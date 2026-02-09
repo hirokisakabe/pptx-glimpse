@@ -1,0 +1,43 @@
+import { parseXml } from "./xml-parser.js";
+
+export interface Relationship {
+  id: string;
+  type: string;
+  target: string;
+}
+
+export function parseRelationships(xml: string): Map<string, Relationship> {
+  const parsed = parseXml(xml);
+  const rels = new Map<string, Relationship>();
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const root = parsed as any;
+  const relationships = root?.Relationships?.Relationship;
+  if (!relationships) return rels;
+
+  for (const rel of relationships) {
+    const id = rel["@_Id"] as string;
+    const type = rel["@_Type"] as string;
+    const target = rel["@_Target"] as string;
+    rels.set(id, { id, type, target });
+  }
+
+  return rels;
+}
+
+export function resolveRelationshipTarget(basePath: string, relTarget: string): string {
+  if (relTarget.startsWith("/")) {
+    return relTarget.slice(1);
+  }
+  const baseDir = basePath.substring(0, basePath.lastIndexOf("/"));
+  const parts = `${baseDir}/${relTarget}`.split("/");
+  const resolved: string[] = [];
+  for (const part of parts) {
+    if (part === "..") {
+      resolved.pop();
+    } else if (part !== ".") {
+      resolved.push(part);
+    }
+  }
+  return resolved.join("/");
+}
