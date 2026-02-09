@@ -1,0 +1,12 @@
+export { readPptx } from "./pptx-reader.js";
+export type { PptxArchive } from "./pptx-reader.js";
+export { parseXml } from "./xml-parser.js";
+export { parseRelationships, resolveRelationshipTarget } from "./relationship-parser.js";
+export type { Relationship } from "./relationship-parser.js";
+export { parsePresentation } from "./presentation-parser.js";
+export type { PresentationInfo } from "./presentation-parser.js";
+export { parseTheme } from "./theme-parser.js";
+export { parseSlideMasterColorMap, parseSlideMasterBackground } from "./slide-master-parser.js";
+export { parseSlideLayoutBackground } from "./slide-layout-parser.js";
+export { parseSlide } from "./slide-parser.js";
+export { parseFillFromNode, parseOutline } from "./fill-parser.js";
