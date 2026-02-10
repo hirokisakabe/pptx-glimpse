@@ -1,7 +1,11 @@
 import { readPptx } from "./parser/pptx-reader.js";
 import { parsePresentation } from "./parser/presentation-parser.js";
 import { parseTheme } from "./parser/theme-parser.js";
-import { parseSlideMasterColorMap } from "./parser/slide-master-parser.js";
+import {
+  parseSlideMasterColorMap,
+  parseSlideMasterBackground,
+} from "./parser/slide-master-parser.js";
+import { parseSlideLayoutBackground } from "./parser/slide-layout-parser.js";
 import { parseSlide } from "./parser/slide-parser.js";
 import { parseRelationships, resolveRelationshipTarget } from "./parser/relationship-parser.js";
 import { ColorResolver } from "./color/color-resolver.js";
@@ -62,11 +66,12 @@ export async function convertPptxToSvg(
     }
   }
 
-  // Parse slide master for color map
+  // Parse slide master for color map and background
   let colorMap: ColorMap = defaultColorMap();
+  let masterPath: string | null = null;
   for (const [, rel] of presRels) {
     if (rel.type.includes("slideMaster")) {
-      const masterPath = resolveRelationshipTarget("ppt/presentation.xml", rel.target);
+      masterPath = resolveRelationshipTarget("ppt/presentation.xml", rel.target);
       const masterXml = archive.files.get(masterPath);
       if (masterXml) {
         colorMap = parseSlideMasterColorMap(masterXml);
@@ -76,6 +81,12 @@ export async function convertPptxToSvg(
   }
 
   const colorResolver = new ColorResolver(theme.colorScheme, colorMap);
+
+  // Parse master background (used as fallback)
+  const masterBackground =
+    masterPath && archive.files.get(masterPath)
+      ? parseSlideMasterBackground(archive.files.get(masterPath)!, colorResolver)
+      : null;
 
   // Resolve slide paths from relationships
   const slidePaths: { slideNumber: number; path: string }[] = [];
@@ -100,6 +111,29 @@ export async function convertPptxToSvg(
     if (!slideXml) continue;
 
     const slide = parseSlide(slideXml, path, slideNumber, archive, colorResolver);
+
+    // Fallback background: slide → layout → master
+    if (!slide.background) {
+      const slideRelsPath = path.replace("ppt/slides/", "ppt/slides/_rels/") + ".rels";
+      const slideRelsXml = archive.files.get(slideRelsPath);
+      if (slideRelsXml) {
+        const slideRels = parseRelationships(slideRelsXml);
+        for (const [, rel] of slideRels) {
+          if (rel.type.includes("slideLayout")) {
+            const layoutPath = resolveRelationshipTarget(path, rel.target);
+            const layoutXml = archive.files.get(layoutPath);
+            if (layoutXml) {
+              slide.background = parseSlideLayoutBackground(layoutXml, colorResolver);
+            }
+            break;
+          }
+        }
+      }
+    }
+    if (!slide.background) {
+      slide.background = masterBackground;
+    }
+
     const svg = renderSlideToSvg(slide, presInfo.slideSize);
     results.push({ slideNumber, svg });
   }

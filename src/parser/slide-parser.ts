@@ -244,7 +244,67 @@ function parseGeometry(spPr: any): Geometry {
     return { type: "preset", preset, adjustValues };
   }
 
+  if (spPr.custGeom) {
+    const pathData = parseCustomGeometryPaths(spPr.custGeom);
+    if (pathData) {
+      return { type: "custom", pathData };
+    }
+  }
+
   return { type: "preset", preset: "rect", adjustValues: {} };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseCustomGeometryPaths(custGeom: any): string | null {
+  const pathLst = custGeom.pathLst;
+  if (!pathLst?.path) return null;
+
+  const paths = Array.isArray(pathLst.path) ? pathLst.path : [pathLst.path];
+  const svgParts: string[] = [];
+
+  for (const path of paths) {
+    const w = Number(path["@_w"] ?? 0);
+    const h = Number(path["@_h"] ?? 0);
+    if (w === 0 && h === 0) continue;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const processCommands = (commands: any[] | undefined, prefix: string) => {
+      if (!commands) return;
+      const list = Array.isArray(commands) ? commands : [commands];
+      for (const cmd of list) {
+        if (prefix === "M" || prefix === "L") {
+          const pt = cmd.pt;
+          if (pt) {
+            const pts = Array.isArray(pt) ? pt : [pt];
+            svgParts.push(
+              `${prefix} ${pts.map((p: Record<string, string>) => `${p["@_x"]} ${p["@_y"]}`).join(" ")}`,
+            );
+          }
+        }
+      }
+    };
+
+    if (path.moveTo) processCommands(Array.isArray(path.moveTo) ? path.moveTo : [path.moveTo], "M");
+    if (path.lnTo) processCommands(Array.isArray(path.lnTo) ? path.lnTo : [path.lnTo], "L");
+
+    if (path.cubicBezTo) {
+      const bezList = Array.isArray(path.cubicBezTo) ? path.cubicBezTo : [path.cubicBezTo];
+      for (const bez of bezList) {
+        const pts = Array.isArray(bez.pt) ? bez.pt : [bez.pt];
+        if (pts.length >= 3) {
+          svgParts.push(
+            `C ${pts.map((p: Record<string, string>) => `${p["@_x"]} ${p["@_y"]}`).join(", ")}`,
+          );
+        }
+      }
+    }
+
+    if (path.close !== undefined) {
+      svgParts.push("Z");
+    }
+  }
+
+  return svgParts.length > 0 ? svgParts.join(" ") : null;
 }
 
 function parseTextBody(

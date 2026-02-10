@@ -5,6 +5,8 @@ export function renderGeometry(geometry: Geometry, width: number, height: number
   if (geometry.type === "preset") {
     return getPresetGeometrySvg(geometry.preset, width, height, geometry.adjustValues);
   }
-  // custom geometry fallback
+  if (geometry.type === "custom" && geometry.pathData) {
+    return `<path d="${geometry.pathData}"/>`;
+  }
   return `<rect width="${width}" height="${height}"/>`;
 }
