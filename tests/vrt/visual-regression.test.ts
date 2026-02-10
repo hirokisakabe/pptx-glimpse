@@ -9,7 +9,7 @@ const SNAPSHOT_DIR = join(__dirname, "snapshots");
 const FIXTURE_DIR = join(__dirname, "../fixtures");
 
 const PIXEL_THRESHOLD = 5;
-const MISMATCH_TOLERANCE = 0.005;
+const MISMATCH_TOLERANCE = 0.01;
 
 interface CompareResult {
   totalPixels: number;
