@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { parseShapeTree } from "../../src/parser/slide-parser.js";
+import { describe, it, expect, vi } from "vitest";
+import { parseSlide, parseShapeTree } from "../../src/parser/slide-parser.js";
 import { ColorResolver } from "../../src/color/color-resolver.js";
 import { parseXml } from "../../src/parser/xml-parser.js";
 import type { PptxArchive } from "../../src/parser/pptx-reader.js";
@@ -461,5 +461,134 @@ describe("parseShapeTree", () => {
       );
       expect((elements[0] as ShapeElement).placeholderType).toBe(phType);
     }
+  });
+});
+
+describe("structural validation warnings", () => {
+  it("warns when parseSlide receives XML without sld root", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const xml = `<other><cSld/></other>`;
+    const result = parseSlide(
+      xml,
+      "ppt/slides/slide3.xml",
+      3,
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Slide 3: missing root element "sld"'),
+    );
+    expect(result.elements).toEqual([]);
+
+    warnSpy.mockRestore();
+  });
+
+  it("warns when a shape is skipped due to parse returning null", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Shape 1"/>
+          </p:nvSpPr>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+      "Slide 1",
+    );
+
+    expect(elements).toHaveLength(0);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Slide 1: shape skipped"));
+
+    warnSpy.mockRestore();
+  });
+
+  it("warns when NaN is detected in transform values", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Shape 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="abc" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide2.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    expect(elements).toHaveLength(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("NaN detected in transform offsetX"),
+    );
+
+    warnSpy.mockRestore();
+  });
+
+  it("does not warn for valid structures", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Shape 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    warnSpy.mockRestore();
   });
 });
