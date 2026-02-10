@@ -12,6 +12,9 @@ export interface BodyProperties {
   marginTop: number;
   marginBottom: number;
   wrap: "square" | "none";
+  autoFit: "noAutofit" | "normAutofit" | "spAutofit";
+  fontScale: number;
+  lnSpcReduction: number;
 }
 
 export interface Paragraph {

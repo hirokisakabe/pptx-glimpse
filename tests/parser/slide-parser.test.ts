@@ -157,6 +157,146 @@ describe("parseShapeTree", () => {
     expect(shape.placeholderIdx).toBeUndefined();
   });
 
+  it("parses normAutofit with fontScale and lnSpcReduction", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="TextBox 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr>
+              <a:normAutofit fontScale="62500" lnSpcReduction="20000"/>
+            </a:bodyPr>
+            <a:p>
+              <a:r>
+                <a:rPr lang="en-US" sz="1800"/>
+                <a:t>Hello</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    expect(shape.textBody).not.toBeNull();
+    expect(shape.textBody!.bodyProperties.autoFit).toBe("normAutofit");
+    expect(shape.textBody!.bodyProperties.fontScale).toBe(0.625);
+    expect(shape.textBody!.bodyProperties.lnSpcReduction).toBe(0.2);
+  });
+
+  it("parses normAutofit without attributes as defaults", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="TextBox 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr>
+              <a:normAutofit/>
+            </a:bodyPr>
+            <a:p>
+              <a:r>
+                <a:rPr lang="en-US" sz="1800"/>
+                <a:t>Hello</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    expect(shape.textBody!.bodyProperties.autoFit).toBe("normAutofit");
+    expect(shape.textBody!.bodyProperties.fontScale).toBe(1);
+    expect(shape.textBody!.bodyProperties.lnSpcReduction).toBe(0);
+  });
+
+  it("defaults to noAutofit when no autofit element is present", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="TextBox 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:p>
+              <a:r>
+                <a:rPr lang="en-US" sz="1800"/>
+                <a:t>Hello</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    expect(shape.textBody!.bodyProperties.autoFit).toBe("noAutofit");
+    expect(shape.textBody!.bodyProperties.fontScale).toBe(1);
+    expect(shape.textBody!.bodyProperties.lnSpcReduction).toBe(0);
+  });
+
   it("parses various placeholder types", () => {
     const types = ["title", "body", "dt", "ftr", "sldNum", "ctrTitle", "subTitle"];
     for (const phType of types) {

@@ -22,6 +22,8 @@ function makeTextBody(
     anchor?: "t" | "ctr" | "b";
     alignment?: "l" | "ctr" | "r" | "just";
     fontSize?: number;
+    fontScale?: number;
+    lnSpcReduction?: number;
   },
 ): TextBody {
   return {
@@ -32,6 +34,9 @@ function makeTextBody(
       marginTop: 45720, // ~4.8px
       marginBottom: 45720,
       wrap: overrides?.wrap ?? "square",
+      autoFit: overrides?.fontScale !== undefined ? "normAutofit" : "noAutofit",
+      fontScale: overrides?.fontScale ?? 1,
+      lnSpcReduction: overrides?.lnSpcReduction ?? 0,
     },
     paragraphs: [
       {
@@ -133,6 +138,9 @@ describe("renderTextBody", () => {
         marginTop: 45720,
         marginBottom: 45720,
         wrap: "square",
+        autoFit: "noAutofit",
+        fontScale: 1,
+        lnSpcReduction: 0,
       },
       paragraphs: [
         {
@@ -190,6 +198,19 @@ describe("renderTextBody", () => {
 
   it("font-size 属性が正しく設定される", () => {
     const textBody = makeTextBody(["Test"], { fontSize: 24 });
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).toContain('font-size="24pt"');
+  });
+
+  it("fontScale が適用されるとフォントサイズが縮小される", () => {
+    const textBody = makeTextBody(["Test"], { fontSize: 24, fontScale: 0.625 });
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    // 24 * 0.625 = 15
+    expect(result).toContain('font-size="15pt"');
+  });
+
+  it("fontScale=1 の場合はフォントサイズが変わらない", () => {
+    const textBody = makeTextBody(["Test"], { fontSize: 24, fontScale: 1 });
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain('font-size="24pt"');
   });
