@@ -1,7 +1,6 @@
 import type { Slide } from "../model/slide.js";
 import type { SlideSize } from "../model/presentation.js";
 import type { SlideElement, GroupElement } from "../model/shape.js";
-import type { ImageElement } from "../model/image.js";
 import { emuToPixels } from "../utils/emu.js";
 import { renderShape, renderConnector } from "./shape-renderer.js";
 import { renderImage } from "./image-renderer.js";
@@ -53,7 +52,7 @@ function renderElement(element: SlideElement, defs: string[]): string | null {
       return removeDefs(result);
     }
     case "image":
-      return renderImage(element as ImageElement);
+      return renderImage(element);
     case "connector":
       return renderConnector(element);
     case "group":
