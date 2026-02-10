@@ -22,7 +22,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "render": "tsx scripts/test-render.ts"
+    "render": "tsx scripts/test-render.ts",
+    "test:vrt:fixtures": "tsx tests/fixtures/create-vrt-fixtures.ts",
+    "test:vrt:update": "tsx scripts/update-vrt-snapshots.ts"
   },
   "files": [
     "dist"
