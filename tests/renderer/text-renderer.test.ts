@@ -50,6 +50,7 @@ function makeTextBody(
             underline: false,
             strikethrough: false,
             color: null,
+            baseline: 0,
           },
         })),
         properties: {
@@ -224,5 +225,151 @@ describe("renderTextBody", () => {
     const xMatches = result.match(/<tspan[^>]*x="/g);
     expect(xMatches).not.toBeNull();
     expect(xMatches!.length).toBeGreaterThan(1);
+  });
+
+  it("上付き文字に baseline-shift=super が設定される", () => {
+    const textBody: TextBody = {
+      bodyProperties: {
+        anchor: "t",
+        marginLeft: 91440,
+        marginRight: 91440,
+        marginTop: 45720,
+        marginBottom: 45720,
+        wrap: "square",
+        autoFit: "noAutofit",
+        fontScale: 1,
+        lnSpcReduction: 0,
+      },
+      paragraphs: [
+        {
+          runs: [
+            {
+              text: "H",
+              properties: {
+                fontSize: 18,
+                fontFamily: null,
+                bold: false,
+                italic: false,
+                underline: false,
+                strikethrough: false,
+                color: null,
+                baseline: 0,
+              },
+            },
+            {
+              text: "2",
+              properties: {
+                fontSize: 12,
+                fontFamily: null,
+                bold: false,
+                italic: false,
+                underline: false,
+                strikethrough: false,
+                color: null,
+                baseline: 30,
+              },
+            },
+            {
+              text: "O",
+              properties: {
+                fontSize: 18,
+                fontFamily: null,
+                bold: false,
+                italic: false,
+                underline: false,
+                strikethrough: false,
+                color: null,
+                baseline: 0,
+              },
+            },
+          ],
+          properties: {
+            alignment: "l",
+            lineSpacing: null,
+            spaceBefore: 0,
+            spaceAfter: 0,
+            level: 0,
+          },
+        },
+      ],
+    };
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).toContain('baseline-shift="super"');
+  });
+
+  it("下付き文字に baseline-shift=sub が設定される", () => {
+    const textBody: TextBody = {
+      bodyProperties: {
+        anchor: "t",
+        marginLeft: 91440,
+        marginRight: 91440,
+        marginTop: 45720,
+        marginBottom: 45720,
+        wrap: "square",
+        autoFit: "noAutofit",
+        fontScale: 1,
+        lnSpcReduction: 0,
+      },
+      paragraphs: [
+        {
+          runs: [
+            {
+              text: "H",
+              properties: {
+                fontSize: 18,
+                fontFamily: null,
+                bold: false,
+                italic: false,
+                underline: false,
+                strikethrough: false,
+                color: null,
+                baseline: 0,
+              },
+            },
+            {
+              text: "2",
+              properties: {
+                fontSize: 12,
+                fontFamily: null,
+                bold: false,
+                italic: false,
+                underline: false,
+                strikethrough: false,
+                color: null,
+                baseline: -25,
+              },
+            },
+            {
+              text: "O",
+              properties: {
+                fontSize: 18,
+                fontFamily: null,
+                bold: false,
+                italic: false,
+                underline: false,
+                strikethrough: false,
+                color: null,
+                baseline: 0,
+              },
+            },
+          ],
+          properties: {
+            alignment: "l",
+            lineSpacing: null,
+            spaceBefore: 0,
+            spaceAfter: 0,
+            level: 0,
+          },
+        },
+      ],
+    };
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).toContain('baseline-shift="sub"');
+  });
+
+  it("baseline=0 の場合は baseline-shift が設定されない", () => {
+    const textBody = makeTextBody(["Normal"]);
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).not.toContain("baseline-shift");
   });
 });
