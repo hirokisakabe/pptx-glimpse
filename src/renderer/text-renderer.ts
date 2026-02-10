@@ -1,6 +1,11 @@
-import type { TextBody } from "../model/text.js";
+import type { Paragraph, RunProperties, TextBody } from "../model/text.js";
 import type { Transform } from "../model/shape.js";
 import { emuToPixels } from "../utils/emu.js";
+import { wrapParagraph } from "../utils/text-wrap.js";
+
+const PX_PER_PT = 96 / 72;
+const DEFAULT_LINE_SPACING = 1.2;
+const DEFAULT_FONT_SIZE_PT = 18;
 
 export function renderTextBody(textBody: TextBody, transform: Transform): string {
   const { bodyProperties, paragraphs } = textBody;
@@ -9,102 +14,197 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
   const marginLeft = emuToPixels(bodyProperties.marginLeft);
   const marginRight = emuToPixels(bodyProperties.marginRight);
   const marginTop = emuToPixels(bodyProperties.marginTop);
-  const _marginBottom = emuToPixels(bodyProperties.marginBottom);
+  const marginBottom = emuToPixels(bodyProperties.marginBottom);
 
   const hasText = paragraphs.some((p) => p.runs.some((r) => r.text.length > 0));
   if (!hasText) return "";
 
   const textWidth = width - marginLeft - marginRight;
-
-  let anchorAttr: string;
-  let xPos: number;
-  switch (getEffectiveAlignment(paragraphs)) {
-    case "ctr":
-      anchorAttr = `text-anchor="middle"`;
-      xPos = marginLeft + textWidth / 2;
-      break;
-    case "r":
-      anchorAttr = `text-anchor="end"`;
-      xPos = width - marginRight;
-      break;
-    default:
-      anchorAttr = `text-anchor="start"`;
-      xPos = marginLeft;
-      break;
-  }
+  const defaultFontSize = getDefaultFontSize(paragraphs);
+  const shouldWrap = bodyProperties.wrap !== "none";
 
   const tspans: string[] = [];
-  let firstLine = true;
+  let isFirstLine = true;
 
   for (const para of paragraphs) {
-    if (para.runs.length === 0) {
-      tspans.push(`<tspan x="${xPos}" dy="1.2em"> </tspan>`);
-      firstLine = false;
+    const { xPos, anchorValue } = getAlignmentInfo(
+      para.properties.alignment,
+      marginLeft,
+      textWidth,
+      width,
+      marginRight,
+    );
+
+    if (para.runs.length === 0 || !para.runs.some((r) => r.text.length > 0)) {
+      const dy = computeDy(isFirstLine, defaultFontSize, DEFAULT_LINE_SPACING, para, true);
+      tspans.push(`<tspan x="${xPos}" dy="${dy}" text-anchor="${anchorValue}"> </tspan>`);
+      isFirstLine = false;
       continue;
     }
 
-    for (let i = 0; i < para.runs.length; i++) {
-      const run = para.runs[i];
-      if (run.text.length === 0) continue;
+    if (shouldWrap) {
+      const wrappedLines = wrapParagraph(para, textWidth, defaultFontSize);
+      for (let lineIdx = 0; lineIdx < wrappedLines.length; lineIdx++) {
+        const line = wrappedLines[lineIdx];
+        if (line.segments.length === 0) {
+          const dy = computeDy(
+            isFirstLine,
+            defaultFontSize,
+            getLineSpacing(para),
+            para,
+            lineIdx === 0,
+          );
+          tspans.push(`<tspan x="${xPos}" dy="${dy}" text-anchor="${anchorValue}"> </tspan>`);
+          isFirstLine = false;
+          continue;
+        }
 
-      const props = run.properties;
-      const styles: string[] = [];
+        for (let segIdx = 0; segIdx < line.segments.length; segIdx++) {
+          const seg = line.segments[segIdx];
+          const styles = buildStyleAttrs(seg.properties);
 
-      if (props.fontSize) {
-        styles.push(`font-size="${props.fontSize}pt"`);
+          if (segIdx === 0) {
+            const lineFontSize = getLineFontSize(line.segments, defaultFontSize);
+            const dy = computeDy(
+              isFirstLine,
+              lineFontSize,
+              getLineSpacing(para),
+              para,
+              lineIdx === 0,
+            );
+            tspans.push(
+              `<tspan x="${xPos}" dy="${dy}" text-anchor="${anchorValue}" ${styles}>${escapeXml(seg.text)}</tspan>`,
+            );
+          } else {
+            tspans.push(`<tspan ${styles}>${escapeXml(seg.text)}</tspan>`);
+          }
+        }
+        isFirstLine = false;
       }
-      if (props.fontFamily) {
-        styles.push(`font-family="${escapeXml(props.fontFamily)}"`);
-      }
-      if (props.bold) {
-        styles.push(`font-weight="bold"`);
-      }
-      if (props.italic) {
-        styles.push(`font-style="italic"`);
-      }
-      if (props.color) {
-        styles.push(`fill="${props.color.hex}"`);
-        if (props.color.alpha < 1) {
-          styles.push(`fill-opacity="${props.color.alpha}"`);
+    } else {
+      // wrap="none": 折り返しなし
+      for (let i = 0; i < para.runs.length; i++) {
+        const run = para.runs[i];
+        if (run.text.length === 0) continue;
+        const styles = buildStyleAttrs(run.properties);
+
+        if (i === 0) {
+          const dy = computeDy(
+            isFirstLine,
+            run.properties.fontSize ?? defaultFontSize,
+            getLineSpacing(para),
+            para,
+            true,
+          );
+          tspans.push(
+            `<tspan x="${xPos}" dy="${dy}" text-anchor="${anchorValue}" ${styles}>${escapeXml(run.text)}</tspan>`,
+          );
+        } else {
+          tspans.push(`<tspan ${styles}>${escapeXml(run.text)}</tspan>`);
         }
       }
-
-      const decorations: string[] = [];
-      if (props.underline) decorations.push("underline");
-      if (props.strikethrough) decorations.push("line-through");
-      if (decorations.length > 0) {
-        styles.push(`text-decoration="${decorations.join(" ")}"`);
-      }
-
-      const dyAttr = i === 0 ? ` x="${xPos}" dy="${firstLine ? "0" : "1.2em"}"` : "";
-      const escapedText = escapeXml(run.text);
-      tspans.push(`<tspan${dyAttr} ${styles.join(" ")}>${escapedText}</tspan>`);
+      isFirstLine = false;
     }
-    firstLine = false;
   }
 
+  // 垂直位置の計算
   let yStart = marginTop;
-  const defaultFontSize = getDefaultFontSize(paragraphs);
+  const totalTextHeight = estimateTextHeight(paragraphs, defaultFontSize, shouldWrap, textWidth);
   if (bodyProperties.anchor === "ctr") {
-    const totalTextHeight = estimateTextHeight(paragraphs, defaultFontSize);
     yStart = Math.max(marginTop, (height - totalTextHeight) / 2);
   } else if (bodyProperties.anchor === "b") {
-    const totalTextHeight = estimateTextHeight(paragraphs, defaultFontSize);
-    yStart = Math.max(marginTop, height - totalTextHeight - _marginBottom);
+    yStart = Math.max(marginTop, height - totalTextHeight - marginBottom);
   }
-
   yStart += defaultFontSize;
 
-  return `<text ${anchorAttr} x="${xPos}" y="${yStart}" ${tspans.length > 0 ? "" : ""}>${tspans.join("")}</text>`;
+  return `<text x="0" y="${yStart}">${tspans.join("")}</text>`;
 }
 
-function getEffectiveAlignment(paragraphs: TextBody["paragraphs"]): "l" | "ctr" | "r" | "just" {
-  for (const p of paragraphs) {
-    if (p.runs.some((r) => r.text.length > 0)) {
-      return p.properties.alignment;
+function getAlignmentInfo(
+  alignment: "l" | "ctr" | "r" | "just",
+  marginLeft: number,
+  textWidth: number,
+  width: number,
+  marginRight: number,
+): { xPos: number; anchorValue: string } {
+  switch (alignment) {
+    case "ctr":
+      return { xPos: marginLeft + textWidth / 2, anchorValue: "middle" };
+    case "r":
+      return { xPos: width - marginRight, anchorValue: "end" };
+    default:
+      return { xPos: marginLeft, anchorValue: "start" };
+  }
+}
+
+function getLineSpacing(para: Paragraph): number {
+  if (para.properties.lineSpacing !== null) {
+    const factor = para.properties.lineSpacing / 100000;
+    return Math.max(0.5, factor);
+  }
+  return DEFAULT_LINE_SPACING;
+}
+
+function computeDy(
+  isFirstLine: boolean,
+  fontSizePt: number,
+  lineSpacingFactor: number,
+  para: Paragraph,
+  isFirstLineOfParagraph: boolean,
+): string {
+  if (isFirstLine) return "0";
+
+  const lineHeight = fontSizePt * PX_PER_PT * lineSpacingFactor;
+  let dy = lineHeight;
+
+  if (isFirstLineOfParagraph && para.properties.spaceBefore > 0) {
+    // spaceBefore は 1/100 ポイント単位
+    dy += (para.properties.spaceBefore / 100) * PX_PER_PT;
+  }
+
+  return dy.toFixed(2);
+}
+
+function getLineFontSize(
+  segments: { text: string; properties: RunProperties }[],
+  defaultFontSize: number,
+): number {
+  for (const seg of segments) {
+    if (seg.properties.fontSize) return seg.properties.fontSize;
+  }
+  return defaultFontSize;
+}
+
+function buildStyleAttrs(props: RunProperties): string {
+  const styles: string[] = [];
+
+  if (props.fontSize) {
+    styles.push(`font-size="${props.fontSize}pt"`);
+  }
+  if (props.fontFamily) {
+    styles.push(`font-family="${escapeXml(props.fontFamily)}"`);
+  }
+  if (props.bold) {
+    styles.push(`font-weight="bold"`);
+  }
+  if (props.italic) {
+    styles.push(`font-style="italic"`);
+  }
+  if (props.color) {
+    styles.push(`fill="${props.color.hex}"`);
+    if (props.color.alpha < 1) {
+      styles.push(`fill-opacity="${props.color.alpha}"`);
     }
   }
-  return "l";
+
+  const decorations: string[] = [];
+  if (props.underline) decorations.push("underline");
+  if (props.strikethrough) decorations.push("line-through");
+  if (decorations.length > 0) {
+    styles.push(`text-decoration="${decorations.join(" ")}"`);
+  }
+
+  return styles.join(" ");
 }
 
 function getDefaultFontSize(paragraphs: TextBody["paragraphs"]): number {
@@ -113,15 +213,38 @@ function getDefaultFontSize(paragraphs: TextBody["paragraphs"]): number {
       if (r.properties.fontSize) return r.properties.fontSize;
     }
   }
-  return 18;
+  return DEFAULT_FONT_SIZE_PT;
 }
 
-function estimateTextHeight(paragraphs: TextBody["paragraphs"], defaultFontSize: number): number {
-  let lines = 0;
-  for (const p of paragraphs) {
-    lines += Math.max(1, p.runs.length > 0 ? 1 : 0);
+function estimateTextHeight(
+  paragraphs: TextBody["paragraphs"],
+  defaultFontSize: number,
+  shouldWrap: boolean,
+  textWidth: number,
+): number {
+  let totalHeight = 0;
+
+  for (let pIdx = 0; pIdx < paragraphs.length; pIdx++) {
+    const para = paragraphs[pIdx];
+    const lineSpacing = getLineSpacing(para);
+    const lineHeight = defaultFontSize * PX_PER_PT * lineSpacing;
+
+    let lineCount: number;
+    if (shouldWrap && para.runs.length > 0 && para.runs.some((r) => r.text.length > 0)) {
+      const wrappedLines = wrapParagraph(para, textWidth, defaultFontSize);
+      lineCount = wrappedLines.length;
+    } else {
+      lineCount = para.runs.some((r) => r.text.length > 0) ? 1 : 1;
+    }
+
+    totalHeight += lineCount * lineHeight;
+
+    if (pIdx > 0 && para.properties.spaceBefore > 0) {
+      totalHeight += (para.properties.spaceBefore / 100) * PX_PER_PT;
+    }
   }
-  return lines * defaultFontSize * 1.2;
+
+  return totalHeight;
 }
 
 function escapeXml(str: string): string {

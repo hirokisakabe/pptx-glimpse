@@ -7,3 +7,6 @@ export {
   ROTATION_UNIT,
   FONT_SIZE_UNIT,
 } from "./constants.js";
+export { measureTextWidth } from "./text-measure.js";
+export { wrapParagraph } from "./text-wrap.js";
+export type { LineSegment, WrappedLine } from "./text-wrap.js";
