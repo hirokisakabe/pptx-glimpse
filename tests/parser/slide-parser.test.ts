@@ -464,6 +464,250 @@ describe("parseShapeTree", () => {
   });
 });
 
+describe("bullet parsing", () => {
+  it("parses buChar from paragraph properties", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="TextBox 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:p>
+              <a:pPr lvl="0" marL="342900" indent="-342900">
+                <a:buChar char="\u2022"/>
+              </a:pPr>
+              <a:r>
+                <a:rPr lang="en-US" sz="1800"/>
+                <a:t>Bullet item</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    const para = shape.textBody!.paragraphs[0];
+    expect(para.properties.bullet).toEqual({ type: "char", char: "\u2022" });
+    expect(para.properties.marginLeft).toBe(342900);
+    expect(para.properties.indent).toBe(-342900);
+  });
+
+  it("parses buAutoNum from paragraph properties", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="TextBox 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:p>
+              <a:pPr lvl="0">
+                <a:buAutoNum type="arabicPeriod" startAt="3"/>
+              </a:pPr>
+              <a:r>
+                <a:rPr lang="en-US" sz="1800"/>
+                <a:t>Numbered item</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    const para = shape.textBody!.paragraphs[0];
+    expect(para.properties.bullet).toEqual({
+      type: "autoNum",
+      scheme: "arabicPeriod",
+      startAt: 3,
+    });
+  });
+
+  it("parses buNone from paragraph properties", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="TextBox 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:p>
+              <a:pPr>
+                <a:buNone/>
+              </a:pPr>
+              <a:r>
+                <a:rPr lang="en-US" sz="1800"/>
+                <a:t>No bullet</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    const para = shape.textBody!.paragraphs[0];
+    expect(para.properties.bullet).toEqual({ type: "none" });
+  });
+
+  it("parses buFont from paragraph properties", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="TextBox 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:p>
+              <a:pPr>
+                <a:buFont typeface="Wingdings"/>
+                <a:buChar char="v"/>
+              </a:pPr>
+              <a:r>
+                <a:rPr lang="en-US" sz="1800"/>
+                <a:t>Custom bullet</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    const para = shape.textBody!.paragraphs[0];
+    expect(para.properties.bulletFont).toBe("Wingdings");
+    expect(para.properties.bullet).toEqual({ type: "char", char: "v" });
+  });
+
+  it("defaults bullet to null when no bullet element is present", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="TextBox 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:p>
+              <a:r>
+                <a:rPr lang="en-US" sz="1800"/>
+                <a:t>Plain text</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    const para = shape.textBody!.paragraphs[0];
+    expect(para.properties.bullet).toBeNull();
+    expect(para.properties.marginLeft).toBe(0);
+    expect(para.properties.indent).toBe(0);
+  });
+});
+
 describe("structural validation warnings", () => {
   it("warns when parseSlide receives XML without sld root", () => {
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
