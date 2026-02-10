@@ -19,6 +19,8 @@ import { parseChart } from "./chart-parser.js";
 import { parseRelationships, resolveRelationshipTarget } from "./relationship-parser.js";
 import { hundredthPointToPoint } from "../utils/emu.js";
 
+const WARN_PREFIX = "[pptx-glimpse]";
+
 export function parseSlide(
   slideXml: string,
   slidePath: string,
@@ -29,13 +31,23 @@ export function parseSlide(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parsed = parseXml(slideXml) as any;
   const sld = parsed.sld;
+  if (!sld) {
+    console.warn(`${WARN_PREFIX} Slide ${slideNumber}: missing root element "sld" in XML`);
+  }
 
   const relsPath = slidePath.replace("ppt/slides/", "ppt/slides/_rels/") + ".rels";
   const relsXml = archive.files.get(relsPath);
   const rels = relsXml ? parseRelationships(relsXml) : new Map<string, Relationship>();
 
   const background = parseBackground(sld?.cSld?.bg, colorResolver);
-  const elements = parseShapeTree(sld?.cSld?.spTree, rels, slidePath, archive, colorResolver);
+  const elements = parseShapeTree(
+    sld?.cSld?.spTree,
+    rels,
+    slidePath,
+    archive,
+    colorResolver,
+    `Slide ${slideNumber}`,
+  );
 
   return { slideNumber, background, elements };
 }
@@ -61,39 +73,61 @@ export function parseShapeTree(
   slidePath: string,
   archive: PptxArchive,
   colorResolver: ColorResolver,
+  context?: string,
 ): SlideElement[] {
   if (!spTree) return [];
 
+  const ctx = context ?? slidePath;
   const elements: SlideElement[] = [];
 
   const shapes = spTree.sp ?? [];
   for (const sp of shapes) {
     const shape = parseShape(sp, colorResolver);
-    if (shape) elements.push(shape);
+    if (shape) {
+      elements.push(shape);
+    } else {
+      console.warn(`${WARN_PREFIX} ${ctx}: shape skipped (parse returned null)`);
+    }
   }
 
   const pics = spTree.pic ?? [];
   for (const pic of pics) {
     const img = parseImage(pic, rels, slidePath, archive);
-    if (img) elements.push(img);
+    if (img) {
+      elements.push(img);
+    } else {
+      console.warn(`${WARN_PREFIX} ${ctx}: image skipped (parse returned null)`);
+    }
   }
 
   const cxnSps = spTree.cxnSp ?? [];
   for (const cxn of cxnSps) {
     const connector = parseConnector(cxn, colorResolver);
-    if (connector) elements.push(connector);
+    if (connector) {
+      elements.push(connector);
+    } else {
+      console.warn(`${WARN_PREFIX} ${ctx}: connector skipped (parse returned null)`);
+    }
   }
 
   const grpSps = spTree.grpSp ?? [];
   for (const grp of grpSps) {
     const group = parseGroup(grp, rels, slidePath, archive, colorResolver);
-    if (group) elements.push(group);
+    if (group) {
+      elements.push(group);
+    } else {
+      console.warn(`${WARN_PREFIX} ${ctx}: group skipped (parse returned null)`);
+    }
   }
 
   const graphicFrames = spTree.graphicFrame ?? [];
   for (const gf of graphicFrames) {
     const chart = parseGraphicFrame(gf, rels, slidePath, archive, colorResolver);
-    if (chart) elements.push(chart);
+    if (chart) {
+      elements.push(chart);
+    } else {
+      console.warn(`${WARN_PREFIX} ${ctx}: graphicFrame skipped (parse returned null)`);
+    }
   }
 
   return elements;
@@ -259,12 +293,39 @@ function parseTransform(xfrm: any): Transform | null {
   const ext = xfrm.ext;
   if (!off || !ext) return null;
 
+  let offsetX = Number(off["@_x"] ?? 0);
+  let offsetY = Number(off["@_y"] ?? 0);
+  let extentWidth = Number(ext["@_cx"] ?? 0);
+  let extentHeight = Number(ext["@_cy"] ?? 0);
+  let rotation = Number(xfrm["@_rot"] ?? 0);
+
+  if (Number.isNaN(offsetX)) {
+    console.warn(`${WARN_PREFIX} NaN detected in transform offsetX, defaulting to 0`);
+    offsetX = 0;
+  }
+  if (Number.isNaN(offsetY)) {
+    console.warn(`${WARN_PREFIX} NaN detected in transform offsetY, defaulting to 0`);
+    offsetY = 0;
+  }
+  if (Number.isNaN(extentWidth)) {
+    console.warn(`${WARN_PREFIX} NaN detected in transform extentWidth, defaulting to 0`);
+    extentWidth = 0;
+  }
+  if (Number.isNaN(extentHeight)) {
+    console.warn(`${WARN_PREFIX} NaN detected in transform extentHeight, defaulting to 0`);
+    extentHeight = 0;
+  }
+  if (Number.isNaN(rotation)) {
+    console.warn(`${WARN_PREFIX} NaN detected in transform rotation, defaulting to 0`);
+    rotation = 0;
+  }
+
   return {
-    offsetX: Number(off["@_x"] ?? 0),
-    offsetY: Number(off["@_y"] ?? 0),
-    extentWidth: Number(ext["@_cx"] ?? 0),
-    extentHeight: Number(ext["@_cy"] ?? 0),
-    rotation: Number(xfrm["@_rot"] ?? 0) / 60000,
+    offsetX,
+    offsetY,
+    extentWidth,
+    extentHeight,
+    rotation: rotation / 60000,
     flipH: xfrm["@_flipH"] === "1" || xfrm["@_flipH"] === "true",
     flipV: xfrm["@_flipV"] === "1" || xfrm["@_flipV"] === "true",
   };
