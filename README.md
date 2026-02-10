@@ -41,16 +41,6 @@ npm run render -- presentation.pptx
 npm run render -- presentation.pptx ./my-output
 ```
 
-## 開発
-
-```bash
-npm run build          # ビルド (CJS + ESM + .d.ts)
-npm run test           # テスト実行
-npm run lint           # ESLint チェック
-npm run format         # Prettier 整形
-npm run typecheck      # 型チェック
-```
-
 ## ライセンス
 
 MIT
