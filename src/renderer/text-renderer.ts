@@ -23,6 +23,10 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
   const defaultFontSize = getDefaultFontSize(paragraphs);
   const shouldWrap = bodyProperties.wrap !== "none";
 
+  const fontScale = bodyProperties.fontScale;
+  const lnSpcReduction = bodyProperties.lnSpcReduction;
+  const scaledDefaultFontSize = defaultFontSize * fontScale;
+
   const tspans: string[] = [];
   let isFirstLine = true;
 
@@ -36,21 +40,21 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
     );
 
     if (para.runs.length === 0 || !para.runs.some((r) => r.text.length > 0)) {
-      const dy = computeDy(isFirstLine, defaultFontSize, DEFAULT_LINE_SPACING, para, true);
+      const dy = computeDy(isFirstLine, scaledDefaultFontSize, DEFAULT_LINE_SPACING, para, true);
       tspans.push(`<tspan x="${xPos}" dy="${dy}" text-anchor="${anchorValue}"> </tspan>`);
       isFirstLine = false;
       continue;
     }
 
     if (shouldWrap) {
-      const wrappedLines = wrapParagraph(para, textWidth, defaultFontSize);
+      const wrappedLines = wrapParagraph(para, textWidth, scaledDefaultFontSize);
       for (let lineIdx = 0; lineIdx < wrappedLines.length; lineIdx++) {
         const line = wrappedLines[lineIdx];
         if (line.segments.length === 0) {
           const dy = computeDy(
             isFirstLine,
-            defaultFontSize,
-            getLineSpacing(para),
+            scaledDefaultFontSize,
+            getLineSpacing(para, lnSpcReduction),
             para,
             lineIdx === 0,
           );
@@ -61,14 +65,14 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
 
         for (let segIdx = 0; segIdx < line.segments.length; segIdx++) {
           const seg = line.segments[segIdx];
-          const styles = buildStyleAttrs(seg.properties);
+          const styles = buildStyleAttrs(seg.properties, fontScale);
 
           if (segIdx === 0) {
-            const lineFontSize = getLineFontSize(line.segments, defaultFontSize);
+            const lineFontSize = getLineFontSize(line.segments, defaultFontSize) * fontScale;
             const dy = computeDy(
               isFirstLine,
               lineFontSize,
-              getLineSpacing(para),
+              getLineSpacing(para, lnSpcReduction),
               para,
               lineIdx === 0,
             );
@@ -86,13 +90,13 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
       for (let i = 0; i < para.runs.length; i++) {
         const run = para.runs[i];
         if (run.text.length === 0) continue;
-        const styles = buildStyleAttrs(run.properties);
+        const styles = buildStyleAttrs(run.properties, fontScale);
 
         if (i === 0) {
           const dy = computeDy(
             isFirstLine,
-            run.properties.fontSize ?? defaultFontSize,
-            getLineSpacing(para),
+            (run.properties.fontSize ?? defaultFontSize) * fontScale,
+            getLineSpacing(para, lnSpcReduction),
             para,
             true,
           );
@@ -109,13 +113,19 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
 
   // 垂直位置の計算
   let yStart = marginTop;
-  const totalTextHeight = estimateTextHeight(paragraphs, defaultFontSize, shouldWrap, textWidth);
+  const totalTextHeight = estimateTextHeight(
+    paragraphs,
+    scaledDefaultFontSize,
+    shouldWrap,
+    textWidth,
+    lnSpcReduction,
+  );
   if (bodyProperties.anchor === "ctr") {
     yStart = Math.max(marginTop, (height - totalTextHeight) / 2);
   } else if (bodyProperties.anchor === "b") {
     yStart = Math.max(marginTop, height - totalTextHeight - marginBottom);
   }
-  yStart += defaultFontSize;
+  yStart += scaledDefaultFontSize;
 
   return `<text x="0" y="${yStart}">${tspans.join("")}</text>`;
 }
@@ -137,12 +147,15 @@ function getAlignmentInfo(
   }
 }
 
-function getLineSpacing(para: Paragraph): number {
+function getLineSpacing(para: Paragraph, lnSpcReduction: number = 0): number {
+  let spacing: number;
   if (para.properties.lineSpacing !== null) {
     const factor = para.properties.lineSpacing / 100000;
-    return Math.max(0.5, factor);
+    spacing = Math.max(0.5, factor);
+  } else {
+    spacing = DEFAULT_LINE_SPACING;
   }
-  return DEFAULT_LINE_SPACING;
+  return spacing * (1 - lnSpcReduction);
 }
 
 function computeDy(
@@ -175,11 +188,12 @@ function getLineFontSize(
   return defaultFontSize;
 }
 
-function buildStyleAttrs(props: RunProperties): string {
+function buildStyleAttrs(props: RunProperties, fontScale: number = 1): string {
   const styles: string[] = [];
 
   if (props.fontSize) {
-    styles.push(`font-size="${props.fontSize}pt"`);
+    const scaledSize = props.fontSize * fontScale;
+    styles.push(`font-size="${scaledSize}pt"`);
   }
   if (props.fontFamily) {
     styles.push(`font-family="${escapeXml(props.fontFamily)}"`);
@@ -221,12 +235,13 @@ function estimateTextHeight(
   defaultFontSize: number,
   shouldWrap: boolean,
   textWidth: number,
+  lnSpcReduction: number = 0,
 ): number {
   let totalHeight = 0;
 
   for (let pIdx = 0; pIdx < paragraphs.length; pIdx++) {
     const para = paragraphs[pIdx];
-    const lineSpacing = getLineSpacing(para);
+    const lineSpacing = getLineSpacing(para, lnSpcReduction);
     const lineHeight = defaultFontSize * PX_PER_PT * lineSpacing;
 
     let lineCount: number;

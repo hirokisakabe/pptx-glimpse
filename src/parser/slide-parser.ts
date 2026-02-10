@@ -321,6 +321,23 @@ function parseTextBody(
   if (!txBody) return null;
 
   const bodyPr = txBody.bodyPr;
+
+  let autoFit: BodyProperties["autoFit"] = "noAutofit";
+  let fontScale = 1;
+  let lnSpcReduction = 0;
+  if (bodyPr?.normAutofit !== undefined) {
+    autoFit = "normAutofit";
+    const normAutofit = bodyPr.normAutofit;
+    if (typeof normAutofit === "object" && normAutofit !== null) {
+      fontScale = normAutofit["@_fontScale"] ? Number(normAutofit["@_fontScale"]) / 100000 : 1;
+      lnSpcReduction = normAutofit["@_lnSpcReduction"]
+        ? Number(normAutofit["@_lnSpcReduction"]) / 100000
+        : 0;
+    }
+  } else if (bodyPr?.spAutoFit !== undefined) {
+    autoFit = "spAutofit";
+  }
+
   const bodyProperties: BodyProperties = {
     anchor: (bodyPr?.["@_anchor"] as "t" | "ctr" | "b") ?? "t",
     marginLeft: Number(bodyPr?.["@_lIns"] ?? 91440),
@@ -328,6 +345,9 @@ function parseTextBody(
     marginTop: Number(bodyPr?.["@_tIns"] ?? 45720),
     marginBottom: Number(bodyPr?.["@_bIns"] ?? 45720),
     wrap: (bodyPr?.["@_wrap"] as "square" | "none") ?? "square",
+    autoFit,
+    fontScale,
+    lnSpcReduction,
   };
 
   const paragraphs: Paragraph[] = [];
