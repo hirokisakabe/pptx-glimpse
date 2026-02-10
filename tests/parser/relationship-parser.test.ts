@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { buildRelsPath } from "../../src/parser/relationship-parser.js";
+import { describe, it, expect, vi } from "vitest";
+import { buildRelsPath, parseRelationships } from "../../src/parser/relationship-parser.js";
 
 describe("buildRelsPath", () => {
   it("builds rels path for slide", () => {
@@ -20,5 +20,67 @@ describe("buildRelsPath", () => {
 
   it("builds rels path for presentation", () => {
     expect(buildRelsPath("ppt/presentation.xml")).toBe("ppt/_rels/presentation.xml.rels");
+  });
+});
+
+describe("parseRelationships", () => {
+  it("parses valid relationships XML", () => {
+    const xml = `
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>
+        <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme1.xml"/>
+      </Relationships>
+    `;
+    const result = parseRelationships(xml);
+
+    expect(result.size).toBe(2);
+    expect(result.get("rId1")?.target).toBe("../slideLayouts/slideLayout1.xml");
+    expect(result.get("rId2")?.target).toBe("../theme/theme1.xml");
+  });
+
+  it("warns when Relationships root is missing", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const xml = `<other/>`;
+    const result = parseRelationships(xml);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Relationship: missing root element "Relationships"'),
+    );
+    expect(result.size).toBe(0);
+    warnSpy.mockRestore();
+  });
+
+  it("warns and skips entries missing required attributes", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const xml = `
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rId1" Type="http://example.com/type" Target="target.xml"/>
+        <Relationship Type="http://example.com/type" Target="target2.xml"/>
+        <Relationship Id="rId3" Target="target3.xml"/>
+        <Relationship Id="rId4" Type="http://example.com/type"/>
+      </Relationships>
+    `;
+    const result = parseRelationships(xml);
+
+    expect(warnSpy).toHaveBeenCalledTimes(3);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("Relationship: entry missing required attribute, skipping"),
+    );
+    expect(result.size).toBe(1);
+    expect(result.get("rId1")?.target).toBe("target.xml");
+    warnSpy.mockRestore();
+  });
+
+  it("does not warn for valid XML", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const xml = `
+      <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+        <Relationship Id="rId1" Type="http://example.com/type" Target="target.xml"/>
+      </Relationships>
+    `;
+    parseRelationships(xml);
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });

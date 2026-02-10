@@ -1,5 +1,7 @@
 import { parseXml } from "./xml-parser.js";
 
+const WARN_PREFIX = "[pptx-glimpse]";
+
 export interface Relationship {
   id: string;
   type: string;
@@ -12,13 +14,25 @@ export function parseRelationships(xml: string): Map<string, Relationship> {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const root = parsed as any;
-  const relationships = root?.Relationships?.Relationship;
+
+  if (!root?.Relationships) {
+    console.warn(`${WARN_PREFIX} Relationship: missing root element "Relationships" in XML`);
+    return rels;
+  }
+
+  const relationships = root.Relationships.Relationship;
   if (!relationships) return rels;
 
   for (const rel of relationships) {
-    const id = rel["@_Id"] as string;
-    const type = rel["@_Type"] as string;
-    const target = rel["@_Target"] as string;
+    const id = rel["@_Id"] as string | undefined;
+    const type = rel["@_Type"] as string | undefined;
+    const target = rel["@_Target"] as string | undefined;
+
+    if (!id || !type || !target) {
+      console.warn(`${WARN_PREFIX} Relationship: entry missing required attribute, skipping`);
+      continue;
+    }
+
     rels.set(id, { id, type, target });
   }
 

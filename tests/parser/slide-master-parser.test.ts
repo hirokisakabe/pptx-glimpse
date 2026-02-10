@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   parseSlideMasterElements,
   parseSlideMasterColorMap,
@@ -47,7 +47,11 @@ function createEmptyArchive(): PptxArchive {
 
 describe("parseSlideMasterColorMap", () => {
   it("returns default color map when no clrMap", () => {
-    const xml = `<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"/>`;
+    const xml = `
+      <p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+        <p:cSld/>
+      </p:sldMaster>
+    `;
     const result = parseSlideMasterColorMap(xml);
     expect(result.bg1).toBe("lt1");
     expect(result.tx1).toBe("dk1");
@@ -144,5 +148,72 @@ describe("parseSlideMasterElements", () => {
     );
 
     expect(elements).toHaveLength(0);
+  });
+});
+
+describe("structural validation warnings", () => {
+  it("warns when parseSlideMasterColorMap receives XML without sldMaster root", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const xml = `<other/>`;
+    const result = parseSlideMasterColorMap(xml);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('SlideMaster: missing root element "sldMaster"'),
+    );
+    expect(result.bg1).toBe("lt1");
+    warnSpy.mockRestore();
+  });
+
+  it("warns when parseSlideMasterBackground receives XML without sldMaster root", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const xml = `<other/>`;
+    const result = parseSlideMasterBackground(xml, createColorResolver());
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('SlideMaster: missing root element "sldMaster"'),
+    );
+    expect(result).toBeNull();
+    warnSpy.mockRestore();
+  });
+
+  it("warns when parseSlideMasterElements receives XML without sldMaster root", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const xml = `<other/>`;
+    const result = parseSlideMasterElements(
+      xml,
+      "ppt/slideMasters/slideMaster1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('SlideMaster: missing root element "sldMaster"'),
+    );
+    expect(result).toHaveLength(0);
+    warnSpy.mockRestore();
+  });
+
+  it("does not warn for valid XML", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const xml = `
+      <p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+        <p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2"
+                  accent1="accent1" accent2="accent2" accent3="accent3"
+                  accent4="accent4" accent5="accent5" accent6="accent6"
+                  hlink="hlink" folHlink="folHlink"/>
+        <p:cSld><p:spTree/></p:cSld>
+      </p:sldMaster>
+    `;
+    parseSlideMasterColorMap(xml);
+    parseSlideMasterBackground(xml, createColorResolver());
+    parseSlideMasterElements(
+      xml,
+      "ppt/slideMasters/slideMaster1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });

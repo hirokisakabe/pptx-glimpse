@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { parseTheme } from "../../src/parser/theme-parser.js";
 
 const themeXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -40,5 +40,90 @@ describe("parseTheme", () => {
   it("parses font scheme", () => {
     expect(theme.fontScheme.majorFont).toBe("Calibri Light");
     expect(theme.fontScheme.minorFont).toBe("Calibri");
+  });
+
+  it("does not warn for valid XML", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    parseTheme(themeXml);
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it("warns and returns defaults when theme root is missing", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const xml = `<other/>`;
+    const result = parseTheme(xml);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Theme: missing root element "theme"'),
+    );
+    expect(result.colorScheme.dk1).toBe("#000000");
+    expect(result.fontScheme.majorFont).toBe("Calibri");
+    warnSpy.mockRestore();
+  });
+
+  it("warns and returns defaults when themeElements is missing", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const xml = `
+      <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:fmtScheme name="Office"/>
+      </a:theme>
+    `;
+    const result = parseTheme(xml);
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Theme: themeElements not found"));
+    expect(result.colorScheme.dk1).toBe("#000000");
+    expect(result.fontScheme.majorFont).toBe("Calibri");
+    warnSpy.mockRestore();
+  });
+
+  it("warns when colorScheme is missing", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const xml = `
+      <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:themeElements>
+          <a:fontScheme name="Office">
+            <a:majorFont><a:latin typeface="Arial"/></a:majorFont>
+            <a:minorFont><a:latin typeface="Arial"/></a:minorFont>
+          </a:fontScheme>
+        </a:themeElements>
+      </a:theme>
+    `;
+    const result = parseTheme(xml);
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Theme: colorScheme not found"));
+    expect(result.colorScheme.dk1).toBe("#000000");
+    expect(result.fontScheme.majorFont).toBe("Arial");
+    warnSpy.mockRestore();
+  });
+
+  it("warns when fontScheme is missing", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const xml = `
+      <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:themeElements>
+          <a:clrScheme name="Office">
+            <a:dk1><a:srgbClr val="111111"/></a:dk1>
+            <a:lt1><a:srgbClr val="FFFFFF"/></a:lt1>
+            <a:dk2><a:srgbClr val="222222"/></a:dk2>
+            <a:lt2><a:srgbClr val="333333"/></a:lt2>
+            <a:accent1><a:srgbClr val="444444"/></a:accent1>
+            <a:accent2><a:srgbClr val="555555"/></a:accent2>
+            <a:accent3><a:srgbClr val="666666"/></a:accent3>
+            <a:accent4><a:srgbClr val="777777"/></a:accent4>
+            <a:accent5><a:srgbClr val="888888"/></a:accent5>
+            <a:accent6><a:srgbClr val="999999"/></a:accent6>
+            <a:hlink><a:srgbClr val="AAAAAA"/></a:hlink>
+            <a:folHlink><a:srgbClr val="BBBBBB"/></a:folHlink>
+          </a:clrScheme>
+        </a:themeElements>
+      </a:theme>
+    `;
+    const result = parseTheme(xml);
+
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Theme: fontScheme not found"));
+    expect(result.colorScheme.dk1).toBe("#111111");
+    expect(result.fontScheme.majorFont).toBe("Calibri");
+    warnSpy.mockRestore();
   });
 });

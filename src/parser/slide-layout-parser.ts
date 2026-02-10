@@ -7,13 +7,21 @@ import { parseShapeTree } from "./slide-parser.js";
 import { buildRelsPath, parseRelationships } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 
+const WARN_PREFIX = "[pptx-glimpse]";
+
 export function parseSlideLayoutBackground(
   xml: string,
   colorResolver: ColorResolver,
 ): Background | null {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parsed = parseXml(xml) as any;
-  const bg = parsed.sldLayout?.cSld?.bg;
+
+  if (!parsed.sldLayout) {
+    console.warn(`${WARN_PREFIX} SlideLayout: missing root element "sldLayout" in XML`);
+    return null;
+  }
+
+  const bg = parsed.sldLayout.cSld?.bg;
   if (!bg) return null;
 
   const bgPr = bg.bgPr;
@@ -31,7 +39,13 @@ export function parseSlideLayoutElements(
 ): SlideElement[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parsed = parseXml(xml) as any;
-  const spTree = parsed.sldLayout?.cSld?.spTree;
+
+  if (!parsed.sldLayout) {
+    console.warn(`${WARN_PREFIX} SlideLayout: missing root element "sldLayout" in XML`);
+    return [];
+  }
+
+  const spTree = parsed.sldLayout.cSld?.spTree;
   if (!spTree) return [];
 
   const relsPath = buildRelsPath(layoutPath);

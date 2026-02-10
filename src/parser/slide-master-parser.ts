@@ -8,6 +8,8 @@ import { parseShapeTree } from "./slide-parser.js";
 import { buildRelsPath, parseRelationships } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 
+const WARN_PREFIX = "[pptx-glimpse]";
+
 const DEFAULT_COLOR_MAP: ColorMap = {
   bg1: "lt1",
   tx1: "dk1",
@@ -26,7 +28,13 @@ const DEFAULT_COLOR_MAP: ColorMap = {
 export function parseSlideMasterColorMap(xml: string): ColorMap {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parsed = parseXml(xml) as any;
-  const clrMap = parsed.sldMaster?.clrMap;
+
+  if (!parsed.sldMaster) {
+    console.warn(`${WARN_PREFIX} SlideMaster: missing root element "sldMaster" in XML`);
+    return { ...DEFAULT_COLOR_MAP };
+  }
+
+  const clrMap = parsed.sldMaster.clrMap;
 
   if (!clrMap) return { ...DEFAULT_COLOR_MAP };
 
@@ -45,7 +53,13 @@ export function parseSlideMasterBackground(
 ): Background | null {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parsed = parseXml(xml) as any;
-  const bg = parsed.sldMaster?.cSld?.bg;
+
+  if (!parsed.sldMaster) {
+    console.warn(`${WARN_PREFIX} SlideMaster: missing root element "sldMaster" in XML`);
+    return null;
+  }
+
+  const bg = parsed.sldMaster.cSld?.bg;
   if (!bg) return null;
 
   const bgPr = bg.bgPr;
@@ -63,7 +77,13 @@ export function parseSlideMasterElements(
 ): SlideElement[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parsed = parseXml(xml) as any;
-  const spTree = parsed.sldMaster?.cSld?.spTree;
+
+  if (!parsed.sldMaster) {
+    console.warn(`${WARN_PREFIX} SlideMaster: missing root element "sldMaster" in XML`);
+    return [];
+  }
+
+  const spTree = parsed.sldMaster.cSld?.spTree;
   if (!spTree) return [];
 
   const relsPath = buildRelsPath(masterPath);
