@@ -52,7 +52,7 @@ function parseBackground(
   return { fill };
 }
 
-function parseShapeTree(
+export function parseShapeTree(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   spTree: any,
   rels: Map<string, Relationship>,
@@ -104,6 +104,10 @@ function parseShape(sp: any, colorResolver: ColorResolver): ShapeElement | null 
   const outline = parseOutline(spPr.ln, colorResolver);
   const textBody = parseTextBody(sp.txBody, colorResolver);
 
+  const ph = sp.nvSpPr?.nvPr?.ph;
+  const placeholderType = ph ? (ph["@_type"] ?? "body") : undefined;
+  const placeholderIdx = ph?.["@_idx"] !== undefined ? Number(ph["@_idx"]) : undefined;
+
   return {
     type: "shape",
     transform,
@@ -111,6 +115,8 @@ function parseShape(sp: any, colorResolver: ColorResolver): ShapeElement | null 
     fill,
     outline,
     textBody,
+    ...(placeholderType !== undefined && { placeholderType }),
+    ...(placeholderIdx !== undefined && { placeholderIdx }),
   };
 }
 

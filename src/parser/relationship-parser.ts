@@ -25,6 +25,13 @@ export function parseRelationships(xml: string): Map<string, Relationship> {
   return rels;
 }
 
+export function buildRelsPath(xmlPath: string): string {
+  const lastSlash = xmlPath.lastIndexOf("/");
+  const dir = xmlPath.substring(0, lastSlash);
+  const filename = xmlPath.substring(lastSlash + 1);
+  return `${dir}/_rels/${filename}.rels`;
+}
+
 export function resolveRelationshipTarget(basePath: string, relTarget: string): string {
   if (relTarget.startsWith("/")) {
     return relTarget.slice(1);

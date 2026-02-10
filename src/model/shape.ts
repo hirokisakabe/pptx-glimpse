@@ -32,6 +32,8 @@ export interface ShapeElement {
   fill: Fill | null;
   outline: Outline | null;
   textBody: TextBody | null;
+  placeholderType?: string;
+  placeholderIdx?: number;
 }
 
 export interface ConnectorElement {
