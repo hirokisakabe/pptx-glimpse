@@ -22,3 +22,4 @@ export type { ImageElement } from "./image.js";
 export type { Fill, SolidFill, GradientFill, NoFill, GradientStop, ResolvedColor } from "./fill.js";
 export type { Outline, DashStyle } from "./line.js";
 export type { Theme, ColorScheme, ColorSchemeKey, ColorMap, FontScheme } from "./theme.js";
+export type { ChartElement, ChartData, ChartType, ChartSeries, ChartLegend } from "./chart.js";
