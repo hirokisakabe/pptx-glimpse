@@ -43,4 +43,5 @@ export interface RunProperties {
   underline: boolean;
   strikethrough: boolean;
   color: ResolvedColor | null;
+  baseline: number;
 }

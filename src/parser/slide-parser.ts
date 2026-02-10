@@ -438,6 +438,7 @@ function parseRunProperties(rPr: any, colorResolver: ColorResolver): RunProperti
       underline: false,
       strikethrough: false,
       color: null,
+      baseline: 0,
     };
   }
 
@@ -447,11 +448,12 @@ function parseRunProperties(rPr: any, colorResolver: ColorResolver): RunProperti
   const italic = rPr["@_i"] === "1" || rPr["@_i"] === "true";
   const underline = rPr["@_u"] !== undefined && rPr["@_u"] !== "none";
   const strikethrough = rPr["@_strike"] !== undefined && rPr["@_strike"] !== "noStrike";
+  const baseline = rPr["@_baseline"] ? Number(rPr["@_baseline"]) / 1000 : 0;
 
   let color = colorResolver.resolve(rPr.solidFill ?? rPr);
   if (!rPr.solidFill && !rPr.srgbClr && !rPr.schemeClr && !rPr.sysClr) {
     color = null;
   }
 
-  return { fontSize, fontFamily, bold, italic, underline, strikethrough, color };
+  return { fontSize, fontFamily, bold, italic, underline, strikethrough, color, baseline };
 }

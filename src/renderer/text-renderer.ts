@@ -218,6 +218,12 @@ function buildStyleAttrs(props: RunProperties, fontScale: number = 1): string {
     styles.push(`text-decoration="${decorations.join(" ")}"`);
   }
 
+  if (props.baseline > 0) {
+    styles.push(`baseline-shift="super"`);
+  } else if (props.baseline < 0) {
+    styles.push(`baseline-shift="sub"`);
+  }
+
   return styles.join(" ");
 }
 
