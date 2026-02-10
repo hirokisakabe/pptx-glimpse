@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { ColorResolver } from "../../src/color/color-resolver.js";
 import type { ColorScheme, ColorMap } from "../../src/model/theme.js";
 
@@ -73,5 +73,34 @@ describe("ColorResolver", () => {
   it("returns null for empty node", () => {
     expect(resolver.resolve(null)).toBeNull();
     expect(resolver.resolve({})).toBeNull();
+  });
+
+  it("warns for unknown color node structure", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const result = resolver.resolve({ unknownClr: { "@_val": "FF0000" } });
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("ColorResolver: unknown color node structure [unknownClr]"),
+    );
+    expect(result).toBeNull();
+    warnSpy.mockRestore();
+  });
+
+  it("does not warn for empty object", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    resolver.resolve({});
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
+  });
+
+  it("does not warn for known color types", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    resolver.resolve({ srgbClr: { "@_val": "FF0000" } });
+    resolver.resolve({ schemeClr: { "@_val": "accent1" } });
+    resolver.resolve({ sysClr: { "@_val": "windowText", "@_lastClr": "000000" } });
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });

@@ -2,6 +2,8 @@ import type { Fill, GradientStop, SolidFill } from "../model/fill.js";
 import type { Outline, DashStyle } from "../model/line.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 
+const WARN_PREFIX = "[pptx-glimpse]";
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function parseFillFromNode(node: any, colorResolver: ColorResolver): Fill | null {
   if (!node) return null;
@@ -27,7 +29,10 @@ export function parseFillFromNode(node: any, colorResolver: ColorResolver): Fill
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseGradientFill(gradNode: any, colorResolver: ColorResolver): Fill | null {
   const gsLst = gradNode.gsLst?.gs;
-  if (!gsLst) return null;
+  if (!gsLst) {
+    console.warn(`${WARN_PREFIX} GradientFill: gsLst not found, skipping gradient`);
+    return null;
+  }
 
   const stops: GradientStop[] = [];
   for (const gs of gsLst) {

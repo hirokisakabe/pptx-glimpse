@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   parseSlideLayoutBackground,
   parseSlideLayoutElements,
@@ -171,5 +171,55 @@ describe("parseSlideLayoutElements", () => {
     const shape = elements[0] as ShapeElement;
     expect(shape.placeholderType).toBeUndefined();
     expect(shape.fill).toEqual({ type: "solid", color: { hex: "#FF0000", alpha: 1 } });
+  });
+});
+
+describe("structural validation warnings", () => {
+  it("warns when parseSlideLayoutBackground receives XML without sldLayout root", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const xml = `<other/>`;
+    const result = parseSlideLayoutBackground(xml, createColorResolver());
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('SlideLayout: missing root element "sldLayout"'),
+    );
+    expect(result).toBeNull();
+    warnSpy.mockRestore();
+  });
+
+  it("warns when parseSlideLayoutElements receives XML without sldLayout root", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const xml = `<other/>`;
+    const result = parseSlideLayoutElements(
+      xml,
+      "ppt/slideLayouts/slideLayout1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('SlideLayout: missing root element "sldLayout"'),
+    );
+    expect(result).toHaveLength(0);
+    warnSpy.mockRestore();
+  });
+
+  it("does not warn for valid XML", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const xml = `
+      <p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+        <p:cSld><p:spTree/></p:cSld>
+      </p:sldLayout>
+    `;
+    parseSlideLayoutBackground(xml, createColorResolver());
+    parseSlideLayoutElements(
+      xml,
+      "ppt/slideLayouts/slideLayout1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    warnSpy.mockRestore();
   });
 });
