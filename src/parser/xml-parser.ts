@@ -15,6 +15,8 @@ const ARRAY_TAGS = new Set([
   "gridCol",
   "tr",
   "tc",
+  "ser",
+  "pt",
 ]);
 
 export function createXmlParser(): XMLParser {

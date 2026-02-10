@@ -49,6 +49,12 @@ export interface GroupElement {
   children: SlideElement[];
 }
 
-export type SlideElement = ShapeElement | ImageElement | ConnectorElement | GroupElement;
+export type SlideElement =
+  | ShapeElement
+  | ImageElement
+  | ConnectorElement
+  | GroupElement
+  | ChartElement;
 
 import type { ImageElement } from "./image.js";
+import type { ChartElement } from "./chart.js";

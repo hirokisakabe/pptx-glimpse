@@ -8,12 +8,14 @@ import type {
   Geometry,
 } from "../model/shape.js";
 import type { ImageElement } from "../model/image.js";
+import type { ChartElement } from "../model/chart.js";
 import type { TextBody, BodyProperties, Paragraph, TextRun, RunProperties } from "../model/text.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import type { Relationship } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import { parseXml } from "./xml-parser.js";
 import { parseFillFromNode, parseOutline } from "./fill-parser.js";
+import { parseChart } from "./chart-parser.js";
 import { parseRelationships, resolveRelationshipTarget } from "./relationship-parser.js";
 import { hundredthPointToPoint } from "../utils/emu.js";
 
@@ -86,6 +88,12 @@ export function parseShapeTree(
   for (const grp of grpSps) {
     const group = parseGroup(grp, rels, slidePath, archive, colorResolver);
     if (group) elements.push(group);
+  }
+
+  const graphicFrames = spTree.graphicFrame ?? [];
+  for (const gf of graphicFrames) {
+    const chart = parseGraphicFrame(gf, rels, slidePath, archive, colorResolver);
+    if (chart) elements.push(chart);
   }
 
   return elements;
@@ -207,6 +215,40 @@ function parseGroup(
   const children = parseShapeTree(grp, rels, slidePath, archive, colorResolver);
 
   return { type: "group", transform, childTransform, children };
+}
+
+function parseGraphicFrame(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  gf: any,
+  rels: Map<string, Relationship>,
+  slidePath: string,
+  archive: PptxArchive,
+  colorResolver: ColorResolver,
+): ChartElement | null {
+  const xfrm = gf.xfrm;
+  const transform = parseTransform(xfrm);
+  if (!transform) return null;
+
+  const graphicData = gf.graphic?.graphicData;
+  if (!graphicData) return null;
+
+  const chartRef = graphicData.chart;
+  if (!chartRef) return null;
+
+  const rId = chartRef["@_r:id"] ?? chartRef["@_id"];
+  if (!rId) return null;
+
+  const rel = rels.get(rId);
+  if (!rel) return null;
+
+  const chartPath = resolveRelationshipTarget(slidePath, rel.target);
+  const chartXml = archive.files.get(chartPath);
+  if (!chartXml) return null;
+
+  const chartData = parseChart(chartXml, colorResolver);
+  if (!chartData) return null;
+
+  return { type: "chart", transform, chart: chartData };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

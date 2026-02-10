@@ -10,3 +10,4 @@ export { parseSlideMasterColorMap, parseSlideMasterBackground } from "./slide-ma
 export { parseSlideLayoutBackground } from "./slide-layout-parser.js";
 export { parseSlide } from "./slide-parser.js";
 export { parseFillFromNode, parseOutline } from "./fill-parser.js";
+export { parseChart } from "./chart-parser.js";
