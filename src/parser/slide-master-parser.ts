@@ -1,7 +1,11 @@
 import type { ColorMap, ColorSchemeKey } from "../model/theme.js";
 import type { Background } from "../model/slide.js";
+import type { SlideElement } from "../model/shape.js";
+import type { PptxArchive } from "./pptx-reader.js";
 import { parseXml } from "./xml-parser.js";
 import { parseFillFromNode } from "./fill-parser.js";
+import { parseShapeTree } from "./slide-parser.js";
+import { buildRelsPath, parseRelationships } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 
 const DEFAULT_COLOR_MAP: ColorMap = {
@@ -49,6 +53,24 @@ export function parseSlideMasterBackground(
 
   const fill = parseFillFromNode(bgPr, colorResolver);
   return { fill };
+}
+
+export function parseSlideMasterElements(
+  xml: string,
+  masterPath: string,
+  archive: PptxArchive,
+  colorResolver: ColorResolver,
+): SlideElement[] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parsed = parseXml(xml) as any;
+  const spTree = parsed.sldMaster?.cSld?.spTree;
+  if (!spTree) return [];
+
+  const relsPath = buildRelsPath(masterPath);
+  const relsXml = archive.files.get(relsPath);
+  const rels = relsXml ? parseRelationships(relsXml) : new Map();
+
+  return parseShapeTree(spTree, rels, masterPath, archive, colorResolver);
 }
 
 export function getDefaultColorMap(): ColorMap {

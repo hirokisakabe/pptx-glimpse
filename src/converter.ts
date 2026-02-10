@@ -4,15 +4,24 @@ import { parseTheme } from "./parser/theme-parser.js";
 import {
   parseSlideMasterColorMap,
   parseSlideMasterBackground,
+  parseSlideMasterElements,
 } from "./parser/slide-master-parser.js";
-import { parseSlideLayoutBackground } from "./parser/slide-layout-parser.js";
+import {
+  parseSlideLayoutBackground,
+  parseSlideLayoutElements,
+} from "./parser/slide-layout-parser.js";
 import { parseSlide } from "./parser/slide-parser.js";
-import { parseRelationships, resolveRelationshipTarget } from "./parser/relationship-parser.js";
+import {
+  parseRelationships,
+  resolveRelationshipTarget,
+  buildRelsPath,
+} from "./parser/relationship-parser.js";
 import { ColorResolver } from "./color/color-resolver.js";
 import { renderSlideToSvg } from "./renderer/svg-renderer.js";
 import { svgToPng } from "./png/png-converter.js";
 import { DEFAULT_OUTPUT_WIDTH } from "./utils/constants.js";
 import type { ColorMap } from "./model/theme.js";
+import type { SlideElement } from "./model/shape.js";
 
 export interface ConvertOptions {
   /** 変換対象のスライド番号 (1始まり)。未指定で全スライド */
@@ -82,11 +91,13 @@ export async function convertPptxToSvg(
 
   const colorResolver = new ColorResolver(theme.colorScheme, colorMap);
 
-  // Parse master background (used as fallback)
-  const masterBackground =
-    masterPath && archive.files.get(masterPath)
-      ? parseSlideMasterBackground(archive.files.get(masterPath)!, colorResolver)
-      : null;
+  // Parse master background and shapes (used as fallback)
+  const masterXml = masterPath ? archive.files.get(masterPath) : undefined;
+  const masterBackground = masterXml ? parseSlideMasterBackground(masterXml, colorResolver) : null;
+  const masterElements =
+    masterPath && masterXml
+      ? parseSlideMasterElements(masterXml, masterPath, archive, colorResolver)
+      : [];
 
   // Resolve slide paths from relationships
   const slidePaths: { slideNumber: number; path: string }[] = [];
@@ -112,27 +123,39 @@ export async function convertPptxToSvg(
 
     const slide = parseSlide(slideXml, path, slideNumber, archive, colorResolver);
 
-    // Fallback background: slide → layout → master
-    if (!slide.background) {
-      const slideRelsPath = path.replace("ppt/slides/", "ppt/slides/_rels/") + ".rels";
-      const slideRelsXml = archive.files.get(slideRelsPath);
-      if (slideRelsXml) {
-        const slideRels = parseRelationships(slideRelsXml);
-        for (const [, rel] of slideRels) {
-          if (rel.type.includes("slideLayout")) {
-            const layoutPath = resolveRelationshipTarget(path, rel.target);
-            const layoutXml = archive.files.get(layoutPath);
-            if (layoutXml) {
+    // Resolve slide layout
+    let layoutElements: SlideElement[] = [];
+    const slideRelsPath = buildRelsPath(path);
+    const slideRelsXml = archive.files.get(slideRelsPath);
+    if (slideRelsXml) {
+      const slideRels = parseRelationships(slideRelsXml);
+      for (const [, rel] of slideRels) {
+        if (rel.type.includes("slideLayout")) {
+          const layoutPath = resolveRelationshipTarget(path, rel.target);
+          const layoutXml = archive.files.get(layoutPath);
+          if (layoutXml) {
+            // Fallback background: slide → layout → master
+            if (!slide.background) {
               slide.background = parseSlideLayoutBackground(layoutXml, colorResolver);
             }
-            break;
+            // Parse layout shapes
+            layoutElements = parseSlideLayoutElements(
+              layoutXml,
+              layoutPath,
+              archive,
+              colorResolver,
+            );
           }
+          break;
         }
       }
     }
     if (!slide.background) {
       slide.background = masterBackground;
     }
+
+    // Merge shapes: master (back) → layout → slide (front)
+    slide.elements = mergeElements(masterElements, layoutElements, slide.elements);
 
     const svg = renderSlideToSvg(slide, presInfo.slideSize);
     results.push({ slideNumber, svg });
@@ -162,6 +185,41 @@ export async function convertPptxToPng(
   }
 
   return results;
+}
+
+function collectPlaceholderTypes(elements: SlideElement[]): Set<string> {
+  const types = new Set<string>();
+  for (const el of elements) {
+    if (el.type === "shape" && el.placeholderType) {
+      types.add(el.placeholderType);
+    }
+  }
+  return types;
+}
+
+function filterByPlaceholder(elements: SlideElement[], excludeTypes: Set<string>): SlideElement[] {
+  return elements.filter((el) => {
+    if (el.type !== "shape") return true;
+    if (!el.placeholderType) return true;
+    return !excludeTypes.has(el.placeholderType);
+  });
+}
+
+function mergeElements(
+  masterElements: SlideElement[],
+  layoutElements: SlideElement[],
+  slideElements: SlideElement[],
+): SlideElement[] {
+  const slidePh = collectPlaceholderTypes(slideElements);
+  const layoutPh = collectPlaceholderTypes(layoutElements);
+
+  // Slide placeholders override layout and master
+  // Layout placeholders override master
+  const allOverrides = new Set([...slidePh, ...layoutPh]);
+  const filteredMaster = filterByPlaceholder(masterElements, allOverrides);
+  const filteredLayout = filterByPlaceholder(layoutElements, slidePh);
+
+  return [...filteredMaster, ...filteredLayout, ...slideElements];
 }
 
 function defaultColorScheme() {
