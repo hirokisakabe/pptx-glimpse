@@ -5,6 +5,7 @@ import { emuToPixels } from "../utils/emu.js";
 import { renderShape, renderConnector } from "./shape-renderer.js";
 import { renderImage } from "./image-renderer.js";
 import { renderChart } from "./chart-renderer.js";
+import { renderTable } from "./table-renderer.js";
 import { renderFillAttrs, resetDefsCounter } from "./fill-renderer.js";
 
 export function renderSlideToSvg(slide: Slide, slideSize: SlideSize): string {
@@ -60,6 +61,8 @@ function renderElement(element: SlideElement, defs: string[]): string | null {
       return renderGroup(element, defs);
     case "chart":
       return renderChart(element);
+    case "table":
+      return renderTable(element, defs);
     default:
       return null;
   }

@@ -54,7 +54,9 @@ export type SlideElement =
   | ImageElement
   | ConnectorElement
   | GroupElement
-  | ChartElement;
+  | ChartElement
+  | TableElement;
 
 import type { ImageElement } from "./image.js";
 import type { ChartElement } from "./chart.js";
+import type { TableElement } from "./table.js";
