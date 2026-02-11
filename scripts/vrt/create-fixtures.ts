@@ -1,11 +1,11 @@
 /**
  * VRT (Visual Regression Testing) 用 PPTX フィクスチャ生成スクリプト
  *
- * 使い方: npx tsx tests/fixtures/create-vrt-fixtures.ts
+ * 使い方: npx tsx scripts/vrt/create-fixtures.ts
  */
 import JSZip from "jszip";
 import sharp from "sharp";
-import { writeFileSync } from "fs";
+import { writeFileSync, mkdirSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
 
@@ -378,8 +378,11 @@ async function buildPptx(options: PptxBuildOptions): Promise<Buffer> {
   return await zip.generateAsync({ type: "nodebuffer" });
 }
 
+const FIXTURE_OUT_DIR = join(__dirname, "../../tests/vrt/internal/fixtures");
+
 function savePptx(buffer: Buffer, name: string): void {
-  const path = join(__dirname, name);
+  mkdirSync(FIXTURE_OUT_DIR, { recursive: true });
+  const path = join(FIXTURE_OUT_DIR, name);
   writeFileSync(path, buffer);
   console.log(`  Created: ${path}`);
 }

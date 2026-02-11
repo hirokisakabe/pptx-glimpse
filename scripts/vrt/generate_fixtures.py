@@ -25,7 +25,7 @@ def make_element(tag, **attribs):
         element.set(key, val)
     return element
 
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "../../tests/vrt/libreoffice-fixtures")
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "../../tests/vrt/libreoffice/fixtures")
 
 SLIDE_WIDTH = 9144000
 SLIDE_HEIGHT = 5143500
