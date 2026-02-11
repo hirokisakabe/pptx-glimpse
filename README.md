@@ -2,6 +2,19 @@
 
 A TypeScript library to render PPTX slides as SVG / PNG.
 
+## Motivation
+
+pptx-glimpse is designed for two primary use cases:
+
+- **Frontend PPTX preview** — Render slide thumbnails without depending on
+  Microsoft Office or LibreOffice. The SVG output can be embedded directly
+  in web pages.
+- **AI image recognition** — Convert slides to PNG so that vision-capable LLMs
+  can understand slide content and layout.
+
+The library focuses on accurately reproducing text, shapes, and spatial layout
+rather than pixel-perfect rendering of every PowerPoint feature.
+
 ## Requirements
 
 - **Node.js >= 20** (does not work in browser environments)
@@ -38,103 +51,103 @@ Supports conversion of static visual content in PowerPoint. Dynamic elements suc
 
 #### Shapes
 
-| Feature        | Details                                                                                          |
-| -------------- | ------------------------------------------------------------------------------------------------ |
-| Preset shapes  | 123 types (rectangles, ellipses, arrows, flowcharts, callouts, stars, math symbols, etc.)        |
-| Custom shapes  | Arbitrary shape drawing using custom paths (moveTo, lnTo, cubicBezTo, close)                     |
-| Connectors     | Line connector drawing, line style / color / width settings                                      |
-| Groups         | Shape grouping, nested groups                                                                    |
-| Transforms     | Position, size, rotation, flip (flipH/flipV), adjustment values                                  |
+| Feature       | Details                                                                                   |
+| ------------- | ----------------------------------------------------------------------------------------- |
+| Preset shapes | 123 types (rectangles, ellipses, arrows, flowcharts, callouts, stars, math symbols, etc.) |
+| Custom shapes | Arbitrary shape drawing using custom paths (moveTo, lnTo, cubicBezTo, close)              |
+| Connectors    | Line connector drawing, line style / color / width settings                               |
+| Groups        | Shape grouping, nested groups                                                             |
+| Transforms    | Position, size, rotation, flip (flipH/flipV), adjustment values                           |
 
 #### Text
 
-| Feature        | Details                                                                                                              |
-| -------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Character formatting | Font size, font family (East Asian font support), bold, italic, underline, strikethrough, font color, superscript / subscript, hyperlinks |
+| Feature              | Details                                                                                                                                     |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Character formatting | Font size, font family (East Asian font support), bold, italic, underline, strikethrough, font color, superscript / subscript, hyperlinks   |
 | Paragraph formatting | Horizontal alignment (left/center/right/justify), vertical anchor (top/center/bottom), line spacing, before/after paragraph spacing, indent |
-| Bullet points  | Character bullets (buChar), auto-numbering (buAutoNum, 9 types), bullet font / color / size                          |
-| Text boxes     | Word wrap (square/none), auto-fit (noAutofit/normAutofit/spAutofit), font scaling, margins                            |
-| Word wrapping  | Word wrapping for English, Japanese, and CJK text, wrapping with mixed font sizes                                    |
+| Bullet points        | Character bullets (buChar), auto-numbering (buAutoNum, 9 types), bullet font / color / size                                                 |
+| Text boxes           | Word wrap (square/none), auto-fit (noAutofit/normAutofit/spAutofit), font scaling, margins                                                  |
+| Word wrapping        | Word wrapping for English, Japanese, and CJK text, wrapping with mixed font sizes                                                           |
 
 #### Fill
 
-| Feature        | Details                                              |
-| -------------- | ---------------------------------------------------- |
-| Solid color    | RGB color specification, transparency                |
-| Gradient       | Linear gradient, multiple gradient stops, angle      |
-| Image fill     | PNG/JPEG/GIF, stretch mode                           |
-| No fill        | noFill specification                                 |
+| Feature     | Details                                         |
+| ----------- | ----------------------------------------------- |
+| Solid color | RGB color specification, transparency           |
+| Gradient    | Linear gradient, multiple gradient stops, angle |
+| Image fill  | PNG/JPEG/GIF, stretch mode                      |
+| No fill     | noFill specification                            |
 
 #### Lines & Borders
 
-| Feature        | Details                                                       |
-| -------------- | ------------------------------------------------------------- |
-| Line style     | Line width, solid color, transparency                         |
-| Dash style     | solid, dash, dot, dashDot, lgDash, lgDashDot, sysDash, sysDot |
+| Feature    | Details                                                       |
+| ---------- | ------------------------------------------------------------- |
+| Line style | Line width, solid color, transparency                         |
+| Dash style | solid, dash, dot, dashDot, lgDash, lgDashDot, sysDash, sysDot |
 
 #### Colors
 
-| Feature        | Details                                                                              |
-| -------------- | ------------------------------------------------------------------------------------ |
-| Color types    | RGB (srgbClr), theme color (schemeClr), system color (sysClr)                        |
-| Theme colors   | Color scheme (dk1, lt1, dk2, lt2, accent1-6, hlink, folHlink), color map             |
-| Color transforms | Luminance adjustment (lumMod/lumOff), tint, shade, transparency (alpha)             |
+| Feature          | Details                                                                  |
+| ---------------- | ------------------------------------------------------------------------ |
+| Color types      | RGB (srgbClr), theme color (schemeClr), system color (sysClr)            |
+| Theme colors     | Color scheme (dk1, lt1, dk2, lt2, accent1-6, hlink, folHlink), color map |
+| Color transforms | Luminance adjustment (lumMod/lumOff), tint, shade, transparency (alpha)  |
 
 #### Effects
 
-| Feature        | Details                                    |
-| -------------- | ------------------------------------------ |
-| Outer shadow   | Blur radius, distance, direction, color / transparency |
-| Inner shadow   | Blur radius, distance, direction, color / transparency |
-| Glow           | Radius, color / transparency               |
-| Soft edge      | Radius                                     |
+| Feature      | Details                                                |
+| ------------ | ------------------------------------------------------ |
+| Outer shadow | Blur radius, distance, direction, color / transparency |
+| Inner shadow | Blur radius, distance, direction, color / transparency |
+| Glow         | Radius, color / transparency                           |
+| Soft edge    | Radius                                                 |
 
 #### Images
 
-| Feature        | Details                                                    |
-| -------------- | ---------------------------------------------------------- |
-| Image elements | PNG/JPEG/GIF, position / size / rotation / flip, effects   |
-| Image fill     | Image fill for shapes and backgrounds                      |
+| Feature        | Details                                                  |
+| -------------- | -------------------------------------------------------- |
+| Image elements | PNG/JPEG/GIF, position / size / rotation / flip, effects |
+| Image fill     | Image fill for shapes and backgrounds                    |
 
 #### Tables
 
-| Feature          | Details                                                                     |
-| ---------------- | --------------------------------------------------------------------------- |
-| Table structure  | Row and column grid, cell merging (gridSpan/rowSpan), row height / column width |
-| Cell formatting  | Text, fill (solid/gradient/image), borders (top/bottom/left/right, styles)  |
+| Feature         | Details                                                                         |
+| --------------- | ------------------------------------------------------------------------------- |
+| Table structure | Row and column grid, cell merging (gridSpan/rowSpan), row height / column width |
+| Cell formatting | Text, fill (solid/gradient/image), borders (top/bottom/left/right, styles)      |
 
 #### Charts
 
-| Feature          | Details                                                                              |
-| ---------------- | ------------------------------------------------------------------------------------ |
-| Supported charts | Bar chart (vertical/horizontal), line chart, pie chart, scatter plot                 |
+| Feature          | Details                                                                                    |
+| ---------------- | ------------------------------------------------------------------------------------------ |
+| Supported charts | Bar chart (vertical/horizontal), line chart, pie chart, scatter plot                       |
 | Chart elements   | Title, legend (position), series (name/values/categories/color), category axis, value axis |
 
 #### Background & Slide Settings
 
-| Feature        | Details                                                                                 |
-| -------------- | --------------------------------------------------------------------------------------- |
-| Background     | Solid, gradient, image. Fallback order: slide → layout → master                         |
-| Slide size     | 16:9, 4:3, custom sizes                                                                 |
-| Theme          | Theme color scheme, theme fonts (majorFont/minorFont)                                   |
+| Feature    | Details                                                         |
+| ---------- | --------------------------------------------------------------- |
+| Background | Solid, gradient, image. Fallback order: slide → layout → master |
+| Slide size | 16:9, 4:3, custom sizes                                         |
+| Theme      | Theme color scheme, theme fonts (majorFont/minorFont)           |
 
 ### Unsupported Features
 
-| Category         | Unsupported features                                                                                                         |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| Fill             | Pattern fill, radial gradient, path gradient                                                                                 |
-| Effects          | Reflection, 3D rotation / extrusion, artistic effects                                                                        |
-| Charts           | Area, radar, doughnut, bubble, stock, combo, histogram, box plot, waterfall, treemap, sunburst                               |
-| Chart details    | Data labels, axis titles / tick marks / grid lines, error bars, trendlines                                                   |
-| Text             | Vertical text, individual text effects (shadow/glow), text outline, text columns                                             |
-| Tables           | Table style template application, diagonal borders                                                                           |
-| Shapes           | Shape operations (Union/Subtract/Intersect/Fragment)                                                                         |
-| SmartArt         | All SmartArt features                                                                                                        |
-| Multimedia       | Embedded video / audio                                                                                                       |
-| Animations       | Object animations, slide transitions                                                                                         |
-| Slide elements   | Slide notes, comments, headers / footers, slide numbers / dates                                                              |
-| Image formats    | EMF/WMF (parsed but not rendered)                                                                                            |
-| Other            | Macros / VBA, sections, zoom slides                                                                                          |
+| Category       | Unsupported features                                                                           |
+| -------------- | ---------------------------------------------------------------------------------------------- |
+| Fill           | Pattern fill, radial gradient, path gradient                                                   |
+| Effects        | Reflection, 3D rotation / extrusion, artistic effects                                          |
+| Charts         | Area, radar, doughnut, bubble, stock, combo, histogram, box plot, waterfall, treemap, sunburst |
+| Chart details  | Data labels, axis titles / tick marks / grid lines, error bars, trendlines                     |
+| Text           | Vertical text, individual text effects (shadow/glow), text outline, text columns               |
+| Tables         | Table style template application, diagonal borders                                             |
+| Shapes         | Shape operations (Union/Subtract/Intersect/Fragment)                                           |
+| SmartArt       | All SmartArt features                                                                          |
+| Multimedia     | Embedded video / audio                                                                         |
+| Animations     | Object animations, slide transitions                                                           |
+| Slide elements | Slide notes, comments, headers / footers, slide numbers / dates                                |
+| Image formats  | EMF/WMF (parsed but not rendered)                                                              |
+| Other          | Macros / VBA, sections, zoom slides                                                            |
 
 ## Test Rendering
 
