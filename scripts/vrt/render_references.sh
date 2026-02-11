@@ -7,8 +7,8 @@ set -euo pipefail
 # Usage:
 #   bash scripts/vrt/render_references.sh
 
-FIXTURE_DIR="/workspace/tests/vrt/libreoffice/fixtures"
-OUTPUT_DIR="/workspace/tests/vrt/libreoffice/snapshots"
+FIXTURE_DIR="/workspace/vrt/libreoffice/fixtures"
+OUTPUT_DIR="/workspace/vrt/libreoffice/snapshots"
 TEMP_DIR="/tmp/libreoffice-render"
 TARGET_WIDTH=960
 
