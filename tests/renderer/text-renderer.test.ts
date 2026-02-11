@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { renderTextBody, formatAutoNum } from "../../src/renderer/text-renderer.js";
+import {
+  renderTextBody,
+  formatAutoNum,
+  buildFontFamilyValue,
+} from "../../src/renderer/text-renderer.js";
 import type { TextBody, Paragraph, BulletType } from "../../src/model/text.js";
 import type { Transform } from "../../src/model/shape.js";
 
@@ -576,8 +580,9 @@ describe("latin/ea フォント切り替え", () => {
       ],
     };
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
-    expect(result).toContain('font-family="Calibri"');
-    expect(result).toContain('font-family="Meiryo"');
+    // Latin セグメントは Calibri が先頭、EA セグメントは Meiryo が先頭のフォールバックリスト
+    expect(result).toContain('font-family="Calibri, Meiryo, sans-serif"');
+    expect(result).toContain('font-family="Meiryo, Calibri, sans-serif"');
     expect(result).toContain("Hello");
     expect(result).toContain("世界");
     expect(result).toContain("Test");
@@ -664,5 +669,47 @@ describe("latin/ea フォント切り替え", () => {
     const tspanCount = (result.match(/<tspan/g) ?? []).length;
     expect(tspanCount).toBe(1);
     expect(result).toContain("Hello世界");
+  });
+});
+
+describe("buildFontFamilyValue", () => {
+  it("単一フォント + 汎用ファミリを返す", () => {
+    expect(buildFontFamilyValue(["Calibri"])).toBe("Calibri, sans-serif");
+  });
+
+  it("latin と ea の両方をフォールバックリストに含める", () => {
+    expect(buildFontFamilyValue(["Calibri", "Meiryo"])).toBe("Calibri, Meiryo, sans-serif");
+  });
+
+  it("重複するフォント名を除去する", () => {
+    expect(buildFontFamilyValue(["Calibri", "Calibri"])).toBe("Calibri, sans-serif");
+  });
+
+  it("null を含むリストでも正しく動作する", () => {
+    expect(buildFontFamilyValue(["Calibri", null])).toBe("Calibri, sans-serif");
+    expect(buildFontFamilyValue([null, "Meiryo"])).toBe("Meiryo, sans-serif");
+  });
+
+  it("すべて null の場合は null を返す", () => {
+    expect(buildFontFamilyValue([null, null])).toBeNull();
+    expect(buildFontFamilyValue([])).toBeNull();
+  });
+
+  it("スペースを含むフォント名をシングルクォートで囲む", () => {
+    expect(buildFontFamilyValue(["Times New Roman"])).toBe("'Times New Roman', serif");
+    expect(buildFontFamilyValue(["Calibri", "Noto Sans JP"])).toBe(
+      "Calibri, 'Noto Sans JP', sans-serif",
+    );
+  });
+
+  it("serif 系フォントの汎用ファミリが serif になる", () => {
+    expect(buildFontFamilyValue(["Times New Roman"])).toBe("'Times New Roman', serif");
+    expect(buildFontFamilyValue(["Yu Mincho"])).toBe("'Yu Mincho', serif");
+    expect(buildFontFamilyValue(["游明朝"])).toBe("游明朝, serif");
+  });
+
+  it("sans-serif 系フォントの汎用ファミリが sans-serif になる", () => {
+    expect(buildFontFamilyValue(["Arial"])).toBe("Arial, sans-serif");
+    expect(buildFontFamilyValue(["Meiryo"])).toBe("Meiryo, sans-serif");
   });
 });
