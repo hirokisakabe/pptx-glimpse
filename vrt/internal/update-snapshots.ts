@@ -10,19 +10,17 @@ const SNAPSHOT_DIR = join(__dirname, "snapshots");
 async function main(): Promise<void> {
   mkdirSync(SNAPSHOT_DIR, { recursive: true });
 
-  const fixtures = readdirSync(FIXTURE_DIR).filter(
-    (f) => f.startsWith("vrt-") && f.endsWith(".pptx"),
-  );
+  const fixtures = readdirSync(FIXTURE_DIR).filter((f) => f.endsWith(".pptx"));
 
   if (fixtures.length === 0) {
-    console.error('No VRT fixtures found. Run "npm run test:vrt:fixtures" first.');
+    console.error('No VRT fixtures found. Run "npm run vrt:internal:fixtures" first.');
     process.exit(1);
   }
 
   let totalSlides = 0;
 
   for (const fixture of fixtures.sort()) {
-    const name = fixture.replace(".pptx", "").replace("vrt-", "");
+    const name = fixture.replace(".pptx", "");
     const fixturePath = join(FIXTURE_DIR, fixture);
     const input = readFileSync(fixturePath);
 

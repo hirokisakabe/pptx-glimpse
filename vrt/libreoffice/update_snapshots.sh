@@ -5,7 +5,7 @@ set -euo pipefail
 # Docker コンテナ内で実行されることを想定。
 #
 # Usage:
-#   bash vrt/libreoffice/render_references.sh
+#   bash vrt/libreoffice/update_snapshots.sh
 
 FIXTURE_DIR="/workspace/vrt/libreoffice/fixtures"
 OUTPUT_DIR="/workspace/vrt/libreoffice/snapshots"
@@ -16,13 +16,12 @@ mkdir -p "$OUTPUT_DIR" "$TEMP_DIR"
 
 found=0
 
-for pptx_file in "$FIXTURE_DIR"/lo-*.pptx; do
+for pptx_file in "$FIXTURE_DIR"/*.pptx; do
     [ -f "$pptx_file" ] || continue
     found=1
 
     basename=$(basename "$pptx_file" .pptx)
-    # lo-basic-shapes -> basic-shapes
-    name="${basename#lo-}"
+    name="$basename"
 
     echo "Rendering: $pptx_file"
 

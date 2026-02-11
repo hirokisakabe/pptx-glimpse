@@ -13,29 +13,29 @@ const PIXEL_THRESHOLD = 0.1;
 const MISMATCH_TOLERANCE = 0.015;
 
 const VRT_CASES = [
-  { name: "shapes", fixture: "vrt-shapes.pptx" },
-  { name: "fill-and-lines", fixture: "vrt-fill-and-lines.pptx" },
-  { name: "text", fixture: "vrt-text.pptx" },
-  { name: "transform", fixture: "vrt-transform.pptx" },
-  { name: "background", fixture: "vrt-background.pptx" },
-  { name: "groups", fixture: "vrt-groups.pptx" },
-  { name: "charts", fixture: "vrt-charts.pptx" },
-  { name: "connectors", fixture: "vrt-connectors.pptx" },
-  { name: "custom-geometry", fixture: "vrt-custom-geometry.pptx" },
-  { name: "image", fixture: "vrt-image.pptx" },
-  { name: "tables", fixture: "vrt-tables.pptx" },
-  { name: "bullets", fixture: "vrt-bullets.pptx" },
-  { name: "flowchart", fixture: "vrt-flowchart.pptx" },
-  { name: "callouts-arcs", fixture: "vrt-callouts-arcs.pptx" },
-  { name: "arrows-stars", fixture: "vrt-arrows-stars.pptx" },
-  { name: "math-other", fixture: "vrt-math-other.pptx" },
-  { name: "word-wrap", fixture: "vrt-word-wrap.pptx" },
-  { name: "background-blipfill", fixture: "vrt-background-blipfill.pptx" },
-  { name: "composite", fixture: "vrt-composite.pptx" },
-  { name: "text-decoration", fixture: "vrt-text-decoration.pptx" },
-  { name: "slide-size-4-3", fixture: "vrt-slide-size-4-3.pptx" },
-  { name: "effects", fixture: "vrt-effects.pptx" },
-  { name: "hyperlinks", fixture: "vrt-hyperlinks.pptx" },
+  { name: "shapes", fixture: "shapes.pptx" },
+  { name: "fill-and-lines", fixture: "fill-and-lines.pptx" },
+  { name: "text", fixture: "text.pptx" },
+  { name: "transform", fixture: "transform.pptx" },
+  { name: "background", fixture: "background.pptx" },
+  { name: "groups", fixture: "groups.pptx" },
+  { name: "charts", fixture: "charts.pptx" },
+  { name: "connectors", fixture: "connectors.pptx" },
+  { name: "custom-geometry", fixture: "custom-geometry.pptx" },
+  { name: "image", fixture: "image.pptx" },
+  { name: "tables", fixture: "tables.pptx" },
+  { name: "bullets", fixture: "bullets.pptx" },
+  { name: "flowchart", fixture: "flowchart.pptx" },
+  { name: "callouts-arcs", fixture: "callouts-arcs.pptx" },
+  { name: "arrows-stars", fixture: "arrows-stars.pptx" },
+  { name: "math-other", fixture: "math-other.pptx" },
+  { name: "word-wrap", fixture: "word-wrap.pptx" },
+  { name: "background-blipfill", fixture: "background-blipfill.pptx" },
+  { name: "composite", fixture: "composite.pptx" },
+  { name: "text-decoration", fixture: "text-decoration.pptx" },
+  { name: "slide-size-4-3", fixture: "slide-size-4-3.pptx" },
+  { name: "effects", fixture: "effects.pptx" },
+  { name: "hyperlinks", fixture: "hyperlinks.pptx" },
 ] as const;
 
 describe("Visual Regression Tests", { timeout: 60000 }, () => {
@@ -45,7 +45,7 @@ describe("Visual Regression Tests", { timeout: 60000 }, () => {
         const fixturePath = join(FIXTURE_DIR, fixture);
         if (!existsSync(fixturePath)) {
           throw new Error(
-            `Fixture not found: ${fixturePath}. Run "npm run test:vrt:fixtures" first.`,
+            `Fixture not found: ${fixturePath}. Run "npm run vrt:internal:fixtures" first.`,
           );
         }
 

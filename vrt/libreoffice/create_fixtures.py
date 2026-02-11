@@ -3,7 +3,7 @@
 LibreOffice VRT 用の PPTX フィクスチャを python-pptx で生成する。
 
 Usage:
-    python3 vrt/libreoffice/generate_fixtures.py
+    python3 vrt/libreoffice/create_fixtures.py
 """
 
 import os
@@ -78,8 +78,8 @@ def create_basic_shapes():
         shape.line.color.rgb = RGBColor(0x33, 0x33, 0x33)
         shape.line.width = Pt(1.5)
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-basic-shapes.pptx"))
-    print("  Created: lo-basic-shapes.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "basic-shapes.pptx"))
+    print("  Created: basic-shapes.pptx")
 
 
 def create_text_formatting():
@@ -129,8 +129,8 @@ def create_text_formatting():
         if "color" in t:
             run.font.color.rgb = t["color"]
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-text-formatting.pptx"))
-    print("  Created: lo-text-formatting.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "text-formatting.pptx"))
+    print("  Created: text-formatting.pptx")
 
 
 def create_fill_and_lines():
@@ -171,8 +171,8 @@ def create_fill_and_lines():
         shape.line.color.rgb = line_color
         shape.line.width = line_width
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-fill-and-lines.pptx"))
-    print("  Created: lo-fill-and-lines.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "fill-and-lines.pptx"))
+    print("  Created: fill-and-lines.pptx")
 
 
 def create_gradient_fills():
@@ -260,8 +260,8 @@ def create_gradient_fills():
             shape.line.color.rgb = RGBColor(0x33, 0x33, 0x33)
             shape.line.width = Pt(2)
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-gradient-fills.pptx"))
-    print("  Created: lo-gradient-fills.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "gradient-fills.pptx"))
+    print("  Created: gradient-fills.pptx")
 
 
 def create_dash_lines():
@@ -308,8 +308,8 @@ def create_dash_lines():
         run.font.size = Pt(18)
         run.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-dash-lines.pptx"))
-    print("  Created: lo-dash-lines.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "dash-lines.pptx"))
+    print("  Created: dash-lines.pptx")
 
 
 def create_text_decoration():
@@ -384,8 +384,8 @@ def create_text_decoration():
                 rPr = run._r.get_or_add_rPr()
                 rPr.set("strike", "sngStrike")
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-text-decoration.pptx"))
-    print("  Created: lo-text-decoration.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "text-decoration.pptx"))
+    print("  Created: text-decoration.pptx")
 
 
 def create_tables():
@@ -436,8 +436,8 @@ def create_tables():
             run.font.name = "Liberation Sans"
             run.font.size = Pt(14)
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-tables.pptx"))
-    print("  Created: lo-tables.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "tables.pptx"))
+    print("  Created: tables.pptx")
 
 
 def create_bullets():
@@ -523,8 +523,8 @@ def create_bullets():
                 buAutoNum.set("type", config["scheme"])
                 pPr.append(buAutoNum)
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-bullets.pptx"))
-    print("  Created: lo-bullets.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "bullets.pptx"))
+    print("  Created: bullets.pptx")
 
 
 def create_transforms():
@@ -564,8 +564,8 @@ def create_transforms():
         if t["flipV"]:
             xfrm.set("flipV", "1")
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-transforms.pptx"))
-    print("  Created: lo-transforms.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "transforms.pptx"))
+    print("  Created: transforms.pptx")
 
 
 def create_groups():
@@ -731,8 +731,8 @@ def create_groups():
 
         spTree.append(grpSp)
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-groups.pptx"))
-    print("  Created: lo-groups.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "groups.pptx"))
+    print("  Created: groups.pptx")
 
 
 def create_slide_background():
@@ -789,8 +789,8 @@ def create_slide_background():
     shape3.line.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
     shape3.line.width = Pt(3)
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-slide-background.pptx"))
-    print("  Created: lo-slide-background.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "slide-background.pptx"))
+    print("  Created: slide-background.pptx")
 
 
 def create_flowchart_shapes():
@@ -821,8 +821,8 @@ def create_flowchart_shapes():
         shape.line.color.rgb = RGBColor(0x33, 0x33, 0x33)
         shape.line.width = Pt(1.5)
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-flowchart-shapes.pptx"))
-    print("  Created: lo-flowchart-shapes.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "flowchart-shapes.pptx"))
+    print("  Created: flowchart-shapes.pptx")
 
 
 def create_arrows_stars():
@@ -861,8 +861,8 @@ def create_arrows_stars():
         shape.line.color.rgb = RGBColor(0x33, 0x33, 0x33)
         shape.line.width = Pt(1.5)
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-arrows-stars.pptx"))
-    print("  Created: lo-arrows-stars.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "arrows-stars.pptx"))
+    print("  Created: arrows-stars.pptx")
 
 
 def create_callouts_arcs():
@@ -902,8 +902,8 @@ def create_callouts_arcs():
         shape.line.color.rgb = RGBColor(0x33, 0x33, 0x33)
         shape.line.width = Pt(1.5)
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-callouts-arcs.pptx"))
-    print("  Created: lo-callouts-arcs.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "callouts-arcs.pptx"))
+    print("  Created: callouts-arcs.pptx")
 
 
 def create_math_other():
@@ -945,8 +945,8 @@ def create_math_other():
         shape.line.color.rgb = RGBColor(0x33, 0x33, 0x33)
         shape.line.width = Pt(1.5)
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-math-other.pptx"))
-    print("  Created: lo-math-other.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "math-other.pptx"))
+    print("  Created: math-other.pptx")
 
 
 def create_image():
@@ -994,8 +994,8 @@ def create_image():
         slide.shapes.add_picture(img2_path, Inches(3.6), Inches(0.5), Inches(2.8), Inches(4))
         slide.shapes.add_picture(img3_path, Inches(6.7), Inches(0.5), Inches(2.8), Inches(4))
 
-        prs.save(os.path.join(OUTPUT_DIR, "lo-image.pptx"))
-        print("  Created: lo-image.pptx")
+        prs.save(os.path.join(OUTPUT_DIR, "image.pptx"))
+        print("  Created: image.pptx")
     finally:
         shutil.rmtree(temp_dir)
 
@@ -1065,8 +1065,8 @@ def create_charts():
         chart_data5,
     )
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-charts.pptx"))
-    print("  Created: lo-charts.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "charts.pptx"))
+    print("  Created: charts.pptx")
 
 
 def create_connectors():
@@ -1160,8 +1160,8 @@ def create_connectors():
         cxnSp.append(spPr)
         spTree.append(cxnSp)
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-connectors.pptx"))
-    print("  Created: lo-connectors.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "connectors.pptx"))
+    print("  Created: connectors.pptx")
 
 
 def _build_custom_path(path_elem, commands):
@@ -1299,8 +1299,8 @@ def create_custom_geometry():
         sp.append(spPr)
         spTree.append(sp)
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-custom-geometry.pptx"))
-    print("  Created: lo-custom-geometry.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "custom-geometry.pptx"))
+    print("  Created: custom-geometry.pptx")
 
 
 def create_slide_size_4_3():
@@ -1385,8 +1385,8 @@ def create_slide_size_4_3():
     run_f.font.size = Pt(14)
     run_f.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-slide-size-4-3.pptx"))
-    print("  Created: lo-slide-size-4-3.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "slide-size-4-3.pptx"))
+    print("  Created: slide-size-4-3.pptx")
 
 
 def create_word_wrap():
@@ -1459,8 +1459,8 @@ def create_word_wrap():
             bodyPr = tf._txBody.find(qn("a:bodyPr"))
             bodyPr.set("wrap", "none")
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-word-wrap.pptx"))
-    print("  Created: lo-word-wrap.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "word-wrap.pptx"))
+    print("  Created: word-wrap.pptx")
 
 
 def create_background_blipfill():
@@ -1549,8 +1549,8 @@ def create_background_blipfill():
         run.font.bold = True
         run.font.color.rgb = RGBColor(0x1F, 0x4E, 0x79)
 
-        prs.save(os.path.join(OUTPUT_DIR, "lo-background-blipfill.pptx"))
-        print("  Created: lo-background-blipfill.pptx")
+        prs.save(os.path.join(OUTPUT_DIR, "background-blipfill.pptx"))
+        print("  Created: background-blipfill.pptx")
     finally:
         shutil.rmtree(temp_dir)
 
@@ -1667,8 +1667,8 @@ def create_composite():
         if c["rotation"] != 0.0:
             shape.rotation = c["rotation"]
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-composite.pptx"))
-    print("  Created: lo-composite.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "composite.pptx"))
+    print("  Created: composite.pptx")
 
 
 def create_effects():
@@ -1765,8 +1765,8 @@ def create_effects():
         spPr = shape._element.spPr
         spPr.append(effectLst)
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-effects.pptx"))
-    print("  Created: lo-effects.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "effects.pptx"))
+    print("  Created: effects.pptx")
 
 
 def create_hyperlinks():
@@ -1873,8 +1873,8 @@ def create_hyperlinks():
     rel_l2 = slide.part.relate_to("https://example.org", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink", is_external=True)
     hlinkClick_l2.set(qn("r:id"), rel_l2)
 
-    prs.save(os.path.join(OUTPUT_DIR, "lo-hyperlinks.pptx"))
-    print("  Created: lo-hyperlinks.pptx")
+    prs.save(os.path.join(OUTPUT_DIR, "hyperlinks.pptx"))
+    print("  Created: hyperlinks.pptx")
 
 
 def main():
