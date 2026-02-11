@@ -68,7 +68,12 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
     }
 
     if (shouldWrap) {
-      const wrappedLines = wrapParagraph(para, effectiveTextWidth, scaledDefaultFontSize);
+      const wrappedLines = wrapParagraph(
+        para,
+        effectiveTextWidth,
+        scaledDefaultFontSize,
+        fontScale,
+      );
       for (let lineIdx = 0; lineIdx < wrappedLines.length; lineIdx++) {
         const line = wrappedLines[lineIdx];
         if (line.segments.length === 0) {
@@ -182,6 +187,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
     shouldWrap,
     textWidth,
     lnSpcReduction,
+    fontScale,
   );
   if (bodyProperties.anchor === "ctr") {
     yStart = Math.max(marginTop, (height - totalTextHeight) / 2);
@@ -498,6 +504,7 @@ function estimateTextHeight(
   shouldWrap: boolean,
   textWidth: number,
   lnSpcReduction: number = 0,
+  fontScale: number = 1,
 ): number {
   let totalHeight = 0;
 
@@ -508,7 +515,7 @@ function estimateTextHeight(
 
     let lineCount: number;
     if (shouldWrap && para.runs.length > 0 && para.runs.some((r) => r.text.length > 0)) {
-      const wrappedLines = wrapParagraph(para, textWidth, defaultFontSize);
+      const wrappedLines = wrapParagraph(para, textWidth, defaultFontSize, fontScale);
       lineCount = wrappedLines.length;
     } else {
       lineCount = para.runs.some((r) => r.text.length > 0) ? 1 : 1;

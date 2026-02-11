@@ -12,6 +12,7 @@ function makeRunProps(overrides: Partial<RunProperties> = {}): RunProperties {
     underline: false,
     strikethrough: false,
     color: null,
+    baseline: 0,
     ...overrides,
   };
 }
@@ -138,5 +139,28 @@ describe("wrapParagraph", () => {
         expect(lastSeg.text).not.toMatch(/\s+$/);
       }
     }
+  });
+
+  it("fontScale が run 個別の fontSize に適用される", () => {
+    // run に明示的な fontSize=36 を設定し、fontScale=0.5 で幅計測
+    // fontScale 適用後は fontSize=18 相当になるため、fontSize=18 と同じ折り返し結果になるはず
+    const para = makeParagraph(["The quick brown fox jumps over the lazy dog"], {
+      fontSize: 36,
+    });
+    const linesWithScale = wrapParagraph(para, 200, 18, 0.5);
+    const paraSmall = makeParagraph(["The quick brown fox jumps over the lazy dog"], {
+      fontSize: 18,
+    });
+    const linesSmall = wrapParagraph(paraSmall, 200, 18, 1);
+    expect(linesWithScale.length).toBe(linesSmall.length);
+  });
+
+  it("fontScale が 1 のとき run の fontSize がそのまま使われる", () => {
+    const para = makeParagraph(["Hello World"], { fontSize: 36 });
+    const linesNoScale = wrapParagraph(para, 200, 18, 1);
+    // fontSize=36 は fontSize=18 より幅が広いので、より多くの行に折り返されるはず
+    const paraSmall = makeParagraph(["Hello World"], { fontSize: 18 });
+    const linesSmall = wrapParagraph(paraSmall, 200, 18, 1);
+    expect(linesNoScale.length).toBeGreaterThanOrEqual(linesSmall.length);
   });
 });
