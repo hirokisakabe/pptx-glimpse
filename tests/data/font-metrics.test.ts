@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getFontMetrics } from "../../src/data/font-metrics.js";
+import { getFontMetrics, getMetricsFallbackFont } from "../../src/data/font-metrics.js";
 
 describe("getFontMetrics", () => {
   it("Calibri に対して Carlito ベースのメトリクスを返す", () => {
@@ -69,5 +69,51 @@ describe("getFontMetrics", () => {
     const arial = getFontMetrics("Arial")!;
     expect(arial.ascender).toBeGreaterThan(0);
     expect(arial.descender).toBeLessThan(0);
+  });
+});
+
+describe("getMetricsFallbackFont", () => {
+  it("Calibri に対して Carlito を返す", () => {
+    expect(getMetricsFallbackFont("Calibri")).toBe("Carlito");
+  });
+
+  it("Arial に対して Liberation Sans を返す", () => {
+    expect(getMetricsFallbackFont("Arial")).toBe("Liberation Sans");
+  });
+
+  it("Helvetica に対して Liberation Sans を返す", () => {
+    expect(getMetricsFallbackFont("Helvetica")).toBe("Liberation Sans");
+  });
+
+  it("Times New Roman に対して Liberation Serif を返す", () => {
+    expect(getMetricsFallbackFont("Times New Roman")).toBe("Liberation Serif");
+  });
+
+  it("Meiryo に対して Noto Sans JP を返す", () => {
+    expect(getMetricsFallbackFont("Meiryo")).toBe("Noto Sans JP");
+  });
+
+  it("Yu Gothic に対して Noto Sans JP を返す", () => {
+    expect(getMetricsFallbackFont("Yu Gothic")).toBe("Noto Sans JP");
+  });
+
+  it("Noto Sans JP に対して Noto Sans JP を返す", () => {
+    expect(getMetricsFallbackFont("Noto Sans JP")).toBe("Noto Sans JP");
+  });
+
+  it("大文字小文字を無視してマッチングする", () => {
+    expect(getMetricsFallbackFont("calibri")).toBe("Carlito");
+  });
+
+  it("未知のフォントに対して null を返す", () => {
+    expect(getMetricsFallbackFont("NonExistentFont")).toBeNull();
+  });
+
+  it("null に対して null を返す", () => {
+    expect(getMetricsFallbackFont(null)).toBeNull();
+  });
+
+  it("undefined に対して null を返す", () => {
+    expect(getMetricsFallbackFont(undefined)).toBeNull();
   });
 });
