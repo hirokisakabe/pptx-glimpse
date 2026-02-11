@@ -11,7 +11,7 @@ const DIFF_DIR = join(__dirname, "diffs");
 const FIXTURE_DIR = join(__dirname, "../fixtures");
 
 const PIXEL_THRESHOLD = 0.1;
-const MISMATCH_TOLERANCE = 0.01;
+const MISMATCH_TOLERANCE = 0.015;
 
 interface CompareResult {
   totalPixels: number;

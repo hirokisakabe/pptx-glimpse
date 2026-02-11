@@ -9,9 +9,10 @@ import type { Transform } from "../model/shape.js";
 import { emuToPixels } from "../utils/emu.js";
 import { wrapParagraph } from "../utils/text-wrap.js";
 import { getMetricsFallbackFont } from "../data/font-metrics.js";
+import { getLineHeightRatio } from "../utils/text-measure.js";
 
 const PX_PER_PT = 96 / 72;
-const DEFAULT_LINE_SPACING = 1.2;
+const DEFAULT_LINE_SPACING = 1.0;
 const DEFAULT_FONT_SIZE_PT = 18;
 
 export function renderTextBody(textBody: TextBody, transform: Transform): string {
@@ -33,6 +34,10 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
   const fontScale = bodyProperties.fontScale;
   const lnSpcReduction = bodyProperties.lnSpcReduction;
   const scaledDefaultFontSize = defaultFontSize * fontScale;
+
+  // デフォルトフォントの行高さ比率
+  const defaultLineHeightRatio = getDefaultLineHeightRatio(paragraphs);
+  const defaultNaturalHeight = scaledDefaultFontSize * defaultLineHeightRatio;
 
   const tspans: string[] = [];
   let isFirstLine = true;
@@ -62,7 +67,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
     );
 
     if (para.runs.length === 0 || !para.runs.some((r) => r.text.length > 0)) {
-      const dy = computeDy(isFirstLine, scaledDefaultFontSize, DEFAULT_LINE_SPACING, para, true);
+      const dy = computeDy(isFirstLine, defaultNaturalHeight, DEFAULT_LINE_SPACING, para, true);
       tspans.push(`<tspan x="${xPos}" dy="${dy}" text-anchor="${anchorValue}"> </tspan>`);
       isFirstLine = false;
       continue;
@@ -80,7 +85,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
         if (line.segments.length === 0) {
           const dy = computeDy(
             isFirstLine,
-            scaledDefaultFontSize,
+            defaultNaturalHeight,
             getLineSpacing(para, lnSpcReduction),
             para,
             lineIdx === 0,
@@ -93,9 +98,14 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
         // 最初の行に箇条書き記号を挿入
         if (lineIdx === 0 && bulletText) {
           const lineFontSize = getLineFontSize(line.segments, defaultFontSize) * fontScale;
+          const lineNaturalHeight = computeLineNaturalHeight(
+            line.segments,
+            defaultFontSize,
+            fontScale,
+          );
           const dy = computeDy(
             isFirstLine,
-            lineFontSize,
+            lineNaturalHeight,
             getLineSpacing(para, lnSpcReduction),
             para,
             true,
@@ -115,10 +125,14 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
             const seg = line.segments[segIdx];
 
             if (segIdx === 0) {
-              const lineFontSize = getLineFontSize(line.segments, defaultFontSize) * fontScale;
+              const lineNaturalHeight = computeLineNaturalHeight(
+                line.segments,
+                defaultFontSize,
+                fontScale,
+              );
               const dy = computeDy(
                 isFirstLine,
-                lineFontSize,
+                lineNaturalHeight,
                 getLineSpacing(para, lnSpcReduction),
                 para,
                 lineIdx === 0,
@@ -138,9 +152,10 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
       if (bulletText) {
         const firstRun = para.runs.find((r) => r.text.length > 0);
         const fontSize = (firstRun?.properties.fontSize ?? defaultFontSize) * fontScale;
+        const naturalHeight = computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
         const dy = computeDy(
           isFirstLine,
-          fontSize,
+          naturalHeight,
           getLineSpacing(para, lnSpcReduction),
           para,
           true,
@@ -161,9 +176,10 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
             const prefix = `x="${xPos}" text-anchor="${anchorValue}" `;
             tspans.push(renderSegment(run.text, run.properties, fontScale, prefix));
           } else {
+            const naturalHeight = computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
             const dy = computeDy(
               isFirstLine,
-              (run.properties.fontSize ?? defaultFontSize) * fontScale,
+              naturalHeight,
               getLineSpacing(para, lnSpcReduction),
               para,
               true,
@@ -195,7 +211,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
   } else if (bodyProperties.anchor === "b") {
     yStart = Math.max(marginTop, height - totalTextHeight - marginBottom);
   }
-  yStart += scaledDefaultFontSize;
+  yStart += defaultNaturalHeight;
 
   return `<text x="0" y="${yStart}">${tspans.join("")}</text>`;
 }
@@ -373,6 +389,20 @@ function getLineFontSize(
     if (seg.properties.fontSize) return seg.properties.fontSize;
   }
   return defaultFontSize;
+}
+
+function computeLineNaturalHeight(
+  segments: { properties: RunProperties }[],
+  defaultFontSize: number,
+  fontScale: number,
+): number {
+  let maxHeight = 0;
+  for (const seg of segments) {
+    const fontSize = (seg.properties.fontSize ?? defaultFontSize) * fontScale;
+    const ratio = getLineHeightRatio(seg.properties.fontFamily, seg.properties.fontFamilyEa);
+    maxHeight = Math.max(maxHeight, fontSize * ratio);
+  }
+  return maxHeight > 0 ? maxHeight : defaultFontSize * fontScale * 1.2;
 }
 
 function isCjkCodePoint(codePoint: number): boolean {
@@ -556,6 +586,17 @@ function getDefaultFontSize(paragraphs: TextBody["paragraphs"]): number {
   return DEFAULT_FONT_SIZE_PT;
 }
 
+function getDefaultLineHeightRatio(paragraphs: TextBody["paragraphs"]): number {
+  for (const p of paragraphs) {
+    for (const r of p.runs) {
+      if (r.properties.fontFamily || r.properties.fontFamilyEa) {
+        return getLineHeightRatio(r.properties.fontFamily, r.properties.fontFamilyEa);
+      }
+    }
+  }
+  return 1.2;
+}
+
 function estimateTextHeight(
   paragraphs: TextBody["paragraphs"],
   defaultFontSize: number,
@@ -565,11 +606,16 @@ function estimateTextHeight(
   fontScale: number = 1,
 ): number {
   let totalHeight = 0;
+  const defaultRatio = getDefaultLineHeightRatio(paragraphs);
 
   for (let pIdx = 0; pIdx < paragraphs.length; pIdx++) {
     const para = paragraphs[pIdx];
     const lineSpacing = getLineSpacing(para, lnSpcReduction);
-    const lineHeight = defaultFontSize * PX_PER_PT * lineSpacing;
+    const naturalHeight = computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
+    const lineHeight =
+      (naturalHeight > 0 ? naturalHeight : defaultFontSize * fontScale * defaultRatio) *
+      PX_PER_PT *
+      lineSpacing;
 
     let lineCount: number;
     if (shouldWrap && para.runs.length > 0 && para.runs.some((r) => r.text.length > 0)) {
