@@ -1,0 +1,42 @@
+name: LibreOffice VRT
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  libreoffice-vrt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Docker image
+        run: docker build -t pptx-glimpse-vrt docker/libreoffice-vrt
+
+      - name: Generate fixtures
+        run: docker run --rm -v "${{ github.workspace }}":/workspace pptx-glimpse-vrt python3 /workspace/scripts/vrt/generate_fixtures.py
+
+      - name: Generate LibreOffice reference images
+        run: docker run --rm -v "${{ github.workspace }}":/workspace pptx-glimpse-vrt bash /workspace/scripts/vrt/render_references.sh
+
+      - name: Run LibreOffice VRT
+        run: npx vitest run tests/vrt/libreoffice-regression.test.ts
+
+      - name: Upload diff images on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: libreoffice-vrt-diffs
+          path: tests/vrt/libreoffice-diffs/
+          retention-days: 7

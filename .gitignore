@@ -6,3 +6,4 @@ coverage/
 output/
 scripts/fonts/
 tests/vrt/diffs/
+tests/vrt/libreoffice-diffs/
