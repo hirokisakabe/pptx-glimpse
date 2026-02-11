@@ -84,6 +84,7 @@ const VRT_CASES = [
   { name: "connectors", fixture: "vrt-connectors.pptx" },
   { name: "custom-geometry", fixture: "vrt-custom-geometry.pptx" },
   { name: "image", fixture: "vrt-image.pptx" },
+  { name: "tables", fixture: "vrt-tables.pptx" },
 ] as const;
 
 describe("Visual Regression Tests", { timeout: 60000 }, () => {
