@@ -1771,12 +1771,36 @@ async function createArrowsStarsFixture(): Promise<void> {
 
   const slide1 = makeSlide(arrowPresets, 5, 2);
   const slide2 = makeSlide(starPresets, 5, 2);
+
+  // Slide 3: Wide (banner-shaped) arrows to test adj calculation with w >> h
+  const wideArrowPresets = ["chevron", "homePlate", "notchedRightArrow", "stripedRightArrow"];
+  const slide3 = (() => {
+    let id = 2;
+    const margin = 200000;
+    const shapeW = SLIDE_W - margin * 2;
+    const shapeH = 650000; // ~68px — much shorter than wide
+    const shapes = wideArrowPresets.map((preset, i) => {
+      const y = margin + i * (shapeH + margin);
+      return shapeXml(id++, preset, {
+        preset,
+        x: margin,
+        y,
+        cx: shapeW,
+        cy: shapeH,
+        fillXml: solidFillXml(COLORS[i % COLORS.length]),
+        outlineXml: outlineXml(12700, "333333"),
+      });
+    });
+    return wrapSlideXml(shapes.join("\n"));
+  })();
+
   const rels = slideRelsXml();
 
   const buffer = await buildPptx({
     slides: [
       { xml: slide1, rels },
       { xml: slide2, rels },
+      { xml: slide3, rels },
     ],
   });
   savePptx(buffer, "arrows-stars.pptx");
