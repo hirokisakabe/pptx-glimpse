@@ -1093,6 +1093,262 @@ async function createImageFixture(): Promise<void> {
   savePptx(buffer, "vrt-image.pptx");
 }
 
+// --- 11. Bullets and Numbering ---
+function bulletParagraphsXml(
+  items: {
+    text: string;
+    bulletXml: string;
+    marL?: number;
+    indent?: number;
+    lvl?: number;
+  }[],
+  opts?: { anchor?: string },
+): string {
+  const anchor = opts?.anchor ?? "t";
+  const paragraphs = items
+    .map((item) => {
+      const marL = item.marL ?? 342900;
+      const indent = item.indent ?? -342900;
+      const lvl = item.lvl ?? 0;
+      return `<a:p>
+      <a:pPr lvl="${lvl}" marL="${marL}" indent="${indent}">
+        ${item.bulletXml}
+      </a:pPr>
+      <a:r>
+        <a:rPr lang="en-US" sz="1400">
+          <a:solidFill><a:srgbClr val="333333"/></a:solidFill>
+        </a:rPr>
+        <a:t>${item.text}</a:t>
+      </a:r>
+    </a:p>`;
+    })
+    .join("\n");
+
+  return `<p:txBody>
+  <a:bodyPr anchor="${anchor}"/>
+  <a:lstStyle/>
+  ${paragraphs}
+</p:txBody>`;
+}
+
+async function createBulletsFixture(): Promise<void> {
+  // Slide 1: Bullet characters (buChar)
+  let id = 2;
+  const shapes1: string[] = [];
+
+  // buChar - standard bullet
+  const buCharItems = [
+    { text: "First bullet item", bulletXml: `<a:buChar char="\u2022"/>` },
+    { text: "Second bullet item", bulletXml: `<a:buChar char="\u2022"/>` },
+    { text: "Third bullet item", bulletXml: `<a:buChar char="\u2022"/>` },
+  ];
+  const pos1 = gridPosition(0, 0, 2, 2);
+  shapes1.push(
+    shapeXml(id++, "buChar-standard", {
+      preset: "rect",
+      x: pos1.x,
+      y: pos1.y,
+      cx: pos1.w,
+      cy: pos1.h,
+      fillXml: solidFillXml("F0F0F0"),
+      textBodyXml: bulletParagraphsXml(buCharItems),
+    }),
+  );
+
+  // buChar - dash bullet
+  const buDashItems = [
+    { text: "Dash item A", bulletXml: `<a:buChar char="-"/>` },
+    { text: "Dash item B", bulletXml: `<a:buChar char="-"/>` },
+  ];
+  const pos2 = gridPosition(1, 0, 2, 2);
+  shapes1.push(
+    shapeXml(id++, "buChar-dash", {
+      preset: "rect",
+      x: pos2.x,
+      y: pos2.y,
+      cx: pos2.w,
+      cy: pos2.h,
+      fillXml: solidFillXml("F0F0F0"),
+      textBodyXml: bulletParagraphsXml(buDashItems),
+    }),
+  );
+
+  // buAutoNum - arabicPeriod
+  const buNumItems = [
+    {
+      text: "Numbered one",
+      bulletXml: `<a:buAutoNum type="arabicPeriod"/>`,
+    },
+    {
+      text: "Numbered two",
+      bulletXml: `<a:buAutoNum type="arabicPeriod"/>`,
+    },
+    {
+      text: "Numbered three",
+      bulletXml: `<a:buAutoNum type="arabicPeriod"/>`,
+    },
+  ];
+  const pos3 = gridPosition(0, 1, 2, 2);
+  shapes1.push(
+    shapeXml(id++, "buAutoNum-arabic", {
+      preset: "rect",
+      x: pos3.x,
+      y: pos3.y,
+      cx: pos3.w,
+      cy: pos3.h,
+      fillXml: solidFillXml("F0F0F0"),
+      textBodyXml: bulletParagraphsXml(buNumItems),
+    }),
+  );
+
+  // buAutoNum - alphaLcPeriod
+  const buAlphaItems = [
+    {
+      text: "Alpha item",
+      bulletXml: `<a:buAutoNum type="alphaLcPeriod"/>`,
+    },
+    {
+      text: "Beta item",
+      bulletXml: `<a:buAutoNum type="alphaLcPeriod"/>`,
+    },
+    {
+      text: "Gamma item",
+      bulletXml: `<a:buAutoNum type="alphaLcPeriod"/>`,
+    },
+  ];
+  const pos4 = gridPosition(1, 1, 2, 2);
+  shapes1.push(
+    shapeXml(id++, "buAutoNum-alpha", {
+      preset: "rect",
+      x: pos4.x,
+      y: pos4.y,
+      cx: pos4.w,
+      cy: pos4.h,
+      fillXml: solidFillXml("F0F0F0"),
+      textBodyXml: bulletParagraphsXml(buAlphaItems),
+    }),
+  );
+
+  const slide1 = wrapSlideXml(shapes1.join("\n"));
+
+  // Slide 2: buNone, buFont, mixed
+  id = 2;
+  const shapes2: string[] = [];
+
+  // buNone
+  const buNoneItems = [
+    { text: "No bullet here", bulletXml: `<a:buNone/>` },
+    { text: "Also no bullet", bulletXml: `<a:buNone/>` },
+  ];
+  const pos5 = gridPosition(0, 0, 2, 2);
+  shapes2.push(
+    shapeXml(id++, "buNone", {
+      preset: "rect",
+      x: pos5.x,
+      y: pos5.y,
+      cx: pos5.w,
+      cy: pos5.h,
+      fillXml: solidFillXml("F0F0F0"),
+      textBodyXml: bulletParagraphsXml(buNoneItems),
+    }),
+  );
+
+  // buFont + buChar (custom font bullet)
+  const buFontItems = [
+    {
+      text: "Custom font bullet",
+      bulletXml: `<a:buFont typeface="Arial"/><a:buChar char="\u25A0"/>`,
+    },
+    {
+      text: "Another custom",
+      bulletXml: `<a:buFont typeface="Arial"/><a:buChar char="\u25A0"/>`,
+    },
+  ];
+  const pos6 = gridPosition(1, 0, 2, 2);
+  shapes2.push(
+    shapeXml(id++, "buFont-custom", {
+      preset: "rect",
+      x: pos6.x,
+      y: pos6.y,
+      cx: pos6.w,
+      cy: pos6.h,
+      fillXml: solidFillXml("F0F0F0"),
+      textBodyXml: bulletParagraphsXml(buFontItems),
+    }),
+  );
+
+  // romanUcPeriod numbering
+  const buRomanItems = [
+    {
+      text: "Roman one",
+      bulletXml: `<a:buAutoNum type="romanUcPeriod"/>`,
+    },
+    {
+      text: "Roman two",
+      bulletXml: `<a:buAutoNum type="romanUcPeriod"/>`,
+    },
+    {
+      text: "Roman three",
+      bulletXml: `<a:buAutoNum type="romanUcPeriod"/>`,
+    },
+    {
+      text: "Roman four",
+      bulletXml: `<a:buAutoNum type="romanUcPeriod"/>`,
+    },
+  ];
+  const pos7 = gridPosition(0, 1, 2, 2);
+  shapes2.push(
+    shapeXml(id++, "buAutoNum-roman", {
+      preset: "rect",
+      x: pos7.x,
+      y: pos7.y,
+      cx: pos7.w,
+      cy: pos7.h,
+      fillXml: solidFillXml("F0F0F0"),
+      textBodyXml: bulletParagraphsXml(buRomanItems),
+    }),
+  );
+
+  // Colored bullet
+  const buColorItems = [
+    {
+      text: "Red bullet",
+      bulletXml: `<a:buClr><a:srgbClr val="FF0000"/></a:buClr><a:buChar char="\u2022"/>`,
+    },
+    {
+      text: "Blue bullet",
+      bulletXml: `<a:buClr><a:srgbClr val="0000FF"/></a:buClr><a:buChar char="\u2022"/>`,
+    },
+    {
+      text: "Green bullet",
+      bulletXml: `<a:buClr><a:srgbClr val="00AA00"/></a:buClr><a:buChar char="\u2022"/>`,
+    },
+  ];
+  const pos8 = gridPosition(1, 1, 2, 2);
+  shapes2.push(
+    shapeXml(id++, "buClr-colored", {
+      preset: "rect",
+      x: pos8.x,
+      y: pos8.y,
+      cx: pos8.w,
+      cy: pos8.h,
+      fillXml: solidFillXml("F0F0F0"),
+      textBodyXml: bulletParagraphsXml(buColorItems),
+    }),
+  );
+
+  const slide2 = wrapSlideXml(shapes2.join("\n"));
+  const rels = slideRelsXml();
+
+  const buffer = await buildPptx({
+    slides: [
+      { xml: slide1, rels },
+      { xml: slide2, rels },
+    ],
+  });
+  savePptx(buffer, "vrt-bullets.pptx");
+}
+
 // --- Main ---
 async function main(): Promise<void> {
   console.log("Creating VRT fixtures...\n");
@@ -1107,6 +1363,7 @@ async function main(): Promise<void> {
   await createConnectorsFixture();
   await createCustomGeometryFixture();
   await createImageFixture();
+  await createBulletsFixture();
 
   console.log("\nDone!");
 }
