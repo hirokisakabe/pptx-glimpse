@@ -9,6 +9,7 @@ import type {
 } from "../model/shape.js";
 import type { ImageElement } from "../model/image.js";
 import type { ChartElement } from "../model/chart.js";
+import type { TableElement } from "../model/table.js";
 import type {
   TextBody,
   BodyProperties,
@@ -24,6 +25,7 @@ import type { ColorResolver } from "../color/color-resolver.js";
 import { parseXml } from "./xml-parser.js";
 import { parseFillFromNode, parseOutline } from "./fill-parser.js";
 import { parseChart } from "./chart-parser.js";
+import { parseTable } from "./table-parser.js";
 import { parseRelationships, resolveRelationshipTarget } from "./relationship-parser.js";
 import { hundredthPointToPoint } from "../utils/emu.js";
 
@@ -266,7 +268,7 @@ function parseGraphicFrame(
   slidePath: string,
   archive: PptxArchive,
   colorResolver: ColorResolver,
-): ChartElement | null {
+): ChartElement | TableElement | null {
   const xfrm = gf.xfrm;
   const transform = parseTransform(xfrm);
   if (!transform) return null;
@@ -274,23 +276,35 @@ function parseGraphicFrame(
   const graphicData = gf.graphic?.graphicData;
   if (!graphicData) return null;
 
+  // Chart
   const chartRef = graphicData.chart;
-  if (!chartRef) return null;
+  if (chartRef) {
+    const rId = chartRef["@_r:id"] ?? chartRef["@_id"];
+    if (!rId) return null;
 
-  const rId = chartRef["@_r:id"] ?? chartRef["@_id"];
-  if (!rId) return null;
+    const rel = rels.get(rId);
+    if (!rel) return null;
 
-  const rel = rels.get(rId);
-  if (!rel) return null;
+    const chartPath = resolveRelationshipTarget(slidePath, rel.target);
+    const chartXml = archive.files.get(chartPath);
+    if (!chartXml) return null;
 
-  const chartPath = resolveRelationshipTarget(slidePath, rel.target);
-  const chartXml = archive.files.get(chartPath);
-  if (!chartXml) return null;
+    const chartData = parseChart(chartXml, colorResolver);
+    if (!chartData) return null;
 
-  const chartData = parseChart(chartXml, colorResolver);
-  if (!chartData) return null;
+    return { type: "chart", transform, chart: chartData };
+  }
 
-  return { type: "chart", transform, chart: chartData };
+  // Table
+  const tblNode = graphicData.tbl;
+  if (tblNode) {
+    const tableData = parseTable(tblNode, colorResolver);
+    if (!tableData) return null;
+
+    return { type: "table", transform, table: tableData };
+  }
+
+  return null;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -424,7 +438,7 @@ function parseCustomGeometryPaths(custGeom: any): string | null {
   return svgParts.length > 0 ? svgParts.join(" ") : null;
 }
 
-function parseTextBody(
+export function parseTextBody(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   txBody: any,
   colorResolver: ColorResolver,

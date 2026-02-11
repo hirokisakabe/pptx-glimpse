@@ -1093,7 +1093,172 @@ async function createImageFixture(): Promise<void> {
   savePptx(buffer, "vrt-image.pptx");
 }
 
-// --- 11. Bullets and Numbering ---
+// --- 11. Tables ---
+function tableGraphicFrameXml(
+  id: number,
+  name: string,
+  x: number,
+  y: number,
+  cx: number,
+  cy: number,
+  tblXml: string,
+): string {
+  return `<p:graphicFrame>
+  <p:nvGraphicFramePr><p:cNvPr id="${id}" name="${name}"/><p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr><p:nvPr/></p:nvGraphicFramePr>
+  <p:xfrm><a:off x="${x}" y="${y}"/><a:ext cx="${cx}" cy="${cy}"/></p:xfrm>
+  <a:graphic>
+    <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table">
+      ${tblXml}
+    </a:graphicData>
+  </a:graphic>
+</p:graphicFrame>`;
+}
+
+function tableCellXml(
+  text: string,
+  opts?: {
+    fillColor?: string;
+    bold?: boolean;
+    fontSize?: number;
+    fontColor?: string;
+    borderColor?: string;
+    borderWidth?: number;
+    gridSpan?: number;
+    rowSpan?: number;
+    hMerge?: boolean;
+    vMerge?: boolean;
+  },
+): string {
+  const spanAttrs = [
+    opts?.gridSpan && opts.gridSpan > 1 ? ` gridSpan="${opts.gridSpan}"` : "",
+    opts?.rowSpan && opts.rowSpan > 1 ? ` rowSpan="${opts.rowSpan}"` : "",
+  ].join("");
+
+  const sz = opts?.fontSize ? ` sz="${opts.fontSize * 100}"` : ` sz="1200"`;
+  const b = opts?.bold ? ` b="1"` : "";
+  const fontColor = opts?.fontColor ?? "000000";
+
+  const fillXml = opts?.fillColor
+    ? `<a:solidFill><a:srgbClr val="${opts.fillColor}"/></a:solidFill>`
+    : "";
+
+  const bw = opts?.borderWidth ?? 12700;
+  const bc = opts?.borderColor ?? "000000";
+  const borderXml = `<a:lnL w="${bw}"><a:solidFill><a:srgbClr val="${bc}"/></a:solidFill></a:lnL>
+      <a:lnR w="${bw}"><a:solidFill><a:srgbClr val="${bc}"/></a:solidFill></a:lnR>
+      <a:lnT w="${bw}"><a:solidFill><a:srgbClr val="${bc}"/></a:solidFill></a:lnT>
+      <a:lnB w="${bw}"><a:solidFill><a:srgbClr val="${bc}"/></a:solidFill></a:lnB>`;
+
+  const hMergeAttr = opts?.hMerge ? ` hMerge="1"` : "";
+  const vMergeAttr = opts?.vMerge ? ` vMerge="1"` : "";
+
+  return `<a:tc${spanAttrs}>
+    <a:txBody>
+      <a:bodyPr/>
+      <a:lstStyle/>
+      <a:p>
+        <a:r>
+          <a:rPr lang="en-US"${sz}${b}>
+            <a:solidFill><a:srgbClr val="${fontColor}"/></a:solidFill>
+          </a:rPr>
+          <a:t>${text}</a:t>
+        </a:r>
+      </a:p>
+    </a:txBody>
+    <a:tcPr${hMergeAttr}${vMergeAttr}>
+      ${borderXml}
+      ${fillXml}
+    </a:tcPr>
+  </a:tc>`;
+}
+
+async function createTablesFixture(): Promise<void> {
+  const margin = 300000;
+
+  // Slide 1: Basic table with header row
+  const colW = 2286000; // 3 columns
+  const rowH = 457200;
+  const tblW = colW * 3;
+  const tblH = rowH * 4;
+
+  const headerRow = `<a:tr h="${rowH}">
+    ${tableCellXml("Name", { fillColor: "4472C4", fontColor: "FFFFFF", bold: true })}
+    ${tableCellXml("Value", { fillColor: "4472C4", fontColor: "FFFFFF", bold: true })}
+    ${tableCellXml("Status", { fillColor: "4472C4", fontColor: "FFFFFF", bold: true })}
+  </a:tr>`;
+
+  const dataRows = [
+    ["Alpha", "100", "Active"],
+    ["Beta", "250", "Pending"],
+    ["Gamma", "75", "Done"],
+  ]
+    .map(
+      (row, i) =>
+        `<a:tr h="${rowH}">
+    ${row.map((cell) => tableCellXml(cell, { fillColor: i % 2 === 0 ? "D6E4F0" : "FFFFFF" })).join("\n    ")}
+  </a:tr>`,
+    )
+    .join("\n  ");
+
+  const tbl1 = `<a:tbl>
+    <a:tblPr firstRow="1"/>
+    <a:tblGrid>
+      <a:gridCol w="${colW}"/>
+      <a:gridCol w="${colW}"/>
+      <a:gridCol w="${colW}"/>
+    </a:tblGrid>
+    ${headerRow}
+    ${dataRows}
+  </a:tbl>`;
+
+  const gf1 = tableGraphicFrameXml(2, "Basic Table", margin, margin, tblW, tblH, tbl1);
+  const slide1 = wrapSlideXml(gf1);
+
+  // Slide 2: Table with cell merging
+  const col2W = 2286000;
+  const row2H = 600000;
+  const tbl2W = col2W * 3;
+  const tbl2H = row2H * 3;
+
+  const tbl2 = `<a:tbl>
+    <a:tblPr/>
+    <a:tblGrid>
+      <a:gridCol w="${col2W}"/>
+      <a:gridCol w="${col2W}"/>
+      <a:gridCol w="${col2W}"/>
+    </a:tblGrid>
+    <a:tr h="${row2H}">
+      ${tableCellXml("Merged Header (3 cols)", { fillColor: "ED7D31", fontColor: "FFFFFF", bold: true, gridSpan: 3 })}
+      ${tableCellXml("", { hMerge: true })}
+      ${tableCellXml("", { hMerge: true })}
+    </a:tr>
+    <a:tr h="${row2H}">
+      ${tableCellXml("Merged\nRows", { fillColor: "A5A5A5", fontColor: "FFFFFF", rowSpan: 2 })}
+      ${tableCellXml("Cell B2", { fillColor: "FFFFFF" })}
+      ${tableCellXml("Cell C2", { fillColor: "FFFFFF" })}
+    </a:tr>
+    <a:tr h="${row2H}">
+      ${tableCellXml("", { vMerge: true })}
+      ${tableCellXml("Cell B3", { fillColor: "D6E4F0" })}
+      ${tableCellXml("Cell C3", { fillColor: "D6E4F0" })}
+    </a:tr>
+  </a:tbl>`;
+
+  const gf2 = tableGraphicFrameXml(2, "Merge Table", margin, margin, tbl2W, tbl2H, tbl2);
+  const slide2 = wrapSlideXml(gf2);
+
+  const rels = slideRelsXml();
+
+  const buffer = await buildPptx({
+    slides: [
+      { xml: slide1, rels },
+      { xml: slide2, rels },
+    ],
+  });
+  savePptx(buffer, "vrt-tables.pptx");
+}
+
+// --- 12. Bullets and Numbering ---
 function bulletParagraphsXml(
   items: {
     text: string;
@@ -1338,6 +1503,7 @@ async function createBulletsFixture(): Promise<void> {
   );
 
   const slide2 = wrapSlideXml(shapes2.join("\n"));
+
   const rels = slideRelsXml();
 
   const buffer = await buildPptx({
@@ -1363,6 +1529,7 @@ async function main(): Promise<void> {
   await createConnectorsFixture();
   await createCustomGeometryFixture();
   await createImageFixture();
+  await createTablesFixture();
   await createBulletsFixture();
 
   console.log("\nDone!");

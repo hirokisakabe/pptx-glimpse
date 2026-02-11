@@ -5,3 +5,4 @@ export { renderImage } from "./image-renderer.js";
 export { renderFillAttrs, renderOutlineAttrs } from "./fill-renderer.js";
 export { renderGeometry, getPresetGeometrySvg } from "./geometry/index.js";
 export { renderChart } from "./chart-renderer.js";
+export { renderTable } from "./table-renderer.js";
