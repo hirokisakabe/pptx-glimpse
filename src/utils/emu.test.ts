@@ -1,10 +1,5 @@
 import { describe, it, expect } from "vitest";
-import {
-  emuToPixels,
-  emuToPoints,
-  rotationToDegrees,
-  hundredthPointToPoint,
-} from "../../src/utils/emu.js";
+import { emuToPixels, emuToPoints, rotationToDegrees, hundredthPointToPoint } from "./emu.js";
 
 describe("emuToPixels", () => {
   it("converts 914400 EMU (1 inch) to 96 pixels at 96 DPI", () => {

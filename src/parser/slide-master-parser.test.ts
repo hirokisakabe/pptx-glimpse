@@ -3,10 +3,10 @@ import {
   parseSlideMasterElements,
   parseSlideMasterColorMap,
   parseSlideMasterBackground,
-} from "../../src/parser/slide-master-parser.js";
-import { ColorResolver } from "../../src/color/color-resolver.js";
-import type { PptxArchive } from "../../src/parser/pptx-reader.js";
-import type { ShapeElement } from "../../src/model/shape.js";
+} from "./slide-master-parser.js";
+import { ColorResolver } from "../color/color-resolver.js";
+import type { PptxArchive } from "./pptx-reader.js";
+import type { ShapeElement } from "../model/shape.js";
 
 function createColorResolver() {
   return new ColorResolver(

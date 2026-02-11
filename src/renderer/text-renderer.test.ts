@@ -1,11 +1,7 @@
 import { describe, it, expect } from "vitest";
-import {
-  renderTextBody,
-  formatAutoNum,
-  buildFontFamilyValue,
-} from "../../src/renderer/text-renderer.js";
-import type { TextBody, Paragraph, BulletType } from "../../src/model/text.js";
-import type { Transform } from "../../src/model/shape.js";
+import { renderTextBody, formatAutoNum, buildFontFamilyValue } from "./text-renderer.js";
+import type { TextBody, Paragraph, BulletType } from "../model/text.js";
+import type { Transform } from "../model/shape.js";
 
 function makeTransform(widthEmu: number, heightEmu: number): Transform {
   return {

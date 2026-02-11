@@ -1,8 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { parseFillFromNode } from "../../src/parser/fill-parser.js";
-import type { FillParseContext } from "../../src/parser/fill-parser.js";
-import { ColorResolver } from "../../src/color/color-resolver.js";
-import type { PptxArchive } from "../../src/parser/pptx-reader.js";
+import { parseFillFromNode } from "./fill-parser.js";
+import type { FillParseContext } from "./fill-parser.js";
+import { ColorResolver } from "../color/color-resolver.js";
+import type { PptxArchive } from "./pptx-reader.js";
 
 function createColorResolver() {
   return new ColorResolver(

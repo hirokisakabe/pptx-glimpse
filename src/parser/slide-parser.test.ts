@@ -1,9 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { parseSlide, parseShapeTree } from "../../src/parser/slide-parser.js";
-import { ColorResolver } from "../../src/color/color-resolver.js";
-import { parseXml } from "../../src/parser/xml-parser.js";
-import type { PptxArchive } from "../../src/parser/pptx-reader.js";
-import type { ShapeElement } from "../../src/model/shape.js";
+import { parseSlide, parseShapeTree } from "./slide-parser.js";
+import { ColorResolver } from "../color/color-resolver.js";
+import { parseXml } from "./xml-parser.js";
+import type { PptxArchive } from "./pptx-reader.js";
+import type { ShapeElement } from "../model/shape.js";
 
 function createColorResolver() {
   return new ColorResolver(

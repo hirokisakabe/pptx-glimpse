@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { parsePresentation } from "../../src/parser/presentation-parser.js";
+import { parsePresentation } from "./presentation-parser.js";
 
 describe("parsePresentation", () => {
   it("parses valid presentation XML", () => {

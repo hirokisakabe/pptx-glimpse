@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { measureTextWidth, getLineHeightRatio } from "../../src/utils/text-measure.js";
+import { measureTextWidth, getLineHeightRatio } from "./text-measure.js";
 
 const PX_PER_PT = 96 / 72;
 
