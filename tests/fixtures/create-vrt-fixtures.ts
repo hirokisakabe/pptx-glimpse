@@ -1768,7 +1768,277 @@ async function createMathOtherFixture(): Promise<void> {
   savePptx(buffer, "vrt-math-other.pptx");
 }
 
-// --- 17. Background blipFill ---
+// --- 17. Word Wrap ---
+function multiRunTextBodyXml(
+  paragraphs: {
+    runs: { text: string; fontSize?: number; bold?: boolean; color?: string; lang?: string }[];
+    align?: string;
+  }[],
+  opts?: { anchor?: string; wrap?: string },
+): string {
+  const anchor = opts?.anchor ?? "t";
+  const wrap = opts?.wrap ? ` wrap="${opts.wrap}"` : "";
+  const parasXml = paragraphs
+    .map((para) => {
+      const algn = para.align ? ` algn="${para.align}"` : "";
+      const runsXml = para.runs
+        .map((r) => {
+          const sz = r.fontSize ? ` sz="${r.fontSize * 100}"` : ` sz="1400"`;
+          const b = r.bold ? ` b="1"` : "";
+          const lang = r.lang ?? "en-US";
+          const fillColor = r.color ?? "000000";
+          return `<a:r>
+        <a:rPr lang="${lang}"${sz}${b}>
+          <a:solidFill><a:srgbClr val="${fillColor}"/></a:solidFill>
+        </a:rPr>
+        <a:t>${r.text}</a:t>
+      </a:r>`;
+        })
+        .join("\n    ");
+      return `<a:p>
+    <a:pPr${algn}/>
+    ${runsXml}
+  </a:p>`;
+    })
+    .join("\n  ");
+
+  return `<p:txBody>
+  <a:bodyPr anchor="${anchor}"${wrap}/>
+  <a:lstStyle/>
+  ${parasXml}
+</p:txBody>`;
+}
+
+async function createWordWrapFixture(): Promise<void> {
+  // Slide 1: Basic word wrap scenarios
+  let id = 2;
+  const shapes1: string[] = [];
+
+  // 1. Long English text in normal-width shape
+  const longEnText =
+    "The quick brown fox jumps over the lazy dog. This is a long sentence that should wrap across multiple lines within the shape boundary.";
+  const pos1 = gridPosition(0, 0, 2, 2);
+  shapes1.push(
+    shapeXml(id++, "long-en-text", {
+      preset: "rect",
+      x: pos1.x,
+      y: pos1.y,
+      cx: pos1.w,
+      cy: pos1.h,
+      fillXml: solidFillXml("F0F0F0"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: multiRunTextBodyXml([{ runs: [{ text: longEnText, fontSize: 14 }] }], {
+        anchor: "t",
+      }),
+    }),
+  );
+
+  // 2. Long text in narrow shape
+  const pos2 = { x: pos1.x + pos1.w + 200000, y: pos1.y, w: 1500000, h: pos1.h };
+  shapes1.push(
+    shapeXml(id++, "narrow-shape", {
+      preset: "rect",
+      x: pos2.x,
+      y: pos2.y,
+      cx: pos2.w,
+      cy: pos2.h,
+      fillXml: solidFillXml("E8F4FD"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: multiRunTextBodyXml(
+        [{ runs: [{ text: "Narrow shape forces frequent word wrapping here.", fontSize: 14 }] }],
+        { anchor: "t" },
+      ),
+    }),
+  );
+
+  // 3. wrap="none" (no wrapping)
+  const pos3 = gridPosition(0, 1, 2, 2);
+  shapes1.push(
+    shapeXml(id++, "no-wrap", {
+      preset: "rect",
+      x: pos3.x,
+      y: pos3.y,
+      cx: pos3.w,
+      cy: pos3.h,
+      fillXml: solidFillXml("FFF3E0"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: multiRunTextBodyXml(
+        [
+          {
+            runs: [
+              {
+                text: "This text has wrap=none so it should not wrap at the shape boundary.",
+                fontSize: 14,
+              },
+            ],
+          },
+        ],
+        { anchor: "t", wrap: "none" },
+      ),
+    }),
+  );
+
+  // 4. Japanese text wrapping
+  const pos4 = gridPosition(1, 1, 2, 2);
+  shapes1.push(
+    shapeXml(id++, "japanese-text", {
+      preset: "rect",
+      x: pos4.x,
+      y: pos4.y,
+      cx: pos4.w,
+      cy: pos4.h,
+      fillXml: solidFillXml("F3E5F5"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: multiRunTextBodyXml(
+        [
+          {
+            runs: [
+              {
+                text: "日本語のテキストは文字単位で折り返されます。長い文章を図形の中に配置した場合の表示を確認します。",
+                fontSize: 14,
+                lang: "ja-JP",
+              },
+            ],
+          },
+        ],
+        { anchor: "t" },
+      ),
+    }),
+  );
+
+  const slide1 = wrapSlideXml(shapes1.join("\n"));
+
+  // Slide 2: Advanced word wrap scenarios
+  id = 2;
+  const shapes2: string[] = [];
+
+  // 1. Mixed font sizes in a single paragraph
+  const pos5 = gridPosition(0, 0, 2, 2);
+  shapes2.push(
+    shapeXml(id++, "mixed-font-sizes", {
+      preset: "rect",
+      x: pos5.x,
+      y: pos5.y,
+      cx: pos5.w,
+      cy: pos5.h,
+      fillXml: solidFillXml("E8F5E9"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: multiRunTextBodyXml(
+        [
+          {
+            runs: [
+              { text: "Large ", fontSize: 28, bold: true, color: "1565C0" },
+              { text: "and small ", fontSize: 12, color: "333333" },
+              { text: "mixed ", fontSize: 20, color: "C62828" },
+              { text: "in one paragraph that wraps across lines.", fontSize: 14, color: "333333" },
+            ],
+          },
+        ],
+        { anchor: "t" },
+      ),
+    }),
+  );
+
+  // 2. Multiple paragraphs
+  const pos6 = gridPosition(1, 0, 2, 2);
+  shapes2.push(
+    shapeXml(id++, "multi-paragraph", {
+      preset: "rect",
+      x: pos6.x,
+      y: pos6.y,
+      cx: pos6.w,
+      cy: pos6.h,
+      fillXml: solidFillXml("FFF8E1"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: multiRunTextBodyXml(
+        [
+          { runs: [{ text: "First paragraph with enough text to wrap.", fontSize: 14 }] },
+          {
+            runs: [{ text: "Second paragraph also wraps within the shape.", fontSize: 14 }],
+            align: "ctr",
+          },
+          {
+            runs: [{ text: "Third paragraph right-aligned.", fontSize: 14 }],
+            align: "r",
+          },
+        ],
+        { anchor: "t" },
+      ),
+    }),
+  );
+
+  // 3. Text overflow (long text in small shape)
+  const pos7 = {
+    x: gridPosition(0, 1, 2, 2).x,
+    y: gridPosition(0, 1, 2, 2).y,
+    w: 2000000,
+    h: 800000,
+  };
+  shapes2.push(
+    shapeXml(id++, "text-overflow", {
+      preset: "rect",
+      x: pos7.x,
+      y: pos7.y,
+      cx: pos7.w,
+      cy: pos7.h,
+      fillXml: solidFillXml("FFEBEE"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: multiRunTextBodyXml(
+        [
+          {
+            runs: [
+              {
+                text: "This text is too long for the small shape and will overflow beyond the visible area of the shape boundary.",
+                fontSize: 14,
+              },
+            ],
+          },
+        ],
+        { anchor: "t" },
+      ),
+    }),
+  );
+
+  // 4. Mixed CJK and Latin text
+  const pos8 = gridPosition(1, 1, 2, 2);
+  shapes2.push(
+    shapeXml(id++, "mixed-cjk-latin", {
+      preset: "rect",
+      x: pos8.x,
+      y: pos8.y,
+      cx: pos8.w,
+      cy: pos8.h,
+      fillXml: solidFillXml("E0F2F1"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: multiRunTextBodyXml(
+        [
+          {
+            runs: [
+              {
+                text: "English and 日本語 mixed text. テキストの折り返しが正しく動作するか確認します。Word wrap test.",
+                fontSize: 14,
+              },
+            ],
+          },
+        ],
+        { anchor: "t" },
+      ),
+    }),
+  );
+
+  const slide2 = wrapSlideXml(shapes2.join("\n"));
+  const rels = slideRelsXml();
+
+  const buffer = await buildPptx({
+    slides: [
+      { xml: slide1, rels },
+      { xml: slide2, rels },
+    ],
+  });
+  savePptx(buffer, "vrt-word-wrap.pptx");
+}
+
+// --- 18. Background blipFill ---
 async function createBackgroundBlipFillFixture(): Promise<void> {
   // Generate a gradient-like test image for background
   const imgSize = 200;
@@ -1864,6 +2134,7 @@ async function main(): Promise<void> {
   await createCalloutsArcsFixture();
   await createArrowsStarsFixture();
   await createMathOtherFixture();
+  await createWordWrapFixture();
   await createBackgroundBlipFillFixture();
 
   console.log("\nDone!");
