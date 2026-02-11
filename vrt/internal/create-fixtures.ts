@@ -1,7 +1,7 @@
 /**
  * VRT (Visual Regression Testing) 用 PPTX フィクスチャ生成スクリプト
  *
- * 使い方: npx tsx scripts/vrt/create-fixtures.ts
+ * 使い方: npx tsx vrt/internal/create-fixtures.ts
  */
 import JSZip from "jszip";
 import sharp from "sharp";
@@ -386,7 +386,7 @@ async function buildPptx(options: PptxBuildOptions): Promise<Buffer> {
   return await zip.generateAsync({ type: "nodebuffer" });
 }
 
-const FIXTURE_OUT_DIR = join(__dirname, "../../vrt/internal/fixtures");
+const FIXTURE_OUT_DIR = join(__dirname, "fixtures");
 
 function savePptx(buffer: Buffer, name: string): void {
   mkdirSync(FIXTURE_OUT_DIR, { recursive: true });

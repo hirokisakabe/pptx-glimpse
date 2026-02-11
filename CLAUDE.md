@@ -57,26 +57,26 @@ CI は 3 ジョブ構成:
 
 ```
 vrt/
-├── compare-utils.ts               # 共通画像比較ユーティリティ
-├── internal/                      # 通常 VRT (自己比較)
-│   ├── visual-regression.test.ts  # テスト本体
-│   ├── fixtures/                  # VRT 用 PPTX フィクスチャ
-│   └── snapshots/                 # 参照スナップショット画像
-└── libreoffice/                   # LibreOffice VRT
-    └── libreoffice-regression.test.ts  # テスト本体 (fixtures/ と snapshots/ は CI で動的生成)
-
-scripts/vrt/
-├── create-fixtures.ts             # 通常 VRT フィクスチャ生成 (TypeScript)
-├── update-snapshots.ts            # 通常 VRT スナップショット更新
-├── generate_fixtures.py           # LibreOffice VRT フィクスチャ生成 (Python)
-└── render_references.sh           # LibreOffice 参照画像生成 (Docker)
+├── compare-utils.ts                          # 共通画像比較ユーティリティ
+├── internal/                                 # 通常 VRT (自己比較)
+│   ├── visual-regression.test.ts             # テスト本体
+│   ├── create-fixtures.ts                    # フィクスチャ生成スクリプト
+│   ├── update-snapshots.ts                   # スナップショット更新スクリプト
+│   ├── fixtures/                             # VRT 用 PPTX フィクスチャ
+│   └── snapshots/                            # 参照スナップショット画像
+└── libreoffice/                              # LibreOffice VRT
+    ├── libreoffice-regression.test.ts        # テスト本体
+    ├── generate_fixtures.py                  # フィクスチャ生成 (Python, Docker)
+    ├── render_references.sh                  # 参照画像生成 (Docker)
+    ├── fixtures/                             # CI で動的生成
+    └── snapshots/                            # CI で動的生成
 ```
 
 ### VRT 更新手順
 
 パーサー・レンダラー・モデルの変更で描画結果が変わる場合:
 
-1. **フィクスチャ更新** (新機能追加や既存フィクスチャの修正が必要な場合): `scripts/vrt/create-fixtures.ts` を編集し `npm run test:vrt:fixtures` を実行
+1. **フィクスチャ更新** (新機能追加や既存フィクスチャの修正が必要な場合): `vrt/internal/create-fixtures.ts` を編集し `npm run test:vrt:fixtures` を実行
 2. **スナップショット更新**: `npm run test:vrt:update` で参照画像を再生成
 3. **テスト確認**: `npm run test` で VRT テストが通ることを確認
 
@@ -84,7 +84,7 @@ scripts/vrt/
 
 新しい描画機能を追加した場合、以下の **3 箇所すべて** を更新する必要がある:
 
-1. **`scripts/vrt/create-fixtures.ts`** — 新機能をカバーするフィクスチャ (PPTX) を追加
+1. **`vrt/internal/create-fixtures.ts`** — 新機能をカバーするフィクスチャ (PPTX) を追加
 2. **`vrt/internal/visual-regression.test.ts`** — `VRT_CASES` 配列に新しいテストケースを追加
 3. **`vrt/internal/snapshots/`** — `npm run test:vrt:update` でスナップショットを再生成
 
