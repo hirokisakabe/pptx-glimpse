@@ -53,6 +53,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate VRT fixtures
+        run: npm run test:vrt:fixtures
+
       - name: Run VRT
         run: npx vitest run vrt/internal/visual-regression.test.ts
 
