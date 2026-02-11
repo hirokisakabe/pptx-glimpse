@@ -57,6 +57,11 @@ export interface TextRun {
   properties: RunProperties;
 }
 
+export interface Hyperlink {
+  url: string;
+  tooltip?: string;
+}
+
 export interface RunProperties {
   fontSize: number | null;
   fontFamily: string | null;
@@ -67,4 +72,5 @@ export interface RunProperties {
   strikethrough: boolean;
   color: ResolvedColor | null;
   baseline: number;
+  hyperlink: Hyperlink | null;
 }

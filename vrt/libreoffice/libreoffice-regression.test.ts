@@ -41,6 +41,7 @@ const LO_VRT_CASES = [
   { name: "background-blipfill", fixture: "lo-background-blipfill.pptx" },
   { name: "composite", fixture: "lo-composite.pptx", tolerance: 0.15 },
   { name: "effects", fixture: "lo-effects.pptx", tolerance: 0.2 },
+  { name: "hyperlinks", fixture: "lo-hyperlinks.pptx" },
 ] as const;
 
 // フィクスチャとスナップショットの両方が存在する場合のみ実行

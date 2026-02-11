@@ -1769,6 +1769,114 @@ def create_effects():
     print("  Created: lo-effects.pptx")
 
 
+def create_hyperlinks():
+    """ハイパーリンク: テキスト内のハイパーリンク"""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    margin = Emu(457200)
+    shape_w = Emu(8229600)
+    shape_h = Emu(914400)
+
+    # Shape 1: Normal text
+    shape1 = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, margin, margin, shape_w, shape_h,
+    )
+    shape1.fill.solid()
+    shape1.fill.fore_color.rgb = RGBColor(0xF2, 0xF2, 0xF2)
+    shape1.line.fill.background()
+    tf1 = shape1.text_frame
+    tf1.paragraphs[0].text = "Normal text without hyperlink"
+    tf1.paragraphs[0].runs[0].font.size = Pt(14)
+    tf1.paragraphs[0].runs[0].font.color.rgb = RGBColor(0x00, 0x00, 0x00)
+
+    # Shape 2: Text with hyperlink
+    y2 = Emu(margin.emu + shape_h.emu + margin.emu)
+    shape2 = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, margin, y2, shape_w, shape_h,
+    )
+    shape2.fill.solid()
+    shape2.fill.fore_color.rgb = RGBColor(0xF2, 0xF2, 0xF2)
+    shape2.line.fill.background()
+    tf2 = shape2.text_frame
+    p2 = tf2.paragraphs[0]
+    run_normal = p2.add_run()
+    run_normal.text = "Click here: "
+    run_normal.font.size = Pt(14)
+    run_normal.font.color.rgb = RGBColor(0x00, 0x00, 0x00)
+    run_link = p2.add_run()
+    run_link.text = "https://example.com"
+    run_link.font.size = Pt(14)
+    run_link.font.color.rgb = RGBColor(0x05, 0x63, 0xC1)
+    run_link.font.underline = True
+    # Add hyperlink via XML
+    rPr = run_link._r.get_or_add_rPr()
+    hlinkClick = etree.SubElement(rPr, qn("a:hlinkClick"))
+    hlinkClick.set(qn("r:id"), "")
+    # Add relationship
+    rel = slide.part.relate_to("https://example.com", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink", is_external=True)
+    hlinkClick.set(qn("r:id"), rel)
+
+    # Shape 3: Link with tooltip
+    y3 = Emu(margin.emu + (shape_h.emu + margin.emu) * 2)
+    shape3 = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, margin, y3, shape_w, shape_h,
+    )
+    shape3.fill.solid()
+    shape3.fill.fore_color.rgb = RGBColor(0xF2, 0xF2, 0xF2)
+    shape3.line.fill.background()
+    tf3 = shape3.text_frame
+    p3 = tf3.paragraphs[0]
+    run_tip = p3.add_run()
+    run_tip.text = "Link with tooltip"
+    run_tip.font.size = Pt(14)
+    run_tip.font.color.rgb = RGBColor(0x05, 0x63, 0xC1)
+    run_tip.font.underline = True
+    rPr3 = run_tip._r.get_or_add_rPr()
+    hlinkClick3 = etree.SubElement(rPr3, qn("a:hlinkClick"))
+    rel3 = slide.part.relate_to("https://example.org", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink", is_external=True)
+    hlinkClick3.set(qn("r:id"), rel3)
+    hlinkClick3.set("tooltip", "Visit Example")
+
+    # Shape 4: Multiple hyperlinks
+    y4 = Emu(margin.emu + (shape_h.emu + margin.emu) * 3)
+    shape4 = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, margin, y4, shape_w, shape_h,
+    )
+    shape4.fill.solid()
+    shape4.fill.fore_color.rgb = RGBColor(0xF2, 0xF2, 0xF2)
+    shape4.line.fill.background()
+    tf4 = shape4.text_frame
+    p4 = tf4.paragraphs[0]
+    run_link1 = p4.add_run()
+    run_link1.text = "Link 1"
+    run_link1.font.size = Pt(14)
+    run_link1.font.color.rgb = RGBColor(0x05, 0x63, 0xC1)
+    run_link1.font.underline = True
+    rPr_l1 = run_link1._r.get_or_add_rPr()
+    hlinkClick_l1 = etree.SubElement(rPr_l1, qn("a:hlinkClick"))
+    rel_l1 = slide.part.relate_to("https://example.com", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink", is_external=True)
+    hlinkClick_l1.set(qn("r:id"), rel_l1)
+
+    run_and = p4.add_run()
+    run_and.text = " and "
+    run_and.font.size = Pt(14)
+    run_and.font.color.rgb = RGBColor(0x00, 0x00, 0x00)
+
+    run_link2 = p4.add_run()
+    run_link2.text = "Link 2"
+    run_link2.font.size = Pt(14)
+    run_link2.font.color.rgb = RGBColor(0x05, 0x63, 0xC1)
+    run_link2.font.underline = True
+    rPr_l2 = run_link2._r.get_or_add_rPr()
+    hlinkClick_l2 = etree.SubElement(rPr_l2, qn("a:hlinkClick"))
+    rel_l2 = slide.part.relate_to("https://example.org", "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink", is_external=True)
+    hlinkClick_l2.set(qn("r:id"), rel_l2)
+
+    prs.save(os.path.join(OUTPUT_DIR, "lo-hyperlinks.pptx"))
+    print("  Created: lo-hyperlinks.pptx")
+
+
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     print("Generating LibreOffice VRT fixtures...")
@@ -1796,6 +1904,7 @@ def main():
     create_background_blipfill()
     create_composite()
     create_effects()
+    create_hyperlinks()
     print("Done!")
 
 
