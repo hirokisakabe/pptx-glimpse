@@ -17,6 +17,7 @@ const ARRAY_TAGS = new Set([
   "tc",
   "ser",
   "pt",
+  "gd",
 ]);
 
 export function createXmlParser(): XMLParser {
