@@ -83,13 +83,17 @@ export function measureTextWidth(
   fontSizePt: number,
   bold: boolean,
   fontFamily?: string | null,
+  fontFamilyEa?: string | null,
 ): number {
   const baseSizePx = fontSizePt * PX_PER_PT;
-  const metrics = getFontMetrics(fontFamily);
+  const latinMetrics = getFontMetrics(fontFamily);
+  const eaMetrics = getFontMetrics(fontFamilyEa);
   let totalWidth = 0;
 
   for (const char of text) {
     const codePoint = char.codePointAt(0)!;
+    const isEa = isCjkCodePoint(codePoint);
+    const metrics = isEa && eaMetrics ? eaMetrics : latinMetrics;
     if (metrics) {
       totalWidth += measureCharMetrics(char, codePoint, baseSizePx, metrics);
     } else {

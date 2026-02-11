@@ -101,19 +101,12 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
           // 箇条書き記号の後にテキストを続ける（同じ行で x をテキスト開始位置に設定）
           for (let segIdx = 0; segIdx < line.segments.length; segIdx++) {
             const seg = line.segments[segIdx];
-            const styles = buildStyleAttrs(seg.properties, fontScale);
-            if (segIdx === 0) {
-              tspans.push(
-                `<tspan x="${xPos}" text-anchor="${anchorValue}" ${styles}>${escapeXml(seg.text)}</tspan>`,
-              );
-            } else {
-              tspans.push(`<tspan ${styles}>${escapeXml(seg.text)}</tspan>`);
-            }
+            const prefix = segIdx === 0 ? `x="${xPos}" text-anchor="${anchorValue}" ` : "";
+            tspans.push(renderSegment(seg.text, seg.properties, fontScale, prefix));
           }
         } else {
           for (let segIdx = 0; segIdx < line.segments.length; segIdx++) {
             const seg = line.segments[segIdx];
-            const styles = buildStyleAttrs(seg.properties, fontScale);
 
             if (segIdx === 0) {
               const lineFontSize = getLineFontSize(line.segments, defaultFontSize) * fontScale;
@@ -124,11 +117,10 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
                 para,
                 lineIdx === 0,
               );
-              tspans.push(
-                `<tspan x="${xPos}" dy="${dy}" text-anchor="${anchorValue}" ${styles}>${escapeXml(seg.text)}</tspan>`,
-              );
+              const prefix = `x="${xPos}" dy="${dy}" text-anchor="${anchorValue}" `;
+              tspans.push(renderSegment(seg.text, seg.properties, fontScale, prefix));
             } else {
-              tspans.push(`<tspan ${styles}>${escapeXml(seg.text)}</tspan>`);
+              tspans.push(renderSegment(seg.text, seg.properties, fontScale, ""));
             }
           }
         }
@@ -156,14 +148,12 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
       for (let i = 0; i < para.runs.length; i++) {
         const run = para.runs[i];
         if (run.text.length === 0) continue;
-        const styles = buildStyleAttrs(run.properties, fontScale);
 
         if (!firstRunRendered) {
           if (bulletText) {
             // 箇条書きがある場合、テキストは x 位置を指定（dy なし、箇条書きと同じ行）
-            tspans.push(
-              `<tspan x="${xPos}" text-anchor="${anchorValue}" ${styles}>${escapeXml(run.text)}</tspan>`,
-            );
+            const prefix = `x="${xPos}" text-anchor="${anchorValue}" `;
+            tspans.push(renderSegment(run.text, run.properties, fontScale, prefix));
           } else {
             const dy = computeDy(
               isFirstLine,
@@ -172,13 +162,12 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
               para,
               true,
             );
-            tspans.push(
-              `<tspan x="${xPos}" dy="${dy}" text-anchor="${anchorValue}" ${styles}>${escapeXml(run.text)}</tspan>`,
-            );
+            const prefix = `x="${xPos}" dy="${dy}" text-anchor="${anchorValue}" `;
+            tspans.push(renderSegment(run.text, run.properties, fontScale, prefix));
           }
           firstRunRendered = true;
         } else {
-          tspans.push(`<tspan ${styles}>${escapeXml(run.text)}</tspan>`);
+          tspans.push(renderSegment(run.text, run.properties, fontScale, ""));
         }
       }
       isFirstLine = false;
@@ -379,15 +368,66 @@ function getLineFontSize(
   return defaultFontSize;
 }
 
-function buildStyleAttrs(props: RunProperties, fontScale: number = 1): string {
+function isCjkCodePoint(codePoint: number): boolean {
+  return (
+    (codePoint >= 0x3000 && codePoint <= 0x9fff) ||
+    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
+    (codePoint >= 0xff01 && codePoint <= 0xff60) ||
+    (codePoint >= 0x20000 && codePoint <= 0x2a6df)
+  );
+}
+
+interface ScriptSegment {
+  text: string;
+  isEa: boolean;
+}
+
+function splitByScript(text: string): ScriptSegment[] {
+  const segments: ScriptSegment[] = [];
+  let current = "";
+  let currentIsEa: boolean | null = null;
+
+  for (const char of text) {
+    const cp = char.codePointAt(0)!;
+    const isEa = isCjkCodePoint(cp);
+
+    if (currentIsEa !== null && isEa !== currentIsEa) {
+      segments.push({ text: current, isEa: currentIsEa });
+      current = "";
+    }
+    currentIsEa = isEa;
+    current += char;
+  }
+
+  if (current && currentIsEa !== null) {
+    segments.push({ text: current, isEa: currentIsEa });
+  }
+
+  return segments;
+}
+
+function needsScriptSplit(props: RunProperties): boolean {
+  return (
+    props.fontFamily !== null &&
+    props.fontFamilyEa !== null &&
+    props.fontFamily !== props.fontFamilyEa
+  );
+}
+
+function buildStyleAttrs(
+  props: RunProperties,
+  fontScale: number = 1,
+  fontOverride?: string | null,
+): string {
   const styles: string[] = [];
 
   if (props.fontSize) {
     const scaledSize = props.fontSize * fontScale;
     styles.push(`font-size="${scaledSize}pt"`);
   }
-  if (props.fontFamily) {
-    styles.push(`font-family="${escapeXml(props.fontFamily)}"`);
+  const fontFamily = fontOverride !== undefined ? fontOverride : props.fontFamily;
+  if (fontFamily) {
+    styles.push(`font-family="${escapeXml(fontFamily)}"`);
   }
   if (props.bold) {
     styles.push(`font-weight="bold"`);
@@ -416,6 +456,31 @@ function buildStyleAttrs(props: RunProperties, fontScale: number = 1): string {
   }
 
   return styles.join(" ");
+}
+
+function renderSegment(
+  text: string,
+  props: RunProperties,
+  fontScale: number,
+  prefix: string,
+): string {
+  if (!needsScriptSplit(props)) {
+    const styles = buildStyleAttrs(props, fontScale);
+    return `<tspan ${prefix}${styles}>${escapeXml(text)}</tspan>`;
+  }
+  const parts = splitByScript(text);
+  const result: string[] = [];
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i];
+    const font = part.isEa ? props.fontFamilyEa : props.fontFamily;
+    const styles = buildStyleAttrs(props, fontScale, font);
+    if (i === 0) {
+      result.push(`<tspan ${prefix}${styles}>${escapeXml(part.text)}</tspan>`);
+    } else {
+      result.push(`<tspan ${styles}>${escapeXml(part.text)}</tspan>`);
+    }
+  }
+  return result.join("");
 }
 
 function getDefaultFontSize(paragraphs: TextBody["paragraphs"]): number {

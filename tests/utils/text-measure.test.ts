@@ -118,3 +118,34 @@ describe("measureTextWidth with font metrics", () => {
     expect(width).toBeCloseTo(expected, 1);
   });
 });
+
+describe("measureTextWidth with fontFamilyEa", () => {
+  it("CJK 文字に ea フォントメトリクスを使用する", () => {
+    // NotoSansJP: cjkWidth=1000, unitsPerEm=1000
+    const width = measureTextWidth("漢", 18, false, "Calibri", "Noto Sans JP");
+    const expected = (1000 / 1000) * 18 * PX_PER_PT;
+    expect(width).toBeCloseTo(expected, 1);
+  });
+
+  it("latin 文字には latin フォントメトリクスを使用する", () => {
+    // Carlito: A=1185, unitsPerEm=2048
+    const width = measureTextWidth("A", 18, false, "Calibri", "Noto Sans JP");
+    const expected = (1185 / 2048) * 18 * PX_PER_PT;
+    expect(width).toBeCloseTo(expected, 1);
+  });
+
+  it("混在テキストで文字ごとに異なるメトリクスを使用する", () => {
+    // A: Carlito (1185/2048), 漢: NotoSansJP (1000/1000)
+    const width = measureTextWidth("A漢", 18, false, "Calibri", "Noto Sans JP");
+    const expectedLatin = (1185 / 2048) * 18 * PX_PER_PT;
+    const expectedEa = (1000 / 1000) * 18 * PX_PER_PT;
+    expect(width).toBeCloseTo(expectedLatin + expectedEa, 1);
+  });
+
+  it("fontFamilyEa が null の場合は latin メトリクスで CJK も計測する", () => {
+    // Carlito: cjkWidth=2048, unitsPerEm=2048
+    const width = measureTextWidth("漢", 18, false, "Calibri", null);
+    const expected = (2048 / 2048) * 18 * PX_PER_PT;
+    expect(width).toBeCloseTo(expected, 1);
+  });
+});

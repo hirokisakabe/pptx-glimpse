@@ -11,7 +11,12 @@ export function parseTheme(xml: string): Theme {
     console.warn(`${WARN_PREFIX} Theme: missing root element "theme" in XML`);
     return {
       colorScheme: defaultColorScheme(),
-      fontScheme: { majorFont: "Calibri", minorFont: "Calibri" },
+      fontScheme: {
+        majorFont: "Calibri",
+        minorFont: "Calibri",
+        majorFontEa: null,
+        minorFontEa: null,
+      },
     };
   }
 
@@ -20,7 +25,12 @@ export function parseTheme(xml: string): Theme {
     console.warn(`${WARN_PREFIX} Theme: themeElements not found, using defaults`);
     return {
       colorScheme: defaultColorScheme(),
-      fontScheme: { majorFont: "Calibri", minorFont: "Calibri" },
+      fontScheme: {
+        majorFont: "Calibri",
+        minorFont: "Calibri",
+        majorFontEa: null,
+        minorFontEa: null,
+      },
     };
   }
 
@@ -72,12 +82,15 @@ function extractColor(colorNode: any): string {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseFontScheme(fontScheme: any): FontScheme {
-  if (!fontScheme) return { majorFont: "Calibri", minorFont: "Calibri" };
+  if (!fontScheme)
+    return { majorFont: "Calibri", minorFont: "Calibri", majorFontEa: null, minorFontEa: null };
 
   const majorFont = fontScheme.majorFont?.latin?.["@_typeface"] ?? "Calibri";
   const minorFont = fontScheme.minorFont?.latin?.["@_typeface"] ?? "Calibri";
+  const majorFontEa = fontScheme.majorFont?.ea?.["@_typeface"] ?? null;
+  const minorFontEa = fontScheme.minorFont?.ea?.["@_typeface"] ?? null;
 
-  return { majorFont, minorFont };
+  return { majorFont, minorFont, majorFontEa, minorFontEa };
 }
 
 function defaultColorScheme(): ColorScheme {

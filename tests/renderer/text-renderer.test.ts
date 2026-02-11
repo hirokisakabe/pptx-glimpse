@@ -64,6 +64,7 @@ function makeTextBody(
           properties: {
             fontSize: overrides?.fontSize ?? 18,
             fontFamily: null,
+            fontFamilyEa: null,
             bold: false,
             italic: false,
             underline: false,
@@ -108,6 +109,7 @@ function makeBulletTextBody(
           properties: {
             fontSize: 18,
             fontFamily: null,
+            fontFamilyEa: null,
             bold: false,
             italic: false,
             underline: false,
@@ -213,6 +215,7 @@ describe("renderTextBody", () => {
               properties: {
                 fontSize: 18,
                 fontFamily: null,
+                fontFamilyEa: null,
                 bold: false,
                 italic: false,
                 underline: false,
@@ -231,6 +234,7 @@ describe("renderTextBody", () => {
               properties: {
                 fontSize: 18,
                 fontFamily: null,
+                fontFamilyEa: null,
                 bold: false,
                 italic: false,
                 underline: false,
@@ -300,6 +304,7 @@ describe("renderTextBody", () => {
               properties: {
                 fontSize: 18,
                 fontFamily: null,
+                fontFamilyEa: null,
                 bold: false,
                 italic: false,
                 underline: false,
@@ -313,6 +318,7 @@ describe("renderTextBody", () => {
               properties: {
                 fontSize: 12,
                 fontFamily: null,
+                fontFamilyEa: null,
                 bold: false,
                 italic: false,
                 underline: false,
@@ -326,6 +332,7 @@ describe("renderTextBody", () => {
               properties: {
                 fontSize: 18,
                 fontFamily: null,
+                fontFamilyEa: null,
                 bold: false,
                 italic: false,
                 underline: false,
@@ -364,6 +371,7 @@ describe("renderTextBody", () => {
               properties: {
                 fontSize: 18,
                 fontFamily: null,
+                fontFamilyEa: null,
                 bold: false,
                 italic: false,
                 underline: false,
@@ -377,6 +385,7 @@ describe("renderTextBody", () => {
               properties: {
                 fontSize: 12,
                 fontFamily: null,
+                fontFamilyEa: null,
                 bold: false,
                 italic: false,
                 underline: false,
@@ -390,6 +399,7 @@ describe("renderTextBody", () => {
               properties: {
                 fontSize: 18,
                 fontFamily: null,
+                fontFamilyEa: null,
                 bold: false,
                 italic: false,
                 underline: false,
@@ -526,5 +536,133 @@ describe("formatAutoNum", () => {
   it("alphaLcParenR: a) b) c)", () => {
     expect(formatAutoNum("alphaLcParenR", 1)).toBe("a)");
     expect(formatAutoNum("alphaLcParenR", 2)).toBe("b)");
+  });
+});
+
+describe("latin/ea フォント切り替え", () => {
+  it("fontFamily と fontFamilyEa が異なる場合、スクリプト境界で tspan が分割される", () => {
+    const textBody: TextBody = {
+      bodyProperties: {
+        anchor: "t",
+        marginLeft: 91440,
+        marginRight: 91440,
+        marginTop: 45720,
+        marginBottom: 45720,
+        wrap: "none",
+        autoFit: "noAutofit",
+        fontScale: 1,
+        lnSpcReduction: 0,
+      },
+      paragraphs: [
+        {
+          runs: [
+            {
+              text: "Hello世界Test",
+              properties: {
+                fontSize: 18,
+                fontFamily: "Calibri",
+                fontFamilyEa: "Meiryo",
+                bold: false,
+                italic: false,
+                underline: false,
+                strikethrough: false,
+                color: null,
+                baseline: 0,
+              },
+            },
+          ],
+          properties: defaultParagraphProperties(),
+        },
+      ],
+    };
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).toContain('font-family="Calibri"');
+    expect(result).toContain('font-family="Meiryo"');
+    expect(result).toContain("Hello");
+    expect(result).toContain("世界");
+    expect(result).toContain("Test");
+  });
+
+  it("fontFamily と fontFamilyEa が同じ場合は分割されない", () => {
+    const textBody: TextBody = {
+      bodyProperties: {
+        anchor: "t",
+        marginLeft: 91440,
+        marginRight: 91440,
+        marginTop: 45720,
+        marginBottom: 45720,
+        wrap: "none",
+        autoFit: "noAutofit",
+        fontScale: 1,
+        lnSpcReduction: 0,
+      },
+      paragraphs: [
+        {
+          runs: [
+            {
+              text: "Hello世界",
+              properties: {
+                fontSize: 18,
+                fontFamily: "Calibri",
+                fontFamilyEa: "Calibri",
+                bold: false,
+                italic: false,
+                underline: false,
+                strikethrough: false,
+                color: null,
+                baseline: 0,
+              },
+            },
+          ],
+          properties: defaultParagraphProperties(),
+        },
+      ],
+    };
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    // 分割されないので tspan は1つだけ
+    const tspanCount = (result.match(/<tspan/g) ?? []).length;
+    expect(tspanCount).toBe(1);
+    expect(result).toContain("Hello世界");
+  });
+
+  it("fontFamilyEa が null の場合は fontFamily のみで分割されない", () => {
+    const textBody: TextBody = {
+      bodyProperties: {
+        anchor: "t",
+        marginLeft: 91440,
+        marginRight: 91440,
+        marginTop: 45720,
+        marginBottom: 45720,
+        wrap: "none",
+        autoFit: "noAutofit",
+        fontScale: 1,
+        lnSpcReduction: 0,
+      },
+      paragraphs: [
+        {
+          runs: [
+            {
+              text: "Hello世界",
+              properties: {
+                fontSize: 18,
+                fontFamily: "Calibri",
+                fontFamilyEa: null,
+                bold: false,
+                italic: false,
+                underline: false,
+                strikethrough: false,
+                color: null,
+                baseline: 0,
+              },
+            },
+          ],
+          properties: defaultParagraphProperties(),
+        },
+      ],
+    };
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    const tspanCount = (result.match(/<tspan/g) ?? []).length;
+    expect(tspanCount).toBe(1);
+    expect(result).toContain("Hello世界");
   });
 });

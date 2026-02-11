@@ -1,6 +1,7 @@
 import { readPptx } from "./parser/pptx-reader.js";
 import { parsePresentation } from "./parser/presentation-parser.js";
 import { parseTheme } from "./parser/theme-parser.js";
+import type { Theme } from "./model/theme.js";
 import {
   parseSlideMasterColorMap,
   parseSlideMasterBackground,
@@ -61,9 +62,14 @@ export async function convertPptxToSvg(
   const presRels = presRelsXml ? parseRelationships(presRelsXml) : new Map();
 
   // Parse theme
-  let theme = {
+  let theme: Theme = {
     colorScheme: defaultColorScheme(),
-    fontScheme: { majorFont: "Calibri", minorFont: "Calibri" },
+    fontScheme: {
+      majorFont: "Calibri",
+      minorFont: "Calibri",
+      majorFontEa: null,
+      minorFontEa: null,
+    },
   };
   for (const [, rel] of presRels) {
     if (rel.type.includes("theme")) {
