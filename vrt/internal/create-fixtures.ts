@@ -35,6 +35,7 @@ const REL_TYPES = {
   slideLayout: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout",
   chart: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart",
   image: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+  hyperlink: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
 };
 
 const COLORS = [
@@ -266,9 +267,14 @@ function wrapSlideXml(spTreeContent: string, backgroundXml = ""): string {
 </p:sld>`;
 }
 
-function slideRelsXml(extraRels: { id: string; type: string; target: string }[] = []): string {
+function slideRelsXml(
+  extraRels: { id: string; type: string; target: string; targetMode?: string }[] = [],
+): string {
   const extras = extraRels
-    .map((r) => `<Relationship Id="${r.id}" Type="${r.type}" Target="${r.target}"/>`)
+    .map((r) => {
+      const tm = r.targetMode ? ` TargetMode="${r.targetMode}"` : "";
+      return `<Relationship Id="${r.id}" Type="${r.type}" Target="${r.target}"${tm}/>`;
+    })
     .join("\n  ");
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
@@ -2850,6 +2856,141 @@ async function createEffectsFixture(): Promise<void> {
   savePptx(buffer, "vrt-effects.pptx");
 }
 
+async function createHyperlinksFixture(): Promise<void> {
+  const margin = 457200; // 0.5 inch
+  const shapeW = 8229600; // 8.5 inch
+  const shapeH = 914400; // 1 inch
+
+  // Shape 1: Normal text (no hyperlink)
+  const shape1 = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="2" name="Shape 1"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="${margin}" y="${margin}"/><a:ext cx="${shapeW}" cy="${shapeH}"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:solidFill><a:srgbClr val="F2F2F2"/></a:solidFill>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr anchor="ctr"/>
+    <a:lstStyle/>
+    <a:p>
+      <a:r>
+        <a:rPr lang="en-US" sz="1400">
+          <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+        </a:rPr>
+        <a:t>Normal text without hyperlink</a:t>
+      </a:r>
+    </a:p>
+  </p:txBody>
+</p:sp>`;
+
+  // Shape 2: Text with hyperlink
+  const shape2 = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="3" name="Shape 2"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="${margin}" y="${margin + shapeH + margin}"/><a:ext cx="${shapeW}" cy="${shapeH}"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:solidFill><a:srgbClr val="F2F2F2"/></a:solidFill>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr anchor="ctr"/>
+    <a:lstStyle/>
+    <a:p>
+      <a:r>
+        <a:rPr lang="en-US" sz="1400">
+          <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+        </a:rPr>
+        <a:t>Click here: </a:t>
+      </a:r>
+      <a:r>
+        <a:rPr lang="en-US" sz="1400" u="sng">
+          <a:solidFill><a:srgbClr val="0563C1"/></a:solidFill>
+          <a:hlinkClick r:id="rId2"/>
+        </a:rPr>
+        <a:t>https://example.com</a:t>
+      </a:r>
+    </a:p>
+  </p:txBody>
+</p:sp>`;
+
+  // Shape 3: Text with hyperlink and tooltip
+  const shape3 = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="4" name="Shape 3"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="${margin}" y="${margin + (shapeH + margin) * 2}"/><a:ext cx="${shapeW}" cy="${shapeH}"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:solidFill><a:srgbClr val="F2F2F2"/></a:solidFill>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr anchor="ctr"/>
+    <a:lstStyle/>
+    <a:p>
+      <a:r>
+        <a:rPr lang="en-US" sz="1400" u="sng">
+          <a:solidFill><a:srgbClr val="0563C1"/></a:solidFill>
+          <a:hlinkClick r:id="rId3" tooltip="Visit Example"/>
+        </a:rPr>
+        <a:t>Link with tooltip</a:t>
+      </a:r>
+    </a:p>
+  </p:txBody>
+</p:sp>`;
+
+  // Shape 4: Multiple hyperlinks in one paragraph
+  const shape4 = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="5" name="Shape 4"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="${margin}" y="${margin + (shapeH + margin) * 3}"/><a:ext cx="${shapeW}" cy="${shapeH}"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:solidFill><a:srgbClr val="F2F2F2"/></a:solidFill>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr anchor="ctr"/>
+    <a:lstStyle/>
+    <a:p>
+      <a:r>
+        <a:rPr lang="en-US" sz="1400" u="sng">
+          <a:solidFill><a:srgbClr val="0563C1"/></a:solidFill>
+          <a:hlinkClick r:id="rId2"/>
+        </a:rPr>
+        <a:t>Link 1</a:t>
+      </a:r>
+      <a:r>
+        <a:rPr lang="en-US" sz="1400">
+          <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+        </a:rPr>
+        <a:t> and </a:t>
+      </a:r>
+      <a:r>
+        <a:rPr lang="en-US" sz="1400" u="sng">
+          <a:solidFill><a:srgbClr val="0563C1"/></a:solidFill>
+          <a:hlinkClick r:id="rId3"/>
+        </a:rPr>
+        <a:t>Link 2</a:t>
+      </a:r>
+    </a:p>
+  </p:txBody>
+</p:sp>`;
+
+  const slide = wrapSlideXml([shape1, shape2, shape3, shape4].join("\n"));
+  const rels = slideRelsXml([
+    {
+      id: "rId2",
+      type: REL_TYPES.hyperlink,
+      target: "https://example.com",
+      targetMode: "External",
+    },
+    {
+      id: "rId3",
+      type: REL_TYPES.hyperlink,
+      target: "https://example.org",
+      targetMode: "External",
+    },
+  ]);
+
+  const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
+  savePptx(buffer, "vrt-hyperlinks.pptx");
+}
+
 async function main(): Promise<void> {
   console.log("Creating VRT fixtures...\n");
 
@@ -2875,6 +3016,7 @@ async function main(): Promise<void> {
   await createTextDecorationFixture();
   await createSlideSize43Fixture();
   await createEffectsFixture();
+  await createHyperlinksFixture();
 
   console.log("\nDone!");
 }

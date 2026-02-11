@@ -556,25 +556,33 @@ function renderSegment(
   fontScale: number,
   prefix: string,
 ): string {
+  let tspanContent: string;
   if (!needsScriptSplit(props)) {
     const styles = buildStyleAttrs(props, fontScale);
-    return `<tspan ${prefix}${styles}>${escapeXml(text)}</tspan>`;
-  }
-  const parts = splitByScript(text);
-  const result: string[] = [];
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i];
-    const fonts = part.isEa
-      ? [props.fontFamilyEa, props.fontFamily]
-      : [props.fontFamily, props.fontFamilyEa];
-    const styles = buildStyleAttrs(props, fontScale, fonts);
-    if (i === 0) {
-      result.push(`<tspan ${prefix}${styles}>${escapeXml(part.text)}</tspan>`);
-    } else {
-      result.push(`<tspan ${styles}>${escapeXml(part.text)}</tspan>`);
+    tspanContent = `<tspan ${prefix}${styles}>${escapeXml(text)}</tspan>`;
+  } else {
+    const parts = splitByScript(text);
+    const result: string[] = [];
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      const fonts = part.isEa
+        ? [props.fontFamilyEa, props.fontFamily]
+        : [props.fontFamily, props.fontFamilyEa];
+      const styles = buildStyleAttrs(props, fontScale, fonts);
+      if (i === 0) {
+        result.push(`<tspan ${prefix}${styles}>${escapeXml(part.text)}</tspan>`);
+      } else {
+        result.push(`<tspan ${styles}>${escapeXml(part.text)}</tspan>`);
+      }
     }
+    tspanContent = result.join("");
   }
-  return result.join("");
+
+  if (props.hyperlink) {
+    const href = escapeXml(props.hyperlink.url);
+    return `<a href="${href}">${tspanContent}</a>`;
+  }
+  return tspanContent;
 }
 
 function getDefaultFontSize(paragraphs: TextBody["paragraphs"]): number {

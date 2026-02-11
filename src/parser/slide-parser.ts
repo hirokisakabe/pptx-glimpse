@@ -16,6 +16,7 @@ import type {
   Paragraph,
   TextRun,
   RunProperties,
+  Hyperlink,
   BulletType,
   AutoNumScheme,
 } from "../model/text.js";
@@ -96,7 +97,7 @@ export function parseShapeTree(
 
   const shapes = spTree.sp ?? [];
   for (const sp of shapes) {
-    const shape = parseShape(sp, colorResolver);
+    const shape = parseShape(sp, colorResolver, rels);
     if (shape) {
       elements.push(shape);
     } else {
@@ -147,8 +148,12 @@ export function parseShapeTree(
   return elements;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseShape(sp: any, colorResolver: ColorResolver): ShapeElement | null {
+function parseShape(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sp: any,
+  colorResolver: ColorResolver,
+  rels?: Map<string, Relationship>,
+): ShapeElement | null {
   const spPr = sp.spPr;
   if (!spPr) return null;
 
@@ -158,7 +163,7 @@ function parseShape(sp: any, colorResolver: ColorResolver): ShapeElement | null 
   const geometry = parseGeometry(spPr);
   const fill = parseFillFromNode(spPr, colorResolver);
   const outline = parseOutline(spPr.ln, colorResolver);
-  const textBody = parseTextBody(sp.txBody, colorResolver);
+  const textBody = parseTextBody(sp.txBody, colorResolver, rels);
   const effects = parseEffectList(spPr.effectLst, colorResolver);
 
   const ph = sp.nvSpPr?.nvPr?.ph;
@@ -453,6 +458,7 @@ export function parseTextBody(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   txBody: any,
   colorResolver: ColorResolver,
+  rels?: Map<string, Relationship>,
 ): TextBody | null {
   if (!txBody) return null;
 
@@ -489,7 +495,7 @@ export function parseTextBody(
   const paragraphs: Paragraph[] = [];
   const pList = txBody.p ?? [];
   for (const p of pList) {
-    paragraphs.push(parseParagraph(p, colorResolver));
+    paragraphs.push(parseParagraph(p, colorResolver, rels));
   }
 
   if (paragraphs.length === 0) return null;
@@ -537,8 +543,12 @@ function parseBullet(pPr: any, colorResolver: ColorResolver) {
   return { bullet, bulletFont, bulletColor, bulletSizePct };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseParagraph(p: any, colorResolver: ColorResolver): Paragraph {
+function parseParagraph(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  p: any,
+  colorResolver: ColorResolver,
+  rels?: Map<string, Relationship>,
+): Paragraph {
   const pPr = p.pPr;
   const { bullet, bulletFont, bulletColor, bulletSizePct } = parseBullet(pPr, colorResolver);
   const properties = {
@@ -561,15 +571,19 @@ function parseParagraph(p: any, colorResolver: ColorResolver): Paragraph {
     const text = r.t ?? "";
     const textContent = typeof text === "object" ? (text["#text"] ?? "") : String(text);
     const rPr = r.rPr;
-    const runProps = parseRunProperties(rPr, colorResolver);
+    const runProps = parseRunProperties(rPr, colorResolver, rels);
     runs.push({ text: textContent, properties: runProps });
   }
 
   return { runs, properties };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseRunProperties(rPr: any, colorResolver: ColorResolver): RunProperties {
+function parseRunProperties(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  rPr: any,
+  colorResolver: ColorResolver,
+  rels?: Map<string, Relationship>,
+): RunProperties {
   if (!rPr) {
     return {
       fontSize: null,
@@ -581,6 +595,7 @@ function parseRunProperties(rPr: any, colorResolver: ColorResolver): RunProperti
       strikethrough: false,
       color: null,
       baseline: 0,
+      hyperlink: null,
     };
   }
 
@@ -598,6 +613,8 @@ function parseRunProperties(rPr: any, colorResolver: ColorResolver): RunProperti
     color = null;
   }
 
+  const hyperlink = parseHyperlink(rPr.hlinkClick, rels);
+
   return {
     fontSize,
     fontFamily,
@@ -608,5 +625,23 @@ function parseRunProperties(rPr: any, colorResolver: ColorResolver): RunProperti
     strikethrough,
     color,
     baseline,
+    hyperlink,
   };
+}
+
+function parseHyperlink(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  hlinkClick: any,
+  rels?: Map<string, Relationship>,
+): Hyperlink | null {
+  if (!hlinkClick) return null;
+
+  const rId = hlinkClick["@_r:id"] ?? hlinkClick["@_id"];
+  if (!rId || !rels) return null;
+
+  const rel = rels.get(rId);
+  if (!rel) return null;
+
+  const tooltip = hlinkClick["@_tooltip"] as string | undefined;
+  return { url: rel.target, ...(tooltip && { tooltip }) };
 }

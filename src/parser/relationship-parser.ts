@@ -6,6 +6,7 @@ export interface Relationship {
   id: string;
   type: string;
   target: string;
+  targetMode?: string;
 }
 
 export function parseRelationships(xml: string): Map<string, Relationship> {
@@ -27,13 +28,14 @@ export function parseRelationships(xml: string): Map<string, Relationship> {
     const id = rel["@_Id"] as string | undefined;
     const type = rel["@_Type"] as string | undefined;
     const target = rel["@_Target"] as string | undefined;
+    const targetMode = rel["@_TargetMode"] as string | undefined;
 
     if (!id || !type || !target) {
       console.warn(`${WARN_PREFIX} Relationship: entry missing required attribute, skipping`);
       continue;
     }
 
-    rels.set(id, { id, type, target });
+    rels.set(id, { id, type, target, ...(targetMode && { targetMode }) });
   }
 
   return rels;
