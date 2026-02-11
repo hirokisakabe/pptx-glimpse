@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getFontMetrics, getMetricsFallbackFont } from "../../src/data/font-metrics.js";
+import { getFontMetrics, getMetricsFallbackFont } from "./font-metrics.js";
 
 describe("getFontMetrics", () => {
   it("Calibri に対して Carlito ベースのメトリクスを返す", () => {

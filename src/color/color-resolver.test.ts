@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { ColorResolver } from "../../src/color/color-resolver.js";
-import type { ColorScheme, ColorMap } from "../../src/model/theme.js";
+import { ColorResolver } from "./color-resolver.js";
+import type { ColorScheme, ColorMap } from "../model/theme.js";
 
 const testScheme: ColorScheme = {
   dk1: "#000000",

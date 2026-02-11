@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { parseTheme } from "../../src/parser/theme-parser.js";
+import { parseTheme } from "./theme-parser.js";
 
 const themeXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Office Theme">

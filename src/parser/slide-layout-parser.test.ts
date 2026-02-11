@@ -1,11 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import {
-  parseSlideLayoutBackground,
-  parseSlideLayoutElements,
-} from "../../src/parser/slide-layout-parser.js";
-import { ColorResolver } from "../../src/color/color-resolver.js";
-import type { PptxArchive } from "../../src/parser/pptx-reader.js";
-import type { ShapeElement } from "../../src/model/shape.js";
+import { parseSlideLayoutBackground, parseSlideLayoutElements } from "./slide-layout-parser.js";
+import { ColorResolver } from "../color/color-resolver.js";
+import type { PptxArchive } from "./pptx-reader.js";
+import type { ShapeElement } from "../model/shape.js";
 
 function createColorResolver() {
   return new ColorResolver(

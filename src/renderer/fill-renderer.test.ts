@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderFillAttrs, renderOutlineAttrs } from "../../src/renderer/fill-renderer.js";
+import { renderFillAttrs, renderOutlineAttrs } from "./fill-renderer.js";
 
 describe("renderFillAttrs", () => {
   it("renders null fill as none", () => {

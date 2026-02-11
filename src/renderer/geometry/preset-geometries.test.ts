@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getPresetGeometrySvg } from "../../src/renderer/geometry/preset-geometries.js";
+import { getPresetGeometrySvg } from "./preset-geometries.js";
 
 describe("getPresetGeometrySvg", () => {
   // --- Basic shapes ---

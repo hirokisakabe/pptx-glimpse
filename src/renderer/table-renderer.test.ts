@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { renderTable } from "../../src/renderer/table-renderer.js";
-import type { TableElement } from "../../src/model/table.js";
+import { renderTable } from "./table-renderer.js";
+import type { TableElement } from "../model/table.js";
 
 function createTableElement(overrides?: Partial<TableElement["table"]>): TableElement {
   return {
