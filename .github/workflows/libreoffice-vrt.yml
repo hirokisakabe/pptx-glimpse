@@ -31,12 +31,12 @@ jobs:
         run: docker run --rm -v "${{ github.workspace }}":/workspace pptx-glimpse-vrt bash /workspace/scripts/vrt/render_references.sh
 
       - name: Run LibreOffice VRT
-        run: npx vitest run tests/vrt/libreoffice-regression.test.ts
+        run: npx vitest run tests/vrt/libreoffice/libreoffice-regression.test.ts
 
       - name: Upload diff images on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: libreoffice-vrt-diffs
-          path: tests/vrt/libreoffice-diffs/
+          path: tests/vrt/libreoffice/diffs/
           retention-days: 7
