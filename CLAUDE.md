@@ -73,6 +73,38 @@ CI は `lint` → `format:check` → `typecheck` → `test` → `build` の順�
 
 **よくあるミス**: パーサーやレンダラーを修正したのにスナップショットを更新し忘れて VRT テストが失敗する。描画に影響する変更を行ったら、必ず `npm run test:vrt:update` を実行すること。
 
+### LibreOffice VRT (Docker ベース)
+
+python-pptx で生成した PPTX を LibreOffice でレンダリングし、pptx-glimpse の出力と比較する。Docker で環境を統一。
+
+#### セットアップ
+
+```bash
+npm run vrt:lo:docker-build   # Docker イメージのビルド
+npm run vrt:lo:update          # フィクスチャ生成 + 参照画像生成 (Docker 必須)
+npm run test                   # テスト実行 (LibreOffice VRT 含む)
+```
+
+#### ファイル構成
+
+- `docker/libreoffice-vrt/Dockerfile` — Docker イメージ定義
+- `scripts/vrt/generate_fixtures.py` — python-pptx フィクスチャ生成
+- `scripts/vrt/render_references.sh` — LibreOffice 参照画像生成
+- `tests/vrt/libreoffice-regression.test.ts` — テスト本体
+- `tests/vrt/libreoffice-fixtures/` — python-pptx 生成の PPTX
+- `tests/vrt/libreoffice-snapshots/` — LibreOffice 参照画像
+
+#### 許容度
+
+- `PIXEL_THRESHOLD = 0.3` (ピクセル単位の色差許容度)
+- `MISMATCH_TOLERANCE = 0.05` (5% のピクセル不一致を許容)
+
+LibreOffice ≠ PowerPoint のため、フォントレンダリングやアンチエイリアスの差異は許容する。明らかな描画漏れ・構造的な間違いを検知する目的。
+
+#### Docker なしの場合
+
+Docker がない環境では LibreOffice VRT テストは自動的にスキップされる。`npm run test` は問題なく通る。
+
 ## コーディング規約
 
 - Prettier: ダブルクォート、セミコロンあり、末尾カンマ、printWidth 100
