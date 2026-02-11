@@ -6,6 +6,7 @@ function makeRunProps(overrides: Partial<RunProperties> = {}): RunProperties {
   return {
     fontSize: 18,
     fontFamily: null,
+    fontFamilyEa: null,
     bold: false,
     italic: false,
     underline: false,

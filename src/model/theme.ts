@@ -38,4 +38,6 @@ export interface ColorMap {
 export interface FontScheme {
   majorFont: string;
   minorFont: string;
+  majorFontEa: string | null;
+  minorFontEa: string | null;
 }

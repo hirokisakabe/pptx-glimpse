@@ -563,6 +563,7 @@ function parseRunProperties(rPr: any, colorResolver: ColorResolver): RunProperti
     return {
       fontSize: null,
       fontFamily: null,
+      fontFamilyEa: null,
       bold: false,
       italic: false,
       underline: false,
@@ -573,7 +574,8 @@ function parseRunProperties(rPr: any, colorResolver: ColorResolver): RunProperti
   }
 
   const fontSize = rPr["@_sz"] ? hundredthPointToPoint(Number(rPr["@_sz"])) : null;
-  const fontFamily = rPr.latin?.["@_typeface"] ?? rPr.ea?.["@_typeface"] ?? null;
+  const fontFamily = rPr.latin?.["@_typeface"] ?? null;
+  const fontFamilyEa = rPr.ea?.["@_typeface"] ?? null;
   const bold = rPr["@_b"] === "1" || rPr["@_b"] === "true";
   const italic = rPr["@_i"] === "1" || rPr["@_i"] === "true";
   const underline = rPr["@_u"] !== undefined && rPr["@_u"] !== "none";
@@ -585,5 +587,15 @@ function parseRunProperties(rPr: any, colorResolver: ColorResolver): RunProperti
     color = null;
   }
 
-  return { fontSize, fontFamily, bold, italic, underline, strikethrough, color, baseline };
+  return {
+    fontSize,
+    fontFamily,
+    fontFamilyEa,
+    bold,
+    italic,
+    underline,
+    strikethrough,
+    color,
+    baseline,
+  };
 }

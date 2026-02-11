@@ -222,6 +222,7 @@ describe("renderTable", () => {
                           properties: {
                             fontSize: 12,
                             fontFamily: null,
+                            fontFamilyEa: null,
                             bold: false,
                             italic: false,
                             underline: false,
