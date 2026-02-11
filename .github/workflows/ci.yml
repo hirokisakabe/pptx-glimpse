@@ -70,8 +70,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build Docker image
-        run: docker build -t pptx-glimpse-vrt docker/libreoffice-vrt
+        uses: docker/build-push-action@v6
+        with:
+          context: docker/libreoffice-vrt
+          load: true
+          tags: pptx-glimpse-vrt
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Generate fixtures
         run: docker run --rm -v "${{ github.workspace }}":/workspace pptx-glimpse-vrt python3 /workspace/scripts/vrt/generate_fixtures.py
