@@ -57,10 +57,10 @@ jobs:
         run: npm ci
 
       - name: Generate VRT fixtures
-        run: npm run test:vrt:fixtures
+        run: npm run vrt:internal:fixtures
 
       - name: Run VRT
-        run: npx vitest run vrt/internal/visual-regression.test.ts
+        run: npx vitest run vrt/internal/regression.test.ts
 
   libreoffice-vrt:
     runs-on: ubuntu-latest
@@ -80,13 +80,13 @@ jobs:
         run: docker build -t pptx-glimpse-vrt docker/libreoffice-vrt
 
       - name: Generate fixtures
-        run: docker run --rm -v "${{ github.workspace }}":/workspace pptx-glimpse-vrt python3 /workspace/vrt/libreoffice/generate_fixtures.py
+        run: docker run --rm -v "${{ github.workspace }}":/workspace pptx-glimpse-vrt python3 /workspace/vrt/libreoffice/create_fixtures.py
 
       - name: Generate LibreOffice reference images
-        run: docker run --rm -v "${{ github.workspace }}":/workspace pptx-glimpse-vrt bash /workspace/vrt/libreoffice/render_references.sh
+        run: docker run --rm -v "${{ github.workspace }}":/workspace pptx-glimpse-vrt bash /workspace/vrt/libreoffice/update_snapshots.sh
 
       - name: Run LibreOffice VRT
-        run: npx vitest run vrt/libreoffice/libreoffice-regression.test.ts
+        run: npx vitest run vrt/libreoffice/regression.test.ts
 
       - name: Upload diff images on failure
         if: failure()

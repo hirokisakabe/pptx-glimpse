@@ -464,7 +464,7 @@ async function createShapesFixture(): Promise<void> {
       { xml: slide2, rels },
     ],
   });
-  savePptx(buffer, "vrt-shapes.pptx");
+  savePptx(buffer, "shapes.pptx");
 }
 
 // --- 2. Fill and Lines ---
@@ -554,7 +554,7 @@ async function createFillAndLinesFixture(): Promise<void> {
       { xml: slide2, rels },
     ],
   });
-  savePptx(buffer, "vrt-fill-and-lines.pptx");
+  savePptx(buffer, "fill-and-lines.pptx");
 }
 
 // --- 3. Text ---
@@ -643,7 +643,7 @@ async function createTextFixture(): Promise<void> {
       { xml: slide2, rels },
     ],
   });
-  savePptx(buffer, "vrt-text.pptx");
+  savePptx(buffer, "text.pptx");
 }
 
 // --- 4. Transform ---
@@ -685,7 +685,7 @@ async function createTransformFixture(): Promise<void> {
   const rels = slideRelsXml();
 
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
-  savePptx(buffer, "vrt-transform.pptx");
+  savePptx(buffer, "transform.pptx");
 }
 
 // --- 5. Background ---
@@ -736,7 +736,7 @@ async function createBackgroundFixture(): Promise<void> {
       { xml: slide2, rels },
     ],
   });
-  savePptx(buffer, "vrt-background.pptx");
+  savePptx(buffer, "background.pptx");
 }
 
 // --- 6. Groups ---
@@ -781,7 +781,7 @@ async function createGroupsFixture(): Promise<void> {
   const rels = slideRelsXml();
 
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
-  savePptx(buffer, "vrt-groups.pptx");
+  savePptx(buffer, "groups.pptx");
 }
 
 // --- 7. Charts ---
@@ -968,7 +968,7 @@ async function createChartsFixture(): Promise<void> {
       `<Override PartName="/ppt/charts/chart4.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
     ],
   });
-  savePptx(buffer, "vrt-charts.pptx");
+  savePptx(buffer, "charts.pptx");
 }
 
 // --- 8. Connectors ---
@@ -1005,7 +1005,7 @@ async function createConnectorsFixture(): Promise<void> {
   const rels = slideRelsXml();
 
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
-  savePptx(buffer, "vrt-connectors.pptx");
+  savePptx(buffer, "connectors.pptx");
 }
 
 // --- 9. Custom Geometry ---
@@ -1073,7 +1073,7 @@ async function createCustomGeometryFixture(): Promise<void> {
   const rels = slideRelsXml();
 
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
-  savePptx(buffer, "vrt-custom-geometry.pptx");
+  savePptx(buffer, "custom-geometry.pptx");
 }
 
 // --- 10. Image ---
@@ -1115,7 +1115,7 @@ async function createImageFixture(): Promise<void> {
   media.set("ppt/media/image1.png", testImage);
 
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }], media });
-  savePptx(buffer, "vrt-image.pptx");
+  savePptx(buffer, "image.pptx");
 }
 
 // --- 11. Tables ---
@@ -1280,7 +1280,7 @@ async function createTablesFixture(): Promise<void> {
       { xml: slide2, rels },
     ],
   });
-  savePptx(buffer, "vrt-tables.pptx");
+  savePptx(buffer, "tables.pptx");
 }
 
 // --- 12. Bullets and Numbering ---
@@ -1537,7 +1537,7 @@ async function createBulletsFixture(): Promise<void> {
       { xml: slide2, rels },
     ],
   });
-  savePptx(buffer, "vrt-bullets.pptx");
+  savePptx(buffer, "bullets.pptx");
 }
 
 // --- 13. Flowchart Shapes ---
@@ -1604,7 +1604,7 @@ async function createFlowchartFixture(): Promise<void> {
       { xml: slide2, rels },
     ],
   });
-  savePptx(buffer, "vrt-flowchart.pptx");
+  savePptx(buffer, "flowchart.pptx");
 }
 
 // --- 14. Callout and Arc Shapes ---
@@ -1643,7 +1643,7 @@ async function createCalloutsArcsFixture(): Promise<void> {
   const rels = slideRelsXml();
 
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
-  savePptx(buffer, "vrt-callouts-arcs.pptx");
+  savePptx(buffer, "callouts-arcs.pptx");
 }
 
 // --- 15. Extended Arrows and Stars ---
@@ -1702,7 +1702,7 @@ async function createArrowsStarsFixture(): Promise<void> {
       { xml: slide2, rels },
     ],
   });
-  savePptx(buffer, "vrt-arrows-stars.pptx");
+  savePptx(buffer, "arrows-stars.pptx");
 }
 
 // --- 16. Math and Other Shapes ---
@@ -1785,7 +1785,7 @@ async function createMathOtherFixture(): Promise<void> {
       { xml: slide3, rels },
     ],
   });
-  savePptx(buffer, "vrt-math-other.pptx");
+  savePptx(buffer, "math-other.pptx");
 }
 
 // --- 17. Word Wrap ---
@@ -2063,7 +2063,7 @@ async function createWordWrapFixture(): Promise<void> {
       { xml: slide2, rels },
     ],
   });
-  savePptx(buffer, "vrt-word-wrap.pptx");
+  savePptx(buffer, "word-wrap.pptx");
 }
 
 // --- 18. Background blipFill ---
@@ -2139,7 +2139,7 @@ async function createBackgroundBlipFillFixture(): Promise<void> {
     slideMasterXml: masterWithBgImage,
     slideMasterRelsXml: masterRelsWithImage,
   });
-  savePptx(buffer, "vrt-background-blipfill.pptx");
+  savePptx(buffer, "background-blipfill.pptx");
 }
 
 // --- 19. Composite (Shape + Text + Fill + Transform) ---
@@ -2490,7 +2490,7 @@ async function createCompositeFixture(): Promise<void> {
       { xml: slide4, rels },
     ],
   });
-  savePptx(buffer, "vrt-composite.pptx");
+  savePptx(buffer, "composite.pptx");
 }
 
 // --- 20. Text Decoration (superscript / subscript) ---
@@ -2576,7 +2576,7 @@ async function createTextDecorationFixture(): Promise<void> {
   const rels = slideRelsXml();
 
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
-  savePptx(buffer, "vrt-text-decoration.pptx");
+  savePptx(buffer, "text-decoration.pptx");
 }
 
 // --- 21. Slide Size 4:3 ---
@@ -2757,7 +2757,7 @@ async function createSlideSize43Fixture(): Promise<void> {
     ],
     slideSize: slideSize43,
   });
-  savePptx(buffer, "vrt-slide-size-4-3.pptx");
+  savePptx(buffer, "slide-size-4-3.pptx");
 }
 
 // --- Main ---
@@ -2853,7 +2853,7 @@ async function createEffectsFixture(): Promise<void> {
   const slide = wrapSlideXml(shapes.join("\n"));
   const rels = slideRelsXml();
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
-  savePptx(buffer, "vrt-effects.pptx");
+  savePptx(buffer, "effects.pptx");
 }
 
 async function createHyperlinksFixture(): Promise<void> {
@@ -2988,7 +2988,7 @@ async function createHyperlinksFixture(): Promise<void> {
   ]);
 
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
-  savePptx(buffer, "vrt-hyperlinks.pptx");
+  savePptx(buffer, "hyperlinks.pptx");
 }
 
 async function main(): Promise<void> {
