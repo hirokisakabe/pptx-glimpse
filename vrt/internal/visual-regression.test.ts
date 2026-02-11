@@ -34,6 +34,7 @@ const VRT_CASES = [
   { name: "composite", fixture: "vrt-composite.pptx" },
   { name: "text-decoration", fixture: "vrt-text-decoration.pptx" },
   { name: "slide-size-4-3", fixture: "vrt-slide-size-4-3.pptx" },
+  { name: "effects", fixture: "vrt-effects.pptx" },
 ] as const;
 
 describe("Visual Regression Tests", { timeout: 60000 }, () => {
