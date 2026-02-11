@@ -56,10 +56,16 @@ function renderElement(element: SlideElement, defs: string[]): string | null {
       extractDefs(result, defs);
       return removeDefs(result);
     }
-    case "image":
-      return renderImage(element);
-    case "connector":
-      return renderConnector(element);
+    case "image": {
+      const imgResult = renderImage(element);
+      extractDefs(imgResult, defs);
+      return removeDefs(imgResult);
+    }
+    case "connector": {
+      const cxnResult = renderConnector(element);
+      extractDefs(cxnResult, defs);
+      return removeDefs(cxnResult);
+    }
     case "group":
       return renderGroup(element, defs);
     case "chart":
@@ -99,12 +105,18 @@ function renderGroup(group: GroupElement, defs: string[]): string {
 }
 
 function extractDefs(svgFragment: string, defs: string[]): void {
-  const defsMatch = svgFragment.match(/<linearGradient[^]*?<\/linearGradient>/g);
-  if (defsMatch) {
-    defs.push(...defsMatch);
+  const gradientMatch = svgFragment.match(/<linearGradient[^]*?<\/linearGradient>/g);
+  if (gradientMatch) {
+    defs.push(...gradientMatch);
+  }
+  const filterMatch = svgFragment.match(/<filter[^]*?<\/filter>/g);
+  if (filterMatch) {
+    defs.push(...filterMatch);
   }
 }
 
 function removeDefs(svgFragment: string): string {
-  return svgFragment.replace(/<linearGradient[^]*?<\/linearGradient>/g, "");
+  return svgFragment
+    .replace(/<linearGradient[^]*?<\/linearGradient>/g, "")
+    .replace(/<filter[^]*?<\/filter>/g, "");
 }

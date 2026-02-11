@@ -152,6 +152,7 @@ function shapeXml(
     flipH?: boolean;
     flipV?: boolean;
     adjValues?: { name: string; val: number }[];
+    effectsXml?: string;
   },
 ): string {
   const rot = opts.rotation ? ` rot="${opts.rotation * 60000}"` : "";
@@ -165,6 +166,7 @@ function shapeXml(
     opts.fillXml ?? `<a:solidFill><a:srgbClr val="${COLORS[id % COLORS.length]}"/></a:solidFill>`;
   const outline = opts.outlineXml ?? "";
   const txBody = opts.textBodyXml ?? "";
+  const effects = opts.effectsXml ? `<a:effectLst>${opts.effectsXml}</a:effectLst>` : "";
 
   return `<p:sp>
   <p:nvSpPr><p:cNvPr id="${id}" name="${name}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
@@ -173,6 +175,7 @@ function shapeXml(
     <a:prstGeom prst="${opts.preset}"><a:avLst>${adjList}</a:avLst></a:prstGeom>
     ${fill}
     ${outline}
+    ${effects}
   </p:spPr>
   ${txBody}
 </p:sp>`;
@@ -2563,6 +2566,101 @@ async function createTextDecorationFixture(): Promise<void> {
 }
 
 // --- Main ---
+// --- 21. Effects ---
+async function createEffectsFixture(): Promise<void> {
+  let id = 2;
+  const shapes: string[] = [];
+
+  // Outer shadow (下方向)
+  const pos0 = gridPosition(0, 0, 3, 2);
+  shapes.push(
+    shapeXml(id++, "OuterShadow", {
+      preset: "roundRect",
+      x: pos0.x,
+      y: pos0.y,
+      cx: pos0.w,
+      cy: pos0.h,
+      fillXml: solidFillXml("4472C4"),
+      effectsXml: `<a:outerShdw blurRad="40000" dist="20000" dir="5400000"><a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr></a:outerShdw>`,
+    }),
+  );
+
+  // Outer shadow (右下方向、大きめ)
+  const pos1 = gridPosition(1, 0, 3, 2);
+  shapes.push(
+    shapeXml(id++, "OuterShadow-Large", {
+      preset: "rect",
+      x: pos1.x,
+      y: pos1.y,
+      cx: pos1.w,
+      cy: pos1.h,
+      fillXml: solidFillXml("ED7D31"),
+      effectsXml: `<a:outerShdw blurRad="76200" dist="38100" dir="2700000"><a:srgbClr val="000000"><a:alpha val="40000"/></a:srgbClr></a:outerShdw>`,
+    }),
+  );
+
+  // Glow
+  const pos2 = gridPosition(2, 0, 3, 2);
+  shapes.push(
+    shapeXml(id++, "Glow", {
+      preset: "ellipse",
+      x: pos2.x,
+      y: pos2.y,
+      cx: pos2.w,
+      cy: pos2.h,
+      fillXml: solidFillXml("5B9BD5"),
+      effectsXml: `<a:glow rad="63500"><a:srgbClr val="4472C4"><a:alpha val="40000"/></a:srgbClr></a:glow>`,
+    }),
+  );
+
+  // Inner shadow
+  const pos3 = gridPosition(0, 1, 3, 2);
+  shapes.push(
+    shapeXml(id++, "InnerShadow", {
+      preset: "roundRect",
+      x: pos3.x,
+      y: pos3.y,
+      cx: pos3.w,
+      cy: pos3.h,
+      fillXml: solidFillXml("A5A5A5"),
+      effectsXml: `<a:innerShdw blurRad="63500" dist="50800" dir="2700000"><a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr></a:innerShdw>`,
+    }),
+  );
+
+  // Soft edge
+  const pos4 = gridPosition(1, 1, 3, 2);
+  shapes.push(
+    shapeXml(id++, "SoftEdge", {
+      preset: "rect",
+      x: pos4.x,
+      y: pos4.y,
+      cx: pos4.w,
+      cy: pos4.h,
+      fillXml: solidFillXml("FFC000"),
+      effectsXml: `<a:softEdge rad="31750"/>`,
+    }),
+  );
+
+  // Combined (shadow + glow)
+  const pos5 = gridPosition(2, 1, 3, 2);
+  shapes.push(
+    shapeXml(id++, "Combined", {
+      preset: "diamond",
+      x: pos5.x,
+      y: pos5.y,
+      cx: pos5.w,
+      cy: pos5.h,
+      fillXml: solidFillXml("70AD47"),
+      effectsXml: `<a:outerShdw blurRad="40000" dist="20000" dir="5400000"><a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr></a:outerShdw><a:glow rad="63500"><a:srgbClr val="70AD47"><a:alpha val="30000"/></a:srgbClr></a:glow>`,
+    }),
+  );
+
+  const slide = wrapSlideXml(shapes.join("\n"));
+  const rels = slideRelsXml();
+  const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
+  savePptx(buffer, "vrt-effects.pptx");
+}
+
 async function main(): Promise<void> {
   console.log("Creating VRT fixtures...\n");
 
@@ -2586,6 +2684,7 @@ async function main(): Promise<void> {
   await createBackgroundBlipFillFixture();
   await createCompositeFixture();
   await createTextDecorationFixture();
+  await createEffectsFixture();
 
   console.log("\nDone!");
 }

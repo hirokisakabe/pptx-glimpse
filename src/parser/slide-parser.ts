@@ -25,6 +25,7 @@ import type { ColorResolver } from "../color/color-resolver.js";
 import { parseXml } from "./xml-parser.js";
 import { parseFillFromNode, parseOutline } from "./fill-parser.js";
 import type { FillParseContext } from "./fill-parser.js";
+import { parseEffectList } from "./effect-parser.js";
 import { parseChart } from "./chart-parser.js";
 import { parseTable } from "./table-parser.js";
 import { parseRelationships, resolveRelationshipTarget } from "./relationship-parser.js";
@@ -105,7 +106,7 @@ export function parseShapeTree(
 
   const pics = spTree.pic ?? [];
   for (const pic of pics) {
-    const img = parseImage(pic, rels, slidePath, archive);
+    const img = parseImage(pic, rels, slidePath, archive, colorResolver);
     if (img) {
       elements.push(img);
     } else {
@@ -158,6 +159,7 @@ function parseShape(sp: any, colorResolver: ColorResolver): ShapeElement | null 
   const fill = parseFillFromNode(spPr, colorResolver);
   const outline = parseOutline(spPr.ln, colorResolver);
   const textBody = parseTextBody(sp.txBody, colorResolver);
+  const effects = parseEffectList(spPr.effectLst, colorResolver);
 
   const ph = sp.nvSpPr?.nvPr?.ph;
   const placeholderType = ph ? (ph["@_type"] ?? "body") : undefined;
@@ -170,6 +172,7 @@ function parseShape(sp: any, colorResolver: ColorResolver): ShapeElement | null 
     fill,
     outline,
     textBody,
+    effects,
     ...(placeholderType !== undefined && { placeholderType }),
     ...(placeholderIdx !== undefined && { placeholderIdx }),
   };
@@ -181,6 +184,7 @@ function parseImage(
   rels: Map<string, Relationship>,
   slidePath: string,
   archive: PptxArchive,
+  colorResolver: ColorResolver,
 ): ImageElement | null {
   const spPr = pic.spPr;
   if (!spPr) return null;
@@ -211,12 +215,14 @@ function parseImage(
   };
   const mimeType = mimeMap[ext] ?? "image/png";
   const imageData = mediaData.toString("base64");
+  const effects = parseEffectList(spPr.effectLst, colorResolver);
 
   return {
     type: "image",
     transform,
     imageData,
     mimeType,
+    effects,
   };
 }
 
@@ -229,8 +235,9 @@ function parseConnector(cxn: any, colorResolver: ColorResolver): ConnectorElemen
   if (!transform) return null;
 
   const outline = parseOutline(spPr.ln, colorResolver);
+  const effects = parseEffectList(spPr.effectLst, colorResolver);
 
-  return { type: "connector", transform, outline };
+  return { type: "connector", transform, outline, effects };
 }
 
 function parseGroup(
@@ -260,8 +267,9 @@ function parseGroup(
   };
 
   const children = parseShapeTree(grp, rels, slidePath, archive, colorResolver);
+  const effects = parseEffectList(grpSpPr.effectLst, colorResolver);
 
-  return { type: "group", transform, childTransform, children };
+  return { type: "group", transform, childTransform, children, effects };
 }
 
 function parseGraphicFrame(
