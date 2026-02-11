@@ -1,16 +1,11 @@
-// Script to create a minimal test PPTX file
+import { describe, it, expect, beforeAll } from "vitest";
 import JSZip from "jszip";
-import { writeFileSync } from "fs";
-import { fileURLToPath } from "url";
-import { dirname, join } from "path";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { convertPptxToSvg, convertPptxToPng } from "./converter.js";
 
 const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
-  <Default Extension="png" ContentType="image/png"/>
   <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
   <Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
   <Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>
@@ -241,9 +236,8 @@ const theme1 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
   </a:themeElements>
 </a:theme>`;
 
-async function main() {
+async function createTestPptx(): Promise<Buffer> {
   const zip = new JSZip();
-
   zip.file("[Content_Types].xml", contentTypes);
   zip.file("_rels/.rels", rootRels);
   zip.file("ppt/presentation.xml", presentationXml);
@@ -255,11 +249,89 @@ async function main() {
   zip.file("ppt/slideLayouts/slideLayout1.xml", slideLayout1);
   zip.file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", slideLayout1Rels);
   zip.file("ppt/theme/theme1.xml", theme1);
-
-  const buffer = await zip.generateAsync({ type: "nodebuffer" });
-  const outputPath = join(__dirname, "basic-shapes.pptx");
-  writeFileSync(outputPath, buffer);
-  console.log(`Created: ${outputPath}`);
+  return zip.generateAsync({ type: "nodebuffer" });
 }
 
-main().catch(console.error);
+let testPptx: Buffer;
+
+beforeAll(async () => {
+  testPptx = await createTestPptx();
+});
+
+describe("convertPptxToSvg", () => {
+  it("converts a PPTX file to SVG", async () => {
+    const results = await convertPptxToSvg(testPptx);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].slideNumber).toBe(1);
+    expect(results[0].svg).toContain("<svg");
+    expect(results[0].svg).toContain("</svg>");
+  });
+
+  it("renders basic shapes", async () => {
+    const results = await convertPptxToSvg(testPptx);
+    const svg = results[0].svg;
+
+    // Should contain rect (blue rectangle)
+    expect(svg).toContain("<rect");
+    // Should contain ellipse (orange)
+    expect(svg).toContain("<ellipse");
+    // Should contain text
+    expect(svg).toContain("Hello World");
+    expect(svg).toContain("Rounded Rectangle");
+  });
+
+  it("has correct viewBox dimensions for 16:9", async () => {
+    const results = await convertPptxToSvg(testPptx);
+    const svg = results[0].svg;
+
+    // 9144000 EMU = 960px, 5143500 EMU ≈ 540px
+    expect(svg).toContain('viewBox="0 0 960');
+  });
+
+  it("applies fill colors", async () => {
+    const results = await convertPptxToSvg(testPptx);
+    const svg = results[0].svg;
+
+    // Blue rectangle fill
+    expect(svg).toContain("#4472C4");
+    // Orange ellipse fill
+    expect(svg).toContain("#ED7D31");
+  });
+
+  it("supports slide number filtering", async () => {
+    const results = await convertPptxToSvg(testPptx, { slides: [1] });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].slideNumber).toBe(1);
+  });
+
+  it("returns empty for non-existent slide numbers", async () => {
+    const results = await convertPptxToSvg(testPptx, { slides: [99] });
+
+    expect(results).toHaveLength(0);
+  });
+});
+
+describe("convertPptxToPng", () => {
+  it("converts a PPTX file to PNG", async () => {
+    const results = await convertPptxToPng(testPptx);
+
+    expect(results).toHaveLength(1);
+    expect(results[0].slideNumber).toBe(1);
+    expect(results[0].png).toBeInstanceOf(Buffer);
+    expect(results[0].png.length).toBeGreaterThan(0);
+    // PNG magic bytes
+    expect(results[0].png[0]).toBe(0x89);
+    expect(results[0].png[1]).toBe(0x50); // P
+    expect(results[0].png[2]).toBe(0x4e); // N
+    expect(results[0].png[3]).toBe(0x47); // G
+  });
+
+  it("respects width option", async () => {
+    const results = await convertPptxToPng(testPptx, { width: 480 });
+
+    expect(results[0].width).toBe(480);
+    expect(results[0].height).toBeGreaterThan(0);
+  });
+});
