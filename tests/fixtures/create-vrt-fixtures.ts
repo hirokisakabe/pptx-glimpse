@@ -2114,6 +2114,357 @@ async function createBackgroundBlipFillFixture(): Promise<void> {
   savePptx(buffer, "vrt-background-blipfill.pptx");
 }
 
+// --- 19. Composite (Shape + Text + Fill + Transform) ---
+async function createCompositeFixture(): Promise<void> {
+  // Slide 1: Non-rectangular shapes with text and different anchors
+  let id = 2;
+  const shapes1: string[] = [];
+
+  const shapeTextTests = [
+    { preset: "ellipse", label: "Ellipse Top", anchor: "t", fill: "4472C4" },
+    { preset: "ellipse", label: "Ellipse Center", anchor: "ctr", fill: "5B9BD5" },
+    { preset: "ellipse", label: "Ellipse Bottom", anchor: "b", fill: "2E75B6" },
+    { preset: "diamond", label: "Diamond\nText", anchor: "ctr", fill: "ED7D31" },
+    { preset: "triangle", label: "Tri", anchor: "ctr", fill: "70AD47" },
+    {
+      preset: "roundRect",
+      label: "Multi-line\nRounded Rect\nwith Text",
+      anchor: "ctr",
+      fill: "FFC000",
+    },
+  ];
+  shapeTextTests.forEach((t, i) => {
+    const col = i % 3;
+    const row = Math.floor(i / 3);
+    const pos = gridPosition(col, row, 3, 2);
+    shapes1.push(
+      shapeXml(id++, t.label, {
+        preset: t.preset,
+        x: pos.x,
+        y: pos.y,
+        cx: pos.w,
+        cy: pos.h,
+        fillXml: solidFillXml(t.fill),
+        outlineXml: outlineXml(12700, "333333"),
+        textBodyXml: textBodyXmlHelper(t.label, {
+          fontSize: 14,
+          color: "FFFFFF",
+          anchor: t.anchor,
+          align: "ctr",
+        }),
+      }),
+    );
+  });
+  const slide1 = wrapSlideXml(shapes1.join("\n"));
+
+  // Slide 2: Shape + Fill + Text + Outline combinations
+  id = 2;
+  const shapes2: string[] = [];
+
+  // Gradient fill + text
+  const pos2a = gridPosition(0, 0, 3, 2);
+  shapes2.push(
+    shapeXml(id++, "grad-text", {
+      preset: "roundRect",
+      x: pos2a.x,
+      y: pos2a.y,
+      cx: pos2a.w,
+      cy: pos2a.h,
+      fillXml: gradientFillXml(
+        [
+          { pos: 0, color: "1A1A2E" },
+          { pos: 100000, color: "E94560" },
+        ],
+        5400000,
+      ),
+      outlineXml: outlineXml(12700, "333333"),
+      textBodyXml: textBodyXmlHelper("Gradient Fill", {
+        fontSize: 18,
+        bold: true,
+        color: "FFFFFF",
+      }),
+    }),
+  );
+
+  // Thick outline + text
+  const pos2b = gridPosition(1, 0, 3, 2);
+  shapes2.push(
+    shapeXml(id++, "thick-outline-text", {
+      preset: "rect",
+      x: pos2b.x,
+      y: pos2b.y,
+      cx: pos2b.w,
+      cy: pos2b.h,
+      fillXml: solidFillXml("F0F0F0"),
+      outlineXml: outlineXml(76200, "4472C4"),
+      textBodyXml: textBodyXmlHelper("Thick Outline", {
+        fontSize: 16,
+        color: "333333",
+      }),
+    }),
+  );
+
+  // Semi-transparent fill + text
+  const pos2c = gridPosition(2, 0, 3, 2);
+  shapes2.push(
+    shapeXml(id++, "semi-transparent-text", {
+      preset: "roundRect",
+      x: pos2c.x,
+      y: pos2c.y,
+      cx: pos2c.w,
+      cy: pos2c.h,
+      fillXml: `<a:solidFill><a:srgbClr val="4472C4"><a:alpha val="50000"/></a:srgbClr></a:solidFill>`,
+      outlineXml: outlineXml(25400, "333333"),
+      textBodyXml: textBodyXmlHelper("50% Alpha Fill", {
+        fontSize: 16,
+        bold: true,
+        color: "000000",
+      }),
+    }),
+  );
+
+  // Gradient fill ellipse + italic text
+  const pos2d = gridPosition(0, 1, 3, 2);
+  shapes2.push(
+    shapeXml(id++, "grad-ellipse-text", {
+      preset: "ellipse",
+      x: pos2d.x,
+      y: pos2d.y,
+      cx: pos2d.w,
+      cy: pos2d.h,
+      fillXml: gradientFillXml(
+        [
+          { pos: 0, color: "FF6384" },
+          { pos: 50000, color: "FFCE56" },
+          { pos: 100000, color: "36A2EB" },
+        ],
+        2700000,
+      ),
+      outlineXml: outlineXml(19050, "666666"),
+      textBodyXml: textBodyXmlHelper("Rainbow Ellipse", {
+        fontSize: 14,
+        italic: true,
+        color: "FFFFFF",
+      }),
+    }),
+  );
+
+  // Dashed outline + bold text
+  const pos2e = gridPosition(1, 1, 3, 2);
+  shapes2.push(
+    shapeXml(id++, "dashed-bold", {
+      preset: "diamond",
+      x: pos2e.x,
+      y: pos2e.y,
+      cx: pos2e.w,
+      cy: pos2e.h,
+      fillXml: solidFillXml("E7E6E6"),
+      outlineXml: outlineXml(38100, "ED7D31", "dash"),
+      textBodyXml: textBodyXmlHelper("Dashed", {
+        fontSize: 14,
+        bold: true,
+        color: "ED7D31",
+      }),
+    }),
+  );
+
+  // Solid fill hexagon + underline text
+  const pos2f = gridPosition(2, 1, 3, 2);
+  shapes2.push(
+    shapeXml(id++, "hex-underline", {
+      preset: "hexagon",
+      x: pos2f.x,
+      y: pos2f.y,
+      cx: pos2f.w,
+      cy: pos2f.h,
+      fillXml: solidFillXml("70AD47"),
+      outlineXml: outlineXml(25400, "333333"),
+      textBodyXml: textBodyXmlHelper("Hexagon", {
+        fontSize: 14,
+        underline: true,
+        color: "FFFFFF",
+      }),
+    }),
+  );
+
+  const slide2 = wrapSlideXml(shapes2.join("\n"));
+
+  // Slide 3: Transform + Text combinations
+  id = 2;
+  const shapes3: string[] = [];
+
+  const transformTextTests = [
+    { label: "Rot45 + Text", preset: "rect", rotation: 45, fill: "4472C4" },
+    {
+      label: "Rot30 + Grad",
+      preset: "roundRect",
+      rotation: 30,
+      fill: undefined as string | undefined,
+      useGrad: true,
+    },
+    { label: "FlipH + Text", preset: "rightArrow", flipH: true, fill: "ED7D31" },
+    { label: "FlipV + Text", preset: "triangle", flipV: true, fill: "70AD47" },
+    { label: "Rot+FlipH", preset: "parallelogram", rotation: 15, flipH: true, fill: "FFC000" },
+    { label: "Rot+FlipV", preset: "pentagon", rotation: 60, flipV: true, fill: "9966FF" },
+  ];
+  transformTextTests.forEach((t, i) => {
+    const col = i % 3;
+    const row = Math.floor(i / 3);
+    const pos = gridPosition(col, row, 3, 2);
+    const fill = t.useGrad
+      ? gradientFillXml(
+          [
+            { pos: 0, color: "667EEA" },
+            { pos: 100000, color: "764BA2" },
+          ],
+          5400000,
+        )
+      : solidFillXml(t.fill!);
+    shapes3.push(
+      shapeXml(id++, t.label, {
+        preset: t.preset,
+        x: pos.x,
+        y: pos.y,
+        cx: pos.w,
+        cy: pos.h,
+        fillXml: fill,
+        outlineXml: outlineXml(12700, "333333"),
+        rotation: t.rotation,
+        flipH: t.flipH,
+        flipV: t.flipV,
+        textBodyXml: textBodyXmlHelper(t.label, {
+          fontSize: 12,
+          bold: true,
+          color: "FFFFFF",
+        }),
+      }),
+    );
+  });
+  const slide3 = wrapSlideXml(shapes3.join("\n"));
+
+  // Slide 4: Overlapping shapes (z-order and semi-transparency)
+  id = 2;
+  const shapes4: string[] = [];
+
+  // Layer 1: large background rectangle
+  shapes4.push(
+    shapeXml(id++, "bg-rect", {
+      preset: "rect",
+      x: 500000,
+      y: 300000,
+      cx: 4000000,
+      cy: 3000000,
+      fillXml: solidFillXml("4472C4"),
+      outlineXml: outlineXml(12700, "333333"),
+      textBodyXml: textBodyXmlHelper("Back (Z=1)", {
+        fontSize: 14,
+        color: "FFFFFF",
+        anchor: "t",
+        align: "l",
+      }),
+    }),
+  );
+
+  // Layer 2: overlapping ellipse
+  shapes4.push(
+    shapeXml(id++, "mid-ellipse", {
+      preset: "ellipse",
+      x: 1500000,
+      y: 1000000,
+      cx: 3500000,
+      cy: 2500000,
+      fillXml: solidFillXml("ED7D31"),
+      outlineXml: outlineXml(12700, "333333"),
+      textBodyXml: textBodyXmlHelper("Middle (Z=2)", {
+        fontSize: 14,
+        color: "FFFFFF",
+      }),
+    }),
+  );
+
+  // Layer 3: small foreground rounded rect
+  shapes4.push(
+    shapeXml(id++, "front-roundRect", {
+      preset: "roundRect",
+      x: 2500000,
+      y: 1500000,
+      cx: 2500000,
+      cy: 1800000,
+      fillXml: solidFillXml("70AD47"),
+      outlineXml: outlineXml(19050, "333333"),
+      textBodyXml: textBodyXmlHelper("Front (Z=3)", {
+        fontSize: 16,
+        bold: true,
+        color: "FFFFFF",
+      }),
+    }),
+  );
+
+  // Semi-transparent overlapping group (right side)
+  shapes4.push(
+    shapeXml(id++, "alpha-rect1", {
+      preset: "rect",
+      x: 5500000,
+      y: 500000,
+      cx: 2500000,
+      cy: 2500000,
+      fillXml: `<a:solidFill><a:srgbClr val="FF0000"><a:alpha val="50000"/></a:srgbClr></a:solidFill>`,
+      outlineXml: outlineXml(12700, "990000"),
+      textBodyXml: textBodyXmlHelper("Red 50%", {
+        fontSize: 12,
+        color: "000000",
+        anchor: "t",
+      }),
+    }),
+  );
+
+  shapes4.push(
+    shapeXml(id++, "alpha-rect2", {
+      preset: "rect",
+      x: 6200000,
+      y: 1200000,
+      cx: 2500000,
+      cy: 2500000,
+      fillXml: `<a:solidFill><a:srgbClr val="0000FF"><a:alpha val="50000"/></a:srgbClr></a:solidFill>`,
+      outlineXml: outlineXml(12700, "000099"),
+      textBodyXml: textBodyXmlHelper("Blue 50%", {
+        fontSize: 12,
+        color: "000000",
+        anchor: "b",
+      }),
+    }),
+  );
+
+  shapes4.push(
+    shapeXml(id++, "alpha-ellipse", {
+      preset: "ellipse",
+      x: 5800000,
+      y: 2000000,
+      cx: 2200000,
+      cy: 2200000,
+      fillXml: `<a:solidFill><a:srgbClr val="00FF00"><a:alpha val="40000"/></a:srgbClr></a:solidFill>`,
+      outlineXml: outlineXml(12700, "006600"),
+      textBodyXml: textBodyXmlHelper("Green 40%", {
+        fontSize: 12,
+        color: "000000",
+      }),
+    }),
+  );
+
+  const slide4 = wrapSlideXml(shapes4.join("\n"));
+  const rels = slideRelsXml();
+
+  const buffer = await buildPptx({
+    slides: [
+      { xml: slide1, rels },
+      { xml: slide2, rels },
+      { xml: slide3, rels },
+      { xml: slide4, rels },
+    ],
+  });
+  savePptx(buffer, "vrt-composite.pptx");
+}
+
 // --- Main ---
 async function main(): Promise<void> {
   console.log("Creating VRT fixtures...\n");
@@ -2136,6 +2487,7 @@ async function main(): Promise<void> {
   await createMathOtherFixture();
   await createWordWrapFixture();
   await createBackgroundBlipFillFixture();
+  await createCompositeFixture();
 
   console.log("\nDone!");
 }
