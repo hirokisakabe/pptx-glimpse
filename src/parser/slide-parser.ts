@@ -10,7 +10,15 @@ import type {
 import type { ImageElement } from "../model/image.js";
 import type { ChartElement } from "../model/chart.js";
 import type { TableElement } from "../model/table.js";
-import type { TextBody, BodyProperties, Paragraph, TextRun, RunProperties } from "../model/text.js";
+import type {
+  TextBody,
+  BodyProperties,
+  Paragraph,
+  TextRun,
+  RunProperties,
+  BulletType,
+  AutoNumScheme,
+} from "../model/text.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import type { Relationship } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
@@ -478,15 +486,62 @@ export function parseTextBody(
   return { paragraphs, bodyProperties };
 }
 
+const VALID_AUTO_NUM_SCHEMES = new Set([
+  "arabicPeriod",
+  "arabicParenR",
+  "romanUcPeriod",
+  "romanLcPeriod",
+  "alphaUcPeriod",
+  "alphaLcPeriod",
+  "alphaLcParenR",
+  "alphaUcParenR",
+  "arabicPlain",
+]);
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseBullet(pPr: any, colorResolver: ColorResolver) {
+  let bullet: BulletType | null = null;
+  let bulletFont: string | null = null;
+  let bulletColor = colorResolver.resolve(pPr?.buClr);
+  if (!pPr?.buClr) bulletColor = null;
+  const bulletSizePct: number | null = pPr?.buSzPct ? Number(pPr.buSzPct["@_val"]) : null;
+
+  if (pPr?.buNone !== undefined) {
+    bullet = { type: "none" };
+  } else if (pPr?.buChar) {
+    bullet = { type: "char", char: pPr.buChar["@_char"] ?? "\u2022" };
+  } else if (pPr?.buAutoNum) {
+    const scheme = pPr.buAutoNum["@_type"] ?? "arabicPeriod";
+    bullet = {
+      type: "autoNum",
+      scheme: VALID_AUTO_NUM_SCHEMES.has(scheme) ? (scheme as AutoNumScheme) : "arabicPeriod",
+      startAt: Number(pPr.buAutoNum["@_startAt"] ?? 1),
+    };
+  }
+
+  if (pPr?.buFont) {
+    bulletFont = pPr.buFont["@_typeface"] ?? null;
+  }
+
+  return { bullet, bulletFont, bulletColor, bulletSizePct };
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function parseParagraph(p: any, colorResolver: ColorResolver): Paragraph {
   const pPr = p.pPr;
+  const { bullet, bulletFont, bulletColor, bulletSizePct } = parseBullet(pPr, colorResolver);
   const properties = {
     alignment: (pPr?.["@_algn"] as "l" | "ctr" | "r" | "just") ?? "l",
     lineSpacing: pPr?.lnSpc?.spcPct ? Number(pPr.lnSpc.spcPct["@_val"]) : null,
     spaceBefore: pPr?.spcBef?.spcPts ? Number(pPr.spcBef.spcPts["@_val"]) : 0,
     spaceAfter: pPr?.spcAft?.spcPts ? Number(pPr.spcAft.spcPts["@_val"]) : 0,
     level: Number(pPr?.["@_lvl"] ?? 0),
+    bullet,
+    bulletFont,
+    bulletColor,
+    bulletSizePct,
+    marginLeft: Number(pPr?.["@_marL"] ?? 0),
+    indent: Number(pPr?.["@_indent"] ?? 0),
   };
 
   const runs: TextRun[] = [];

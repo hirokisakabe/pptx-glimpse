@@ -22,12 +22,34 @@ export interface Paragraph {
   properties: ParagraphProperties;
 }
 
+export type AutoNumScheme =
+  | "arabicPeriod"
+  | "arabicParenR"
+  | "romanUcPeriod"
+  | "romanLcPeriod"
+  | "alphaUcPeriod"
+  | "alphaLcPeriod"
+  | "alphaLcParenR"
+  | "alphaUcParenR"
+  | "arabicPlain";
+
+export type BulletType =
+  | { type: "none" }
+  | { type: "char"; char: string }
+  | { type: "autoNum"; scheme: AutoNumScheme; startAt: number };
+
 export interface ParagraphProperties {
   alignment: "l" | "ctr" | "r" | "just";
   lineSpacing: number | null;
   spaceBefore: number;
   spaceAfter: number;
   level: number;
+  bullet: BulletType | null;
+  bulletFont: string | null;
+  bulletColor: ResolvedColor | null;
+  bulletSizePct: number | null;
+  marginLeft: number;
+  indent: number;
 }
 
 export interface TextRun {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { renderTextBody } from "../../src/renderer/text-renderer.js";
-import type { TextBody } from "../../src/model/text.js";
+import { renderTextBody, formatAutoNum } from "../../src/renderer/text-renderer.js";
+import type { TextBody, Paragraph, BulletType } from "../../src/model/text.js";
 import type { Transform } from "../../src/model/shape.js";
 
 function makeTransform(widthEmu: number, heightEmu: number): Transform {
@@ -12,6 +12,25 @@ function makeTransform(widthEmu: number, heightEmu: number): Transform {
     rotation: 0,
     flipH: false,
     flipV: false,
+  };
+}
+
+function defaultParagraphProperties(
+  overrides?: Partial<Paragraph["properties"]>,
+): Paragraph["properties"] {
+  return {
+    alignment: "l",
+    lineSpacing: null,
+    spaceBefore: 0,
+    spaceAfter: 0,
+    level: 0,
+    bullet: null,
+    bulletFont: null,
+    bulletColor: null,
+    bulletSizePct: null,
+    marginLeft: 0,
+    indent: 0,
+    ...overrides,
   };
 }
 
@@ -53,15 +72,58 @@ function makeTextBody(
             baseline: 0,
           },
         })),
-        properties: {
+        properties: defaultParagraphProperties({
           alignment: overrides?.alignment ?? "l",
-          lineSpacing: null,
-          spaceBefore: 0,
-          spaceAfter: 0,
-          level: 0,
-        },
+        }),
       },
     ],
+  };
+}
+
+function makeBulletTextBody(
+  paragraphs: {
+    text: string;
+    bullet: BulletType | null;
+    marginLeft?: number;
+    indent?: number;
+    level?: number;
+  }[],
+): TextBody {
+  return {
+    bodyProperties: {
+      anchor: "t",
+      marginLeft: 91440,
+      marginRight: 91440,
+      marginTop: 45720,
+      marginBottom: 45720,
+      wrap: "square",
+      autoFit: "noAutofit",
+      fontScale: 1,
+      lnSpcReduction: 0,
+    },
+    paragraphs: paragraphs.map((p) => ({
+      runs: [
+        {
+          text: p.text,
+          properties: {
+            fontSize: 18,
+            fontFamily: null,
+            bold: false,
+            italic: false,
+            underline: false,
+            strikethrough: false,
+            color: null,
+            baseline: 0,
+          },
+        },
+      ],
+      properties: defaultParagraphProperties({
+        bullet: p.bullet,
+        marginLeft: p.marginLeft ?? 342900,
+        indent: p.indent ?? -342900,
+        level: p.level ?? 0,
+      }),
+    })),
   };
 }
 
@@ -156,16 +218,11 @@ describe("renderTextBody", () => {
                 underline: false,
                 strikethrough: false,
                 color: null,
+                baseline: 0,
               },
             },
           ],
-          properties: {
-            alignment: "l",
-            lineSpacing: null,
-            spaceBefore: 0,
-            spaceAfter: 0,
-            level: 0,
-          },
+          properties: defaultParagraphProperties(),
         },
         {
           runs: [
@@ -179,16 +236,11 @@ describe("renderTextBody", () => {
                 underline: false,
                 strikethrough: false,
                 color: null,
+                baseline: 0,
               },
             },
           ],
-          properties: {
-            alignment: "l",
-            lineSpacing: null,
-            spaceBefore: 0,
-            spaceAfter: 0,
-            level: 0,
-          },
+          properties: defaultParagraphProperties(),
         },
       ],
     };
@@ -283,13 +335,7 @@ describe("renderTextBody", () => {
               },
             },
           ],
-          properties: {
-            alignment: "l",
-            lineSpacing: null,
-            spaceBefore: 0,
-            spaceAfter: 0,
-            level: 0,
-          },
+          properties: defaultParagraphProperties(),
         },
       ],
     };
@@ -353,13 +399,7 @@ describe("renderTextBody", () => {
               },
             },
           ],
-          properties: {
-            alignment: "l",
-            lineSpacing: null,
-            spaceBefore: 0,
-            spaceAfter: 0,
-            level: 0,
-          },
+          properties: defaultParagraphProperties(),
         },
       ],
     };
@@ -371,5 +411,120 @@ describe("renderTextBody", () => {
     const textBody = makeTextBody(["Normal"]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).not.toContain("baseline-shift");
+  });
+});
+
+describe("箇条書き記号レンダリング", () => {
+  it("buChar の箇条書き記号が SVG に含まれる", () => {
+    const textBody = makeBulletTextBody([
+      { text: "Item 1", bullet: { type: "char", char: "\u2022" } },
+      { text: "Item 2", bullet: { type: "char", char: "\u2022" } },
+    ]);
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).toContain("\u2022");
+    expect(result).toContain("Item 1");
+    expect(result).toContain("Item 2");
+  });
+
+  it("buAutoNum (arabicPeriod) で正しい番号が描画される", () => {
+    const textBody = makeBulletTextBody([
+      { text: "First", bullet: { type: "autoNum", scheme: "arabicPeriod", startAt: 1 } },
+      { text: "Second", bullet: { type: "autoNum", scheme: "arabicPeriod", startAt: 1 } },
+      { text: "Third", bullet: { type: "autoNum", scheme: "arabicPeriod", startAt: 1 } },
+    ]);
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).toContain("1.");
+    expect(result).toContain("2.");
+    expect(result).toContain("3.");
+  });
+
+  it("buNone の場合は記号が描画されない", () => {
+    const textBody = makeBulletTextBody([{ text: "No bullet", bullet: { type: "none" } }]);
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).toContain("No bullet");
+    // bullet tspan が1つも入らない（テキスト用 tspan のみ）
+    const tspanCount = (result.match(/<tspan/g) ?? []).length;
+    expect(tspanCount).toBe(1);
+  });
+
+  it("bullet=null (未指定) の場合は記号が描画されない", () => {
+    const textBody = makeBulletTextBody([{ text: "Plain text", bullet: null }]);
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).toContain("Plain text");
+    const tspanCount = (result.match(/<tspan/g) ?? []).length;
+    expect(tspanCount).toBe(1);
+  });
+
+  it("marginLeft によるインデントが x 座標に反映される", () => {
+    const noIndent = makeBulletTextBody([
+      { text: "No indent", bullet: null, marginLeft: 0, indent: 0 },
+    ]);
+    const withIndent = makeBulletTextBody([
+      { text: "Indented", bullet: null, marginLeft: 457200, indent: 0 },
+    ]);
+
+    const resultNoIndent = renderTextBody(noIndent, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    const resultIndent = renderTextBody(withIndent, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+
+    // tspan の x 属性を取得（<text> の x ではなく）
+    const xNoIndent = resultNoIndent.match(/<tspan[^>]*x="([^"]+)"/)?.[1];
+    const xIndent = resultIndent.match(/<tspan[^>]*x="([^"]+)"/)?.[1];
+    expect(Number(xIndent)).toBeGreaterThan(Number(xNoIndent));
+  });
+
+  it("buAutoNum の startAt が反映される", () => {
+    const textBody = makeBulletTextBody([
+      { text: "Item", bullet: { type: "autoNum", scheme: "arabicPeriod", startAt: 5 } },
+    ]);
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).toContain("5.");
+  });
+});
+
+describe("formatAutoNum", () => {
+  it("arabicPeriod: 1. 2. 3.", () => {
+    expect(formatAutoNum("arabicPeriod", 1)).toBe("1.");
+    expect(formatAutoNum("arabicPeriod", 10)).toBe("10.");
+  });
+
+  it("arabicParenR: 1) 2) 3)", () => {
+    expect(formatAutoNum("arabicParenR", 1)).toBe("1)");
+    expect(formatAutoNum("arabicParenR", 3)).toBe("3)");
+  });
+
+  it("arabicPlain: 1 2 3", () => {
+    expect(formatAutoNum("arabicPlain", 1)).toBe("1");
+    expect(formatAutoNum("arabicPlain", 5)).toBe("5");
+  });
+
+  it("romanUcPeriod: I. II. III.", () => {
+    expect(formatAutoNum("romanUcPeriod", 1)).toBe("I.");
+    expect(formatAutoNum("romanUcPeriod", 4)).toBe("IV.");
+    expect(formatAutoNum("romanUcPeriod", 9)).toBe("IX.");
+  });
+
+  it("romanLcPeriod: i. ii. iii.", () => {
+    expect(formatAutoNum("romanLcPeriod", 1)).toBe("i.");
+    expect(formatAutoNum("romanLcPeriod", 3)).toBe("iii.");
+  });
+
+  it("alphaUcPeriod: A. B. C.", () => {
+    expect(formatAutoNum("alphaUcPeriod", 1)).toBe("A.");
+    expect(formatAutoNum("alphaUcPeriod", 26)).toBe("Z.");
+    expect(formatAutoNum("alphaUcPeriod", 27)).toBe("AA.");
+  });
+
+  it("alphaLcPeriod: a. b. c.", () => {
+    expect(formatAutoNum("alphaLcPeriod", 1)).toBe("a.");
+    expect(formatAutoNum("alphaLcPeriod", 3)).toBe("c.");
+  });
+
+  it("alphaUcParenR: A) B) C)", () => {
+    expect(formatAutoNum("alphaUcParenR", 1)).toBe("A)");
+  });
+
+  it("alphaLcParenR: a) b) c)", () => {
+    expect(formatAutoNum("alphaLcParenR", 1)).toBe("a)");
+    expect(formatAutoNum("alphaLcParenR", 2)).toBe("b)");
   });
 });
