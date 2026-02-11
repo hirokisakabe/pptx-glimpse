@@ -15,6 +15,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const SLIDE_W = 9144000;
 const SLIDE_H = 5143500;
 
+// 4:3 slide size
+const SLIDE_W_4_3 = 9144000;
+const SLIDE_H_4_3 = 6858000;
+
 const NS = {
   a: "http://schemas.openxmlformats.org/drawingml/2006/main",
   r: "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
@@ -282,6 +286,7 @@ interface PptxBuildOptions {
   contentTypesExtra?: string[];
   slideMasterXml?: string;
   slideMasterRelsXml?: string;
+  slideSize?: { cx: number; cy: number; type?: string };
 }
 
 async function buildPptx(options: PptxBuildOptions): Promise<Buffer> {
@@ -318,13 +323,16 @@ async function buildPptx(options: PptxBuildOptions): Promise<Buffer> {
   const sldIdLst = options.slides
     .map((_, i) => `<p:sldId id="${256 + i}" r:id="rId${2 + i}"/>`)
     .join("");
+  const sldSzCx = options.slideSize?.cx ?? SLIDE_W;
+  const sldSzCy = options.slideSize?.cy ?? SLIDE_H;
+  const sldSzType = options.slideSize?.type ?? "screen16x9";
   zip.file(
     "ppt/presentation.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:presentation xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}">
   <p:sldMasterIdLst><p:sldMasterId r:id="rId1"/></p:sldMasterIdLst>
   <p:sldIdLst>${sldIdLst}</p:sldIdLst>
-  <p:sldSz cx="${SLIDE_W}" cy="${SLIDE_H}" type="screen16x9"/>
+  <p:sldSz cx="${sldSzCx}" cy="${sldSzCy}" type="${sldSzType}"/>
 </p:presentation>`,
   );
 
@@ -2562,6 +2570,187 @@ async function createTextDecorationFixture(): Promise<void> {
   savePptx(buffer, "vrt-text-decoration.pptx");
 }
 
+// --- 21. Slide Size 4:3 ---
+function gridPosition43(
+  col: number,
+  row: number,
+  cols: number,
+  rows: number,
+  margin = 200000,
+): GridPos {
+  const cellW = (SLIDE_W_4_3 - margin * (cols + 1)) / cols;
+  const cellH = (SLIDE_H_4_3 - margin * (rows + 1)) / rows;
+  return {
+    x: margin + col * (cellW + margin),
+    y: margin + row * (cellH + margin),
+    w: cellW,
+    h: cellH,
+  };
+}
+
+async function createSlideSize43Fixture(): Promise<void> {
+  const slideSize43 = { cx: SLIDE_W_4_3, cy: SLIDE_H_4_3, type: "screen4x3" };
+
+  // Slide 1: Basic shapes on 4:3
+  const shapeDefs = [
+    { preset: "rect", label: "Rectangle" },
+    { preset: "ellipse", label: "Ellipse" },
+    { preset: "roundRect", label: "RoundRect" },
+    { preset: "diamond", label: "Diamond" },
+    { preset: "triangle", label: "Triangle" },
+    { preset: "hexagon", label: "Hexagon" },
+  ];
+
+  let id = 2;
+  const shapes1: string[] = [];
+  shapeDefs.forEach((def, i) => {
+    const col = i % 3;
+    const row = Math.floor(i / 3);
+    const pos = gridPosition43(col, row, 3, 2);
+    shapes1.push(
+      shapeXml(id++, def.label, {
+        preset: def.preset,
+        x: pos.x,
+        y: pos.y,
+        cx: pos.w,
+        cy: pos.h,
+        textBodyXml: textBodyXmlHelper(def.label, { fontSize: 14, color: "FFFFFF" }),
+      }),
+    );
+  });
+
+  const slide1 = wrapSlideXml(shapes1.join("\n"));
+
+  // Slide 2: Text layout on 4:3
+  id = 2;
+  const shapes2: string[] = [];
+
+  // Large title text at top
+  const titlePos = gridPosition43(0, 0, 1, 3);
+  shapes2.push(
+    shapeXml(id++, "Title", {
+      preset: "rect",
+      x: titlePos.x,
+      y: titlePos.y,
+      cx: titlePos.w,
+      cy: titlePos.h,
+      fillXml: solidFillXml("1F4E79"),
+      textBodyXml: textBodyXmlHelper("4:3 Slide Title", {
+        fontSize: 32,
+        bold: true,
+        color: "FFFFFF",
+        align: "ctr",
+      }),
+    }),
+  );
+
+  // Text boxes in 2x1 grid for body area
+  const leftPos = gridPosition43(0, 1, 2, 3);
+  shapes2.push(
+    shapeXml(id++, "LeftText", {
+      preset: "roundRect",
+      x: leftPos.x,
+      y: leftPos.y,
+      cx: leftPos.w,
+      cy: leftPos.h,
+      fillXml: solidFillXml("E8F0FE"),
+      outlineXml: outlineXml(12700, "4472C4"),
+      textBodyXml: textBodyXmlHelper("Left content area with text that spans multiple lines", {
+        fontSize: 14,
+        color: "333333",
+        anchor: "t",
+      }),
+    }),
+  );
+
+  const rightPos = gridPosition43(1, 1, 2, 3);
+  shapes2.push(
+    shapeXml(id++, "RightText", {
+      preset: "roundRect",
+      x: rightPos.x,
+      y: rightPos.y,
+      cx: rightPos.w,
+      cy: rightPos.h,
+      fillXml: solidFillXml("FFF2CC"),
+      outlineXml: outlineXml(12700, "FFC000"),
+      textBodyXml: textBodyXmlHelper("Right content area with different styling", {
+        fontSize: 14,
+        italic: true,
+        color: "333333",
+        anchor: "t",
+      }),
+    }),
+  );
+
+  // Bottom bar
+  const bottomPos = gridPosition43(0, 2, 1, 3);
+  shapes2.push(
+    shapeXml(id++, "Footer", {
+      preset: "rect",
+      x: bottomPos.x,
+      y: bottomPos.y,
+      cx: bottomPos.w,
+      cy: bottomPos.h,
+      fillXml: solidFillXml("44546A"),
+      textBodyXml: textBodyXmlHelper("Footer on 4:3 slide", {
+        fontSize: 10,
+        color: "FFFFFF",
+        align: "ctr",
+      }),
+    }),
+  );
+
+  const slide2 = wrapSlideXml(shapes2.join("\n"));
+
+  // Slide 3: Background on 4:3
+  const bgXml = `<p:bg>
+    <p:bgPr>
+      <a:gradFill>
+        <a:gsLst>
+          <a:gs pos="0"><a:srgbClr val="1A237E"/></a:gs>
+          <a:gs pos="50000"><a:srgbClr val="4A148C"/></a:gs>
+          <a:gs pos="100000"><a:srgbClr val="880E4F"/></a:gs>
+        </a:gsLst>
+        <a:lin ang="2700000" scaled="1"/>
+      </a:gradFill>
+      <a:effectLst/>
+    </p:bgPr>
+  </p:bg>`;
+
+  id = 2;
+  const shapes3: string[] = [];
+  const centerPos = gridPosition43(0, 0, 1, 1);
+  shapes3.push(
+    shapeXml(id++, "CenterShape", {
+      preset: "ellipse",
+      x: centerPos.x + centerPos.w / 4,
+      y: centerPos.y + centerPos.h / 4,
+      cx: centerPos.w / 2,
+      cy: centerPos.h / 2,
+      fillXml: `<a:solidFill><a:srgbClr val="FFFFFF"><a:alpha val="70000"/></a:srgbClr></a:solidFill>`,
+      textBodyXml: textBodyXmlHelper("4:3 BG", {
+        fontSize: 24,
+        bold: true,
+        color: "1A237E",
+        align: "ctr",
+      }),
+    }),
+  );
+
+  const slide3 = wrapSlideXml(shapes3.join("\n"), bgXml);
+
+  const rels = slideRelsXml();
+  const buffer = await buildPptx({
+    slides: [
+      { xml: slide1, rels },
+      { xml: slide2, rels },
+      { xml: slide3, rels },
+    ],
+    slideSize: slideSize43,
+  });
+  savePptx(buffer, "vrt-slide-size-4-3.pptx");
+}
+
 // --- Main ---
 async function main(): Promise<void> {
   console.log("Creating VRT fixtures...\n");
@@ -2586,6 +2775,7 @@ async function main(): Promise<void> {
   await createBackgroundBlipFillFixture();
   await createCompositeFixture();
   await createTextDecorationFixture();
+  await createSlideSize43Fixture();
 
   console.log("\nDone!");
 }

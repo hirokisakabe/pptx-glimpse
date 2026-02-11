@@ -30,12 +30,24 @@ OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "../../vrt/libreoffice/fixt
 SLIDE_WIDTH = 9144000
 SLIDE_HEIGHT = 5143500
 
+# 4:3 slide size
+SLIDE_WIDTH_4_3 = 9144000
+SLIDE_HEIGHT_4_3 = 6858000
+
 
 def new_presentation():
     """スライドサイズを固定した新しいプレゼンテーションを生成する。"""
     prs = Presentation()
     prs.slide_width = Emu(SLIDE_WIDTH)
     prs.slide_height = Emu(SLIDE_HEIGHT)
+    return prs
+
+
+def new_presentation_4_3():
+    """4:3 スライドサイズの新しいプレゼンテーションを生成する。"""
+    prs = Presentation()
+    prs.slide_width = Emu(SLIDE_WIDTH_4_3)
+    prs.slide_height = Emu(SLIDE_HEIGHT_4_3)
     return prs
 
 
@@ -1275,6 +1287,92 @@ def create_custom_geometry():
     print("  Created: lo-custom-geometry.pptx")
 
 
+def create_slide_size_4_3():
+    """4:3 スライドサイズ: 基本図形 + テキスト + 背景色を 1 スライドに配置"""
+    prs = new_presentation_4_3()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    # スライド背景色
+    background = slide.background
+    fill_bg = background.fill
+    fill_bg.solid()
+    fill_bg.fore_color.rgb = RGBColor(0xF0, 0xF4, 0xF8)
+
+    # 上段: 基本図形 3 つ
+    shapes_def = [
+        (MSO_SHAPE.RECTANGLE, Inches(0.3), Inches(0.3), Inches(2.8), Inches(2.5),
+         RGBColor(0x44, 0x72, 0xC4)),
+        (MSO_SHAPE.OVAL, Inches(3.5), Inches(0.3), Inches(2.8), Inches(2.5),
+         RGBColor(0xED, 0x7D, 0x31)),
+        (MSO_SHAPE.ROUNDED_RECTANGLE, Inches(6.7), Inches(0.3), Inches(2.8), Inches(2.5),
+         RGBColor(0x70, 0xAD, 0x47)),
+    ]
+
+    for shape_type, left, top, width, height, color in shapes_def:
+        shape = slide.shapes.add_shape(shape_type, left, top, width, height)
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = color
+        shape.line.color.rgb = RGBColor(0x33, 0x33, 0x33)
+        shape.line.width = Pt(1.5)
+
+    # 中段: テキストボックス 2 つ
+    left_box = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.3), Inches(3.1), Inches(4.5), Inches(2.2)
+    )
+    left_box.fill.solid()
+    left_box.fill.fore_color.rgb = RGBColor(0xE8, 0xF0, 0xFE)
+    left_box.line.color.rgb = RGBColor(0x44, 0x72, 0xC4)
+    left_box.line.width = Pt(1)
+    tf_l = left_box.text_frame
+    tf_l.word_wrap = True
+    p_l = tf_l.paragraphs[0]
+    p_l.text = "4:3 Layout Text"
+    p_l.alignment = PP_ALIGN.CENTER
+    run_l = p_l.runs[0]
+    run_l.font.name = "Liberation Sans"
+    run_l.font.size = Pt(20)
+    run_l.font.bold = True
+    run_l.font.color.rgb = RGBColor(0x1F, 0x4E, 0x79)
+
+    right_box = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, Inches(5.1), Inches(3.1), Inches(4.5), Inches(2.2)
+    )
+    right_box.fill.solid()
+    right_box.fill.fore_color.rgb = RGBColor(0xFF, 0xF2, 0xCC)
+    right_box.line.color.rgb = RGBColor(0xFF, 0xC0, 0x00)
+    right_box.line.width = Pt(1)
+    tf_r = right_box.text_frame
+    tf_r.word_wrap = True
+    p_r = tf_r.paragraphs[0]
+    p_r.text = "Right Content"
+    p_r.alignment = PP_ALIGN.CENTER
+    run_r = p_r.runs[0]
+    run_r.font.name = "Liberation Sans"
+    run_r.font.size = Pt(20)
+    run_r.font.italic = True
+    run_r.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
+
+    # 下段: フッターバー
+    footer = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(0.3), Inches(5.6), Inches(9.2), Inches(1.6)
+    )
+    footer.fill.solid()
+    footer.fill.fore_color.rgb = RGBColor(0x44, 0x54, 0x6A)
+    footer.line.width = Pt(0)
+    tf_f = footer.text_frame
+    tf_f.word_wrap = True
+    p_f = tf_f.paragraphs[0]
+    p_f.text = "Footer on 4:3 slide"
+    p_f.alignment = PP_ALIGN.CENTER
+    run_f = p_f.runs[0]
+    run_f.font.name = "Liberation Sans"
+    run_f.font.size = Pt(14)
+    run_f.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
+    prs.save(os.path.join(OUTPUT_DIR, "lo-slide-size-4-3.pptx"))
+    print("  Created: lo-slide-size-4-3.pptx")
+
+
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     print("Generating LibreOffice VRT fixtures...")
@@ -1297,6 +1395,7 @@ def main():
     create_charts()
     create_connectors()
     create_custom_geometry()
+    create_slide_size_4_3()
     print("Done!")
 
 
