@@ -86,6 +86,10 @@ const VRT_CASES = [
   { name: "image", fixture: "vrt-image.pptx" },
   { name: "tables", fixture: "vrt-tables.pptx" },
   { name: "bullets", fixture: "vrt-bullets.pptx" },
+  { name: "flowchart", fixture: "vrt-flowchart.pptx" },
+  { name: "callouts-arcs", fixture: "vrt-callouts-arcs.pptx" },
+  { name: "arrows-stars", fixture: "vrt-arrows-stars.pptx" },
+  { name: "math-other", fixture: "vrt-math-other.pptx" },
   { name: "background-blipfill", fixture: "vrt-background-blipfill.pptx" },
 ] as const;
 

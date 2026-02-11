@@ -1520,7 +1520,255 @@ async function createBulletsFixture(): Promise<void> {
   savePptx(buffer, "vrt-bullets.pptx");
 }
 
-// --- 13. Background blipFill ---
+// --- 13. Flowchart Shapes ---
+async function createFlowchartFixture(): Promise<void> {
+  const flowchartPresets1 = [
+    "flowChartProcess",
+    "flowChartAlternateProcess",
+    "flowChartDecision",
+    "flowChartInputOutput",
+    "flowChartPredefinedProcess",
+    "flowChartInternalStorage",
+    "flowChartDocument",
+    "flowChartMultidocument",
+    "flowChartTerminator",
+    "flowChartPreparation",
+    "flowChartManualInput",
+    "flowChartManualOperation",
+    "flowChartConnector",
+    "flowChartOffpageConnector",
+  ];
+  const flowchartPresets2 = [
+    "flowChartPunchedCard",
+    "flowChartPunchedTape",
+    "flowChartCollate",
+    "flowChartSort",
+    "flowChartExtract",
+    "flowChartMerge",
+    "flowChartOnlineStorage",
+    "flowChartDelay",
+    "flowChartDisplay",
+    "flowChartMagneticTape",
+    "flowChartMagneticDisk",
+    "flowChartMagneticDrum",
+    "flowChartSummingJunction",
+    "flowChartOr",
+  ];
+
+  const makeSlide = (presets: string[], cols: number, rows: number): string => {
+    let id = 2;
+    const shapes = presets.map((preset, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const pos = gridPosition(col, row, cols, rows);
+      return shapeXml(id++, preset, {
+        preset,
+        x: pos.x,
+        y: pos.y,
+        cx: pos.w,
+        cy: pos.h,
+        fillXml: solidFillXml(COLORS[i % COLORS.length]),
+        outlineXml: outlineXml(12700, "333333"),
+      });
+    });
+    return wrapSlideXml(shapes.join("\n"));
+  };
+
+  const slide1 = makeSlide(flowchartPresets1, 7, 2);
+  const slide2 = makeSlide(flowchartPresets2, 7, 2);
+  const rels = slideRelsXml();
+
+  const buffer = await buildPptx({
+    slides: [
+      { xml: slide1, rels },
+      { xml: slide2, rels },
+    ],
+  });
+  savePptx(buffer, "vrt-flowchart.pptx");
+}
+
+// --- 14. Callout and Arc Shapes ---
+async function createCalloutsArcsFixture(): Promise<void> {
+  const presets = [
+    "wedgeRectCallout",
+    "wedgeRoundRectCallout",
+    "wedgeEllipseCallout",
+    "cloudCallout",
+    "borderCallout1",
+    "borderCallout2",
+    "borderCallout3",
+    "arc",
+    "chord",
+    "pie",
+    "blockArc",
+  ];
+
+  let id = 2;
+  const shapes = presets.map((preset, i) => {
+    const col = i % 4;
+    const row = Math.floor(i / 4);
+    const pos = gridPosition(col, row, 4, 3);
+    return shapeXml(id++, preset, {
+      preset,
+      x: pos.x,
+      y: pos.y,
+      cx: pos.w,
+      cy: pos.h,
+      fillXml: solidFillXml(COLORS[i % COLORS.length]),
+      outlineXml: outlineXml(12700, "333333"),
+    });
+  });
+
+  const slide = wrapSlideXml(shapes.join("\n"));
+  const rels = slideRelsXml();
+
+  const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
+  savePptx(buffer, "vrt-callouts-arcs.pptx");
+}
+
+// --- 15. Extended Arrows and Stars ---
+async function createArrowsStarsFixture(): Promise<void> {
+  const arrowPresets = [
+    "leftRightArrow",
+    "upDownArrow",
+    "notchedRightArrow",
+    "stripedRightArrow",
+    "chevron",
+    "homePlate",
+    "bentArrow",
+    "bendUpArrow",
+    "quadArrow",
+    "leftUpArrow",
+  ];
+  const starPresets = [
+    "star6",
+    "star8",
+    "star10",
+    "star12",
+    "star16",
+    "star24",
+    "star32",
+    "irregularSeal1",
+    "irregularSeal2",
+    "sun",
+  ];
+
+  const makeSlide = (presets: string[], cols: number, rows: number): string => {
+    let id = 2;
+    const shapes = presets.map((preset, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const pos = gridPosition(col, row, cols, rows);
+      return shapeXml(id++, preset, {
+        preset,
+        x: pos.x,
+        y: pos.y,
+        cx: pos.w,
+        cy: pos.h,
+        fillXml: solidFillXml(COLORS[i % COLORS.length]),
+        outlineXml: outlineXml(12700, "333333"),
+      });
+    });
+    return wrapSlideXml(shapes.join("\n"));
+  };
+
+  const slide1 = makeSlide(arrowPresets, 5, 2);
+  const slide2 = makeSlide(starPresets, 5, 2);
+  const rels = slideRelsXml();
+
+  const buffer = await buildPptx({
+    slides: [
+      { xml: slide1, rels },
+      { xml: slide2, rels },
+    ],
+  });
+  savePptx(buffer, "vrt-arrows-stars.pptx");
+}
+
+// --- 16. Math and Other Shapes ---
+async function createMathOtherFixture(): Promise<void> {
+  const mathPresets = [
+    "mathPlus",
+    "mathMinus",
+    "mathMultiply",
+    "mathDivide",
+    "mathEqual",
+    "mathNotEqual",
+  ];
+  const otherPresets1 = [
+    "plus",
+    "heptagon",
+    "octagon",
+    "decagon",
+    "dodecagon",
+    "plaque",
+    "can",
+    "cube",
+    "donut",
+    "noSmoking",
+    "smileyFace",
+    "foldedCorner",
+    "frame",
+    "bevel",
+  ];
+  const otherPresets2 = [
+    "halfFrame",
+    "corner",
+    "diagStripe",
+    "snip1Rect",
+    "snip2SameRect",
+    "snip2DiagRect",
+    "snipRoundRect",
+    "round1Rect",
+    "round2SameRect",
+    "round2DiagRect",
+    "lightningBolt",
+    "moon",
+    "teardrop",
+    "wave",
+    "doubleWave",
+    "ribbon",
+    "ribbon2",
+    "bracketPair",
+    "bracePair",
+    "leftBracket",
+  ];
+
+  const makeSlide = (presets: string[], cols: number, rows: number): string => {
+    let id = 2;
+    const shapes = presets.map((preset, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const pos = gridPosition(col, row, cols, rows);
+      return shapeXml(id++, preset, {
+        preset,
+        x: pos.x,
+        y: pos.y,
+        cx: pos.w,
+        cy: pos.h,
+        fillXml: solidFillXml(COLORS[i % COLORS.length]),
+        outlineXml: outlineXml(12700, "333333"),
+      });
+    });
+    return wrapSlideXml(shapes.join("\n"));
+  };
+
+  const slide1 = makeSlide(mathPresets, 3, 2);
+  const slide2 = makeSlide(otherPresets1, 7, 2);
+  const slide3 = makeSlide(otherPresets2, 7, 3);
+  const rels = slideRelsXml();
+
+  const buffer = await buildPptx({
+    slides: [
+      { xml: slide1, rels },
+      { xml: slide2, rels },
+      { xml: slide3, rels },
+    ],
+  });
+  savePptx(buffer, "vrt-math-other.pptx");
+}
+
+// --- 17. Background blipFill ---
 async function createBackgroundBlipFillFixture(): Promise<void> {
   // Generate a gradient-like test image for background
   const imgSize = 200;
@@ -1612,6 +1860,10 @@ async function main(): Promise<void> {
   await createImageFixture();
   await createTablesFixture();
   await createBulletsFixture();
+  await createFlowchartFixture();
+  await createCalloutsArcsFixture();
+  await createArrowsStarsFixture();
+  await createMathOtherFixture();
   await createBackgroundBlipFillFixture();
 
   console.log("\nDone!");
