@@ -1,6 +1,6 @@
 {
   "name": "pptx-glimpse",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Convert PPTX slides to SVG and PNG",
   "type": "module",
   "main": "./dist/index.cjs",
