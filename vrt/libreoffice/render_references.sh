@@ -5,7 +5,7 @@ set -euo pipefail
 # Docker コンテナ内で実行されることを想定。
 #
 # Usage:
-#   bash scripts/vrt/render_references.sh
+#   bash vrt/libreoffice/render_references.sh
 
 FIXTURE_DIR="/workspace/vrt/libreoffice/fixtures"
 OUTPUT_DIR="/workspace/vrt/libreoffice/snapshots"
