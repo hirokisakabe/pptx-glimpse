@@ -1,0 +1,161 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #f5f5f5;
+  color: #333;
+  min-height: 100vh;
+}
+
+#app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 2rem;
+}
+
+header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+}
+
+header p {
+  color: #666;
+  margin-top: 0.5rem;
+}
+
+#drop-zone {
+  border: 3px dashed #ccc;
+  border-radius: 12px;
+  padding: 4rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color 0.2s,
+    background 0.2s;
+}
+
+#drop-zone.drag-over {
+  border-color: #4472c4;
+  background: #eef3fb;
+}
+
+#drop-zone p {
+  margin: 0.5rem 0;
+  color: #888;
+}
+
+#file-label {
+  display: inline-block;
+  padding: 0.75rem 1.5rem;
+  background: #4472c4;
+  color: white;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  transition: background 0.2s;
+}
+
+#file-label:hover {
+  background: #3561b0;
+}
+
+#loading {
+  text-align: center;
+  padding: 4rem;
+  font-size: 1.2rem;
+  color: #666;
+}
+
+#error {
+  text-align: center;
+  padding: 2rem;
+  color: #d32f2f;
+  background: #ffebee;
+  border-radius: 8px;
+  margin-top: 1rem;
+}
+
+#slide-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+#slide-nav button {
+  padding: 0.5rem 1rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+}
+
+#slide-nav button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#slide-container {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+#slide-container svg {
+  display: block;
+}
+
+#thumbnail-strip {
+  display: flex;
+  gap: 8px;
+  margin-top: 1rem;
+  overflow-x: auto;
+  padding: 8px 0;
+}
+
+.thumbnail {
+  flex: 0 0 120px;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: pointer;
+  background: white;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: border-color 0.2s;
+}
+
+.thumbnail.active {
+  border-color: #4472c4;
+}
+
+.thumbnail:hover {
+  border-color: #90b0db;
+}
+
+footer {
+  text-align: center;
+  margin-top: 3rem;
+  padding-top: 1rem;
+  border-top: 1px solid #e0e0e0;
+  color: #888;
+}
+
+footer a {
+  color: #4472c4;
+  text-decoration: none;
+}
+
+footer a:hover {
+  text-decoration: underline;
+}

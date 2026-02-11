@@ -29,7 +29,9 @@
     "vrt:lo:fixtures": "docker run --rm -v \"$(pwd)\":/workspace pptx-glimpse-vrt python3 /workspace/vrt/libreoffice/create_fixtures.py",
     "vrt:lo:snapshots": "docker run --rm -v \"$(pwd)\":/workspace pptx-glimpse-vrt bash /workspace/vrt/libreoffice/update_snapshots.sh",
     "vrt:lo:update": "npm run vrt:lo:docker-build && npm run vrt:lo:fixtures && npm run vrt:lo:snapshots",
-    "test:package": "npm run build && bash scripts/test-package.sh"
+    "test:package": "npm run build && bash scripts/test-package.sh",
+    "demo:dev": "cd demo && npm run dev",
+    "demo:build": "cd demo && npm run build"
   },
   "files": [
     "dist"
