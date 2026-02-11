@@ -1,19 +1,19 @@
 # pptx-glimpse
 
-PPTX スライドを SVG / PNG に変換する TypeScript ライブラリ。
+A TypeScript library for converting PPTX slides to SVG / PNG.
 
-## 動作環境
+## Requirements
 
-- **Node.js >= 20** (ブラウザ環境では動作しません)
-- PNG 変換に [sharp](https://sharp.pixelplumbing.com/) を使用しているため、sharp がサポートするプラットフォームが必要です
+- **Node.js >= 20** (does not work in browser environments)
+- Requires a platform supported by [sharp](https://sharp.pixelplumbing.com/), which is used for PNG conversion
 
-## インストール
+## Installation
 
 ```bash
 npm install pptx-glimpse
 ```
 
-## 使い方
+## Usage
 
 ```typescript
 import { readFileSync } from "fs";
@@ -21,138 +21,138 @@ import { convertPptxToSvg, convertPptxToPng } from "pptx-glimpse";
 
 const pptx = readFileSync("presentation.pptx");
 
-// SVG に変換
+// Convert to SVG
 const svgResults = await convertPptxToSvg(pptx);
 // [{ slideNumber: 1, svg: "<svg>...</svg>" }, ...]
 
-// PNG に変換
+// Convert to PNG
 const pngResults = await convertPptxToPng(pptx);
 // [{ slideNumber: 1, png: Buffer, width: 960, height: 540 }, ...]
 ```
 
-## サポート状況
+## Feature Support
 
-PowerPoint の静的なビジュアルコンテンツの変換に対応しています。アニメーションやトランジションなど、動的な要素には対応していません。
+Supports conversion of static visual content in PowerPoint. Dynamic elements such as animations and transitions are not supported.
 
-### 対応している機能
+### Supported Features
 
-#### 図形
+#### Shapes
 
-| 機能           | 詳細                                                                      |
-| -------------- | ------------------------------------------------------------------------- |
-| プリセット図形 | 113 種類 (矩形、楕円、矢印、フローチャート、吹き出し、星形、数学記号など) |
-| カスタム図形   | カスタムパス (moveTo, lnTo, cubicBezTo, close) による任意の図形描画       |
-| コネクター     | 線コネクターの描画、線スタイル・色・太さの設定                            |
-| グループ       | 図形のグループ化、ネストされたグループ                                    |
-| 変形           | 位置、サイズ、回転、反転 (flipH/flipV)、調整値                            |
+| Feature        | Details                                                                                          |
+| -------------- | ------------------------------------------------------------------------------------------------ |
+| Preset shapes  | 113 types (rectangles, ellipses, arrows, flowcharts, callouts, stars, math symbols, etc.)        |
+| Custom shapes  | Arbitrary shape drawing using custom paths (moveTo, lnTo, cubicBezTo, close)                     |
+| Connectors     | Line connector drawing, line style / color / width settings                                      |
+| Groups         | Shape grouping, nested groups                                                                    |
+| Transforms     | Position, size, rotation, flip (flipH/flipV), adjustment values                                  |
 
-#### テキスト
+#### Text
 
-| 機能             | 詳細                                                                                                            |
-| ---------------- | --------------------------------------------------------------------------------------------------------------- |
-| 文字書式         | フォントサイズ、フォントファミリー (東アジアフォント対応)、太字、斜体、下線、取り消し線、文字色、上付き・下付き |
-| 段落書式         | 水平配置 (left/center/right/justify)、垂直アンカー (top/center/bottom)、行間、段落前後スペース、インデント      |
-| 箇条書き         | 文字箇条書き (buChar)、自動番号 (buAutoNum、9 種類)、箇条書きフォント・色・サイズ                               |
-| テキストボックス | 折り返し (square/none)、自動調整 (noAutofit/normAutofit/spAutofit)、フォントスケール、マージン                  |
-| 単語折り返し     | 英語・日本語・CJK テキストの折り返し、複数フォントサイズ混在時の折り返し                                        |
+| Feature        | Details                                                                                                              |
+| -------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Character formatting | Font size, font family (East Asian font support), bold, italic, underline, strikethrough, font color, superscript / subscript |
+| Paragraph formatting | Horizontal alignment (left/center/right/justify), vertical anchor (top/center/bottom), line spacing, before/after paragraph spacing, indent |
+| Bullet points  | Character bullets (buChar), auto-numbering (buAutoNum, 9 types), bullet font / color / size                          |
+| Text boxes     | Word wrap (square/none), auto-fit (noAutofit/normAutofit/spAutofit), font scaling, margins                            |
+| Word wrapping  | Word wrapping for English, Japanese, and CJK text, wrapping with mixed font sizes                                    |
 
-#### 塗りつぶし
+#### Fill
 
-| 機能           | 詳細                                                     |
-| -------------- | -------------------------------------------------------- |
-| ソリッドカラー | RGB 色指定、透明度                                       |
-| グラデーション | 線形グラデーション、複数グラデーションストップ、角度指定 |
-| 画像塗りつぶし | PNG/JPEG/GIF、引き伸ばし (stretch) モード                |
-| 塗りつぶしなし | noFill 指定                                              |
+| Feature        | Details                                              |
+| -------------- | ---------------------------------------------------- |
+| Solid color    | RGB color specification, transparency                |
+| Gradient       | Linear gradient, multiple gradient stops, angle      |
+| Image fill     | PNG/JPEG/GIF, stretch mode                           |
+| No fill        | noFill specification                                 |
 
-#### 線・枠線
+#### Lines & Borders
 
-| 機能         | 詳細                                                          |
-| ------------ | ------------------------------------------------------------- |
-| 線スタイル   | 線幅、ソリッドカラー、透明度                                  |
-| 破線スタイル | solid, dash, dot, dashDot, lgDash, lgDashDot, sysDash, sysDot |
+| Feature        | Details                                                       |
+| -------------- | ------------------------------------------------------------- |
+| Line style     | Line width, solid color, transparency                         |
+| Dash style     | solid, dash, dot, dashDot, lgDash, lgDashDot, sysDash, sysDot |
 
-#### 色
+#### Colors
 
-| 機能         | 詳細                                                                          |
-| ------------ | ----------------------------------------------------------------------------- |
-| 色指定方式   | RGB (srgbClr)、テーマ色 (schemeClr)、システム色 (sysClr)                      |
-| テーマカラー | カラースキーム (dk1, lt1, dk2, lt2, accent1-6, hlink, folHlink)、カラーマップ |
-| 色変換       | 輝度調整 (lumMod/lumOff)、ティント (tint)、シェード (shade)、透明度 (alpha)   |
-
-#### エフェクト
-
-| 機能               | 詳細                               |
-| ------------------ | ---------------------------------- |
-| 外側の影           | ぼかし半径、距離、方向、色・透明度 |
-| 内側の影           | ぼかし半径、距離、方向、色・透明度 |
-| 光彩               | 半径、色・透明度                   |
-| ぼかし (Soft Edge) | 半径                               |
-
-#### 画像
-
-| 機能           | 詳細                                               |
-| -------------- | -------------------------------------------------- |
-| 画像要素       | PNG/JPEG/GIF、位置・サイズ・回転・反転、エフェクト |
-| 画像塗りつぶし | 図形・背景への画像塗りつぶし                       |
-
-#### 表
-
-| 機能         | 詳細                                                                   |
-| ------------ | ---------------------------------------------------------------------- |
-| テーブル構造 | 行・列のグリッド、セル結合 (gridSpan/rowSpan)、行の高さ・列の幅        |
-| セルの書式   | テキスト、塗りつぶし (solid/gradient/image)、枠線 (上下左右、スタイル) |
-
-#### グラフ
-
-| 機能       | 詳細                                                                       |
-| ---------- | -------------------------------------------------------------------------- |
-| 対応グラフ | 棒グラフ (縦棒・横棒)、折れ線グラフ、円グラフ、散布図                      |
-| グラフ要素 | タイトル、凡例 (位置指定)、系列 (名前・値・カテゴリ・色)、カテゴリ軸、値軸 |
-
-#### 背景・スライド設定
-
-| 機能           | 詳細                                                                                 |
+| Feature        | Details                                                                              |
 | -------------- | ------------------------------------------------------------------------------------ |
-| 背景           | ソリッド、グラデーション、画像。スライド → レイアウト → マスターの順でフォールバック |
-| スライドサイズ | 16:9、4:3、カスタムサイズ                                                            |
-| テーマ         | テーマカラースキーム、テーマフォント (majorFont/minorFont)                           |
+| Color types    | RGB (srgbClr), theme color (schemeClr), system color (sysClr)                        |
+| Theme colors   | Color scheme (dk1, lt1, dk2, lt2, accent1-6, hlink, folHlink), color map             |
+| Color transforms | Luminance adjustment (lumMod/lumOff), tint, shade, transparency (alpha)             |
 
-### 対応していない機能
+#### Effects
 
-| カテゴリ         | 未対応の機能                                                                                                                     |
-| ---------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| 塗りつぶし       | パターン塗りつぶし、放射状グラデーション、パスグラデーション                                                                     |
-| エフェクト       | 反射、3D 回転・押し出し、アーティスティック効果                                                                                  |
-| グラフ           | 面グラフ、レーダー、ドーナツ、バブル、株価、複合、ヒストグラム、ボックスプロット、ウォーターフォール、ツリーマップ、サンバースト |
-| グラフの詳細機能 | データラベル、軸タイトル・目盛り・グリッド線、誤差範囲、トレンドライン                                                           |
-| テキスト         | 縦書きテキスト、テキスト個別のエフェクト (影・光彩)、テキストのアウトライン、テキストの列                                        |
-| 表               | 表スタイルのテンプレート適用、対角線枠線                                                                                         |
-| 図形             | 図形の結合 (Union/Subtract/Intersect/Fragment)                                                                                   |
-| SmartArt         | SmartArt 全般                                                                                                                    |
-| マルチメディア   | 動画・音声の埋め込み                                                                                                             |
-| アニメーション   | オブジェクトアニメーション、スライドトランジション                                                                               |
-| リンク           | ハイパーリンク                                                                                                                   |
-| スライド要素     | スライドノート、コメント、ヘッダー・フッター、スライド番号・日付                                                                 |
-| 画像フォーマット | EMF/WMF (パースされるがレンダリング未対応)                                                                                       |
-| その他           | マクロ・VBA、セクション、ズームスライド                                                                                          |
+| Feature        | Details                                    |
+| -------------- | ------------------------------------------ |
+| Outer shadow   | Blur radius, distance, direction, color / transparency |
+| Inner shadow   | Blur radius, distance, direction, color / transparency |
+| Glow           | Radius, color / transparency               |
+| Soft edge      | Radius                                     |
 
-## テストレンダリング
+#### Images
 
-PPTX ファイルを指定して、SVG と PNG の変換結果を確認できます。
+| Feature        | Details                                                    |
+| -------------- | ---------------------------------------------------------- |
+| Image elements | PNG/JPEG/GIF, position / size / rotation / flip, effects   |
+| Image fill     | Image fill for shapes and backgrounds                      |
+
+#### Tables
+
+| Feature          | Details                                                                     |
+| ---------------- | --------------------------------------------------------------------------- |
+| Table structure  | Row and column grid, cell merging (gridSpan/rowSpan), row height / column width |
+| Cell formatting  | Text, fill (solid/gradient/image), borders (top/bottom/left/right, styles)  |
+
+#### Charts
+
+| Feature          | Details                                                                              |
+| ---------------- | ------------------------------------------------------------------------------------ |
+| Supported charts | Bar chart (vertical/horizontal), line chart, pie chart, scatter plot                 |
+| Chart elements   | Title, legend (position), series (name/values/categories/color), category axis, value axis |
+
+#### Background & Slide Settings
+
+| Feature        | Details                                                                                 |
+| -------------- | --------------------------------------------------------------------------------------- |
+| Background     | Solid, gradient, image. Fallback order: slide → layout → master                         |
+| Slide size     | 16:9, 4:3, custom sizes                                                                 |
+| Theme          | Theme color scheme, theme fonts (majorFont/minorFont)                                   |
+
+### Unsupported Features
+
+| Category         | Unsupported features                                                                                                         |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| Fill             | Pattern fill, radial gradient, path gradient                                                                                 |
+| Effects          | Reflection, 3D rotation / extrusion, artistic effects                                                                        |
+| Charts           | Area, radar, doughnut, bubble, stock, combo, histogram, box plot, waterfall, treemap, sunburst                               |
+| Chart details    | Data labels, axis titles / tick marks / grid lines, error bars, trendlines                                                   |
+| Text             | Vertical text, individual text effects (shadow/glow), text outline, text columns                                             |
+| Tables           | Table style template application, diagonal borders                                                                           |
+| Shapes           | Shape operations (Union/Subtract/Intersect/Fragment)                                                                         |
+| SmartArt         | All SmartArt features                                                                                                        |
+| Multimedia       | Embedded video / audio                                                                                                       |
+| Animations       | Object animations, slide transitions                                                                                         |
+| Links            | Hyperlinks                                                                                                                   |
+| Slide elements   | Slide notes, comments, headers / footers, slide numbers / dates                                                              |
+| Image formats    | EMF/WMF (parsed but not rendered)                                                                                            |
+| Other            | Macros / VBA, sections, zoom slides                                                                                          |
+
+## Test Rendering
+
+You can specify a PPTX file to preview SVG and PNG conversion results.
 
 ```bash
 npm run render -- <pptx-file> [output-dir]
 ```
 
-- `output-dir` を省略すると `./output` に出力されます
+- If `output-dir` is omitted, output is saved to `./output`
 
 ```bash
-# 例
+# Examples
 npm run render -- presentation.pptx
 npm run render -- presentation.pptx ./my-output
 ```
 
-## ライセンス
+## License
 
 MIT
