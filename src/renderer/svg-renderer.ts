@@ -8,6 +8,9 @@ import { renderChart } from "./chart-renderer.js";
 import { renderTable } from "./table-renderer.js";
 import { renderFillAttrs } from "./fill-renderer.js";
 
+// SVG 1.1 (W3C) で出力。CSS クラスは使わずインライン属性のみ使用する。
+// 理由: sharp (内部で librsvg を使用) が CSS セレクタを正しく解釈しないため。
+
 export function renderSlideToSvg(slide: Slide, slideSize: SlideSize): string {
   const width = emuToPixels(slideSize.width);
   const height = emuToPixels(slideSize.height);

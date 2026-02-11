@@ -1,22 +1,26 @@
 import { XMLParser } from "fast-xml-parser";
 
+// OOXML XML で単一要素でも配列として扱う必要があるタグ。
+// fast-xml-parser は子要素が 1 つだとオブジェクト、複数だと配列を返すため、
+// スライド上に図形が 1 つだけの場合などにパース結果が不安定になる。
+// isArray で常に配列化することで、下流コードを統一的に記述できる。
 const ARRAY_TAGS = new Set([
-  "sp",
-  "pic",
-  "cxnSp",
-  "grpSp",
-  "graphicFrame",
-  "p",
-  "r",
-  "br",
-  "Relationship",
-  "sldId",
-  "gs",
-  "gridCol",
-  "tr",
-  "tc",
-  "ser",
-  "pt",
+  "sp", // 図形 (Shape)
+  "pic", // 画像 (Picture)
+  "cxnSp", // コネクタ (Connector)
+  "grpSp", // グループ (Group Shape)
+  "graphicFrame", // テーブル・チャート等のフレーム
+  "p", // テキスト段落 (Paragraph)
+  "r", // テキストラン (Run)
+  "br", // 改行 (Break)
+  "Relationship", // リレーションシップ
+  "sldId", // スライド ID
+  "gs", // グラデーションストップ (Gradient Stop)
+  "gridCol", // テーブル列定義
+  "tr", // テーブル行 (Table Row)
+  "tc", // テーブルセル (Table Cell)
+  "ser", // チャートデータ系列 (Series)
+  "pt", // チャートデータポイント (Point)
 ]);
 
 export function createXmlParser(): XMLParser {
