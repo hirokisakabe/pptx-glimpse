@@ -86,14 +86,20 @@ function splitTextIntoFragments(text: string): { fragment: string; breakable: bo
   return fragments;
 }
 
-function tokenizeRuns(runs: Paragraph["runs"], defaultFontSize: number): Token[] {
+function tokenizeRuns(
+  runs: Paragraph["runs"],
+  defaultFontSize: number,
+  fontScale: number,
+): Token[] {
   const tokens: Token[] = [];
   let isFirst = true;
 
   for (const run of runs) {
     if (run.text.length === 0) continue;
 
-    const fontSize = run.properties.fontSize ?? defaultFontSize;
+    const fontSize = run.properties.fontSize
+      ? run.properties.fontSize * fontScale
+      : defaultFontSize;
     const bold = run.properties.bold;
     const fontFamily = run.properties.fontFamily;
     const fontFamilyEa = run.properties.fontFamilyEa;
@@ -128,11 +134,14 @@ function splitTokenByChars(
   token: Token,
   availableWidth: number,
   defaultFontSize: number,
+  fontScale: number,
 ): Token[][] {
   const lines: Token[][] = [];
   let currentLine: Token[] = [];
   let currentWidth = 0;
-  const fontSize = token.properties.fontSize ?? defaultFontSize;
+  const fontSize = token.properties.fontSize
+    ? token.properties.fontSize * fontScale
+    : defaultFontSize;
   const bold = token.properties.bold;
   const fontFamily = token.properties.fontFamily;
   const fontFamilyEa = token.properties.fontFamilyEa;
@@ -201,6 +210,7 @@ function layoutTokensIntoLines(
   tokens: Token[],
   availableWidth: number,
   defaultFontSize: number,
+  fontScale: number,
 ): WrappedLine[] {
   if (tokens.length === 0) return [{ segments: [] }];
 
@@ -220,7 +230,7 @@ function layoutTokensIntoLines(
         // 空白だけのトークンはスキップ
         continue;
       }
-      const splitLines = splitTokenByChars(token, availableWidth, defaultFontSize);
+      const splitLines = splitTokenByChars(token, availableWidth, defaultFontSize, fontScale);
       for (let j = 0; j < splitLines.length; j++) {
         if (j < splitLines.length - 1) {
           const segments = trimTrailingSpaces(mergeSegments(splitLines[j]));
@@ -268,15 +278,16 @@ export function wrapParagraph(
   paragraph: Paragraph,
   availableWidth: number,
   defaultFontSize: number = DEFAULT_FONT_SIZE,
+  fontScale: number = 1,
 ): WrappedLine[] {
   if (paragraph.runs.length === 0 || !paragraph.runs.some((r) => r.text.length > 0)) {
     return [{ segments: [] }];
   }
 
   const safeWidth = Math.max(availableWidth, 1);
-  const tokens = tokenizeRuns(paragraph.runs, defaultFontSize);
+  const tokens = tokenizeRuns(paragraph.runs, defaultFontSize, fontScale);
 
   if (tokens.length === 0) return [{ segments: [] }];
 
-  return layoutTokensIntoLines(tokens, safeWidth, defaultFontSize);
+  return layoutTokensIntoLines(tokens, safeWidth, defaultFontSize, fontScale);
 }
