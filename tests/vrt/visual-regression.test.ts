@@ -92,6 +92,7 @@ const VRT_CASES = [
   { name: "math-other", fixture: "vrt-math-other.pptx" },
   { name: "word-wrap", fixture: "vrt-word-wrap.pptx" },
   { name: "background-blipfill", fixture: "vrt-background-blipfill.pptx" },
+  { name: "composite", fixture: "vrt-composite.pptx" },
 ] as const;
 
 describe("Visual Regression Tests", { timeout: 60000 }, () => {
