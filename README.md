@@ -2,6 +2,11 @@
 
 PPTX スライドを SVG / PNG に変換する TypeScript ライブラリ。
 
+## 動作環境
+
+- **Node.js >= 20** (ブラウザ環境では動作しません)
+- PNG 変換に [sharp](https://sharp.pixelplumbing.com/) を使用しているため、sharp がサポートするプラットフォームが必要です
+
 ## インストール
 
 ```bash
