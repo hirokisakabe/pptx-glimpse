@@ -420,10 +420,57 @@ function needsScriptSplit(props: RunProperties): boolean {
   );
 }
 
+function getGenericFamily(fontFamily: string): string {
+  const lower = fontFamily.toLowerCase();
+  if (
+    lower.includes("mincho") ||
+    lower.includes("明朝") ||
+    lower === "times new roman" ||
+    lower === "georgia" ||
+    lower === "cambria" ||
+    (lower.includes("serif") && !lower.includes("sans"))
+  ) {
+    return "serif";
+  }
+  return "sans-serif";
+}
+
+function escapeFontName(name: string): string {
+  return name
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+export function buildFontFamilyValue(fonts: (string | null)[]): string | null {
+  const uniqueFonts: string[] = [];
+  const seen = new Set<string>();
+
+  for (const font of fonts) {
+    if (font && !seen.has(font)) {
+      seen.add(font);
+      uniqueFonts.push(font);
+    }
+  }
+
+  if (uniqueFonts.length === 0) return null;
+
+  const genericFamily = getGenericFamily(uniqueFonts[0]);
+
+  const parts = uniqueFonts.map((f) => {
+    const escaped = escapeFontName(f);
+    return f.includes(" ") ? `'${escaped}'` : escaped;
+  });
+  parts.push(genericFamily);
+
+  return parts.join(", ");
+}
+
 function buildStyleAttrs(
   props: RunProperties,
   fontScale: number = 1,
-  fontOverride?: string | null,
+  fontFamilies?: (string | null)[],
 ): string {
   const styles: string[] = [];
 
@@ -431,9 +478,10 @@ function buildStyleAttrs(
     const scaledSize = props.fontSize * fontScale;
     styles.push(`font-size="${scaledSize}pt"`);
   }
-  const fontFamily = fontOverride !== undefined ? fontOverride : props.fontFamily;
-  if (fontFamily) {
-    styles.push(`font-family="${escapeXml(fontFamily)}"`);
+  const fonts = fontFamilies ?? [props.fontFamily, props.fontFamilyEa];
+  const fontFamilyValue = buildFontFamilyValue(fonts);
+  if (fontFamilyValue) {
+    styles.push(`font-family="${fontFamilyValue}"`);
   }
   if (props.bold) {
     styles.push(`font-weight="bold"`);
@@ -478,8 +526,10 @@ function renderSegment(
   const result: string[] = [];
   for (let i = 0; i < parts.length; i++) {
     const part = parts[i];
-    const font = part.isEa ? props.fontFamilyEa : props.fontFamily;
-    const styles = buildStyleAttrs(props, fontScale, font);
+    const fonts = part.isEa
+      ? [props.fontFamilyEa, props.fontFamily]
+      : [props.fontFamily, props.fontFamilyEa];
+    const styles = buildStyleAttrs(props, fontScale, fonts);
     if (i === 0) {
       result.push(`<tspan ${prefix}${styles}>${escapeXml(part.text)}</tspan>`);
     } else {
