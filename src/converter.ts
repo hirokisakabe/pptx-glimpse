@@ -16,6 +16,7 @@ import {
   resolveRelationshipTarget,
   buildRelsPath,
 } from "./parser/relationship-parser.js";
+import type { FillParseContext } from "./parser/fill-parser.js";
 import { ColorResolver } from "./color/color-resolver.js";
 import { renderSlideToSvg } from "./renderer/svg-renderer.js";
 import { svgToPng } from "./png/png-converter.js";
@@ -93,7 +94,16 @@ export async function convertPptxToSvg(
 
   // Parse master background and shapes (used as fallback)
   const masterXml = masterPath ? archive.files.get(masterPath) : undefined;
-  const masterBackground = masterXml ? parseSlideMasterBackground(masterXml, colorResolver) : null;
+  let masterFillContext: FillParseContext | undefined;
+  if (masterPath) {
+    const masterRelsPath = buildRelsPath(masterPath);
+    const masterRelsXml = archive.files.get(masterRelsPath);
+    const masterRels = masterRelsXml ? parseRelationships(masterRelsXml) : new Map();
+    masterFillContext = { rels: masterRels, archive, basePath: masterPath };
+  }
+  const masterBackground = masterXml
+    ? parseSlideMasterBackground(masterXml, colorResolver, masterFillContext)
+    : null;
   const masterElements =
     masterPath && masterXml
       ? parseSlideMasterElements(masterXml, masterPath, archive, colorResolver)
@@ -136,7 +146,19 @@ export async function convertPptxToSvg(
           if (layoutXml) {
             // Fallback background: slide → layout → master
             if (!slide.background) {
-              slide.background = parseSlideLayoutBackground(layoutXml, colorResolver);
+              const layoutRelsPath = buildRelsPath(layoutPath);
+              const layoutRelsXml = archive.files.get(layoutRelsPath);
+              const layoutRels = layoutRelsXml ? parseRelationships(layoutRelsXml) : new Map();
+              const layoutFillContext: FillParseContext = {
+                rels: layoutRels,
+                archive,
+                basePath: layoutPath,
+              };
+              slide.background = parseSlideLayoutBackground(
+                layoutXml,
+                colorResolver,
+                layoutFillContext,
+              );
             }
             // Parse layout shapes
             layoutElements = parseSlideLayoutElements(

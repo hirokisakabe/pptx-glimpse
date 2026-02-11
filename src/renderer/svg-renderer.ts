@@ -22,7 +22,12 @@ export function renderSlideToSvg(slide: Slide, slideSize: SlideSize): string {
   );
 
   // Background
-  if (slide.background?.fill) {
+  if (slide.background?.fill?.type === "image") {
+    const bg = slide.background.fill;
+    parts.push(
+      `<image href="data:${bg.mimeType};base64,${bg.imageData}" width="${width}" height="${height}" preserveAspectRatio="none"/>`,
+    );
+  } else if (slide.background?.fill) {
     const fillResult = renderFillAttrs(slide.background.fill);
     if (fillResult.defs) defs.push(fillResult.defs);
     parts.push(`<rect width="${width}" height="${height}" ${fillResult.attrs}/>`);

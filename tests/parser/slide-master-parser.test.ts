@@ -70,6 +70,52 @@ describe("parseSlideMasterBackground", () => {
     const result = parseSlideMasterBackground(xml, createColorResolver());
     expect(result).toBeNull();
   });
+
+  it("parses blipFill background when context is provided", () => {
+    const xml = `
+      <p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                    xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                    xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <p:cSld>
+          <p:bg>
+            <p:bgPr>
+              <a:blipFill>
+                <a:blip r:embed="rId2"/>
+                <a:stretch><a:fillRect/></a:stretch>
+              </a:blipFill>
+            </p:bgPr>
+          </p:bg>
+          <p:spTree/>
+        </p:cSld>
+      </p:sldMaster>
+    `;
+    const imageBuffer = Buffer.from("test-image-data");
+    const archive: PptxArchive = {
+      files: new Map(),
+      media: new Map([["ppt/media/image1.png", imageBuffer]]),
+    };
+    const context = {
+      rels: new Map([
+        [
+          "rId2",
+          {
+            id: "rId2",
+            type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+            target: "../media/image1.png",
+          },
+        ],
+      ]),
+      archive,
+      basePath: "ppt/slideMasters/slideMaster1.xml",
+    };
+    const result = parseSlideMasterBackground(xml, createColorResolver(), context);
+    expect(result).not.toBeNull();
+    expect(result?.fill?.type).toBe("image");
+    if (result?.fill?.type === "image") {
+      expect(result.fill.mimeType).toBe("image/png");
+      expect(result.fill.imageData).toBe(imageBuffer.toString("base64"));
+    }
+  });
 });
 
 describe("parseSlideMasterElements", () => {
