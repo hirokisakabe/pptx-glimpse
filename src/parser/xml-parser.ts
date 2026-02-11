@@ -22,6 +22,7 @@ const ARRAY_TAGS = new Set([
   "ser", // チャートデータ系列 (Series)
   "pt", // チャートデータポイント (Point)
   "gd", // ガイド定義 (Guide Definition)
+  "AlternateContent", // mc:AlternateContent (SmartArt 等)
 ]);
 
 export function createXmlParser(): XMLParser {

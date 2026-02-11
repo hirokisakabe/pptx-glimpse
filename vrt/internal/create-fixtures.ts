@@ -3245,6 +3245,165 @@ async function createPatternImageFillFixture(): Promise<void> {
   savePptx(buffer, "pattern-image-fill.pptx");
 }
 
+// --- SmartArt Fixture ---
+async function createSmartArtFixture(): Promise<void> {
+  const margin = 300000;
+  const diagramW = SLIDE_W - margin * 2;
+  const diagramH = SLIDE_H - margin * 2;
+
+  // SmartArt の drawing XML: 3つの角丸矩形と2つの矢印を横に配置するプロセス型
+  const drawingXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<dsp:drawing xmlns:dsp="http://schemas.microsoft.com/office/drawing/2008/diagram"
+             xmlns:a="${NS.a}">
+  <dsp:spTree>
+    <dsp:nvGrpSpPr>
+      <dsp:cNvPr id="0" name=""/>
+      <dsp:cNvGrpSpPr/>
+    </dsp:nvGrpSpPr>
+    <dsp:grpSpPr>
+      <a:xfrm>
+        <a:off x="0" y="0"/>
+        <a:ext cx="${diagramW}" cy="${diagramH}"/>
+        <a:chOff x="0" y="0"/>
+        <a:chExt cx="${diagramW}" cy="${diagramH}"/>
+      </a:xfrm>
+    </dsp:grpSpPr>
+    <dsp:sp>
+      <dsp:nvSpPr><dsp:cNvPr id="10" name="Box1"/><dsp:cNvSpPr/></dsp:nvSpPr>
+      <dsp:spPr>
+        <a:xfrm><a:off x="0" y="500000"/><a:ext cx="2500000" cy="3500000"/></a:xfrm>
+        <a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom>
+        <a:solidFill><a:srgbClr val="4472C4"/></a:solidFill>
+      </dsp:spPr>
+      <dsp:txBody>
+        <a:bodyPr anchor="ctr"/>
+        <a:lstStyle/>
+        <a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="en-US" sz="1400"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:rPr><a:t>Step 1</a:t></a:r></a:p>
+      </dsp:txBody>
+    </dsp:sp>
+    <dsp:sp>
+      <dsp:nvSpPr><dsp:cNvPr id="11" name="Arrow1"/><dsp:cNvSpPr/></dsp:nvSpPr>
+      <dsp:spPr>
+        <a:xfrm><a:off x="2700000" y="1500000"/><a:ext cx="600000" cy="600000"/></a:xfrm>
+        <a:prstGeom prst="rightArrow"><a:avLst/></a:prstGeom>
+        <a:solidFill><a:srgbClr val="A5A5A5"/></a:solidFill>
+      </dsp:spPr>
+    </dsp:sp>
+    <dsp:sp>
+      <dsp:nvSpPr><dsp:cNvPr id="12" name="Box2"/><dsp:cNvSpPr/></dsp:nvSpPr>
+      <dsp:spPr>
+        <a:xfrm><a:off x="3500000" y="500000"/><a:ext cx="2500000" cy="3500000"/></a:xfrm>
+        <a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom>
+        <a:solidFill><a:srgbClr val="ED7D31"/></a:solidFill>
+      </dsp:spPr>
+      <dsp:txBody>
+        <a:bodyPr anchor="ctr"/>
+        <a:lstStyle/>
+        <a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="en-US" sz="1400"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:rPr><a:t>Step 2</a:t></a:r></a:p>
+      </dsp:txBody>
+    </dsp:sp>
+    <dsp:sp>
+      <dsp:nvSpPr><dsp:cNvPr id="13" name="Arrow2"/><dsp:cNvSpPr/></dsp:nvSpPr>
+      <dsp:spPr>
+        <a:xfrm><a:off x="6200000" y="1500000"/><a:ext cx="600000" cy="600000"/></a:xfrm>
+        <a:prstGeom prst="rightArrow"><a:avLst/></a:prstGeom>
+        <a:solidFill><a:srgbClr val="A5A5A5"/></a:solidFill>
+      </dsp:spPr>
+    </dsp:sp>
+    <dsp:sp>
+      <dsp:nvSpPr><dsp:cNvPr id="14" name="Box3"/><dsp:cNvSpPr/></dsp:nvSpPr>
+      <dsp:spPr>
+        <a:xfrm><a:off x="7000000" y="500000"/><a:ext cx="2500000" cy="3500000"/></a:xfrm>
+        <a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom>
+        <a:solidFill><a:srgbClr val="70AD47"/></a:solidFill>
+      </dsp:spPr>
+      <dsp:txBody>
+        <a:bodyPr anchor="ctr"/>
+        <a:lstStyle/>
+        <a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="en-US" sz="1400"><a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill></a:rPr><a:t>Step 3</a:t></a:r></a:p>
+      </dsp:txBody>
+    </dsp:sp>
+  </dsp:spTree>
+</dsp:drawing>`;
+
+  const dataXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<dgm:dataModel xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram">
+  <dgm:ptLst><dgm:pt modelId="0" type="doc"/></dgm:ptLst>
+</dgm:dataModel>`;
+
+  const minimalLayout = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<dgm:layoutDef xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram"/>`;
+  const minimalStyles = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<dgm:styleDef xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram" xmlns:a="${NS.a}"/>`;
+  const minimalColors = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<dgm:colorsDef xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram" xmlns:a="${NS.a}"/>`;
+
+  const dataRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.microsoft.com/office/2007/relationships/diagramDrawing" Target="drawing1.xml"/>
+</Relationships>`;
+
+  // mc:AlternateContent でラップした SmartArt graphicFrame
+  const smartArtXml = `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+                                            xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram">
+    <mc:Choice Requires="dgm">
+      <p:graphicFrame>
+        <p:nvGraphicFramePr><p:cNvPr id="2" name="SmartArt1"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr>
+        <p:xfrm><a:off x="${margin}" y="${margin}"/><a:ext cx="${diagramW}" cy="${diagramH}"/></p:xfrm>
+        <a:graphic>
+          <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/diagram">
+            <dgm:relIds xmlns:r="${NS.r}" r:dm="rId2" r:lo="rId3" r:qs="rId4" r:cs="rId5"/>
+          </a:graphicData>
+        </a:graphic>
+      </p:graphicFrame>
+    </mc:Choice>
+    <mc:Fallback/>
+  </mc:AlternateContent>`;
+
+  const slideXml = wrapSlideXml(smartArtXml);
+  const slideRels = slideRelsXml([
+    {
+      id: "rId2",
+      type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData",
+      target: "../diagrams/data1.xml",
+    },
+    {
+      id: "rId3",
+      type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramLayout",
+      target: "../diagrams/layout1.xml",
+    },
+    {
+      id: "rId4",
+      type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramStyle",
+      target: "../diagrams/quickStyles1.xml",
+    },
+    {
+      id: "rId5",
+      type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramColors",
+      target: "../diagrams/colors1.xml",
+    },
+  ]);
+
+  const extraFiles = new Map<string, string>();
+  extraFiles.set("ppt/diagrams/data1.xml", dataXml);
+  extraFiles.set("ppt/diagrams/drawing1.xml", drawingXml);
+  extraFiles.set("ppt/diagrams/layout1.xml", minimalLayout);
+  extraFiles.set("ppt/diagrams/quickStyles1.xml", minimalStyles);
+  extraFiles.set("ppt/diagrams/colors1.xml", minimalColors);
+  extraFiles.set("ppt/diagrams/_rels/data1.xml.rels", dataRels);
+
+  const buffer = await buildPptx({
+    slides: [{ xml: slideXml, rels: slideRels }],
+    charts: extraFiles,
+    contentTypesExtra: [
+      `<Override PartName="/ppt/diagrams/data1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.diagramData+xml"/>`,
+      `<Override PartName="/ppt/diagrams/drawing1.xml" ContentType="application/vnd.ms-office.drawingml.diagramDrawing+xml"/>`,
+    ],
+  });
+
+  savePptx(buffer, "smartart.pptx");
+}
+
 async function main(): Promise<void> {
   console.log("Creating VRT fixtures...\n");
 
@@ -3272,6 +3431,7 @@ async function main(): Promise<void> {
   await createEffectsFixture();
   await createHyperlinksFixture();
   await createPatternImageFillFixture();
+  await createSmartArtFixture();
 
   console.log("\nDone!");
 }
