@@ -4,8 +4,8 @@ import { fileURLToPath } from "url";
 import { convertPptxToPng } from "../../src/converter.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const FIXTURE_DIR = join(__dirname, "../../tests/vrt/internal/fixtures");
-const SNAPSHOT_DIR = join(__dirname, "../../tests/vrt/internal/snapshots");
+const FIXTURE_DIR = join(__dirname, "../../vrt/internal/fixtures");
+const SNAPSHOT_DIR = join(__dirname, "../../vrt/internal/snapshots");
 
 async function main(): Promise<void> {
   mkdirSync(SNAPSHOT_DIR, { recursive: true });

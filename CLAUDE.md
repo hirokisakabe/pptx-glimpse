@@ -12,7 +12,7 @@ pptx-glimpse は PPTX スライドを SVG / PNG に変換する TypeScript ラ�
 ```bash
 npm run build          # tsup でビルド (CJS + ESM + .d.ts)
 npm run test           # vitest で全テスト実行
-npm run test -- tests/utils/emu.test.ts  # 単一テストファイル実行
+npm run test -- src/utils/emu.test.ts  # 単一テストファイル実行
 npm run test:watch     # テストのウォッチモード
 npm run lint           # ESLint チェック
 npm run lint:fix       # ESLint 自動修正
@@ -52,7 +52,7 @@ CI は `lint` → `format:check` → `typecheck` → `test` → `build` の順�
 ### ディレクトリ構成
 
 ```
-tests/vrt/
+vrt/
 ├── compare-utils.ts               # 共通画像比較ユーティリティ
 ├── internal/                      # 通常 VRT (自己比較)
 │   ├── visual-regression.test.ts  # テスト本体
@@ -83,8 +83,8 @@ scripts/vrt/
 新しい描画機能を追加した場合、以下の **3 箇所すべて** を更新する必要がある:
 
 1. **`scripts/vrt/create-fixtures.ts`** — 新機能をカバーするフィクスチャ (PPTX) を追加
-2. **`tests/vrt/internal/visual-regression.test.ts`** — `VRT_CASES` 配列に新しいテストケースを追加
-3. **`tests/vrt/internal/snapshots/`** — `npm run test:vrt:update` でスナップショットを再生成
+2. **`vrt/internal/visual-regression.test.ts`** — `VRT_CASES` 配列に新しいテストケースを追加
+3. **`vrt/internal/snapshots/`** — `npm run test:vrt:update` でスナップショットを再生成
 
 **よくあるミス**: パーサーやレンダラーを修正したのにスナップショットを更新し忘れて VRT テストが失敗する。描画に影響する変更を行ったら、必ず `npm run test:vrt:update` を実行すること。
 

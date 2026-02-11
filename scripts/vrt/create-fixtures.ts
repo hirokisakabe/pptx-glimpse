@@ -378,7 +378,7 @@ async function buildPptx(options: PptxBuildOptions): Promise<Buffer> {
   return await zip.generateAsync({ type: "nodebuffer" });
 }
 
-const FIXTURE_OUT_DIR = join(__dirname, "../../tests/vrt/internal/fixtures");
+const FIXTURE_OUT_DIR = join(__dirname, "../../vrt/internal/fixtures");
 
 function savePptx(buffer: Buffer, name: string): void {
   mkdirSync(FIXTURE_OUT_DIR, { recursive: true });

@@ -5,7 +5,7 @@ dist/
 coverage/
 output/
 scripts/fonts/
-tests/vrt/internal/diffs/
-tests/vrt/libreoffice/diffs/
-tests/vrt/libreoffice/snapshots/
-tests/vrt/libreoffice/fixtures/
+vrt/internal/diffs/
+vrt/libreoffice/diffs/
+vrt/libreoffice/snapshots/
+vrt/libreoffice/fixtures/

@@ -34,7 +34,7 @@ jobs:
         run: npm run typecheck
 
       - name: Test
-        run: npx vitest run --exclude 'tests/vrt/**'
+        run: npx vitest run --exclude 'vrt/**'
 
       - name: Build
         run: npm run build
@@ -54,7 +54,7 @@ jobs:
         run: npm ci
 
       - name: Run VRT
-        run: npx vitest run tests/vrt/internal/visual-regression.test.ts
+        run: npx vitest run vrt/internal/visual-regression.test.ts
 
   libreoffice-vrt:
     runs-on: ubuntu-latest
@@ -80,12 +80,12 @@ jobs:
         run: docker run --rm -v "${{ github.workspace }}":/workspace pptx-glimpse-vrt bash /workspace/scripts/vrt/render_references.sh
 
       - name: Run LibreOffice VRT
-        run: npx vitest run tests/vrt/libreoffice/libreoffice-regression.test.ts
+        run: npx vitest run vrt/libreoffice/libreoffice-regression.test.ts
 
       - name: Upload diff images on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: libreoffice-vrt-diffs
-          path: tests/vrt/libreoffice/diffs/
+          path: vrt/libreoffice/diffs/
           retention-days: 7
