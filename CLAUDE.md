@@ -49,17 +49,32 @@ CI は `lint` → `format:check` → `typecheck` → `test` → `build` の順�
 
 描画結果の視覚的回帰テスト。パーサーやレンダラーを変更した場合、**必ず VRT の更新が必要か確認すること**。
 
-### ファイル構成
+### ディレクトリ構成
 
-- `tests/fixtures/create-vrt-fixtures.ts` — VRT 用 PPTX フィクスチャの生成スクリプト
-- `tests/vrt/visual-regression.test.ts` — VRT テスト本体 (pixelmatch でスナップショット比較)
-- `tests/vrt/snapshots/*.png` — 参照スナップショット画像
+```
+tests/vrt/
+├── compare-utils.ts               # 共通画像比較ユーティリティ
+├── internal/                      # 通常 VRT (自己比較)
+│   ├── visual-regression.test.ts  # テスト本体
+│   ├── fixtures/                  # VRT 用 PPTX フィクスチャ
+│   └── snapshots/                 # 参照スナップショット画像
+└── libreoffice/                   # LibreOffice VRT
+    ├── libreoffice-regression.test.ts  # テスト本体
+    ├── fixtures/                  # python-pptx 生成の PPTX
+    └── snapshots/                 # LibreOffice 参照画像
+
+scripts/vrt/
+├── create-fixtures.ts             # 通常 VRT フィクスチャ生成 (TypeScript)
+├── update-snapshots.ts            # 通常 VRT スナップショット更新
+├── generate_fixtures.py           # LibreOffice VRT フィクスチャ生成 (Python)
+└── render_references.sh           # LibreOffice 参照画像生成 (Docker)
+```
 
 ### VRT 更新手順
 
 パーサー・レンダラー・モデルの変更で描画結果が変わる場合:
 
-1. **フィクスチャ更新** (新機能追加や既存フィクスチャの修正が必要な場合): `tests/fixtures/create-vrt-fixtures.ts` を編集し `npm run test:vrt:fixtures` を実行
+1. **フィクスチャ更新** (新機能追加や既存フィクスチャの修正が必要な場合): `scripts/vrt/create-fixtures.ts` を編集し `npm run test:vrt:fixtures` を実行
 2. **スナップショット更新**: `npm run test:vrt:update` で参照画像を再生成
 3. **テスト確認**: `npm run test` で VRT テストが通ることを確認
 
@@ -67,9 +82,9 @@ CI は `lint` → `format:check` → `typecheck` → `test` → `build` の順�
 
 新しい描画機能を追加した場合、以下の **3 箇所すべて** を更新する必要がある:
 
-1. **`create-vrt-fixtures.ts`** — 新機能をカバーするフィクスチャ (PPTX) を追加
-2. **`visual-regression.test.ts`** — `VRT_CASES` 配列に新しいテストケースを追加
-3. **`tests/vrt/snapshots/`** — `npm run test:vrt:update` でスナップショットを再生成
+1. **`scripts/vrt/create-fixtures.ts`** — 新機能をカバーするフィクスチャ (PPTX) を追加
+2. **`tests/vrt/internal/visual-regression.test.ts`** — `VRT_CASES` 配列に新しいテストケースを追加
+3. **`tests/vrt/internal/snapshots/`** — `npm run test:vrt:update` でスナップショットを再生成
 
 **よくあるミス**: パーサーやレンダラーを修正したのにスナップショットを更新し忘れて VRT テストが失敗する。描画に影響する変更を行ったら、必ず `npm run test:vrt:update` を実行すること。
 
@@ -84,15 +99,6 @@ npm run vrt:lo:docker-build   # Docker イメージのビルド
 npm run vrt:lo:update          # フィクスチャ生成 + 参照画像生成 (Docker 必須)
 npm run test                   # テスト実行 (LibreOffice VRT 含む)
 ```
-
-#### ファイル構成
-
-- `docker/libreoffice-vrt/Dockerfile` — Docker イメージ定義
-- `scripts/vrt/generate_fixtures.py` — python-pptx フィクスチャ生成
-- `scripts/vrt/render_references.sh` — LibreOffice 参照画像生成
-- `tests/vrt/libreoffice-regression.test.ts` — テスト本体
-- `tests/vrt/libreoffice-fixtures/` — python-pptx 生成の PPTX
-- `tests/vrt/libreoffice-snapshots/` — LibreOffice 参照画像
 
 #### 許容度
 
