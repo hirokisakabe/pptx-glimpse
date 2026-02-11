@@ -3,7 +3,7 @@
 LibreOffice VRT 用の PPTX フィクスチャを python-pptx で生成する。
 
 Usage:
-    python3 scripts/vrt/generate_fixtures.py
+    python3 vrt/libreoffice/generate_fixtures.py
 """
 
 import os
@@ -25,7 +25,7 @@ def make_element(tag, **attribs):
         element.set(key, val)
     return element
 
-OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "../../vrt/libreoffice/fixtures")
+OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
 SLIDE_WIDTH = 9144000
 SLIDE_HEIGHT = 5143500

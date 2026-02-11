@@ -74,10 +74,10 @@ jobs:
         run: docker build -t pptx-glimpse-vrt docker/libreoffice-vrt
 
       - name: Generate fixtures
-        run: docker run --rm -v "${{ github.workspace }}":/workspace pptx-glimpse-vrt python3 /workspace/scripts/vrt/generate_fixtures.py
+        run: docker run --rm -v "${{ github.workspace }}":/workspace pptx-glimpse-vrt python3 /workspace/vrt/libreoffice/generate_fixtures.py
 
       - name: Generate LibreOffice reference images
-        run: docker run --rm -v "${{ github.workspace }}":/workspace pptx-glimpse-vrt bash /workspace/scripts/vrt/render_references.sh
+        run: docker run --rm -v "${{ github.workspace }}":/workspace pptx-glimpse-vrt bash /workspace/vrt/libreoffice/render_references.sh
 
       - name: Run LibreOffice VRT
         run: npx vitest run vrt/libreoffice/libreoffice-regression.test.ts

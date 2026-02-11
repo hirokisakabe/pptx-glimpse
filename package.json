@@ -23,11 +23,11 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "render": "tsx scripts/test-render.ts",
-    "test:vrt:fixtures": "tsx scripts/vrt/create-fixtures.ts",
-    "test:vrt:update": "tsx scripts/vrt/update-snapshots.ts",
+    "test:vrt:fixtures": "tsx vrt/internal/create-fixtures.ts",
+    "test:vrt:update": "tsx vrt/internal/update-snapshots.ts",
     "vrt:lo:docker-build": "docker build -t pptx-glimpse-vrt docker/libreoffice-vrt",
-    "vrt:lo:fixtures": "docker run --rm -v \"$(pwd)\":/workspace pptx-glimpse-vrt python3 /workspace/scripts/vrt/generate_fixtures.py",
-    "vrt:lo:reference": "docker run --rm -v \"$(pwd)\":/workspace pptx-glimpse-vrt bash /workspace/scripts/vrt/render_references.sh",
+    "vrt:lo:fixtures": "docker run --rm -v \"$(pwd)\":/workspace pptx-glimpse-vrt python3 /workspace/vrt/libreoffice/generate_fixtures.py",
+    "vrt:lo:reference": "docker run --rm -v \"$(pwd)\":/workspace pptx-glimpse-vrt bash /workspace/vrt/libreoffice/render_references.sh",
     "vrt:lo:update": "npm run vrt:lo:docker-build && npm run vrt:lo:fixtures && npm run vrt:lo:reference"
   },
   "files": [
