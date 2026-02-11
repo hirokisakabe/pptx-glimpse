@@ -1774,7 +1774,14 @@ async function createMathOtherFixture(): Promise<void> {
 // --- 17. Word Wrap ---
 function multiRunTextBodyXml(
   paragraphs: {
-    runs: { text: string; fontSize?: number; bold?: boolean; color?: string; lang?: string }[];
+    runs: {
+      text: string;
+      fontSize?: number;
+      bold?: boolean;
+      color?: string;
+      lang?: string;
+      baseline?: number;
+    }[];
     align?: string;
   }[],
   opts?: { anchor?: string; wrap?: string },
@@ -1790,8 +1797,9 @@ function multiRunTextBodyXml(
           const b = r.bold ? ` b="1"` : "";
           const lang = r.lang ?? "en-US";
           const fillColor = r.color ?? "000000";
+          const bl = r.baseline !== undefined ? ` baseline="${r.baseline}"` : "";
           return `<a:r>
-        <a:rPr lang="${lang}"${sz}${b}>
+        <a:rPr lang="${lang}"${sz}${b}${bl}>
           <a:solidFill><a:srgbClr val="${fillColor}"/></a:solidFill>
         </a:rPr>
         <a:t>${r.text}</a:t>
@@ -2468,6 +2476,92 @@ async function createCompositeFixture(): Promise<void> {
   savePptx(buffer, "vrt-composite.pptx");
 }
 
+// --- 20. Text Decoration (superscript / subscript) ---
+async function createTextDecorationFixture(): Promise<void> {
+  let id = 2;
+  const shapes: string[] = [];
+
+  const testCases = [
+    {
+      label: "Superscript",
+      paragraphs: [
+        {
+          runs: [
+            { text: "E = mc", fontSize: 20 },
+            { text: "2", fontSize: 14, baseline: 30000 },
+          ],
+        },
+      ],
+    },
+    {
+      label: "Subscript",
+      paragraphs: [
+        {
+          runs: [
+            { text: "H", fontSize: 20 },
+            { text: "2", fontSize: 14, baseline: -25000 },
+            { text: "O", fontSize: 20 },
+          ],
+        },
+      ],
+    },
+    {
+      label: "Mixed",
+      paragraphs: [
+        {
+          runs: [
+            { text: "x", fontSize: 18 },
+            { text: "n", fontSize: 12, baseline: 30000 },
+            { text: " + y", fontSize: 18 },
+            { text: "m", fontSize: 12, baseline: -25000 },
+          ],
+        },
+      ],
+    },
+    {
+      label: "Multi-line",
+      paragraphs: [
+        {
+          runs: [
+            { text: "Line 1 with ", fontSize: 16 },
+            { text: "super", fontSize: 12, baseline: 30000 },
+          ],
+        },
+        {
+          runs: [
+            { text: "Line 2 with ", fontSize: 16 },
+            { text: "sub", fontSize: 12, baseline: -25000 },
+          ],
+        },
+      ],
+    },
+  ];
+
+  testCases.forEach((tc, i) => {
+    const col = i % 2;
+    const row = Math.floor(i / 2);
+    const pos = gridPosition(col, row, 2, 2);
+    shapes.push(
+      shapeXml(id++, tc.label, {
+        preset: "rect",
+        x: pos.x,
+        y: pos.y,
+        cx: pos.w,
+        cy: pos.h,
+        fillXml: solidFillXml("F0F0F0"),
+        outlineXml: outlineXml(12700, "CCCCCC"),
+        textBodyXml: multiRunTextBodyXml(tc.paragraphs, { anchor: "ctr" }),
+      }),
+    );
+  });
+
+  const slide = wrapSlideXml(shapes.join("\n"));
+  const rels = slideRelsXml();
+
+  const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
+  savePptx(buffer, "vrt-text-decoration.pptx");
+}
+
 // --- Main ---
 async function main(): Promise<void> {
   console.log("Creating VRT fixtures...\n");
@@ -2491,6 +2585,7 @@ async function main(): Promise<void> {
   await createWordWrapFixture();
   await createBackgroundBlipFillFixture();
   await createCompositeFixture();
+  await createTextDecorationFixture();
 
   console.log("\nDone!");
 }

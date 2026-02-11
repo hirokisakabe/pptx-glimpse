@@ -813,6 +813,468 @@ def create_flowchart_shapes():
     print("  Created: lo-flowchart-shapes.pptx")
 
 
+def create_arrows_stars():
+    """矢印と星形図形: MSO_SHAPE presets"""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    arrow_defs = [
+        (MSO_SHAPE.LEFT_RIGHT_ARROW, RGBColor(0x44, 0x72, 0xC4)),
+        (MSO_SHAPE.UP_DOWN_ARROW, RGBColor(0xED, 0x7D, 0x31)),
+        (MSO_SHAPE.QUAD_ARROW, RGBColor(0xA5, 0xA5, 0xA5)),
+        (MSO_SHAPE.CIRCULAR_ARROW, RGBColor(0xFF, 0xC0, 0x00)),
+    ]
+
+    for i, (shape_type, color) in enumerate(arrow_defs):
+        left = Inches(0.3 + i * 2.4)
+        shape = slide.shapes.add_shape(shape_type, left, Inches(0.3), Inches(2.1), Inches(2.2))
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = color
+        shape.line.color.rgb = RGBColor(0x33, 0x33, 0x33)
+        shape.line.width = Pt(1.5)
+
+    star_defs = [
+        (MSO_SHAPE.STAR_6_POINT, RGBColor(0xFF, 0x63, 0x84)),
+        (MSO_SHAPE.STAR_8_POINT, RGBColor(0x36, 0xA2, 0xEB)),
+        (MSO_SHAPE.STAR_10_POINT, RGBColor(0xFF, 0xCE, 0x56)),
+        (MSO_SHAPE.STAR_12_POINT, RGBColor(0x99, 0x66, 0xFF)),
+        (MSO_SHAPE.STAR_16_POINT, RGBColor(0x4B, 0xC0, 0xC0)),
+    ]
+
+    for i, (shape_type, color) in enumerate(star_defs):
+        left = Inches(0.3 + i * 1.9)
+        shape = slide.shapes.add_shape(shape_type, left, Inches(2.8), Inches(1.6), Inches(1.6))
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = color
+        shape.line.color.rgb = RGBColor(0x33, 0x33, 0x33)
+        shape.line.width = Pt(1.5)
+
+    prs.save(os.path.join(OUTPUT_DIR, "lo-arrows-stars.pptx"))
+    print("  Created: lo-arrows-stars.pptx")
+
+
+def create_callouts_arcs():
+    """吹き出しとアーク図形"""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    callout_defs = [
+        (MSO_SHAPE.RECTANGULAR_CALLOUT, RGBColor(0x44, 0x72, 0xC4)),
+        (MSO_SHAPE.ROUNDED_RECTANGULAR_CALLOUT, RGBColor(0xED, 0x7D, 0x31)),
+        (MSO_SHAPE.OVAL_CALLOUT, RGBColor(0xA5, 0xA5, 0xA5)),
+        (MSO_SHAPE.CLOUD_CALLOUT, RGBColor(0xFF, 0xC0, 0x00)),
+    ]
+
+    for i, (shape_type, color) in enumerate(callout_defs):
+        col = i % 2
+        row = i // 2
+        left = Inches(0.3 + col * 4.7)
+        top = Inches(0.3 + row * 1.8)
+        shape = slide.shapes.add_shape(shape_type, left, top, Inches(4.4), Inches(1.5))
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = color
+        shape.line.color.rgb = RGBColor(0x33, 0x33, 0x33)
+        shape.line.width = Pt(1.5)
+
+    arc_defs = [
+        (MSO_SHAPE.ARC, RGBColor(0x5B, 0x9B, 0xD5)),
+        (MSO_SHAPE.BLOCK_ARC, RGBColor(0x70, 0xAD, 0x47)),
+        (MSO_SHAPE.CHORD, RGBColor(0xFF, 0x63, 0x84)),
+    ]
+
+    for i, (shape_type, color) in enumerate(arc_defs):
+        left = Inches(0.3 + i * 3.2)
+        shape = slide.shapes.add_shape(shape_type, left, Inches(3.9), Inches(2.8), Inches(1.5))
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = color
+        shape.line.color.rgb = RGBColor(0x33, 0x33, 0x33)
+        shape.line.width = Pt(1.5)
+
+    prs.save(os.path.join(OUTPUT_DIR, "lo-callouts-arcs.pptx"))
+    print("  Created: lo-callouts-arcs.pptx")
+
+
+def create_math_other():
+    """数式記号とその他の図形"""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    math_defs = [
+        (MSO_SHAPE.MATH_PLUS, RGBColor(0x44, 0x72, 0xC4)),
+        (MSO_SHAPE.MATH_MINUS, RGBColor(0xED, 0x7D, 0x31)),
+        (MSO_SHAPE.MATH_MULTIPLY, RGBColor(0xA5, 0xA5, 0xA5)),
+        (MSO_SHAPE.MATH_DIVIDE, RGBColor(0xFF, 0xC0, 0x00)),
+        (MSO_SHAPE.MATH_EQUAL, RGBColor(0x5B, 0x9B, 0xD5)),
+        (MSO_SHAPE.MATH_NOT_EQUAL, RGBColor(0x70, 0xAD, 0x47)),
+    ]
+
+    for i, (shape_type, color) in enumerate(math_defs):
+        left = Inches(0.3 + i * 1.55)
+        shape = slide.shapes.add_shape(shape_type, left, Inches(0.3), Inches(1.3), Inches(1.3))
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = color
+        shape.line.color.rgb = RGBColor(0x33, 0x33, 0x33)
+        shape.line.width = Pt(1.5)
+
+    other_defs = [
+        (MSO_SHAPE.GEAR_6, RGBColor(0xFF, 0x63, 0x84)),
+        (MSO_SHAPE.GEAR_9, RGBColor(0x36, 0xA2, 0xEB)),
+        (MSO_SHAPE.DONUT, RGBColor(0xFF, 0xCE, 0x56)),
+        (MSO_SHAPE.NO_SYMBOL, RGBColor(0x99, 0x66, 0xFF)),
+        (MSO_SHAPE.CROSS, RGBColor(0x4B, 0xC0, 0xC0)),
+        (MSO_SHAPE.HEART, RGBColor(0xF0, 0x80, 0x80)),
+    ]
+
+    for i, (shape_type, color) in enumerate(other_defs):
+        left = Inches(0.3 + i * 1.55)
+        shape = slide.shapes.add_shape(shape_type, left, Inches(1.9), Inches(1.3), Inches(1.3))
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = color
+        shape.line.color.rgb = RGBColor(0x33, 0x33, 0x33)
+        shape.line.width = Pt(1.5)
+
+    prs.save(os.path.join(OUTPUT_DIR, "lo-math-other.pptx"))
+    print("  Created: lo-math-other.pptx")
+
+
+def create_image():
+    """画像埋め込み: Pillow で動的生成した画像を配置"""
+    import shutil
+    import tempfile
+
+    from PIL import Image, ImageDraw
+
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    temp_dir = tempfile.mkdtemp()
+
+    try:
+        # 画像1: カラーグラデーション
+        img1 = Image.new("RGB", (200, 200))
+        pixels = img1.load()
+        for y in range(200):
+            for x in range(200):
+                pixels[x, y] = (int(255 * x / 200), int(255 * y / 200), 128)
+        img1_path = os.path.join(temp_dir, "gradient.png")
+        img1.save(img1_path)
+
+        # 画像2: チェッカーボード
+        img2 = Image.new("RGB", (200, 200), "white")
+        draw2 = ImageDraw.Draw(img2)
+        for row in range(10):
+            for col in range(10):
+                if (row + col) % 2 == 0:
+                    x1, y1 = col * 20, row * 20
+                    draw2.rectangle([x1, y1, x1 + 20, y1 + 20], fill=(0, 0, 0))
+        img2_path = os.path.join(temp_dir, "checker.png")
+        img2.save(img2_path)
+
+        # 画像3: 円パターン
+        img3 = Image.new("RGB", (200, 200), "white")
+        draw3 = ImageDraw.Draw(img3)
+        draw3.ellipse([10, 10, 190, 190], fill=(68, 114, 196), outline=(51, 51, 51))
+        draw3.ellipse([60, 60, 140, 140], fill=(237, 125, 49))
+        img3_path = os.path.join(temp_dir, "circles.png")
+        img3.save(img3_path)
+
+        slide.shapes.add_picture(img1_path, Inches(0.5), Inches(0.5), Inches(2.8), Inches(4))
+        slide.shapes.add_picture(img2_path, Inches(3.6), Inches(0.5), Inches(2.8), Inches(4))
+        slide.shapes.add_picture(img3_path, Inches(6.7), Inches(0.5), Inches(2.8), Inches(4))
+
+        prs.save(os.path.join(OUTPUT_DIR, "lo-image.pptx"))
+        print("  Created: lo-image.pptx")
+    finally:
+        shutil.rmtree(temp_dir)
+
+
+def create_charts():
+    """チャート: 縦棒、折れ線、円、横棒"""
+    from pptx.chart.data import CategoryChartData
+    from pptx.enum.chart import XL_CHART_TYPE
+
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    # 縦棒グラフ
+    chart_data1 = CategoryChartData()
+    chart_data1.categories = ["Q1", "Q2", "Q3", "Q4"]
+    chart_data1.add_series("Sales", (19.2, 21.4, 16.7, 20.8))
+    slide.shapes.add_chart(
+        XL_CHART_TYPE.COLUMN_CLUSTERED,
+        Inches(0.3), Inches(0.3), Inches(4.3), Inches(2.2),
+        chart_data1,
+    )
+
+    # 折れ線グラフ
+    chart_data2 = CategoryChartData()
+    chart_data2.categories = ["Jan", "Feb", "Mar", "Apr"]
+    chart_data2.add_series("Revenue", (30, 35, 32, 40))
+    chart_data2.add_series("Profit", (10, 12, 11, 15))
+    slide.shapes.add_chart(
+        XL_CHART_TYPE.LINE,
+        Inches(5.0), Inches(0.3), Inches(4.3), Inches(2.2),
+        chart_data2,
+    )
+
+    # 円グラフ
+    chart_data3 = CategoryChartData()
+    chart_data3.categories = ["Red", "Green", "Blue"]
+    chart_data3.add_series("Share", (40, 35, 25))
+    slide.shapes.add_chart(
+        XL_CHART_TYPE.PIE,
+        Inches(0.3), Inches(2.8), Inches(4.3), Inches(2.2),
+        chart_data3,
+    )
+
+    # 横棒グラフ
+    chart_data4 = CategoryChartData()
+    chart_data4.categories = ["Alpha", "Beta", "Gamma"]
+    chart_data4.add_series("Values", (50, 65, 45))
+    slide.shapes.add_chart(
+        XL_CHART_TYPE.BAR_CLUSTERED,
+        Inches(5.0), Inches(2.8), Inches(4.3), Inches(2.2),
+        chart_data4,
+    )
+
+    prs.save(os.path.join(OUTPUT_DIR, "lo-charts.pptx"))
+    print("  Created: lo-charts.pptx")
+
+
+def create_connectors():
+    """コネクタ線: XML 直接操作で p:cxnSp を生成"""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    spTree = slide.shapes._spTree
+
+    connectors_def = [
+        {
+            "id": "10",
+            "name": "Straight",
+            "prst": "line",
+            "x": "500000",
+            "y": "500000",
+            "cx": "3000000",
+            "cy": "0",
+            "color": "4472C4",
+            "width": "25400",
+        },
+        {
+            "id": "11",
+            "name": "Dashed",
+            "prst": "line",
+            "x": "500000",
+            "y": "1500000",
+            "cx": "3000000",
+            "cy": "2000000",
+            "color": "ED7D31",
+            "width": "25400",
+            "dash": "dash",
+        },
+        {
+            "id": "12",
+            "name": "Dotted",
+            "prst": "line",
+            "x": "5000000",
+            "y": "500000",
+            "cx": "0",
+            "cy": "4000000",
+            "color": "70AD47",
+            "width": "25400",
+            "dash": "dot",
+        },
+    ]
+
+    for c in connectors_def:
+        cxnSp = make_element("p:cxnSp")
+
+        nvCxnSpPr = make_element("p:nvCxnSpPr")
+        cNvPr = make_element("p:cNvPr")
+        cNvPr.set("id", c["id"])
+        cNvPr.set("name", c["name"])
+        nvCxnSpPr.append(cNvPr)
+        nvCxnSpPr.append(make_element("p:cNvCxnSpPr"))
+        nvCxnSpPr.append(make_element("p:nvPr"))
+        cxnSp.append(nvCxnSpPr)
+
+        spPr = make_element("p:spPr")
+
+        xfrm = make_element("a:xfrm")
+        off = make_element("a:off")
+        off.set("x", c["x"])
+        off.set("y", c["y"])
+        xfrm.append(off)
+        ext = make_element("a:ext")
+        ext.set("cx", c["cx"])
+        ext.set("cy", c["cy"])
+        xfrm.append(ext)
+        spPr.append(xfrm)
+
+        prstGeom = make_element("a:prstGeom")
+        prstGeom.set("prst", c["prst"])
+        prstGeom.append(make_element("a:avLst"))
+        spPr.append(prstGeom)
+
+        ln = make_element("a:ln")
+        ln.set("w", c["width"])
+        solidFill = make_element("a:solidFill")
+        srgbClr = make_element("a:srgbClr")
+        srgbClr.set("val", c["color"])
+        solidFill.append(srgbClr)
+        ln.append(solidFill)
+        if "dash" in c:
+            prstDash = make_element("a:prstDash")
+            prstDash.set("val", c["dash"])
+            ln.append(prstDash)
+        spPr.append(ln)
+
+        cxnSp.append(spPr)
+        spTree.append(cxnSp)
+
+    prs.save(os.path.join(OUTPUT_DIR, "lo-connectors.pptx"))
+    print("  Created: lo-connectors.pptx")
+
+
+def _build_custom_path(path_elem, commands):
+    """カスタムジオメトリのパスコマンドを構築するヘルパー"""
+    for cmd in commands:
+        if cmd[0] == "moveTo":
+            moveTo = make_element("a:moveTo")
+            pt = make_element("a:pt")
+            pt.set("x", str(cmd[1]))
+            pt.set("y", str(cmd[2]))
+            moveTo.append(pt)
+            path_elem.append(moveTo)
+        elif cmd[0] == "lnTo":
+            lnTo = make_element("a:lnTo")
+            pt = make_element("a:pt")
+            pt.set("x", str(cmd[1]))
+            pt.set("y", str(cmd[2]))
+            lnTo.append(pt)
+            path_elem.append(lnTo)
+        elif cmd[0] == "cubicBezTo":
+            bez = make_element("a:cubicBezTo")
+            for j in range(1, 4):
+                pt = make_element("a:pt")
+                pt.set("x", str(cmd[j * 2 - 1]))
+                pt.set("y", str(cmd[j * 2]))
+                bez.append(pt)
+            path_elem.append(bez)
+        elif cmd[0] == "close":
+            path_elem.append(make_element("a:close"))
+
+
+def create_custom_geometry():
+    """カスタムジオメトリ: a:custGeom でカスタムパスを定義"""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    shapes_def = [
+        {
+            "left": Inches(0.5),
+            "top": Inches(0.5),
+            "w": Inches(3.5),
+            "h": Inches(3.5),
+            "color": "FFC000",
+            "commands": [
+                ("moveTo", 500, 0),
+                ("lnTo", 650, 350),
+                ("lnTo", 1000, 400),
+                ("lnTo", 750, 650),
+                ("lnTo", 800, 1000),
+                ("lnTo", 500, 850),
+                ("lnTo", 200, 1000),
+                ("lnTo", 250, 650),
+                ("lnTo", 0, 400),
+                ("lnTo", 350, 350),
+                ("close",),
+            ],
+        },
+        {
+            "left": Inches(5.5),
+            "top": Inches(0.5),
+            "w": Inches(3.5),
+            "h": Inches(3.5),
+            "color": "5B9BD5",
+            "commands": [
+                ("moveTo", 0, 500),
+                ("cubicBezTo", 250, 0, 750, 1000, 1000, 500),
+                ("close",),
+            ],
+        },
+    ]
+
+    spTree = slide.shapes._spTree
+
+    for idx, s in enumerate(shapes_def):
+        sp = make_element("p:sp")
+
+        nvSpPr = make_element("p:nvSpPr")
+        cNvPr = make_element("p:cNvPr")
+        cNvPr.set("id", str(100 + idx))
+        cNvPr.set("name", f"Custom {idx + 1}")
+        nvSpPr.append(cNvPr)
+        nvSpPr.append(make_element("p:cNvSpPr"))
+        nvSpPr.append(make_element("p:nvPr"))
+        sp.append(nvSpPr)
+
+        spPr = make_element("p:spPr")
+
+        xfrm = make_element("a:xfrm")
+        off = make_element("a:off")
+        off.set("x", str(int(s["left"])))
+        off.set("y", str(int(s["top"])))
+        xfrm.append(off)
+        ext = make_element("a:ext")
+        ext.set("cx", str(int(s["w"])))
+        ext.set("cy", str(int(s["h"])))
+        xfrm.append(ext)
+        spPr.append(xfrm)
+
+        custGeom = make_element("a:custGeom")
+        custGeom.append(make_element("a:avLst"))
+        custGeom.append(make_element("a:gdLst"))
+        custGeom.append(make_element("a:ahLst"))
+        custGeom.append(make_element("a:cxnLst"))
+        rect = make_element("a:rect")
+        rect.set("l", "0")
+        rect.set("t", "0")
+        rect.set("r", "0")
+        rect.set("b", "0")
+        custGeom.append(rect)
+
+        pathLst = make_element("a:pathLst")
+        path = make_element("a:path")
+        path.set("w", "1000")
+        path.set("h", "1000")
+        _build_custom_path(path, s["commands"])
+        pathLst.append(path)
+        custGeom.append(pathLst)
+        spPr.append(custGeom)
+
+        solidFill = make_element("a:solidFill")
+        srgbClr = make_element("a:srgbClr")
+        srgbClr.set("val", s["color"])
+        solidFill.append(srgbClr)
+        spPr.append(solidFill)
+
+        ln = make_element("a:ln")
+        ln.set("w", "12700")
+        lnFill = make_element("a:solidFill")
+        lnClr = make_element("a:srgbClr")
+        lnClr.set("val", "333333")
+        lnFill.append(lnClr)
+        ln.append(lnFill)
+        spPr.append(ln)
+
+        sp.append(spPr)
+        spTree.append(sp)
+
+    prs.save(os.path.join(OUTPUT_DIR, "lo-custom-geometry.pptx"))
+    print("  Created: lo-custom-geometry.pptx")
+
+
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     print("Generating LibreOffice VRT fixtures...")
@@ -828,6 +1290,13 @@ def main():
     create_groups()
     create_slide_background()
     create_flowchart_shapes()
+    create_arrows_stars()
+    create_callouts_arcs()
+    create_math_other()
+    create_image()
+    create_charts()
+    create_connectors()
+    create_custom_geometry()
     print("Done!")
 
 

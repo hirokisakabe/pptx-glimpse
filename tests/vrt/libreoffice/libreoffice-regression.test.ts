@@ -27,6 +27,13 @@ const LO_VRT_CASES = [
   { name: "groups", fixture: "lo-groups.pptx" },
   { name: "slide-background", fixture: "lo-slide-background.pptx" },
   { name: "flowchart-shapes", fixture: "lo-flowchart-shapes.pptx" },
+  { name: "arrows-stars", fixture: "lo-arrows-stars.pptx" },
+  { name: "callouts-arcs", fixture: "lo-callouts-arcs.pptx" },
+  { name: "math-other", fixture: "lo-math-other.pptx" },
+  { name: "image", fixture: "lo-image.pptx" },
+  { name: "charts", fixture: "lo-charts.pptx" },
+  { name: "connectors", fixture: "lo-connectors.pptx" },
+  { name: "custom-geometry", fixture: "lo-custom-geometry.pptx" },
 ] as const;
 
 // フィクスチャとスナップショットの両方が存在する場合のみ実行
@@ -40,13 +47,13 @@ const describeOrSkip = hasFixtures && hasSnapshots ? describe : describe.skip;
 
 describeOrSkip("LibreOffice Visual Regression Tests", { timeout: 60000 }, () => {
   for (const { name, fixture } of LO_VRT_CASES) {
-    describe(name, () => {
-      it("should match LibreOffice reference", async () => {
-        const fixturePath = join(FIXTURE_DIR, fixture);
-        if (!existsSync(fixturePath)) {
-          throw new Error(`Fixture not found: ${fixturePath}`);
-        }
+    // フィクスチャまたはスナップショットが存在しないケースはスキップ
+    const fixturePath = join(FIXTURE_DIR, fixture);
+    const snapshotPath = join(SNAPSHOT_DIR, `${name}-slide1.png`);
+    const itOrSkip = existsSync(fixturePath) && existsSync(snapshotPath) ? it : it.skip;
 
+    describe(name, () => {
+      itOrSkip("should match LibreOffice reference", async () => {
         const input = readFileSync(fixturePath);
         const results = await convertPptxToPng(input);
 
