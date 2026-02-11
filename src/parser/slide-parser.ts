@@ -30,7 +30,11 @@ import { parseEffectList } from "./effect-parser.js";
 import { parseChart } from "./chart-parser.js";
 import { parseCustomGeometry } from "./custom-geometry-parser.js";
 import { parseTable } from "./table-parser.js";
-import { parseRelationships, resolveRelationshipTarget } from "./relationship-parser.js";
+import {
+  parseRelationships,
+  resolveRelationshipTarget,
+  buildRelsPath,
+} from "./relationship-parser.js";
 import { hundredthPointToPoint } from "../utils/emu.js";
 
 const WARN_PREFIX = "[pptx-glimpse]";
@@ -83,6 +87,22 @@ function parseBackground(
   return { fill };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mergeChildElements(spTree: any, source: any): void {
+  const tags = ["sp", "pic", "cxnSp", "grpSp", "graphicFrame"];
+  for (const tag of tags) {
+    const items = source[tag];
+    if (!items) continue;
+    if (!spTree[tag]) {
+      spTree[tag] = [];
+    }
+    const arr = Array.isArray(items) ? items : [items];
+    for (const item of arr) {
+      spTree[tag].push(item);
+    }
+  }
+}
+
 export function parseShapeTree(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   spTree: any,
@@ -94,6 +114,15 @@ export function parseShapeTree(
   fillContext?: FillParseContext,
 ): SlideElement[] {
   if (!spTree) return [];
+
+  // mc:AlternateContent の処理: Choice 内の要素を spTree にマージ
+  const alternateContents = spTree.AlternateContent ?? [];
+  for (const ac of alternateContents) {
+    const choices = Array.isArray(ac.Choice) ? ac.Choice : ac.Choice ? [ac.Choice] : [];
+    for (const choice of choices) {
+      mergeChildElements(spTree, choice);
+    }
+  }
 
   const ctx = context ?? slidePath;
   const elements: SlideElement[] = [];
@@ -305,7 +334,7 @@ function parseGraphicFrame(
   slidePath: string,
   archive: PptxArchive,
   colorResolver: ColorResolver,
-): ChartElement | TableElement | null {
+): ChartElement | TableElement | GroupElement | null {
   const xfrm = gf.xfrm;
   const transform = parseTransform(xfrm);
   if (!transform) return null;
@@ -341,7 +370,118 @@ function parseGraphicFrame(
     return { type: "table", transform, table: tableData };
   }
 
+  // SmartArt (Diagram)
+  if (graphicData["@_uri"] === "http://schemas.openxmlformats.org/drawingml/2006/diagram") {
+    return parseSmartArt(graphicData, transform, rels, slidePath, archive, colorResolver);
+  }
+
   return null;
+}
+
+function parseSmartArt(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  graphicData: any,
+  transform: Transform,
+  rels: Map<string, Relationship>,
+  slidePath: string,
+  archive: PptxArchive,
+  colorResolver: ColorResolver,
+): GroupElement | null {
+  // dgm:relIds → removeNSPrefix → relIds
+  const relIds = graphicData.relIds;
+  if (!relIds) return null;
+
+  // r:dm 属性 (data model relationship ID)
+  const dmRId = relIds["@_r:dm"] ?? relIds["@_dm"];
+  if (!dmRId) return null;
+
+  const dmRel = rels.get(dmRId);
+  if (!dmRel) return null;
+
+  const dataPath = resolveRelationshipTarget(slidePath, dmRel.target);
+
+  // data の .rels から diagramDrawing リレーションシップを探す
+  const dataRelsPath = buildRelsPath(dataPath);
+  const dataRelsXml = archive.files.get(dataRelsPath);
+
+  let drawingPath: string | null = null;
+
+  if (dataRelsXml) {
+    const dataRels = parseRelationships(dataRelsXml);
+    for (const [, rel] of dataRels) {
+      if (rel.type.includes("diagramDrawing")) {
+        drawingPath = resolveRelationshipTarget(dataPath, rel.target);
+        break;
+      }
+    }
+  }
+
+  // フォールバック: slide rels から diagramDrawing を探す
+  if (!drawingPath) {
+    for (const [, rel] of rels) {
+      if (rel.type.includes("diagramDrawing")) {
+        drawingPath = resolveRelationshipTarget(slidePath, rel.target);
+        break;
+      }
+    }
+  }
+
+  if (!drawingPath) return null;
+
+  const drawingXml = archive.files.get(drawingPath);
+  if (!drawingXml) return null;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parsed = parseXml(drawingXml) as any;
+  const spTree = parsed.drawing?.spTree;
+  if (!spTree) return null;
+
+  // drawing XML 用のリレーションシップを取得
+  const drawingRelsPath = buildRelsPath(drawingPath);
+  const drawingRelsXml = archive.files.get(drawingRelsPath);
+  const drawingRels = drawingRelsXml
+    ? parseRelationships(drawingRelsXml)
+    : new Map<string, Relationship>();
+
+  // grpSpPr から childTransform を取得
+  const grpXfrm = spTree.grpSpPr?.xfrm;
+  const childOff = grpXfrm?.chOff;
+  const childExt = grpXfrm?.chExt;
+  const childTransform: Transform = {
+    offsetX: Number(childOff?.["@_x"] ?? 0),
+    offsetY: Number(childOff?.["@_y"] ?? 0),
+    extentWidth: Number(childExt?.["@_cx"] ?? transform.extentWidth),
+    extentHeight: Number(childExt?.["@_cy"] ?? transform.extentHeight),
+    rotation: 0,
+    flipH: false,
+    flipV: false,
+  };
+
+  const fillContext: FillParseContext = {
+    rels: drawingRels,
+    archive,
+    basePath: drawingPath,
+  };
+
+  const children = parseShapeTree(
+    spTree,
+    drawingRels,
+    drawingPath,
+    archive,
+    colorResolver,
+    undefined,
+    fillContext,
+  );
+
+  if (children.length === 0) return null;
+
+  return {
+    type: "group",
+    transform,
+    childTransform,
+    children,
+    effects: null,
+  };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
