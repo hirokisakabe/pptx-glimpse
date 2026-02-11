@@ -7,3 +7,5 @@ output/
 scripts/fonts/
 tests/vrt/internal/diffs/
 tests/vrt/libreoffice/diffs/
+tests/vrt/libreoffice/snapshots/
+tests/vrt/libreoffice/fixtures/
