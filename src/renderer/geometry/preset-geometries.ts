@@ -206,7 +206,7 @@ const presetGeometries: Record<string, GeometryGenerator> = {
   },
 
   homePlate: (w, h, adj) => {
-    const offset = ((adj["adj"] ?? 50000) / 100000) * w;
+    const offset = ((adj["adj"] ?? 50000) / 100000) * Math.min(w, h);
     return `<polygon points="0,0 ${w - offset},0 ${w},${h / 2} ${w - offset},${h} 0,${h}"/>`;
   },
 
