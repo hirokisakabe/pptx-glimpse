@@ -1,13 +1,7 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import {
-  renderFillAttrs,
-  renderOutlineAttrs,
-  resetDefsCounter,
-} from "../../src/renderer/fill-renderer.js";
+import { describe, it, expect } from "vitest";
+import { renderFillAttrs, renderOutlineAttrs } from "../../src/renderer/fill-renderer.js";
 
 describe("renderFillAttrs", () => {
-  beforeEach(() => resetDefsCounter());
-
   it("renders null fill as none", () => {
     const result = renderFillAttrs(null);
     expect(result.attrs).toBe('fill="none"');
