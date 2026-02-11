@@ -36,6 +36,22 @@
   "engines": {
     "node": ">=20"
   },
+  "keywords": [
+    "pptx",
+    "powerpoint",
+    "svg",
+    "png",
+    "converter"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hirokisakabe/pptx-glimpse.git"
+  },
+  "homepage": "https://github.com/hirokisakabe/pptx-glimpse",
+  "bugs": {
+    "url": "https://github.com/hirokisakabe/pptx-glimpse/issues"
+  },
+  "author": "hirokisakabe",
   "license": "MIT",
   "dependencies": {
     "fast-xml-parser": "^4.5.0",
