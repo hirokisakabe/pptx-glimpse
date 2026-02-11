@@ -33,7 +33,7 @@ CI は 3 ジョブ構成:
 データフロー: **PPTX バイナリ → Parser (ZIP解凍+XMLパース) → 中間モデル → Renderer (SVG生成) → PNG変換 (optional)**
 
 - `src/parser/` — PPTX の ZIP 解凍 (`jszip`) と XML パース (`fast-xml-parser`) で中間モデルを構築
-- `src/model/` — 中間モデルの TypeScript インターフェース (Slide, Shape, Fill, Text, Theme, Table, Chart, Image, Line, Presentation 等)
+- `src/model/` — 中間モデルの TypeScript インターフェース (Slide, Shape, Fill, Text, Theme, Table, Chart, Image, Line, Effect, Presentation 等)
 - `src/renderer/` — 中間モデルから SVG 文字列を生成。`geometry/` にプリセット図形定義、テーブル・チャート・画像の個別レンダラーも含む
 - `src/color/` — テーマカラー解決 (schemeClr → colorMap → colorScheme) と色変換 (lumMod/tint/shade)
 - `src/png/` — sharp による SVG → PNG 変換

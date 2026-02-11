@@ -40,7 +40,7 @@ Supports conversion of static visual content in PowerPoint. Dynamic elements suc
 
 | Feature        | Details                                                                                          |
 | -------------- | ------------------------------------------------------------------------------------------------ |
-| Preset shapes  | 113 types (rectangles, ellipses, arrows, flowcharts, callouts, stars, math symbols, etc.)        |
+| Preset shapes  | 123 types (rectangles, ellipses, arrows, flowcharts, callouts, stars, math symbols, etc.)        |
 | Custom shapes  | Arbitrary shape drawing using custom paths (moveTo, lnTo, cubicBezTo, close)                     |
 | Connectors     | Line connector drawing, line style / color / width settings                                      |
 | Groups         | Shape grouping, nested groups                                                                    |
@@ -50,7 +50,7 @@ Supports conversion of static visual content in PowerPoint. Dynamic elements suc
 
 | Feature        | Details                                                                                                              |
 | -------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Character formatting | Font size, font family (East Asian font support), bold, italic, underline, strikethrough, font color, superscript / subscript |
+| Character formatting | Font size, font family (East Asian font support), bold, italic, underline, strikethrough, font color, superscript / subscript, hyperlinks |
 | Paragraph formatting | Horizontal alignment (left/center/right/justify), vertical anchor (top/center/bottom), line spacing, before/after paragraph spacing, indent |
 | Bullet points  | Character bullets (buChar), auto-numbering (buAutoNum, 9 types), bullet font / color / size                          |
 | Text boxes     | Word wrap (square/none), auto-fit (noAutofit/normAutofit/spAutofit), font scaling, margins                            |
@@ -132,7 +132,6 @@ Supports conversion of static visual content in PowerPoint. Dynamic elements suc
 | SmartArt         | All SmartArt features                                                                                                        |
 | Multimedia       | Embedded video / audio                                                                                                       |
 | Animations       | Object animations, slide transitions                                                                                         |
-| Links            | Hyperlinks                                                                                                                   |
 | Slide elements   | Slide notes, comments, headers / footers, slide numbers / dates                                                              |
 | Image formats    | EMF/WMF (parsed but not rendered)                                                                                            |
 | Other            | Macros / VBA, sections, zoom slides                                                                                          |
