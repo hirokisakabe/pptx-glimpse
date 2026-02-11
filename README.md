@@ -125,6 +125,13 @@ Supports conversion of static visual content in PowerPoint. Dynamic elements suc
 | Supported charts | Bar chart (vertical/horizontal), line chart, pie chart, scatter plot                       |
 | Chart elements   | Title, legend (position), series (name/values/categories/color), category axis, value axis |
 
+#### SmartArt
+
+| Feature              | Details                                                                            |
+| -------------------- | ---------------------------------------------------------------------------------- |
+| Pre-rendered shapes  | Renders SmartArt using PowerPoint's pre-rendered drawing shapes (drawingN.xml)      |
+| mc:AlternateContent  | Handles AlternateContent fallback mechanism used by SmartArt                        |
+
 #### Background & Slide Settings
 
 | Feature    | Details                                                         |
@@ -144,7 +151,6 @@ Supports conversion of static visual content in PowerPoint. Dynamic elements suc
 | Text           | Vertical text, individual text effects (shadow/glow), text outline, text columns               |
 | Tables         | Table style template application, diagonal borders                                             |
 | Shapes         | Shape operations (Union/Subtract/Intersect/Fragment)                                           |
-| SmartArt       | All SmartArt features                                                                          |
 | Multimedia     | Embedded video / audio                                                                         |
 | Animations     | Object animations, slide transitions                                                           |
 | Slide elements | Slide notes, comments, headers / footers, slide numbers / dates                                |
