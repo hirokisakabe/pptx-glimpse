@@ -5,3 +5,4 @@ dist/
 coverage/
 output/
 scripts/fonts/
+tests/vrt/diffs/

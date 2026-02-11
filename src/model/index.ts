@@ -23,3 +23,11 @@ export type { Fill, SolidFill, GradientFill, NoFill, GradientStop, ResolvedColor
 export type { Outline, DashStyle } from "./line.js";
 export type { Theme, ColorScheme, ColorSchemeKey, ColorMap, FontScheme } from "./theme.js";
 export type { ChartElement, ChartData, ChartType, ChartSeries, ChartLegend } from "./chart.js";
+export type {
+  TableElement,
+  TableData,
+  TableRow,
+  TableColumn,
+  TableCell,
+  CellBorders,
+} from "./table.js";
