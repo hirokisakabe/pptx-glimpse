@@ -1,3 +1,10 @@
+// OOXML テーマカラー解決 (ECMA-376 §20.1.6)
+// 色の種類:
+//   srgbClr — sRGB 直接指定 (e.g. "FF0000")
+//   schemeClr — テーマカラー参照 (dk1, lt1, accent1-6, hlink, folHlink)
+//     → colorMap でキーを変換 → colorScheme から実際の色を取得
+//   sysClr — システムカラー (@_lastClr で保存された直近値を使用)
+
 import type { ColorScheme, ColorMap, ColorSchemeKey } from "../model/theme.js";
 import type { ResolvedColor } from "../model/fill.js";
 import { applyColorTransforms } from "./color-transforms.js";

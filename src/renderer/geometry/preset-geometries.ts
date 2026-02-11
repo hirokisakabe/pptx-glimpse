@@ -1,3 +1,6 @@
+// OOXML DrawingML プリセット図形 (ECMA-376 §20.1.10.56 prst)
+// adj 値は 100,000 分率で正規化 (e.g. adj=50000 → 50%)
+
 type GeometryGenerator = (w: number, h: number, adj: Record<string, number>) => string;
 
 // --- Helper functions ---
@@ -24,6 +27,7 @@ function starPolygon(w: number, h: number, points: number, innerRatio: number): 
   return `<polygon points="${coords.join(" ")}"/>`;
 }
 
+// OOXML 角度 (1/60,000 度) → ラジアン
 function ooxmlAngleToRadians(angle60k: number): number {
   return (angle60k / 60000) * (Math.PI / 180);
 }
