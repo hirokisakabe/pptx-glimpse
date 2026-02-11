@@ -4,4 +4,5 @@ dist/
 .DS_Store
 coverage/
 output/
+scripts/fonts/
 tests/vrt/diffs/
