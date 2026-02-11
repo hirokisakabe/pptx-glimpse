@@ -60,6 +60,7 @@ export interface TextRun {
 export interface RunProperties {
   fontSize: number | null;
   fontFamily: string | null;
+  fontFamilyEa: string | null;
   bold: boolean;
   italic: boolean;
   underline: boolean;

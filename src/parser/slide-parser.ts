@@ -24,6 +24,7 @@ import type { Relationship } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import { parseXml } from "./xml-parser.js";
 import { parseFillFromNode, parseOutline } from "./fill-parser.js";
+import type { FillParseContext } from "./fill-parser.js";
 import { parseChart } from "./chart-parser.js";
 import { parseTable } from "./table-parser.js";
 import { parseRelationships, resolveRelationshipTarget } from "./relationship-parser.js";
@@ -49,7 +50,8 @@ export function parseSlide(
   const relsXml = archive.files.get(relsPath);
   const rels = relsXml ? parseRelationships(relsXml) : new Map<string, Relationship>();
 
-  const background = parseBackground(sld?.cSld?.bg, colorResolver);
+  const fillContext: FillParseContext = { rels, archive, basePath: slidePath };
+  const background = parseBackground(sld?.cSld?.bg, colorResolver, fillContext);
   const elements = parseShapeTree(
     sld?.cSld?.spTree,
     rels,
@@ -66,13 +68,14 @@ function parseBackground(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   bgNode: any,
   colorResolver: ColorResolver,
+  context?: FillParseContext,
 ): Background | null {
   if (!bgNode) return null;
 
   const bgPr = bgNode.bgPr;
   if (!bgPr) return null;
 
-  const fill = parseFillFromNode(bgPr, colorResolver);
+  const fill = parseFillFromNode(bgPr, colorResolver, context);
   return { fill };
 }
 
@@ -563,6 +566,7 @@ function parseRunProperties(rPr: any, colorResolver: ColorResolver): RunProperti
     return {
       fontSize: null,
       fontFamily: null,
+      fontFamilyEa: null,
       bold: false,
       italic: false,
       underline: false,
@@ -573,7 +577,8 @@ function parseRunProperties(rPr: any, colorResolver: ColorResolver): RunProperti
   }
 
   const fontSize = rPr["@_sz"] ? hundredthPointToPoint(Number(rPr["@_sz"])) : null;
-  const fontFamily = rPr.latin?.["@_typeface"] ?? rPr.ea?.["@_typeface"] ?? null;
+  const fontFamily = rPr.latin?.["@_typeface"] ?? null;
+  const fontFamilyEa = rPr.ea?.["@_typeface"] ?? null;
   const bold = rPr["@_b"] === "1" || rPr["@_b"] === "true";
   const italic = rPr["@_i"] === "1" || rPr["@_i"] === "true";
   const underline = rPr["@_u"] !== undefined && rPr["@_u"] !== "none";
@@ -585,5 +590,15 @@ function parseRunProperties(rPr: any, colorResolver: ColorResolver): RunProperti
     color = null;
   }
 
-  return { fontSize, fontFamily, bold, italic, underline, strikethrough, color, baseline };
+  return {
+    fontSize,
+    fontFamily,
+    fontFamilyEa,
+    bold,
+    italic,
+    underline,
+    strikethrough,
+    color,
+    baseline,
+  };
 }

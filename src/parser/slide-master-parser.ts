@@ -4,6 +4,7 @@ import type { SlideElement } from "../model/shape.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import { parseXml } from "./xml-parser.js";
 import { parseFillFromNode } from "./fill-parser.js";
+import type { FillParseContext } from "./fill-parser.js";
 import { parseShapeTree } from "./slide-parser.js";
 import { buildRelsPath, parseRelationships } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
@@ -50,6 +51,7 @@ export function parseSlideMasterColorMap(xml: string): ColorMap {
 export function parseSlideMasterBackground(
   xml: string,
   colorResolver: ColorResolver,
+  context?: FillParseContext,
 ): Background | null {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parsed = parseXml(xml) as any;
@@ -65,7 +67,7 @@ export function parseSlideMasterBackground(
   const bgPr = bg.bgPr;
   if (!bgPr) return null;
 
-  const fill = parseFillFromNode(bgPr, colorResolver);
+  const fill = parseFillFromNode(bgPr, colorResolver, context);
   return { fill };
 }
 
