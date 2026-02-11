@@ -39,6 +39,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Verify package (CJS/ESM/TypeScript)
+        run: bash scripts/test-package.sh
+
   vrt:
     runs-on: ubuntu-latest
     steps:
