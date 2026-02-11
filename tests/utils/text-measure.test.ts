@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { measureTextWidth } from "../../src/utils/text-measure.js";
+import { measureTextWidth, getLineHeightRatio } from "../../src/utils/text-measure.js";
 
 const PX_PER_PT = 96 / 72;
 
@@ -147,5 +147,51 @@ describe("measureTextWidth with fontFamilyEa", () => {
     const width = measureTextWidth("漢", 18, false, "Calibri", null);
     const expected = (2048 / 2048) * 18 * PX_PER_PT;
     expect(width).toBeCloseTo(expected, 1);
+  });
+});
+
+describe("getLineHeightRatio", () => {
+  it("Calibri (Carlito) の行高さ比率を返す", () => {
+    // Carlito: ascender=1950, descender=-550, unitsPerEm=2048
+    // (1950 + 550) / 2048 = 1.220703125
+    const ratio = getLineHeightRatio("Calibri");
+    expect(ratio).toBeCloseTo((1950 + 550) / 2048, 5);
+  });
+
+  it("Arial (LiberationSans) の行高さ比率を返す", () => {
+    // LiberationSans: ascender=1854, descender=-434, unitsPerEm=2048
+    const ratio = getLineHeightRatio("Arial");
+    expect(ratio).toBeCloseTo((1854 + 434) / 2048, 5);
+  });
+
+  it("NotoSansJP の行高さ比率を返す", () => {
+    // NotoSansJP: ascender=1160, descender=-288, unitsPerEm=1000
+    const ratio = getLineHeightRatio(null, "Meiryo");
+    expect(ratio).toBeCloseTo((1160 + 288) / 1000, 5);
+  });
+
+  it("fontFamily を優先して使用する", () => {
+    const ratio = getLineHeightRatio("Calibri", "Meiryo");
+    expect(ratio).toBeCloseTo((1950 + 550) / 2048, 5);
+  });
+
+  it("fontFamily が null の場合は fontFamilyEa を使用する", () => {
+    const ratio = getLineHeightRatio(null, "Meiryo");
+    expect(ratio).toBeCloseTo((1160 + 288) / 1000, 5);
+  });
+
+  it("未知のフォントの場合はデフォルト値 1.2 を返す", () => {
+    const ratio = getLineHeightRatio("UnknownFont");
+    expect(ratio).toBe(1.2);
+  });
+
+  it("両方 null の場合はデフォルト値 1.2 を返す", () => {
+    const ratio = getLineHeightRatio(null, null);
+    expect(ratio).toBe(1.2);
+  });
+
+  it("引数なしの場合はデフォルト値 1.2 を返す", () => {
+    const ratio = getLineHeightRatio();
+    expect(ratio).toBe(1.2);
   });
 });

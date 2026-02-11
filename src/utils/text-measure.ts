@@ -10,6 +10,21 @@ const WIDTH_RATIO: Record<CharCategory, number> = {
 
 const BOLD_FACTOR = 1.05;
 const PX_PER_PT = 96 / 72;
+const DEFAULT_LINE_HEIGHT_RATIO = 1.2;
+
+/**
+ * フォントの自然な行高さ比率を返す。
+ * (ascender + |descender|) / unitsPerEm で計算。
+ * メトリクスが見つからない場合はフォールバック値 (1.2) を返す。
+ */
+export function getLineHeightRatio(
+  fontFamily?: string | null,
+  fontFamilyEa?: string | null,
+): number {
+  const metrics = getFontMetrics(fontFamily) ?? getFontMetrics(fontFamilyEa);
+  if (!metrics) return DEFAULT_LINE_HEIGHT_RATIO;
+  return (metrics.ascender + Math.abs(metrics.descender)) / metrics.unitsPerEm;
+}
 
 function isCjkCodePoint(codePoint: number): boolean {
   return (
