@@ -1,4 +1,4 @@
-export type Fill = SolidFill | GradientFill | ImageFill | NoFill;
+export type Fill = SolidFill | GradientFill | ImageFill | PatternFill | NoFill;
 
 export interface SolidFill {
   type: "solid";
@@ -9,6 +9,9 @@ export interface GradientFill {
   type: "gradient";
   stops: GradientStop[];
   angle: number;
+  gradientType: "linear" | "radial";
+  centerX?: number;
+  centerY?: number;
 }
 
 export interface GradientStop {
@@ -20,6 +23,13 @@ export interface ImageFill {
   type: "image";
   imageData: string;
   mimeType: string;
+}
+
+export interface PatternFill {
+  type: "pattern";
+  preset: string;
+  foregroundColor: ResolvedColor;
+  backgroundColor: ResolvedColor;
 }
 
 export interface NoFill {
