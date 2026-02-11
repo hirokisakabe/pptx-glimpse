@@ -6,11 +6,9 @@ import { renderShape, renderConnector } from "./shape-renderer.js";
 import { renderImage } from "./image-renderer.js";
 import { renderChart } from "./chart-renderer.js";
 import { renderTable } from "./table-renderer.js";
-import { renderFillAttrs, resetDefsCounter } from "./fill-renderer.js";
+import { renderFillAttrs } from "./fill-renderer.js";
 
 export function renderSlideToSvg(slide: Slide, slideSize: SlideSize): string {
-  resetDefsCounter();
-
   const width = emuToPixels(slideSize.width);
   const height = emuToPixels(slideSize.height);
 

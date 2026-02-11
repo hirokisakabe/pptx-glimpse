@@ -7,12 +7,6 @@ export interface FillAttrs {
   defs: string;
 }
 
-let defsCounter = 0;
-
-export function resetDefsCounter(): void {
-  defsCounter = 0;
-}
-
 export function renderFillAttrs(fill: Fill | null): FillAttrs {
   if (!fill || fill.type === "none") {
     return { attrs: `fill="none"`, defs: "" };
@@ -24,7 +18,7 @@ export function renderFillAttrs(fill: Fill | null): FillAttrs {
   }
 
   if (fill.type === "gradient") {
-    const id = `grad-${defsCounter++}`;
+    const id = `grad-${crypto.randomUUID()}`;
     const angle = fill.angle;
     const rad = (angle * Math.PI) / 180;
     const x1 = 50 - Math.cos(rad) * 50;
