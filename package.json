@@ -28,7 +28,8 @@
     "vrt:lo:docker-build": "docker build -t pptx-glimpse-vrt docker/libreoffice-vrt",
     "vrt:lo:fixtures": "docker run --rm -v \"$(pwd)\":/workspace pptx-glimpse-vrt python3 /workspace/vrt/libreoffice/generate_fixtures.py",
     "vrt:lo:reference": "docker run --rm -v \"$(pwd)\":/workspace pptx-glimpse-vrt bash /workspace/vrt/libreoffice/render_references.sh",
-    "vrt:lo:update": "npm run vrt:lo:docker-build && npm run vrt:lo:fixtures && npm run vrt:lo:reference"
+    "vrt:lo:update": "npm run vrt:lo:docker-build && npm run vrt:lo:fixtures && npm run vrt:lo:reference",
+    "test:package": "npm run build && bash scripts/test-package.sh"
   },
   "files": [
     "dist"
