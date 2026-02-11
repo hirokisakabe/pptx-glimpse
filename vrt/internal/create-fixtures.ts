@@ -3068,6 +3068,183 @@ async function createHyperlinksFixture(): Promise<void> {
   savePptx(buffer, "hyperlinks.pptx");
 }
 
+// --- Pattern / Image Fill / Radial Gradient ---
+
+function radialGradientFillXml(
+  stops: { pos: number; color: string }[],
+  center: { l: number; t: number; r: number; b: number },
+): string {
+  const gsItems = stops
+    .map((s) => `<a:gs pos="${s.pos}"><a:srgbClr val="${s.color}"/></a:gs>`)
+    .join("");
+  return `<a:gradFill><a:gsLst>${gsItems}</a:gsLst><a:path path="circle"><a:fillToRect l="${center.l}" t="${center.t}" r="${center.r}" b="${center.b}"/></a:path></a:gradFill>`;
+}
+
+function patternFillXml(preset: string, fgColor: string, bgColor: string): string {
+  return `<a:pattFill prst="${preset}"><a:fgClr><a:srgbClr val="${fgColor}"/></a:fgClr><a:bgClr><a:srgbClr val="${bgColor}"/></a:bgClr></a:pattFill>`;
+}
+
+async function createPatternImageFillFixture(): Promise<void> {
+  // --- Slide 1: Radial gradients ---
+  let id = 2;
+  const radialShapes: string[] = [];
+
+  const radialConfigs = [
+    {
+      name: "RadialCenter",
+      preset: "rect",
+      col: 0,
+      row: 0,
+      center: { l: 50000, t: 50000, r: 50000, b: 50000 },
+      colors: [
+        { pos: 0, color: "FF0000" },
+        { pos: 100000, color: "0000FF" },
+      ],
+    },
+    {
+      name: "RadialTopLeft",
+      preset: "roundRect",
+      col: 1,
+      row: 0,
+      center: { l: 0, t: 0, r: 100000, b: 100000 },
+      colors: [
+        { pos: 0, color: "FFFF00" },
+        { pos: 100000, color: "008000" },
+      ],
+    },
+    {
+      name: "RadialBottomRight",
+      preset: "ellipse",
+      col: 2,
+      row: 0,
+      center: { l: 100000, t: 100000, r: 0, b: 0 },
+      colors: [
+        { pos: 0, color: "FFFFFF" },
+        { pos: 50000, color: "FFC000" },
+        { pos: 100000, color: "FF6384" },
+      ],
+    },
+    {
+      name: "RadialRect",
+      preset: "rect",
+      col: 0,
+      row: 1,
+      center: { l: 50000, t: 50000, r: 50000, b: 50000 },
+      colors: [
+        { pos: 0, color: "4472C4" },
+        { pos: 100000, color: "ED7D31" },
+      ],
+    },
+  ];
+
+  for (const cfg of radialConfigs) {
+    const pos = gridPosition(cfg.col, cfg.row, 3, 2);
+    radialShapes.push(
+      shapeXml(id++, cfg.name, {
+        preset: cfg.preset,
+        x: pos.x,
+        y: pos.y,
+        cx: pos.w,
+        cy: pos.h,
+        fillXml: radialGradientFillXml(cfg.colors, cfg.center),
+      }),
+    );
+  }
+
+  const slide1 = wrapSlideXml(radialShapes.join("\n"));
+  const rels1 = slideRelsXml();
+
+  // --- Slide 2: Image fills ---
+  id = 2;
+  const imgSize = 80;
+  const pixels = Buffer.alloc(imgSize * imgSize * 4);
+  for (let y = 0; y < imgSize; y++) {
+    for (let x = 0; x < imgSize; x++) {
+      const idx = (y * imgSize + x) * 4;
+      pixels[idx] = Math.floor((x / imgSize) * 255);
+      pixels[idx + 1] = Math.floor((y / imgSize) * 255);
+      pixels[idx + 2] = 128;
+      pixels[idx + 3] = 255;
+    }
+  }
+  const testImage = await sharp(pixels, {
+    raw: { width: imgSize, height: imgSize, channels: 4 },
+  })
+    .png()
+    .toBuffer();
+
+  const imgFillConfigs = [
+    { name: "ImageFillRect", preset: "rect", col: 0, row: 0 },
+    { name: "ImageFillRoundRect", preset: "roundRect", col: 1, row: 0 },
+    { name: "ImageFillEllipse", preset: "ellipse", col: 0, row: 1 },
+  ];
+  const imgFillShapes: string[] = [];
+  for (const cfg of imgFillConfigs) {
+    const pos = gridPosition(cfg.col, cfg.row, 2, 2);
+    imgFillShapes.push(
+      shapeXml(id++, cfg.name, {
+        preset: cfg.preset,
+        x: pos.x,
+        y: pos.y,
+        cx: pos.w,
+        cy: pos.h,
+        fillXml: `<a:blipFill><a:blip r:embed="rId2"/><a:stretch><a:fillRect/></a:stretch></a:blipFill>`,
+      }),
+    );
+  }
+
+  const slide2 = wrapSlideXml(imgFillShapes.join("\n"));
+  const rels2 = slideRelsXml([
+    { id: "rId2", type: REL_TYPES.image, target: "../media/image1.png" },
+  ]);
+
+  // --- Slide 3: Pattern fills ---
+  id = 2;
+  const patternPresets = [
+    "ltHorz",
+    "ltVert",
+    "ltDnDiag",
+    "ltUpDiag",
+    "dkHorz",
+    "dkVert",
+    "cross",
+    "diagCross",
+    "pct25",
+  ];
+  const pattShapes: string[] = [];
+  for (let i = 0; i < patternPresets.length; i++) {
+    const col = i % 3;
+    const row = Math.floor(i / 3);
+    const pos = gridPosition(col, row, 3, 3);
+    pattShapes.push(
+      shapeXml(id++, `Pattern-${patternPresets[i]}`, {
+        preset: "rect",
+        x: pos.x,
+        y: pos.y,
+        cx: pos.w,
+        cy: pos.h,
+        fillXml: patternFillXml(patternPresets[i], "4472C4", "FFFFFF"),
+      }),
+    );
+  }
+
+  const slide3 = wrapSlideXml(pattShapes.join("\n"));
+  const rels3 = slideRelsXml();
+
+  const media = new Map<string, Buffer>();
+  media.set("ppt/media/image1.png", testImage);
+
+  const buffer = await buildPptx({
+    slides: [
+      { xml: slide1, rels: rels1 },
+      { xml: slide2, rels: rels2 },
+      { xml: slide3, rels: rels3 },
+    ],
+    media,
+  });
+  savePptx(buffer, "pattern-image-fill.pptx");
+}
+
 async function main(): Promise<void> {
   console.log("Creating VRT fixtures...\n");
 
@@ -3094,6 +3271,7 @@ async function main(): Promise<void> {
   await createSlideSize43Fixture();
   await createEffectsFixture();
   await createHyperlinksFixture();
+  await createPatternImageFillFixture();
 
   console.log("\nDone!");
 }

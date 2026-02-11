@@ -71,12 +71,14 @@ Supports conversion of static visual content in PowerPoint. Dynamic elements suc
 
 #### Fill
 
-| Feature     | Details                                         |
-| ----------- | ----------------------------------------------- |
-| Solid color | RGB color specification, transparency           |
-| Gradient    | Linear gradient, multiple gradient stops, angle |
-| Image fill  | PNG/JPEG/GIF, stretch mode                      |
-| No fill     | noFill specification                            |
+| Feature      | Details                                                          |
+| ------------ | ---------------------------------------------------------------- |
+| Solid color  | RGB color specification, transparency                            |
+| Gradient     | Linear gradient, radial gradient, multiple gradient stops, angle |
+| Image fill   | PNG/JPEG/GIF, stretch mode                                       |
+| Pattern fill | Hatching patterns (horizontal, vertical, diagonal, cross, etc.)  |
+| Group fill   | Inherit fill from parent group                                   |
+| No fill      | noFill specification                                             |
 
 #### Lines & Borders
 
@@ -135,7 +137,7 @@ Supports conversion of static visual content in PowerPoint. Dynamic elements suc
 
 | Category       | Unsupported features                                                                           |
 | -------------- | ---------------------------------------------------------------------------------------------- |
-| Fill           | Pattern fill, radial gradient, path gradient                                                   |
+| Fill           | Path gradient (rect/shape type)                                                                |
 | Effects        | Reflection, 3D rotation / extrusion, artistic effects                                          |
 | Charts         | Area, radar, doughnut, bubble, stock, combo, histogram, box plot, waterfall, treemap, sunburst |
 | Chart details  | Data labels, axis titles / tick marks / grid lines, error bars, trendlines                     |

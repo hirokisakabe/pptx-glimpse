@@ -62,6 +62,7 @@ export function parseSlide(
     archive,
     colorResolver,
     `Slide ${slideNumber}`,
+    fillContext,
   );
 
   return { slideNumber, background, elements };
@@ -90,6 +91,7 @@ export function parseShapeTree(
   archive: PptxArchive,
   colorResolver: ColorResolver,
   context?: string,
+  fillContext?: FillParseContext,
 ): SlideElement[] {
   if (!spTree) return [];
 
@@ -98,7 +100,7 @@ export function parseShapeTree(
 
   const shapes = spTree.sp ?? [];
   for (const sp of shapes) {
-    const shape = parseShape(sp, colorResolver, rels);
+    const shape = parseShape(sp, colorResolver, rels, fillContext);
     if (shape) {
       elements.push(shape);
     } else {
@@ -128,7 +130,7 @@ export function parseShapeTree(
 
   const grpSps = spTree.grpSp ?? [];
   for (const grp of grpSps) {
-    const group = parseGroup(grp, rels, slidePath, archive, colorResolver);
+    const group = parseGroup(grp, rels, slidePath, archive, colorResolver, fillContext);
     if (group) {
       elements.push(group);
     } else {
@@ -154,6 +156,7 @@ function parseShape(
   sp: any,
   colorResolver: ColorResolver,
   rels?: Map<string, Relationship>,
+  fillContext?: FillParseContext,
 ): ShapeElement | null {
   const spPr = sp.spPr;
   if (!spPr) return null;
@@ -162,7 +165,7 @@ function parseShape(
   if (!transform) return null;
 
   const geometry = parseGeometry(spPr);
-  const fill = parseFillFromNode(spPr, colorResolver);
+  const fill = parseFillFromNode(spPr, colorResolver, fillContext);
   const outline = parseOutline(spPr.ln, colorResolver);
   const textBody = parseTextBody(sp.txBody, colorResolver, rels);
   const effects = parseEffectList(spPr.effectLst, colorResolver);
@@ -253,6 +256,7 @@ function parseGroup(
   slidePath: string,
   archive: PptxArchive,
   colorResolver: ColorResolver,
+  parentFillContext?: FillParseContext,
 ): GroupElement | null {
   const grpSpPr = grp.grpSpPr;
   if (!grpSpPr) return null;
@@ -272,7 +276,23 @@ function parseGroup(
     flipV: false,
   };
 
-  const children = parseShapeTree(grp, rels, slidePath, archive, colorResolver);
+  const groupFill = parseFillFromNode(grpSpPr, colorResolver, parentFillContext);
+  const childFillContext: FillParseContext = {
+    rels: parentFillContext?.rels ?? rels,
+    archive: parentFillContext?.archive ?? { files: new Map(), media: new Map() },
+    basePath: parentFillContext?.basePath ?? slidePath,
+    ...(groupFill ? { groupFill } : {}),
+  };
+
+  const children = parseShapeTree(
+    grp,
+    rels,
+    slidePath,
+    archive,
+    colorResolver,
+    undefined,
+    childFillContext,
+  );
   const effects = parseEffectList(grpSpPr.effectLst, colorResolver);
 
   return { type: "group", transform, childTransform, children, effects };

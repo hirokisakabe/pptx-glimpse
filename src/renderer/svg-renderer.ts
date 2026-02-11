@@ -108,9 +108,17 @@ function renderGroup(group: GroupElement, defs: string[]): string {
 }
 
 function extractDefs(svgFragment: string, defs: string[]): void {
-  const gradientMatch = svgFragment.match(/<linearGradient[^]*?<\/linearGradient>/g);
-  if (gradientMatch) {
-    defs.push(...gradientMatch);
+  const linearGradientMatch = svgFragment.match(/<linearGradient[^]*?<\/linearGradient>/g);
+  if (linearGradientMatch) {
+    defs.push(...linearGradientMatch);
+  }
+  const radialGradientMatch = svgFragment.match(/<radialGradient[^]*?<\/radialGradient>/g);
+  if (radialGradientMatch) {
+    defs.push(...radialGradientMatch);
+  }
+  const patternMatch = svgFragment.match(/<pattern[^]*?<\/pattern>/g);
+  if (patternMatch) {
+    defs.push(...patternMatch);
   }
   const filterMatch = svgFragment.match(/<filter[^]*?<\/filter>/g);
   if (filterMatch) {
@@ -121,5 +129,7 @@ function extractDefs(svgFragment: string, defs: string[]): void {
 function removeDefs(svgFragment: string): string {
   return svgFragment
     .replace(/<linearGradient[^]*?<\/linearGradient>/g, "")
+    .replace(/<radialGradient[^]*?<\/radialGradient>/g, "")
+    .replace(/<pattern[^]*?<\/pattern>/g, "")
     .replace(/<filter[^]*?<\/filter>/g, "");
 }

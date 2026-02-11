@@ -66,7 +66,132 @@ describe("parseFillFromNode", () => {
 
     expect(warnSpy).not.toHaveBeenCalled();
     expect(result?.type).toBe("gradient");
+    if (result?.type === "gradient") {
+      expect(result.gradientType).toBe("linear");
+    }
     warnSpy.mockRestore();
+  });
+
+  it("parses radial gradient with fillToRect", () => {
+    const node = {
+      gradFill: {
+        gsLst: {
+          gs: [
+            { "@_pos": "0", srgbClr: { "@_val": "FF0000" } },
+            { "@_pos": "100000", srgbClr: { "@_val": "0000FF" } },
+          ],
+        },
+        path: {
+          "@_path": "circle",
+          fillToRect: { "@_l": "50000", "@_t": "50000", "@_r": "50000", "@_b": "50000" },
+        },
+      },
+    };
+    const result = parseFillFromNode(node, createColorResolver());
+
+    expect(result?.type).toBe("gradient");
+    if (result?.type === "gradient") {
+      expect(result.gradientType).toBe("radial");
+      expect(result.centerX).toBe(0.5);
+      expect(result.centerY).toBe(0.5);
+      expect(result.stops).toHaveLength(2);
+    }
+  });
+
+  it("parses radial gradient without fillToRect defaults to center", () => {
+    const node = {
+      gradFill: {
+        gsLst: {
+          gs: [
+            { "@_pos": "0", srgbClr: { "@_val": "FF0000" } },
+            { "@_pos": "100000", srgbClr: { "@_val": "0000FF" } },
+          ],
+        },
+        path: { "@_path": "circle" },
+      },
+    };
+    const result = parseFillFromNode(node, createColorResolver());
+
+    expect(result?.type).toBe("gradient");
+    if (result?.type === "gradient") {
+      expect(result.gradientType).toBe("radial");
+      expect(result.centerX).toBe(0.5);
+      expect(result.centerY).toBe(0.5);
+    }
+  });
+
+  it("parses radial gradient with top-left focus", () => {
+    const node = {
+      gradFill: {
+        gsLst: {
+          gs: [
+            { "@_pos": "0", srgbClr: { "@_val": "FF0000" } },
+            { "@_pos": "100000", srgbClr: { "@_val": "0000FF" } },
+          ],
+        },
+        path: {
+          "@_path": "circle",
+          fillToRect: { "@_l": "0", "@_t": "0", "@_r": "100000", "@_b": "100000" },
+        },
+      },
+    };
+    const result = parseFillFromNode(node, createColorResolver());
+
+    if (result?.type === "gradient") {
+      expect(result.gradientType).toBe("radial");
+      expect(result.centerX).toBe(0);
+      expect(result.centerY).toBe(0);
+    }
+  });
+
+  it("parses pattFill", () => {
+    const node = {
+      pattFill: {
+        "@_prst": "ltDnDiag",
+        fgClr: { srgbClr: { "@_val": "4472C4" } },
+        bgClr: { srgbClr: { "@_val": "FFFFFF" } },
+      },
+    };
+    const result = parseFillFromNode(node, createColorResolver());
+
+    expect(result?.type).toBe("pattern");
+    if (result?.type === "pattern") {
+      expect(result.preset).toBe("ltDnDiag");
+      expect(result.foregroundColor.hex).toBe("#4472C4");
+      expect(result.backgroundColor.hex).toBe("#FFFFFF");
+    }
+  });
+
+  it("returns null for pattFill without colors", () => {
+    const node = {
+      pattFill: {
+        "@_prst": "ltDnDiag",
+      },
+    };
+    const result = parseFillFromNode(node, createColorResolver());
+    expect(result).toBeNull();
+  });
+
+  it("parses grpFill using context groupFill", () => {
+    const context: FillParseContext = {
+      rels: new Map(),
+      archive: { files: new Map(), media: new Map() },
+      basePath: "ppt/slides/slide1.xml",
+      groupFill: { type: "solid", color: { hex: "#FF0000", alpha: 1 } },
+    };
+    const node = { grpFill: {} };
+    const result = parseFillFromNode(node, createColorResolver(), context);
+
+    expect(result?.type).toBe("solid");
+    if (result?.type === "solid") {
+      expect(result.color.hex).toBe("#FF0000");
+    }
+  });
+
+  it("returns null for grpFill without context groupFill", () => {
+    const node = { grpFill: {} };
+    const result = parseFillFromNode(node, createColorResolver());
+    expect(result).toBeNull();
   });
 
   it("parses blipFill when context is provided", () => {
