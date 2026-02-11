@@ -1069,7 +1069,84 @@ async function createCustomGeometryFixture(): Promise<void> {
   </p:spPr>
 </p:sp>`;
 
-  const slide = wrapSlideXml(customShape1 + "\n" + customShape2);
+  // quadBezTo: 2次ベジェ曲線
+  const customShape3 = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="4" name="QuadBez"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="500000" y="3200000"/><a:ext cx="2500000" cy="1500000"/></a:xfrm>
+    <a:custGeom>
+      <a:avLst/>
+      <a:gdLst/>
+      <a:pathLst>
+        <a:path w="1000" h="1000">
+          <a:moveTo><a:pt x="0" y="1000"/></a:moveTo>
+          <a:quadBezTo>
+            <a:pt x="500" y="0"/>
+            <a:pt x="1000" y="1000"/>
+          </a:quadBezTo>
+          <a:close/>
+        </a:path>
+      </a:pathLst>
+    </a:custGeom>
+    <a:solidFill><a:srgbClr val="70AD47"/></a:solidFill>
+    <a:ln w="12700"><a:solidFill><a:srgbClr val="333333"/></a:solidFill></a:ln>
+  </p:spPr>
+</p:sp>`;
+
+  // arcTo: 楕円弧 (半円)
+  const customShape4 = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="5" name="ArcShape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="3500000" y="3200000"/><a:ext cx="2500000" cy="1500000"/></a:xfrm>
+    <a:custGeom>
+      <a:avLst/>
+      <a:gdLst/>
+      <a:pathLst>
+        <a:path w="1000" h="500">
+          <a:moveTo><a:pt x="0" y="500"/></a:moveTo>
+          <a:arcTo wR="500" hR="500" stAng="10800000" swAng="10800000"/>
+          <a:close/>
+        </a:path>
+      </a:pathLst>
+    </a:custGeom>
+    <a:solidFill><a:srgbClr val="ED7D31"/></a:solidFill>
+    <a:ln w="12700"><a:solidFill><a:srgbClr val="333333"/></a:solidFill></a:ln>
+  </p:spPr>
+</p:sp>`;
+
+  // adjustValues: ガイド値による動的座標
+  const customShape5 = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="6" name="AdjustShape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="6500000" y="3200000"/><a:ext cx="2500000" cy="1500000"/></a:xfrm>
+    <a:custGeom>
+      <a:avLst>
+        <a:gd name="adj" fmla="val 50000"/>
+      </a:avLst>
+      <a:gdLst>
+        <a:gd name="midX" fmla="*/ w adj 100000"/>
+        <a:gd name="midY" fmla="*/ h adj 100000"/>
+      </a:gdLst>
+      <a:pathLst>
+        <a:path w="1000" h="1000">
+          <a:moveTo><a:pt x="0" y="0"/></a:moveTo>
+          <a:lnTo><a:pt x="w" y="0"/></a:lnTo>
+          <a:lnTo><a:pt x="w" y="midY"/></a:lnTo>
+          <a:lnTo><a:pt x="midX" y="midY"/></a:lnTo>
+          <a:lnTo><a:pt x="midX" y="h"/></a:lnTo>
+          <a:lnTo><a:pt x="0" y="h"/></a:lnTo>
+          <a:close/>
+        </a:path>
+      </a:pathLst>
+    </a:custGeom>
+    <a:solidFill><a:srgbClr val="9B59B6"/></a:solidFill>
+    <a:ln w="12700"><a:solidFill><a:srgbClr val="333333"/></a:solidFill></a:ln>
+  </p:spPr>
+</p:sp>`;
+
+  const slide = wrapSlideXml(
+    [customShape1, customShape2, customShape3, customShape4, customShape5].join("\n"),
+  );
   const rels = slideRelsXml();
 
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });

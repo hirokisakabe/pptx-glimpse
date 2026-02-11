@@ -21,9 +21,15 @@ export interface PresetGeometry {
   adjustValues: Record<string, number>;
 }
 
+export interface CustomGeometryPath {
+  width: number;
+  height: number;
+  commands: string;
+}
+
 export interface CustomGeometry {
   type: "custom";
-  pathData: string;
+  paths: CustomGeometryPath[];
 }
 
 export interface ShapeElement {

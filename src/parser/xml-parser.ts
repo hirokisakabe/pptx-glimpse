@@ -21,6 +21,7 @@ const ARRAY_TAGS = new Set([
   "tc", // テーブルセル (Table Cell)
   "ser", // チャートデータ系列 (Series)
   "pt", // チャートデータポイント (Point)
+  "gd", // ガイド定義 (Guide Definition)
 ]);
 
 export function createXmlParser(): XMLParser {

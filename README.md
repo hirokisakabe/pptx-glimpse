@@ -51,13 +51,13 @@ Supports conversion of static visual content in PowerPoint. Dynamic elements suc
 
 #### Shapes
 
-| Feature       | Details                                                                                   |
-| ------------- | ----------------------------------------------------------------------------------------- |
-| Preset shapes | 123 types (rectangles, ellipses, arrows, flowcharts, callouts, stars, math symbols, etc.) |
-| Custom shapes | Arbitrary shape drawing using custom paths (moveTo, lnTo, cubicBezTo, close)              |
-| Connectors    | Line connector drawing, line style / color / width settings                               |
-| Groups        | Shape grouping, nested groups                                                             |
-| Transforms    | Position, size, rotation, flip (flipH/flipV), adjustment values                           |
+| Feature       | Details                                                                                                                        |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Preset shapes | 123 types (rectangles, ellipses, arrows, flowcharts, callouts, stars, math symbols, etc.)                                      |
+| Custom shapes | Arbitrary shape drawing using custom paths (moveTo, lnTo, cubicBezTo, quadBezTo, arcTo, close), adjust values / guide formulas |
+| Connectors    | Line connector drawing, line style / color / width settings                                                                    |
+| Groups        | Shape grouping, nested groups                                                                                                  |
+| Transforms    | Position, size, rotation, flip (flipH/flipV), adjustment values                                                                |
 
 #### Text
 
