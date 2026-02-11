@@ -24,6 +24,7 @@ import type { Relationship } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import { parseXml } from "./xml-parser.js";
 import { parseFillFromNode, parseOutline } from "./fill-parser.js";
+import type { FillParseContext } from "./fill-parser.js";
 import { parseChart } from "./chart-parser.js";
 import { parseTable } from "./table-parser.js";
 import { parseRelationships, resolveRelationshipTarget } from "./relationship-parser.js";
@@ -49,7 +50,8 @@ export function parseSlide(
   const relsXml = archive.files.get(relsPath);
   const rels = relsXml ? parseRelationships(relsXml) : new Map<string, Relationship>();
 
-  const background = parseBackground(sld?.cSld?.bg, colorResolver);
+  const fillContext: FillParseContext = { rels, archive, basePath: slidePath };
+  const background = parseBackground(sld?.cSld?.bg, colorResolver, fillContext);
   const elements = parseShapeTree(
     sld?.cSld?.spTree,
     rels,
@@ -66,13 +68,14 @@ function parseBackground(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   bgNode: any,
   colorResolver: ColorResolver,
+  context?: FillParseContext,
 ): Background | null {
   if (!bgNode) return null;
 
   const bgPr = bgNode.bgPr;
   if (!bgPr) return null;
 
-  const fill = parseFillFromNode(bgPr, colorResolver);
+  const fill = parseFillFromNode(bgPr, colorResolver, context);
   return { fill };
 }
 

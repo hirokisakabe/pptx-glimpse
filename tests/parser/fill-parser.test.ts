@@ -1,6 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
 import { parseFillFromNode } from "../../src/parser/fill-parser.js";
+import type { FillParseContext } from "../../src/parser/fill-parser.js";
 import { ColorResolver } from "../../src/color/color-resolver.js";
+import type { PptxArchive } from "../../src/parser/pptx-reader.js";
 
 function createColorResolver() {
   return new ColorResolver(
@@ -65,5 +67,70 @@ describe("parseFillFromNode", () => {
     expect(warnSpy).not.toHaveBeenCalled();
     expect(result?.type).toBe("gradient");
     warnSpy.mockRestore();
+  });
+
+  it("parses blipFill when context is provided", () => {
+    const imageBuffer = Buffer.from("fake-png-data");
+    const archive: PptxArchive = {
+      files: new Map(),
+      media: new Map([["ppt/media/image1.png", imageBuffer]]),
+    };
+    const context: FillParseContext = {
+      rels: new Map([
+        [
+          "rId2",
+          {
+            id: "rId2",
+            type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+            target: "../media/image1.png",
+          },
+        ],
+      ]),
+      archive,
+      basePath: "ppt/slideMasters/slideMaster1.xml",
+    };
+    const node = {
+      blipFill: {
+        blip: { "@_r:embed": "rId2" },
+        stretch: { fillRect: {} },
+      },
+    };
+    const result = parseFillFromNode(node, createColorResolver(), context);
+
+    expect(result).not.toBeNull();
+    expect(result?.type).toBe("image");
+    if (result?.type === "image") {
+      expect(result.mimeType).toBe("image/png");
+      expect(result.imageData).toBe(imageBuffer.toString("base64"));
+    }
+  });
+
+  it("ignores blipFill when context is not provided", () => {
+    const node = {
+      blipFill: {
+        blip: { "@_r:embed": "rId2" },
+      },
+    };
+    const result = parseFillFromNode(node, createColorResolver());
+    expect(result).toBeNull();
+  });
+
+  it("returns null for blipFill with missing rel", () => {
+    const archive: PptxArchive = {
+      files: new Map(),
+      media: new Map(),
+    };
+    const context: FillParseContext = {
+      rels: new Map(),
+      archive,
+      basePath: "ppt/slideMasters/slideMaster1.xml",
+    };
+    const node = {
+      blipFill: {
+        blip: { "@_r:embed": "rId99" },
+      },
+    };
+    const result = parseFillFromNode(node, createColorResolver(), context);
+    expect(result).toBeNull();
   });
 });

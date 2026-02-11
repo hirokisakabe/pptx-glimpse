@@ -1,11 +1,24 @@
-import type { Fill, GradientStop, SolidFill } from "../model/fill.js";
+import type { Fill, GradientStop, ImageFill, SolidFill } from "../model/fill.js";
 import type { Outline, DashStyle } from "../model/line.js";
 import type { ColorResolver } from "../color/color-resolver.js";
+import type { PptxArchive } from "./pptx-reader.js";
+import type { Relationship } from "./relationship-parser.js";
+import { resolveRelationshipTarget } from "./relationship-parser.js";
 
 const WARN_PREFIX = "[pptx-glimpse]";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function parseFillFromNode(node: any, colorResolver: ColorResolver): Fill | null {
+export interface FillParseContext {
+  rels: Map<string, Relationship>;
+  archive: PptxArchive;
+  basePath: string;
+}
+
+export function parseFillFromNode(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  node: any,
+  colorResolver: ColorResolver,
+  context?: FillParseContext,
+): Fill | null {
   if (!node) return null;
 
   if (node.noFill !== undefined) {
@@ -23,7 +36,39 @@ export function parseFillFromNode(node: any, colorResolver: ColorResolver): Fill
     return parseGradientFill(node.gradFill, colorResolver);
   }
 
+  if (node.blipFill && context) {
+    return parseBlipFill(node.blipFill, context);
+  }
+
   return null;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseBlipFill(blipFillNode: any, context: FillParseContext): ImageFill | null {
+  const rId = blipFillNode?.blip?.["@_r:embed"] ?? blipFillNode?.blip?.["@_embed"];
+  if (!rId) return null;
+
+  const rel = context.rels.get(rId);
+  if (!rel) return null;
+
+  const mediaPath = resolveRelationshipTarget(context.basePath, rel.target);
+  const mediaData = context.archive.media.get(mediaPath);
+  if (!mediaData) return null;
+
+  const ext = mediaPath.split(".").pop()?.toLowerCase() ?? "png";
+  const mimeMap: Record<string, string> = {
+    png: "image/png",
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    gif: "image/gif",
+    svg: "image/svg+xml",
+    emf: "image/emf",
+    wmf: "image/wmf",
+  };
+  const mimeType = mimeMap[ext] ?? "image/png";
+  const imageData = mediaData.toString("base64");
+
+  return { type: "image", imageData, mimeType };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
