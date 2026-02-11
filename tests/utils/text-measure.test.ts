@@ -55,3 +55,66 @@ describe("measureTextWidth", () => {
     expect(width24).toBeCloseTo(width12 * 2, 1);
   });
 });
+
+describe("measureTextWidth with font metrics", () => {
+  it("Calibri のメトリクスで ASCII テキストの幅を計算する", () => {
+    // Carlito: A=1185, unitsPerEm=2048
+    // 幅 = 1185 / 2048 * 18 * (96/72)
+    const width = measureTextWidth("A", 18, false, "Calibri");
+    const expected = (1185 / 2048) * 18 * PX_PER_PT;
+    expect(width).toBeCloseTo(expected, 1);
+  });
+
+  it("ヒューリスティックとは異なる値を返す", () => {
+    const metricsWidth = measureTextWidth("A", 18, false, "Calibri");
+    const heuristicWidth = measureTextWidth("A", 18, false);
+    expect(metricsWidth).not.toBeCloseTo(heuristicWidth, 0);
+  });
+
+  it("未知のフォントではヒューリスティックにフォールバックする", () => {
+    const metricsWidth = measureTextWidth("A", 18, false, "UnknownFont");
+    const heuristicWidth = measureTextWidth("A", 18, false);
+    expect(metricsWidth).toBeCloseTo(heuristicWidth, 5);
+  });
+
+  it("fontFamily が null の場合はヒューリスティックにフォールバックする", () => {
+    const metricsWidth = measureTextWidth("A", 18, false, null);
+    const heuristicWidth = measureTextWidth("A", 18, false);
+    expect(metricsWidth).toBeCloseTo(heuristicWidth, 5);
+  });
+
+  it("Arial のメトリクスで計算する", () => {
+    // LiberationSans: A=1366, unitsPerEm=2048
+    const width = measureTextWidth("A", 18, false, "Arial");
+    const expected = (1366 / 2048) * 18 * PX_PER_PT;
+    expect(width).toBeCloseTo(expected, 1);
+  });
+
+  it("CJK テキストは cjkWidth を使用する", () => {
+    // Carlito: cjkWidth=2048, unitsPerEm=2048 → 1.0 * fontSizePx
+    const width = measureTextWidth("漢", 18, false, "Calibri");
+    const expected = (2048 / 2048) * 18 * PX_PER_PT;
+    expect(width).toBeCloseTo(expected, 1);
+  });
+
+  it("太字はメトリクスベースの幅にも BOLD_FACTOR を適用する", () => {
+    const normalWidth = measureTextWidth("Test", 18, false, "Calibri");
+    const boldWidth = measureTextWidth("Test", 18, true, "Calibri");
+    expect(boldWidth).toBeCloseTo(normalWidth * 1.05, 1);
+  });
+
+  it("複数文字の幅を正しく合算する", () => {
+    // Carlito: H=1276, e=1019, l=470, l=470, o=1080
+    const width = measureTextWidth("Hello", 18, false, "Calibri");
+    const expected = ((1276 + 1019 + 470 + 470 + 1080) / 2048) * 18 * PX_PER_PT;
+    expect(width).toBeCloseTo(expected, 1);
+  });
+
+  it("メトリクスに無い文字は defaultWidth を使用する", () => {
+    // Carlito: defaultWidth=991, unitsPerEm=2048
+    // U+0100 (Ā) はメトリクスに含まれない Latin 拡張文字
+    const width = measureTextWidth("\u0100", 18, false, "Calibri");
+    const expected = (991 / 2048) * 18 * PX_PER_PT;
+    expect(width).toBeCloseTo(expected, 1);
+  });
+});

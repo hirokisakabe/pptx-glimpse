@@ -1,3 +1,5 @@
+import { type FontMetrics, getFontMetrics } from "../data/font-metrics.js";
+
 type CharCategory = "narrow" | "normal" | "wide";
 
 const WIDTH_RATIO: Record<CharCategory, number> = {
@@ -9,14 +11,18 @@ const WIDTH_RATIO: Record<CharCategory, number> = {
 const BOLD_FACTOR = 1.05;
 const PX_PER_PT = 96 / 72;
 
-function categorizeChar(codePoint: number): CharCategory {
-  // CJK 統合漢字、ひらがな、カタカナ、CJK 記号、全角英数
-  if (
+function isCjkCodePoint(codePoint: number): boolean {
+  return (
     (codePoint >= 0x3000 && codePoint <= 0x9fff) ||
     (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
     (codePoint >= 0xff01 && codePoint <= 0xff60) ||
     (codePoint >= 0x20000 && codePoint <= 0x2a6df)
-  ) {
+  );
+}
+
+function categorizeChar(codePoint: number): CharCategory {
+  // CJK 統合漢字、ひらがな、カタカナ、CJK 記号、全角英数
+  if (isCjkCodePoint(codePoint)) {
     return "wide";
   }
 
@@ -47,17 +53,48 @@ function categorizeChar(codePoint: number): CharCategory {
   return "normal";
 }
 
+function measureCharHeuristic(codePoint: number, baseSizePx: number): number {
+  return baseSizePx * WIDTH_RATIO[categorizeChar(codePoint)];
+}
+
+function measureCharMetrics(
+  char: string,
+  codePoint: number,
+  baseSizePx: number,
+  metrics: FontMetrics,
+): number {
+  const charWidth = metrics.widths[char];
+  if (charWidth !== undefined) {
+    return (charWidth / metrics.unitsPerEm) * baseSizePx;
+  }
+  if (isCjkCodePoint(codePoint)) {
+    return (metrics.cjkWidth / metrics.unitsPerEm) * baseSizePx;
+  }
+  return (metrics.defaultWidth / metrics.unitsPerEm) * baseSizePx;
+}
+
 /**
- * テキストの推定幅を計算する (ピクセル単位)
+ * テキストの推定幅を計算する (ピクセル単位)。
+ * fontFamily が指定され、対応するメトリクスが存在する場合はメトリクスベースで計算する。
+ * それ以外はヒューリスティック (文字カテゴリ別の固定比率) にフォールバックする。
  */
-export function measureTextWidth(text: string, fontSizePt: number, bold: boolean): number {
+export function measureTextWidth(
+  text: string,
+  fontSizePt: number,
+  bold: boolean,
+  fontFamily?: string | null,
+): number {
   const baseSizePx = fontSizePt * PX_PER_PT;
+  const metrics = getFontMetrics(fontFamily);
   let totalWidth = 0;
 
   for (const char of text) {
     const codePoint = char.codePointAt(0)!;
-    const category = categorizeChar(codePoint);
-    totalWidth += baseSizePx * WIDTH_RATIO[category];
+    if (metrics) {
+      totalWidth += measureCharMetrics(char, codePoint, baseSizePx, metrics);
+    } else {
+      totalWidth += measureCharHeuristic(codePoint, baseSizePx);
+    }
   }
 
   if (bold) {

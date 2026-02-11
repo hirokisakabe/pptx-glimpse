@@ -95,10 +95,11 @@ function tokenizeRuns(runs: Paragraph["runs"], defaultFontSize: number): Token[]
 
     const fontSize = run.properties.fontSize ?? defaultFontSize;
     const bold = run.properties.bold;
+    const fontFamily = run.properties.fontFamily;
     const fragments = splitTextIntoFragments(run.text);
 
     for (const { fragment, breakable } of fragments) {
-      const width = measureTextWidth(fragment, fontSize, bold);
+      const width = measureTextWidth(fragment, fontSize, bold, fontFamily);
       tokens.push({
         text: fragment,
         properties: run.properties,
@@ -132,9 +133,10 @@ function splitTokenByChars(
   let currentWidth = 0;
   const fontSize = token.properties.fontSize ?? defaultFontSize;
   const bold = token.properties.bold;
+  const fontFamily = token.properties.fontFamily;
 
   for (const char of token.text) {
-    const charWidth = measureTextWidth(char, fontSize, bold);
+    const charWidth = measureTextWidth(char, fontSize, bold, fontFamily);
 
     if (currentWidth + charWidth > availableWidth && currentLine.length > 0) {
       lines.push(currentLine);
