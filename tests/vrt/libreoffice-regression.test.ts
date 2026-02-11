@@ -72,6 +72,15 @@ const LO_VRT_CASES = [
   { name: "basic-shapes", fixture: "lo-basic-shapes.pptx" },
   { name: "text-formatting", fixture: "lo-text-formatting.pptx" },
   { name: "fill-and-lines", fixture: "lo-fill-and-lines.pptx" },
+  { name: "gradient-fills", fixture: "lo-gradient-fills.pptx" },
+  { name: "dash-lines", fixture: "lo-dash-lines.pptx" },
+  { name: "text-decoration", fixture: "lo-text-decoration.pptx" },
+  { name: "tables", fixture: "lo-tables.pptx" },
+  { name: "bullets", fixture: "lo-bullets.pptx" },
+  { name: "transforms", fixture: "lo-transforms.pptx" },
+  { name: "groups", fixture: "lo-groups.pptx" },
+  { name: "slide-background", fixture: "lo-slide-background.pptx" },
+  { name: "flowchart-shapes", fixture: "lo-flowchart-shapes.pptx" },
 ] as const;
 
 // フィクスチャとスナップショットの両方が存在する場合のみ実行
