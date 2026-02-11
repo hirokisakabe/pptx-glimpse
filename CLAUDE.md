@@ -22,7 +22,11 @@ npm run typecheck      # tsc --noEmit で型チェック
 npm run render         # tsx scripts/test-render.ts でテストレンダリング
 ```
 
-CI は `lint` → `format:check` → `typecheck` → `test` → `build` の順で実行される。
+CI は 3 ジョブ構成:
+
+- **ci**: `lint` → `format:check` → `typecheck` → `test` (VRT 除外) → `build` (Node 20/22/24)
+- **vrt**: 通常 VRT (自己比較)
+- **libreoffice-vrt**: LibreOffice VRT (Docker でフィクスチャ・参照画像を生成して実行)
 
 ## アーキテクチャ
 
@@ -59,9 +63,7 @@ vrt/
 │   ├── fixtures/                  # VRT 用 PPTX フィクスチャ
 │   └── snapshots/                 # 参照スナップショット画像
 └── libreoffice/                   # LibreOffice VRT
-    ├── libreoffice-regression.test.ts  # テスト本体
-    ├── fixtures/                  # python-pptx 生成の PPTX
-    └── snapshots/                 # LibreOffice 参照画像
+    └── libreoffice-regression.test.ts  # テスト本体 (fixtures/ と snapshots/ は CI で動的生成)
 
 scripts/vrt/
 ├── create-fixtures.ts             # 通常 VRT フィクスチャ生成 (TypeScript)
