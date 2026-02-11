@@ -62,7 +62,7 @@ vrt/
 │   ├── visual-regression.test.ts             # テスト本体
 │   ├── create-fixtures.ts                    # フィクスチャ生成スクリプト
 │   ├── update-snapshots.ts                   # スナップショット更新スクリプト
-│   ├── fixtures/                             # VRT 用 PPTX フィクスチャ
+│   ├── fixtures/                             # VRT 用 PPTX フィクスチャ (CI で動的生成)
 │   └── snapshots/                            # 参照スナップショット画像
 └── libreoffice/                              # LibreOffice VRT
     ├── libreoffice-regression.test.ts        # テスト本体
