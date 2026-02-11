@@ -1001,20 +1001,21 @@ def create_image():
 
 
 def create_charts():
-    """チャート: 縦棒、折れ線、円、横棒"""
-    from pptx.chart.data import CategoryChartData
+    """チャート: 縦棒、折れ線、円、横棒、散布図"""
+    from pptx.chart.data import CategoryChartData, XyChartData
     from pptx.enum.chart import XL_CHART_TYPE
 
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
+    # Row 1: 3 charts
     # 縦棒グラフ
     chart_data1 = CategoryChartData()
     chart_data1.categories = ["Q1", "Q2", "Q3", "Q4"]
     chart_data1.add_series("Sales", (19.2, 21.4, 16.7, 20.8))
     slide.shapes.add_chart(
         XL_CHART_TYPE.COLUMN_CLUSTERED,
-        Inches(0.3), Inches(0.3), Inches(4.3), Inches(2.2),
+        Inches(0.2), Inches(0.2), Inches(3.0), Inches(2.4),
         chart_data1,
     )
 
@@ -1025,7 +1026,7 @@ def create_charts():
     chart_data2.add_series("Profit", (10, 12, 11, 15))
     slide.shapes.add_chart(
         XL_CHART_TYPE.LINE,
-        Inches(5.0), Inches(0.3), Inches(4.3), Inches(2.2),
+        Inches(3.4), Inches(0.2), Inches(3.0), Inches(2.4),
         chart_data2,
     )
 
@@ -1035,18 +1036,33 @@ def create_charts():
     chart_data3.add_series("Share", (40, 35, 25))
     slide.shapes.add_chart(
         XL_CHART_TYPE.PIE,
-        Inches(0.3), Inches(2.8), Inches(4.3), Inches(2.2),
+        Inches(6.6), Inches(0.2), Inches(3.0), Inches(2.4),
         chart_data3,
     )
 
+    # Row 2: 2 charts
     # 横棒グラフ
     chart_data4 = CategoryChartData()
     chart_data4.categories = ["Alpha", "Beta", "Gamma"]
     chart_data4.add_series("Values", (50, 65, 45))
     slide.shapes.add_chart(
         XL_CHART_TYPE.BAR_CLUSTERED,
-        Inches(5.0), Inches(2.8), Inches(4.3), Inches(2.2),
+        Inches(0.2), Inches(2.8), Inches(4.5), Inches(2.4),
         chart_data4,
+    )
+
+    # 散布図
+    chart_data5 = XyChartData()
+    series = chart_data5.add_series("Points")
+    series.add_data_point(1.0, 2.5)
+    series.add_data_point(2.5, 4.0)
+    series.add_data_point(3.0, 1.5)
+    series.add_data_point(4.5, 5.0)
+    series.add_data_point(5.5, 3.5)
+    slide.shapes.add_chart(
+        XL_CHART_TYPE.XY_SCATTER,
+        Inches(4.9), Inches(2.8), Inches(4.5), Inches(2.4),
+        chart_data5,
     )
 
     prs.save(os.path.join(OUTPUT_DIR, "lo-charts.pptx"))
@@ -1373,6 +1389,386 @@ def create_slide_size_4_3():
     print("  Created: lo-slide-size-4-3.pptx")
 
 
+def create_word_wrap():
+    """テキスト折り返し: 長文、ナロー、no-wrap、日本語、CJK混合、複数サイズ"""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    tests = [
+        {
+            "text": "This is a long English sentence that should automatically "
+                    "wrap within the shape boundary when rendered.",
+            "width": Inches(4.4),
+            "label": "Auto Wrap",
+        },
+        {
+            "text": "Narrow shape causes more frequent line breaks in this text.",
+            "width": Inches(1.8),
+            "label": "Narrow",
+        },
+        {
+            "text": "No wrap mode - this text should extend beyond the shape.",
+            "width": Inches(3.0),
+            "no_wrap": True,
+            "label": "No Wrap",
+        },
+        {
+            "text": "\u3053\u308c\u306f\u65e5\u672c\u8a9e\u306e\u30c6\u30ad\u30b9\u30c8\u3067\u3059\u3002"
+                    "\u6587\u5b57\u5358\u4f4d\u3067\u6298\u308a\u8fd4\u3055\u308c\u307e\u3059\u3002",
+            "width": Inches(4.4),
+            "label": "Japanese",
+        },
+        {
+            "text": "Mixed text: \u82f1\u8a9e\u3068\u65e5\u672c\u8a9e\u306e\u6df7\u5408 "
+                    "rendered together in one shape.",
+            "width": Inches(4.4),
+            "label": "Mixed CJK",
+        },
+        {
+            "text": "Small 12pt text with more content to fill the shape and "
+                    "verify wrapping at a smaller font size.",
+            "width": Inches(4.4),
+            "small_font": True,
+            "label": "Small Font",
+        },
+    ]
+
+    for i, t in enumerate(tests):
+        col = i % 2
+        row = i // 2
+        left = Inches(0.3 + col * 4.8)
+        top = Inches(0.2 + row * 1.7)
+
+        shape = slide.shapes.add_shape(
+            MSO_SHAPE.RECTANGLE, left, top, t["width"], Inches(1.4)
+        )
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = RGBColor(0xF0, 0xF0, 0xF0)
+        shape.line.color.rgb = RGBColor(0xCC, 0xCC, 0xCC)
+        shape.line.width = Pt(0.5)
+
+        tf = shape.text_frame
+        tf.word_wrap = True
+        p = tf.paragraphs[0]
+        p.text = t["text"]
+        run = p.runs[0]
+        run.font.name = "Liberation Sans"
+        run.font.size = Pt(12) if t.get("small_font") else Pt(16)
+
+        if t.get("no_wrap"):
+            bodyPr = tf._txBody.find(qn("a:bodyPr"))
+            bodyPr.set("wrap", "none")
+
+    prs.save(os.path.join(OUTPUT_DIR, "lo-word-wrap.pptx"))
+    print("  Created: lo-word-wrap.pptx")
+
+
+def create_background_blipfill():
+    """画像ベース背景: Pillow で画像を生成し、スライド背景に blipFill で設定"""
+    import shutil
+    import tempfile
+
+    from PIL import Image
+
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    temp_dir = tempfile.mkdtemp()
+
+    try:
+        # グラデーション画像を生成
+        img = Image.new("RGB", (200, 200))
+        pixels = img.load()
+        for y in range(200):
+            for x in range(200):
+                r = int(68 + (237 - 68) * x / 200)
+                g = int(114 + (125 - 114) * y / 200)
+                b = int(196 - 147 * x / 200)
+                pixels[x, y] = (r, g, b)
+        img_path = os.path.join(temp_dir, "bg-gradient.png")
+        img.save(img_path)
+
+        # ダミーの画像を追加して rId を取得し、その後削除
+        pic = slide.shapes.add_picture(img_path, 0, 0, Inches(1), Inches(1))
+        blip_elem = pic._element.find(".//" + qn("a:blip"))
+        rId = blip_elem.get(qn("r:embed"))
+        spTree = slide.shapes._spTree
+        spTree.remove(pic._element)
+
+        # スライド背景に blipFill を設定 (p:cSld > p:bg > p:bgPr)
+        cSld = slide._element.find(qn("p:cSld"))
+
+        # 既存の p:bg があれば削除
+        existing_bg = cSld.find(qn("p:bg"))
+        if existing_bg is not None:
+            cSld.remove(existing_bg)
+
+        bg = make_element("p:bg")
+        bgPr = make_element("p:bgPr")
+        blipFill = make_element("a:blipFill")
+        blip = make_element("a:blip")
+        blip.set(qn("r:embed"), rId)
+        blipFill.append(blip)
+        stretch = make_element("a:stretch")
+        fillRect = make_element("a:fillRect")
+        stretch.append(fillRect)
+        blipFill.append(stretch)
+        bgPr.append(blipFill)
+        effectLst = make_element("a:effectLst")
+        bgPr.append(effectLst)
+        bg.append(bgPr)
+
+        # p:bg を p:spTree の前に挿入
+        spTree_idx = list(cSld).index(spTree)
+        cSld.insert(spTree_idx, bg)
+
+        # 半透明の白い矩形 + テキストをオーバーレイ
+        overlay = slide.shapes.add_shape(
+            MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1), Inches(1), Inches(8), Inches(3)
+        )
+        # 半透明の白塗り (XML で alpha を設定)
+        overlay.fill.solid()
+        overlay.fill.fore_color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+        solidFill = overlay._element.spPr.find(qn("a:solidFill"))
+        srgbClr = solidFill.find(qn("a:srgbClr"))
+        alpha = make_element("a:alpha")
+        alpha.set("val", "70000")  # 70% 不透明
+        srgbClr.append(alpha)
+
+        overlay.line.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+        overlay.line.width = Pt(0)
+
+        tf = overlay.text_frame
+        tf.word_wrap = True
+        p = tf.paragraphs[0]
+        p.text = "Background Image Test"
+        p.alignment = PP_ALIGN.CENTER
+        run = p.runs[0]
+        run.font.name = "Liberation Sans"
+        run.font.size = Pt(28)
+        run.font.bold = True
+        run.font.color.rgb = RGBColor(0x1F, 0x4E, 0x79)
+
+        prs.save(os.path.join(OUTPUT_DIR, "lo-background-blipfill.pptx"))
+        print("  Created: lo-background-blipfill.pptx")
+    finally:
+        shutil.rmtree(temp_dir)
+
+
+def create_composite():
+    """複合テスト: 非矩形図形+テキスト、グラデーション+回転+半透明の組み合わせ"""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    # 非矩形図形にテキストを配置
+    text_shapes = [
+        (MSO_SHAPE.OVAL, Inches(0.3), Inches(0.3), Inches(2.8), Inches(2.2),
+         RGBColor(0x44, 0x72, 0xC4), "Ellipse Text", PP_ALIGN.CENTER),
+        (MSO_SHAPE.DIAMOND, Inches(3.4), Inches(0.3), Inches(2.8), Inches(2.2),
+         RGBColor(0xED, 0x7D, 0x31), "Diamond", PP_ALIGN.CENTER),
+        (MSO_SHAPE.ROUNDED_RECTANGLE, Inches(6.6), Inches(0.3), Inches(2.8), Inches(2.2),
+         RGBColor(0x70, 0xAD, 0x47), "RoundRect", PP_ALIGN.CENTER),
+    ]
+
+    for shape_type, left, top, width, height, color, text, align in text_shapes:
+        shape = slide.shapes.add_shape(shape_type, left, top, width, height)
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = color
+        shape.line.color.rgb = RGBColor(0x33, 0x33, 0x33)
+        shape.line.width = Pt(1.5)
+        tf = shape.text_frame
+        tf.word_wrap = True
+        p = tf.paragraphs[0]
+        p.text = text
+        p.alignment = align
+        run = p.runs[0]
+        run.font.name = "Liberation Sans"
+        run.font.size = Pt(18)
+        run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+        run.font.bold = True
+
+    # グラデーション + 回転 + 半透明の組み合わせ
+    combo_shapes = [
+        {
+            "shape": MSO_SHAPE.HEXAGON,
+            "left": Inches(0.3), "top": Inches(2.8),
+            "w": Inches(2.8), "h": Inches(2.2),
+            "rotation": 15.0,
+            "gradient": [("4472C4", 0), ("ED7D31", 100000)],
+        },
+        {
+            "shape": MSO_SHAPE.ROUNDED_RECTANGLE,
+            "left": Inches(3.4), "top": Inches(2.8),
+            "w": Inches(2.8), "h": Inches(2.2),
+            "rotation": 0.0,
+            "alpha": "50000",
+            "color": "5B9BD5",
+            "border_dash": True,
+        },
+        {
+            "shape": MSO_SHAPE.ISOSCELES_TRIANGLE,
+            "left": Inches(6.6), "top": Inches(2.8),
+            "w": Inches(2.8), "h": Inches(2.2),
+            "rotation": 30.0,
+            "gradient": [("FF6384", 0), ("FFCE56", 50000), ("70AD47", 100000)],
+        },
+    ]
+
+    for c in combo_shapes:
+        shape = slide.shapes.add_shape(
+            c["shape"], c["left"], c["top"], c["w"], c["h"]
+        )
+
+        if "gradient" in c:
+            shape.fill.background()
+            spPr = shape._element.spPr
+            for child in list(spPr):
+                tag = etree.QName(child.tag).localname
+                if tag in ("noFill", "solidFill"):
+                    spPr.remove(child)
+            gradFill = make_element("a:gradFill")
+            gsLst = make_element("a:gsLst")
+            for color_hex, pos in c["gradient"]:
+                gs = make_element("a:gs")
+                gs.set("pos", str(pos))
+                srgbClr = make_element("a:srgbClr")
+                srgbClr.set("val", color_hex)
+                gs.append(srgbClr)
+                gsLst.append(gs)
+            gradFill.append(gsLst)
+            lin = make_element("a:lin")
+            lin.set("ang", "2700000")
+            lin.set("scaled", "1")
+            gradFill.append(lin)
+            spPr.append(gradFill)
+        elif "color" in c:
+            shape.fill.solid()
+            shape.fill.fore_color.rgb = RGBColor(
+                int(c["color"][:2], 16),
+                int(c["color"][2:4], 16),
+                int(c["color"][4:6], 16),
+            )
+            if "alpha" in c:
+                solidFill = shape._element.spPr.find(qn("a:solidFill"))
+                srgbClr = solidFill.find(qn("a:srgbClr"))
+                alpha = make_element("a:alpha")
+                alpha.set("val", c["alpha"])
+                srgbClr.append(alpha)
+
+        shape.line.color.rgb = RGBColor(0x33, 0x33, 0x33)
+        shape.line.width = Pt(3) if c.get("border_dash") else Pt(1.5)
+
+        if c.get("border_dash"):
+            ln = shape.line._ln
+            prstDash = make_element("a:prstDash")
+            prstDash.set("val", "dash")
+            ln.append(prstDash)
+
+        if c["rotation"] != 0.0:
+            shape.rotation = c["rotation"]
+
+    prs.save(os.path.join(OUTPUT_DIR, "lo-composite.pptx"))
+    print("  Created: lo-composite.pptx")
+
+
+def create_effects():
+    """シェイプエフェクト: ドロップシャドウ、インナーシャドウ、グロー、ソフトエッジ"""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    effects_def = [
+        {
+            "shape": MSO_SHAPE.ROUNDED_RECTANGLE,
+            "color": RGBColor(0x44, 0x72, 0xC4),
+            "label": "Drop Shadow",
+            "effect_xml": (
+                '<a:effectLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+                '<a:outerShdw blurRad="40000" dist="25000" dir="2700000" rotWithShape="0">'
+                '<a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr>'
+                '</a:outerShdw></a:effectLst>'
+            ),
+        },
+        {
+            "shape": MSO_SHAPE.RECTANGLE,
+            "color": RGBColor(0xED, 0x7D, 0x31),
+            "label": "Inner Shadow",
+            "effect_xml": (
+                '<a:effectLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+                '<a:innerShdw blurRad="40000" dist="20000" dir="5400000">'
+                '<a:srgbClr val="000000"><a:alpha val="50000"/></a:srgbClr>'
+                '</a:innerShdw></a:effectLst>'
+            ),
+        },
+        {
+            "shape": MSO_SHAPE.OVAL,
+            "color": RGBColor(0x70, 0xAD, 0x47),
+            "label": "Glow",
+            "effect_xml": (
+                '<a:effectLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+                '<a:glow rad="63500">'
+                '<a:srgbClr val="FFC000"><a:alpha val="40000"/></a:srgbClr>'
+                '</a:glow></a:effectLst>'
+            ),
+        },
+        {
+            "shape": MSO_SHAPE.DIAMOND,
+            "color": RGBColor(0x5B, 0x9B, 0xD5),
+            "label": "Soft Edge",
+            "effect_xml": (
+                '<a:effectLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+                '<a:softEdge rad="25400"/></a:effectLst>'
+            ),
+        },
+        {
+            "shape": MSO_SHAPE.ROUNDED_RECTANGLE,
+            "color": RGBColor(0xFF, 0xC0, 0x00),
+            "label": "Shadow+Glow",
+            "effect_xml": (
+                '<a:effectLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+                '<a:outerShdw blurRad="40000" dist="20000" dir="2700000" rotWithShape="0">'
+                '<a:srgbClr val="000000"><a:alpha val="40000"/></a:srgbClr>'
+                '</a:outerShdw>'
+                '<a:glow rad="50800">'
+                '<a:srgbClr val="4472C4"><a:alpha val="35000"/></a:srgbClr>'
+                '</a:glow></a:effectLst>'
+            ),
+        },
+        {
+            "shape": MSO_SHAPE.RECTANGLE,
+            "color": RGBColor(0xA5, 0xA5, 0xA5),
+            "label": "Large Shadow",
+            "effect_xml": (
+                '<a:effectLst xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">'
+                '<a:outerShdw blurRad="76200" dist="38100" dir="2700000" rotWithShape="0">'
+                '<a:srgbClr val="333333"><a:alpha val="60000"/></a:srgbClr>'
+                '</a:outerShdw></a:effectLst>'
+            ),
+        },
+    ]
+
+    for i, e in enumerate(effects_def):
+        col = i % 3
+        row = i // 3
+        left = Inches(0.3 + col * 3.2)
+        top = Inches(0.3 + row * 2.6)
+
+        shape = slide.shapes.add_shape(
+            e["shape"], left, top, Inches(2.6), Inches(2.0)
+        )
+        shape.fill.solid()
+        shape.fill.fore_color.rgb = e["color"]
+        shape.line.color.rgb = RGBColor(0x33, 0x33, 0x33)
+        shape.line.width = Pt(1.5)
+
+        # エフェクトを XML で追加
+        effectLst = etree.fromstring(e["effect_xml"])
+        spPr = shape._element.spPr
+        spPr.append(effectLst)
+
+    prs.save(os.path.join(OUTPUT_DIR, "lo-effects.pptx"))
+    print("  Created: lo-effects.pptx")
+
+
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     print("Generating LibreOffice VRT fixtures...")
@@ -1396,6 +1792,10 @@ def main():
     create_connectors()
     create_custom_geometry()
     create_slide_size_4_3()
+    create_word_wrap()
+    create_background_blipfill()
+    create_composite()
+    create_effects()
     print("Done!")
 
 

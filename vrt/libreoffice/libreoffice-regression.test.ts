@@ -37,6 +37,10 @@ const LO_VRT_CASES = [
   { name: "connectors", fixture: "lo-connectors.pptx" },
   { name: "custom-geometry", fixture: "lo-custom-geometry.pptx", tolerance: 0.45 },
   { name: "slide-size-4-3", fixture: "lo-slide-size-4-3.pptx" },
+  { name: "word-wrap", fixture: "lo-word-wrap.pptx", tolerance: 0.15 },
+  { name: "background-blipfill", fixture: "lo-background-blipfill.pptx" },
+  { name: "composite", fixture: "lo-composite.pptx", tolerance: 0.15 },
+  { name: "effects", fixture: "lo-effects.pptx", tolerance: 0.2 },
 ] as const;
 
 // フィクスチャとスナップショットの両方が存在する場合のみ実行
