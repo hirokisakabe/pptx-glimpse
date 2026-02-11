@@ -218,6 +218,17 @@ const fontNameMap: Record<string, string> = {
 };
 
 /**
+ * メトリクスキー → 実際の OSS フォント名。
+ * SVG の font-family フォールバックに使用する。
+ */
+const metricsKeyToFontName: Record<string, string> = {
+  Carlito: "Carlito",
+  LiberationSans: "Liberation Sans",
+  LiberationSerif: "Liberation Serif",
+  NotoSansJP: "Noto Sans JP",
+};
+
+/**
  * フォント名からメトリクスデータを取得する。
  * マッピングに存在しないフォントの場合は null を返す。
  */
@@ -228,4 +239,18 @@ export function getFontMetrics(fontFamily: string | null | undefined): FontMetri
   if (!key) return null;
 
   return metricsData[key] ?? null;
+}
+
+/**
+ * PPTX フォント名に対応するメトリクス互換 OSS フォント名を返す。
+ * SVG の font-family フォールバックリストに追加することで、
+ * 計測と描画のフォント一致度を上げる。
+ */
+export function getMetricsFallbackFont(fontFamily: string | null | undefined): string | null {
+  if (!fontFamily) return null;
+
+  const key = fontNameMap[fontFamily] ?? fontNameMap[fontFamily.toLowerCase()];
+  if (!key) return null;
+
+  return metricsKeyToFontName[key] ?? null;
 }

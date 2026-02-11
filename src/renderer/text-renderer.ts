@@ -8,6 +8,7 @@ import type {
 import type { Transform } from "../model/shape.js";
 import { emuToPixels } from "../utils/emu.js";
 import { wrapParagraph } from "../utils/text-wrap.js";
+import { getMetricsFallbackFont } from "../data/font-metrics.js";
 
 const PX_PER_PT = 96 / 72;
 const DEFAULT_LINE_SPACING = 1.2;
@@ -451,6 +452,13 @@ export function buildFontFamilyValue(fonts: (string | null)[]): string | null {
     if (font && !seen.has(font)) {
       seen.add(font);
       uniqueFonts.push(font);
+
+      // メトリクス互換 OSS フォントをフォールバックとして追加
+      const fallback = getMetricsFallbackFont(font);
+      if (fallback && !seen.has(fallback)) {
+        seen.add(fallback);
+        uniqueFonts.push(fallback);
+      }
     }
   }
 
