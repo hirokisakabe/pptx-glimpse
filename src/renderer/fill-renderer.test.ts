@@ -108,7 +108,9 @@ describe("renderFillAttrs", () => {
 
 describe("renderOutlineAttrs", () => {
   it("renders null outline as stroke none", () => {
-    expect(renderOutlineAttrs(null)).toBe('stroke="none"');
+    const result = renderOutlineAttrs(null);
+    expect(result.attrs).toBe('stroke="none"');
+    expect(result.defs).toBe("");
   });
 
   it("renders outline with color", () => {
@@ -119,8 +121,9 @@ describe("renderOutlineAttrs", () => {
       headEnd: null,
       tailEnd: null,
     });
-    expect(result).toContain('stroke="#000000"');
-    expect(result).toContain("stroke-width=");
+    expect(result.attrs).toContain('stroke="#000000"');
+    expect(result.attrs).toContain("stroke-width=");
+    expect(result.defs).toBe("");
   });
 
   it("renders dash style", () => {
@@ -131,6 +134,54 @@ describe("renderOutlineAttrs", () => {
       headEnd: null,
       tailEnd: null,
     });
-    expect(result).toContain("stroke-dasharray=");
+    expect(result.attrs).toContain("stroke-dasharray=");
+  });
+
+  it("renders gradient outline with defs", () => {
+    const result = renderOutlineAttrs({
+      width: 12700,
+      fill: {
+        type: "gradient",
+        stops: [
+          { position: 0, color: { hex: "#FF0000", alpha: 1 } },
+          { position: 1, color: { hex: "#0000FF", alpha: 1 } },
+        ],
+        angle: 90,
+        gradientType: "linear",
+      },
+      dashStyle: "solid",
+      headEnd: null,
+      tailEnd: null,
+    });
+    expect(result.attrs).toContain('stroke="url(#grad-');
+    expect(result.defs).toContain("<linearGradient");
+    expect(result.defs).toContain("#FF0000");
+    expect(result.defs).toContain("#0000FF");
+  });
+
+  it("renders custom dash pattern", () => {
+    const result = renderOutlineAttrs({
+      width: 12700,
+      fill: { type: "solid", color: { hex: "#000000", alpha: 1 } },
+      dashStyle: "solid",
+      customDash: [3, 1, 1, 1],
+      headEnd: null,
+      tailEnd: null,
+    });
+    expect(result.attrs).toContain("stroke-dasharray=");
+  });
+
+  it("custom dash overrides prstDash", () => {
+    const result = renderOutlineAttrs({
+      width: 12700,
+      fill: { type: "solid", color: { hex: "#000000", alpha: 1 } },
+      dashStyle: "dash",
+      customDash: [3, 1],
+      headEnd: null,
+      tailEnd: null,
+    });
+    // customDash が適用される (prstDash ではなく)
+    const widthPx = (12700 / 914400) * 96;
+    expect(result.attrs).toContain(`stroke-dasharray="${3 * widthPx} ${1 * widthPx}"`);
   });
 });

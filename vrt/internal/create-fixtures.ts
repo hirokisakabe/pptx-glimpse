@@ -610,6 +610,74 @@ async function createFillAndLinesFixture(): Promise<void> {
   });
 
   const slide3 = wrapSlideXml(capJoinShapes.join("\n"));
+
+  // Slide 4: Gradient line fill + custom dash patterns
+  id = 2;
+  const gradDashShapes: string[] = [];
+
+  // Row 0: Gradient line fills
+  const gradientLines = [
+    {
+      label: "Linear grad stroke",
+      outlineXml: `<a:ln w="38100"><a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="FF0000"/></a:gs><a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs></a:gsLst><a:lin ang="0" scaled="1"/></a:gradFill></a:ln>`,
+    },
+    {
+      label: "Vertical grad stroke",
+      outlineXml: `<a:ln w="38100"><a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="00FF00"/></a:gs><a:gs pos="100000"><a:srgbClr val="FF00FF"/></a:gs></a:gsLst><a:lin ang="5400000" scaled="1"/></a:gradFill></a:ln>`,
+    },
+    {
+      label: "3-stop grad stroke",
+      outlineXml: `<a:ln w="38100"><a:gradFill><a:gsLst><a:gs pos="0"><a:srgbClr val="FF0000"/></a:gs><a:gs pos="50000"><a:srgbClr val="00FF00"/></a:gs><a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs></a:gsLst><a:lin ang="0" scaled="1"/></a:gradFill></a:ln>`,
+    },
+  ];
+  gradientLines.forEach((gl, i) => {
+    const pos = gridPosition(i, 0, 3, 2);
+    gradDashShapes.push(
+      shapeXml(id++, `grad-line-${i}`, {
+        preset: "rect",
+        x: pos.x,
+        y: pos.y,
+        cx: pos.w,
+        cy: pos.h,
+        fillXml: `<a:noFill/>`,
+        outlineXml: gl.outlineXml,
+        textBodyXml: textBodyXmlHelper(gl.label, { fontSize: 9, color: "333333" }),
+      }),
+    );
+  });
+
+  // Row 1: Custom dash patterns
+  const customDashLines = [
+    {
+      label: "custDash 3:1",
+      outlineXml: `<a:ln w="25400"><a:solidFill><a:srgbClr val="4472C4"/></a:solidFill><a:custDash><a:ds d="300000" sp="100000"/></a:custDash></a:ln>`,
+    },
+    {
+      label: "custDash 3:1:1:1",
+      outlineXml: `<a:ln w="25400"><a:solidFill><a:srgbClr val="ED7D31"/></a:solidFill><a:custDash><a:ds d="300000" sp="100000"/><a:ds d="100000" sp="100000"/></a:custDash></a:ln>`,
+    },
+    {
+      label: "custDash 5:2:2:2",
+      outlineXml: `<a:ln w="25400"><a:solidFill><a:srgbClr val="70AD47"/></a:solidFill><a:custDash><a:ds d="500000" sp="200000"/><a:ds d="200000" sp="200000"/></a:custDash></a:ln>`,
+    },
+  ];
+  customDashLines.forEach((cdl, i) => {
+    const pos = gridPosition(i, 1, 3, 2);
+    gradDashShapes.push(
+      shapeXml(id++, `cust-dash-${i}`, {
+        preset: "rect",
+        x: pos.x,
+        y: pos.y,
+        cx: pos.w,
+        cy: pos.h,
+        fillXml: `<a:noFill/>`,
+        outlineXml: cdl.outlineXml,
+        textBodyXml: textBodyXmlHelper(cdl.label, { fontSize: 9, color: "333333" }),
+      }),
+    );
+  });
+
+  const slide4 = wrapSlideXml(gradDashShapes.join("\n"));
   const rels = slideRelsXml();
 
   const buffer = await buildPptx({
@@ -617,6 +685,7 @@ async function createFillAndLinesFixture(): Promise<void> {
       { xml: slide1, rels },
       { xml: slide2, rels },
       { xml: slide3, rels },
+      { xml: slide4, rels },
     ],
   });
   savePptx(buffer, "fill-and-lines.pptx");
