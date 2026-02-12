@@ -23,6 +23,7 @@ import type {
 import type { PptxArchive } from "./pptx-reader.js";
 import type { Relationship } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
+import type { FontScheme } from "../model/theme.js";
 import { parseXml } from "./xml-parser.js";
 import { parseFillFromNode, parseOutline } from "./fill-parser.js";
 import type { FillParseContext } from "./fill-parser.js";
@@ -45,6 +46,7 @@ export function parseSlide(
   slideNumber: number,
   archive: PptxArchive,
   colorResolver: ColorResolver,
+  fontScheme?: FontScheme | null,
 ): Slide {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parsed = parseXml(slideXml) as any;
@@ -67,6 +69,7 @@ export function parseSlide(
     colorResolver,
     `Slide ${slideNumber}`,
     fillContext,
+    fontScheme,
   );
 
   return { slideNumber, background, elements };
@@ -112,6 +115,7 @@ export function parseShapeTree(
   colorResolver: ColorResolver,
   context?: string,
   fillContext?: FillParseContext,
+  fontScheme?: FontScheme | null,
 ): SlideElement[] {
   if (!spTree) return [];
 
@@ -129,7 +133,7 @@ export function parseShapeTree(
 
   const shapes = spTree.sp ?? [];
   for (const sp of shapes) {
-    const shape = parseShape(sp, colorResolver, rels, fillContext);
+    const shape = parseShape(sp, colorResolver, rels, fillContext, fontScheme);
     if (shape) {
       elements.push(shape);
     } else {
@@ -159,7 +163,7 @@ export function parseShapeTree(
 
   const grpSps = spTree.grpSp ?? [];
   for (const grp of grpSps) {
-    const group = parseGroup(grp, rels, slidePath, archive, colorResolver, fillContext);
+    const group = parseGroup(grp, rels, slidePath, archive, colorResolver, fillContext, fontScheme);
     if (group) {
       elements.push(group);
     } else {
@@ -169,7 +173,7 @@ export function parseShapeTree(
 
   const graphicFrames = spTree.graphicFrame ?? [];
   for (const gf of graphicFrames) {
-    const chart = parseGraphicFrame(gf, rels, slidePath, archive, colorResolver);
+    const chart = parseGraphicFrame(gf, rels, slidePath, archive, colorResolver, fontScheme);
     if (chart) {
       elements.push(chart);
     } else {
@@ -186,6 +190,7 @@ function parseShape(
   colorResolver: ColorResolver,
   rels?: Map<string, Relationship>,
   fillContext?: FillParseContext,
+  fontScheme?: FontScheme | null,
 ): ShapeElement | null {
   const spPr = sp.spPr;
   if (!spPr) return null;
@@ -196,7 +201,7 @@ function parseShape(
   const geometry = parseGeometry(spPr);
   const fill = parseFillFromNode(spPr, colorResolver, fillContext);
   const outline = parseOutline(spPr.ln, colorResolver);
-  const textBody = parseTextBody(sp.txBody, colorResolver, rels);
+  const textBody = parseTextBody(sp.txBody, colorResolver, rels, fontScheme);
   const effects = parseEffectList(spPr.effectLst, colorResolver);
 
   const ph = sp.nvSpPr?.nvPr?.ph;
@@ -286,6 +291,7 @@ function parseGroup(
   archive: PptxArchive,
   colorResolver: ColorResolver,
   parentFillContext?: FillParseContext,
+  fontScheme?: FontScheme | null,
 ): GroupElement | null {
   const grpSpPr = grp.grpSpPr;
   if (!grpSpPr) return null;
@@ -321,6 +327,7 @@ function parseGroup(
     colorResolver,
     undefined,
     childFillContext,
+    fontScheme,
   );
   const effects = parseEffectList(grpSpPr.effectLst, colorResolver);
 
@@ -334,6 +341,7 @@ function parseGraphicFrame(
   slidePath: string,
   archive: PptxArchive,
   colorResolver: ColorResolver,
+  fontScheme?: FontScheme | null,
 ): ChartElement | TableElement | GroupElement | null {
   const xfrm = gf.xfrm;
   const transform = parseTransform(xfrm);
@@ -364,7 +372,7 @@ function parseGraphicFrame(
   // Table
   const tblNode = graphicData.tbl;
   if (tblNode) {
-    const tableData = parseTable(tblNode, colorResolver);
+    const tableData = parseTable(tblNode, colorResolver, fontScheme);
     if (!tableData) return null;
 
     return { type: "table", transform, table: tableData };
@@ -372,7 +380,15 @@ function parseGraphicFrame(
 
   // SmartArt (Diagram)
   if (graphicData["@_uri"] === "http://schemas.openxmlformats.org/drawingml/2006/diagram") {
-    return parseSmartArt(graphicData, transform, rels, slidePath, archive, colorResolver);
+    return parseSmartArt(
+      graphicData,
+      transform,
+      rels,
+      slidePath,
+      archive,
+      colorResolver,
+      fontScheme,
+    );
   }
 
   return null;
@@ -386,6 +402,7 @@ function parseSmartArt(
   slidePath: string,
   archive: PptxArchive,
   colorResolver: ColorResolver,
+  fontScheme?: FontScheme | null,
 ): GroupElement | null {
   // dgm:relIds → removeNSPrefix → relIds
   const relIds = graphicData.relIds;
@@ -471,6 +488,7 @@ function parseSmartArt(
     colorResolver,
     undefined,
     fillContext,
+    fontScheme,
   );
 
   if (children.length === 0) return null;
@@ -567,6 +585,7 @@ export function parseTextBody(
   txBody: any,
   colorResolver: ColorResolver,
   rels?: Map<string, Relationship>,
+  fontScheme?: FontScheme | null,
 ): TextBody | null {
   if (!txBody) return null;
 
@@ -603,7 +622,7 @@ export function parseTextBody(
   const paragraphs: Paragraph[] = [];
   const pList = txBody.p ?? [];
   for (const p of pList) {
-    paragraphs.push(parseParagraph(p, colorResolver, rels));
+    paragraphs.push(parseParagraph(p, colorResolver, rels, fontScheme));
   }
 
   if (paragraphs.length === 0) return null;
@@ -656,6 +675,7 @@ function parseParagraph(
   p: any,
   colorResolver: ColorResolver,
   rels?: Map<string, Relationship>,
+  fontScheme?: FontScheme | null,
 ): Paragraph {
   const pPr = p.pPr;
   const { bullet, bulletFont, bulletColor, bulletSizePct } = parseBullet(pPr, colorResolver);
@@ -679,11 +699,27 @@ function parseParagraph(
     const text = r.t ?? "";
     const textContent = typeof text === "object" ? (text["#text"] ?? "") : String(text);
     const rPr = r.rPr;
-    const runProps = parseRunProperties(rPr, colorResolver, rels);
+    const runProps = parseRunProperties(rPr, colorResolver, rels, fontScheme);
     runs.push({ text: textContent, properties: runProps });
   }
 
   return { runs, properties };
+}
+
+function resolveThemeFont(typeface: string | null, fontScheme?: FontScheme | null): string | null {
+  if (!typeface || !fontScheme) return typeface;
+  switch (typeface) {
+    case "+mj-lt":
+      return fontScheme.majorFont;
+    case "+mn-lt":
+      return fontScheme.minorFont;
+    case "+mj-ea":
+      return fontScheme.majorFontEa;
+    case "+mn-ea":
+      return fontScheme.minorFontEa;
+    default:
+      return typeface;
+  }
 }
 
 function parseRunProperties(
@@ -691,6 +727,7 @@ function parseRunProperties(
   rPr: any,
   colorResolver: ColorResolver,
   rels?: Map<string, Relationship>,
+  fontScheme?: FontScheme | null,
 ): RunProperties {
   if (!rPr) {
     return {
@@ -708,8 +745,8 @@ function parseRunProperties(
   }
 
   const fontSize = rPr["@_sz"] ? hundredthPointToPoint(Number(rPr["@_sz"])) : null;
-  const fontFamily = rPr.latin?.["@_typeface"] ?? null;
-  const fontFamilyEa = rPr.ea?.["@_typeface"] ?? null;
+  const fontFamily = resolveThemeFont(rPr.latin?.["@_typeface"] ?? null, fontScheme);
+  const fontFamilyEa = resolveThemeFont(rPr.ea?.["@_typeface"] ?? null, fontScheme);
   const bold = rPr["@_b"] === "1" || rPr["@_b"] === "true";
   const italic = rPr["@_i"] === "1" || rPr["@_i"] === "true";
   const underline = rPr["@_u"] !== undefined && rPr["@_u"] !== "none";

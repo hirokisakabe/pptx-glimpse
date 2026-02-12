@@ -7,6 +7,7 @@ import type { FillParseContext } from "./fill-parser.js";
 import { parseShapeTree } from "./slide-parser.js";
 import { buildRelsPath, parseRelationships } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
+import type { FontScheme } from "../model/theme.js";
 
 const WARN_PREFIX = "[pptx-glimpse]";
 
@@ -38,6 +39,7 @@ export function parseSlideLayoutElements(
   layoutPath: string,
   archive: PptxArchive,
   colorResolver: ColorResolver,
+  fontScheme?: FontScheme | null,
 ): SlideElement[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parsed = parseXml(xml) as any;
@@ -54,5 +56,14 @@ export function parseSlideLayoutElements(
   const relsXml = archive.files.get(relsPath);
   const rels = relsXml ? parseRelationships(relsXml) : new Map();
 
-  return parseShapeTree(spTree, rels, layoutPath, archive, colorResolver);
+  return parseShapeTree(
+    spTree,
+    rels,
+    layoutPath,
+    archive,
+    colorResolver,
+    undefined,
+    undefined,
+    fontScheme,
+  );
 }

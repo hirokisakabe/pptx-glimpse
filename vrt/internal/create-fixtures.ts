@@ -296,6 +296,7 @@ interface PptxBuildOptions {
   slideMasterXml?: string;
   slideMasterRelsXml?: string;
   slideSize?: { cx: number; cy: number; type?: string };
+  themeXml?: string;
 }
 
 async function buildPptx(options: PptxBuildOptions): Promise<Buffer> {
@@ -376,7 +377,7 @@ async function buildPptx(options: PptxBuildOptions): Promise<Buffer> {
   );
   zip.file("ppt/slideLayouts/slideLayout1.xml", slideLayout1);
   zip.file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", slideLayout1Rels);
-  zip.file("ppt/theme/theme1.xml", theme1);
+  zip.file("ppt/theme/theme1.xml", options.themeXml ?? theme1);
 
   // Charts
   if (options.charts) {
@@ -3428,6 +3429,163 @@ async function createSmartArtFixture(): Promise<void> {
   savePptx(buffer, "smartart.pptx");
 }
 
+// --- Theme Font References Fixture ---
+async function createThemeFontFixture(): Promise<void> {
+  const customTheme = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<a:theme xmlns:a="${NS.a}" name="Office Theme">
+  <a:themeElements>
+    <a:clrScheme name="Office">
+      <a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>
+      <a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>
+      <a:dk2><a:srgbClr val="44546A"/></a:dk2>
+      <a:lt2><a:srgbClr val="E7E6E6"/></a:lt2>
+      <a:accent1><a:srgbClr val="4472C4"/></a:accent1>
+      <a:accent2><a:srgbClr val="ED7D31"/></a:accent2>
+      <a:accent3><a:srgbClr val="A5A5A5"/></a:accent3>
+      <a:accent4><a:srgbClr val="FFC000"/></a:accent4>
+      <a:accent5><a:srgbClr val="5B9BD5"/></a:accent5>
+      <a:accent6><a:srgbClr val="70AD47"/></a:accent6>
+      <a:hlink><a:srgbClr val="0563C1"/></a:hlink>
+      <a:folHlink><a:srgbClr val="954F72"/></a:folHlink>
+    </a:clrScheme>
+    <a:fontScheme name="Office">
+      <a:majorFont><a:latin typeface="Calibri Light"/><a:ea typeface="Yu Gothic"/></a:majorFont>
+      <a:minorFont><a:latin typeface="Calibri"/><a:ea typeface="Yu Mincho"/></a:minorFont>
+    </a:fontScheme>
+    <a:fmtScheme name="Office"/>
+  </a:themeElements>
+</a:theme>`;
+
+  // テーマフォント参照を使用するテキスト
+  const shapes = [
+    // +mj-lt (major latin)
+    shapeXml(2, "MajorLatin", {
+      preset: "rect",
+      x: 200000,
+      y: 200000,
+      cx: 4000000,
+      cy: 1200000,
+      fillXml: solidFillXml("E8EAF6"),
+      textBodyXml: `<p:txBody>
+        <a:bodyPr anchor="ctr"/>
+        <a:lstStyle/>
+        <a:p>
+          <a:pPr algn="ctr"/>
+          <a:r>
+            <a:rPr lang="en-US" sz="2000">
+              <a:latin typeface="+mj-lt"/>
+              <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+            </a:rPr>
+            <a:t>Major Latin (+mj-lt)</a:t>
+          </a:r>
+        </a:p>
+      </p:txBody>`,
+    }),
+    // +mn-lt (minor latin)
+    shapeXml(3, "MinorLatin", {
+      preset: "rect",
+      x: 4800000,
+      y: 200000,
+      cx: 4000000,
+      cy: 1200000,
+      fillXml: solidFillXml("E3F2FD"),
+      textBodyXml: `<p:txBody>
+        <a:bodyPr anchor="ctr"/>
+        <a:lstStyle/>
+        <a:p>
+          <a:pPr algn="ctr"/>
+          <a:r>
+            <a:rPr lang="en-US" sz="2000">
+              <a:latin typeface="+mn-lt"/>
+              <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+            </a:rPr>
+            <a:t>Minor Latin (+mn-lt)</a:t>
+          </a:r>
+        </a:p>
+      </p:txBody>`,
+    }),
+    // +mj-ea (major east asian)
+    shapeXml(4, "MajorEA", {
+      preset: "rect",
+      x: 200000,
+      y: 1800000,
+      cx: 4000000,
+      cy: 1200000,
+      fillXml: solidFillXml("FFF3E0"),
+      textBodyXml: `<p:txBody>
+        <a:bodyPr anchor="ctr"/>
+        <a:lstStyle/>
+        <a:p>
+          <a:pPr algn="ctr"/>
+          <a:r>
+            <a:rPr lang="en-US" sz="2000">
+              <a:ea typeface="+mj-ea"/>
+              <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+            </a:rPr>
+            <a:t>Major EA (+mj-ea)</a:t>
+          </a:r>
+        </a:p>
+      </p:txBody>`,
+    }),
+    // +mn-ea (minor east asian)
+    shapeXml(5, "MinorEA", {
+      preset: "rect",
+      x: 4800000,
+      y: 1800000,
+      cx: 4000000,
+      cy: 1200000,
+      fillXml: solidFillXml("E8F5E9"),
+      textBodyXml: `<p:txBody>
+        <a:bodyPr anchor="ctr"/>
+        <a:lstStyle/>
+        <a:p>
+          <a:pPr algn="ctr"/>
+          <a:r>
+            <a:rPr lang="en-US" sz="2000">
+              <a:ea typeface="+mn-ea"/>
+              <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+            </a:rPr>
+            <a:t>Minor EA (+mn-ea)</a:t>
+          </a:r>
+        </a:p>
+      </p:txBody>`,
+    }),
+    // Explicit font (not a theme reference)
+    shapeXml(6, "ExplicitFont", {
+      preset: "rect",
+      x: 200000,
+      y: 3400000,
+      cx: 8600000,
+      cy: 1200000,
+      fillXml: solidFillXml("F3E5F5"),
+      textBodyXml: `<p:txBody>
+        <a:bodyPr anchor="ctr"/>
+        <a:lstStyle/>
+        <a:p>
+          <a:pPr algn="ctr"/>
+          <a:r>
+            <a:rPr lang="en-US" sz="2000">
+              <a:latin typeface="Arial"/>
+              <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+            </a:rPr>
+            <a:t>Explicit Font (Arial)</a:t>
+          </a:r>
+        </a:p>
+      </p:txBody>`,
+    }),
+  ];
+
+  const slideXml = wrapSlideXml(shapes.join("\n"));
+  const slideRels = slideRelsXml();
+
+  const buffer = await buildPptx({
+    slides: [{ xml: slideXml, rels: slideRels }],
+    themeXml: customTheme,
+  });
+
+  savePptx(buffer, "theme-fonts.pptx");
+}
+
 async function main(): Promise<void> {
   console.log("Creating VRT fixtures...\n");
 
@@ -3456,6 +3614,7 @@ async function main(): Promise<void> {
   await createHyperlinksFixture();
   await createPatternImageFillFixture();
   await createSmartArtFixture();
+  await createThemeFontFixture();
 
   console.log("\nDone!");
 }
