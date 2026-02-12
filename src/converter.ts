@@ -114,7 +114,6 @@ export async function convertPptxToSvg(
     masterPath && masterXml
       ? parseSlideMasterElements(masterXml, masterPath, archive, colorResolver, theme.fontScheme)
       : [];
-
   // Resolve slide paths from relationships
   const slidePaths: { slideNumber: number; path: string }[] = [];
   for (let i = 0; i < presInfo.slideRIds.length; i++) {

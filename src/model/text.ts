@@ -19,10 +19,17 @@ export interface DefaultParagraphLevelProperties {
   defaultRunProperties?: DefaultRunProperties;
 }
 
-/** presentation.xml の defaultTextStyle */
+/** presentation.xml の defaultTextStyle / slideMaster の titleStyle・bodyStyle・otherStyle */
 export interface DefaultTextStyle {
   defaultParagraph?: DefaultParagraphLevelProperties;
   levels: (DefaultParagraphLevelProperties | undefined)[]; // index 0 = lvl1pPr, ... index 8 = lvl9pPr
+}
+
+/** slideMaster の txStyles */
+export interface TxStyles {
+  titleStyle?: DefaultTextStyle;
+  bodyStyle?: DefaultTextStyle;
+  otherStyle?: DefaultTextStyle;
 }
 
 export interface TextBody {
