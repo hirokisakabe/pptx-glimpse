@@ -3,6 +3,7 @@ import { parseSlide, parseShapeTree, navigateOrdered } from "./slide-parser.js";
 import { initWarningLogger } from "../warning-logger.js";
 import { ColorResolver } from "../color/color-resolver.js";
 import { parseXml, parseXmlOrdered } from "./xml-parser.js";
+import type { XmlNode } from "./xml-parser.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import type { ShapeElement } from "../model/shape.js";
 
@@ -66,11 +67,9 @@ describe("parseShapeTree", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
-    const spTree = parsed.spTree;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -104,11 +103,9 @@ describe("parseShapeTree", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
-    const spTree = parsed.spTree;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -141,11 +138,9 @@ describe("parseShapeTree", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
-    const spTree = parsed.spTree;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -189,10 +184,9 @@ describe("parseShapeTree", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -237,10 +231,9 @@ describe("parseShapeTree", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -282,10 +275,9 @@ describe("parseShapeTree", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -327,10 +319,9 @@ describe("parseShapeTree", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -370,10 +361,9 @@ describe("parseShapeTree", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -413,10 +403,9 @@ describe("parseShapeTree", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -451,10 +440,9 @@ describe("parseShapeTree", () => {
           </p:sp>
         </p:spTree>
       `;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const parsed = parseXml(xml) as any;
+      const parsed = parseXml(xml);
       const elements = parseShapeTree(
-        parsed.spTree,
+        parsed.spTree as XmlNode | undefined,
         new Map(),
         "ppt/slides/slide1.xml",
         createEmptyArchive(),
@@ -498,10 +486,9 @@ describe("bullet parsing", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -547,10 +534,9 @@ describe("bullet parsing", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -598,10 +584,9 @@ describe("bullet parsing", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -646,10 +631,9 @@ describe("bullet parsing", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -691,10 +675,9 @@ describe("bullet parsing", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -746,10 +729,9 @@ describe("structural validation warnings", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -787,10 +769,9 @@ describe("structural validation warnings", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide2.xml",
       createEmptyArchive(),
@@ -828,10 +809,9 @@ describe("structural validation warnings", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -882,8 +862,7 @@ describe("structural validation warnings", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const fontScheme = {
       majorFont: "Calibri Light",
       minorFont: "Calibri",
@@ -891,7 +870,7 @@ describe("structural validation warnings", () => {
       minorFontEa: "Yu Mincho",
     };
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -943,8 +922,7 @@ describe("structural validation warnings", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const fontScheme = {
       majorFont: "Calibri Light",
       minorFont: "Calibri",
@@ -952,7 +930,7 @@ describe("structural validation warnings", () => {
       minorFontEa: "Yu Mincho",
     };
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -1008,10 +986,9 @@ describe("lstStyle and defRPr parsing", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -1063,10 +1040,9 @@ describe("lstStyle and defRPr parsing", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -1124,10 +1100,9 @@ describe("lstStyle and defRPr parsing", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -1184,10 +1159,9 @@ describe("lstStyle and defRPr parsing", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -1233,10 +1207,9 @@ describe("lstStyle and defRPr parsing", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -1295,10 +1268,9 @@ describe("lstStyle and defRPr parsing", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -1343,10 +1315,9 @@ describe("lstStyle and defRPr parsing", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -1397,8 +1368,7 @@ describe("lstStyle and defRPr parsing", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const fontScheme = {
       majorFont: "Calibri Light",
       minorFont: "Calibri",
@@ -1406,7 +1376,7 @@ describe("lstStyle and defRPr parsing", () => {
       minorFontEa: "Yu Mincho",
     };
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -1454,13 +1424,12 @@ describe("Z-order across element types", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const orderedParsed = parseXmlOrdered(xml);
     const orderedSpTree = navigateOrdered(orderedParsed, ["spTree"]);
 
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -1498,12 +1467,11 @@ describe("Z-order across element types", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
 
     // orderedChildren なし → タイプ別イテレーション（sp が先）
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),

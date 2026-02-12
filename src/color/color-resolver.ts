@@ -7,6 +7,7 @@
 
 import type { ColorScheme, ColorMap, ColorSchemeKey } from "../model/theme.js";
 import type { ResolvedColor } from "../model/fill.js";
+import type { XmlNode } from "../parser/xml-parser.js";
 import { applyColorTransforms } from "./color-transforms.js";
 import { debug } from "../warning-logger.js";
 
@@ -16,18 +17,17 @@ export class ColorResolver {
     private colorMap: ColorMap,
   ) {}
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  resolve(colorNode: any): ResolvedColor | null {
+  resolve(colorNode: XmlNode): ResolvedColor | null {
     if (!colorNode) return null;
 
     if (colorNode.srgbClr) {
-      return this.resolveSrgbClr(colorNode.srgbClr);
+      return this.resolveSrgbClr(colorNode.srgbClr as XmlNode);
     }
     if (colorNode.schemeClr) {
-      return this.resolveSchemeClr(colorNode.schemeClr);
+      return this.resolveSchemeClr(colorNode.schemeClr as XmlNode);
     }
     if (colorNode.sysClr) {
-      return this.resolveSysClr(colorNode.sysClr);
+      return this.resolveSysClr(colorNode.sysClr as XmlNode);
     }
 
     const keys = Object.keys(colorNode).filter((k) => !k.startsWith("@_"));
@@ -38,24 +38,21 @@ export class ColorResolver {
     return null;
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private resolveSrgbClr(node: any): ResolvedColor {
-    const hex = `#${node["@_val"]}`;
+  private resolveSrgbClr(node: XmlNode): ResolvedColor {
+    const hex = `#${node["@_val"] as string}`;
     const alpha = extractAlpha(node);
     return applyColorTransforms({ hex, alpha }, node);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private resolveSchemeClr(node: any): ResolvedColor {
+  private resolveSchemeClr(node: XmlNode): ResolvedColor {
     const schemeName = node["@_val"] as string;
     const hex = this.resolveSchemeColorName(schemeName);
     const alpha = extractAlpha(node);
     return applyColorTransforms({ hex, alpha }, node);
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  private resolveSysClr(node: any): ResolvedColor {
-    const hex = `#${node["@_lastClr"] ?? "000000"}`;
+  private resolveSysClr(node: XmlNode): ResolvedColor {
+    const hex = `#${(node["@_lastClr"] as string | undefined) ?? "000000"}`;
     const alpha = extractAlpha(node);
     return applyColorTransforms({ hex, alpha }, node);
   }
@@ -76,9 +73,8 @@ export class ColorResolver {
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function extractAlpha(node: any): number {
-  const alphaNode = node.alpha;
+function extractAlpha(node: XmlNode): number {
+  const alphaNode = node.alpha as XmlNode | undefined;
   if (alphaNode) {
     return Number(alphaNode["@_val"]) / 100000;
   }

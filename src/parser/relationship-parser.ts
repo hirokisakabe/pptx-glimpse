@@ -1,4 +1,4 @@
-import { parseXml } from "./xml-parser.js";
+import { parseXml, type XmlNode } from "./xml-parser.js";
 import { debug } from "../warning-logger.js";
 
 export interface Relationship {
@@ -12,15 +12,14 @@ export function parseRelationships(xml: string): Map<string, Relationship> {
   const parsed = parseXml(xml);
   const rels = new Map<string, Relationship>();
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const root = parsed as any;
+  const root = parsed.Relationships as XmlNode | undefined;
 
-  if (!root?.Relationships) {
+  if (!root) {
     debug("relationship.missing", `missing root element "Relationships" in XML`);
     return rels;
   }
 
-  const relationships = root.Relationships.Relationship;
+  const relationships = root.Relationship as XmlNode[] | undefined;
   if (!relationships) return rels;
 
   for (const rel of relationships) {

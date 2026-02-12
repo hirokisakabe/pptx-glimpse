@@ -2,7 +2,11 @@ import { describe, it, expect } from "vitest";
 import { applyTextStyleInheritance } from "./text-style-resolver.js";
 import type { TextStyleContext } from "./text-style-resolver.js";
 import type { ShapeElement, GroupElement } from "./model/shape.js";
-import type { DefaultTextStyle, RunProperties } from "./model/text.js";
+import type {
+  DefaultTextStyle,
+  DefaultParagraphLevelProperties,
+  RunProperties,
+} from "./model/text.js";
 
 function makeRunProperties(overrides: Partial<RunProperties> = {}): RunProperties {
   return {
@@ -87,8 +91,7 @@ function makeDefaultTextStyle(
   }>,
   level = 0,
 ): DefaultTextStyle {
-  const levels: (undefined | { defaultRunProperties: typeof levelDefRPr })[] =
-    Array(9).fill(undefined);
+  const levels = Array<undefined | { defaultRunProperties: typeof levelDefRPr }>(9).fill(undefined);
   levels[level] = { defaultRunProperties: levelDefRPr };
   return { levels };
 }
@@ -425,7 +428,7 @@ describe("applyTextStyleInheritance", () => {
         txStyles: {
           bodyStyle: {
             defaultParagraph: { defaultRunProperties: { fontSize: 20 } },
-            levels: Array(9).fill(undefined),
+            levels: Array<DefaultParagraphLevelProperties | undefined>(9).fill(undefined),
           },
         },
       });

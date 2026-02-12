@@ -6,25 +6,34 @@
 // 値は 100000 分率 (e.g. 50000 = 50%)
 
 import type { ResolvedColor } from "../model/fill.js";
+import type { XmlNode } from "../parser/xml-parser.js";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function applyColorTransforms(color: ResolvedColor, node: any): ResolvedColor {
+export function applyColorTransforms(color: ResolvedColor, node: XmlNode): ResolvedColor {
   let { hex, alpha } = color;
 
-  if (node.lumMod || node.lumOff) {
-    hex = applyLuminance(hex, node.lumMod?.["@_val"], node.lumOff?.["@_val"]);
+  const lumMod = node.lumMod as XmlNode | undefined;
+  const lumOff = node.lumOff as XmlNode | undefined;
+  if (lumMod || lumOff) {
+    hex = applyLuminance(
+      hex,
+      lumMod?.["@_val"] as string | undefined,
+      lumOff?.["@_val"] as string | undefined,
+    );
   }
 
-  if (node.tint) {
-    hex = applyTint(hex, Number(node.tint["@_val"]) / 100000);
+  const tintNode = node.tint as XmlNode | undefined;
+  if (tintNode) {
+    hex = applyTint(hex, Number(tintNode["@_val"]) / 100000);
   }
 
-  if (node.shade) {
-    hex = applyShade(hex, Number(node.shade["@_val"]) / 100000);
+  const shadeNode = node.shade as XmlNode | undefined;
+  if (shadeNode) {
+    hex = applyShade(hex, Number(shadeNode["@_val"]) / 100000);
   }
 
-  if (node.alpha) {
-    alpha = Number(node.alpha["@_val"]) / 100000;
+  const alphaNode = node.alpha as XmlNode | undefined;
+  if (alphaNode) {
+    alpha = Number(alphaNode["@_val"]) / 100000;
   }
 
   return { hex, alpha };

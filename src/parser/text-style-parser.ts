@@ -5,9 +5,9 @@ import type {
 } from "../model/text.js";
 import type { FontScheme } from "../model/theme.js";
 import { hundredthPointToPoint } from "../utils/emu.js";
+import type { XmlNode } from "./xml-parser.js";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function parseDefaultRunProperties(defRPr: any): DefaultRunProperties | undefined {
+export function parseDefaultRunProperties(defRPr: XmlNode): DefaultRunProperties | undefined {
   if (!defRPr) return undefined;
 
   const result: DefaultRunProperties = {};
@@ -15,11 +15,13 @@ export function parseDefaultRunProperties(defRPr: any): DefaultRunProperties | u
   if (defRPr["@_sz"] !== undefined) {
     result.fontSize = hundredthPointToPoint(Number(defRPr["@_sz"]));
   }
-  if (defRPr.latin?.["@_typeface"] !== undefined) {
-    result.fontFamily = defRPr.latin["@_typeface"];
+  const latin = defRPr.latin as XmlNode | undefined;
+  if (latin?.["@_typeface"] !== undefined) {
+    result.fontFamily = latin["@_typeface"] as string;
   }
-  if (defRPr.ea?.["@_typeface"] !== undefined) {
-    result.fontFamilyEa = defRPr.ea["@_typeface"];
+  const ea = defRPr.ea as XmlNode | undefined;
+  if (ea?.["@_typeface"] !== undefined) {
+    result.fontFamilyEa = ea["@_typeface"] as string;
   }
   if (defRPr["@_b"] !== undefined) {
     result.bold = defRPr["@_b"] === "1" || defRPr["@_b"] === "true";
@@ -38,8 +40,7 @@ export function parseDefaultRunProperties(defRPr: any): DefaultRunProperties | u
 }
 
 export function parseParagraphLevelProperties(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  node: any,
+  node: XmlNode,
 ): DefaultParagraphLevelProperties | undefined {
   if (!node) return undefined;
 
@@ -55,7 +56,7 @@ export function parseParagraphLevelProperties(
     result.indent = Number(node["@_indent"]);
   }
 
-  const defRPr = parseDefaultRunProperties(node.defRPr);
+  const defRPr = parseDefaultRunProperties(node.defRPr as XmlNode);
   if (defRPr) {
     result.defaultRunProperties = defRPr;
   }
@@ -67,15 +68,14 @@ export function parseParagraphLevelProperties(
  * defPPr + lvl1pPr〜lvl9pPr の構造を DefaultTextStyle としてパースする。
  * presentation.xml の defaultTextStyle および slideMaster の titleStyle/bodyStyle/otherStyle で共通利用。
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function parseListStyle(node: any): DefaultTextStyle | undefined {
+export function parseListStyle(node: XmlNode): DefaultTextStyle | undefined {
   if (!node) return undefined;
 
-  const defaultParagraph = parseParagraphLevelProperties(node.defPPr);
+  const defaultParagraph = parseParagraphLevelProperties(node.defPPr as XmlNode);
 
   const levels: (DefaultParagraphLevelProperties | undefined)[] = [];
   for (let i = 1; i <= 9; i++) {
-    levels.push(parseParagraphLevelProperties(node[`lvl${i}pPr`]));
+    levels.push(parseParagraphLevelProperties(node[`lvl${i}pPr`] as XmlNode));
   }
 
   // すべてのレベルが undefined で defaultParagraph もなければ undefined を返す
