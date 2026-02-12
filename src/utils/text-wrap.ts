@@ -19,6 +19,14 @@ interface Token {
 
 const DEFAULT_FONT_SIZE = 18;
 
+/**
+ * フォントメトリクスの近似誤差を吸収するための折り返しトレランス。
+ * availableWidth に対する比率で指定する。
+ * 代替フォントメトリクス（例: Meiryo → Noto Sans JP）による幅の過大評価で、
+ * 本来1行に収まるテキストの末尾文字が次行に送られる問題を緩和する。
+ */
+const WRAP_TOLERANCE_RATIO = 0.02;
+
 function isCjk(codePoint: number): boolean {
   return (
     (codePoint >= 0x3000 && codePoint <= 0x9fff) ||
@@ -217,11 +225,12 @@ function layoutTokensIntoLines(
   const lines: WrappedLine[] = [];
   let currentLine: Token[] = [];
   let currentWidth = 0;
+  const tolerance = availableWidth * WRAP_TOLERANCE_RATIO;
 
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
 
-    if (currentWidth + token.width <= availableWidth) {
+    if (currentWidth + token.width <= availableWidth + tolerance) {
       currentLine.push(token);
       currentWidth += token.width;
     } else if (currentLine.length === 0) {

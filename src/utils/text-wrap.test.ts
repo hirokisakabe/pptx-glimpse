@@ -155,6 +155,51 @@ describe("wrapParagraph", () => {
     expect(linesWithScale.length).toBe(linesSmall.length);
   });
 
+  it("フォントメトリクス誤差で僅かにはみ出す CJK テキストを折り返さない", () => {
+    // "ABCシステム" の計測幅 ≈ 135.74px (Carlito ABC + NotoSansJP CJK×4, 18pt)
+    // availableWidth=134 → はみ出し 1.74px, tolerance=134*0.02=2.68px → 1行に収まる
+    const props = makeRunProps({
+      fontFamily: "Calibri",
+      fontFamilyEa: "Meiryo",
+      fontSize: 18,
+    });
+    const para: Paragraph = {
+      runs: [{ text: "ABCシステム", properties: props }],
+      properties: {
+        alignment: "l",
+        lineSpacing: null,
+        spaceBefore: 0,
+        spaceAfter: 0,
+        level: 0,
+      },
+    };
+    const lines = wrapParagraph(para, 134, 18);
+    expect(lines).toHaveLength(1);
+    expect(lines[0].segments.map((s) => s.text).join("")).toBe("ABCシステム");
+  });
+
+  it("トレランスを超える幅超過では正しく折り返される", () => {
+    // "ABCシステム" の計測幅 ≈ 135.74px
+    // availableWidth=120 → はみ出し 15.74px, tolerance=120*0.02=2.4px → 折り返される
+    const props = makeRunProps({
+      fontFamily: "Calibri",
+      fontFamilyEa: "Meiryo",
+      fontSize: 18,
+    });
+    const para: Paragraph = {
+      runs: [{ text: "ABCシステム", properties: props }],
+      properties: {
+        alignment: "l",
+        lineSpacing: null,
+        spaceBefore: 0,
+        spaceAfter: 0,
+        level: 0,
+      },
+    };
+    const lines = wrapParagraph(para, 120, 18);
+    expect(lines.length).toBeGreaterThan(1);
+  });
+
   it("fontScale が 1 のとき run の fontSize がそのまま使われる", () => {
     const para = makeParagraph(["Hello World"], { fontSize: 36 });
     const linesNoScale = wrapParagraph(para, 200, 18, 1);
