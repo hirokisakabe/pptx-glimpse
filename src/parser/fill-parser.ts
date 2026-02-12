@@ -1,5 +1,13 @@
 import type { Fill, GradientStop, ImageFill, PatternFill, SolidFill } from "../model/fill.js";
-import type { Outline, DashStyle, ArrowEndpoint, ArrowType, ArrowSize } from "../model/line.js";
+import type {
+  Outline,
+  DashStyle,
+  LineCap,
+  LineJoin,
+  ArrowEndpoint,
+  ArrowType,
+  ArrowSize,
+} from "../model/line.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import type { Relationship } from "./relationship-parser.js";
@@ -168,10 +176,31 @@ export function parseOutline(lnNode: XmlNode, colorResolver: ColorResolver): Out
   const prstDash = lnNode.prstDash as XmlNode | undefined;
   const dashStyle = ((prstDash?.["@_val"] as string | undefined) ?? "solid") as DashStyle;
 
+  const lineCap = parseLineCap(lnNode["@_cap"] as string | undefined);
+  const lineJoin = parseLineJoin(lnNode);
+
   const headEnd = parseArrowEndpoint(lnNode.headEnd as XmlNode);
   const tailEnd = parseArrowEndpoint(lnNode.tailEnd as XmlNode);
 
-  return { width, fill, dashStyle, headEnd, tailEnd };
+  return { width, fill, dashStyle, lineCap, lineJoin, headEnd, tailEnd };
+}
+
+const LINE_CAP_MAP: Record<string, LineCap> = {
+  flat: "butt",
+  sq: "square",
+  rnd: "round",
+};
+
+function parseLineCap(cap: string | undefined): LineCap | undefined {
+  if (!cap) return undefined;
+  return LINE_CAP_MAP[cap];
+}
+
+function parseLineJoin(lnNode: XmlNode): LineJoin | undefined {
+  if (lnNode.round !== undefined) return "round";
+  if (lnNode.bevel !== undefined) return "bevel";
+  if (lnNode.miter !== undefined) return "miter";
+  return undefined;
 }
 
 function parseArrowEndpoint(node: XmlNode): ArrowEndpoint | null {

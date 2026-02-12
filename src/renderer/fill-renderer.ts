@@ -83,6 +83,14 @@ export function renderOutlineAttrs(outline: Outline | null): string {
     }
   }
 
+  if (outline.lineCap) {
+    parts.push(`stroke-linecap="${outline.lineCap}"`);
+  }
+
+  if (outline.lineJoin) {
+    parts.push(`stroke-linejoin="${outline.lineJoin}"`);
+  }
+
   return parts.join(" ");
 }
 

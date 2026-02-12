@@ -9,10 +9,15 @@ export interface ArrowEndpoint {
   length: ArrowSize;
 }
 
+export type LineCap = "butt" | "round" | "square";
+export type LineJoin = "miter" | "round" | "bevel";
+
 export interface Outline {
   width: number;
   fill: SolidFill | null;
   dashStyle: DashStyle;
+  lineCap?: LineCap;
+  lineJoin?: LineJoin;
   headEnd: ArrowEndpoint | null;
   tailEnd: ArrowEndpoint | null;
 }
