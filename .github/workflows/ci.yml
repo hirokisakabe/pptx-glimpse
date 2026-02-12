@@ -9,6 +9,8 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     strategy:
       matrix:
         node-version: [20, 22, 24]
@@ -33,8 +35,22 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
-      - name: Test
-        run: npx vitest run --exclude 'vrt/**'
+      - name: Test with coverage
+        run: npx vitest run --coverage --exclude 'vrt/**'
+
+      - name: Upload coverage report
+        if: matrix.node-version == 22
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+
+      - name: Coverage summary comment
+        if: matrix.node-version == 22 && github.event_name == 'pull_request'
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          json-summary-path: coverage/coverage-summary.json
 
       - name: Build
         run: npm run build
