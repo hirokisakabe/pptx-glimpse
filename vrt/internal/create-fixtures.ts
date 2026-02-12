@@ -4235,6 +4235,77 @@ async function createZOrderMixedFixture(): Promise<void> {
   savePptx(buffer, "z-order-mixed.pptx");
 }
 
+// --- Image Crop (srcRect) ---
+async function createImageCropFixture(): Promise<void> {
+  const imgSize = 100;
+  const pixels = Buffer.alloc(imgSize * imgSize * 4);
+  for (let y = 0; y < imgSize; y++) {
+    for (let x = 0; x < imgSize; x++) {
+      const idx = (y * imgSize + x) * 4;
+      pixels[idx] = x < imgSize / 2 ? 255 : 0; // R
+      pixels[idx + 1] = y < imgSize / 2 ? 255 : 0; // G
+      pixels[idx + 2] = 128; // B
+      pixels[idx + 3] = 255; // A
+    }
+  }
+  const testImage = await sharp(pixels, {
+    raw: { width: imgSize, height: imgSize, channels: 4 },
+  })
+    .png()
+    .toBuffer();
+
+  // 1. Crop left 25%
+  const pic1 = `<p:pic>
+  <p:nvPicPr><p:cNvPr id="2" name="CropLeft"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>
+  <p:blipFill>
+    <a:blip r:embed="rId2"/>
+    <a:srcRect l="25000"/>
+    <a:stretch><a:fillRect/></a:stretch>
+  </p:blipFill>
+  <p:spPr>
+    <a:xfrm><a:off x="300000" y="300000"/><a:ext cx="3000000" cy="2000000"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+</p:pic>`;
+
+  // 2. Crop top 20%, bottom 20%
+  const pic2 = `<p:pic>
+  <p:nvPicPr><p:cNvPr id="3" name="CropTopBottom"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>
+  <p:blipFill>
+    <a:blip r:embed="rId2"/>
+    <a:srcRect t="20000" b="20000"/>
+    <a:stretch><a:fillRect/></a:stretch>
+  </p:blipFill>
+  <p:spPr>
+    <a:xfrm><a:off x="4000000" y="300000"/><a:ext cx="3000000" cy="2000000"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+</p:pic>`;
+
+  // 3. Crop all sides 10%
+  const pic3 = `<p:pic>
+  <p:nvPicPr><p:cNvPr id="4" name="CropAllSides"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>
+  <p:blipFill>
+    <a:blip r:embed="rId2"/>
+    <a:srcRect l="10000" t="10000" r="10000" b="10000"/>
+    <a:stretch><a:fillRect/></a:stretch>
+  </p:blipFill>
+  <p:spPr>
+    <a:xfrm><a:off x="300000" y="2700000"/><a:ext cx="3000000" cy="2000000"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+</p:pic>`;
+
+  const slide = wrapSlideXml([pic1, pic2, pic3].join("\n"));
+  const rels = slideRelsXml([{ id: "rId2", type: REL_TYPES.image, target: "../media/image1.png" }]);
+
+  const media = new Map<string, Buffer>();
+  media.set("ppt/media/image1.png", testImage);
+
+  const buffer = await buildPptx({ slides: [{ xml: slide, rels }], media });
+  savePptx(buffer, "image-crop.pptx");
+}
+
 // --- Placeholder Overlap (Master/Layout/Slide element overlap + showMasterSp) ---
 async function createPlaceholderOverlapFixture(): Promise<void> {
   // Custom slide master with decorative shapes (red rect + blue ellipse)
@@ -4562,6 +4633,7 @@ async function main(): Promise<void> {
   await createZOrderMixedFixture();
   await createParagraphSpacingFixture();
   await createPlaceholderOverlapFixture();
+  await createImageCropFixture();
 
   console.log("\nDone!");
 }
