@@ -19,6 +19,7 @@ import {
   parseRelationships,
   resolveRelationshipTarget,
   buildRelsPath,
+  type Relationship,
 } from "./parser/relationship-parser.js";
 import type { FillParseContext } from "./parser/fill-parser.js";
 import { ColorResolver } from "./color/color-resolver.js";
@@ -64,7 +65,7 @@ export async function convertPptxToSvg(
 
   // Parse presentation relationships
   const presRelsXml = archive.files.get("ppt/_rels/presentation.xml.rels");
-  const presRels = presRelsXml ? parseRelationships(presRelsXml) : new Map();
+  const presRels = presRelsXml ? parseRelationships(presRelsXml) : new Map<string, Relationship>();
 
   // Parse theme
   let theme: Theme = {
@@ -109,7 +110,9 @@ export async function convertPptxToSvg(
   if (masterPath) {
     const masterRelsPath = buildRelsPath(masterPath);
     const masterRelsXml = archive.files.get(masterRelsPath);
-    const masterRels = masterRelsXml ? parseRelationships(masterRelsXml) : new Map();
+    const masterRels = masterRelsXml
+      ? parseRelationships(masterRelsXml)
+      : new Map<string, Relationship>();
     masterFillContext = { rels: masterRels, archive, basePath: masterPath };
   }
   const masterBackground = masterXml
@@ -161,7 +164,9 @@ export async function convertPptxToSvg(
             if (!slide.background) {
               const layoutRelsPath = buildRelsPath(layoutPath);
               const layoutRelsXml = archive.files.get(layoutRelsPath);
-              const layoutRels = layoutRelsXml ? parseRelationships(layoutRelsXml) : new Map();
+              const layoutRels = layoutRelsXml
+                ? parseRelationships(layoutRelsXml)
+                : new Map<string, Relationship>();
               const layoutFillContext: FillParseContext = {
                 rels: layoutRels,
                 archive,

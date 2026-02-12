@@ -1,6 +1,6 @@
 import type { SlideSize } from "../model/presentation.js";
 import type { DefaultTextStyle } from "../model/text.js";
-import { parseXml } from "./xml-parser.js";
+import { parseXml, type XmlNode } from "./xml-parser.js";
 import { parseListStyle } from "./text-style-parser.js";
 
 export interface PresentationInfo {
@@ -14,9 +14,8 @@ const DEFAULT_SLIDE_WIDTH = 9144000;
 const DEFAULT_SLIDE_HEIGHT = 5143500;
 
 export function parsePresentation(xml: string): PresentationInfo {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const parsed = parseXml(xml) as any;
-  const pres = parsed.presentation;
+  const parsed = parseXml(xml);
+  const pres = parsed.presentation as XmlNode | undefined;
 
   if (!pres) {
     console.warn(`${WARN_PREFIX} Presentation: missing root element "presentation" in XML`);
@@ -26,7 +25,7 @@ export function parsePresentation(xml: string): PresentationInfo {
     };
   }
 
-  const sldSz = pres.sldSz;
+  const sldSz = pres.sldSz as XmlNode | undefined;
   let slideSize: SlideSize;
   if (!sldSz || sldSz["@_cx"] === undefined || sldSz["@_cy"] === undefined) {
     console.warn(
@@ -40,10 +39,11 @@ export function parsePresentation(xml: string): PresentationInfo {
     };
   }
 
-  const sldIdLst = pres.sldIdLst?.sldId ?? [];
-  const slideRIds: string[] = sldIdLst
-    .map((s: Record<string, string>) => s["@_r:id"] ?? s["@_id"])
-    .filter((id: string | undefined) => {
+  const sldIdLst = pres.sldIdLst as XmlNode | undefined;
+  const sldIdArr = (sldIdLst?.sldId as XmlNode[] | undefined) ?? [];
+  const slideRIds: string[] = sldIdArr
+    .map((s) => (s["@_r:id"] as string | undefined) ?? (s["@_id"] as string | undefined))
+    .filter((id): id is string => {
       if (id === undefined) {
         console.warn(
           `${WARN_PREFIX} Presentation: undefined slide relationship ID found, skipping`,
@@ -53,7 +53,7 @@ export function parsePresentation(xml: string): PresentationInfo {
       return true;
     });
 
-  const defaultTextStyle = parseListStyle(pres.defaultTextStyle);
+  const defaultTextStyle = parseListStyle(pres.defaultTextStyle as XmlNode);
 
   return { slideSize, slideRIds, defaultTextStyle };
 }

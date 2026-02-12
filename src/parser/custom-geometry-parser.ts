@@ -1,16 +1,20 @@
 import type { CustomGeometryPath } from "../model/shape.js";
 import { evaluateGuides, resolveValue, type GuideDefinition } from "./geometry-formula.js";
+import type { XmlNode } from "./xml-parser.js";
 
 /** custGeom ノードをパースして CustomGeometryPath[] を返す */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function parseCustomGeometry(custGeom: any): CustomGeometryPath[] | null {
-  const pathLst = custGeom.pathLst;
+export function parseCustomGeometry(custGeom: XmlNode): CustomGeometryPath[] | null {
+  const pathLst = custGeom.pathLst as XmlNode | undefined;
   if (!pathLst?.path) return null;
 
-  const avLst = parseGuideList(custGeom.avLst?.gd);
-  const gdLst = parseGuideList(custGeom.gdLst?.gd);
+  const avLst = custGeom.avLst as XmlNode | undefined;
+  const gdLst = custGeom.gdLst as XmlNode | undefined;
+  const avGd = parseGuideList(avLst?.gd as XmlNode);
+  const gdGd = parseGuideList(gdLst?.gd as XmlNode);
 
-  const paths = Array.isArray(pathLst.path) ? pathLst.path : [pathLst.path];
+  const paths = Array.isArray(pathLst.path)
+    ? (pathLst.path as XmlNode[])
+    : [pathLst.path as XmlNode];
   const result: CustomGeometryPath[] = [];
 
   for (const path of paths) {
@@ -18,7 +22,7 @@ export function parseCustomGeometry(custGeom: any): CustomGeometryPath[] | null 
     const h = Number(path["@_h"] ?? 0);
     if (w === 0 && h === 0) continue;
 
-    const vars = evaluateGuides(avLst, gdLst, w, h);
+    const vars = evaluateGuides(avGd, gdGd, w, h);
     const commands = buildPathCommands(path, vars);
     if (!commands) continue;
 
@@ -28,21 +32,19 @@ export function parseCustomGeometry(custGeom: any): CustomGeometryPath[] | null 
   return result.length > 0 ? result : null;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseGuideList(gd: any): GuideDefinition[] {
+function parseGuideList(gd: XmlNode): GuideDefinition[] {
   if (!gd) return [];
-  const list = Array.isArray(gd) ? gd : [gd];
+  const list = Array.isArray(gd) ? (gd as XmlNode[]) : [gd];
   return list
-    .map((g: Record<string, string>) => ({
-      name: g["@_name"] ?? "",
-      fmla: g["@_fmla"] ?? "",
+    .map((g) => ({
+      name: (g["@_name"] as string | undefined) ?? "",
+      fmla: (g["@_fmla"] as string | undefined) ?? "",
     }))
     .filter((g: GuideDefinition) => g.name && g.fmla);
 }
 
 /** パスオブジェクトからSVGパスコマンド文字列を生成 */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function buildPathCommands(path: any, vars: Record<string, number>): string | null {
+function buildPathCommands(path: XmlNode, vars: Record<string, number>): string | null {
   const parts: string[] = [];
   let curX = 0;
   let curY = 0;
@@ -53,12 +55,12 @@ function buildPathCommands(path: any, vars: Record<string, number>): string | nu
     if (key.startsWith("@_")) continue;
 
     const value = path[key];
-    const items = Array.isArray(value) ? value : [value];
+    const items = Array.isArray(value) ? (value as XmlNode[]) : [value as XmlNode];
 
     for (const item of items) {
       switch (key) {
         case "moveTo": {
-          const pt = resolveFirstPoint(item.pt, vars);
+          const pt = resolveFirstPoint(item.pt as XmlNode, vars);
           if (pt) {
             parts.push(`M ${pt.x} ${pt.y}`);
             curX = pt.x;
@@ -69,7 +71,7 @@ function buildPathCommands(path: any, vars: Record<string, number>): string | nu
           break;
         }
         case "lnTo": {
-          const pt = resolveFirstPoint(item.pt, vars);
+          const pt = resolveFirstPoint(item.pt as XmlNode, vars);
           if (pt) {
             parts.push(`L ${pt.x} ${pt.y}`);
             curX = pt.x;
@@ -78,7 +80,7 @@ function buildPathCommands(path: any, vars: Record<string, number>): string | nu
           break;
         }
         case "cubicBezTo": {
-          const pts = resolvePoints(item.pt, vars);
+          const pts = resolvePoints(item.pt as XmlNode, vars);
           if (pts.length >= 3) {
             parts.push(`C ${pts.map((p) => `${p.x} ${p.y}`).join(", ")}`);
             curX = pts[pts.length - 1].x;
@@ -87,7 +89,7 @@ function buildPathCommands(path: any, vars: Record<string, number>): string | nu
           break;
         }
         case "quadBezTo": {
-          const pts = resolvePoints(item.pt, vars);
+          const pts = resolvePoints(item.pt as XmlNode, vars);
           if (pts.length >= 2) {
             parts.push(`Q ${pts.map((p) => `${p.x} ${p.y}`).join(", ")}`);
             curX = pts[pts.length - 1].x;
@@ -118,44 +120,38 @@ function buildPathCommands(path: any, vars: Record<string, number>): string | nu
 }
 
 function resolveFirstPoint(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  pt: any,
+  pt: XmlNode,
   vars: Record<string, number>,
 ): { x: number; y: number } | null {
   if (!pt) return null;
-  const p = Array.isArray(pt) ? pt[0] : pt;
+  const p = Array.isArray(pt) ? (pt[0] as XmlNode) : pt;
   if (!p) return null;
   return {
-    x: resolveValue(p["@_x"], vars),
-    y: resolveValue(p["@_y"], vars),
+    x: resolveValue(p["@_x"] as string, vars),
+    y: resolveValue(p["@_y"] as string, vars),
   };
 }
 
-function resolvePoints(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  pt: any,
-  vars: Record<string, number>,
-): Array<{ x: number; y: number }> {
+function resolvePoints(pt: XmlNode, vars: Record<string, number>): Array<{ x: number; y: number }> {
   if (!pt) return [];
-  const pts = Array.isArray(pt) ? pt : [pt];
-  return pts.map((p: Record<string, string>) => ({
-    x: resolveValue(p["@_x"], vars),
-    y: resolveValue(p["@_y"], vars),
+  const pts = Array.isArray(pt) ? (pt as XmlNode[]) : [pt];
+  return pts.map((p) => ({
+    x: resolveValue(p["@_x"] as string, vars),
+    y: resolveValue(p["@_y"] as string, vars),
   }));
 }
 
 /** arcTo を SVG A コマンドに変換 */
 function convertArcTo(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  arc: any,
+  arc: XmlNode,
   curX: number,
   curY: number,
   vars: Record<string, number>,
 ): { svg: string; endX: number; endY: number } | null {
-  const wR = resolveValue(arc["@_wR"] ?? "0", vars);
-  const hR = resolveValue(arc["@_hR"] ?? "0", vars);
-  const stAng = resolveValue(arc["@_stAng"] ?? "0", vars);
-  const swAng = resolveValue(arc["@_swAng"] ?? "0", vars);
+  const wR = resolveValue((arc["@_wR"] as string | undefined) ?? "0", vars);
+  const hR = resolveValue((arc["@_hR"] as string | undefined) ?? "0", vars);
+  const stAng = resolveValue((arc["@_stAng"] as string | undefined) ?? "0", vars);
+  const swAng = resolveValue((arc["@_swAng"] as string | undefined) ?? "0", vars);
 
   if (wR === 0 && hR === 0) return null;
   if (swAng === 0) return null;

@@ -4,6 +4,7 @@ import type { ColorResolver } from "../color/color-resolver.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import type { Relationship } from "./relationship-parser.js";
 import { resolveRelationshipTarget } from "./relationship-parser.js";
+import type { XmlNode } from "./xml-parser.js";
 
 const WARN_PREFIX = "[pptx-glimpse]";
 
@@ -15,8 +16,7 @@ export interface FillParseContext {
 }
 
 export function parseFillFromNode(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  node: any,
+  node: XmlNode,
   colorResolver: ColorResolver,
   context?: FillParseContext,
 ): Fill | null {
@@ -27,22 +27,22 @@ export function parseFillFromNode(
   }
 
   if (node.solidFill) {
-    const color = colorResolver.resolve(node.solidFill);
+    const color = colorResolver.resolve(node.solidFill as XmlNode);
     if (color) {
       return { type: "solid", color };
     }
   }
 
   if (node.gradFill) {
-    return parseGradientFill(node.gradFill, colorResolver);
+    return parseGradientFill(node.gradFill as XmlNode, colorResolver);
   }
 
   if (node.blipFill && context) {
-    return parseBlipFill(node.blipFill, context);
+    return parseBlipFill(node.blipFill as XmlNode, context);
   }
 
   if (node.pattFill) {
-    return parsePatternFill(node.pattFill, colorResolver);
+    return parsePatternFill(node.pattFill as XmlNode, colorResolver);
   }
 
   if (node.grpFill !== undefined && context?.groupFill) {
@@ -52,9 +52,10 @@ export function parseFillFromNode(
   return null;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseBlipFill(blipFillNode: any, context: FillParseContext): ImageFill | null {
-  const rId = blipFillNode?.blip?.["@_r:embed"] ?? blipFillNode?.blip?.["@_embed"];
+function parseBlipFill(blipFillNode: XmlNode, context: FillParseContext): ImageFill | null {
+  const blip = blipFillNode?.blip as XmlNode | undefined;
+  const rId =
+    (blip?.["@_r:embed"] as string | undefined) ?? (blip?.["@_embed"] as string | undefined);
   if (!rId) return null;
 
   const rel = context.rels.get(rId);
@@ -80,16 +81,16 @@ function parseBlipFill(blipFillNode: any, context: FillParseContext): ImageFill 
   return { type: "image", imageData, mimeType };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseGradientFill(gradNode: any, colorResolver: ColorResolver): Fill | null {
-  const gsLst = gradNode.gsLst?.gs;
-  if (!gsLst) {
+function parseGradientFill(gradNode: XmlNode, colorResolver: ColorResolver): Fill | null {
+  const gsLst = gradNode.gsLst as XmlNode | undefined;
+  const gsArr = gsLst?.gs as XmlNode[] | undefined;
+  if (!gsArr) {
     console.warn(`${WARN_PREFIX} GradientFill: gsLst not found, skipping gradient`);
     return null;
   }
 
   const stops: GradientStop[] = [];
-  for (const gs of gsLst) {
+  for (const gs of gsArr) {
     const position = Number(gs["@_pos"] ?? 0) / 100000;
     const color = colorResolver.resolve(gs);
     if (color) {
@@ -97,8 +98,9 @@ function parseGradientFill(gradNode: any, colorResolver: ColorResolver): Fill | 
     }
   }
 
-  if (gradNode.path) {
-    const fillToRect = gradNode.path.fillToRect;
+  const pathNode = gradNode.path as XmlNode | undefined;
+  if (pathNode) {
+    const fillToRect = pathNode.fillToRect as XmlNode | undefined;
     let centerX = 0.5;
     let centerY = 0.5;
     if (fillToRect) {
@@ -113,33 +115,32 @@ function parseGradientFill(gradNode: any, colorResolver: ColorResolver): Fill | 
   }
 
   let angle = 0;
-  if (gradNode.lin) {
-    angle = Number(gradNode.lin["@_ang"] ?? 0) / 60000;
+  const lin = gradNode.lin as XmlNode | undefined;
+  if (lin) {
+    angle = Number(lin["@_ang"] ?? 0) / 60000;
   }
 
   return { type: "gradient", stops, angle, gradientType: "linear" };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parsePatternFill(pattNode: any, colorResolver: ColorResolver): PatternFill | null {
-  const preset = pattNode["@_prst"] ?? "ltDnDiag";
-  const fgColor = pattNode.fgClr ? colorResolver.resolve(pattNode.fgClr) : null;
-  const bgColor = pattNode.bgClr ? colorResolver.resolve(pattNode.bgClr) : null;
+function parsePatternFill(pattNode: XmlNode, colorResolver: ColorResolver): PatternFill | null {
+  const preset = (pattNode["@_prst"] as string | undefined) ?? "ltDnDiag";
+  const fgColor = pattNode.fgClr ? colorResolver.resolve(pattNode.fgClr as XmlNode) : null;
+  const bgColor = pattNode.bgClr ? colorResolver.resolve(pattNode.bgClr as XmlNode) : null;
 
   if (!fgColor || !bgColor) return null;
 
   return { type: "pattern", preset, foregroundColor: fgColor, backgroundColor: bgColor };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function parseOutline(lnNode: any, colorResolver: ColorResolver): Outline | null {
+export function parseOutline(lnNode: XmlNode, colorResolver: ColorResolver): Outline | null {
   if (!lnNode) return null;
 
   const width = Number(lnNode["@_w"] ?? 12700);
 
   let fill: SolidFill | null = null;
   if (lnNode.solidFill) {
-    const color = colorResolver.resolve(lnNode.solidFill);
+    const color = colorResolver.resolve(lnNode.solidFill as XmlNode);
     if (color) {
       fill = { type: "solid", color };
     }
@@ -149,22 +150,22 @@ export function parseOutline(lnNode: any, colorResolver: ColorResolver): Outline
     return null;
   }
 
-  const dashStyle = (lnNode.prstDash?.["@_val"] ?? "solid") as DashStyle;
+  const prstDash = lnNode.prstDash as XmlNode | undefined;
+  const dashStyle = ((prstDash?.["@_val"] as string | undefined) ?? "solid") as DashStyle;
 
-  const headEnd = parseArrowEndpoint(lnNode.headEnd);
-  const tailEnd = parseArrowEndpoint(lnNode.tailEnd);
+  const headEnd = parseArrowEndpoint(lnNode.headEnd as XmlNode);
+  const tailEnd = parseArrowEndpoint(lnNode.tailEnd as XmlNode);
 
   return { width, fill, dashStyle, headEnd, tailEnd };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseArrowEndpoint(node: any): ArrowEndpoint | null {
+function parseArrowEndpoint(node: XmlNode): ArrowEndpoint | null {
   if (!node) return null;
-  const type = (node["@_type"] ?? "none") as ArrowType;
+  const type = ((node["@_type"] as string | undefined) ?? "none") as ArrowType;
   if (type === "none") return null;
   return {
     type,
-    width: (node["@_w"] ?? "med") as ArrowSize,
-    length: (node["@_len"] ?? "med") as ArrowSize,
+    width: ((node["@_w"] as string | undefined) ?? "med") as ArrowSize,
+    length: ((node["@_len"] as string | undefined) ?? "med") as ArrowSize,
   };
 }

@@ -28,6 +28,7 @@ import type { Relationship } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import type { FontScheme } from "../model/theme.js";
 import { parseXml, parseXmlOrdered } from "./xml-parser.js";
+import type { XmlNode, XmlOrderedNode } from "./xml-parser.js";
 import { parseFillFromNode, parseOutline } from "./fill-parser.js";
 import type { FillParseContext } from "./fill-parser.js";
 import { parseEffectList } from "./effect-parser.js";
@@ -51,15 +52,15 @@ const WARN_PREFIX = "[pptx-glimpse]";
 const SHAPE_TAGS = new Set(["sp", "pic", "cxnSp", "grpSp", "graphicFrame"]);
 
 // preserveOrder パース結果を path で辿り、指定ノードの子配列を返す。
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function navigateOrdered(ordered: any[], path: string[]): any[] | null {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let current: any[] = ordered;
+export function navigateOrdered(
+  ordered: XmlOrderedNode[],
+  path: string[],
+): XmlOrderedNode[] | null {
+  let current: XmlOrderedNode[] = ordered;
   for (const key of path) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const entry = current.find((item: any) => key in item);
+    const entry = current.find((item: XmlOrderedNode) => key in item);
     if (!entry) return null;
-    current = entry[key];
+    current = entry[key] as XmlOrderedNode[];
     if (!Array.isArray(current)) return null;
   }
   return current;
@@ -73,9 +74,8 @@ export function parseSlide(
   colorResolver: ColorResolver,
   fontScheme?: FontScheme | null,
 ): Slide {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const parsed = parseXml(slideXml) as any;
-  const sld = parsed.sld;
+  const parsed = parseXml(slideXml);
+  const sld = parsed.sld as XmlNode | undefined;
   if (!sld) {
     console.warn(`${WARN_PREFIX} Slide ${slideNumber}: missing root element "sld" in XML`);
   }
@@ -85,14 +85,15 @@ export function parseSlide(
   const rels = relsXml ? parseRelationships(relsXml) : new Map<string, Relationship>();
 
   const fillContext: FillParseContext = { rels, archive, basePath: slidePath };
-  const background = parseBackground(sld?.cSld?.bg, colorResolver, fillContext);
+  const cSld = (sld?.cSld as XmlNode | undefined) ?? undefined;
+  const background = parseBackground(cSld?.bg as XmlNode | undefined, colorResolver, fillContext);
 
   // ordered パーサーで子要素の出現順序を取得（Z-order 保持のため）
   const orderedParsed = parseXmlOrdered(slideXml);
   const orderedSpTree = navigateOrdered(orderedParsed, ["sld", "cSld", "spTree"]);
 
   const elements = parseShapeTree(
-    sld?.cSld?.spTree,
+    cSld?.spTree as XmlNode | undefined,
     rels,
     slidePath,
     archive,
@@ -107,22 +108,20 @@ export function parseSlide(
 }
 
 function parseBackground(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  bgNode: any,
+  bgNode: XmlNode | undefined,
   colorResolver: ColorResolver,
   context?: FillParseContext,
 ): Background | null {
   if (!bgNode) return null;
 
-  const bgPr = bgNode.bgPr;
+  const bgPr = bgNode.bgPr as XmlNode | undefined;
   if (!bgPr) return null;
 
   const fill = parseFillFromNode(bgPr, colorResolver, context);
   return { fill };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function mergeChildElements(spTree: any, source: any): void {
+function mergeChildElements(spTree: XmlNode, source: XmlNode): void {
   const tags = ["sp", "pic", "cxnSp", "grpSp", "graphicFrame"];
   for (const tag of tags) {
     const items = source[tag];
@@ -132,14 +131,13 @@ function mergeChildElements(spTree: any, source: any): void {
     }
     const arr = Array.isArray(items) ? items : [items];
     for (const item of arr) {
-      spTree[tag].push(item);
+      (spTree[tag] as unknown[]).push(item);
     }
   }
 }
 
 export function parseShapeTree(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  spTree: any,
+  spTree: XmlNode | undefined,
   rels: Map<string, Relationship>,
   slidePath: string,
   archive: PptxArchive,
@@ -147,8 +145,7 @@ export function parseShapeTree(
   context?: string,
   fillContext?: FillParseContext,
   fontScheme?: FontScheme | null,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  orderedChildren?: any[] | null,
+  orderedChildren?: XmlOrderedNode[] | null,
 ): SlideElement[] {
   if (!spTree) return [];
 
@@ -169,18 +166,18 @@ export function parseShapeTree(
 
   // フォールバック: タイプ別イテレーション（後方互換）
   // mc:AlternateContent の処理: Choice 内の要素を spTree にマージ
-  const alternateContents = spTree.AlternateContent ?? [];
+  const alternateContents = (spTree.AlternateContent as XmlNode[] | undefined) ?? [];
   for (const ac of alternateContents) {
     const choices = Array.isArray(ac.Choice) ? ac.Choice : ac.Choice ? [ac.Choice] : [];
     for (const choice of choices) {
-      mergeChildElements(spTree, choice);
+      mergeChildElements(spTree, choice as XmlNode);
     }
   }
 
   const ctx = context ?? slidePath;
   const elements: SlideElement[] = [];
 
-  const shapes = spTree.sp ?? [];
+  const shapes = (spTree.sp as XmlNode[] | undefined) ?? [];
   for (const sp of shapes) {
     const shape = parseShape(sp, colorResolver, rels, fillContext, fontScheme);
     if (shape) {
@@ -190,7 +187,7 @@ export function parseShapeTree(
     }
   }
 
-  const pics = spTree.pic ?? [];
+  const pics = (spTree.pic as XmlNode[] | undefined) ?? [];
   for (const pic of pics) {
     const img = parseImage(pic, rels, slidePath, archive, colorResolver);
     if (img) {
@@ -200,7 +197,7 @@ export function parseShapeTree(
     }
   }
 
-  const cxnSps = spTree.cxnSp ?? [];
+  const cxnSps = (spTree.cxnSp as XmlNode[] | undefined) ?? [];
   for (const cxn of cxnSps) {
     const connector = parseConnector(cxn, colorResolver);
     if (connector) {
@@ -210,7 +207,7 @@ export function parseShapeTree(
     }
   }
 
-  const grpSps = spTree.grpSp ?? [];
+  const grpSps = (spTree.grpSp as XmlNode[] | undefined) ?? [];
   for (const grp of grpSps) {
     const group = parseGroup(grp, rels, slidePath, archive, colorResolver, fillContext, fontScheme);
     if (group) {
@@ -220,7 +217,7 @@ export function parseShapeTree(
     }
   }
 
-  const graphicFrames = spTree.graphicFrame ?? [];
+  const graphicFrames = (spTree.graphicFrame as XmlNode[] | undefined) ?? [];
   for (const gf of graphicFrames) {
     const chart = parseGraphicFrame(gf, rels, slidePath, archive, colorResolver, fontScheme);
     if (chart) {
@@ -235,10 +232,8 @@ export function parseShapeTree(
 
 // orderedChildren を使ってドキュメント順で要素をイテレートする
 function parseShapeTreeOrdered(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  spTree: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  orderedChildren: any[],
+  spTree: XmlNode,
+  orderedChildren: XmlOrderedNode[],
   rels: Map<string, Relationship>,
   slidePath: string,
   archive: PptxArchive,
@@ -260,8 +255,8 @@ function parseShapeTreeOrdered(
       const acIndex = tagCounters["AlternateContent"] ?? 0;
       tagCounters["AlternateContent"] = acIndex + 1;
 
-      const acList = spTree.AlternateContent ?? [];
-      const acData = acList[acIndex];
+      const acList = (spTree.AlternateContent as XmlNode[] | undefined) ?? [];
+      const acData = acList[acIndex] as XmlNode | undefined;
       if (!acData) continue;
 
       const choices = Array.isArray(acData.Choice)
@@ -269,17 +264,16 @@ function parseShapeTreeOrdered(
         : acData.Choice
           ? [acData.Choice]
           : [];
-      const firstChoice = choices[0];
+      const firstChoice = choices[0] as XmlNode | undefined;
       if (!firstChoice) continue;
 
       // ordered 結果から Choice の子要素を取得
-      const acOrderedChildren = child.AlternateContent;
+      const acOrderedChildren = child.AlternateContent as XmlOrderedNode[] | undefined;
 
       const choiceOrdered = Array.isArray(acOrderedChildren)
-        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          acOrderedChildren.find((c: any) => "Choice" in c)
+        ? acOrderedChildren.find((c: XmlOrderedNode) => "Choice" in c)
         : null;
-      const choiceChildren = choiceOrdered?.Choice;
+      const choiceChildren = choiceOrdered?.Choice as XmlOrderedNode[] | undefined;
 
       if (Array.isArray(choiceChildren)) {
         // Choice 内の子要素をドキュメント順で処理
@@ -293,7 +287,7 @@ function parseShapeTreeOrdered(
 
           const items = firstChoice[choiceTag];
           const arr = Array.isArray(items) ? items : items ? [items] : [];
-          const element = arr[choiceIdx];
+          const element = arr[choiceIdx] as XmlNode | undefined;
           if (!element) continue;
 
           parseAndPushElement(
@@ -319,7 +313,8 @@ function parseShapeTreeOrdered(
     const index = tagCounters[tag] ?? 0;
     tagCounters[tag] = index + 1;
 
-    const element = spTree[tag]?.[index];
+    const tagArray = spTree[tag] as XmlNode[] | undefined;
+    const element = tagArray?.[index];
     if (!element) continue;
 
     parseAndPushElement(
@@ -343,10 +338,8 @@ function parseShapeTreeOrdered(
 // タグに応じた要素パース処理を行い elements に追加する
 function parseAndPushElement(
   tag: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  element: any,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  orderedNode: any,
+  element: XmlNode,
+  orderedNode: XmlOrderedNode,
   elements: SlideElement[],
   rels: Map<string, Relationship>,
   slidePath: string,
@@ -386,7 +379,7 @@ function parseAndPushElement(
     }
     case "grpSp": {
       // ordered 結果からグループの子要素順序を取得
-      const grpOrderedChildren = orderedNode[tag] ?? null;
+      const grpOrderedChildren = (orderedNode[tag] as XmlOrderedNode[] | undefined) ?? null;
       const group = parseGroup(
         element,
         rels,
@@ -424,27 +417,28 @@ function parseAndPushElement(
 }
 
 function parseShape(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  sp: any,
+  sp: XmlNode,
   colorResolver: ColorResolver,
   rels?: Map<string, Relationship>,
   fillContext?: FillParseContext,
   fontScheme?: FontScheme | null,
 ): ShapeElement | null {
-  const spPr = sp.spPr;
+  const spPr = sp.spPr as XmlNode | undefined;
   if (!spPr) return null;
 
-  const transform = parseTransform(spPr.xfrm);
+  const transform = parseTransform(spPr.xfrm as XmlNode | undefined);
   if (!transform) return null;
 
   const geometry = parseGeometry(spPr);
   const fill = parseFillFromNode(spPr, colorResolver, fillContext);
-  const outline = parseOutline(spPr.ln, colorResolver);
-  const textBody = parseTextBody(sp.txBody, colorResolver, rels, fontScheme);
-  const effects = parseEffectList(spPr.effectLst, colorResolver);
+  const outline = parseOutline(spPr.ln as XmlNode, colorResolver);
+  const textBody = parseTextBody(sp.txBody as XmlNode | undefined, colorResolver, rels, fontScheme);
+  const effects = parseEffectList(spPr.effectLst as XmlNode, colorResolver);
 
-  const ph = sp.nvSpPr?.nvPr?.ph;
-  const placeholderType = ph ? (ph["@_type"] ?? "body") : undefined;
+  const nvSpPr = sp.nvSpPr as XmlNode | undefined;
+  const nvPr = nvSpPr?.nvPr as XmlNode | undefined;
+  const ph = nvPr?.ph as XmlNode | undefined;
+  const placeholderType = ph ? ((ph["@_type"] as string | undefined) ?? "body") : undefined;
   const placeholderIdx = ph?.["@_idx"] !== undefined ? Number(ph["@_idx"]) : undefined;
 
   return {
@@ -461,21 +455,22 @@ function parseShape(
 }
 
 function parseImage(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  pic: any,
+  pic: XmlNode,
   rels: Map<string, Relationship>,
   slidePath: string,
   archive: PptxArchive,
   colorResolver: ColorResolver,
 ): ImageElement | null {
-  const spPr = pic.spPr;
+  const spPr = pic.spPr as XmlNode | undefined;
   if (!spPr) return null;
 
-  const transform = parseTransform(spPr.xfrm);
+  const transform = parseTransform(spPr.xfrm as XmlNode | undefined);
   if (!transform) return null;
 
-  const blipFill = pic.blipFill;
-  const rId = blipFill?.blip?.["@_r:embed"] ?? blipFill?.blip?.["@_embed"];
+  const blipFill = pic.blipFill as XmlNode | undefined;
+  const blip = blipFill?.blip as XmlNode | undefined;
+  const rId =
+    (blip?.["@_r:embed"] as string | undefined) ?? (blip?.["@_embed"] as string | undefined);
   if (!rId) return null;
 
   const rel = rels.get(rId);
@@ -497,7 +492,7 @@ function parseImage(
   };
   const mimeType = mimeMap[ext] ?? "image/png";
   const imageData = mediaData.toString("base64");
-  const effects = parseEffectList(spPr.effectLst, colorResolver);
+  const effects = parseEffectList(spPr.effectLst as XmlNode, colorResolver);
 
   return {
     type: "image",
@@ -508,41 +503,39 @@ function parseImage(
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseConnector(cxn: any, colorResolver: ColorResolver): ConnectorElement | null {
-  const spPr = cxn.spPr;
+function parseConnector(cxn: XmlNode, colorResolver: ColorResolver): ConnectorElement | null {
+  const spPr = cxn.spPr as XmlNode | undefined;
   if (!spPr) return null;
 
-  const transform = parseTransform(spPr.xfrm);
+  const transform = parseTransform(spPr.xfrm as XmlNode | undefined);
   if (!transform) return null;
 
   const geometry = parseGeometry(spPr);
-  const outline = parseOutline(spPr.ln, colorResolver);
-  const effects = parseEffectList(spPr.effectLst, colorResolver);
+  const outline = parseOutline(spPr.ln as XmlNode, colorResolver);
+  const effects = parseEffectList(spPr.effectLst as XmlNode, colorResolver);
 
   return { type: "connector", transform, geometry, outline, effects };
 }
 
 function parseGroup(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  grp: any,
+  grp: XmlNode,
   rels: Map<string, Relationship>,
   slidePath: string,
   archive: PptxArchive,
   colorResolver: ColorResolver,
   parentFillContext?: FillParseContext,
   fontScheme?: FontScheme | null,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  orderedChildren?: any[] | null,
+  orderedChildren?: XmlOrderedNode[] | null,
 ): GroupElement | null {
-  const grpSpPr = grp.grpSpPr;
+  const grpSpPr = grp.grpSpPr as XmlNode | undefined;
   if (!grpSpPr) return null;
 
-  const transform = parseTransform(grpSpPr.xfrm);
+  const xfrm = grpSpPr.xfrm as XmlNode | undefined;
+  const transform = parseTransform(xfrm);
   if (!transform) return null;
 
-  const childOff = grpSpPr.xfrm?.chOff;
-  const childExt = grpSpPr.xfrm?.chExt;
+  const childOff = xfrm?.chOff as XmlNode | undefined;
+  const childExt = xfrm?.chExt as XmlNode | undefined;
   const childTransform: Transform = {
     offsetX: Number(childOff?.["@_x"] ?? 0),
     offsetY: Number(childOff?.["@_y"] ?? 0),
@@ -572,31 +565,32 @@ function parseGroup(
     fontScheme,
     orderedChildren,
   );
-  const effects = parseEffectList(grpSpPr.effectLst, colorResolver);
+  const effects = parseEffectList(grpSpPr.effectLst as XmlNode, colorResolver);
 
   return { type: "group", transform, childTransform, children, effects };
 }
 
 function parseGraphicFrame(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  gf: any,
+  gf: XmlNode,
   rels: Map<string, Relationship>,
   slidePath: string,
   archive: PptxArchive,
   colorResolver: ColorResolver,
   fontScheme?: FontScheme | null,
 ): ChartElement | TableElement | GroupElement | null {
-  const xfrm = gf.xfrm;
+  const xfrm = gf.xfrm as XmlNode | undefined;
   const transform = parseTransform(xfrm);
   if (!transform) return null;
 
-  const graphicData = gf.graphic?.graphicData;
+  const graphic = gf.graphic as XmlNode | undefined;
+  const graphicData = graphic?.graphicData as XmlNode | undefined;
   if (!graphicData) return null;
 
   // Chart
-  const chartRef = graphicData.chart;
+  const chartRef = graphicData.chart as XmlNode | undefined;
   if (chartRef) {
-    const rId = chartRef["@_r:id"] ?? chartRef["@_id"];
+    const rId =
+      (chartRef["@_r:id"] as string | undefined) ?? (chartRef["@_id"] as string | undefined);
     if (!rId) return null;
 
     const rel = rels.get(rId);
@@ -613,7 +607,7 @@ function parseGraphicFrame(
   }
 
   // Table
-  const tblNode = graphicData.tbl;
+  const tblNode = graphicData.tbl as XmlNode | undefined;
   if (tblNode) {
     const tableData = parseTable(tblNode, colorResolver, fontScheme);
     if (!tableData) return null;
@@ -638,8 +632,7 @@ function parseGraphicFrame(
 }
 
 function parseSmartArt(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  graphicData: any,
+  graphicData: XmlNode,
   transform: Transform,
   rels: Map<string, Relationship>,
   slidePath: string,
@@ -648,11 +641,11 @@ function parseSmartArt(
   fontScheme?: FontScheme | null,
 ): GroupElement | null {
   // dgm:relIds → removeNSPrefix → relIds
-  const relIds = graphicData.relIds;
+  const relIds = graphicData.relIds as XmlNode | undefined;
   if (!relIds) return null;
 
   // r:dm 属性 (data model relationship ID)
-  const dmRId = relIds["@_r:dm"] ?? relIds["@_dm"];
+  const dmRId = (relIds["@_r:dm"] as string | undefined) ?? (relIds["@_dm"] as string | undefined);
   if (!dmRId) return null;
 
   const dmRel = rels.get(dmRId);
@@ -691,9 +684,9 @@ function parseSmartArt(
   const drawingXml = archive.files.get(drawingPath);
   if (!drawingXml) return null;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const parsed = parseXml(drawingXml) as any;
-  const spTree = parsed.drawing?.spTree;
+  const parsed = parseXml(drawingXml);
+  const drawing = parsed.drawing as XmlNode | undefined;
+  const spTree = drawing?.spTree as XmlNode | undefined;
   if (!spTree) return null;
 
   // drawing XML 用のリレーションシップを取得
@@ -704,9 +697,10 @@ function parseSmartArt(
     : new Map<string, Relationship>();
 
   // grpSpPr から childTransform を取得
-  const grpXfrm = spTree.grpSpPr?.xfrm;
-  const childOff = grpXfrm?.chOff;
-  const childExt = grpXfrm?.chExt;
+  const grpSpPr = spTree.grpSpPr as XmlNode | undefined;
+  const grpXfrm = grpSpPr?.xfrm as XmlNode | undefined;
+  const childOff = grpXfrm?.chOff as XmlNode | undefined;
+  const childExt = grpXfrm?.chExt as XmlNode | undefined;
   const childTransform: Transform = {
     offsetX: Number(childOff?.["@_x"] ?? 0),
     offsetY: Number(childOff?.["@_y"] ?? 0),
@@ -750,12 +744,11 @@ function parseSmartArt(
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseTransform(xfrm: any): Transform | null {
+function parseTransform(xfrm: XmlNode | undefined): Transform | null {
   if (!xfrm) return null;
 
-  const off = xfrm.off;
-  const ext = xfrm.ext;
+  const off = xfrm.off as XmlNode | undefined;
+  const ext = xfrm.ext as XmlNode | undefined;
   if (!off || !ext) return null;
 
   let offsetX = Number(off["@_x"] ?? 0);
@@ -796,18 +789,19 @@ function parseTransform(xfrm: any): Transform | null {
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseGeometry(spPr: any): Geometry {
+function parseGeometry(spPr: XmlNode): Geometry {
   if (spPr.prstGeom) {
-    const preset = spPr.prstGeom["@_prst"] ?? "rect";
-    const avLst = spPr.prstGeom.avLst;
+    const prstGeom = spPr.prstGeom as XmlNode;
+    const preset = (prstGeom["@_prst"] as string | undefined) ?? "rect";
+    const avLst = prstGeom.avLst as XmlNode | undefined;
     const adjustValues: Record<string, number> = {};
 
     if (avLst?.gd) {
       const guides = Array.isArray(avLst.gd) ? avLst.gd : [avLst.gd];
       for (const gd of guides) {
-        const name = gd["@_name"] as string;
-        const fmla = gd["@_fmla"] as string;
+        const gdNode = gd as XmlNode;
+        const name = gdNode["@_name"] as string;
+        const fmla = gdNode["@_fmla"] as string;
         const match = fmla?.match(/val\s+(\d+)/);
         if (name && match) {
           adjustValues[name] = Number(match[1]);
@@ -819,7 +813,7 @@ function parseGeometry(spPr: any): Geometry {
   }
 
   if (spPr.custGeom) {
-    const paths = parseCustomGeometry(spPr.custGeom);
+    const paths = parseCustomGeometry(spPr.custGeom as XmlNode);
     if (paths) {
       return { type: "custom", paths };
     }
@@ -829,15 +823,14 @@ function parseGeometry(spPr: any): Geometry {
 }
 
 export function parseTextBody(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  txBody: any,
+  txBody: XmlNode | undefined,
   colorResolver: ColorResolver,
   rels?: Map<string, Relationship>,
   fontScheme?: FontScheme | null,
 ): TextBody | null {
   if (!txBody) return null;
 
-  const bodyPr = txBody.bodyPr;
+  const bodyPr = txBody.bodyPr as XmlNode | undefined;
 
   let autoFit: BodyProperties["autoFit"] = "noAutofit";
   let fontScale = 1;
@@ -846,9 +839,10 @@ export function parseTextBody(
     autoFit = "normAutofit";
     const normAutofit = bodyPr.normAutofit;
     if (typeof normAutofit === "object" && normAutofit !== null) {
-      fontScale = normAutofit["@_fontScale"] ? Number(normAutofit["@_fontScale"]) / 100000 : 1;
-      lnSpcReduction = normAutofit["@_lnSpcReduction"]
-        ? Number(normAutofit["@_lnSpcReduction"]) / 100000
+      const normNode = normAutofit as XmlNode;
+      fontScale = normNode["@_fontScale"] ? Number(normNode["@_fontScale"]) / 100000 : 1;
+      lnSpcReduction = normNode["@_lnSpcReduction"]
+        ? Number(normNode["@_lnSpcReduction"]) / 100000
         : 0;
     }
   } else if (bodyPr?.spAutoFit !== undefined) {
@@ -867,10 +861,10 @@ export function parseTextBody(
     lnSpcReduction,
   };
 
-  const lstStyle = parseListStyle(txBody.lstStyle);
+  const lstStyle = parseListStyle(txBody.lstStyle as XmlNode);
 
   const paragraphs: Paragraph[] = [];
-  const pList = txBody.p ?? [];
+  const pList = (txBody.p as XmlNode[] | undefined) ?? [];
   for (const p of pList) {
     paragraphs.push(parseParagraph(p, colorResolver, rels, fontScheme, lstStyle));
   }
@@ -892,61 +886,71 @@ const VALID_AUTO_NUM_SCHEMES = new Set([
   "arabicPlain",
 ]);
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseBullet(pPr: any, colorResolver: ColorResolver) {
+function parseBullet(pPr: XmlNode | undefined, colorResolver: ColorResolver) {
   let bullet: BulletType | null = null;
   let bulletFont: string | null = null;
-  let bulletColor = colorResolver.resolve(pPr?.buClr);
-  if (!pPr?.buClr) bulletColor = null;
-  const bulletSizePct: number | null = pPr?.buSzPct ? Number(pPr.buSzPct["@_val"]) : null;
+  const buClr = pPr?.buClr as XmlNode | undefined;
+  let bulletColor = colorResolver.resolve(buClr as XmlNode);
+  if (!buClr) bulletColor = null;
+  const buSzPct = pPr?.buSzPct as XmlNode | undefined;
+  const bulletSizePct: number | null = buSzPct ? Number(buSzPct["@_val"]) : null;
 
   if (pPr?.buNone !== undefined) {
     bullet = { type: "none" };
   } else if (pPr?.buChar) {
-    bullet = { type: "char", char: pPr.buChar["@_char"] ?? "\u2022" };
+    const buChar = pPr.buChar as XmlNode;
+    bullet = { type: "char", char: (buChar["@_char"] as string | undefined) ?? "\u2022" };
   } else if (pPr?.buAutoNum) {
-    const scheme = pPr.buAutoNum["@_type"] ?? "arabicPeriod";
+    const buAutoNum = pPr.buAutoNum as XmlNode;
+    const scheme = (buAutoNum["@_type"] as string | undefined) ?? "arabicPeriod";
     bullet = {
       type: "autoNum",
       scheme: VALID_AUTO_NUM_SCHEMES.has(scheme) ? (scheme as AutoNumScheme) : "arabicPeriod",
-      startAt: Number(pPr.buAutoNum["@_startAt"] ?? 1),
+      startAt: Number(buAutoNum["@_startAt"] ?? 1),
     };
   }
 
   if (pPr?.buFont) {
-    bulletFont = pPr.buFont["@_typeface"] ?? null;
+    const buFont = pPr.buFont as XmlNode;
+    bulletFont = (buFont["@_typeface"] as string | undefined) ?? null;
   }
 
   return { bullet, bulletFont, bulletColor, bulletSizePct };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseSpacing(spc: any): SpacingValue {
-  if (spc?.spcPts) return { type: "pts", value: Number(spc.spcPts["@_val"]) };
-  if (spc?.spcPct) return { type: "pct", value: Number(spc.spcPct["@_val"]) };
+function parseSpacing(spc: XmlNode | undefined): SpacingValue {
+  if (spc?.spcPts) {
+    const spcPts = spc.spcPts as XmlNode;
+    return { type: "pts", value: Number(spcPts["@_val"]) };
+  }
+  if (spc?.spcPct) {
+    const spcPct = spc.spcPct as XmlNode;
+    return { type: "pct", value: Number(spcPct["@_val"]) };
+  }
   return { type: "pts", value: 0 };
 }
 
 function parseParagraph(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  p: any,
+  p: XmlNode,
   colorResolver: ColorResolver,
   rels?: Map<string, Relationship>,
   fontScheme?: FontScheme | null,
   lstStyle?: DefaultTextStyle,
 ): Paragraph {
-  const pPr = p.pPr;
+  const pPr = p.pPr as XmlNode | undefined;
   const level = Number(pPr?.["@_lvl"] ?? 0);
 
   // lstStyle からレベル対応のデフォルト段落プロパティを取得
   const lstLevelProps = lstStyle?.levels[level];
 
   const { bullet, bulletFont, bulletColor, bulletSizePct } = parseBullet(pPr, colorResolver);
+  const lnSpc = pPr?.lnSpc as XmlNode | undefined;
+  const lnSpcSpcPct = lnSpc?.spcPct as XmlNode | undefined;
   const properties = {
     alignment: (pPr?.["@_algn"] as "l" | "ctr" | "r" | "just") ?? lstLevelProps?.alignment ?? "l",
-    lineSpacing: pPr?.lnSpc?.spcPct ? Number(pPr.lnSpc.spcPct["@_val"]) : null,
-    spaceBefore: parseSpacing(pPr?.spcBef),
-    spaceAfter: parseSpacing(pPr?.spcAft),
+    lineSpacing: lnSpcSpcPct ? Number(lnSpcSpcPct["@_val"]) : null,
+    spaceBefore: parseSpacing(pPr?.spcBef as XmlNode | undefined),
+    spaceAfter: parseSpacing(pPr?.spcAft as XmlNode | undefined),
     level,
     bullet,
     bulletFont,
@@ -959,16 +963,19 @@ function parseParagraph(
   };
 
   // defRPr のマージ: pPr.defRPr > lstStyle.lvl.defRPr
-  const pPrDefRPr = parseDefaultRunProperties(pPr?.defRPr);
+  const pPrDefRPr = parseDefaultRunProperties(pPr?.defRPr as XmlNode);
   const lstDefRPr = lstLevelProps?.defaultRunProperties;
   const mergedDefaults = mergeDefaultRunProperties(pPrDefRPr, lstDefRPr);
 
   const runs: TextRun[] = [];
-  const rList = p.r ?? [];
+  const rList = (p.r as XmlNode[] | undefined) ?? [];
   for (const r of rList) {
-    const text = r.t ?? "";
-    const textContent = typeof text === "object" ? (text["#text"] ?? "") : String(text);
-    const rPr = r.rPr;
+    const text = r.t;
+    const textContent =
+      typeof text === "object"
+        ? (((text as XmlNode)["#text"] as string) ?? "")
+        : String(text as string | number);
+    const rPr = r.rPr as XmlNode | undefined;
     const runProps = parseRunProperties(rPr, colorResolver, rels, fontScheme, mergedDefaults);
     runs.push({ text: textContent, properties: runProps });
   }
@@ -995,8 +1002,7 @@ function mergeDefaultRunProperties(
 }
 
 function parseRunProperties(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  rPr: any,
+  rPr: XmlNode | undefined,
   colorResolver: ColorResolver,
   rels?: Map<string, Relationship>,
   fontScheme?: FontScheme | null,
@@ -1017,15 +1023,18 @@ function parseRunProperties(
     };
   }
 
+  const latin = rPr.latin as XmlNode | undefined;
+  const ea = rPr.ea as XmlNode | undefined;
+
   const fontSize = rPr["@_sz"]
     ? hundredthPointToPoint(Number(rPr["@_sz"]))
     : (defaults?.fontSize ?? null);
   const fontFamily = resolveThemeFont(
-    rPr.latin?.["@_typeface"] ?? defaults?.fontFamily ?? null,
+    (latin?.["@_typeface"] as string | undefined) ?? defaults?.fontFamily ?? null,
     fontScheme,
   );
   const fontFamilyEa = resolveThemeFont(
-    rPr.ea?.["@_typeface"] ?? defaults?.fontFamilyEa ?? null,
+    (ea?.["@_typeface"] as string | undefined) ?? defaults?.fontFamilyEa ?? null,
     fontScheme,
   );
   const bold =
@@ -1044,12 +1053,13 @@ function parseRunProperties(
       : (defaults?.strikethrough ?? false);
   const baseline = rPr["@_baseline"] ? Number(rPr["@_baseline"]) / 1000 : 0;
 
-  let color = colorResolver.resolve(rPr.solidFill ?? rPr);
-  if (!rPr.solidFill && !rPr.srgbClr && !rPr.schemeClr && !rPr.sysClr) {
+  const solidFill = rPr.solidFill as XmlNode | undefined;
+  let color = colorResolver.resolve(solidFill ?? rPr);
+  if (!solidFill && !rPr.srgbClr && !rPr.schemeClr && !rPr.sysClr) {
     color = null;
   }
 
-  const hyperlink = parseHyperlink(rPr.hlinkClick, rels);
+  const hyperlink = parseHyperlink(rPr.hlinkClick as XmlNode | undefined, rels);
 
   return {
     fontSize,
@@ -1066,13 +1076,13 @@ function parseRunProperties(
 }
 
 function parseHyperlink(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  hlinkClick: any,
+  hlinkClick: XmlNode | undefined,
   rels?: Map<string, Relationship>,
 ): Hyperlink | null {
   if (!hlinkClick) return null;
 
-  const rId = hlinkClick["@_r:id"] ?? hlinkClick["@_id"];
+  const rId =
+    (hlinkClick["@_r:id"] as string | undefined) ?? (hlinkClick["@_id"] as string | undefined);
   if (!rId || !rels) return null;
 
   const rel = rels.get(rId);

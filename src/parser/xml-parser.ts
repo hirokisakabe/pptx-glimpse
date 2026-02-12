@@ -1,5 +1,11 @@
 import { XMLParser } from "fast-xml-parser";
 
+/** fast-xml-parser が返す XML ノードの型エイリアス */
+export type XmlNode = Record<string, unknown>;
+
+/** preserveOrder: true で返される順序付き XML ノード */
+export type XmlOrderedNode = Record<string, unknown>;
+
 // OOXML XML で単一要素でも配列として扱う必要があるタグ。
 // fast-xml-parser は子要素が 1 つだとオブジェクト、複数だと配列を返すため、
 // スライド上に図形が 1 つだけの場合などにパース結果が不安定になる。
@@ -45,11 +51,11 @@ export function parseXml(xml: string): Record<string, unknown> {
 // preserveOrder: true で子要素の出現順序を保持するパーサー。
 // spTree 内の異なる要素タイプ（sp, pic, cxnSp 等）の Z-order を正しく復元するために使用。
 // データ取得には既存の parseXml を使い、本関数は順序情報のみに使用する。
-export function parseXmlOrdered(xml: string): unknown[] {
+export function parseXmlOrdered(xml: string): XmlOrderedNode[] {
   const parser = new XMLParser({
     preserveOrder: true,
     removeNSPrefix: true,
     ignoreAttributes: true,
   });
-  return parser.parse(xml) as unknown[];
+  return parser.parse(xml) as XmlOrderedNode[];
 }

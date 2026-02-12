@@ -2,11 +2,11 @@ import type { Background } from "../model/slide.js";
 import type { SlideElement } from "../model/shape.js";
 import type { PlaceholderStyleInfo } from "../model/text.js";
 import type { PptxArchive } from "./pptx-reader.js";
-import { parseXml, parseXmlOrdered } from "./xml-parser.js";
+import { parseXml, parseXmlOrdered, type XmlNode } from "./xml-parser.js";
 import { parseFillFromNode } from "./fill-parser.js";
 import type { FillParseContext } from "./fill-parser.js";
 import { parseShapeTree, navigateOrdered } from "./slide-parser.js";
-import { buildRelsPath, parseRelationships } from "./relationship-parser.js";
+import { buildRelsPath, parseRelationships, type Relationship } from "./relationship-parser.js";
 import { parseListStyle } from "./text-style-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import type { FontScheme } from "../model/theme.js";
@@ -18,18 +18,19 @@ export function parseSlideLayoutBackground(
   colorResolver: ColorResolver,
   context?: FillParseContext,
 ): Background | null {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const parsed = parseXml(xml) as any;
+  const parsed = parseXml(xml);
 
-  if (!parsed.sldLayout) {
+  const sldLayout = parsed.sldLayout as XmlNode | undefined;
+  if (!sldLayout) {
     console.warn(`${WARN_PREFIX} SlideLayout: missing root element "sldLayout" in XML`);
     return null;
   }
 
-  const bg = parsed.sldLayout.cSld?.bg;
+  const cSld = sldLayout.cSld as XmlNode | undefined;
+  const bg = cSld?.bg as XmlNode | undefined;
   if (!bg) return null;
 
-  const bgPr = bg.bgPr;
+  const bgPr = bg.bgPr as XmlNode | undefined;
   if (!bgPr) return null;
 
   const fill = parseFillFromNode(bgPr, colorResolver, context);
@@ -43,20 +44,21 @@ export function parseSlideLayoutElements(
   colorResolver: ColorResolver,
   fontScheme?: FontScheme | null,
 ): SlideElement[] {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const parsed = parseXml(xml) as any;
+  const parsed = parseXml(xml);
 
-  if (!parsed.sldLayout) {
+  const sldLayout = parsed.sldLayout as XmlNode | undefined;
+  if (!sldLayout) {
     console.warn(`${WARN_PREFIX} SlideLayout: missing root element "sldLayout" in XML`);
     return [];
   }
 
-  const spTree = parsed.sldLayout.cSld?.spTree;
+  const cSld = sldLayout.cSld as XmlNode | undefined;
+  const spTree = cSld?.spTree as XmlNode | undefined;
   if (!spTree) return [];
 
   const relsPath = buildRelsPath(layoutPath);
   const relsXml = archive.files.get(relsPath);
-  const rels = relsXml ? parseRelationships(relsXml) : new Map();
+  const rels = relsXml ? parseRelationships(relsXml) : new Map<string, Relationship>();
 
   const orderedParsed = parseXmlOrdered(xml);
   const orderedSpTree = navigateOrdered(orderedParsed, ["sldLayout", "cSld", "spTree"]);
@@ -75,23 +77,29 @@ export function parseSlideLayoutElements(
 }
 
 export function parseSlideLayoutPlaceholderStyles(xml: string): PlaceholderStyleInfo[] {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const parsed = parseXml(xml) as any;
-  if (!parsed.sldLayout) return [];
+  const parsed = parseXml(xml);
 
-  const spTree = parsed.sldLayout.cSld?.spTree;
+  const sldLayout = parsed.sldLayout as XmlNode | undefined;
+  if (!sldLayout) return [];
+
+  const cSld = sldLayout.cSld as XmlNode | undefined;
+  const spTree = cSld?.spTree as XmlNode | undefined;
   if (!spTree) return [];
 
   const results: PlaceholderStyleInfo[] = [];
-  const shapes = spTree.sp ?? [];
+  const shapes = (spTree.sp as XmlNode[] | undefined) ?? [];
 
   for (const sp of shapes) {
-    const ph = sp.nvSpPr?.nvPr?.ph;
+    const nvSpPr = sp.nvSpPr as XmlNode | undefined;
+    const nvPr = nvSpPr?.nvPr as XmlNode | undefined;
+    const ph = nvPr?.ph as XmlNode | undefined;
     if (!ph) continue;
 
-    const placeholderType: string = ph["@_type"] ?? "body";
+    const placeholderType: string = (ph["@_type"] as string) ?? "body";
     const placeholderIdx = ph["@_idx"] !== undefined ? Number(ph["@_idx"]) : undefined;
-    const lstStyle = parseListStyle(sp.txBody?.lstStyle);
+    const txBody = sp.txBody as XmlNode | undefined;
+    const lstStyleNode = txBody?.lstStyle as XmlNode | undefined;
+    const lstStyle = lstStyleNode ? parseListStyle(lstStyleNode) : undefined;
 
     results.push({
       placeholderType,
