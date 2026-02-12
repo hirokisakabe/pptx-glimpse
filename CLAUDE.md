@@ -20,6 +20,7 @@ npm run format         # Prettier 整形
 npm run format:check   # Prettier チェック
 npm run typecheck      # tsc --noEmit で型チェック
 npm run render         # tsx scripts/test-render.ts でテストレンダリング
+npm run inspect        # PPTX 内部 XML の調査 (例: npm run inspect -- file.pptx slide1)
 ```
 
 CI は 3 ジョブ構成:
@@ -33,7 +34,7 @@ CI は 3 ジョブ構成:
 データフロー: **PPTX バイナリ → Parser (ZIP解凍+XMLパース) → 中間モデル → Renderer (SVG生成) → PNG変換 (optional)**
 
 - `src/parser/` — PPTX の ZIP 解凍 (`jszip`) と XML パース (`fast-xml-parser`) で中間モデルを構築
-- `src/model/` — 中間モデルの TypeScript インターフェース (Slide, Shape, Fill, Text, Theme, Table, Chart, Image, Line, Presentation 等)
+- `src/model/` — 中間モデルの TypeScript インターフェース (Slide, Shape, Fill, Text, Theme, Table, Chart, Image, Line, Effect, Presentation 等)
 - `src/renderer/` — 中間モデルから SVG 文字列を生成。`geometry/` にプリセット図形定義、テーブル・チャート・画像の個別レンダラーも含む
 - `src/color/` — テーマカラー解決 (schemeClr → colorMap → colorScheme) と色変換 (lumMod/tint/shade)
 - `src/png/` — sharp による SVG → PNG 変換
@@ -57,38 +58,38 @@ CI は 3 ジョブ構成:
 
 ```
 vrt/
-├── compare-utils.ts               # 共通画像比較ユーティリティ
-├── internal/                      # 通常 VRT (自己比較)
-│   ├── visual-regression.test.ts  # テスト本体
-│   ├── fixtures/                  # VRT 用 PPTX フィクスチャ
-│   └── snapshots/                 # 参照スナップショット画像
-└── libreoffice/                   # LibreOffice VRT
-    └── libreoffice-regression.test.ts  # テスト本体 (fixtures/ と snapshots/ は CI で動的生成)
-
-scripts/vrt/
-├── create-fixtures.ts             # 通常 VRT フィクスチャ生成 (TypeScript)
-├── update-snapshots.ts            # 通常 VRT スナップショット更新
-├── generate_fixtures.py           # LibreOffice VRT フィクスチャ生成 (Python)
-└── render_references.sh           # LibreOffice 参照画像生成 (Docker)
+├── compare-utils.ts              # 共通画像比較ユーティリティ
+├── internal/                     # 通常 VRT (自己比較)
+│   ├── regression.test.ts        # テスト本体
+│   ├── create-fixtures.ts        # フィクスチャ生成スクリプト
+│   ├── update-snapshots.ts       # スナップショット更新スクリプト
+│   ├── fixtures/                 # VRT 用 PPTX フィクスチャ
+│   └── snapshots/                # 参照スナップショット画像
+└── libreoffice/                  # LibreOffice VRT
+    ├── regression.test.ts        # テスト本体
+    ├── create_fixtures.py        # フィクスチャ生成 (Python)
+    ├── update_snapshots.sh       # 参照画像生成 (Docker)
+    ├── fixtures/                 # CI で動的生成
+    └── snapshots/                # CI で動的生成
 ```
 
 ### VRT 更新手順
 
 パーサー・レンダラー・モデルの変更で描画結果が変わる場合:
 
-1. **フィクスチャ更新** (新機能追加や既存フィクスチャの修正が必要な場合): `scripts/vrt/create-fixtures.ts` を編集し `npm run test:vrt:fixtures` を実行
-2. **スナップショット更新**: `npm run test:vrt:update` で参照画像を再生成
+1. **フィクスチャ更新** (新機能追加や既存フィクスチャの修正が必要な場合): `vrt/internal/create-fixtures.ts` を編集し `npm run vrt:internal:fixtures` を実行
+2. **スナップショット更新**: `npm run vrt:internal:update` で参照画像を再生成
 3. **テスト確認**: `npm run test` で VRT テストが通ることを確認
 
 ### 同期が必要な 3 箇所
 
 新しい描画機能を追加した場合、以下の **3 箇所すべて** を更新する必要がある:
 
-1. **`scripts/vrt/create-fixtures.ts`** — 新機能をカバーするフィクスチャ (PPTX) を追加
-2. **`vrt/internal/visual-regression.test.ts`** — `VRT_CASES` 配列に新しいテストケースを追加
-3. **`vrt/internal/snapshots/`** — `npm run test:vrt:update` でスナップショットを再生成
+1. **`vrt/internal/create-fixtures.ts`** — 新機能をカバーするフィクスチャ (PPTX) を追加
+2. **`vrt/internal/regression.test.ts`** — `VRT_CASES` 配列に新しいテストケースを追加
+3. **`vrt/internal/snapshots/`** — `npm run vrt:internal:update` でスナップショットを再生成
 
-**よくあるミス**: パーサーやレンダラーを修正したのにスナップショットを更新し忘れて VRT テストが失敗する。描画に影響する変更を行ったら、必ず `npm run test:vrt:update` を実行すること。
+**よくあるミス**: パーサーやレンダラーを修正したのにスナップショットを更新し忘れて VRT テストが失敗する。描画に影響する変更を行ったら、必ず `npm run vrt:internal:update` を実行すること。
 
 ### LibreOffice VRT (Docker ベース)
 
@@ -118,3 +119,4 @@ Docker がない環境では LibreOffice VRT テストは自動的にスキッ�
 - Prettier: ダブルクォート、セミコロンあり、末尾カンマ、printWidth 100
 - ESLint: `_` プレフィックスの未使用変数は許可
 - ESM (`"type": "module"`) — インポートには `.js` 拡張子が必要
+- テストはソースファイルと同じディレクトリにコロケーション (`src/parser/slide-parser.test.ts` 等)
