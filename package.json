@@ -24,6 +24,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "render": "tsx scripts/test-render.ts",
+    "inspect": "tsx scripts/inspect-pptx.ts",
     "vrt:internal:fixtures": "tsx vrt/internal/create-fixtures.ts",
     "vrt:internal:update": "tsx vrt/internal/update-snapshots.ts",
     "vrt:lo:docker-build": "docker build -t pptx-glimpse-vrt docker/libreoffice-vrt",
