@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { buildRelsPath, parseRelationships } from "./relationship-parser.js";
+import { initWarningLogger } from "../warning-logger.js";
 
 describe("buildRelsPath", () => {
   it("builds rels path for slide", () => {
@@ -39,18 +40,21 @@ describe("parseRelationships", () => {
   });
 
   it("warns when Relationships root is missing", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const xml = `<other/>`;
     const result = parseRelationships(xml);
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Relationship: missing root element "Relationships"'),
+      expect.stringContaining('missing root element "Relationships" in XML'),
     );
     expect(result.size).toBe(0);
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("warns and skips entries missing required attributes", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const xml = `
       <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
@@ -64,11 +68,12 @@ describe("parseRelationships", () => {
 
     expect(warnSpy).toHaveBeenCalledTimes(3);
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("Relationship: entry missing required attribute, skipping"),
+      expect.stringContaining("entry missing required attribute, skipping"),
     );
     expect(result.size).toBe(1);
     expect(result.get("rId1")?.target).toBe("target.xml");
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("does not warn for valid XML", () => {

@@ -4,8 +4,7 @@ import type { ColorResolver } from "../color/color-resolver.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import type { Relationship } from "./relationship-parser.js";
 import { resolveRelationshipTarget } from "./relationship-parser.js";
-
-const WARN_PREFIX = "[pptx-glimpse]";
+import { warn, debug } from "../warning-logger.js";
 
 export interface FillParseContext {
   rels: Map<string, Relationship>;
@@ -84,7 +83,7 @@ function parseBlipFill(blipFillNode: any, context: FillParseContext): ImageFill 
 function parseGradientFill(gradNode: any, colorResolver: ColorResolver): Fill | null {
   const gsLst = gradNode.gsLst?.gs;
   if (!gsLst) {
-    console.warn(`${WARN_PREFIX} GradientFill: gsLst not found, skipping gradient`);
+    debug("gradientFill.gsLst", "GradientFill: gsLst not found, skipping gradient");
     return null;
   }
 
@@ -134,6 +133,22 @@ function parsePatternFill(pattNode: any, colorResolver: ColorResolver): PatternF
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function parseOutline(lnNode: any, colorResolver: ColorResolver): Outline | null {
   if (!lnNode) return null;
+
+  // Unsupported feature detection
+  if (lnNode.headEnd) {
+    const headType = lnNode.headEnd["@_type"] ?? "unknown";
+    warn("ln.headEnd", `line head arrow (type="${headType}") not implemented`);
+  }
+  if (lnNode.tailEnd) {
+    const tailType = lnNode.tailEnd["@_type"] ?? "unknown";
+    warn("ln.tailEnd", `line tail arrow (type="${tailType}") not implemented`);
+  }
+  if (lnNode.gradFill) {
+    warn("ln.gradFill", "gradient line fill not implemented");
+  }
+  if (lnNode.pattFill) {
+    warn("ln.pattFill", "pattern line fill not implemented");
+  }
 
   const width = Number(lnNode["@_w"] ?? 12700);
 

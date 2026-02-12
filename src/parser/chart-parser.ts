@@ -2,6 +2,7 @@ import type { ChartData, ChartType, ChartSeries, ChartLegend } from "../model/ch
 import type { ResolvedColor } from "../model/fill.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import { parseXml } from "./xml-parser.js";
+import { warn } from "../warning-logger.js";
 
 const ACCENT_KEYS = ["accent1", "accent2", "accent3", "accent4", "accent5", "accent6"] as const;
 
@@ -70,6 +71,25 @@ function parseChartTypeAndData(
     const barDirection = chartType === "bar" ? (chartNode.barDir?.["@_val"] ?? "col") : undefined;
 
     return { chartType, series, categories, barDirection };
+  }
+
+  // Detect unsupported chart types
+  const knownTags = new Set(CHART_TYPE_MAP.map(([tag]) => tag));
+  const chartTags = [
+    "areaChart",
+    "area3DChart",
+    "surfaceChart",
+    "surface3DChart",
+    "bubbleChart",
+    "radarChart",
+    "stockChart",
+    "ofPieChart",
+  ];
+  for (const tag of chartTags) {
+    if (!knownTags.has(tag) && plotArea[tag]) {
+      warn(`chart.${tag}`, `chart type "${tag}" not implemented`);
+      break;
+    }
   }
 
   return { chartType: null, series: [], categories: [] };

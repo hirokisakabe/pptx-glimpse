@@ -11,8 +11,7 @@ import { buildRelsPath, parseRelationships } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import type { FontScheme } from "../model/theme.js";
 import { parseListStyle } from "./text-style-parser.js";
-
-const WARN_PREFIX = "[pptx-glimpse]";
+import { debug } from "../warning-logger.js";
 
 const DEFAULT_COLOR_MAP: ColorMap = {
   bg1: "lt1",
@@ -34,7 +33,7 @@ export function parseSlideMasterColorMap(xml: string): ColorMap {
   const parsed = parseXml(xml) as any;
 
   if (!parsed.sldMaster) {
-    console.warn(`${WARN_PREFIX} SlideMaster: missing root element "sldMaster" in XML`);
+    debug("slideMaster.missing", `missing root element "sldMaster" in XML`);
     return { ...DEFAULT_COLOR_MAP };
   }
 
@@ -60,7 +59,7 @@ export function parseSlideMasterBackground(
   const parsed = parseXml(xml) as any;
 
   if (!parsed.sldMaster) {
-    console.warn(`${WARN_PREFIX} SlideMaster: missing root element "sldMaster" in XML`);
+    debug("slideMaster.missing", `missing root element "sldMaster" in XML`);
     return null;
   }
 
@@ -85,7 +84,7 @@ export function parseSlideMasterElements(
   const parsed = parseXml(xml) as any;
 
   if (!parsed.sldMaster) {
-    console.warn(`${WARN_PREFIX} SlideMaster: missing root element "sldMaster" in XML`);
+    debug("slideMaster.missing", `missing root element "sldMaster" in XML`);
     return [];
   }
 
@@ -117,7 +116,7 @@ export function parseSlideMasterTxStyles(xml: string): TxStyles | undefined {
   const parsed = parseXml(xml) as any;
 
   if (!parsed.sldMaster) {
-    console.warn(`${WARN_PREFIX} SlideMaster: missing root element "sldMaster" in XML`);
+    debug("slideMaster.missing", `missing root element "sldMaster" in XML`);
     return undefined;
   }
 

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { ColorResolver } from "./color-resolver.js";
+import { initWarningLogger } from "../warning-logger.js";
 import type { ColorScheme, ColorMap } from "../model/theme.js";
 
 const testScheme: ColorScheme = {
@@ -76,14 +77,16 @@ describe("ColorResolver", () => {
   });
 
   it("warns for unknown color node structure", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const result = resolver.resolve({ unknownClr: { "@_val": "FF0000" } });
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("ColorResolver: unknown color node structure [unknownClr]"),
+      expect.stringContaining("unknown color node structure [unknownClr]"),
     );
     expect(result).toBeNull();
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("does not warn for empty object", () => {

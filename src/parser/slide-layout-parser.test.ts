@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { parseSlideLayoutBackground, parseSlideLayoutElements } from "./slide-layout-parser.js";
+import { initWarningLogger } from "../warning-logger.js";
 import { ColorResolver } from "../color/color-resolver.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import type { ShapeElement } from "../model/shape.js";
@@ -173,18 +174,21 @@ describe("parseSlideLayoutElements", () => {
 
 describe("structural validation warnings", () => {
   it("warns when parseSlideLayoutBackground receives XML without sldLayout root", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const xml = `<other/>`;
     const result = parseSlideLayoutBackground(xml, createColorResolver());
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('SlideLayout: missing root element "sldLayout"'),
+      expect.stringContaining('missing root element "sldLayout" in XML'),
     );
     expect(result).toBeNull();
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("warns when parseSlideLayoutElements receives XML without sldLayout root", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const xml = `<other/>`;
     const result = parseSlideLayoutElements(
@@ -195,10 +199,11 @@ describe("structural validation warnings", () => {
     );
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('SlideLayout: missing root element "sldLayout"'),
+      expect.stringContaining('missing root element "sldLayout" in XML'),
     );
     expect(result).toHaveLength(0);
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("does not warn for valid XML", () => {

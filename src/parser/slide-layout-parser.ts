@@ -10,8 +10,7 @@ import { buildRelsPath, parseRelationships } from "./relationship-parser.js";
 import { parseListStyle } from "./text-style-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import type { FontScheme } from "../model/theme.js";
-
-const WARN_PREFIX = "[pptx-glimpse]";
+import { debug } from "../warning-logger.js";
 
 export function parseSlideLayoutBackground(
   xml: string,
@@ -22,7 +21,7 @@ export function parseSlideLayoutBackground(
   const parsed = parseXml(xml) as any;
 
   if (!parsed.sldLayout) {
-    console.warn(`${WARN_PREFIX} SlideLayout: missing root element "sldLayout" in XML`);
+    debug("slideLayout.missing", `missing root element "sldLayout" in XML`);
     return null;
   }
 
@@ -47,7 +46,7 @@ export function parseSlideLayoutElements(
   const parsed = parseXml(xml) as any;
 
   if (!parsed.sldLayout) {
-    console.warn(`${WARN_PREFIX} SlideLayout: missing root element "sldLayout" in XML`);
+    debug("slideLayout.missing", `missing root element "sldLayout" in XML`);
     return [];
   }
 

@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
+import { initWarningLogger } from "../warning-logger.js";
 import {
   parseSlideMasterElements,
   parseSlideMasterColorMap,
@@ -295,44 +296,51 @@ describe("parseSlideMasterTxStyles", () => {
   });
 
   it("warns and returns undefined for invalid XML", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const xml = `<other/>`;
     const result = parseSlideMasterTxStyles(xml);
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('SlideMaster: missing root element "sldMaster"'),
+      expect.stringContaining('missing root element "sldMaster" in XML'),
     );
     expect(result).toBeUndefined();
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 });
 
 describe("structural validation warnings", () => {
   it("warns when parseSlideMasterColorMap receives XML without sldMaster root", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const xml = `<other/>`;
     const result = parseSlideMasterColorMap(xml);
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('SlideMaster: missing root element "sldMaster"'),
+      expect.stringContaining('missing root element "sldMaster" in XML'),
     );
     expect(result.bg1).toBe("lt1");
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("warns when parseSlideMasterBackground receives XML without sldMaster root", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const xml = `<other/>`;
     const result = parseSlideMasterBackground(xml, createColorResolver());
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('SlideMaster: missing root element "sldMaster"'),
+      expect.stringContaining('missing root element "sldMaster" in XML'),
     );
     expect(result).toBeNull();
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("warns when parseSlideMasterElements receives XML without sldMaster root", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const xml = `<other/>`;
     const result = parseSlideMasterElements(
@@ -343,10 +351,11 @@ describe("structural validation warnings", () => {
     );
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('SlideMaster: missing root element "sldMaster"'),
+      expect.stringContaining('missing root element "sldMaster" in XML'),
     );
     expect(result).toHaveLength(0);
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("does not warn for valid XML", () => {

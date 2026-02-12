@@ -1,14 +1,13 @@
 import type { Theme, ColorScheme, FontScheme } from "../model/theme.js";
 import { parseXml } from "./xml-parser.js";
-
-const WARN_PREFIX = "[pptx-glimpse]";
+import { debug } from "../warning-logger.js";
 
 export function parseTheme(xml: string): Theme {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parsed = parseXml(xml) as any;
 
   if (!parsed.theme) {
-    console.warn(`${WARN_PREFIX} Theme: missing root element "theme" in XML`);
+    debug("theme.missing", `missing root element "theme" in XML`);
     return {
       colorScheme: defaultColorScheme(),
       fontScheme: {
@@ -22,7 +21,7 @@ export function parseTheme(xml: string): Theme {
 
   const themeElements = parsed.theme.themeElements;
   if (!themeElements) {
-    console.warn(`${WARN_PREFIX} Theme: themeElements not found, using defaults`);
+    debug("theme.themeElements", "themeElements not found, using defaults");
     return {
       colorScheme: defaultColorScheme(),
       fontScheme: {
@@ -35,10 +34,10 @@ export function parseTheme(xml: string): Theme {
   }
 
   if (!themeElements.clrScheme) {
-    console.warn(`${WARN_PREFIX} Theme: colorScheme not found, using defaults`);
+    debug("theme.colorScheme", "colorScheme not found, using defaults");
   }
   if (!themeElements.fontScheme) {
-    console.warn(`${WARN_PREFIX} Theme: fontScheme not found, using defaults`);
+    debug("theme.fontScheme", "fontScheme not found, using defaults");
   }
 
   const colorScheme = parseColorScheme(themeElements.clrScheme);
