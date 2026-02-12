@@ -21,6 +21,7 @@ npm run format:check   # Prettier check
 npm run typecheck      # Type check with tsc --noEmit
 npm run render         # Test rendering with tsx scripts/test-render.ts
 npm run inspect        # Inspect PPTX internal XML (e.g., npm run inspect -- file.pptx slide1)
+npm run dev -- file.pptx  # Live preview dev server (auto-reload on src/ changes)
 ```
 
 CI consists of 3 jobs:
