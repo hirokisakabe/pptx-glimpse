@@ -835,4 +835,131 @@ describe("structural validation warnings", () => {
 
     warnSpy.mockRestore();
   });
+
+  it("resolves theme font references (+mj-lt, +mn-lt) to actual font names", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:p>
+              <a:r>
+                <a:rPr lang="en-US">
+                  <a:latin typeface="+mj-lt"/>
+                  <a:ea typeface="+mj-ea"/>
+                </a:rPr>
+                <a:t>Major</a:t>
+              </a:r>
+              <a:r>
+                <a:rPr lang="en-US">
+                  <a:latin typeface="+mn-lt"/>
+                  <a:ea typeface="+mn-ea"/>
+                </a:rPr>
+                <a:t>Minor</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const fontScheme = {
+      majorFont: "Calibri Light",
+      minorFont: "Calibri",
+      majorFontEa: "Yu Gothic",
+      minorFontEa: "Yu Mincho",
+    };
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+      undefined,
+      undefined,
+      fontScheme,
+    );
+
+    expect(elements).toHaveLength(1);
+    const shape = elements[0] as ShapeElement;
+    const runs = shape.textBody!.paragraphs[0].runs;
+
+    expect(runs[0].properties.fontFamily).toBe("Calibri Light");
+    expect(runs[0].properties.fontFamilyEa).toBe("Yu Gothic");
+    expect(runs[1].properties.fontFamily).toBe("Calibri");
+    expect(runs[1].properties.fontFamilyEa).toBe("Yu Mincho");
+  });
+
+  it("does not resolve font names that are not theme references", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:p>
+              <a:r>
+                <a:rPr lang="en-US">
+                  <a:latin typeface="Arial"/>
+                  <a:ea typeface="Meiryo"/>
+                </a:rPr>
+                <a:t>Hello</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const fontScheme = {
+      majorFont: "Calibri Light",
+      minorFont: "Calibri",
+      majorFontEa: "Yu Gothic",
+      minorFontEa: "Yu Mincho",
+    };
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+      undefined,
+      undefined,
+      fontScheme,
+    );
+
+    expect(elements).toHaveLength(1);
+    const shape = elements[0] as ShapeElement;
+    const runs = shape.textBody!.paragraphs[0].runs;
+
+    expect(runs[0].properties.fontFamily).toBe("Arial");
+    expect(runs[0].properties.fontFamilyEa).toBe("Meiryo");
+  });
 });
