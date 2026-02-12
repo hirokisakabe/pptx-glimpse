@@ -1,11 +1,13 @@
 import type { Background } from "../model/slide.js";
 import type { SlideElement } from "../model/shape.js";
+import type { PlaceholderStyleInfo } from "../model/text.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import { parseXml } from "./xml-parser.js";
 import { parseFillFromNode } from "./fill-parser.js";
 import type { FillParseContext } from "./fill-parser.js";
 import { parseShapeTree } from "./slide-parser.js";
 import { buildRelsPath, parseRelationships } from "./relationship-parser.js";
+import { parseListStyle } from "./text-style-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import type { FontScheme } from "../model/theme.js";
 
@@ -66,4 +68,33 @@ export function parseSlideLayoutElements(
     undefined,
     fontScheme,
   );
+}
+
+export function parseSlideLayoutPlaceholderStyles(xml: string): PlaceholderStyleInfo[] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parsed = parseXml(xml) as any;
+  if (!parsed.sldLayout) return [];
+
+  const spTree = parsed.sldLayout.cSld?.spTree;
+  if (!spTree) return [];
+
+  const results: PlaceholderStyleInfo[] = [];
+  const shapes = spTree.sp ?? [];
+
+  for (const sp of shapes) {
+    const ph = sp.nvSpPr?.nvPr?.ph;
+    if (!ph) continue;
+
+    const placeholderType: string = ph["@_type"] ?? "body";
+    const placeholderIdx = ph["@_idx"] !== undefined ? Number(ph["@_idx"]) : undefined;
+    const lstStyle = parseListStyle(sp.txBody?.lstStyle);
+
+    results.push({
+      placeholderType,
+      ...(placeholderIdx !== undefined && { placeholderIdx }),
+      ...(lstStyle && { lstStyle }),
+    });
+  }
+
+  return results;
 }

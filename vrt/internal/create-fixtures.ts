@@ -295,8 +295,10 @@ interface PptxBuildOptions {
   contentTypesExtra?: string[];
   slideMasterXml?: string;
   slideMasterRelsXml?: string;
+  slideLayoutXml?: string;
   slideSize?: { cx: number; cy: number; type?: string };
   themeXml?: string;
+  defaultTextStyleXml?: string;
 }
 
 async function buildPptx(options: PptxBuildOptions): Promise<Buffer> {
@@ -336,6 +338,9 @@ async function buildPptx(options: PptxBuildOptions): Promise<Buffer> {
   const sldSzCx = options.slideSize?.cx ?? SLIDE_W;
   const sldSzCy = options.slideSize?.cy ?? SLIDE_H;
   const sldSzType = options.slideSize?.type ?? "screen16x9";
+  const defaultTextStyleSection = options.defaultTextStyleXml
+    ? `<p:defaultTextStyle>${options.defaultTextStyleXml}</p:defaultTextStyle>`
+    : "";
   zip.file(
     "ppt/presentation.xml",
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -343,6 +348,7 @@ async function buildPptx(options: PptxBuildOptions): Promise<Buffer> {
   <p:sldMasterIdLst><p:sldMasterId r:id="rId1"/></p:sldMasterIdLst>
   <p:sldIdLst>${sldIdLst}</p:sldIdLst>
   <p:sldSz cx="${sldSzCx}" cy="${sldSzCy}" type="${sldSzType}"/>
+  ${defaultTextStyleSection}
 </p:presentation>`,
   );
 
@@ -375,7 +381,7 @@ async function buildPptx(options: PptxBuildOptions): Promise<Buffer> {
     "ppt/slideMasters/_rels/slideMaster1.xml.rels",
     options.slideMasterRelsXml ?? slideMaster1Rels,
   );
-  zip.file("ppt/slideLayouts/slideLayout1.xml", slideLayout1);
+  zip.file("ppt/slideLayouts/slideLayout1.xml", options.slideLayoutXml ?? slideLayout1);
   zip.file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", slideLayout1Rels);
   zip.file("ppt/theme/theme1.xml", options.themeXml ?? theme1);
 
@@ -3586,6 +3592,133 @@ async function createThemeFontFixture(): Promise<void> {
   savePptx(buffer, "theme-fonts.pptx");
 }
 
+// ============================================================
+// Text Style Inheritance
+// ============================================================
+async function createTextStyleInheritanceFixture(): Promise<void> {
+  // スライドマスター: txStyles (titleStyle: 36pt, bodyStyle: 24pt, otherStyle: 14pt)
+  const customSlideMaster = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sldMaster xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr/>
+    </p:spTree>
+  </p:cSld>
+  <p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>
+  <p:sldLayoutIdLst><p:sldLayoutId r:id="rId1"/></p:sldLayoutIdLst>
+  <p:txStyles>
+    <p:titleStyle>
+      <a:lvl1pPr><a:defRPr sz="3600"/></a:lvl1pPr>
+    </p:titleStyle>
+    <p:bodyStyle>
+      <a:lvl1pPr><a:defRPr sz="2400"/></a:lvl1pPr>
+      <a:lvl2pPr><a:defRPr sz="2000"/></a:lvl2pPr>
+    </p:bodyStyle>
+    <p:otherStyle>
+      <a:lvl1pPr><a:defRPr sz="1400"/></a:lvl1pPr>
+    </p:otherStyle>
+  </p:txStyles>
+</p:sldMaster>`;
+
+  // defaultTextStyle: lvl1pPr の defRPr に 12pt
+  const defaultTextStyleXml = `<a:lvl1pPr><a:defRPr sz="1200"/></a:lvl1pPr>`;
+
+  const slideRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="${REL_TYPES.slideLayout}" Target="../slideLayouts/slideLayout1.xml"/>
+</Relationships>`;
+
+  // Shape 1: title プレースホルダー (fontSize なし → txStyles.titleStyle から 36pt)
+  const shape1 = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="2" name="Title"/><p:cNvSpPr/><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="457200" y="274638"/><a:ext cx="8229600" cy="1143000"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr/>
+    <a:p><a:r><a:t>Title (36pt from txStyles)</a:t></a:r></a:p>
+  </p:txBody>
+</p:sp>`;
+
+  // Shape 2: body プレースホルダー (fontSize なし → txStyles.bodyStyle から 24pt)
+  const shape2 = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="3" name="Body"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="457200" y="1600200"/><a:ext cx="8229600" cy="1143000"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr/>
+    <a:p><a:r><a:t>Body (24pt from txStyles)</a:t></a:r></a:p>
+  </p:txBody>
+</p:sp>`;
+
+  // Shape 3: 通常シェイプ (fontSize なし → txStyles.otherStyle から 14pt)
+  const shape3 = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="4" name="Other"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="457200" y="2971800"/><a:ext cx="3810000" cy="762000"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:solidFill><a:srgbClr val="E7E6E6"/></a:solidFill>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr/>
+    <a:p><a:r><a:t>Other (14pt from otherStyle)</a:t></a:r></a:p>
+  </p:txBody>
+</p:sp>`;
+
+  // Shape 4: title プレースホルダーで rPr に fontSize 直接指定 (20pt, txStyles より優先)
+  const shape4 = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="5" name="Title Direct"/><p:cNvSpPr/><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="457200" y="3962400"/><a:ext cx="3810000" cy="762000"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr/>
+    <a:p><a:r><a:rPr sz="2000"/><a:t>Title direct 20pt</a:t></a:r></a:p>
+  </p:txBody>
+</p:sp>`;
+
+  // Shape 5: body レベル1 (fontSize なし → txStyles.bodyStyle.lvl2pPr から 20pt)
+  const shape5 = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="6" name="Body Level2"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="2"/></p:nvPr></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="4876800" y="2971800"/><a:ext cx="3810000" cy="1752600"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr/>
+    <a:p><a:pPr lvl="0"/><a:r><a:t>Body L1 (24pt)</a:t></a:r></a:p>
+    <a:p><a:pPr lvl="1"/><a:r><a:t>Body L2 (20pt)</a:t></a:r></a:p>
+  </p:txBody>
+</p:sp>`;
+
+  const slideXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr/>
+      ${shape1}
+      ${shape2}
+      ${shape3}
+      ${shape4}
+      ${shape5}
+    </p:spTree>
+  </p:cSld>
+</p:sld>`;
+
+  const buffer = await buildPptx({
+    slides: [{ xml: slideXml, rels: slideRels }],
+    slideMasterXml: customSlideMaster,
+    defaultTextStyleXml,
+  });
+  savePptx(buffer, "text-style-inheritance.pptx");
+}
+
 async function main(): Promise<void> {
   console.log("Creating VRT fixtures...\n");
 
@@ -3615,6 +3748,7 @@ async function main(): Promise<void> {
   await createPatternImageFillFixture();
   await createSmartArtFixture();
   await createThemeFontFixture();
+  await createTextStyleInheritanceFixture();
 
   console.log("\nDone!");
 }

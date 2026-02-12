@@ -6,10 +6,13 @@ import {
   parseSlideMasterColorMap,
   parseSlideMasterBackground,
   parseSlideMasterElements,
+  parseSlideMasterTxStyles,
+  parseSlideMasterPlaceholderStyles,
 } from "./parser/slide-master-parser.js";
 import {
   parseSlideLayoutBackground,
   parseSlideLayoutElements,
+  parseSlideLayoutPlaceholderStyles,
 } from "./parser/slide-layout-parser.js";
 import { parseSlide } from "./parser/slide-parser.js";
 import {
@@ -23,7 +26,9 @@ import { renderSlideToSvg } from "./renderer/svg-renderer.js";
 import { svgToPng } from "./png/png-converter.js";
 import { DEFAULT_OUTPUT_WIDTH } from "./utils/constants.js";
 import type { ColorMap } from "./model/theme.js";
+import type { PlaceholderStyleInfo } from "./model/text.js";
 import type { SlideElement } from "./model/shape.js";
+import { applyTextStyleInheritance } from "./text-style-resolver.js";
 
 export interface ConvertOptions {
   /** 変換対象のスライド番号 (1始まり)。未指定で全スライド */
@@ -114,6 +119,8 @@ export async function convertPptxToSvg(
     masterPath && masterXml
       ? parseSlideMasterElements(masterXml, masterPath, archive, colorResolver, theme.fontScheme)
       : [];
+  const masterTxStyles = masterXml ? parseSlideMasterTxStyles(masterXml) : undefined;
+  const masterPlaceholderStyles = masterXml ? parseSlideMasterPlaceholderStyles(masterXml) : [];
   // Resolve slide paths from relationships
   const slidePaths: { slideNumber: number; path: string }[] = [];
   for (let i = 0; i < presInfo.slideRIds.length; i++) {
@@ -140,6 +147,7 @@ export async function convertPptxToSvg(
 
     // Resolve slide layout
     let layoutElements: SlideElement[] = [];
+    let layoutPlaceholderStyles: PlaceholderStyleInfo[] = [];
     const slideRelsPath = buildRelsPath(path);
     const slideRelsXml = archive.files.get(slideRelsPath);
     if (slideRelsXml) {
@@ -173,6 +181,8 @@ export async function convertPptxToSvg(
               colorResolver,
               theme.fontScheme,
             );
+            // Extract placeholder styles for text style inheritance
+            layoutPlaceholderStyles = parseSlideLayoutPlaceholderStyles(layoutXml);
           }
           break;
         }
@@ -181,6 +191,15 @@ export async function convertPptxToSvg(
     if (!slide.background) {
       slide.background = masterBackground;
     }
+
+    // Apply text style inheritance chain before merging
+    applyTextStyleInheritance(slide.elements, {
+      layoutPlaceholderStyles,
+      masterPlaceholderStyles,
+      txStyles: masterTxStyles,
+      defaultTextStyle: presInfo.defaultTextStyle,
+      fontScheme: theme.fontScheme,
+    });
 
     // Merge shapes: master (back) → layout → slide (front)
     slide.elements = mergeElements(masterElements, layoutElements, slide.elements);
