@@ -93,10 +93,27 @@ function renderGroup(group: GroupElement, defs: string[]): string {
   const scaleX = chW !== 0 ? w / chW : 1;
   const scaleY = chH !== 0 ? h / chH : 1;
 
+  const transformParts: string[] = [];
+  transformParts.push(`translate(${x}, ${y})`);
+
+  if (group.transform.rotation !== 0) {
+    transformParts.push(`rotate(${group.transform.rotation}, ${w / 2}, ${h / 2})`);
+  }
+
+  if (group.transform.flipH || group.transform.flipV) {
+    const sx = group.transform.flipH ? -1 : 1;
+    const sy = group.transform.flipV ? -1 : 1;
+    transformParts.push(
+      `translate(${group.transform.flipH ? w : 0}, ${group.transform.flipV ? h : 0})`,
+    );
+    transformParts.push(`scale(${sx}, ${sy})`);
+  }
+
+  transformParts.push(`scale(${scaleX}, ${scaleY})`);
+  transformParts.push(`translate(${-chX}, ${-chY})`);
+
   const parts: string[] = [];
-  parts.push(
-    `<g transform="translate(${x}, ${y}) scale(${scaleX}, ${scaleY}) translate(${-chX}, ${-chY})">`,
-  );
+  parts.push(`<g transform="${transformParts.join(" ")}">`);
 
   for (const child of group.children) {
     const rendered = renderElement(child, defs);
