@@ -1051,35 +1051,92 @@ async function createChartsFixture(): Promise<void> {
 
 // --- 8. Connectors ---
 async function createConnectorsFixture(): Promise<void> {
-  const connectors = [
-    {
-      id: 2,
-      x: 500000,
-      y: 500000,
-      cx: 3000000,
-      cy: 0,
-      color: "4472C4",
-      dash: undefined as string | undefined,
-    },
-    { id: 3, x: 500000, y: 1500000, cx: 3000000, cy: 2000000, color: "ED7D31", dash: "dash" },
-    { id: 4, x: 5000000, y: 500000, cx: 0, cy: 4000000, color: "70AD47", dash: "dot" },
+  // Row 1: Basic connectors (straight, dash, dot)
+  const basicConnectors = [
+    `<p:cxnSp>
+  <p:nvCxnSpPr><p:cNvPr id="2" name="Straight"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="500000" y="300000"/><a:ext cx="2500000" cy="0"/></a:xfrm>
+    <a:prstGeom prst="straightConnector1"><a:avLst/></a:prstGeom>
+    <a:ln w="25400"><a:solidFill><a:srgbClr val="4472C4"/></a:solidFill></a:ln>
+  </p:spPr>
+</p:cxnSp>`,
+    `<p:cxnSp>
+  <p:nvCxnSpPr><p:cNvPr id="3" name="StraightDiag"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="500000" y="600000"/><a:ext cx="2500000" cy="1200000"/></a:xfrm>
+    <a:prstGeom prst="straightConnector1"><a:avLst/></a:prstGeom>
+    <a:ln w="25400"><a:solidFill><a:srgbClr val="ED7D31"/></a:solidFill><a:prstDash val="dash"/></a:ln>
+  </p:spPr>
+</p:cxnSp>`,
   ];
 
-  const cxnXml = connectors
-    .map((c) => {
-      const dashXml = c.dash ? `<a:prstDash val="${c.dash}"/>` : "";
-      return `<p:cxnSp>
-  <p:nvCxnSpPr><p:cNvPr id="${c.id}" name="Connector ${c.id}"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
+  // Row 2: Arrow endpoints
+  const arrowConnectors = [
+    `<p:cxnSp>
+  <p:nvCxnSpPr><p:cNvPr id="4" name="TriangleTail"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
   <p:spPr>
-    <a:xfrm><a:off x="${c.x}" y="${c.y}"/><a:ext cx="${c.cx}" cy="${c.cy}"/></a:xfrm>
-    <a:prstGeom prst="line"><a:avLst/></a:prstGeom>
-    <a:ln w="25400"><a:solidFill><a:srgbClr val="${c.color}"/></a:solidFill>${dashXml}</a:ln>
+    <a:xfrm><a:off x="500000" y="2200000"/><a:ext cx="2500000" cy="0"/></a:xfrm>
+    <a:prstGeom prst="straightConnector1"><a:avLst/></a:prstGeom>
+    <a:ln w="25400"><a:solidFill><a:srgbClr val="4472C4"/></a:solidFill><a:tailEnd type="triangle" w="med" len="med"/></a:ln>
   </p:spPr>
-</p:cxnSp>`;
-    })
-    .join("\n");
+</p:cxnSp>`,
+    `<p:cxnSp>
+  <p:nvCxnSpPr><p:cNvPr id="5" name="BothArrows"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="500000" y="2700000"/><a:ext cx="2500000" cy="0"/></a:xfrm>
+    <a:prstGeom prst="straightConnector1"><a:avLst/></a:prstGeom>
+    <a:ln w="25400"><a:solidFill><a:srgbClr val="ED7D31"/></a:solidFill><a:headEnd type="triangle" w="med" len="med"/><a:tailEnd type="stealth" w="lg" len="lg"/></a:ln>
+  </p:spPr>
+</p:cxnSp>`,
+    `<p:cxnSp>
+  <p:nvCxnSpPr><p:cNvPr id="6" name="DiamondOval"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="500000" y="3200000"/><a:ext cx="2500000" cy="0"/></a:xfrm>
+    <a:prstGeom prst="straightConnector1"><a:avLst/></a:prstGeom>
+    <a:ln w="25400"><a:solidFill><a:srgbClr val="70AD47"/></a:solidFill><a:headEnd type="diamond" w="med" len="med"/><a:tailEnd type="oval" w="med" len="med"/></a:ln>
+  </p:spPr>
+</p:cxnSp>`,
+  ];
 
-  const slide = wrapSlideXml(cxnXml);
+  // Row 3: Bent and curved connectors
+  const geometryConnectors = [
+    `<p:cxnSp>
+  <p:nvCxnSpPr><p:cNvPr id="7" name="Bent3"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="4000000" y="300000"/><a:ext cx="2500000" cy="1500000"/></a:xfrm>
+    <a:prstGeom prst="bentConnector3"><a:avLst><a:gd name="adj1" fmla="val 50000"/></a:avLst></a:prstGeom>
+    <a:ln w="25400"><a:solidFill><a:srgbClr val="5B9BD5"/></a:solidFill></a:ln>
+  </p:spPr>
+</p:cxnSp>`,
+    `<p:cxnSp>
+  <p:nvCxnSpPr><p:cNvPr id="8" name="Curved3"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="4000000" y="2200000"/><a:ext cx="2500000" cy="1500000"/></a:xfrm>
+    <a:prstGeom prst="curvedConnector3"><a:avLst><a:gd name="adj1" fmla="val 50000"/></a:avLst></a:prstGeom>
+    <a:ln w="25400"><a:solidFill><a:srgbClr val="FFC000"/></a:solidFill></a:ln>
+  </p:spPr>
+</p:cxnSp>`,
+    `<p:cxnSp>
+  <p:nvCxnSpPr><p:cNvPr id="9" name="Bent3Arrow"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="7000000" y="300000"/><a:ext cx="1500000" cy="1500000"/></a:xfrm>
+    <a:prstGeom prst="bentConnector3"><a:avLst><a:gd name="adj1" fmla="val 50000"/></a:avLst></a:prstGeom>
+    <a:ln w="25400"><a:solidFill><a:srgbClr val="FF6384"/></a:solidFill><a:tailEnd type="triangle" w="med" len="med"/></a:ln>
+  </p:spPr>
+</p:cxnSp>`,
+    `<p:cxnSp>
+  <p:nvCxnSpPr><p:cNvPr id="10" name="Curved3Arrow"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="7000000" y="2200000"/><a:ext cx="1500000" cy="1500000"/></a:xfrm>
+    <a:prstGeom prst="curvedConnector3"><a:avLst><a:gd name="adj1" fmla="val 50000"/></a:avLst></a:prstGeom>
+    <a:ln w="25400"><a:solidFill><a:srgbClr val="9966FF"/></a:solidFill><a:headEnd type="oval" w="sm" len="sm"/><a:tailEnd type="triangle" w="lg" len="lg"/></a:ln>
+  </p:spPr>
+</p:cxnSp>`,
+  ];
+
+  const allXml = [...basicConnectors, ...arrowConnectors, ...geometryConnectors].join("\n");
+  const slide = wrapSlideXml(allXml);
   const rels = slideRelsXml();
 
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });

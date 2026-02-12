@@ -117,6 +117,52 @@ const presetGeometries: Record<string, GeometryGenerator> = {
 
   line: () => "",
 
+  // =====================
+  // Connector shapes
+  // =====================
+
+  straightConnector1: (w, h) => `<path d="M 0 0 L ${w} ${h}"/>`,
+
+  bentConnector2: (w, h) => `<path d="M 0 0 L ${w} 0 L ${w} ${h}"/>`,
+
+  bentConnector3: (w, h, adj) => {
+    const midX = ((adj["adj1"] ?? 50000) / 100000) * w;
+    return `<path d="M 0 0 L ${midX} 0 L ${midX} ${h} L ${w} ${h}"/>`;
+  },
+
+  bentConnector4: (w, h, adj) => {
+    const midX = ((adj["adj1"] ?? 50000) / 100000) * w;
+    const midY = ((adj["adj2"] ?? 50000) / 100000) * h;
+    return `<path d="M 0 0 L ${midX} 0 L ${midX} ${midY} L ${w} ${midY} L ${w} ${h}"/>`;
+  },
+
+  bentConnector5: (w, h, adj) => {
+    const midX1 = ((adj["adj1"] ?? 50000) / 100000) * w;
+    const midY = ((adj["adj2"] ?? 50000) / 100000) * h;
+    const midX2 = ((adj["adj3"] ?? 50000) / 100000) * w;
+    return `<path d="M 0 0 L ${midX1} 0 L ${midX1} ${midY} L ${midX2} ${midY} L ${midX2} ${h} L ${w} ${h}"/>`;
+  },
+
+  curvedConnector2: (w, h) => `<path d="M 0 0 C ${w} 0 0 ${h} ${w} ${h}"/>`,
+
+  curvedConnector3: (w, h, adj) => {
+    const midX = ((adj["adj1"] ?? 50000) / 100000) * w;
+    return `<path d="M 0 0 C ${midX} 0 ${midX} ${h} ${w} ${h}"/>`;
+  },
+
+  curvedConnector4: (w, h, adj) => {
+    const midX = ((adj["adj1"] ?? 50000) / 100000) * w;
+    const midY = ((adj["adj2"] ?? 50000) / 100000) * h;
+    return `<path d="M 0 0 C ${midX} 0 ${midX} ${midY} ${midX} ${midY} S ${w} ${midY} ${w} ${h}"/>`;
+  },
+
+  curvedConnector5: (w, h, adj) => {
+    const midX1 = ((adj["adj1"] ?? 50000) / 100000) * w;
+    const midY = ((adj["adj2"] ?? 50000) / 100000) * h;
+    const midX2 = ((adj["adj3"] ?? 50000) / 100000) * w;
+    return `<path d="M 0 0 C ${midX1} 0 ${midX1} ${midY} ${midX1} ${midY} S ${midX2} ${midY} ${midX2} ${h} S ${w} ${h} ${w} ${h}"/>`;
+  },
+
   cloud: (w, h) => `<rect width="${w}" height="${h}" rx="${Math.min(w, h) * 0.15}"/>`,
 
   heart: (w, h) => {

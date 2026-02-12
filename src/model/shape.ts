@@ -47,6 +47,7 @@ export interface ShapeElement {
 export interface ConnectorElement {
   type: "connector";
   transform: Transform;
+  geometry: Geometry;
   outline: Outline | null;
   effects: EffectList | null;
 }

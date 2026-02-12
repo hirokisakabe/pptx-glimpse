@@ -515,10 +515,11 @@ function parseConnector(cxn: any, colorResolver: ColorResolver): ConnectorElemen
   const transform = parseTransform(spPr.xfrm);
   if (!transform) return null;
 
+  const geometry = parseGeometry(spPr);
   const outline = parseOutline(spPr.ln, colorResolver);
   const effects = parseEffectList(spPr.effectLst, colorResolver);
 
-  return { type: "connector", transform, outline, effects };
+  return { type: "connector", transform, geometry, outline, effects };
 }
 
 function parseGroup(

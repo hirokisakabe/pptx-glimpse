@@ -1,5 +1,5 @@
 import type { Fill, GradientStop, ImageFill, PatternFill, SolidFill } from "../model/fill.js";
-import type { Outline, DashStyle } from "../model/line.js";
+import type { Outline, DashStyle, ArrowEndpoint, ArrowType, ArrowSize } from "../model/line.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import type { Relationship } from "./relationship-parser.js";
@@ -151,5 +151,20 @@ export function parseOutline(lnNode: any, colorResolver: ColorResolver): Outline
 
   const dashStyle = (lnNode.prstDash?.["@_val"] ?? "solid") as DashStyle;
 
-  return { width, fill, dashStyle };
+  const headEnd = parseArrowEndpoint(lnNode.headEnd);
+  const tailEnd = parseArrowEndpoint(lnNode.tailEnd);
+
+  return { width, fill, dashStyle, headEnd, tailEnd };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseArrowEndpoint(node: any): ArrowEndpoint | null {
+  if (!node) return null;
+  const type = (node["@_type"] ?? "none") as ArrowType;
+  if (type === "none") return null;
+  return {
+    type,
+    width: (node["@_w"] ?? "med") as ArrowSize,
+    length: (node["@_len"] ?? "med") as ArrowSize,
+  };
 }
