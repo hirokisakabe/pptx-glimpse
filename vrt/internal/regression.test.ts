@@ -42,6 +42,7 @@ const VRT_CASES = [
   { name: "text-style-inheritance", fixture: "text-style-inheritance.pptx" },
   { name: "z-order-mixed", fixture: "z-order-mixed.pptx" },
   { name: "paragraph-spacing", fixture: "paragraph-spacing.pptx" },
+  { name: "placeholder-overlap", fixture: "placeholder-overlap.pptx" },
 ] as const;
 
 describe("Visual Regression Tests", { timeout: 60000 }, () => {
