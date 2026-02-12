@@ -103,7 +103,10 @@ export function parseSlide(
     orderedSpTree,
   );
 
-  return { slideNumber, background, elements };
+  const showMasterSpAttr = sld?.["@_showMasterSp"];
+  const showMasterSp = showMasterSpAttr !== "0" && showMasterSpAttr !== "false";
+
+  return { slideNumber, background, elements, showMasterSp };
 }
 
 function parseBackground(
