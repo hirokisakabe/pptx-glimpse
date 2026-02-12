@@ -92,14 +92,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build Docker image
-        run: docker build -t pptx-glimpse-vrt docker/libreoffice-vrt
+      - name: Pull Docker image
+        run: docker pull ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest
 
       - name: Generate fixtures
-        run: docker run --rm -v "${{ github.workspace }}":/workspace pptx-glimpse-vrt python3 /workspace/vrt/libreoffice/create_fixtures.py
+        run: docker run --rm -v "${{ github.workspace }}":/workspace ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest python3 /workspace/vrt/libreoffice/create_fixtures.py
 
       - name: Generate LibreOffice reference images
-        run: docker run --rm -v "${{ github.workspace }}":/workspace pptx-glimpse-vrt bash /workspace/vrt/libreoffice/update_snapshots.sh
+        run: docker run --rm -v "${{ github.workspace }}":/workspace ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest bash /workspace/vrt/libreoffice/update_snapshots.sh
 
       - name: Run LibreOffice VRT
         run: npx vitest run vrt/libreoffice/regression.test.ts
