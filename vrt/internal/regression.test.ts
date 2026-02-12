@@ -39,6 +39,7 @@ const VRT_CASES = [
   { name: "pattern-image-fill", fixture: "pattern-image-fill.pptx" },
   { name: "smartart", fixture: "smartart.pptx" },
   { name: "theme-fonts", fixture: "theme-fonts.pptx" },
+  { name: "text-style-inheritance", fixture: "text-style-inheritance.pptx" },
 ] as const;
 
 describe("Visual Regression Tests", { timeout: 60000 }, () => {

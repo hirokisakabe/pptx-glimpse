@@ -39,7 +39,11 @@ import {
   buildRelsPath,
 } from "./relationship-parser.js";
 import { hundredthPointToPoint } from "../utils/emu.js";
-import { parseListStyle, parseDefaultRunProperties } from "./text-style-parser.js";
+import {
+  parseListStyle,
+  parseDefaultRunProperties,
+  resolveThemeFont,
+} from "./text-style-parser.js";
 
 const WARN_PREFIX = "[pptx-glimpse]";
 
@@ -740,22 +744,6 @@ function mergeDefaultRunProperties(
     underline: primary.underline ?? secondary.underline,
     strikethrough: primary.strikethrough ?? secondary.strikethrough,
   };
-}
-
-function resolveThemeFont(typeface: string | null, fontScheme?: FontScheme | null): string | null {
-  if (!typeface || !fontScheme) return typeface;
-  switch (typeface) {
-    case "+mj-lt":
-      return fontScheme.majorFont;
-    case "+mn-lt":
-      return fontScheme.minorFont;
-    case "+mj-ea":
-      return fontScheme.majorFontEa;
-    case "+mn-ea":
-      return fontScheme.minorFontEa;
-    default:
-      return typeface;
-  }
 }
 
 function parseRunProperties(

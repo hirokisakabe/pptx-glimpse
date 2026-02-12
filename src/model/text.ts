@@ -32,6 +32,13 @@ export interface TxStyles {
   otherStyle?: DefaultTextStyle;
 }
 
+/** プレースホルダーに紐づくテキストスタイル情報 */
+export interface PlaceholderStyleInfo {
+  placeholderType: string;
+  placeholderIdx?: number;
+  lstStyle?: DefaultTextStyle;
+}
+
 export interface TextBody {
   paragraphs: Paragraph[];
   bodyProperties: BodyProperties;

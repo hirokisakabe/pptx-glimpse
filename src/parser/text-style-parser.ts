@@ -3,6 +3,7 @@ import type {
   DefaultParagraphLevelProperties,
   DefaultRunProperties,
 } from "../model/text.js";
+import type { FontScheme } from "../model/theme.js";
 import { hundredthPointToPoint } from "../utils/emu.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -83,4 +84,23 @@ export function parseListStyle(node: any): DefaultTextStyle | undefined {
   }
 
   return { defaultParagraph, levels };
+}
+
+export function resolveThemeFont(
+  typeface: string | null,
+  fontScheme?: FontScheme | null,
+): string | null {
+  if (!typeface || !fontScheme) return typeface;
+  switch (typeface) {
+    case "+mj-lt":
+      return fontScheme.majorFont;
+    case "+mn-lt":
+      return fontScheme.minorFont;
+    case "+mj-ea":
+      return fontScheme.majorFontEa;
+    case "+mn-ea":
+      return fontScheme.minorFontEa;
+    default:
+      return typeface;
+  }
 }

@@ -1,7 +1,7 @@
 import type { ColorMap, ColorSchemeKey } from "../model/theme.js";
 import type { Background } from "../model/slide.js";
 import type { SlideElement } from "../model/shape.js";
-import type { TxStyles } from "../model/text.js";
+import type { TxStyles, PlaceholderStyleInfo } from "../model/text.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import { parseXml } from "./xml-parser.js";
 import { parseFillFromNode } from "./fill-parser.js";
@@ -127,6 +127,35 @@ export function parseSlideMasterTxStyles(xml: string): TxStyles | undefined {
   if (!titleStyle && !bodyStyle && !otherStyle) return undefined;
 
   return { titleStyle, bodyStyle, otherStyle };
+}
+
+export function parseSlideMasterPlaceholderStyles(xml: string): PlaceholderStyleInfo[] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parsed = parseXml(xml) as any;
+  if (!parsed.sldMaster) return [];
+
+  const spTree = parsed.sldMaster.cSld?.spTree;
+  if (!spTree) return [];
+
+  const results: PlaceholderStyleInfo[] = [];
+  const shapes = spTree.sp ?? [];
+
+  for (const sp of shapes) {
+    const ph = sp.nvSpPr?.nvPr?.ph;
+    if (!ph) continue;
+
+    const placeholderType: string = ph["@_type"] ?? "body";
+    const placeholderIdx = ph["@_idx"] !== undefined ? Number(ph["@_idx"]) : undefined;
+    const lstStyle = parseListStyle(sp.txBody?.lstStyle);
+
+    results.push({
+      placeholderType,
+      ...(placeholderIdx !== undefined && { placeholderIdx }),
+      ...(lstStyle && { lstStyle }),
+    });
+  }
+
+  return results;
 }
 
 export function getDefaultColorMap(): ColorMap {
