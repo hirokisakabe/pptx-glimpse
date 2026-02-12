@@ -21,6 +21,7 @@ import type {
   AutoNumScheme,
   DefaultTextStyle,
   DefaultRunProperties,
+  SpacingValue,
 } from "../model/text.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import type { Relationship } from "./relationship-parser.js";
@@ -918,6 +919,13 @@ function parseBullet(pPr: any, colorResolver: ColorResolver) {
   return { bullet, bulletFont, bulletColor, bulletSizePct };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseSpacing(spc: any): SpacingValue {
+  if (spc?.spcPts) return { type: "pts", value: Number(spc.spcPts["@_val"]) };
+  if (spc?.spcPct) return { type: "pct", value: Number(spc.spcPct["@_val"]) };
+  return { type: "pts", value: 0 };
+}
+
 function parseParagraph(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   p: any,
@@ -936,8 +944,8 @@ function parseParagraph(
   const properties = {
     alignment: (pPr?.["@_algn"] as "l" | "ctr" | "r" | "just") ?? lstLevelProps?.alignment ?? "l",
     lineSpacing: pPr?.lnSpc?.spcPct ? Number(pPr.lnSpc.spcPct["@_val"]) : null,
-    spaceBefore: pPr?.spcBef?.spcPts ? Number(pPr.spcBef.spcPts["@_val"]) : 0,
-    spaceAfter: pPr?.spcAft?.spcPts ? Number(pPr.spcAft.spcPts["@_val"]) : 0,
+    spaceBefore: parseSpacing(pPr?.spcBef),
+    spaceAfter: parseSpacing(pPr?.spcAft),
     level,
     bullet,
     bulletFont,
