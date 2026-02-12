@@ -26,7 +26,7 @@ import type { PptxArchive } from "./pptx-reader.js";
 import type { Relationship } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import type { FontScheme } from "../model/theme.js";
-import { parseXml } from "./xml-parser.js";
+import { parseXml, parseXmlOrdered } from "./xml-parser.js";
 import { parseFillFromNode, parseOutline } from "./fill-parser.js";
 import type { FillParseContext } from "./fill-parser.js";
 import { parseEffectList } from "./effect-parser.js";
@@ -46,6 +46,23 @@ import {
 } from "./text-style-parser.js";
 
 const WARN_PREFIX = "[pptx-glimpse]";
+
+const SHAPE_TAGS = new Set(["sp", "pic", "cxnSp", "grpSp", "graphicFrame"]);
+
+// preserveOrder パース結果を path で辿り、指定ノードの子配列を返す。
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function navigateOrdered(ordered: any[], path: string[]): any[] | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let current: any[] = ordered;
+  for (const key of path) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const entry = current.find((item: any) => key in item);
+    if (!entry) return null;
+    current = entry[key];
+    if (!Array.isArray(current)) return null;
+  }
+  return current;
+}
 
 export function parseSlide(
   slideXml: string,
@@ -68,6 +85,11 @@ export function parseSlide(
 
   const fillContext: FillParseContext = { rels, archive, basePath: slidePath };
   const background = parseBackground(sld?.cSld?.bg, colorResolver, fillContext);
+
+  // ordered パーサーで子要素の出現順序を取得（Z-order 保持のため）
+  const orderedParsed = parseXmlOrdered(slideXml);
+  const orderedSpTree = navigateOrdered(orderedParsed, ["sld", "cSld", "spTree"]);
+
   const elements = parseShapeTree(
     sld?.cSld?.spTree,
     rels,
@@ -77,6 +99,7 @@ export function parseSlide(
     `Slide ${slideNumber}`,
     fillContext,
     fontScheme,
+    orderedSpTree,
   );
 
   return { slideNumber, background, elements };
@@ -123,9 +146,27 @@ export function parseShapeTree(
   context?: string,
   fillContext?: FillParseContext,
   fontScheme?: FontScheme | null,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  orderedChildren?: any[] | null,
 ): SlideElement[] {
   if (!spTree) return [];
 
+  // orderedChildren が提供されている場合はドキュメント順でイテレート
+  if (orderedChildren) {
+    return parseShapeTreeOrdered(
+      spTree,
+      orderedChildren,
+      rels,
+      slidePath,
+      archive,
+      colorResolver,
+      context,
+      fillContext,
+      fontScheme,
+    );
+  }
+
+  // フォールバック: タイプ別イテレーション（後方互換）
   // mc:AlternateContent の処理: Choice 内の要素を spTree にマージ
   const alternateContents = spTree.AlternateContent ?? [];
   for (const ac of alternateContents) {
@@ -189,6 +230,196 @@ export function parseShapeTree(
   }
 
   return elements;
+}
+
+// orderedChildren を使ってドキュメント順で要素をイテレートする
+function parseShapeTreeOrdered(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  spTree: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  orderedChildren: any[],
+  rels: Map<string, Relationship>,
+  slidePath: string,
+  archive: PptxArchive,
+  colorResolver: ColorResolver,
+  context?: string,
+  fillContext?: FillParseContext,
+  fontScheme?: FontScheme | null,
+): SlideElement[] {
+  const ctx = context ?? slidePath;
+  const elements: SlideElement[] = [];
+  const tagCounters: Record<string, number> = {};
+
+  for (const child of orderedChildren) {
+    const tag = Object.keys(child).find((k) => k !== ":@");
+    if (!tag) continue;
+
+    if (tag === "AlternateContent") {
+      // AlternateContent をインライン処理
+      const acIndex = tagCounters["AlternateContent"] ?? 0;
+      tagCounters["AlternateContent"] = acIndex + 1;
+
+      const acList = spTree.AlternateContent ?? [];
+      const acData = acList[acIndex];
+      if (!acData) continue;
+
+      const choices = Array.isArray(acData.Choice)
+        ? acData.Choice
+        : acData.Choice
+          ? [acData.Choice]
+          : [];
+      const firstChoice = choices[0];
+      if (!firstChoice) continue;
+
+      // ordered 結果から Choice の子要素を取得
+      const acOrderedChildren = child.AlternateContent;
+
+      const choiceOrdered = Array.isArray(acOrderedChildren)
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          acOrderedChildren.find((c: any) => "Choice" in c)
+        : null;
+      const choiceChildren = choiceOrdered?.Choice;
+
+      if (Array.isArray(choiceChildren)) {
+        // Choice 内の子要素をドキュメント順で処理
+        const choiceTagCounters: Record<string, number> = {};
+        for (const choiceChild of choiceChildren) {
+          const choiceTag = Object.keys(choiceChild).find((k) => k !== ":@");
+          if (!choiceTag || !SHAPE_TAGS.has(choiceTag)) continue;
+
+          const choiceIdx = choiceTagCounters[choiceTag] ?? 0;
+          choiceTagCounters[choiceTag] = choiceIdx + 1;
+
+          const items = firstChoice[choiceTag];
+          const arr = Array.isArray(items) ? items : items ? [items] : [];
+          const element = arr[choiceIdx];
+          if (!element) continue;
+
+          parseAndPushElement(
+            choiceTag,
+            element,
+            choiceChild,
+            elements,
+            rels,
+            slidePath,
+            archive,
+            colorResolver,
+            ctx,
+            fillContext,
+            fontScheme,
+          );
+        }
+      }
+      continue;
+    }
+
+    if (!SHAPE_TAGS.has(tag)) continue;
+
+    const index = tagCounters[tag] ?? 0;
+    tagCounters[tag] = index + 1;
+
+    const element = spTree[tag]?.[index];
+    if (!element) continue;
+
+    parseAndPushElement(
+      tag,
+      element,
+      child,
+      elements,
+      rels,
+      slidePath,
+      archive,
+      colorResolver,
+      ctx,
+      fillContext,
+      fontScheme,
+    );
+  }
+
+  return elements;
+}
+
+// タグに応じた要素パース処理を行い elements に追加する
+function parseAndPushElement(
+  tag: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  element: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  orderedNode: any,
+  elements: SlideElement[],
+  rels: Map<string, Relationship>,
+  slidePath: string,
+  archive: PptxArchive,
+  colorResolver: ColorResolver,
+  ctx: string,
+  fillContext?: FillParseContext,
+  fontScheme?: FontScheme | null,
+): void {
+  switch (tag) {
+    case "sp": {
+      const shape = parseShape(element, colorResolver, rels, fillContext, fontScheme);
+      if (shape) {
+        elements.push(shape);
+      } else {
+        console.warn(`${WARN_PREFIX} ${ctx}: shape skipped (parse returned null)`);
+      }
+      break;
+    }
+    case "pic": {
+      const img = parseImage(element, rels, slidePath, archive, colorResolver);
+      if (img) {
+        elements.push(img);
+      } else {
+        console.warn(`${WARN_PREFIX} ${ctx}: image skipped (parse returned null)`);
+      }
+      break;
+    }
+    case "cxnSp": {
+      const connector = parseConnector(element, colorResolver);
+      if (connector) {
+        elements.push(connector);
+      } else {
+        console.warn(`${WARN_PREFIX} ${ctx}: connector skipped (parse returned null)`);
+      }
+      break;
+    }
+    case "grpSp": {
+      // ordered 結果からグループの子要素順序を取得
+      const grpOrderedChildren = orderedNode[tag] ?? null;
+      const group = parseGroup(
+        element,
+        rels,
+        slidePath,
+        archive,
+        colorResolver,
+        fillContext,
+        fontScheme,
+        grpOrderedChildren,
+      );
+      if (group) {
+        elements.push(group);
+      } else {
+        console.warn(`${WARN_PREFIX} ${ctx}: group skipped (parse returned null)`);
+      }
+      break;
+    }
+    case "graphicFrame": {
+      const gfResult = parseGraphicFrame(
+        element,
+        rels,
+        slidePath,
+        archive,
+        colorResolver,
+        fontScheme,
+      );
+      if (gfResult) {
+        elements.push(gfResult);
+      } else {
+        console.warn(`${WARN_PREFIX} ${ctx}: graphicFrame skipped (parse returned null)`);
+      }
+      break;
+    }
+  }
 }
 
 function parseShape(
@@ -299,6 +530,8 @@ function parseGroup(
   colorResolver: ColorResolver,
   parentFillContext?: FillParseContext,
   fontScheme?: FontScheme | null,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  orderedChildren?: any[] | null,
 ): GroupElement | null {
   const grpSpPr = grp.grpSpPr;
   if (!grpSpPr) return null;
@@ -335,6 +568,7 @@ function parseGroup(
     undefined,
     childFillContext,
     fontScheme,
+    orderedChildren,
   );
   const effects = parseEffectList(grpSpPr.effectLst, colorResolver);
 
@@ -487,6 +721,10 @@ function parseSmartArt(
     basePath: drawingPath,
   };
 
+  // ordered パーサーで子要素の出現順序を取得
+  const orderedParsed = parseXmlOrdered(drawingXml);
+  const orderedSpTree = navigateOrdered(orderedParsed, ["drawing", "spTree"]);
+
   const children = parseShapeTree(
     spTree,
     drawingRels,
@@ -496,6 +734,7 @@ function parseSmartArt(
     undefined,
     fillContext,
     fontScheme,
+    orderedSpTree,
   );
 
   if (children.length === 0) return null;

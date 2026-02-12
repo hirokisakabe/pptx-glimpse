@@ -3790,6 +3790,154 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
   savePptx(buffer, "text-style-inheritance.pptx");
 }
 
+// --- Z-order mixed (cross-type element ordering) ---
+async function createZOrderMixedFixture(): Promise<void> {
+  // 画像を生成（青のグラデーション）
+  const imgSize = 100;
+  const pixels = Buffer.alloc(imgSize * imgSize * 4);
+  for (let y = 0; y < imgSize; y++) {
+    for (let x = 0; x < imgSize; x++) {
+      const idx = (y * imgSize + x) * 4;
+      pixels[idx] = 30; // R
+      pixels[idx + 1] = 100; // G
+      pixels[idx + 2] = Math.floor(150 + (x / imgSize) * 105); // B gradient
+      pixels[idx + 3] = 255; // A
+    }
+  }
+  const testImage = await sharp(pixels, {
+    raw: { width: imgSize, height: imgSize, channels: 4 },
+  })
+    .png()
+    .toBuffer();
+
+  // Slide 1: sp → pic → sp (画像が2つの図形の間に挟まる)
+  // 正しい Z-order: 赤矩形(最背面) → 画像(中間) → 緑矩形(最前面)
+  const spTreeContent1 = [
+    // 1. 赤矩形 (最背面, Z=1)
+    shapeXml(2, "back-rect", {
+      preset: "rect",
+      x: 500000,
+      y: 500000,
+      cx: 5000000,
+      cy: 3500000,
+      fillXml: solidFillXml("CC3333"),
+      outlineXml: outlineXml(25400, "990000"),
+      textBodyXml: textBodyXmlHelper("Back (Z=1)", {
+        fontSize: 18,
+        bold: true,
+        color: "FFFFFF",
+        anchor: "t",
+        align: "l",
+      }),
+    }),
+    // 2. 画像 (中間, Z=2)
+    `<p:pic>
+  <p:nvPicPr><p:cNvPr id="3" name="Image 1"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>
+  <p:blipFill>
+    <a:blip r:embed="rId2"/>
+    <a:stretch><a:fillRect/></a:stretch>
+  </p:blipFill>
+  <p:spPr>
+    <a:xfrm><a:off x="1500000" y="1000000"/><a:ext cx="4000000" cy="2500000"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+</p:pic>`,
+    // 3. 緑矩形 (最前面, Z=3)
+    shapeXml(4, "front-rect", {
+      preset: "roundRect",
+      x: 3000000,
+      y: 1500000,
+      cx: 4000000,
+      cy: 2500000,
+      fillXml: `<a:solidFill><a:srgbClr val="33AA33"><a:alpha val="80000"/></a:srgbClr></a:solidFill>`,
+      outlineXml: outlineXml(25400, "006600"),
+      textBodyXml: textBodyXmlHelper("Front (Z=3)", {
+        fontSize: 18,
+        bold: true,
+        color: "FFFFFF",
+      }),
+    }),
+  ].join("\n");
+
+  const slide1 = wrapSlideXml(spTreeContent1);
+  const rels1 = slideRelsXml([
+    { id: "rId2", type: REL_TYPES.image, target: "../media/image1.png" },
+  ]);
+
+  // Slide 2: cxnSp → sp → pic → sp (コネクタも混在)
+  const spTreeContent2 = [
+    // 1. コネクタ (最背面)
+    `<p:cxnSp>
+  <p:nvCxnSpPr><p:cNvPr id="2" name="Connector 1"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="500000" y="2500000"/><a:ext cx="8000000" cy="0"/></a:xfrm>
+    <a:prstGeom prst="line"><a:avLst/></a:prstGeom>
+    <a:ln w="50800"><a:solidFill><a:srgbClr val="FF6600"/></a:solidFill></a:ln>
+  </p:spPr>
+</p:cxnSp>`,
+    // 2. 黄色矩形
+    shapeXml(3, "yellow-rect", {
+      preset: "rect",
+      x: 1000000,
+      y: 800000,
+      cx: 3500000,
+      cy: 3000000,
+      fillXml: solidFillXml("FFCC00"),
+      outlineXml: outlineXml(19050, "CC9900"),
+      textBodyXml: textBodyXmlHelper("Shape (Z=2)", {
+        fontSize: 14,
+        bold: true,
+        color: "333333",
+        anchor: "t",
+      }),
+    }),
+    // 3. 画像
+    `<p:pic>
+  <p:nvPicPr><p:cNvPr id="4" name="Image 2"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>
+  <p:blipFill>
+    <a:blip r:embed="rId2"/>
+    <a:stretch><a:fillRect/></a:stretch>
+  </p:blipFill>
+  <p:spPr>
+    <a:xfrm><a:off x="3000000" y="1500000"/><a:ext cx="3000000" cy="2000000"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+</p:pic>`,
+    // 4. 紫矩形 (最前面)
+    shapeXml(5, "purple-rect", {
+      preset: "ellipse",
+      x: 5000000,
+      y: 500000,
+      cx: 3500000,
+      cy: 3500000,
+      fillXml: `<a:solidFill><a:srgbClr val="6633CC"><a:alpha val="70000"/></a:srgbClr></a:solidFill>`,
+      outlineXml: outlineXml(19050, "330066"),
+      textBodyXml: textBodyXmlHelper("Shape (Z=4)", {
+        fontSize: 14,
+        bold: true,
+        color: "FFFFFF",
+      }),
+    }),
+  ].join("\n");
+
+  const slide2 = wrapSlideXml(spTreeContent2);
+  const rels2 = slideRelsXml([
+    { id: "rId2", type: REL_TYPES.image, target: "../media/image1.png" },
+  ]);
+
+  const media = new Map<string, Buffer>();
+  media.set("ppt/media/image1.png", testImage);
+
+  const buffer = await buildPptx({
+    slides: [
+      { xml: slide1, rels: rels1 },
+      { xml: slide2, rels: rels2 },
+    ],
+    media,
+  });
+  savePptx(buffer, "z-order-mixed.pptx");
+}
+
 async function main(): Promise<void> {
   console.log("Creating VRT fixtures...\n");
 
@@ -3820,6 +3968,7 @@ async function main(): Promise<void> {
   await createSmartArtFixture();
   await createThemeFontFixture();
   await createTextStyleInheritanceFixture();
+  await createZOrderMixedFixture();
 
   console.log("\nDone!");
 }
