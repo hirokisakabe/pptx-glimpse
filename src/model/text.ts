@@ -1,5 +1,30 @@
 import type { ResolvedColor } from "./fill.js";
 
+/** defRPr に対応するデフォルトランプロパティ */
+export interface DefaultRunProperties {
+  fontSize?: number;
+  fontFamily?: string | null;
+  fontFamilyEa?: string | null;
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  strikethrough?: boolean;
+}
+
+/** defaultTextStyle の各レベルに対応するデフォルト段落プロパティ */
+export interface DefaultParagraphLevelProperties {
+  alignment?: "l" | "ctr" | "r" | "just";
+  marginLeft?: number;
+  indent?: number;
+  defaultRunProperties?: DefaultRunProperties;
+}
+
+/** presentation.xml の defaultTextStyle */
+export interface DefaultTextStyle {
+  defaultParagraph?: DefaultParagraphLevelProperties;
+  levels: (DefaultParagraphLevelProperties | undefined)[]; // index 0 = lvl1pPr, ... index 8 = lvl9pPr
+}
+
 export interface TextBody {
   paragraphs: Paragraph[];
   bodyProperties: BodyProperties;
