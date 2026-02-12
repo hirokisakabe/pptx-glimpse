@@ -1,6 +1,7 @@
 import type { ColorMap, ColorSchemeKey } from "../model/theme.js";
 import type { Background } from "../model/slide.js";
 import type { SlideElement } from "../model/shape.js";
+import type { TxStyles } from "../model/text.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import { parseXml } from "./xml-parser.js";
 import { parseFillFromNode } from "./fill-parser.js";
@@ -9,6 +10,7 @@ import { parseShapeTree } from "./slide-parser.js";
 import { buildRelsPath, parseRelationships } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import type { FontScheme } from "../model/theme.js";
+import { parseListStyle } from "./text-style-parser.js";
 
 const WARN_PREFIX = "[pptx-glimpse]";
 
@@ -104,6 +106,27 @@ export function parseSlideMasterElements(
     undefined,
     fontScheme,
   );
+}
+
+export function parseSlideMasterTxStyles(xml: string): TxStyles | undefined {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parsed = parseXml(xml) as any;
+
+  if (!parsed.sldMaster) {
+    console.warn(`${WARN_PREFIX} SlideMaster: missing root element "sldMaster" in XML`);
+    return undefined;
+  }
+
+  const txStyles = parsed.sldMaster.txStyles;
+  if (!txStyles) return undefined;
+
+  const titleStyle = parseListStyle(txStyles.titleStyle);
+  const bodyStyle = parseListStyle(txStyles.bodyStyle);
+  const otherStyle = parseListStyle(txStyles.otherStyle);
+
+  if (!titleStyle && !bodyStyle && !otherStyle) return undefined;
+
+  return { titleStyle, bodyStyle, otherStyle };
 }
 
 export function getDefaultColorMap(): ColorMap {
