@@ -853,10 +853,78 @@ async function createGroupsFixture(): Promise<void> {
   const slide2 = wrapSlideXml(`${rotatedGroup}${flipHGroup}${flipVGroup}`);
   const rels2 = slideRelsXml();
 
+  // Slide 3: Group transform combinations (rot+flipH, rot+flipV, flipH+flipV)
+  const grp3W = 3500000;
+  const grp3H = 2000000;
+  const comboChildShapes = (id: number, label: string) => `
+  ${shapeXml(id, "Rect", {
+    preset: "rect",
+    x: 0,
+    y: 0,
+    cx: 1500000,
+    cy: 1500000,
+    fillXml: solidFillXml("70AD47"),
+    textBodyXml: textBodyXmlHelper(label, { fontSize: 10, color: "FFFFFF" }),
+  })}
+  ${shapeXml(id + 1, "Ellipse", {
+    preset: "ellipse",
+    x: 1800000,
+    y: 200000,
+    cx: 1500000,
+    cy: 1500000,
+    fillXml: solidFillXml("FFC000"),
+  })}`;
+
+  // Group with rot45 + flipH
+  const rotFlipHGroup = `<p:grpSp>
+  <p:nvGrpSpPr><p:cNvPr id="40" name="Rot45+FlipH"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+  <p:grpSpPr>
+    <a:xfrm rot="${45 * 60000}" flipH="1">
+      <a:off x="200000" y="200000"/>
+      <a:ext cx="${grp3W}" cy="${grp3H}"/>
+      <a:chOff x="0" y="0"/>
+      <a:chExt cx="${grp3W}" cy="${grp3H}"/>
+    </a:xfrm>
+  </p:grpSpPr>
+  ${comboChildShapes(41, "R45+FH")}
+</p:grpSp>`;
+
+  // Group with rot30 + flipV
+  const rotFlipVGroup = `<p:grpSp>
+  <p:nvGrpSpPr><p:cNvPr id="50" name="Rot30+FlipV"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+  <p:grpSpPr>
+    <a:xfrm rot="${30 * 60000}" flipV="1">
+      <a:off x="4800000" y="200000"/>
+      <a:ext cx="${grp3W}" cy="${grp3H}"/>
+      <a:chOff x="0" y="0"/>
+      <a:chExt cx="${grp3W}" cy="${grp3H}"/>
+    </a:xfrm>
+  </p:grpSpPr>
+  ${comboChildShapes(51, "R30+FV")}
+</p:grpSp>`;
+
+  // Group with flipH + flipV (equivalent to 180 degree rotation)
+  const flipHVGroup = `<p:grpSp>
+  <p:nvGrpSpPr><p:cNvPr id="60" name="FlipH+FlipV"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+  <p:grpSpPr>
+    <a:xfrm flipH="1" flipV="1">
+      <a:off x="2500000" y="2800000"/>
+      <a:ext cx="${grp3W}" cy="${grp3H}"/>
+      <a:chOff x="0" y="0"/>
+      <a:chExt cx="${grp3W}" cy="${grp3H}"/>
+    </a:xfrm>
+  </p:grpSpPr>
+  ${comboChildShapes(61, "FH+FV")}
+</p:grpSp>`;
+
+  const slide3 = wrapSlideXml(`${rotFlipHGroup}${rotFlipVGroup}${flipHVGroup}`);
+  const rels3 = slideRelsXml();
+
   const buffer = await buildPptx({
     slides: [
       { xml: slide1, rels: rels1 },
       { xml: slide2, rels: rels2 },
+      { xml: slide3, rels: rels3 },
     ],
   });
   savePptx(buffer, "groups.pptx");
@@ -3940,6 +4008,104 @@ async function createZOrderMixedFixture(): Promise<void> {
     { id: "rId2", type: REL_TYPES.image, target: "../media/image1.png" },
   ]);
 
+  // Slide 3: 全5要素タイプ混在 (cxnSp → grpSp → pic → graphicFrame(table) → sp)
+  const spTreeContent3 = [
+    // 1. cxnSp (最背面, Z=1)
+    `<p:cxnSp>
+  <p:nvCxnSpPr><p:cNvPr id="10" name="Connector BG"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="300000" y="1000000"/><a:ext cx="8500000" cy="3000000"/></a:xfrm>
+    <a:prstGeom prst="line"><a:avLst/></a:prstGeom>
+    <a:ln w="76200"><a:solidFill><a:srgbClr val="FF6600"/></a:solidFill></a:ln>
+  </p:spPr>
+</p:cxnSp>`,
+    // 2. grpSp (Z=2)
+    `<p:grpSp>
+  <p:nvGrpSpPr><p:cNvPr id="11" name="Group Z2"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+  <p:grpSpPr>
+    <a:xfrm>
+      <a:off x="500000" y="500000"/>
+      <a:ext cx="3500000" cy="2500000"/>
+      <a:chOff x="0" y="0"/>
+      <a:chExt cx="3500000" cy="2500000"/>
+    </a:xfrm>
+  </p:grpSpPr>
+  ${shapeXml(12, "GrpRect", {
+    preset: "rect",
+    x: 0,
+    y: 0,
+    cx: 1600000,
+    cy: 2500000,
+    fillXml: solidFillXml("4472C4"),
+    textBodyXml: textBodyXmlHelper("Grp (Z=2)", { fontSize: 12, color: "FFFFFF" }),
+  })}
+  ${shapeXml(13, "GrpEllipse", {
+    preset: "ellipse",
+    x: 1800000,
+    y: 0,
+    cx: 1600000,
+    cy: 2500000,
+    fillXml: solidFillXml("5B9BD5"),
+  })}
+</p:grpSp>`,
+    // 3. pic (Z=3)
+    `<p:pic>
+  <p:nvPicPr><p:cNvPr id="14" name="Image Z3"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>
+  <p:blipFill>
+    <a:blip r:embed="rId2"/>
+    <a:stretch><a:fillRect/></a:stretch>
+  </p:blipFill>
+  <p:spPr>
+    <a:xfrm><a:off x="2000000" y="1000000"/><a:ext cx="3000000" cy="2500000"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+</p:pic>`,
+    // 4. graphicFrame - table (Z=4)
+    tableGraphicFrameXml(
+      15,
+      "Table Z4",
+      3500000,
+      1500000,
+      3500000,
+      1500000,
+      `<a:tbl>
+    <a:tblPr firstRow="1"/>
+    <a:tblGrid>
+      <a:gridCol w="1750000"/>
+      <a:gridCol w="1750000"/>
+    </a:tblGrid>
+    <a:tr h="750000">
+      ${tableCellXml("Tbl", { fillColor: "ED7D31", fontColor: "FFFFFF", bold: true })}
+      ${tableCellXml("Z=4", { fillColor: "ED7D31", fontColor: "FFFFFF", bold: true })}
+    </a:tr>
+    <a:tr h="750000">
+      ${tableCellXml("A", { fillColor: "FFF2CC" })}
+      ${tableCellXml("B", { fillColor: "FFF2CC" })}
+    </a:tr>
+  </a:tbl>`,
+    ),
+    // 5. sp (最前面, Z=5)
+    shapeXml(16, "front-shape", {
+      preset: "ellipse",
+      x: 5000000,
+      y: 500000,
+      cx: 3500000,
+      cy: 3500000,
+      fillXml: `<a:solidFill><a:srgbClr val="70AD47"><a:alpha val="75000"/></a:srgbClr></a:solidFill>`,
+      outlineXml: outlineXml(25400, "2E7D32"),
+      textBodyXml: textBodyXmlHelper("Shape (Z=5)", {
+        fontSize: 16,
+        bold: true,
+        color: "FFFFFF",
+      }),
+    }),
+  ].join("\n");
+
+  const slide3 = wrapSlideXml(spTreeContent3);
+  const rels3 = slideRelsXml([
+    { id: "rId2", type: REL_TYPES.image, target: "../media/image1.png" },
+  ]);
+
   const media = new Map<string, Buffer>();
   media.set("ppt/media/image1.png", testImage);
 
@@ -3947,10 +4113,140 @@ async function createZOrderMixedFixture(): Promise<void> {
     slides: [
       { xml: slide1, rels: rels1 },
       { xml: slide2, rels: rels2 },
+      { xml: slide3, rels: rels3 },
     ],
     media,
   });
   savePptx(buffer, "z-order-mixed.pptx");
+}
+
+// --- Placeholder Overlap (Master/Layout/Slide element overlap + showMasterSp) ---
+async function createPlaceholderOverlapFixture(): Promise<void> {
+  // Custom slide master with decorative shapes (red rect + blue ellipse)
+  const masterWithShapes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sldMaster xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr/>
+      ${shapeXml(2, "MasterRect", {
+        preset: "rect",
+        x: 200000,
+        y: 200000,
+        cx: 4000000,
+        cy: 2500000,
+        fillXml: solidFillXml("CC3333"),
+        textBodyXml: textBodyXmlHelper("Master Rect", {
+          fontSize: 16,
+          bold: true,
+          color: "FFFFFF",
+        }),
+      })}
+      ${shapeXml(3, "MasterEllipse", {
+        preset: "ellipse",
+        x: 4800000,
+        y: 200000,
+        cx: 4000000,
+        cy: 2500000,
+        fillXml: solidFillXml("3366CC"),
+        textBodyXml: textBodyXmlHelper("Master Ellipse", {
+          fontSize: 16,
+          bold: true,
+          color: "FFFFFF",
+        }),
+      })}
+      ${shapeXml(4, "MasterFooter", {
+        preset: "rect",
+        x: 200000,
+        y: 4200000,
+        cx: 8600000,
+        cy: 600000,
+        fillXml: solidFillXml("333333"),
+        textBodyXml: textBodyXmlHelper("Master Footer Bar", { fontSize: 12, color: "AAAAAA" }),
+      })}
+    </p:spTree>
+  </p:cSld>
+  <p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>
+  <p:sldLayoutIdLst><p:sldLayoutId r:id="rId1"/></p:sldLayoutIdLst>
+</p:sldMaster>`;
+
+  // Slide 1: Master shapes visible behind slide shapes (default showMasterSp=true)
+  const slideShapes1 = [
+    // Semi-transparent shape overlapping master rect
+    shapeXml(2, "SlideOverlap1", {
+      preset: "roundRect",
+      x: 1500000,
+      y: 800000,
+      cx: 3500000,
+      cy: 2000000,
+      fillXml: `<a:solidFill><a:srgbClr val="70AD47"><a:alpha val="70000"/></a:srgbClr></a:solidFill>`,
+      outlineXml: outlineXml(25400, "2E7D32"),
+      textBodyXml: textBodyXmlHelper("Slide Shape 1", {
+        fontSize: 14,
+        bold: true,
+        color: "FFFFFF",
+      }),
+    }),
+    // Shape overlapping master ellipse
+    shapeXml(3, "SlideOverlap2", {
+      preset: "diamond",
+      x: 5000000,
+      y: 1000000,
+      cx: 3000000,
+      cy: 2500000,
+      fillXml: `<a:solidFill><a:srgbClr val="FFC000"><a:alpha val="70000"/></a:srgbClr></a:solidFill>`,
+      outlineXml: outlineXml(25400, "CC9900"),
+      textBodyXml: textBodyXmlHelper("Slide Shape 2", {
+        fontSize: 14,
+        bold: true,
+        color: "333333",
+      }),
+    }),
+  ].join("\n");
+
+  const slide1 = wrapSlideXml(slideShapes1);
+  const rels1 = slideRelsXml();
+
+  // Slide 2: showMasterSp="0" — master shapes should be hidden
+  const slideShapes2 = [
+    shapeXml(2, "SlideOnly", {
+      preset: "rect",
+      x: 1000000,
+      y: 1000000,
+      cx: 7000000,
+      cy: 3000000,
+      fillXml: solidFillXml("4472C4"),
+      outlineXml: outlineXml(25400, "2F5496"),
+      textBodyXml: textBodyXmlHelper("Only slide shapes (showMasterSp=0)", {
+        fontSize: 16,
+        bold: true,
+        color: "FFFFFF",
+      }),
+    }),
+  ].join("\n");
+
+  const slide2Xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}" showMasterSp="0">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr>
+        <a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm>
+      </p:grpSpPr>
+      ${slideShapes2}
+    </p:spTree>
+  </p:cSld>
+</p:sld>`;
+  const rels2 = slideRelsXml();
+
+  const buffer = await buildPptx({
+    slides: [
+      { xml: slide1, rels: rels1 },
+      { xml: slide2Xml, rels: rels2 },
+    ],
+    slideMasterXml: masterWithShapes,
+  });
+  savePptx(buffer, "placeholder-overlap.pptx");
 }
 
 // --- Paragraph Spacing ---
@@ -4150,6 +4446,7 @@ async function main(): Promise<void> {
   await createTextStyleInheritanceFixture();
   await createZOrderMixedFixture();
   await createParagraphSpacingFixture();
+  await createPlaceholderOverlapFixture();
 
   console.log("\nDone!");
 }
