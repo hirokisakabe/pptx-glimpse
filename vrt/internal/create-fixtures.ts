@@ -197,9 +197,16 @@ function gradientFillXml(stops: { pos: number; color: string }[], angle: number)
   return `<a:gradFill><a:gsLst>${gsItems}</a:gsLst><a:lin ang="${angle}" scaled="1"/></a:gradFill>`;
 }
 
-function outlineXml(width: number, color: string, dashStyle?: string): string {
+function outlineXml(
+  width: number,
+  color: string,
+  dashStyle?: string,
+  opts?: { cap?: string; join?: string },
+): string {
+  const capAttr = opts?.cap ? ` cap="${opts.cap}"` : "";
   const dash = dashStyle ? `<a:prstDash val="${dashStyle}"/>` : "";
-  return `<a:ln w="${width}"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill>${dash}</a:ln>`;
+  const joinXml = opts?.join ? `<a:${opts.join}/>` : "";
+  return `<a:ln w="${width}"${capAttr}><a:solidFill><a:srgbClr val="${color}"/></a:solidFill>${dash}${joinXml}</a:ln>`;
 }
 
 function textBodyXmlHelper(
@@ -553,12 +560,63 @@ async function createFillAndLinesFixture(): Promise<void> {
   });
 
   const slide2 = wrapSlideXml(lineShapes.join("\n"));
+
+  // Slide 3: Line cap and join styles
+  id = 2;
+  const capJoinShapes: string[] = [];
+
+  // Row 0: Line cap styles (flat, sq, rnd)
+  const capStyles: { cap: string; label: string }[] = [
+    { cap: "flat", label: "cap: flat (butt)" },
+    { cap: "sq", label: "cap: sq (square)" },
+    { cap: "rnd", label: "cap: rnd (round)" },
+  ];
+  capStyles.forEach((cs, i) => {
+    const pos = gridPosition(i, 0, 3, 2);
+    capJoinShapes.push(
+      shapeXml(id++, `cap-${cs.cap}`, {
+        preset: "rect",
+        x: pos.x,
+        y: pos.y,
+        cx: pos.w,
+        cy: pos.h,
+        fillXml: `<a:noFill/>`,
+        outlineXml: outlineXml(50800, "4472C4", undefined, { cap: cs.cap }),
+        textBodyXml: textBodyXmlHelper(cs.label, { fontSize: 10, color: "333333" }),
+      }),
+    );
+  });
+
+  // Row 1: Line join styles (miter, bevel, round)
+  const joinStyles: { join: string; label: string }[] = [
+    { join: "miter", label: "join: miter" },
+    { join: "bevel", label: "join: bevel" },
+    { join: "round", label: "join: round" },
+  ];
+  joinStyles.forEach((js, i) => {
+    const pos = gridPosition(i, 1, 3, 2);
+    capJoinShapes.push(
+      shapeXml(id++, `join-${js.join}`, {
+        preset: "rect",
+        x: pos.x,
+        y: pos.y,
+        cx: pos.w,
+        cy: pos.h,
+        fillXml: `<a:noFill/>`,
+        outlineXml: outlineXml(50800, "ED7D31", undefined, { join: js.join }),
+        textBodyXml: textBodyXmlHelper(js.label, { fontSize: 10, color: "333333" }),
+      }),
+    );
+  });
+
+  const slide3 = wrapSlideXml(capJoinShapes.join("\n"));
   const rels = slideRelsXml();
 
   const buffer = await buildPptx({
     slides: [
       { xml: slide1, rels },
       { xml: slide2, rels },
+      { xml: slide3, rels },
     ],
   });
   savePptx(buffer, "fill-and-lines.pptx");
