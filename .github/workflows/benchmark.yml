@@ -1,0 +1,69 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run benchmarks
+        run: npx vitest bench --outputJson bench-results.json
+
+      - name: Transform results for benchmark-action
+        run: npx tsx scripts/transform-bench-json.ts bench-results.json benchmark-output.json
+
+      - name: Store benchmark result (push to main)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: customBiggerIsBetter
+          output-file-path: benchmark-output.json
+          gh-pages-branch: benchmark-data
+          benchmark-data-dir-path: dev/bench
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+
+      - name: Check if baseline exists
+        if: github.event_name == 'pull_request'
+        id: baseline
+        run: |
+          if git ls-remote --exit-code origin benchmark-data > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No baseline data yet. Benchmark comparison will be available after the first merge to main."
+          fi
+
+      - name: Compare benchmark result (PR)
+        if: github.event_name == 'pull_request' && steps.baseline.outputs.exists == 'true'
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: customBiggerIsBetter
+          output-file-path: benchmark-output.json
+          gh-pages-branch: benchmark-data
+          benchmark-data-dir-path: dev/bench
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          alert-threshold: "130%"
+          comment-on-alert: true
+          comment-always: true
+          fail-on-alert: false
+          save-data-file: false

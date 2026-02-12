@@ -10,5 +10,8 @@ export default defineConfig({
       exclude: ["src/**/*.test.ts"],
       reporter: ["text", "html", "json-summary"],
     },
+    benchmark: {
+      include: ["bench/**/*.bench.ts"],
+    },
   },
 });
