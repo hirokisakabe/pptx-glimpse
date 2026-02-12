@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
-import { parseSlide, parseShapeTree } from "./slide-parser.js";
+import { parseSlide, parseShapeTree, navigateOrdered } from "./slide-parser.js";
 import { ColorResolver } from "../color/color-resolver.js";
-import { parseXml } from "./xml-parser.js";
+import { parseXml, parseXmlOrdered } from "./xml-parser.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import type { ShapeElement } from "../model/shape.js";
 
@@ -1413,5 +1413,99 @@ describe("lstStyle and defRPr parsing", () => {
     const run = shape.textBody!.paragraphs[0].runs[0];
     expect(run.properties.fontFamily).toBe("Calibri Light");
     expect(run.properties.fontFamilyEa).toBe("Yu Mincho");
+  });
+});
+
+describe("Z-order across element types", () => {
+  it("preserves document order when orderedChildren is provided (sp → cxnSp → sp)", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+        <p:grpSpPr/>
+        <p:sp>
+          <p:nvSpPr><p:cNvPr id="2" name="Shape 1"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+          <p:spPr>
+            <a:xfrm><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+        </p:sp>
+        <p:cxnSp>
+          <p:nvCxnSpPr><p:cNvPr id="3" name="Connector 1"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
+          <p:spPr>
+            <a:xfrm><a:off x="100" y="100"/><a:ext cx="200" cy="0"/></a:xfrm>
+            <a:prstGeom prst="line"/>
+            <a:ln w="12700"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln>
+          </p:spPr>
+        </p:cxnSp>
+        <p:sp>
+          <p:nvSpPr><p:cNvPr id="4" name="Shape 2"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+          <p:spPr>
+            <a:xfrm><a:off x="200" y="200"/><a:ext cx="100" cy="100"/></a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const orderedParsed = parseXmlOrdered(xml);
+    const orderedSpTree = navigateOrdered(orderedParsed, ["spTree"]);
+
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+      undefined,
+      undefined,
+      undefined,
+      orderedSpTree,
+    );
+
+    expect(elements).toHaveLength(3);
+    expect(elements[0].type).toBe("shape");
+    expect(elements[1].type).toBe("connector");
+    expect(elements[2].type).toBe("shape");
+  });
+
+  it("falls back to type-based iteration when orderedChildren is not provided", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:cxnSp>
+          <p:nvCxnSpPr><p:cNvPr id="2" name="Connector 1"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
+          <p:spPr>
+            <a:xfrm><a:off x="0" y="0"/><a:ext cx="200" cy="0"/></a:xfrm>
+            <a:prstGeom prst="line"/>
+            <a:ln w="12700"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln>
+          </p:spPr>
+        </p:cxnSp>
+        <p:sp>
+          <p:nvSpPr><p:cNvPr id="3" name="Shape 1"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+          <p:spPr>
+            <a:xfrm><a:off x="100" y="100"/><a:ext cx="100" cy="100"/></a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+
+    // orderedChildren なし → タイプ別イテレーション（sp が先）
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    expect(elements).toHaveLength(2);
+    // フォールバック: sp が cxnSp より先に来る
+    expect(elements[0].type).toBe("shape");
+    expect(elements[1].type).toBe("connector");
   });
 });

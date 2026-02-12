@@ -3,10 +3,10 @@ import type { Background } from "../model/slide.js";
 import type { SlideElement } from "../model/shape.js";
 import type { TxStyles, PlaceholderStyleInfo } from "../model/text.js";
 import type { PptxArchive } from "./pptx-reader.js";
-import { parseXml } from "./xml-parser.js";
+import { parseXml, parseXmlOrdered } from "./xml-parser.js";
 import { parseFillFromNode } from "./fill-parser.js";
 import type { FillParseContext } from "./fill-parser.js";
-import { parseShapeTree } from "./slide-parser.js";
+import { parseShapeTree, navigateOrdered } from "./slide-parser.js";
 import { buildRelsPath, parseRelationships } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import type { FontScheme } from "../model/theme.js";
@@ -96,6 +96,9 @@ export function parseSlideMasterElements(
   const relsXml = archive.files.get(relsPath);
   const rels = relsXml ? parseRelationships(relsXml) : new Map();
 
+  const orderedParsed = parseXmlOrdered(xml);
+  const orderedSpTree = navigateOrdered(orderedParsed, ["sldMaster", "cSld", "spTree"]);
+
   return parseShapeTree(
     spTree,
     rels,
@@ -105,6 +108,7 @@ export function parseSlideMasterElements(
     undefined,
     undefined,
     fontScheme,
+    orderedSpTree,
   );
 }
 

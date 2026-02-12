@@ -41,3 +41,15 @@ export function parseXml(xml: string): Record<string, unknown> {
   const parser = createXmlParser();
   return parser.parse(xml) as Record<string, unknown>;
 }
+
+// preserveOrder: true で子要素の出現順序を保持するパーサー。
+// spTree 内の異なる要素タイプ（sp, pic, cxnSp 等）の Z-order を正しく復元するために使用。
+// データ取得には既存の parseXml を使い、本関数は順序情報のみに使用する。
+export function parseXmlOrdered(xml: string): unknown[] {
+  const parser = new XMLParser({
+    preserveOrder: true,
+    removeNSPrefix: true,
+    ignoreAttributes: true,
+  });
+  return parser.parse(xml) as unknown[];
+}
