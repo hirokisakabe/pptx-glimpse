@@ -748,7 +748,7 @@ async function createBackgroundFixture(): Promise<void> {
 
 // --- 6. Groups ---
 async function createGroupsFixture(): Promise<void> {
-  // Group containing a rect, ellipse, and text shape
+  // Slide 1: Group containing a rect, ellipse, and text shape
   const grpX = 500000;
   const grpY = 500000;
   const grpW = 8000000;
@@ -784,10 +784,81 @@ async function createGroupsFixture(): Promise<void> {
   })}
 </p:grpSp>`;
 
-  const slide = wrapSlideXml(groupContent);
-  const rels = slideRelsXml();
+  const slide1 = wrapSlideXml(groupContent);
+  const rels1 = slideRelsXml();
 
-  const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
+  // Slide 2: Group rotation and flip
+  const grp2W = 3500000;
+  const grp2H = 2000000;
+  const childShapes = (id: number) => `
+  ${shapeXml(id, "Rect", {
+    preset: "rect",
+    x: 0,
+    y: 0,
+    cx: 1500000,
+    cy: 1500000,
+    fillXml: solidFillXml("4472C4"),
+  })}
+  ${shapeXml(id + 1, "Ellipse", {
+    preset: "ellipse",
+    x: 1800000,
+    y: 200000,
+    cx: 1500000,
+    cy: 1500000,
+    fillXml: solidFillXml("ED7D31"),
+  })}`;
+
+  // Group with 90 degree rotation
+  const rotatedGroup = `<p:grpSp>
+  <p:nvGrpSpPr><p:cNvPr id="10" name="Rotated Group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+  <p:grpSpPr>
+    <a:xfrm rot="${90 * 60000}">
+      <a:off x="200000" y="200000"/>
+      <a:ext cx="${grp2W}" cy="${grp2H}"/>
+      <a:chOff x="0" y="0"/>
+      <a:chExt cx="${grp2W}" cy="${grp2H}"/>
+    </a:xfrm>
+  </p:grpSpPr>
+  ${childShapes(11)}
+</p:grpSp>`;
+
+  // Group with flipH
+  const flipHGroup = `<p:grpSp>
+  <p:nvGrpSpPr><p:cNvPr id="20" name="FlipH Group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+  <p:grpSpPr>
+    <a:xfrm flipH="1">
+      <a:off x="4800000" y="200000"/>
+      <a:ext cx="${grp2W}" cy="${grp2H}"/>
+      <a:chOff x="0" y="0"/>
+      <a:chExt cx="${grp2W}" cy="${grp2H}"/>
+    </a:xfrm>
+  </p:grpSpPr>
+  ${childShapes(21)}
+</p:grpSp>`;
+
+  // Group with flipV
+  const flipVGroup = `<p:grpSp>
+  <p:nvGrpSpPr><p:cNvPr id="30" name="FlipV Group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+  <p:grpSpPr>
+    <a:xfrm flipV="1">
+      <a:off x="200000" y="2800000"/>
+      <a:ext cx="${grp2W}" cy="${grp2H}"/>
+      <a:chOff x="0" y="0"/>
+      <a:chExt cx="${grp2W}" cy="${grp2H}"/>
+    </a:xfrm>
+  </p:grpSpPr>
+  ${childShapes(31)}
+</p:grpSp>`;
+
+  const slide2 = wrapSlideXml(`${rotatedGroup}${flipHGroup}${flipVGroup}`);
+  const rels2 = slideRelsXml();
+
+  const buffer = await buildPptx({
+    slides: [
+      { xml: slide1, rels: rels1 },
+      { xml: slide2, rels: rels2 },
+    ],
+  });
   savePptx(buffer, "groups.pptx");
 }
 
