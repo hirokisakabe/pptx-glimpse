@@ -30,6 +30,7 @@ function makeImage(overrides: Partial<ImageElement> = {}): ImageElement {
     imageData: "iVBORw0KGgo=",
     mimeType: "image/png",
     effects: null,
+    srcRect: null,
     ...overrides,
   };
 }
@@ -65,6 +66,33 @@ describe("renderImage", () => {
     const result = renderImage(makeImage());
     expect(result).not.toContain("<filter");
     expect(result).not.toContain("filter=");
+  });
+
+  it("renders image with srcRect crop", () => {
+    const result = renderImage(
+      makeImage({ srcRect: { left: 0.1, top: 0.2, right: 0.1, bottom: 0.2 } }),
+    );
+
+    // clipPath def should be present
+    expect(result).toContain("<clipPath");
+    expect(result).toContain('width="192"');
+    expect(result).toContain('height="144"');
+
+    // image should be scaled up: 192 / (1 - 0.1 - 0.1) = 240, 144 / (1 - 0.2 - 0.2) = 240
+    expect(result).toContain('width="240"');
+    expect(result).toContain('height="240"');
+
+    // image offset: x = -0.1 * 240 = -24, y = -0.2 * 240 = -48
+    expect(result).toContain('x="-24"');
+    expect(result).toContain('y="-48"');
+
+    expect(result).toContain("clip-path=");
+  });
+
+  it("does not include clipPath when srcRect is null", () => {
+    const result = renderImage(makeImage());
+    expect(result).not.toContain("<clipPath");
+    expect(result).not.toContain("clip-path=");
   });
 
   it("renders image with effects", () => {

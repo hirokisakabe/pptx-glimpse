@@ -7,7 +7,7 @@ import type {
   Transform,
   Geometry,
 } from "../model/shape.js";
-import type { ImageElement } from "../model/image.js";
+import type { ImageElement, SrcRect } from "../model/image.js";
 import type { ChartElement } from "../model/chart.js";
 import type { TableElement } from "../model/table.js";
 import type {
@@ -506,6 +506,7 @@ function parseImage(
   const mimeType = mimeMap[ext] ?? "image/png";
   const imageData = mediaData.toString("base64");
   const effects = parseEffectList(spPr.effectLst as XmlNode, colorResolver);
+  const srcRect = parseSrcRect(blipFill?.srcRect as XmlNode | undefined);
 
   return {
     type: "image",
@@ -513,7 +514,18 @@ function parseImage(
     imageData,
     mimeType,
     effects,
+    srcRect,
   };
+}
+
+function parseSrcRect(node: XmlNode | undefined): SrcRect | null {
+  if (!node) return null;
+  const l = Number(node["@_l"] ?? 0) / 100000;
+  const t = Number(node["@_t"] ?? 0) / 100000;
+  const r = Number(node["@_r"] ?? 0) / 100000;
+  const b = Number(node["@_b"] ?? 0) / 100000;
+  if (l === 0 && t === 0 && r === 0 && b === 0) return null;
+  return { left: l, top: t, right: r, bottom: b };
 }
 
 function parseConnector(cxn: XmlNode, colorResolver: ColorResolver): ConnectorElement | null {
