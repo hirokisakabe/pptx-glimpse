@@ -16,21 +16,54 @@ import type {
   Paragraph,
   TextRun,
   RunProperties,
+  Hyperlink,
   BulletType,
   AutoNumScheme,
+  DefaultTextStyle,
+  DefaultRunProperties,
+  SpacingValue,
 } from "../model/text.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import type { Relationship } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
-import { parseXml } from "./xml-parser.js";
+import type { FontScheme } from "../model/theme.js";
+import { parseXml, parseXmlOrdered } from "./xml-parser.js";
 import { parseFillFromNode, parseOutline } from "./fill-parser.js";
 import type { FillParseContext } from "./fill-parser.js";
+import { parseEffectList } from "./effect-parser.js";
 import { parseChart } from "./chart-parser.js";
+import { parseCustomGeometry } from "./custom-geometry-parser.js";
 import { parseTable } from "./table-parser.js";
-import { parseRelationships, resolveRelationshipTarget } from "./relationship-parser.js";
+import {
+  parseRelationships,
+  resolveRelationshipTarget,
+  buildRelsPath,
+} from "./relationship-parser.js";
 import { hundredthPointToPoint } from "../utils/emu.js";
+import {
+  parseListStyle,
+  parseDefaultRunProperties,
+  resolveThemeFont,
+} from "./text-style-parser.js";
 
 const WARN_PREFIX = "[pptx-glimpse]";
+
+const SHAPE_TAGS = new Set(["sp", "pic", "cxnSp", "grpSp", "graphicFrame"]);
+
+// preserveOrder パース結果を path で辿り、指定ノードの子配列を返す。
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function navigateOrdered(ordered: any[], path: string[]): any[] | null {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let current: any[] = ordered;
+  for (const key of path) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const entry = current.find((item: any) => key in item);
+    if (!entry) return null;
+    current = entry[key];
+    if (!Array.isArray(current)) return null;
+  }
+  return current;
+}
 
 export function parseSlide(
   slideXml: string,
@@ -38,6 +71,7 @@ export function parseSlide(
   slideNumber: number,
   archive: PptxArchive,
   colorResolver: ColorResolver,
+  fontScheme?: FontScheme | null,
 ): Slide {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parsed = parseXml(slideXml) as any;
@@ -52,6 +86,11 @@ export function parseSlide(
 
   const fillContext: FillParseContext = { rels, archive, basePath: slidePath };
   const background = parseBackground(sld?.cSld?.bg, colorResolver, fillContext);
+
+  // ordered パーサーで子要素の出現順序を取得（Z-order 保持のため）
+  const orderedParsed = parseXmlOrdered(slideXml);
+  const orderedSpTree = navigateOrdered(orderedParsed, ["sld", "cSld", "spTree"]);
+
   const elements = parseShapeTree(
     sld?.cSld?.spTree,
     rels,
@@ -59,9 +98,15 @@ export function parseSlide(
     archive,
     colorResolver,
     `Slide ${slideNumber}`,
+    fillContext,
+    fontScheme,
+    orderedSpTree,
   );
 
-  return { slideNumber, background, elements };
+  const showMasterSpAttr = sld?.["@_showMasterSp"];
+  const showMasterSp = showMasterSpAttr !== "0" && showMasterSpAttr !== "false";
+
+  return { slideNumber, background, elements, showMasterSp };
 }
 
 function parseBackground(
@@ -79,6 +124,22 @@ function parseBackground(
   return { fill };
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mergeChildElements(spTree: any, source: any): void {
+  const tags = ["sp", "pic", "cxnSp", "grpSp", "graphicFrame"];
+  for (const tag of tags) {
+    const items = source[tag];
+    if (!items) continue;
+    if (!spTree[tag]) {
+      spTree[tag] = [];
+    }
+    const arr = Array.isArray(items) ? items : [items];
+    for (const item of arr) {
+      spTree[tag].push(item);
+    }
+  }
+}
+
 export function parseShapeTree(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   spTree: any,
@@ -87,15 +148,44 @@ export function parseShapeTree(
   archive: PptxArchive,
   colorResolver: ColorResolver,
   context?: string,
+  fillContext?: FillParseContext,
+  fontScheme?: FontScheme | null,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  orderedChildren?: any[] | null,
 ): SlideElement[] {
   if (!spTree) return [];
+
+  // orderedChildren が提供されている場合はドキュメント順でイテレート
+  if (orderedChildren) {
+    return parseShapeTreeOrdered(
+      spTree,
+      orderedChildren,
+      rels,
+      slidePath,
+      archive,
+      colorResolver,
+      context,
+      fillContext,
+      fontScheme,
+    );
+  }
+
+  // フォールバック: タイプ別イテレーション（後方互換）
+  // mc:AlternateContent の処理: Choice 内の要素を spTree にマージ
+  const alternateContents = spTree.AlternateContent ?? [];
+  for (const ac of alternateContents) {
+    const choices = Array.isArray(ac.Choice) ? ac.Choice : ac.Choice ? [ac.Choice] : [];
+    for (const choice of choices) {
+      mergeChildElements(spTree, choice);
+    }
+  }
 
   const ctx = context ?? slidePath;
   const elements: SlideElement[] = [];
 
   const shapes = spTree.sp ?? [];
   for (const sp of shapes) {
-    const shape = parseShape(sp, colorResolver);
+    const shape = parseShape(sp, colorResolver, rels, fillContext, fontScheme);
     if (shape) {
       elements.push(shape);
     } else {
@@ -105,7 +195,7 @@ export function parseShapeTree(
 
   const pics = spTree.pic ?? [];
   for (const pic of pics) {
-    const img = parseImage(pic, rels, slidePath, archive);
+    const img = parseImage(pic, rels, slidePath, archive, colorResolver);
     if (img) {
       elements.push(img);
     } else {
@@ -125,7 +215,7 @@ export function parseShapeTree(
 
   const grpSps = spTree.grpSp ?? [];
   for (const grp of grpSps) {
-    const group = parseGroup(grp, rels, slidePath, archive, colorResolver);
+    const group = parseGroup(grp, rels, slidePath, archive, colorResolver, fillContext, fontScheme);
     if (group) {
       elements.push(group);
     } else {
@@ -135,7 +225,7 @@ export function parseShapeTree(
 
   const graphicFrames = spTree.graphicFrame ?? [];
   for (const gf of graphicFrames) {
-    const chart = parseGraphicFrame(gf, rels, slidePath, archive, colorResolver);
+    const chart = parseGraphicFrame(gf, rels, slidePath, archive, colorResolver, fontScheme);
     if (chart) {
       elements.push(chart);
     } else {
@@ -146,8 +236,204 @@ export function parseShapeTree(
   return elements;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseShape(sp: any, colorResolver: ColorResolver): ShapeElement | null {
+// orderedChildren を使ってドキュメント順で要素をイテレートする
+function parseShapeTreeOrdered(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  spTree: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  orderedChildren: any[],
+  rels: Map<string, Relationship>,
+  slidePath: string,
+  archive: PptxArchive,
+  colorResolver: ColorResolver,
+  context?: string,
+  fillContext?: FillParseContext,
+  fontScheme?: FontScheme | null,
+): SlideElement[] {
+  const ctx = context ?? slidePath;
+  const elements: SlideElement[] = [];
+  const tagCounters: Record<string, number> = {};
+
+  for (const child of orderedChildren) {
+    const tag = Object.keys(child).find((k) => k !== ":@");
+    if (!tag) continue;
+
+    if (tag === "AlternateContent") {
+      // AlternateContent をインライン処理
+      const acIndex = tagCounters["AlternateContent"] ?? 0;
+      tagCounters["AlternateContent"] = acIndex + 1;
+
+      const acList = spTree.AlternateContent ?? [];
+      const acData = acList[acIndex];
+      if (!acData) continue;
+
+      const choices = Array.isArray(acData.Choice)
+        ? acData.Choice
+        : acData.Choice
+          ? [acData.Choice]
+          : [];
+      const firstChoice = choices[0];
+      if (!firstChoice) continue;
+
+      // ordered 結果から Choice の子要素を取得
+      const acOrderedChildren = child.AlternateContent;
+
+      const choiceOrdered = Array.isArray(acOrderedChildren)
+        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          acOrderedChildren.find((c: any) => "Choice" in c)
+        : null;
+      const choiceChildren = choiceOrdered?.Choice;
+
+      if (Array.isArray(choiceChildren)) {
+        // Choice 内の子要素をドキュメント順で処理
+        const choiceTagCounters: Record<string, number> = {};
+        for (const choiceChild of choiceChildren) {
+          const choiceTag = Object.keys(choiceChild).find((k) => k !== ":@");
+          if (!choiceTag || !SHAPE_TAGS.has(choiceTag)) continue;
+
+          const choiceIdx = choiceTagCounters[choiceTag] ?? 0;
+          choiceTagCounters[choiceTag] = choiceIdx + 1;
+
+          const items = firstChoice[choiceTag];
+          const arr = Array.isArray(items) ? items : items ? [items] : [];
+          const element = arr[choiceIdx];
+          if (!element) continue;
+
+          parseAndPushElement(
+            choiceTag,
+            element,
+            choiceChild,
+            elements,
+            rels,
+            slidePath,
+            archive,
+            colorResolver,
+            ctx,
+            fillContext,
+            fontScheme,
+          );
+        }
+      }
+      continue;
+    }
+
+    if (!SHAPE_TAGS.has(tag)) continue;
+
+    const index = tagCounters[tag] ?? 0;
+    tagCounters[tag] = index + 1;
+
+    const element = spTree[tag]?.[index];
+    if (!element) continue;
+
+    parseAndPushElement(
+      tag,
+      element,
+      child,
+      elements,
+      rels,
+      slidePath,
+      archive,
+      colorResolver,
+      ctx,
+      fillContext,
+      fontScheme,
+    );
+  }
+
+  return elements;
+}
+
+// タグに応じた要素パース処理を行い elements に追加する
+function parseAndPushElement(
+  tag: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  element: any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  orderedNode: any,
+  elements: SlideElement[],
+  rels: Map<string, Relationship>,
+  slidePath: string,
+  archive: PptxArchive,
+  colorResolver: ColorResolver,
+  ctx: string,
+  fillContext?: FillParseContext,
+  fontScheme?: FontScheme | null,
+): void {
+  switch (tag) {
+    case "sp": {
+      const shape = parseShape(element, colorResolver, rels, fillContext, fontScheme);
+      if (shape) {
+        elements.push(shape);
+      } else {
+        console.warn(`${WARN_PREFIX} ${ctx}: shape skipped (parse returned null)`);
+      }
+      break;
+    }
+    case "pic": {
+      const img = parseImage(element, rels, slidePath, archive, colorResolver);
+      if (img) {
+        elements.push(img);
+      } else {
+        console.warn(`${WARN_PREFIX} ${ctx}: image skipped (parse returned null)`);
+      }
+      break;
+    }
+    case "cxnSp": {
+      const connector = parseConnector(element, colorResolver);
+      if (connector) {
+        elements.push(connector);
+      } else {
+        console.warn(`${WARN_PREFIX} ${ctx}: connector skipped (parse returned null)`);
+      }
+      break;
+    }
+    case "grpSp": {
+      // ordered 結果からグループの子要素順序を取得
+      const grpOrderedChildren = orderedNode[tag] ?? null;
+      const group = parseGroup(
+        element,
+        rels,
+        slidePath,
+        archive,
+        colorResolver,
+        fillContext,
+        fontScheme,
+        grpOrderedChildren,
+      );
+      if (group) {
+        elements.push(group);
+      } else {
+        console.warn(`${WARN_PREFIX} ${ctx}: group skipped (parse returned null)`);
+      }
+      break;
+    }
+    case "graphicFrame": {
+      const gfResult = parseGraphicFrame(
+        element,
+        rels,
+        slidePath,
+        archive,
+        colorResolver,
+        fontScheme,
+      );
+      if (gfResult) {
+        elements.push(gfResult);
+      } else {
+        console.warn(`${WARN_PREFIX} ${ctx}: graphicFrame skipped (parse returned null)`);
+      }
+      break;
+    }
+  }
+}
+
+function parseShape(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sp: any,
+  colorResolver: ColorResolver,
+  rels?: Map<string, Relationship>,
+  fillContext?: FillParseContext,
+  fontScheme?: FontScheme | null,
+): ShapeElement | null {
   const spPr = sp.spPr;
   if (!spPr) return null;
 
@@ -155,9 +441,10 @@ function parseShape(sp: any, colorResolver: ColorResolver): ShapeElement | null 
   if (!transform) return null;
 
   const geometry = parseGeometry(spPr);
-  const fill = parseFillFromNode(spPr, colorResolver);
+  const fill = parseFillFromNode(spPr, colorResolver, fillContext);
   const outline = parseOutline(spPr.ln, colorResolver);
-  const textBody = parseTextBody(sp.txBody, colorResolver);
+  const textBody = parseTextBody(sp.txBody, colorResolver, rels, fontScheme);
+  const effects = parseEffectList(spPr.effectLst, colorResolver);
 
   const ph = sp.nvSpPr?.nvPr?.ph;
   const placeholderType = ph ? (ph["@_type"] ?? "body") : undefined;
@@ -170,6 +457,7 @@ function parseShape(sp: any, colorResolver: ColorResolver): ShapeElement | null 
     fill,
     outline,
     textBody,
+    effects,
     ...(placeholderType !== undefined && { placeholderType }),
     ...(placeholderIdx !== undefined && { placeholderIdx }),
   };
@@ -181,6 +469,7 @@ function parseImage(
   rels: Map<string, Relationship>,
   slidePath: string,
   archive: PptxArchive,
+  colorResolver: ColorResolver,
 ): ImageElement | null {
   const spPr = pic.spPr;
   if (!spPr) return null;
@@ -211,12 +500,14 @@ function parseImage(
   };
   const mimeType = mimeMap[ext] ?? "image/png";
   const imageData = mediaData.toString("base64");
+  const effects = parseEffectList(spPr.effectLst, colorResolver);
 
   return {
     type: "image",
     transform,
     imageData,
     mimeType,
+    effects,
   };
 }
 
@@ -228,9 +519,11 @@ function parseConnector(cxn: any, colorResolver: ColorResolver): ConnectorElemen
   const transform = parseTransform(spPr.xfrm);
   if (!transform) return null;
 
+  const geometry = parseGeometry(spPr);
   const outline = parseOutline(spPr.ln, colorResolver);
+  const effects = parseEffectList(spPr.effectLst, colorResolver);
 
-  return { type: "connector", transform, outline };
+  return { type: "connector", transform, geometry, outline, effects };
 }
 
 function parseGroup(
@@ -240,6 +533,10 @@ function parseGroup(
   slidePath: string,
   archive: PptxArchive,
   colorResolver: ColorResolver,
+  parentFillContext?: FillParseContext,
+  fontScheme?: FontScheme | null,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  orderedChildren?: any[] | null,
 ): GroupElement | null {
   const grpSpPr = grp.grpSpPr;
   if (!grpSpPr) return null;
@@ -259,9 +556,28 @@ function parseGroup(
     flipV: false,
   };
 
-  const children = parseShapeTree(grp, rels, slidePath, archive, colorResolver);
+  const groupFill = parseFillFromNode(grpSpPr, colorResolver, parentFillContext);
+  const childFillContext: FillParseContext = {
+    rels: parentFillContext?.rels ?? rels,
+    archive: parentFillContext?.archive ?? { files: new Map(), media: new Map() },
+    basePath: parentFillContext?.basePath ?? slidePath,
+    ...(groupFill ? { groupFill } : {}),
+  };
 
-  return { type: "group", transform, childTransform, children };
+  const children = parseShapeTree(
+    grp,
+    rels,
+    slidePath,
+    archive,
+    colorResolver,
+    undefined,
+    childFillContext,
+    fontScheme,
+    orderedChildren,
+  );
+  const effects = parseEffectList(grpSpPr.effectLst, colorResolver);
+
+  return { type: "group", transform, childTransform, children, effects };
 }
 
 function parseGraphicFrame(
@@ -271,7 +587,8 @@ function parseGraphicFrame(
   slidePath: string,
   archive: PptxArchive,
   colorResolver: ColorResolver,
-): ChartElement | TableElement | null {
+  fontScheme?: FontScheme | null,
+): ChartElement | TableElement | GroupElement | null {
   const xfrm = gf.xfrm;
   const transform = parseTransform(xfrm);
   if (!transform) return null;
@@ -301,13 +618,139 @@ function parseGraphicFrame(
   // Table
   const tblNode = graphicData.tbl;
   if (tblNode) {
-    const tableData = parseTable(tblNode, colorResolver);
+    const tableData = parseTable(tblNode, colorResolver, fontScheme);
     if (!tableData) return null;
 
     return { type: "table", transform, table: tableData };
   }
 
+  // SmartArt (Diagram)
+  if (graphicData["@_uri"] === "http://schemas.openxmlformats.org/drawingml/2006/diagram") {
+    return parseSmartArt(
+      graphicData,
+      transform,
+      rels,
+      slidePath,
+      archive,
+      colorResolver,
+      fontScheme,
+    );
+  }
+
   return null;
+}
+
+function parseSmartArt(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  graphicData: any,
+  transform: Transform,
+  rels: Map<string, Relationship>,
+  slidePath: string,
+  archive: PptxArchive,
+  colorResolver: ColorResolver,
+  fontScheme?: FontScheme | null,
+): GroupElement | null {
+  // dgm:relIds → removeNSPrefix → relIds
+  const relIds = graphicData.relIds;
+  if (!relIds) return null;
+
+  // r:dm 属性 (data model relationship ID)
+  const dmRId = relIds["@_r:dm"] ?? relIds["@_dm"];
+  if (!dmRId) return null;
+
+  const dmRel = rels.get(dmRId);
+  if (!dmRel) return null;
+
+  const dataPath = resolveRelationshipTarget(slidePath, dmRel.target);
+
+  // data の .rels から diagramDrawing リレーションシップを探す
+  const dataRelsPath = buildRelsPath(dataPath);
+  const dataRelsXml = archive.files.get(dataRelsPath);
+
+  let drawingPath: string | null = null;
+
+  if (dataRelsXml) {
+    const dataRels = parseRelationships(dataRelsXml);
+    for (const [, rel] of dataRels) {
+      if (rel.type.includes("diagramDrawing")) {
+        drawingPath = resolveRelationshipTarget(dataPath, rel.target);
+        break;
+      }
+    }
+  }
+
+  // フォールバック: slide rels から diagramDrawing を探す
+  if (!drawingPath) {
+    for (const [, rel] of rels) {
+      if (rel.type.includes("diagramDrawing")) {
+        drawingPath = resolveRelationshipTarget(slidePath, rel.target);
+        break;
+      }
+    }
+  }
+
+  if (!drawingPath) return null;
+
+  const drawingXml = archive.files.get(drawingPath);
+  if (!drawingXml) return null;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parsed = parseXml(drawingXml) as any;
+  const spTree = parsed.drawing?.spTree;
+  if (!spTree) return null;
+
+  // drawing XML 用のリレーションシップを取得
+  const drawingRelsPath = buildRelsPath(drawingPath);
+  const drawingRelsXml = archive.files.get(drawingRelsPath);
+  const drawingRels = drawingRelsXml
+    ? parseRelationships(drawingRelsXml)
+    : new Map<string, Relationship>();
+
+  // grpSpPr から childTransform を取得
+  const grpXfrm = spTree.grpSpPr?.xfrm;
+  const childOff = grpXfrm?.chOff;
+  const childExt = grpXfrm?.chExt;
+  const childTransform: Transform = {
+    offsetX: Number(childOff?.["@_x"] ?? 0),
+    offsetY: Number(childOff?.["@_y"] ?? 0),
+    extentWidth: Number(childExt?.["@_cx"] ?? transform.extentWidth),
+    extentHeight: Number(childExt?.["@_cy"] ?? transform.extentHeight),
+    rotation: 0,
+    flipH: false,
+    flipV: false,
+  };
+
+  const fillContext: FillParseContext = {
+    rels: drawingRels,
+    archive,
+    basePath: drawingPath,
+  };
+
+  // ordered パーサーで子要素の出現順序を取得
+  const orderedParsed = parseXmlOrdered(drawingXml);
+  const orderedSpTree = navigateOrdered(orderedParsed, ["drawing", "spTree"]);
+
+  const children = parseShapeTree(
+    spTree,
+    drawingRels,
+    drawingPath,
+    archive,
+    colorResolver,
+    undefined,
+    fillContext,
+    fontScheme,
+    orderedSpTree,
+  );
+
+  if (children.length === 0) return null;
+
+  return {
+    type: "group",
+    transform,
+    childTransform,
+    children,
+    effects: null,
+  };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -379,72 +822,21 @@ function parseGeometry(spPr: any): Geometry {
   }
 
   if (spPr.custGeom) {
-    const pathData = parseCustomGeometryPaths(spPr.custGeom);
-    if (pathData) {
-      return { type: "custom", pathData };
+    const paths = parseCustomGeometry(spPr.custGeom);
+    if (paths) {
+      return { type: "custom", paths };
     }
   }
 
   return { type: "preset", preset: "rect", adjustValues: {} };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseCustomGeometryPaths(custGeom: any): string | null {
-  const pathLst = custGeom.pathLst;
-  if (!pathLst?.path) return null;
-
-  const paths = Array.isArray(pathLst.path) ? pathLst.path : [pathLst.path];
-  const svgParts: string[] = [];
-
-  for (const path of paths) {
-    const w = Number(path["@_w"] ?? 0);
-    const h = Number(path["@_h"] ?? 0);
-    if (w === 0 && h === 0) continue;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const processCommands = (commands: any[] | undefined, prefix: string) => {
-      if (!commands) return;
-      const list = Array.isArray(commands) ? commands : [commands];
-      for (const cmd of list) {
-        if (prefix === "M" || prefix === "L") {
-          const pt = cmd.pt;
-          if (pt) {
-            const pts = Array.isArray(pt) ? pt : [pt];
-            svgParts.push(
-              `${prefix} ${pts.map((p: Record<string, string>) => `${p["@_x"]} ${p["@_y"]}`).join(" ")}`,
-            );
-          }
-        }
-      }
-    };
-
-    if (path.moveTo) processCommands(Array.isArray(path.moveTo) ? path.moveTo : [path.moveTo], "M");
-    if (path.lnTo) processCommands(Array.isArray(path.lnTo) ? path.lnTo : [path.lnTo], "L");
-
-    if (path.cubicBezTo) {
-      const bezList = Array.isArray(path.cubicBezTo) ? path.cubicBezTo : [path.cubicBezTo];
-      for (const bez of bezList) {
-        const pts = Array.isArray(bez.pt) ? bez.pt : [bez.pt];
-        if (pts.length >= 3) {
-          svgParts.push(
-            `C ${pts.map((p: Record<string, string>) => `${p["@_x"]} ${p["@_y"]}`).join(", ")}`,
-          );
-        }
-      }
-    }
-
-    if (path.close !== undefined) {
-      svgParts.push("Z");
-    }
-  }
-
-  return svgParts.length > 0 ? svgParts.join(" ") : null;
-}
-
 export function parseTextBody(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   txBody: any,
   colorResolver: ColorResolver,
+  rels?: Map<string, Relationship>,
+  fontScheme?: FontScheme | null,
 ): TextBody | null {
   if (!txBody) return null;
 
@@ -478,10 +870,12 @@ export function parseTextBody(
     lnSpcReduction,
   };
 
+  const lstStyle = parseListStyle(txBody.lstStyle);
+
   const paragraphs: Paragraph[] = [];
   const pList = txBody.p ?? [];
   for (const p of pList) {
-    paragraphs.push(parseParagraph(p, colorResolver));
+    paragraphs.push(parseParagraph(p, colorResolver, rels, fontScheme, lstStyle));
   }
 
   if (paragraphs.length === 0) return null;
@@ -530,22 +924,47 @@ function parseBullet(pPr: any, colorResolver: ColorResolver) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseParagraph(p: any, colorResolver: ColorResolver): Paragraph {
+function parseSpacing(spc: any): SpacingValue {
+  if (spc?.spcPts) return { type: "pts", value: Number(spc.spcPts["@_val"]) };
+  if (spc?.spcPct) return { type: "pct", value: Number(spc.spcPct["@_val"]) };
+  return { type: "pts", value: 0 };
+}
+
+function parseParagraph(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  p: any,
+  colorResolver: ColorResolver,
+  rels?: Map<string, Relationship>,
+  fontScheme?: FontScheme | null,
+  lstStyle?: DefaultTextStyle,
+): Paragraph {
   const pPr = p.pPr;
+  const level = Number(pPr?.["@_lvl"] ?? 0);
+
+  // lstStyle からレベル対応のデフォルト段落プロパティを取得
+  const lstLevelProps = lstStyle?.levels[level];
+
   const { bullet, bulletFont, bulletColor, bulletSizePct } = parseBullet(pPr, colorResolver);
   const properties = {
-    alignment: (pPr?.["@_algn"] as "l" | "ctr" | "r" | "just") ?? "l",
+    alignment: (pPr?.["@_algn"] as "l" | "ctr" | "r" | "just") ?? lstLevelProps?.alignment ?? "l",
     lineSpacing: pPr?.lnSpc?.spcPct ? Number(pPr.lnSpc.spcPct["@_val"]) : null,
-    spaceBefore: pPr?.spcBef?.spcPts ? Number(pPr.spcBef.spcPts["@_val"]) : 0,
-    spaceAfter: pPr?.spcAft?.spcPts ? Number(pPr.spcAft.spcPts["@_val"]) : 0,
-    level: Number(pPr?.["@_lvl"] ?? 0),
+    spaceBefore: parseSpacing(pPr?.spcBef),
+    spaceAfter: parseSpacing(pPr?.spcAft),
+    level,
     bullet,
     bulletFont,
     bulletColor,
     bulletSizePct,
-    marginLeft: Number(pPr?.["@_marL"] ?? 0),
-    indent: Number(pPr?.["@_indent"] ?? 0),
+    marginLeft:
+      pPr?.["@_marL"] !== undefined ? Number(pPr["@_marL"]) : (lstLevelProps?.marginLeft ?? 0),
+    indent:
+      pPr?.["@_indent"] !== undefined ? Number(pPr["@_indent"]) : (lstLevelProps?.indent ?? 0),
   };
+
+  // defRPr のマージ: pPr.defRPr > lstStyle.lvl.defRPr
+  const pPrDefRPr = parseDefaultRunProperties(pPr?.defRPr);
+  const lstDefRPr = lstLevelProps?.defaultRunProperties;
+  const mergedDefaults = mergeDefaultRunProperties(pPrDefRPr, lstDefRPr);
 
   const runs: TextRun[] = [];
   const rList = p.r ?? [];
@@ -553,42 +972,87 @@ function parseParagraph(p: any, colorResolver: ColorResolver): Paragraph {
     const text = r.t ?? "";
     const textContent = typeof text === "object" ? (text["#text"] ?? "") : String(text);
     const rPr = r.rPr;
-    const runProps = parseRunProperties(rPr, colorResolver);
+    const runProps = parseRunProperties(rPr, colorResolver, rels, fontScheme, mergedDefaults);
     runs.push({ text: textContent, properties: runProps });
   }
 
   return { runs, properties };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseRunProperties(rPr: any, colorResolver: ColorResolver): RunProperties {
+function mergeDefaultRunProperties(
+  primary?: DefaultRunProperties,
+  secondary?: DefaultRunProperties,
+): DefaultRunProperties | undefined {
+  if (!primary && !secondary) return undefined;
+  if (!primary) return secondary;
+  if (!secondary) return primary;
+  return {
+    fontSize: primary.fontSize ?? secondary.fontSize,
+    fontFamily: primary.fontFamily ?? secondary.fontFamily,
+    fontFamilyEa: primary.fontFamilyEa ?? secondary.fontFamilyEa,
+    bold: primary.bold ?? secondary.bold,
+    italic: primary.italic ?? secondary.italic,
+    underline: primary.underline ?? secondary.underline,
+    strikethrough: primary.strikethrough ?? secondary.strikethrough,
+  };
+}
+
+function parseRunProperties(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  rPr: any,
+  colorResolver: ColorResolver,
+  rels?: Map<string, Relationship>,
+  fontScheme?: FontScheme | null,
+  defaults?: DefaultRunProperties,
+): RunProperties {
   if (!rPr) {
     return {
-      fontSize: null,
-      fontFamily: null,
-      fontFamilyEa: null,
-      bold: false,
-      italic: false,
-      underline: false,
-      strikethrough: false,
+      fontSize: defaults?.fontSize ?? null,
+      fontFamily: resolveThemeFont(defaults?.fontFamily ?? null, fontScheme),
+      fontFamilyEa: resolveThemeFont(defaults?.fontFamilyEa ?? null, fontScheme),
+      bold: defaults?.bold ?? false,
+      italic: defaults?.italic ?? false,
+      underline: defaults?.underline ?? false,
+      strikethrough: defaults?.strikethrough ?? false,
       color: null,
       baseline: 0,
+      hyperlink: null,
     };
   }
 
-  const fontSize = rPr["@_sz"] ? hundredthPointToPoint(Number(rPr["@_sz"])) : null;
-  const fontFamily = rPr.latin?.["@_typeface"] ?? null;
-  const fontFamilyEa = rPr.ea?.["@_typeface"] ?? null;
-  const bold = rPr["@_b"] === "1" || rPr["@_b"] === "true";
-  const italic = rPr["@_i"] === "1" || rPr["@_i"] === "true";
-  const underline = rPr["@_u"] !== undefined && rPr["@_u"] !== "none";
-  const strikethrough = rPr["@_strike"] !== undefined && rPr["@_strike"] !== "noStrike";
+  const fontSize = rPr["@_sz"]
+    ? hundredthPointToPoint(Number(rPr["@_sz"]))
+    : (defaults?.fontSize ?? null);
+  const fontFamily = resolveThemeFont(
+    rPr.latin?.["@_typeface"] ?? defaults?.fontFamily ?? null,
+    fontScheme,
+  );
+  const fontFamilyEa = resolveThemeFont(
+    rPr.ea?.["@_typeface"] ?? defaults?.fontFamilyEa ?? null,
+    fontScheme,
+  );
+  const bold =
+    rPr["@_b"] !== undefined
+      ? rPr["@_b"] === "1" || rPr["@_b"] === "true"
+      : (defaults?.bold ?? false);
+  const italic =
+    rPr["@_i"] !== undefined
+      ? rPr["@_i"] === "1" || rPr["@_i"] === "true"
+      : (defaults?.italic ?? false);
+  const underline =
+    rPr["@_u"] !== undefined ? rPr["@_u"] !== "none" : (defaults?.underline ?? false);
+  const strikethrough =
+    rPr["@_strike"] !== undefined
+      ? rPr["@_strike"] !== "noStrike"
+      : (defaults?.strikethrough ?? false);
   const baseline = rPr["@_baseline"] ? Number(rPr["@_baseline"]) / 1000 : 0;
 
   let color = colorResolver.resolve(rPr.solidFill ?? rPr);
   if (!rPr.solidFill && !rPr.srgbClr && !rPr.schemeClr && !rPr.sysClr) {
     color = null;
   }
+
+  const hyperlink = parseHyperlink(rPr.hlinkClick, rels);
 
   return {
     fontSize,
@@ -600,5 +1064,23 @@ function parseRunProperties(rPr: any, colorResolver: ColorResolver): RunProperti
     strikethrough,
     color,
     baseline,
+    hyperlink,
   };
+}
+
+function parseHyperlink(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  hlinkClick: any,
+  rels?: Map<string, Relationship>,
+): Hyperlink | null {
+  if (!hlinkClick) return null;
+
+  const rId = hlinkClick["@_r:id"] ?? hlinkClick["@_id"];
+  if (!rId || !rels) return null;
+
+  const rel = rels.get(rId);
+  if (!rel) return null;
+
+  const tooltip = hlinkClick["@_tooltip"] as string | undefined;
+  return { url: rel.target, ...(tooltip && { tooltip }) };
 }

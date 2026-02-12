@@ -6,6 +6,9 @@ coverage/
 output/
 scripts/fonts/
 vrt/internal/diffs/
+vrt/internal/fixtures/
 vrt/libreoffice/diffs/
 vrt/libreoffice/snapshots/
 vrt/libreoffice/fixtures/
+demo/dist/
+demo/node_modules/

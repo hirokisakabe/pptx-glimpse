@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { renderTextBody, formatAutoNum, buildFontFamilyValue } from "./text-renderer.js";
-import type { TextBody, Paragraph, BulletType } from "../model/text.js";
+import type { TextBody, Paragraph, BulletType, SpacingValue } from "../model/text.js";
 import type { Transform } from "../model/shape.js";
 
 function makeTransform(widthEmu: number, heightEmu: number): Transform {
@@ -21,8 +21,8 @@ function defaultParagraphProperties(
   return {
     alignment: "l",
     lineSpacing: null,
-    spaceBefore: 0,
-    spaceAfter: 0,
+    spaceBefore: { type: "pts", value: 0 },
+    spaceAfter: { type: "pts", value: 0 },
     level: 0,
     bullet: null,
     bulletFont: null,
@@ -421,6 +421,130 @@ describe("renderTextBody", () => {
     const textBody = makeTextBody(["Normal"]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).not.toContain("baseline-shift");
+  });
+});
+
+describe("段落間隔 (spaceBefore / spaceAfter)", () => {
+  function makeRunProps(fontSize: number = 18) {
+    return {
+      fontSize,
+      fontFamily: null,
+      fontFamilyEa: null,
+      bold: false,
+      italic: false,
+      underline: false,
+      strikethrough: false,
+      color: null,
+      baseline: 0,
+    };
+  }
+
+  function makeSpacingTextBody(
+    paragraphs: { text: string; spaceBefore?: SpacingValue; spaceAfter?: SpacingValue }[],
+  ): TextBody {
+    return {
+      bodyProperties: {
+        anchor: "t",
+        marginLeft: 91440,
+        marginRight: 91440,
+        marginTop: 45720,
+        marginBottom: 45720,
+        wrap: "square",
+        autoFit: "noAutofit",
+        fontScale: 1,
+        lnSpcReduction: 0,
+      },
+      paragraphs: paragraphs.map((p) => ({
+        runs: [{ text: p.text, properties: makeRunProps() }],
+        properties: defaultParagraphProperties({
+          spaceBefore: p.spaceBefore ?? { type: "pts", value: 0 },
+          spaceAfter: p.spaceAfter ?? { type: "pts", value: 0 },
+        }),
+      })),
+    };
+  }
+
+  function extractDyValues(svg: string): number[] {
+    const matches = svg.matchAll(/dy="([^"]+)"/g);
+    return [...matches].map((m) => parseFloat(m[1]));
+  }
+
+  it("spaceBefore (pts) が段落間隔に反映される", () => {
+    const withSpacing = makeSpacingTextBody([
+      { text: "First" },
+      { text: "Second", spaceBefore: { type: "pts", value: 1200 } }, // 12pt
+    ]);
+    const withoutSpacing = makeSpacingTextBody([{ text: "First" }, { text: "Second" }]);
+
+    const dyWith = extractDyValues(
+      renderTextBody(withSpacing, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
+    );
+    const dyWithout = extractDyValues(
+      renderTextBody(withoutSpacing, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
+    );
+
+    // spaceBefore が設定されている場合、2番目の段落の dy が大きくなる
+    expect(dyWith[1]).toBeGreaterThan(dyWithout[1]);
+  });
+
+  it("spaceAfter (pts) が次の段落との間隔に反映される", () => {
+    const withSpaceAfter = makeSpacingTextBody([
+      { text: "First", spaceAfter: { type: "pts", value: 1200 } }, // 12pt
+      { text: "Second" },
+    ]);
+    const withoutSpacing = makeSpacingTextBody([{ text: "First" }, { text: "Second" }]);
+
+    const dyWith = extractDyValues(
+      renderTextBody(withSpaceAfter, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
+    );
+    const dyWithout = extractDyValues(
+      renderTextBody(withoutSpacing, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
+    );
+
+    // spaceAfter が設定されている場合、2番目の段落の dy が大きくなる
+    expect(dyWith[1]).toBeGreaterThan(dyWithout[1]);
+  });
+
+  it("spaceAfter と spaceBefore の大きい方が適用される", () => {
+    const spaceAfterOnly = makeSpacingTextBody([
+      { text: "First", spaceAfter: { type: "pts", value: 2000 } }, // 20pt
+      { text: "Second", spaceBefore: { type: "pts", value: 500 } }, // 5pt
+    ]);
+    const spaceBeforeOnly = makeSpacingTextBody([
+      { text: "First", spaceAfter: { type: "pts", value: 500 } }, // 5pt
+      { text: "Second", spaceBefore: { type: "pts", value: 2000 } }, // 20pt
+    ]);
+
+    const dyAfter = extractDyValues(
+      renderTextBody(spaceAfterOnly, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
+    );
+    const dyBefore = extractDyValues(
+      renderTextBody(spaceBeforeOnly, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
+    );
+
+    // 両方とも 20pt 分の間隔が適用される（max が使われるため同じ dy になる）
+    expect(dyAfter[1]).toBeCloseTo(dyBefore[1], 1);
+  });
+
+  it("spaceBefore (pct) がフォントサイズに基づいて計算される", () => {
+    const withPct = makeSpacingTextBody([
+      { text: "First" },
+      { text: "Second", spaceBefore: { type: "pct", value: 100000 } }, // 100%
+    ]);
+    const withoutSpacing = makeSpacingTextBody([{ text: "First" }, { text: "Second" }]);
+
+    const dyWith = extractDyValues(
+      renderTextBody(withPct, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
+    );
+    const dyWithout = extractDyValues(
+      renderTextBody(withoutSpacing, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
+    );
+
+    // 100% = フォントサイズ(18pt)分の追加間隔
+    expect(dyWith[1]).toBeGreaterThan(dyWithout[1]);
+    // 追加間隔は 18pt * (96/72) = 24px
+    const diff = dyWith[1] - dyWithout[1];
+    expect(diff).toBeCloseTo(18 * (96 / 72), 1);
   });
 });
 

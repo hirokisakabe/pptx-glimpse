@@ -1,9 +1,12 @@
 import type { SlideSize } from "../model/presentation.js";
+import type { DefaultTextStyle } from "../model/text.js";
 import { parseXml } from "./xml-parser.js";
+import { parseListStyle } from "./text-style-parser.js";
 
 export interface PresentationInfo {
   slideSize: SlideSize;
   slideRIds: string[];
+  defaultTextStyle?: DefaultTextStyle;
 }
 
 const WARN_PREFIX = "[pptx-glimpse]";
@@ -50,5 +53,7 @@ export function parsePresentation(xml: string): PresentationInfo {
       return true;
     });
 
-  return { slideSize, slideRIds };
+  const defaultTextStyle = parseListStyle(pres.defaultTextStyle);
+
+  return { slideSize, slideRIds, defaultTextStyle };
 }

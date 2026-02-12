@@ -1,6 +1,7 @@
 import type { Fill } from "./fill.js";
 import type { Outline } from "./line.js";
 import type { TextBody } from "./text.js";
+import type { EffectList } from "./effect.js";
 
 export interface Transform {
   offsetX: number;
@@ -20,9 +21,15 @@ export interface PresetGeometry {
   adjustValues: Record<string, number>;
 }
 
+export interface CustomGeometryPath {
+  width: number;
+  height: number;
+  commands: string;
+}
+
 export interface CustomGeometry {
   type: "custom";
-  pathData: string;
+  paths: CustomGeometryPath[];
 }
 
 export interface ShapeElement {
@@ -32,6 +39,7 @@ export interface ShapeElement {
   fill: Fill | null;
   outline: Outline | null;
   textBody: TextBody | null;
+  effects: EffectList | null;
   placeholderType?: string;
   placeholderIdx?: number;
 }
@@ -39,7 +47,9 @@ export interface ShapeElement {
 export interface ConnectorElement {
   type: "connector";
   transform: Transform;
+  geometry: Geometry;
   outline: Outline | null;
+  effects: EffectList | null;
 }
 
 export interface GroupElement {
@@ -47,6 +57,7 @@ export interface GroupElement {
   transform: Transform;
   childTransform: Transform;
   children: SlideElement[];
+  effects: EffectList | null;
 }
 
 export type SlideElement =

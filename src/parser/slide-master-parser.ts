@@ -1,13 +1,16 @@
 import type { ColorMap, ColorSchemeKey } from "../model/theme.js";
 import type { Background } from "../model/slide.js";
 import type { SlideElement } from "../model/shape.js";
+import type { TxStyles, PlaceholderStyleInfo } from "../model/text.js";
 import type { PptxArchive } from "./pptx-reader.js";
-import { parseXml } from "./xml-parser.js";
+import { parseXml, parseXmlOrdered } from "./xml-parser.js";
 import { parseFillFromNode } from "./fill-parser.js";
 import type { FillParseContext } from "./fill-parser.js";
-import { parseShapeTree } from "./slide-parser.js";
+import { parseShapeTree, navigateOrdered } from "./slide-parser.js";
 import { buildRelsPath, parseRelationships } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
+import type { FontScheme } from "../model/theme.js";
+import { parseListStyle } from "./text-style-parser.js";
 
 const WARN_PREFIX = "[pptx-glimpse]";
 
@@ -76,6 +79,7 @@ export function parseSlideMasterElements(
   masterPath: string,
   archive: PptxArchive,
   colorResolver: ColorResolver,
+  fontScheme?: FontScheme | null,
 ): SlideElement[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parsed = parseXml(xml) as any;
@@ -92,7 +96,70 @@ export function parseSlideMasterElements(
   const relsXml = archive.files.get(relsPath);
   const rels = relsXml ? parseRelationships(relsXml) : new Map();
 
-  return parseShapeTree(spTree, rels, masterPath, archive, colorResolver);
+  const orderedParsed = parseXmlOrdered(xml);
+  const orderedSpTree = navigateOrdered(orderedParsed, ["sldMaster", "cSld", "spTree"]);
+
+  return parseShapeTree(
+    spTree,
+    rels,
+    masterPath,
+    archive,
+    colorResolver,
+    undefined,
+    undefined,
+    fontScheme,
+    orderedSpTree,
+  );
+}
+
+export function parseSlideMasterTxStyles(xml: string): TxStyles | undefined {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parsed = parseXml(xml) as any;
+
+  if (!parsed.sldMaster) {
+    console.warn(`${WARN_PREFIX} SlideMaster: missing root element "sldMaster" in XML`);
+    return undefined;
+  }
+
+  const txStyles = parsed.sldMaster.txStyles;
+  if (!txStyles) return undefined;
+
+  const titleStyle = parseListStyle(txStyles.titleStyle);
+  const bodyStyle = parseListStyle(txStyles.bodyStyle);
+  const otherStyle = parseListStyle(txStyles.otherStyle);
+
+  if (!titleStyle && !bodyStyle && !otherStyle) return undefined;
+
+  return { titleStyle, bodyStyle, otherStyle };
+}
+
+export function parseSlideMasterPlaceholderStyles(xml: string): PlaceholderStyleInfo[] {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parsed = parseXml(xml) as any;
+  if (!parsed.sldMaster) return [];
+
+  const spTree = parsed.sldMaster.cSld?.spTree;
+  if (!spTree) return [];
+
+  const results: PlaceholderStyleInfo[] = [];
+  const shapes = spTree.sp ?? [];
+
+  for (const sp of shapes) {
+    const ph = sp.nvSpPr?.nvPr?.ph;
+    if (!ph) continue;
+
+    const placeholderType: string = ph["@_type"] ?? "body";
+    const placeholderIdx = ph["@_idx"] !== undefined ? Number(ph["@_idx"]) : undefined;
+    const lstStyle = parseListStyle(sp.txBody?.lstStyle);
+
+    results.push({
+      placeholderType,
+      ...(placeholderIdx !== undefined && { placeholderIdx }),
+      ...(lstStyle && { lstStyle }),
+    });
+  }
+
+  return results;
 }
 
 export function getDefaultColorMap(): ColorMap {

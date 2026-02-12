@@ -1,5 +1,5 @@
-import type { Fill, GradientStop, ImageFill, SolidFill } from "../model/fill.js";
-import type { Outline, DashStyle } from "../model/line.js";
+import type { Fill, GradientStop, ImageFill, PatternFill, SolidFill } from "../model/fill.js";
+import type { Outline, DashStyle, ArrowEndpoint, ArrowType, ArrowSize } from "../model/line.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import type { Relationship } from "./relationship-parser.js";
@@ -11,6 +11,7 @@ export interface FillParseContext {
   rels: Map<string, Relationship>;
   archive: PptxArchive;
   basePath: string;
+  groupFill?: Fill;
 }
 
 export function parseFillFromNode(
@@ -38,6 +39,14 @@ export function parseFillFromNode(
 
   if (node.blipFill && context) {
     return parseBlipFill(node.blipFill, context);
+  }
+
+  if (node.pattFill) {
+    return parsePatternFill(node.pattFill, colorResolver);
+  }
+
+  if (node.grpFill !== undefined && context?.groupFill) {
+    return context.groupFill;
   }
 
   return null;
@@ -88,12 +97,38 @@ function parseGradientFill(gradNode: any, colorResolver: ColorResolver): Fill | 
     }
   }
 
+  if (gradNode.path) {
+    const fillToRect = gradNode.path.fillToRect;
+    let centerX = 0.5;
+    let centerY = 0.5;
+    if (fillToRect) {
+      const l = Number(fillToRect["@_l"] ?? 0);
+      const t = Number(fillToRect["@_t"] ?? 0);
+      const r = Number(fillToRect["@_r"] ?? 0);
+      const b = Number(fillToRect["@_b"] ?? 0);
+      centerX = (l + (100000 - r)) / 2 / 100000;
+      centerY = (t + (100000 - b)) / 2 / 100000;
+    }
+    return { type: "gradient", stops, angle: 0, gradientType: "radial", centerX, centerY };
+  }
+
   let angle = 0;
   if (gradNode.lin) {
     angle = Number(gradNode.lin["@_ang"] ?? 0) / 60000;
   }
 
-  return { type: "gradient", stops, angle };
+  return { type: "gradient", stops, angle, gradientType: "linear" };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parsePatternFill(pattNode: any, colorResolver: ColorResolver): PatternFill | null {
+  const preset = pattNode["@_prst"] ?? "ltDnDiag";
+  const fgColor = pattNode.fgClr ? colorResolver.resolve(pattNode.fgClr) : null;
+  const bgColor = pattNode.bgClr ? colorResolver.resolve(pattNode.bgClr) : null;
+
+  if (!fgColor || !bgColor) return null;
+
+  return { type: "pattern", preset, foregroundColor: fgColor, backgroundColor: bgColor };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -116,5 +151,20 @@ export function parseOutline(lnNode: any, colorResolver: ColorResolver): Outline
 
   const dashStyle = (lnNode.prstDash?.["@_val"] ?? "solid") as DashStyle;
 
-  return { width, fill, dashStyle };
+  const headEnd = parseArrowEndpoint(lnNode.headEnd);
+  const tailEnd = parseArrowEndpoint(lnNode.tailEnd);
+
+  return { width, fill, dashStyle, headEnd, tailEnd };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function parseArrowEndpoint(node: any): ArrowEndpoint | null {
+  if (!node) return null;
+  const type = (node["@_type"] ?? "none") as ArrowType;
+  if (type === "none") return null;
+  return {
+    type,
+    width: (node["@_w"] ?? "med") as ArrowSize,
+    length: (node["@_len"] ?? "med") as ArrowSize,
+  };
 }

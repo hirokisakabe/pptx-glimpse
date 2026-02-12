@@ -3,6 +3,7 @@ import {
   parseSlideMasterElements,
   parseSlideMasterColorMap,
   parseSlideMasterBackground,
+  parseSlideMasterTxStyles,
 } from "./slide-master-parser.js";
 import { ColorResolver } from "../color/color-resolver.js";
 import type { PptxArchive } from "./pptx-reader.js";
@@ -194,6 +195,115 @@ describe("parseSlideMasterElements", () => {
     );
 
     expect(elements).toHaveLength(0);
+  });
+});
+
+describe("parseSlideMasterTxStyles", () => {
+  it("returns undefined when no txStyles", () => {
+    const xml = `
+      <p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+        <p:cSld/>
+      </p:sldMaster>
+    `;
+    expect(parseSlideMasterTxStyles(xml)).toBeUndefined();
+  });
+
+  it("parses titleStyle, bodyStyle, otherStyle", () => {
+    const xml = `
+      <p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                    xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:cSld/>
+        <p:txStyles>
+          <p:titleStyle>
+            <a:lvl1pPr algn="ctr">
+              <a:defRPr sz="4400" b="1">
+                <a:latin typeface="Calibri"/>
+              </a:defRPr>
+            </a:lvl1pPr>
+          </p:titleStyle>
+          <p:bodyStyle>
+            <a:lvl1pPr marL="342900" indent="-342900" algn="l">
+              <a:defRPr sz="3200"/>
+            </a:lvl1pPr>
+            <a:lvl2pPr marL="742950" indent="-285750" algn="l">
+              <a:defRPr sz="2800"/>
+            </a:lvl2pPr>
+          </p:bodyStyle>
+          <p:otherStyle>
+            <a:defPPr>
+              <a:defRPr sz="1800"/>
+            </a:defPPr>
+          </p:otherStyle>
+        </p:txStyles>
+      </p:sldMaster>
+    `;
+    const result = parseSlideMasterTxStyles(xml);
+
+    expect(result).toBeDefined();
+
+    // titleStyle
+    expect(result!.titleStyle).toBeDefined();
+    expect(result!.titleStyle!.levels[0]?.alignment).toBe("ctr");
+    expect(result!.titleStyle!.levels[0]?.defaultRunProperties?.fontSize).toBe(44);
+    expect(result!.titleStyle!.levels[0]?.defaultRunProperties?.bold).toBe(true);
+    expect(result!.titleStyle!.levels[0]?.defaultRunProperties?.fontFamily).toBe("Calibri");
+
+    // bodyStyle
+    expect(result!.bodyStyle).toBeDefined();
+    expect(result!.bodyStyle!.levels[0]?.marginLeft).toBe(342900);
+    expect(result!.bodyStyle!.levels[0]?.indent).toBe(-342900);
+    expect(result!.bodyStyle!.levels[0]?.defaultRunProperties?.fontSize).toBe(32);
+    expect(result!.bodyStyle!.levels[1]?.marginLeft).toBe(742950);
+    expect(result!.bodyStyle!.levels[1]?.defaultRunProperties?.fontSize).toBe(28);
+
+    // otherStyle
+    expect(result!.otherStyle).toBeDefined();
+    expect(result!.otherStyle!.defaultParagraph?.defaultRunProperties?.fontSize).toBe(18);
+  });
+
+  it("returns undefined when txStyles is empty", () => {
+    const xml = `
+      <p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+        <p:cSld/>
+        <p:txStyles/>
+      </p:sldMaster>
+    `;
+    expect(parseSlideMasterTxStyles(xml)).toBeUndefined();
+  });
+
+  it("parses partial txStyles (only titleStyle)", () => {
+    const xml = `
+      <p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                    xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:cSld/>
+        <p:txStyles>
+          <p:titleStyle>
+            <a:lvl1pPr>
+              <a:defRPr sz="4400"/>
+            </a:lvl1pPr>
+          </p:titleStyle>
+        </p:txStyles>
+      </p:sldMaster>
+    `;
+    const result = parseSlideMasterTxStyles(xml);
+
+    expect(result).toBeDefined();
+    expect(result!.titleStyle).toBeDefined();
+    expect(result!.titleStyle!.levels[0]?.defaultRunProperties?.fontSize).toBe(44);
+    expect(result!.bodyStyle).toBeUndefined();
+    expect(result!.otherStyle).toBeUndefined();
+  });
+
+  it("warns and returns undefined for invalid XML", () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const xml = `<other/>`;
+    const result = parseSlideMasterTxStyles(xml);
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('SlideMaster: missing root element "sldMaster"'),
+    );
+    expect(result).toBeUndefined();
+    warnSpy.mockRestore();
   });
 });
 

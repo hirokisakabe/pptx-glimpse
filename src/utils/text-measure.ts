@@ -2,14 +2,17 @@ import { type FontMetrics, getFontMetrics } from "../data/font-metrics.js";
 
 type CharCategory = "narrow" | "normal" | "wide";
 
+// フォントメトリクスが無い場合のヒューリスティック幅比率 (対 fontSize)。
+// 実測ベースの近似値。
 const WIDTH_RATIO: Record<CharCategory, number> = {
-  narrow: 0.3,
-  normal: 0.6,
-  wide: 1.0,
+  narrow: 0.3, // i, l, 1, 句読点等
+  normal: 0.6, // ラテン文字の平均的な幅
+  wide: 1.0, // CJK 文字 (全角)
 };
 
 const BOLD_FACTOR = 1.05;
 const PX_PER_PT = 96 / 72;
+// OpenType メトリクスが無いフォントの行高さフォールバック (CSS 既定値相当)
 const DEFAULT_LINE_HEIGHT_RATIO = 1.2;
 
 /**
@@ -26,12 +29,13 @@ export function getLineHeightRatio(
   return (metrics.ascender + Math.abs(metrics.descender)) / metrics.unitsPerEm;
 }
 
+// CJK 文字判定 (Unicode Standard に基づくコードポイント範囲)
 function isCjkCodePoint(codePoint: number): boolean {
   return (
-    (codePoint >= 0x3000 && codePoint <= 0x9fff) ||
-    (codePoint >= 0xf900 && codePoint <= 0xfaff) ||
-    (codePoint >= 0xff01 && codePoint <= 0xff60) ||
-    (codePoint >= 0x20000 && codePoint <= 0x2a6df)
+    (codePoint >= 0x3000 && codePoint <= 0x9fff) || // CJK 記号・ひらがな・カタカナ・統合漢字
+    (codePoint >= 0xf900 && codePoint <= 0xfaff) || // CJK 互換漢字
+    (codePoint >= 0xff01 && codePoint <= 0xff60) || // 全角英数・記号
+    (codePoint >= 0x20000 && codePoint <= 0x2a6df) // CJK 統合漢字拡張 B
   );
 }
 

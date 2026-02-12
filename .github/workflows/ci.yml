@@ -9,6 +9,8 @@ on:
 jobs:
   ci:
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
     strategy:
       matrix:
         node-version: [20, 22, 24]
@@ -33,11 +35,28 @@ jobs:
       - name: Type check
         run: npm run typecheck
 
-      - name: Test
-        run: npx vitest run --exclude 'vrt/**'
+      - name: Test with coverage
+        run: npx vitest run --coverage --exclude 'vrt/**'
+
+      - name: Upload coverage report
+        if: matrix.node-version == 22
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 7
+
+      - name: Coverage summary comment
+        if: matrix.node-version == 22 && github.event_name == 'pull_request'
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          json-summary-path: coverage/coverage-summary.json
 
       - name: Build
         run: npm run build
+
+      - name: Verify package (CJS/ESM/TypeScript)
+        run: bash scripts/test-package.sh
 
   vrt:
     runs-on: ubuntu-latest
@@ -53,8 +72,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Generate VRT fixtures
+        run: npm run vrt:internal:fixtures
+
       - name: Run VRT
-        run: npx vitest run vrt/internal/visual-regression.test.ts
+        run: npx vitest run vrt/internal/regression.test.ts
 
   libreoffice-vrt:
     runs-on: ubuntu-latest
@@ -74,13 +96,13 @@ jobs:
         run: docker build -t pptx-glimpse-vrt docker/libreoffice-vrt
 
       - name: Generate fixtures
-        run: docker run --rm -v "${{ github.workspace }}":/workspace pptx-glimpse-vrt python3 /workspace/scripts/vrt/generate_fixtures.py
+        run: docker run --rm -v "${{ github.workspace }}":/workspace pptx-glimpse-vrt python3 /workspace/vrt/libreoffice/create_fixtures.py
 
       - name: Generate LibreOffice reference images
-        run: docker run --rm -v "${{ github.workspace }}":/workspace pptx-glimpse-vrt bash /workspace/scripts/vrt/render_references.sh
+        run: docker run --rm -v "${{ github.workspace }}":/workspace pptx-glimpse-vrt bash /workspace/vrt/libreoffice/update_snapshots.sh
 
       - name: Run LibreOffice VRT
-        run: npx vitest run vrt/libreoffice/libreoffice-regression.test.ts
+        run: npx vitest run vrt/libreoffice/regression.test.ts
 
       - name: Upload diff images on failure
         if: failure()

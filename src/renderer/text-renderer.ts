@@ -3,6 +3,7 @@ import type {
   Paragraph,
   ParagraphProperties,
   RunProperties,
+  SpacingValue,
   TextBody,
 } from "../model/text.js";
 import type { Transform } from "../model/shape.js";
@@ -45,6 +46,9 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
   // 連番管理用
   const autoNumCounters = new Map<string, number>();
 
+  // 前の段落の spaceAfter（ピクセル解決済み）
+  let prevSpaceAfterPx = 0;
+
   for (const para of paragraphs) {
     const paraMarginLeft = emuToPixels(para.properties.marginLeft);
     const paraIndent = emuToPixels(para.properties.indent);
@@ -66,10 +70,16 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
       marginRight,
     );
 
+    // 段落間隔の計算: max(前段落のspaceAfter, 現段落のspaceBefore)
+    const paraFontSize = getParagraphFontSize(para, defaultFontSize) * fontScale;
+    const spaceBeforePx = resolveSpacingPx(para.properties.spaceBefore, paraFontSize);
+    const paragraphGap = Math.max(prevSpaceAfterPx, spaceBeforePx);
+
     if (para.runs.length === 0 || !para.runs.some((r) => r.text.length > 0)) {
-      const dy = computeDy(isFirstLine, defaultNaturalHeight, DEFAULT_LINE_SPACING, para, true);
+      const dy = computeDy(isFirstLine, defaultNaturalHeight, DEFAULT_LINE_SPACING, paragraphGap);
       tspans.push(`<tspan x="${xPos}" dy="${dy}" text-anchor="${anchorValue}"> </tspan>`);
       isFirstLine = false;
+      prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSize);
       continue;
     }
 
@@ -82,13 +92,13 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
       );
       for (let lineIdx = 0; lineIdx < wrappedLines.length; lineIdx++) {
         const line = wrappedLines[lineIdx];
+        const lineGap = lineIdx === 0 ? paragraphGap : 0;
         if (line.segments.length === 0) {
           const dy = computeDy(
             isFirstLine,
             defaultNaturalHeight,
             getLineSpacing(para, lnSpcReduction),
-            para,
-            lineIdx === 0,
+            lineGap,
           );
           tspans.push(`<tspan x="${xPos}" dy="${dy}" text-anchor="${anchorValue}"> </tspan>`);
           isFirstLine = false;
@@ -107,8 +117,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
             isFirstLine,
             lineNaturalHeight,
             getLineSpacing(para, lnSpcReduction),
-            para,
-            true,
+            paragraphGap,
           );
           const bulletStyles = buildBulletStyleAttrs(para.properties, lineFontSize, fontScale);
           tspans.push(
@@ -134,8 +143,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
                 isFirstLine,
                 lineNaturalHeight,
                 getLineSpacing(para, lnSpcReduction),
-                para,
-                lineIdx === 0,
+                lineGap,
               );
               const prefix = `x="${xPos}" dy="${dy}" text-anchor="${anchorValue}" `;
               tspans.push(renderSegment(seg.text, seg.properties, fontScale, prefix));
@@ -157,8 +165,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
           isFirstLine,
           naturalHeight,
           getLineSpacing(para, lnSpcReduction),
-          para,
-          true,
+          paragraphGap,
         );
         const bulletStyles = buildBulletStyleAttrs(para.properties, fontSize, fontScale);
         tspans.push(
@@ -181,8 +188,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
               isFirstLine,
               naturalHeight,
               getLineSpacing(para, lnSpcReduction),
-              para,
-              true,
+              paragraphGap,
             );
             const prefix = `x="${xPos}" dy="${dy}" text-anchor="${anchorValue}" `;
             tspans.push(renderSegment(run.text, run.properties, fontScale, prefix));
@@ -194,6 +200,8 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
       }
       isFirstLine = false;
     }
+
+    prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSize);
   }
 
   // 垂直位置の計算
@@ -361,22 +369,33 @@ function getLineSpacing(para: Paragraph, lnSpcReduction: number = 0): number {
   return spacing * (1 - lnSpcReduction);
 }
 
+function resolveSpacingPx(spacing: SpacingValue, fontSizePt: number): number {
+  if (spacing.type === "pts") {
+    return (spacing.value / 100) * PX_PER_PT;
+  }
+  // pct: val / 100000 がフォントサイズに対する比率
+  return fontSizePt * (spacing.value / 100000) * PX_PER_PT;
+}
+
+function getParagraphFontSize(para: Paragraph, defaultFontSize: number): number {
+  for (const run of para.runs) {
+    if (run.text.length > 0 && run.properties.fontSize) {
+      return run.properties.fontSize;
+    }
+  }
+  return defaultFontSize;
+}
+
 function computeDy(
   isFirstLine: boolean,
   fontSizePt: number,
   lineSpacingFactor: number,
-  para: Paragraph,
-  isFirstLineOfParagraph: boolean,
+  paragraphGap: number,
 ): string {
   if (isFirstLine) return "0";
 
   const lineHeight = fontSizePt * PX_PER_PT * lineSpacingFactor;
-  let dy = lineHeight;
-
-  if (isFirstLineOfParagraph && para.properties.spaceBefore > 0) {
-    // spaceBefore は 1/100 ポイント単位
-    dy += (para.properties.spaceBefore / 100) * PX_PER_PT;
-  }
+  const dy = lineHeight + paragraphGap;
 
   return dy.toFixed(2);
 }
@@ -556,25 +575,33 @@ function renderSegment(
   fontScale: number,
   prefix: string,
 ): string {
+  let tspanContent: string;
   if (!needsScriptSplit(props)) {
     const styles = buildStyleAttrs(props, fontScale);
-    return `<tspan ${prefix}${styles}>${escapeXml(text)}</tspan>`;
-  }
-  const parts = splitByScript(text);
-  const result: string[] = [];
-  for (let i = 0; i < parts.length; i++) {
-    const part = parts[i];
-    const fonts = part.isEa
-      ? [props.fontFamilyEa, props.fontFamily]
-      : [props.fontFamily, props.fontFamilyEa];
-    const styles = buildStyleAttrs(props, fontScale, fonts);
-    if (i === 0) {
-      result.push(`<tspan ${prefix}${styles}>${escapeXml(part.text)}</tspan>`);
-    } else {
-      result.push(`<tspan ${styles}>${escapeXml(part.text)}</tspan>`);
+    tspanContent = `<tspan ${prefix}${styles}>${escapeXml(text)}</tspan>`;
+  } else {
+    const parts = splitByScript(text);
+    const result: string[] = [];
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i];
+      const fonts = part.isEa
+        ? [props.fontFamilyEa, props.fontFamily]
+        : [props.fontFamily, props.fontFamilyEa];
+      const styles = buildStyleAttrs(props, fontScale, fonts);
+      if (i === 0) {
+        result.push(`<tspan ${prefix}${styles}>${escapeXml(part.text)}</tspan>`);
+      } else {
+        result.push(`<tspan ${styles}>${escapeXml(part.text)}</tspan>`);
+      }
     }
+    tspanContent = result.join("");
   }
-  return result.join("");
+
+  if (props.hyperlink) {
+    const href = escapeXml(props.hyperlink.url);
+    return `<a href="${href}">${tspanContent}</a>`;
+  }
+  return tspanContent;
 }
 
 function getDefaultFontSize(paragraphs: TextBody["paragraphs"]): number {
@@ -607,6 +634,7 @@ function estimateTextHeight(
 ): number {
   let totalHeight = 0;
   const defaultRatio = getDefaultLineHeightRatio(paragraphs);
+  let prevSpaceAfterPx = 0;
 
   for (let pIdx = 0; pIdx < paragraphs.length; pIdx++) {
     const para = paragraphs[pIdx];
@@ -627,9 +655,14 @@ function estimateTextHeight(
 
     totalHeight += lineCount * lineHeight;
 
-    if (pIdx > 0 && para.properties.spaceBefore > 0) {
-      totalHeight += (para.properties.spaceBefore / 100) * PX_PER_PT;
+    if (pIdx > 0) {
+      const paraFontSize = getParagraphFontSize(para, defaultFontSize) * fontScale;
+      const spaceBeforePx = resolveSpacingPx(para.properties.spaceBefore, paraFontSize);
+      totalHeight += Math.max(prevSpaceAfterPx, spaceBeforePx);
     }
+
+    const paraFontSizeForAfter = getParagraphFontSize(para, defaultFontSize) * fontScale;
+    prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSizeForAfter);
   }
 
   return totalHeight;

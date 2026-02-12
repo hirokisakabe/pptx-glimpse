@@ -1,3 +1,10 @@
+// OOXML 色変換 (ECMA-376 §20.1.2.3)
+// lumMod/lumOff: HSL 色空間の輝度チャネルを変更
+// tint: 白方向にブレンド (RGB 各チャネル: c + (255 - c) * amount)
+// shade: 黒方向にブレンド (RGB 各チャネル: c * amount)
+// alpha: 不透明度 (100000 = 100%)
+// 値は 100000 分率 (e.g. 50000 = 50%)
+
 import type { ResolvedColor } from "../model/fill.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -61,6 +68,7 @@ function rgbToHex(r: number, g: number, b: number): string {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
+// RGB ↔ HSL 変換: W3C CSS Color Module Level 3 §4.2.4 のアルゴリズムに準拠
 function hexToHsl(hex: string): { h: number; s: number; l: number } {
   const { r: r255, g: g255, b: b255 } = hexToRgb(hex);
   const r = r255 / 255;
