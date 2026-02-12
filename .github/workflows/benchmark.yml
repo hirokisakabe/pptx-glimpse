@@ -42,8 +42,19 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
 
-      - name: Compare benchmark result (PR)
+      - name: Check if baseline exists
         if: github.event_name == 'pull_request'
+        id: baseline
+        run: |
+          if git ls-remote --exit-code origin benchmark-data > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No baseline data yet. Benchmark comparison will be available after the first merge to main."
+          fi
+
+      - name: Compare benchmark result (PR)
+        if: github.event_name == 'pull_request' && steps.baseline.outputs.exists == 'true'
         uses: benchmark-action/github-action-benchmark@v1
         with:
           tool: customBiggerIsBetter
