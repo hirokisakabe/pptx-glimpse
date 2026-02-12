@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { parseFillFromNode } from "./fill-parser.js";
+import { parseFillFromNode, parseOutline } from "./fill-parser.js";
 import { initWarningLogger } from "../warning-logger.js";
 import type { FillParseContext } from "./fill-parser.js";
 import { ColorResolver } from "../color/color-resolver.js";
@@ -260,5 +260,56 @@ describe("parseFillFromNode", () => {
     };
     const result = parseFillFromNode(node, createColorResolver(), context);
     expect(result).toBeNull();
+  });
+});
+
+describe("parseOutline", () => {
+  it("parses gradient fill in outline", () => {
+    const lnNode = {
+      "@_w": "25400",
+      gradFill: {
+        gsLst: {
+          gs: [
+            { "@_pos": "0", srgbClr: { "@_val": "FF0000" } },
+            { "@_pos": "100000", srgbClr: { "@_val": "0000FF" } },
+          ],
+        },
+        lin: { "@_ang": "5400000" },
+      },
+    };
+    const result = parseOutline(lnNode, createColorResolver());
+    expect(result).not.toBeNull();
+    expect(result!.fill?.type).toBe("gradient");
+    if (result!.fill?.type === "gradient") {
+      expect(result!.fill.gradientType).toBe("linear");
+      expect(result!.fill.angle).toBe(90);
+      expect(result!.fill.stops).toHaveLength(2);
+    }
+  });
+
+  it("parses custDash in outline", () => {
+    const lnNode = {
+      "@_w": "25400",
+      solidFill: { srgbClr: { "@_val": "000000" } },
+      custDash: {
+        ds: [
+          { "@_d": "300000", "@_sp": "100000" },
+          { "@_d": "100000", "@_sp": "100000" },
+        ],
+      },
+    };
+    const result = parseOutline(lnNode, createColorResolver());
+    expect(result).not.toBeNull();
+    expect(result!.customDash).toEqual([3, 1, 1, 1]);
+  });
+
+  it("returns undefined customDash when no custDash element", () => {
+    const lnNode = {
+      "@_w": "25400",
+      solidFill: { srgbClr: { "@_val": "000000" } },
+    };
+    const result = parseOutline(lnNode, createColorResolver());
+    expect(result).not.toBeNull();
+    expect(result!.customDash).toBeUndefined();
   });
 });

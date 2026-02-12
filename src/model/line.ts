@@ -1,4 +1,4 @@
-import type { SolidFill } from "./fill.js";
+import type { GradientFill, SolidFill } from "./fill.js";
 
 export type ArrowType = "none" | "triangle" | "stealth" | "diamond" | "oval" | "arrow";
 export type ArrowSize = "sm" | "med" | "lg";
@@ -14,8 +14,9 @@ export type LineJoin = "miter" | "round" | "bevel";
 
 export interface Outline {
   width: number;
-  fill: SolidFill | null;
+  fill: SolidFill | GradientFill | null;
   dashStyle: DashStyle;
+  customDash?: number[];
   lineCap?: LineCap;
   lineJoin?: LineJoin;
   headEnd: ArrowEndpoint | null;

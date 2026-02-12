@@ -42,23 +42,27 @@ export function renderTable(element: TableElement, defs: string[]): string {
       // Cell borders
       if (cell.borders) {
         if (cell.borders.top) {
-          const attrs = renderOutlineAttrs(cell.borders.top);
-          parts.push(`<line x1="${x}" y1="${y}" x2="${x + cellW}" y2="${y}" ${attrs}/>`);
+          const topResult = renderOutlineAttrs(cell.borders.top);
+          if (topResult.defs) defs.push(topResult.defs);
+          parts.push(`<line x1="${x}" y1="${y}" x2="${x + cellW}" y2="${y}" ${topResult.attrs}/>`);
         }
         if (cell.borders.bottom) {
-          const attrs = renderOutlineAttrs(cell.borders.bottom);
+          const bottomResult = renderOutlineAttrs(cell.borders.bottom);
+          if (bottomResult.defs) defs.push(bottomResult.defs);
           parts.push(
-            `<line x1="${x}" y1="${y + cellH}" x2="${x + cellW}" y2="${y + cellH}" ${attrs}/>`,
+            `<line x1="${x}" y1="${y + cellH}" x2="${x + cellW}" y2="${y + cellH}" ${bottomResult.attrs}/>`,
           );
         }
         if (cell.borders.left) {
-          const attrs = renderOutlineAttrs(cell.borders.left);
-          parts.push(`<line x1="${x}" y1="${y}" x2="${x}" y2="${y + cellH}" ${attrs}/>`);
+          const leftResult = renderOutlineAttrs(cell.borders.left);
+          if (leftResult.defs) defs.push(leftResult.defs);
+          parts.push(`<line x1="${x}" y1="${y}" x2="${x}" y2="${y + cellH}" ${leftResult.attrs}/>`);
         }
         if (cell.borders.right) {
-          const attrs = renderOutlineAttrs(cell.borders.right);
+          const rightResult = renderOutlineAttrs(cell.borders.right);
+          if (rightResult.defs) defs.push(rightResult.defs);
           parts.push(
-            `<line x1="${x + cellW}" y1="${y}" x2="${x + cellW}" y2="${y + cellH}" ${attrs}/>`,
+            `<line x1="${x + cellW}" y1="${y}" x2="${x + cellW}" y2="${y + cellH}" ${rightResult.attrs}/>`,
           );
         }
       }

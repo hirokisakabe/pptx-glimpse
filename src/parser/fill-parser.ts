@@ -1,4 +1,11 @@
-import type { Fill, GradientStop, ImageFill, PatternFill, SolidFill } from "../model/fill.js";
+import type {
+  Fill,
+  GradientFill,
+  GradientStop,
+  ImageFill,
+  PatternFill,
+  SolidFill,
+} from "../model/fill.js";
 import type {
   Outline,
   DashStyle,
@@ -144,28 +151,22 @@ export function parseOutline(lnNode: XmlNode, colorResolver: ColorResolver): Out
   if (!lnNode) return null;
 
   // Unsupported feature detection
-  if (lnNode.headEnd) {
-    const headType = ((lnNode.headEnd as XmlNode)["@_type"] as string | undefined) ?? "unknown";
-    warn("ln.headEnd", `line head arrow (type="${headType}") not implemented`);
-  }
-  if (lnNode.tailEnd) {
-    const tailType = ((lnNode.tailEnd as XmlNode)["@_type"] as string | undefined) ?? "unknown";
-    warn("ln.tailEnd", `line tail arrow (type="${tailType}") not implemented`);
-  }
-  if (lnNode.gradFill) {
-    warn("ln.gradFill", "gradient line fill not implemented");
-  }
   if (lnNode.pattFill) {
     warn("ln.pattFill", "pattern line fill not implemented");
   }
 
   const width = Number(lnNode["@_w"] ?? 12700);
 
-  let fill: SolidFill | null = null;
+  let fill: SolidFill | GradientFill | null = null;
   if (lnNode.solidFill) {
     const color = colorResolver.resolve(lnNode.solidFill as XmlNode);
     if (color) {
       fill = { type: "solid", color };
+    }
+  } else if (lnNode.gradFill) {
+    const gradFill = parseGradientFill(lnNode.gradFill as XmlNode, colorResolver);
+    if (gradFill && gradFill.type === "gradient") {
+      fill = gradFill;
     }
   }
 
@@ -176,13 +177,30 @@ export function parseOutline(lnNode: XmlNode, colorResolver: ColorResolver): Out
   const prstDash = lnNode.prstDash as XmlNode | undefined;
   const dashStyle = ((prstDash?.["@_val"] as string | undefined) ?? "solid") as DashStyle;
 
+  const customDash = parseCustomDash(lnNode);
+
   const lineCap = parseLineCap(lnNode["@_cap"] as string | undefined);
   const lineJoin = parseLineJoin(lnNode);
 
   const headEnd = parseArrowEndpoint(lnNode.headEnd as XmlNode);
   const tailEnd = parseArrowEndpoint(lnNode.tailEnd as XmlNode);
 
-  return { width, fill, dashStyle, lineCap, lineJoin, headEnd, tailEnd };
+  return { width, fill, dashStyle, customDash, lineCap, lineJoin, headEnd, tailEnd };
+}
+
+function parseCustomDash(lnNode: XmlNode): number[] | undefined {
+  const custDash = lnNode.custDash as XmlNode | undefined;
+  if (!custDash) return undefined;
+  const dsArr = custDash.ds as XmlNode[] | undefined;
+  if (!dsArr || dsArr.length === 0) return undefined;
+
+  const result: number[] = [];
+  for (const ds of dsArr) {
+    const d = Number(ds["@_d"] ?? 100000) / 100000;
+    const sp = Number(ds["@_sp"] ?? 100000) / 100000;
+    result.push(d, sp);
+  }
+  return result;
 }
 
 const LINE_CAP_MAP: Record<string, LineCap> = {

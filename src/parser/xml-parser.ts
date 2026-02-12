@@ -28,6 +28,7 @@ const ARRAY_TAGS = new Set([
   "ser", // チャートデータ系列 (Series)
   "pt", // チャートデータポイント (Point)
   "gd", // ガイド定義 (Guide Definition)
+  "ds", // カスタムダッシュセグメント (Custom Dash Segment)
   "AlternateContent", // mc:AlternateContent (SmartArt 等)
 ]);
 

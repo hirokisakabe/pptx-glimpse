@@ -1,4 +1,4 @@
-import type { Fill, PatternFill } from "../model/fill.js";
+import type { Fill, GradientFill, PatternFill } from "../model/fill.js";
 import type { Outline, ArrowEndpoint, ArrowSize } from "../model/line.js";
 import { emuToPixels } from "../utils/emu.js";
 
@@ -18,34 +18,8 @@ export function renderFillAttrs(fill: Fill | null): FillAttrs {
   }
 
   if (fill.type === "gradient") {
-    const id = `grad-${crypto.randomUUID()}`;
-
-    const stops = fill.stops
-      .map((s) => {
-        const opacityAttr = s.color.alpha < 1 ? ` stop-opacity="${s.color.alpha}"` : "";
-        return `<stop offset="${s.position * 100}%" stop-color="${s.color.hex}"${opacityAttr}/>`;
-      })
-      .join("");
-
-    if (fill.gradientType === "radial") {
-      const cx = (fill.centerX ?? 0.5) * 100;
-      const cy = (fill.centerY ?? 0.5) * 100;
-      const dx = Math.max(cx, 100 - cx);
-      const dy = Math.max(cy, 100 - cy);
-      const r = Math.sqrt(dx * dx + dy * dy);
-      const defs = `<radialGradient id="${id}" cx="${cx}%" cy="${cy}%" r="${r}%">${stops}</radialGradient>`;
-      return { attrs: `fill="url(#${id})"`, defs };
-    }
-
-    const angle = fill.angle;
-    const rad = (angle * Math.PI) / 180;
-    const x1 = 50 - Math.cos(rad) * 50;
-    const y1 = 50 - Math.sin(rad) * 50;
-    const x2 = 50 + Math.cos(rad) * 50;
-    const y2 = 50 + Math.sin(rad) * 50;
-
-    const defs = `<linearGradient id="${id}" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%">${stops}</linearGradient>`;
-    return { attrs: `fill="url(#${id})"`, defs };
+    const result = renderGradientDefs(fill);
+    return { attrs: `fill="${result.ref}"`, defs: result.defs };
   }
 
   if (fill.type === "image") {
@@ -61,22 +35,32 @@ export function renderFillAttrs(fill: Fill | null): FillAttrs {
   return { attrs: `fill="none"`, defs: "" };
 }
 
-export function renderOutlineAttrs(outline: Outline | null): string {
-  if (!outline) return `stroke="none"`;
+export function renderOutlineAttrs(outline: Outline | null): FillAttrs {
+  if (!outline) return { attrs: `stroke="none"`, defs: "" };
 
   const widthPx = emuToPixels(outline.width);
   const parts: string[] = [`stroke-width="${widthPx}"`];
+  let defs = "";
 
   if (outline.fill) {
-    parts.push(`stroke="${outline.fill.color.hex}"`);
-    if (outline.fill.color.alpha < 1) {
-      parts.push(`stroke-opacity="${outline.fill.color.alpha}"`);
+    if (outline.fill.type === "solid") {
+      parts.push(`stroke="${outline.fill.color.hex}"`);
+      if (outline.fill.color.alpha < 1) {
+        parts.push(`stroke-opacity="${outline.fill.color.alpha}"`);
+      }
+    } else if (outline.fill.type === "gradient") {
+      const gradResult = renderGradientDefs(outline.fill);
+      parts.push(`stroke="${gradResult.ref}"`);
+      defs = gradResult.defs;
     }
   } else {
     parts.push(`stroke="none"`);
   }
 
-  if (outline.dashStyle !== "solid") {
+  if (outline.customDash && outline.customDash.length > 0) {
+    const dashArray = outline.customDash.map((v) => v * widthPx).join(" ");
+    parts.push(`stroke-dasharray="${dashArray}"`);
+  } else if (outline.dashStyle !== "solid") {
     const dashArray = getDashArray(outline.dashStyle, widthPx);
     if (dashArray) {
       parts.push(`stroke-dasharray="${dashArray}"`);
@@ -91,7 +75,37 @@ export function renderOutlineAttrs(outline: Outline | null): string {
     parts.push(`stroke-linejoin="${outline.lineJoin}"`);
   }
 
-  return parts.join(" ");
+  return { attrs: parts.join(" "), defs };
+}
+
+function renderGradientDefs(fill: GradientFill): { ref: string; defs: string } {
+  const id = `grad-${crypto.randomUUID()}`;
+
+  const stops = fill.stops
+    .map((s) => {
+      const opacityAttr = s.color.alpha < 1 ? ` stop-opacity="${s.color.alpha}"` : "";
+      return `<stop offset="${s.position * 100}%" stop-color="${s.color.hex}"${opacityAttr}/>`;
+    })
+    .join("");
+
+  if (fill.gradientType === "radial") {
+    const cx = (fill.centerX ?? 0.5) * 100;
+    const cy = (fill.centerY ?? 0.5) * 100;
+    const dx = Math.max(cx, 100 - cx);
+    const dy = Math.max(cy, 100 - cy);
+    const r = Math.sqrt(dx * dx + dy * dy);
+    const defs = `<radialGradient id="${id}" cx="${cx}%" cy="${cy}%" r="${r}%">${stops}</radialGradient>`;
+    return { ref: `url(#${id})`, defs };
+  }
+
+  const angle = fill.angle;
+  const rad = (angle * Math.PI) / 180;
+  const x1 = 50 - Math.cos(rad) * 50;
+  const y1 = 50 - Math.sin(rad) * 50;
+  const x2 = 50 + Math.cos(rad) * 50;
+  const y2 = 50 + Math.sin(rad) * 50;
+  const defs = `<linearGradient id="${id}" x1="${x1}%" y1="${y1}%" x2="${x2}%" y2="${y2}%">${stops}</linearGradient>`;
+  return { ref: `url(#${id})`, defs };
 }
 
 function getDashArray(style: string, w: number): string | null {
@@ -252,8 +266,15 @@ export function renderMarkers(outline: Outline | null): MarkerResult {
   if (!outline) return empty;
   if (!outline.headEnd && !outline.tailEnd) return empty;
 
-  const color = outline.fill?.color.hex ?? "#000000";
-  const alpha = outline.fill?.color.alpha ?? 1;
+  let color = "#000000";
+  let alpha = 1;
+  if (outline.fill?.type === "solid") {
+    color = outline.fill.color.hex;
+    alpha = outline.fill.color.alpha;
+  } else if (outline.fill?.type === "gradient" && outline.fill.stops.length > 0) {
+    color = outline.fill.stops[0].color.hex;
+    alpha = outline.fill.stops[0].color.alpha;
+  }
   const defs: string[] = [];
   let startAttr = "";
   let endAttr = "";

@@ -13,7 +13,7 @@ export function renderShape(shape: ShapeElement): string {
 
   const transformAttr = buildTransformAttr(transform);
   const fillResult = renderFillAttrs(fill);
-  const outlineAttr = renderOutlineAttrs(outline);
+  const outlineResult = renderOutlineAttrs(outline);
   const effectResult = renderEffects(effects);
 
   const geometrySvg = renderGeometry(geometry, w, h);
@@ -21,6 +21,9 @@ export function renderShape(shape: ShapeElement): string {
   const parts: string[] = [];
   if (fillResult.defs) {
     parts.push(fillResult.defs);
+  }
+  if (outlineResult.defs) {
+    parts.push(outlineResult.defs);
   }
   if (effectResult.filterDefs) {
     parts.push(effectResult.filterDefs);
@@ -31,7 +34,10 @@ export function renderShape(shape: ShapeElement): string {
 
   if (geometrySvg) {
     // Apply fill/stroke to the geometry element
-    const styledGeometry = geometrySvg.replace(/^<(\w+)/, `<$1 ${fillResult.attrs} ${outlineAttr}`);
+    const styledGeometry = geometrySvg.replace(
+      /^<(\w+)/,
+      `<$1 ${fillResult.attrs} ${outlineResult.attrs}`,
+    );
     parts.push(styledGeometry);
   }
 
@@ -51,11 +57,12 @@ export function renderConnector(connector: ConnectorElement): string {
   const w = emuToPixels(transform.extentWidth);
   const h = emuToPixels(transform.extentHeight);
   const transformAttr = buildTransformAttr(transform);
-  const outlineAttr = renderOutlineAttrs(outline);
+  const outlineResult = renderOutlineAttrs(outline);
   const effectResult = renderEffects(effects);
   const markerResult = renderMarkers(outline);
 
   const parts: string[] = [];
+  if (outlineResult.defs) parts.push(outlineResult.defs);
   if (markerResult.defs) parts.push(markerResult.defs);
   if (effectResult.filterDefs) parts.push(effectResult.filterDefs);
 
@@ -67,10 +74,12 @@ export function renderConnector(connector: ConnectorElement): string {
 
   parts.push(`<g transform="${transformAttr}"${filterAttr}>`);
   if (geometrySvg) {
-    parts.push(geometrySvg.replace(/^<(\w+)/, `<$1 ${outlineAttr} fill="none"${markerAttrStr}`));
+    parts.push(
+      geometrySvg.replace(/^<(\w+)/, `<$1 ${outlineResult.attrs} fill="none"${markerAttrStr}`),
+    );
   } else {
     parts.push(
-      `<line x1="0" y1="0" x2="${w}" y2="${h}" ${outlineAttr} fill="none"${markerAttrStr}/>`,
+      `<line x1="0" y1="0" x2="${w}" y2="${h}" ${outlineResult.attrs} fill="none"${markerAttrStr}/>`,
     );
   }
   parts.push("</g>");
