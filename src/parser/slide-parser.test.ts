@@ -963,3 +963,455 @@ describe("structural validation warnings", () => {
     expect(runs[0].properties.fontFamilyEa).toBe("Meiryo");
   });
 });
+
+describe("lstStyle and defRPr parsing", () => {
+  it("applies lstStyle defRPr as fallback when rPr has no values", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:lstStyle>
+              <a:lvl1pPr algn="ctr">
+                <a:defRPr sz="2400" b="1">
+                  <a:latin typeface="Arial"/>
+                </a:defRPr>
+              </a:lvl1pPr>
+            </a:lstStyle>
+            <a:p>
+              <a:r>
+                <a:rPr lang="en-US"/>
+                <a:t>Hello</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    const para = shape.textBody!.paragraphs[0];
+    // lstStyle の段落プロパティが適用される
+    expect(para.properties.alignment).toBe("ctr");
+    // lstStyle の defRPr がフォールバックされる
+    expect(para.runs[0].properties.fontSize).toBe(24);
+    expect(para.runs[0].properties.bold).toBe(true);
+    expect(para.runs[0].properties.fontFamily).toBe("Arial");
+  });
+
+  it("applies pPr defRPr as fallback when rPr has no values", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:p>
+              <a:pPr>
+                <a:defRPr sz="1800" i="1">
+                  <a:latin typeface="Calibri"/>
+                  <a:ea typeface="Yu Gothic"/>
+                </a:defRPr>
+              </a:pPr>
+              <a:r>
+                <a:rPr lang="en-US"/>
+                <a:t>World</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    const run = shape.textBody!.paragraphs[0].runs[0];
+    expect(run.properties.fontSize).toBe(18);
+    expect(run.properties.italic).toBe(true);
+    expect(run.properties.fontFamily).toBe("Calibri");
+    expect(run.properties.fontFamilyEa).toBe("Yu Gothic");
+  });
+
+  it("rPr takes priority over defRPr and lstStyle", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:lstStyle>
+              <a:lvl1pPr>
+                <a:defRPr sz="3200" b="1">
+                  <a:latin typeface="Times New Roman"/>
+                </a:defRPr>
+              </a:lvl1pPr>
+            </a:lstStyle>
+            <a:p>
+              <a:pPr>
+                <a:defRPr sz="2400">
+                  <a:latin typeface="Georgia"/>
+                </a:defRPr>
+              </a:pPr>
+              <a:r>
+                <a:rPr lang="en-US" sz="1200">
+                  <a:latin typeface="Helvetica"/>
+                </a:rPr>
+                <a:t>Priority test</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    const run = shape.textBody!.paragraphs[0].runs[0];
+    // rPr が最優先
+    expect(run.properties.fontSize).toBe(12);
+    expect(run.properties.fontFamily).toBe("Helvetica");
+    // rPr に bold がないので defRPr にフォールバック（defRPr にもないので lstStyle の b=1）
+    expect(run.properties.bold).toBe(true);
+  });
+
+  it("defRPr takes priority over lstStyle", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:lstStyle>
+              <a:lvl1pPr>
+                <a:defRPr sz="3200">
+                  <a:latin typeface="Times New Roman"/>
+                </a:defRPr>
+              </a:lvl1pPr>
+            </a:lstStyle>
+            <a:p>
+              <a:pPr>
+                <a:defRPr sz="2400">
+                  <a:latin typeface="Georgia"/>
+                </a:defRPr>
+              </a:pPr>
+              <a:r>
+                <a:rPr lang="en-US"/>
+                <a:t>DefRPr priority</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    const run = shape.textBody!.paragraphs[0].runs[0];
+    // pPr.defRPr > lstStyle.lvl.defRPr
+    expect(run.properties.fontSize).toBe(24);
+    expect(run.properties.fontFamily).toBe("Georgia");
+  });
+
+  it("applies lstStyle paragraph properties (marginLeft, indent) as fallback", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:lstStyle>
+              <a:lvl1pPr marL="342900" indent="-342900" algn="r"/>
+            </a:lstStyle>
+            <a:p>
+              <a:r>
+                <a:rPr lang="en-US" sz="1800"/>
+                <a:t>Indented</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    const para = shape.textBody!.paragraphs[0];
+    expect(para.properties.marginLeft).toBe(342900);
+    expect(para.properties.indent).toBe(-342900);
+    expect(para.properties.alignment).toBe("r");
+  });
+
+  it("uses level-specific lstStyle for different paragraph levels", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:lstStyle>
+              <a:lvl1pPr>
+                <a:defRPr sz="2400"/>
+              </a:lvl1pPr>
+              <a:lvl2pPr>
+                <a:defRPr sz="1800"/>
+              </a:lvl2pPr>
+            </a:lstStyle>
+            <a:p>
+              <a:pPr lvl="0"/>
+              <a:r>
+                <a:rPr lang="en-US"/>
+                <a:t>Level 0</a:t>
+              </a:r>
+            </a:p>
+            <a:p>
+              <a:pPr lvl="1"/>
+              <a:r>
+                <a:rPr lang="en-US"/>
+                <a:t>Level 1</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    expect(shape.textBody!.paragraphs[0].runs[0].properties.fontSize).toBe(24);
+    expect(shape.textBody!.paragraphs[1].runs[0].properties.fontSize).toBe(18);
+  });
+
+  it("applies defRPr defaults when rPr is absent", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:lstStyle>
+              <a:lvl1pPr>
+                <a:defRPr sz="2000" b="1" i="1"/>
+              </a:lvl1pPr>
+            </a:lstStyle>
+            <a:p>
+              <a:r>
+                <a:t>No rPr</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    const run = shape.textBody!.paragraphs[0].runs[0];
+    expect(run.properties.fontSize).toBe(20);
+    expect(run.properties.bold).toBe(true);
+    expect(run.properties.italic).toBe(true);
+  });
+
+  it("resolves theme font references in lstStyle defRPr", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:lstStyle>
+              <a:lvl1pPr>
+                <a:defRPr>
+                  <a:latin typeface="+mj-lt"/>
+                  <a:ea typeface="+mn-ea"/>
+                </a:defRPr>
+              </a:lvl1pPr>
+            </a:lstStyle>
+            <a:p>
+              <a:r>
+                <a:rPr lang="en-US"/>
+                <a:t>Theme font</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const parsed = parseXml(xml) as any;
+    const fontScheme = {
+      majorFont: "Calibri Light",
+      minorFont: "Calibri",
+      majorFontEa: "Yu Gothic",
+      minorFontEa: "Yu Mincho",
+    };
+    const elements = parseShapeTree(
+      parsed.spTree,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+      undefined,
+      undefined,
+      fontScheme,
+    );
+
+    const shape = elements[0] as ShapeElement;
+    const run = shape.textBody!.paragraphs[0].runs[0];
+    expect(run.properties.fontFamily).toBe("Calibri Light");
+    expect(run.properties.fontFamilyEa).toBe("Yu Mincho");
+  });
+});
