@@ -46,11 +46,26 @@ jobs:
           path: coverage/
           retention-days: 7
 
+      - name: Checkout main branch for coverage comparison
+        if: matrix.node-version == 22 && github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          path: __main_branch
+
+      - name: Generate main branch coverage
+        if: matrix.node-version == 22 && github.event_name == 'pull_request'
+        working-directory: __main_branch
+        run: |
+          npm ci
+          npx vitest run --coverage --exclude 'vrt/**'
+
       - name: Coverage summary comment
         if: matrix.node-version == 22 && github.event_name == 'pull_request'
         uses: davelosert/vitest-coverage-report-action@v2
         with:
           json-summary-path: coverage/coverage-summary.json
+          json-summary-compare-path: __main_branch/coverage/coverage-summary.json
 
       - name: Build
         run: npm run build
