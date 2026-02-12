@@ -13,6 +13,7 @@ import {
   parseSlideLayoutBackground,
   parseSlideLayoutElements,
   parseSlideLayoutPlaceholderStyles,
+  parseSlideLayoutShowMasterSp,
 } from "./parser/slide-layout-parser.js";
 import { parseSlide } from "./parser/slide-parser.js";
 import {
@@ -148,6 +149,7 @@ export async function convertPptxToSvg(
     // Resolve slide layout
     let layoutElements: SlideElement[] = [];
     let layoutPlaceholderStyles: PlaceholderStyleInfo[] = [];
+    let layoutShowMasterSp = true;
     const slideRelsPath = buildRelsPath(path);
     const slideRelsXml = archive.files.get(slideRelsPath);
     if (slideRelsXml) {
@@ -183,6 +185,7 @@ export async function convertPptxToSvg(
             );
             // Extract placeholder styles for text style inheritance
             layoutPlaceholderStyles = parseSlideLayoutPlaceholderStyles(layoutXml);
+            layoutShowMasterSp = parseSlideLayoutShowMasterSp(layoutXml);
           }
           break;
         }
@@ -202,7 +205,8 @@ export async function convertPptxToSvg(
     });
 
     // Merge shapes: master (back) → layout → slide (front)
-    slide.elements = mergeElements(masterElements, layoutElements, slide.elements);
+    const effectiveMasterElements = slide.showMasterSp && layoutShowMasterSp ? masterElements : [];
+    slide.elements = mergeElements(effectiveMasterElements, layoutElements, slide.elements);
 
     const svg = renderSlideToSvg(slide, presInfo.slideSize);
     results.push({ slideNumber, svg });

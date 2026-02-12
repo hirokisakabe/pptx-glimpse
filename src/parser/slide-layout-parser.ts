@@ -74,6 +74,13 @@ export function parseSlideLayoutElements(
   );
 }
 
+export function parseSlideLayoutShowMasterSp(xml: string): boolean {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const parsed = parseXml(xml) as any;
+  const attr = parsed.sldLayout?.["@_showMasterSp"];
+  return attr !== "0" && attr !== "false";
+}
+
 export function parseSlideLayoutPlaceholderStyles(xml: string): PlaceholderStyleInfo[] {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const parsed = parseXml(xml) as any;
