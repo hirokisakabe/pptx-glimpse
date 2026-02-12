@@ -77,11 +77,16 @@ export type BulletType =
   | { type: "char"; char: string }
   | { type: "autoNum"; scheme: AutoNumScheme; startAt: number };
 
+/** 段落間隔の値（ポイント指定またはパーセント指定） */
+export type SpacingValue =
+  | { type: "pts"; value: number } // 1/100 ポイント単位 (spcPts)
+  | { type: "pct"; value: number }; // 1/1000 パーセント単位 (spcPct, 50000 = 50%)
+
 export interface ParagraphProperties {
   alignment: "l" | "ctr" | "r" | "just";
   lineSpacing: number | null;
-  spaceBefore: number;
-  spaceAfter: number;
+  spaceBefore: SpacingValue;
+  spaceAfter: SpacingValue;
   level: number;
   bullet: BulletType | null;
   bulletFont: string | null;

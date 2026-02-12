@@ -1979,6 +1979,8 @@ function multiRunTextBodyXml(
       baseline?: number;
     }[];
     align?: string;
+    spcBef?: { pts?: number; pct?: number };
+    spcAft?: { pts?: number; pct?: number };
   }[],
   opts?: { anchor?: string; wrap?: string },
 ): string {
@@ -1987,6 +1989,19 @@ function multiRunTextBodyXml(
   const parasXml = paragraphs
     .map((para) => {
       const algn = para.align ? ` algn="${para.align}"` : "";
+      let spcBefXml = "";
+      if (para.spcBef?.pts !== undefined) {
+        spcBefXml = `<a:spcBef><a:spcPts val="${para.spcBef.pts}"/></a:spcBef>`;
+      } else if (para.spcBef?.pct !== undefined) {
+        spcBefXml = `<a:spcBef><a:spcPct val="${para.spcBef.pct}"/></a:spcBef>`;
+      }
+      let spcAftXml = "";
+      if (para.spcAft?.pts !== undefined) {
+        spcAftXml = `<a:spcAft><a:spcPts val="${para.spcAft.pts}"/></a:spcAft>`;
+      } else if (para.spcAft?.pct !== undefined) {
+        spcAftXml = `<a:spcAft><a:spcPct val="${para.spcAft.pct}"/></a:spcAft>`;
+      }
+      const pPrContent = spcBefXml + spcAftXml;
       const runsXml = para.runs
         .map((r) => {
           const sz = r.fontSize ? ` sz="${r.fontSize * 100}"` : ` sz="1400"`;
@@ -2003,7 +2018,7 @@ function multiRunTextBodyXml(
         })
         .join("\n    ");
       return `<a:p>
-    <a:pPr${algn}/>
+    <a:pPr${algn}>${pPrContent}</a:pPr>
     ${runsXml}
   </a:p>`;
     })
@@ -3938,6 +3953,171 @@ async function createZOrderMixedFixture(): Promise<void> {
   savePptx(buffer, "z-order-mixed.pptx");
 }
 
+// --- Paragraph Spacing ---
+async function createParagraphSpacingFixture(): Promise<void> {
+  let id = 2;
+  const shapes: string[] = [];
+
+  // 1. spaceBefore (pts)
+  const pos1 = gridPosition(0, 0, 3, 2);
+  shapes.push(
+    shapeXml(id++, "space-before-pts", {
+      preset: "rect",
+      x: pos1.x,
+      y: pos1.y,
+      cx: pos1.w,
+      cy: pos1.h,
+      fillXml: solidFillXml("F0F0F0"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: multiRunTextBodyXml(
+        [
+          { runs: [{ text: "Paragraph 1", fontSize: 14 }] },
+          {
+            runs: [{ text: "spaceBefore 12pt", fontSize: 14 }],
+            spcBef: { pts: 1200 },
+          },
+          { runs: [{ text: "Paragraph 3", fontSize: 14 }] },
+        ],
+        { anchor: "t" },
+      ),
+    }),
+  );
+
+  // 2. spaceAfter (pts)
+  const pos2 = gridPosition(1, 0, 3, 2);
+  shapes.push(
+    shapeXml(id++, "space-after-pts", {
+      preset: "rect",
+      x: pos2.x,
+      y: pos2.y,
+      cx: pos2.w,
+      cy: pos2.h,
+      fillXml: solidFillXml("F0F0F0"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: multiRunTextBodyXml(
+        [
+          {
+            runs: [{ text: "spaceAfter 12pt", fontSize: 14 }],
+            spcAft: { pts: 1200 },
+          },
+          { runs: [{ text: "Paragraph 2", fontSize: 14 }] },
+          { runs: [{ text: "Paragraph 3", fontSize: 14 }] },
+        ],
+        { anchor: "t" },
+      ),
+    }),
+  );
+
+  // 3. spaceBefore (pct) - 50% of font size
+  const pos3 = gridPosition(2, 0, 3, 2);
+  shapes.push(
+    shapeXml(id++, "space-before-pct", {
+      preset: "rect",
+      x: pos3.x,
+      y: pos3.y,
+      cx: pos3.w,
+      cy: pos3.h,
+      fillXml: solidFillXml("F0F0F0"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: multiRunTextBodyXml(
+        [
+          { runs: [{ text: "Paragraph 1", fontSize: 14 }] },
+          {
+            runs: [{ text: "spcBef 50%", fontSize: 14 }],
+            spcBef: { pct: 50000 },
+          },
+          { runs: [{ text: "Paragraph 3", fontSize: 14 }] },
+        ],
+        { anchor: "t" },
+      ),
+    }),
+  );
+
+  // 4. spaceAfter (pct) - 100% of font size
+  const pos4 = gridPosition(0, 1, 3, 2);
+  shapes.push(
+    shapeXml(id++, "space-after-pct", {
+      preset: "rect",
+      x: pos4.x,
+      y: pos4.y,
+      cx: pos4.w,
+      cy: pos4.h,
+      fillXml: solidFillXml("F0F0F0"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: multiRunTextBodyXml(
+        [
+          {
+            runs: [{ text: "spcAft 100%", fontSize: 14 }],
+            spcAft: { pct: 100000 },
+          },
+          { runs: [{ text: "Paragraph 2", fontSize: 14 }] },
+          { runs: [{ text: "Paragraph 3", fontSize: 14 }] },
+        ],
+        { anchor: "t" },
+      ),
+    }),
+  );
+
+  // 5. max(spaceAfter, spaceBefore) - spaceAfter wins
+  const pos5 = gridPosition(1, 1, 3, 2);
+  shapes.push(
+    shapeXml(id++, "max-space-after-wins", {
+      preset: "rect",
+      x: pos5.x,
+      y: pos5.y,
+      cx: pos5.w,
+      cy: pos5.h,
+      fillXml: solidFillXml("F0F0F0"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: multiRunTextBodyXml(
+        [
+          {
+            runs: [{ text: "spcAft 20pt", fontSize: 14 }],
+            spcAft: { pts: 2000 },
+          },
+          {
+            runs: [{ text: "spcBef 5pt", fontSize: 14 }],
+            spcBef: { pts: 500 },
+          },
+          { runs: [{ text: "Paragraph 3", fontSize: 14 }] },
+        ],
+        { anchor: "t" },
+      ),
+    }),
+  );
+
+  // 6. Both spaceBefore and spaceAfter on same paragraph
+  const pos6 = gridPosition(2, 1, 3, 2);
+  shapes.push(
+    shapeXml(id++, "both-before-after", {
+      preset: "rect",
+      x: pos6.x,
+      y: pos6.y,
+      cx: pos6.w,
+      cy: pos6.h,
+      fillXml: solidFillXml("F0F0F0"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: multiRunTextBodyXml(
+        [
+          { runs: [{ text: "Paragraph 1", fontSize: 14 }] },
+          {
+            runs: [{ text: "spcBef+spcAft 10pt", fontSize: 14 }],
+            spcBef: { pts: 1000 },
+            spcAft: { pts: 1000 },
+          },
+          { runs: [{ text: "Paragraph 3", fontSize: 14 }] },
+        ],
+        { anchor: "t" },
+      ),
+    }),
+  );
+
+  const slide = wrapSlideXml(shapes.join("\n"));
+  const rels = slideRelsXml();
+  const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
+  savePptx(buffer, "paragraph-spacing.pptx");
+}
+
 async function main(): Promise<void> {
   console.log("Creating VRT fixtures...\n");
 
@@ -3969,6 +4149,7 @@ async function main(): Promise<void> {
   await createThemeFontFixture();
   await createTextStyleInheritanceFixture();
   await createZOrderMixedFixture();
+  await createParagraphSpacingFixture();
 
   console.log("\nDone!");
 }
