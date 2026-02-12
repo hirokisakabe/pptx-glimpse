@@ -121,6 +121,47 @@ describe("renderChart", () => {
     });
   });
 
+  describe("doughnut chart", () => {
+    it("renders path elements with inner and outer arcs", () => {
+      const element = createChartElement({
+        chartType: "doughnut",
+        holeSize: 50,
+        series: [{ name: "D1", values: [60, 40], color: { hex: "#4472C4", alpha: 1 } }],
+        categories: ["A", "B"],
+      });
+
+      const svg = renderChart(element);
+      const paths = svg.match(/<path[^>]*d="M[^"]*A[^"]*A[^"]*Z"[^>]*\/>/g);
+      expect(paths).not.toBeNull();
+      expect(paths!.length).toBe(2);
+    });
+
+    it("renders circles for single-value doughnut", () => {
+      const element = createChartElement({
+        chartType: "doughnut",
+        holeSize: 50,
+        series: [{ name: "D1", values: [100], color: { hex: "#4472C4", alpha: 1 } }],
+        categories: ["A"],
+      });
+
+      const svg = renderChart(element);
+      const circles = svg.match(/<circle[^>]*\/>/g);
+      expect(circles).not.toBeNull();
+      expect(circles!.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("uses default holeSize of 50 when not specified", () => {
+      const element = createChartElement({
+        chartType: "doughnut",
+        series: [{ name: "D1", values: [60, 40], color: { hex: "#4472C4", alpha: 1 } }],
+        categories: ["A", "B"],
+      });
+
+      const svg = renderChart(element);
+      expect(svg).toContain("<path");
+    });
+  });
+
   describe("scatter chart", () => {
     it("renders circle elements for data points", () => {
       const element = createChartElement({

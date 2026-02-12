@@ -216,6 +216,58 @@ describe("parseChart", () => {
     expect(result!.series[0].values).toEqual([60, 40]);
   });
 
+  it("parses a doughnut chart with holeSize", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+        <c:chart>
+          <c:plotArea>
+            <c:doughnutChart>
+              <c:ser>
+                <c:idx val="0"/>
+                <c:cat><c:strRef><c:strCache>
+                  <c:pt idx="0"><c:v>A</c:v></c:pt>
+                  <c:pt idx="1"><c:v>B</c:v></c:pt>
+                </c:strCache></c:strRef></c:cat>
+                <c:val><c:numRef><c:numCache>
+                  <c:pt idx="0"><c:v>60</c:v></c:pt>
+                  <c:pt idx="1"><c:v>40</c:v></c:pt>
+                </c:numCache></c:numRef></c:val>
+              </c:ser>
+              <c:holeSize val="75"/>
+            </c:doughnutChart>
+          </c:plotArea>
+        </c:chart>
+      </c:chartSpace>`;
+
+    const result = parseChart(xml, createColorResolver());
+    expect(result!.chartType).toBe("doughnut");
+    expect(result!.holeSize).toBe(75);
+    expect(result!.categories).toEqual(["A", "B"]);
+    expect(result!.series[0].values).toEqual([60, 40]);
+  });
+
+  it("parses a doughnut chart with default holeSize", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+        <c:chart>
+          <c:plotArea>
+            <c:doughnutChart>
+              <c:ser>
+                <c:idx val="0"/>
+                <c:val><c:numRef><c:numCache>
+                  <c:pt idx="0"><c:v>100</c:v></c:pt>
+                </c:numCache></c:numRef></c:val>
+              </c:ser>
+            </c:doughnutChart>
+          </c:plotArea>
+        </c:chart>
+      </c:chartSpace>`;
+
+    const result = parseChart(xml, createColorResolver());
+    expect(result!.chartType).toBe("doughnut");
+    expect(result!.holeSize).toBe(50);
+  });
+
   it("parses a scatter chart with xValues", () => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
       <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">

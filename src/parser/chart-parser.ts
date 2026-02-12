@@ -13,7 +13,7 @@ const CHART_TYPE_MAP: [string, ChartType][] = [
   ["line3DChart", "line"],
   ["pieChart", "pie"],
   ["pie3DChart", "pie"],
-  ["doughnutChart", "pie"],
+  ["doughnutChart", "doughnut"],
   ["scatterChart", "scatter"],
 ];
 
@@ -29,7 +29,7 @@ export function parseChart(chartXml: string, colorResolver: ColorResolver): Char
   if (!plotArea) return null;
 
   const title = parseChartTitle(chart.title as XmlNode);
-  const { chartType, series, categories, barDirection } = parseChartTypeAndData(
+  const { chartType, series, categories, barDirection, holeSize } = parseChartTypeAndData(
     plotArea,
     colorResolver,
   );
@@ -43,6 +43,7 @@ export function parseChart(chartXml: string, colorResolver: ColorResolver): Char
     series,
     categories,
     ...(barDirection !== undefined && { barDirection }),
+    ...(holeSize !== undefined && { holeSize }),
     legend,
   };
 }
@@ -55,6 +56,7 @@ function parseChartTypeAndData(
   series: ChartSeries[];
   categories: string[];
   barDirection?: "col" | "bar";
+  holeSize?: number;
 } {
   for (const [xmlTag, chartType] of CHART_TYPE_MAP) {
     const chartNode = plotArea[xmlTag] as XmlNode | undefined;
@@ -71,7 +73,10 @@ function parseChartTypeAndData(
         ? (((barDirNode?.["@_val"] as string | undefined) ?? "col") as "col" | "bar")
         : undefined;
 
-    return { chartType, series, categories, barDirection };
+    const holeSizeNode = chartNode.holeSize as XmlNode | undefined;
+    const holeSize = chartType === "doughnut" ? Number(holeSizeNode?.["@_val"] ?? 50) : undefined;
+
+    return { chartType, series, categories, barDirection, holeSize };
   }
 
   // Detect unsupported chart types

@@ -52,6 +52,9 @@ export function renderChart(element: ChartElement): string {
       case "pie":
         parts.push(renderPieChart(chart, plotX, plotY, plotW, plotH));
         break;
+      case "doughnut":
+        parts.push(renderDoughnutChart(chart, plotX, plotY, plotW, plotH));
+        break;
       case "scatter":
         parts.push(renderScatterChart(chart, plotX, plotY, plotW, plotH));
         break;
@@ -240,6 +243,56 @@ function renderPieChart(chart: ChartData, x: number, y: number, w: number, h: nu
   return parts.join("");
 }
 
+function renderDoughnutChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
+  const parts: string[] = [];
+  const series = chart.series[0];
+  if (!series || series.values.length === 0) return "";
+
+  const total = series.values.reduce((sum, v) => sum + v, 0);
+  if (total === 0) return "";
+
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const outerR = (Math.min(w, h) / 2) * 0.85;
+  const holeSize = chart.holeSize ?? 50;
+  const innerR = outerR * (holeSize / 100);
+
+  let currentAngle = -Math.PI / 2;
+
+  for (let i = 0; i < series.values.length; i++) {
+    const val = series.values[i];
+    const sliceAngle = (val / total) * 2 * Math.PI;
+    const color = getPieSliceColor(i, chart);
+
+    if (series.values.length === 1) {
+      parts.push(
+        `<circle cx="${round(cx)}" cy="${round(cy)}" r="${round(outerR)}" ${fillAttr(color)}/>`,
+      );
+      parts.push(
+        `<circle cx="${round(cx)}" cy="${round(cy)}" r="${round(innerR)}" fill="#FFFFFF"/>`,
+      );
+    } else {
+      const ox1 = cx + outerR * Math.cos(currentAngle);
+      const oy1 = cy + outerR * Math.sin(currentAngle);
+      const ox2 = cx + outerR * Math.cos(currentAngle + sliceAngle);
+      const oy2 = cy + outerR * Math.sin(currentAngle + sliceAngle);
+      const ix1 = cx + innerR * Math.cos(currentAngle + sliceAngle);
+      const iy1 = cy + innerR * Math.sin(currentAngle + sliceAngle);
+      const ix2 = cx + innerR * Math.cos(currentAngle);
+      const iy2 = cy + innerR * Math.sin(currentAngle);
+      const largeArc = sliceAngle > Math.PI ? 1 : 0;
+
+      parts.push(
+        `<path d="M${round(ox1)},${round(oy1)} A${round(outerR)},${round(outerR)} 0 ${largeArc},1 ${round(ox2)},${round(oy2)} L${round(ix1)},${round(iy1)} A${round(innerR)},${round(innerR)} 0 ${largeArc},0 ${round(ix2)},${round(iy2)} Z" ${fillAttr(color)}/>`,
+      );
+    }
+
+    currentAngle += sliceAngle;
+  }
+
+  return parts.join("");
+}
+
 function renderScatterChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
   const parts: string[] = [];
   const { series } = chart;
@@ -283,7 +336,7 @@ function renderLegend(chart: ChartData, chartW: number, chartH: number, position
   const parts: string[] = [];
 
   const entries =
-    chart.chartType === "pie"
+    chart.chartType === "pie" || chart.chartType === "doughnut"
       ? chart.categories.map((cat, i) => ({
           label: cat,
           color: getPieSliceColor(i, chart),

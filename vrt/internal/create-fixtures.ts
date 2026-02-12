@@ -993,6 +993,7 @@ function chartXml(
   chartType: string,
   opts: {
     barDir?: string;
+    holeSize?: number;
     title?: string;
     legendPos?: string;
     series: {
@@ -1026,6 +1027,7 @@ function chartXml(
     .join("");
 
   const barDirXml = opts.barDir ? `<c:barDir val="${opts.barDir}"/>` : "";
+  const holeSizeXml = opts.holeSize !== undefined ? `<c:holeSize val="${opts.holeSize}"/>` : "";
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <c:chartSpace xmlns:c="${NS.c}" xmlns:a="${NS.a}">
@@ -1035,6 +1037,7 @@ function chartXml(
       <c:${chartType}>
         ${barDirXml}
         ${seriesXml}
+        ${holeSizeXml}
       </c:${chartType}>
     </c:plotArea>
     ${legendXml}
@@ -1162,6 +1165,34 @@ async function createChartsFixture(): Promise<void> {
     rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart4.xml" }]),
   });
 
+  // Slide 5: Doughnut chart
+  const doughnutChart = chartXml("doughnutChart", {
+    title: "Budget Allocation",
+    legendPos: "r",
+    holeSize: 60,
+    series: [
+      {
+        name: "Budget",
+        categories: ["Dev", "Marketing", "Sales", "Support"],
+        values: [35, 25, 25, 15],
+      },
+    ],
+  });
+  charts.set("ppt/charts/chart5.xml", doughnutChart);
+  const gf5 = graphicFrameXml(
+    2,
+    "Doughnut Chart",
+    margin,
+    margin,
+    SLIDE_W - margin * 2,
+    SLIDE_H - margin * 2,
+    "rId2",
+  );
+  slides.push({
+    xml: wrapSlideXml(gf5),
+    rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart5.xml" }]),
+  });
+
   const buffer = await buildPptx({
     slides,
     charts,
@@ -1170,6 +1201,7 @@ async function createChartsFixture(): Promise<void> {
       `<Override PartName="/ppt/charts/chart2.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
       `<Override PartName="/ppt/charts/chart3.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
       `<Override PartName="/ppt/charts/chart4.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
+      `<Override PartName="/ppt/charts/chart5.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
     ],
   });
   savePptx(buffer, "charts.pptx");
