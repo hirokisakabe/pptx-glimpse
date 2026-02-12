@@ -10,8 +10,7 @@ import { buildRelsPath, parseRelationships, type Relationship } from "./relation
 import { parseListStyle } from "./text-style-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import type { FontScheme } from "../model/theme.js";
-
-const WARN_PREFIX = "[pptx-glimpse]";
+import { debug } from "../warning-logger.js";
 
 export function parseSlideLayoutBackground(
   xml: string,
@@ -22,7 +21,7 @@ export function parseSlideLayoutBackground(
 
   const sldLayout = parsed.sldLayout as XmlNode | undefined;
   if (!sldLayout) {
-    console.warn(`${WARN_PREFIX} SlideLayout: missing root element "sldLayout" in XML`);
+    debug("slideLayout.missing", `missing root element "sldLayout" in XML`);
     return null;
   }
 
@@ -48,7 +47,7 @@ export function parseSlideLayoutElements(
 
   const sldLayout = parsed.sldLayout as XmlNode | undefined;
   if (!sldLayout) {
-    console.warn(`${WARN_PREFIX} SlideLayout: missing root element "sldLayout" in XML`);
+    debug("slideLayout.missing", `missing root element "sldLayout" in XML`);
     return [];
   }
 
@@ -74,6 +73,13 @@ export function parseSlideLayoutElements(
     fontScheme,
     orderedSpTree,
   );
+}
+
+export function parseSlideLayoutShowMasterSp(xml: string): boolean {
+  const parsed = parseXml(xml);
+  const sldLayout = parsed.sldLayout as XmlNode | undefined;
+  const attr = sldLayout?.["@_showMasterSp"];
+  return attr !== "0" && attr !== "false";
 }
 
 export function parseSlideLayoutPlaceholderStyles(xml: string): PlaceholderStyleInfo[] {

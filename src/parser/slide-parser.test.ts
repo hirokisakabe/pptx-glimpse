@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { parseSlide, parseShapeTree, navigateOrdered } from "./slide-parser.js";
+import { initWarningLogger } from "../warning-logger.js";
 import { ColorResolver } from "../color/color-resolver.js";
 import { parseXml, parseXmlOrdered } from "./xml-parser.js";
 import type { XmlNode } from "./xml-parser.js";
@@ -693,6 +694,7 @@ describe("bullet parsing", () => {
 
 describe("structural validation warnings", () => {
   it("warns when parseSlide receives XML without sld root", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const xml = `<other><cSld/></other>`;
@@ -705,14 +707,16 @@ describe("structural validation warnings", () => {
     );
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Slide 3: missing root element "sld"'),
+      expect.stringContaining('missing root element "sld" in XML'),
     );
     expect(result.elements).toEqual([]);
 
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("warns when a shape is skipped due to parse returning null", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const xml = `
@@ -736,12 +740,14 @@ describe("structural validation warnings", () => {
     );
 
     expect(elements).toHaveLength(0);
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Slide 1: shape skipped"));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("shape skipped"));
 
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("warns when NaN is detected in transform values", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const xml = `
@@ -778,6 +784,7 @@ describe("structural validation warnings", () => {
     );
 
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("does not warn for valid structures", () => {

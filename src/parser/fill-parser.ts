@@ -5,8 +5,7 @@ import type { PptxArchive } from "./pptx-reader.js";
 import type { Relationship } from "./relationship-parser.js";
 import { resolveRelationshipTarget } from "./relationship-parser.js";
 import type { XmlNode } from "./xml-parser.js";
-
-const WARN_PREFIX = "[pptx-glimpse]";
+import { warn, debug } from "../warning-logger.js";
 
 export interface FillParseContext {
   rels: Map<string, Relationship>;
@@ -85,7 +84,7 @@ function parseGradientFill(gradNode: XmlNode, colorResolver: ColorResolver): Fil
   const gsLst = gradNode.gsLst as XmlNode | undefined;
   const gsArr = gsLst?.gs as XmlNode[] | undefined;
   if (!gsArr) {
-    console.warn(`${WARN_PREFIX} GradientFill: gsLst not found, skipping gradient`);
+    debug("gradientFill.gsLst", "GradientFill: gsLst not found, skipping gradient");
     return null;
   }
 
@@ -135,6 +134,22 @@ function parsePatternFill(pattNode: XmlNode, colorResolver: ColorResolver): Patt
 
 export function parseOutline(lnNode: XmlNode, colorResolver: ColorResolver): Outline | null {
   if (!lnNode) return null;
+
+  // Unsupported feature detection
+  if (lnNode.headEnd) {
+    const headType = ((lnNode.headEnd as XmlNode)["@_type"] as string | undefined) ?? "unknown";
+    warn("ln.headEnd", `line head arrow (type="${headType}") not implemented`);
+  }
+  if (lnNode.tailEnd) {
+    const tailType = ((lnNode.tailEnd as XmlNode)["@_type"] as string | undefined) ?? "unknown";
+    warn("ln.tailEnd", `line tail arrow (type="${tailType}") not implemented`);
+  }
+  if (lnNode.gradFill) {
+    warn("ln.gradFill", "gradient line fill not implemented");
+  }
+  if (lnNode.pattFill) {
+    warn("ln.pattFill", "pattern line fill not implemented");
+  }
 
   const width = Number(lnNode["@_w"] ?? 12700);
 

@@ -20,6 +20,7 @@ npm run format         # Prettier formatting
 npm run format:check   # Prettier check
 npm run typecheck      # Type check with tsc --noEmit
 npm run render         # Test rendering with tsx scripts/test-render.ts
+npm run inspect        # Inspect PPTX internal XML (e.g., npm run inspect -- file.pptx slide1)
 ```
 
 CI consists of 3 jobs:
@@ -118,3 +119,4 @@ LibreOffice VRT tests are automatically skipped in environments without Docker. 
 - Prettier: double quotes, semicolons, trailing commas, printWidth 100
 - ESLint: unused variables with `_` prefix are allowed
 - ESM (`"type": "module"`) — imports require `.js` extension
+- Tests are colocated with source files (`src/parser/slide-parser.test.ts`, etc.)

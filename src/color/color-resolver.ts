@@ -9,8 +9,7 @@ import type { ColorScheme, ColorMap, ColorSchemeKey } from "../model/theme.js";
 import type { ResolvedColor } from "../model/fill.js";
 import type { XmlNode } from "../parser/xml-parser.js";
 import { applyColorTransforms } from "./color-transforms.js";
-
-const WARN_PREFIX = "[pptx-glimpse]";
+import { debug } from "../warning-logger.js";
 
 export class ColorResolver {
   constructor(
@@ -33,9 +32,7 @@ export class ColorResolver {
 
     const keys = Object.keys(colorNode).filter((k) => !k.startsWith("@_"));
     if (keys.length > 0) {
-      console.warn(
-        `${WARN_PREFIX} ColorResolver: unknown color node structure [${keys.join(", ")}]`,
-      );
+      debug("colorResolver.unknown", `unknown color node structure [${keys.join(", ")}]`);
     }
 
     return null;

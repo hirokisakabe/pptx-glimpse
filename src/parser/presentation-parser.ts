@@ -2,6 +2,7 @@ import type { SlideSize } from "../model/presentation.js";
 import type { DefaultTextStyle } from "../model/text.js";
 import { parseXml, type XmlNode } from "./xml-parser.js";
 import { parseListStyle } from "./text-style-parser.js";
+import { debug } from "../warning-logger.js";
 
 export interface PresentationInfo {
   slideSize: SlideSize;
@@ -9,7 +10,6 @@ export interface PresentationInfo {
   defaultTextStyle?: DefaultTextStyle;
 }
 
-const WARN_PREFIX = "[pptx-glimpse]";
 const DEFAULT_SLIDE_WIDTH = 9144000;
 const DEFAULT_SLIDE_HEIGHT = 5143500;
 
@@ -18,7 +18,7 @@ export function parsePresentation(xml: string): PresentationInfo {
   const pres = parsed.presentation as XmlNode | undefined;
 
   if (!pres) {
-    console.warn(`${WARN_PREFIX} Presentation: missing root element "presentation" in XML`);
+    debug("presentation.missing", `missing root element "presentation" in XML`);
     return {
       slideSize: { width: DEFAULT_SLIDE_WIDTH, height: DEFAULT_SLIDE_HEIGHT },
       slideRIds: [],
@@ -28,8 +28,9 @@ export function parsePresentation(xml: string): PresentationInfo {
   const sldSz = pres.sldSz as XmlNode | undefined;
   let slideSize: SlideSize;
   if (!sldSz || sldSz["@_cx"] === undefined || sldSz["@_cy"] === undefined) {
-    console.warn(
-      `${WARN_PREFIX} Presentation: sldSz missing, using default ${DEFAULT_SLIDE_WIDTH}x${DEFAULT_SLIDE_HEIGHT} EMU`,
+    debug(
+      "presentation.sldSz",
+      `sldSz missing, using default ${DEFAULT_SLIDE_WIDTH}x${DEFAULT_SLIDE_HEIGHT} EMU`,
     );
     slideSize = { width: DEFAULT_SLIDE_WIDTH, height: DEFAULT_SLIDE_HEIGHT };
   } else {
@@ -45,9 +46,7 @@ export function parsePresentation(xml: string): PresentationInfo {
     .map((s) => (s["@_r:id"] as string | undefined) ?? (s["@_id"] as string | undefined))
     .filter((id): id is string => {
       if (id === undefined) {
-        console.warn(
-          `${WARN_PREFIX} Presentation: undefined slide relationship ID found, skipping`,
-        );
+        debug("presentation.slideRId", "undefined slide relationship ID found, skipping");
         return false;
       }
       return true;

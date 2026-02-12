@@ -13,6 +13,7 @@ import {
   parseSlideLayoutBackground,
   parseSlideLayoutElements,
   parseSlideLayoutPlaceholderStyles,
+  parseSlideLayoutShowMasterSp,
 } from "./parser/slide-layout-parser.js";
 import { parseSlide } from "./parser/slide-parser.js";
 import {
@@ -30,6 +31,8 @@ import type { ColorMap } from "./model/theme.js";
 import type { PlaceholderStyleInfo } from "./model/text.js";
 import type { SlideElement } from "./model/shape.js";
 import { applyTextStyleInheritance } from "./text-style-resolver.js";
+import type { LogLevel } from "./warning-logger.js";
+import { initWarningLogger, flushWarnings } from "./warning-logger.js";
 
 export interface ConvertOptions {
   /** 変換対象のスライド番号 (1始まり)。未指定で全スライド */
@@ -38,6 +41,8 @@ export interface ConvertOptions {
   width?: number;
   /** 出力画像の高さ (ピクセル)。widthと同時指定時はwidthが優先 */
   height?: number;
+  /** 警告ログレベル。デフォルト: "off" */
+  logLevel?: LogLevel;
 }
 
 export interface SlideSvg {
@@ -56,6 +61,8 @@ export async function convertPptxToSvg(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
 ): Promise<SlideSvg[]> {
+  initWarningLogger(options?.logLevel ?? "off");
+
   const archive = await readPptx(input);
 
   // Parse presentation.xml
@@ -151,6 +158,7 @@ export async function convertPptxToSvg(
     // Resolve slide layout
     let layoutElements: SlideElement[] = [];
     let layoutPlaceholderStyles: PlaceholderStyleInfo[] = [];
+    let layoutShowMasterSp = true;
     const slideRelsPath = buildRelsPath(path);
     const slideRelsXml = archive.files.get(slideRelsPath);
     if (slideRelsXml) {
@@ -188,6 +196,7 @@ export async function convertPptxToSvg(
             );
             // Extract placeholder styles for text style inheritance
             layoutPlaceholderStyles = parseSlideLayoutPlaceholderStyles(layoutXml);
+            layoutShowMasterSp = parseSlideLayoutShowMasterSp(layoutXml);
           }
           break;
         }
@@ -207,11 +216,14 @@ export async function convertPptxToSvg(
     });
 
     // Merge shapes: master (back) → layout → slide (front)
-    slide.elements = mergeElements(masterElements, layoutElements, slide.elements);
+    const effectiveMasterElements = slide.showMasterSp && layoutShowMasterSp ? masterElements : [];
+    slide.elements = mergeElements(effectiveMasterElements, layoutElements, slide.elements);
 
     const svg = renderSlideToSvg(slide, presInfo.slideSize);
     results.push({ slideNumber, svg });
   }
+
+  flushWarnings();
 
   return results;
 }

@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { parseTheme } from "./theme-parser.js";
+import { initWarningLogger } from "../warning-logger.js";
 
 const themeXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" name="Office Theme">
@@ -50,19 +51,22 @@ describe("parseTheme", () => {
   });
 
   it("warns and returns defaults when theme root is missing", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const xml = `<other/>`;
     const result = parseTheme(xml);
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Theme: missing root element "theme"'),
+      expect.stringContaining('missing root element "theme" in XML'),
     );
     expect(result.colorScheme.dk1).toBe("#000000");
     expect(result.fontScheme.majorFont).toBe("Calibri");
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("warns and returns defaults when themeElements is missing", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const xml = `
       <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
@@ -71,13 +75,15 @@ describe("parseTheme", () => {
     `;
     const result = parseTheme(xml);
 
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Theme: themeElements not found"));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("themeElements not found"));
     expect(result.colorScheme.dk1).toBe("#000000");
     expect(result.fontScheme.majorFont).toBe("Calibri");
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("warns when colorScheme is missing", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const xml = `
       <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
@@ -91,13 +97,15 @@ describe("parseTheme", () => {
     `;
     const result = parseTheme(xml);
 
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Theme: colorScheme not found"));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("colorScheme not found"));
     expect(result.colorScheme.dk1).toBe("#000000");
     expect(result.fontScheme.majorFont).toBe("Arial");
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("warns when fontScheme is missing", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const xml = `
       <a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
@@ -121,9 +129,10 @@ describe("parseTheme", () => {
     `;
     const result = parseTheme(xml);
 
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Theme: fontScheme not found"));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("fontScheme not found"));
     expect(result.colorScheme.dk1).toBe("#111111");
     expect(result.fontScheme.majorFont).toBe("Calibri");
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 });

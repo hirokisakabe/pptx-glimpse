@@ -1,6 +1,5 @@
 import { parseXml, type XmlNode } from "./xml-parser.js";
-
-const WARN_PREFIX = "[pptx-glimpse]";
+import { debug } from "../warning-logger.js";
 
 export interface Relationship {
   id: string;
@@ -16,7 +15,7 @@ export function parseRelationships(xml: string): Map<string, Relationship> {
   const root = parsed.Relationships as XmlNode | undefined;
 
   if (!root) {
-    console.warn(`${WARN_PREFIX} Relationship: missing root element "Relationships" in XML`);
+    debug("relationship.missing", `missing root element "Relationships" in XML`);
     return rels;
   }
 
@@ -30,7 +29,7 @@ export function parseRelationships(xml: string): Map<string, Relationship> {
     const targetMode = rel["@_TargetMode"] as string | undefined;
 
     if (!id || !type || !target) {
-      console.warn(`${WARN_PREFIX} Relationship: entry missing required attribute, skipping`);
+      debug("relationship.attribute", "entry missing required attribute, skipping");
       continue;
     }
 
