@@ -19,6 +19,8 @@ import type {
   Hyperlink,
   BulletType,
   AutoNumScheme,
+  DefaultTextStyle,
+  DefaultRunProperties,
 } from "../model/text.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import type { Relationship } from "./relationship-parser.js";
@@ -37,6 +39,7 @@ import {
   buildRelsPath,
 } from "./relationship-parser.js";
 import { hundredthPointToPoint } from "../utils/emu.js";
+import { parseListStyle, parseDefaultRunProperties } from "./text-style-parser.js";
 
 const WARN_PREFIX = "[pptx-glimpse]";
 
@@ -619,10 +622,12 @@ export function parseTextBody(
     lnSpcReduction,
   };
 
+  const lstStyle = parseListStyle(txBody.lstStyle);
+
   const paragraphs: Paragraph[] = [];
   const pList = txBody.p ?? [];
   for (const p of pList) {
-    paragraphs.push(parseParagraph(p, colorResolver, rels, fontScheme));
+    paragraphs.push(parseParagraph(p, colorResolver, rels, fontScheme, lstStyle));
   }
 
   if (paragraphs.length === 0) return null;
@@ -676,22 +681,35 @@ function parseParagraph(
   colorResolver: ColorResolver,
   rels?: Map<string, Relationship>,
   fontScheme?: FontScheme | null,
+  lstStyle?: DefaultTextStyle,
 ): Paragraph {
   const pPr = p.pPr;
+  const level = Number(pPr?.["@_lvl"] ?? 0);
+
+  // lstStyle からレベル対応のデフォルト段落プロパティを取得
+  const lstLevelProps = lstStyle?.levels[level];
+
   const { bullet, bulletFont, bulletColor, bulletSizePct } = parseBullet(pPr, colorResolver);
   const properties = {
-    alignment: (pPr?.["@_algn"] as "l" | "ctr" | "r" | "just") ?? "l",
+    alignment: (pPr?.["@_algn"] as "l" | "ctr" | "r" | "just") ?? lstLevelProps?.alignment ?? "l",
     lineSpacing: pPr?.lnSpc?.spcPct ? Number(pPr.lnSpc.spcPct["@_val"]) : null,
     spaceBefore: pPr?.spcBef?.spcPts ? Number(pPr.spcBef.spcPts["@_val"]) : 0,
     spaceAfter: pPr?.spcAft?.spcPts ? Number(pPr.spcAft.spcPts["@_val"]) : 0,
-    level: Number(pPr?.["@_lvl"] ?? 0),
+    level,
     bullet,
     bulletFont,
     bulletColor,
     bulletSizePct,
-    marginLeft: Number(pPr?.["@_marL"] ?? 0),
-    indent: Number(pPr?.["@_indent"] ?? 0),
+    marginLeft:
+      pPr?.["@_marL"] !== undefined ? Number(pPr["@_marL"]) : (lstLevelProps?.marginLeft ?? 0),
+    indent:
+      pPr?.["@_indent"] !== undefined ? Number(pPr["@_indent"]) : (lstLevelProps?.indent ?? 0),
   };
+
+  // defRPr のマージ: pPr.defRPr > lstStyle.lvl.defRPr
+  const pPrDefRPr = parseDefaultRunProperties(pPr?.defRPr);
+  const lstDefRPr = lstLevelProps?.defaultRunProperties;
+  const mergedDefaults = mergeDefaultRunProperties(pPrDefRPr, lstDefRPr);
 
   const runs: TextRun[] = [];
   const rList = p.r ?? [];
@@ -699,11 +717,29 @@ function parseParagraph(
     const text = r.t ?? "";
     const textContent = typeof text === "object" ? (text["#text"] ?? "") : String(text);
     const rPr = r.rPr;
-    const runProps = parseRunProperties(rPr, colorResolver, rels, fontScheme);
+    const runProps = parseRunProperties(rPr, colorResolver, rels, fontScheme, mergedDefaults);
     runs.push({ text: textContent, properties: runProps });
   }
 
   return { runs, properties };
+}
+
+function mergeDefaultRunProperties(
+  primary?: DefaultRunProperties,
+  secondary?: DefaultRunProperties,
+): DefaultRunProperties | undefined {
+  if (!primary && !secondary) return undefined;
+  if (!primary) return secondary;
+  if (!secondary) return primary;
+  return {
+    fontSize: primary.fontSize ?? secondary.fontSize,
+    fontFamily: primary.fontFamily ?? secondary.fontFamily,
+    fontFamilyEa: primary.fontFamilyEa ?? secondary.fontFamilyEa,
+    bold: primary.bold ?? secondary.bold,
+    italic: primary.italic ?? secondary.italic,
+    underline: primary.underline ?? secondary.underline,
+    strikethrough: primary.strikethrough ?? secondary.strikethrough,
+  };
 }
 
 function resolveThemeFont(typeface: string | null, fontScheme?: FontScheme | null): string | null {
@@ -728,29 +764,48 @@ function parseRunProperties(
   colorResolver: ColorResolver,
   rels?: Map<string, Relationship>,
   fontScheme?: FontScheme | null,
+  defaults?: DefaultRunProperties,
 ): RunProperties {
   if (!rPr) {
     return {
-      fontSize: null,
-      fontFamily: null,
-      fontFamilyEa: null,
-      bold: false,
-      italic: false,
-      underline: false,
-      strikethrough: false,
+      fontSize: defaults?.fontSize ?? null,
+      fontFamily: resolveThemeFont(defaults?.fontFamily ?? null, fontScheme),
+      fontFamilyEa: resolveThemeFont(defaults?.fontFamilyEa ?? null, fontScheme),
+      bold: defaults?.bold ?? false,
+      italic: defaults?.italic ?? false,
+      underline: defaults?.underline ?? false,
+      strikethrough: defaults?.strikethrough ?? false,
       color: null,
       baseline: 0,
       hyperlink: null,
     };
   }
 
-  const fontSize = rPr["@_sz"] ? hundredthPointToPoint(Number(rPr["@_sz"])) : null;
-  const fontFamily = resolveThemeFont(rPr.latin?.["@_typeface"] ?? null, fontScheme);
-  const fontFamilyEa = resolveThemeFont(rPr.ea?.["@_typeface"] ?? null, fontScheme);
-  const bold = rPr["@_b"] === "1" || rPr["@_b"] === "true";
-  const italic = rPr["@_i"] === "1" || rPr["@_i"] === "true";
-  const underline = rPr["@_u"] !== undefined && rPr["@_u"] !== "none";
-  const strikethrough = rPr["@_strike"] !== undefined && rPr["@_strike"] !== "noStrike";
+  const fontSize = rPr["@_sz"]
+    ? hundredthPointToPoint(Number(rPr["@_sz"]))
+    : (defaults?.fontSize ?? null);
+  const fontFamily = resolveThemeFont(
+    rPr.latin?.["@_typeface"] ?? defaults?.fontFamily ?? null,
+    fontScheme,
+  );
+  const fontFamilyEa = resolveThemeFont(
+    rPr.ea?.["@_typeface"] ?? defaults?.fontFamilyEa ?? null,
+    fontScheme,
+  );
+  const bold =
+    rPr["@_b"] !== undefined
+      ? rPr["@_b"] === "1" || rPr["@_b"] === "true"
+      : (defaults?.bold ?? false);
+  const italic =
+    rPr["@_i"] !== undefined
+      ? rPr["@_i"] === "1" || rPr["@_i"] === "true"
+      : (defaults?.italic ?? false);
+  const underline =
+    rPr["@_u"] !== undefined ? rPr["@_u"] !== "none" : (defaults?.underline ?? false);
+  const strikethrough =
+    rPr["@_strike"] !== undefined
+      ? rPr["@_strike"] !== "noStrike"
+      : (defaults?.strikethrough ?? false);
   const baseline = rPr["@_baseline"] ? Number(rPr["@_baseline"]) / 1000 : 0;
 
   let color = colorResolver.resolve(rPr.solidFill ?? rPr);
