@@ -141,6 +141,10 @@ function extractDefs(svgFragment: string, defs: string[]): void {
   if (filterMatch) {
     defs.push(...filterMatch);
   }
+  const markerMatch = svgFragment.match(/<marker[^]*?<\/marker>/g);
+  if (markerMatch) {
+    defs.push(...markerMatch);
+  }
 }
 
 function removeDefs(svgFragment: string): string {
@@ -148,5 +152,6 @@ function removeDefs(svgFragment: string): string {
     .replace(/<linearGradient[^]*?<\/linearGradient>/g, "")
     .replace(/<radialGradient[^]*?<\/radialGradient>/g, "")
     .replace(/<pattern[^]*?<\/pattern>/g, "")
-    .replace(/<filter[^]*?<\/filter>/g, "");
+    .replace(/<filter[^]*?<\/filter>/g, "")
+    .replace(/<marker[^]*?<\/marker>/g, "");
 }

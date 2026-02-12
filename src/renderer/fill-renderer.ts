@@ -1,5 +1,5 @@
 import type { Fill, PatternFill } from "../model/fill.js";
-import type { Outline } from "../model/line.js";
+import type { Outline, ArrowEndpoint, ArrowSize } from "../model/line.js";
 import { emuToPixels } from "../utils/emu.js";
 
 export interface FillAttrs {
@@ -223,4 +223,88 @@ function getPatternContent(preset: string, fg: string, fgAlpha: string): Pattern
     default:
       return null;
   }
+}
+
+// --- Arrow marker rendering ---
+
+export interface MarkerResult {
+  defs: string;
+  startAttr: string;
+  endAttr: string;
+}
+
+const ARROW_SIZE_MAP: Record<ArrowSize, number> = {
+  sm: 5,
+  med: 8,
+  lg: 12,
+};
+
+export function renderMarkers(outline: Outline | null): MarkerResult {
+  const empty: MarkerResult = { defs: "", startAttr: "", endAttr: "" };
+  if (!outline) return empty;
+  if (!outline.headEnd && !outline.tailEnd) return empty;
+
+  const color = outline.fill?.color.hex ?? "#000000";
+  const alpha = outline.fill?.color.alpha ?? 1;
+  const defs: string[] = [];
+  let startAttr = "";
+  let endAttr = "";
+
+  if (outline.headEnd) {
+    const id = `marker-${crypto.randomUUID()}`;
+    const markerDef = buildMarkerDef(id, outline.headEnd, color, alpha);
+    if (markerDef) {
+      defs.push(markerDef);
+      startAttr = `marker-start="url(#${id})"`;
+    }
+  }
+
+  if (outline.tailEnd) {
+    const id = `marker-${crypto.randomUUID()}`;
+    const markerDef = buildMarkerDef(id, outline.tailEnd, color, alpha);
+    if (markerDef) {
+      defs.push(markerDef);
+      endAttr = `marker-end="url(#${id})"`;
+    }
+  }
+
+  return { defs: defs.join(""), startAttr, endAttr };
+}
+
+function buildMarkerDef(
+  id: string,
+  endpoint: ArrowEndpoint,
+  color: string,
+  alpha: number,
+): string | null {
+  const mw = ARROW_SIZE_MAP[endpoint.length];
+  const mh = ARROW_SIZE_MAP[endpoint.width];
+  const alphaAttr = alpha < 1 ? ` opacity="${alpha}"` : "";
+
+  let path: string;
+  let fillAttr: string;
+  switch (endpoint.type) {
+    case "triangle":
+      path = `M 0 0 L ${mw} ${mh / 2} L 0 ${mh} Z`;
+      fillAttr = `fill="${color}"`;
+      break;
+    case "stealth":
+      path = `M 0 0 L ${mw} ${mh / 2} L 0 ${mh} L ${mw * 0.3} ${mh / 2} Z`;
+      fillAttr = `fill="${color}"`;
+      break;
+    case "diamond":
+      path = `M 0 ${mh / 2} L ${mw / 2} 0 L ${mw} ${mh / 2} L ${mw / 2} ${mh} Z`;
+      fillAttr = `fill="${color}"`;
+      break;
+    case "oval":
+      return `<marker id="${id}" markerWidth="${mw}" markerHeight="${mh}" refX="${mw / 2}" refY="${mh / 2}" orient="auto" markerUnits="userSpaceOnUse"><ellipse cx="${mw / 2}" cy="${mh / 2}" rx="${mw / 2}" ry="${mh / 2}" ${`fill="${color}"`}${alphaAttr}/></marker>`;
+    case "arrow":
+      path = `M 0 0 L ${mw} ${mh / 2} L 0 ${mh}`;
+      fillAttr = `fill="none" stroke="${color}" stroke-width="1"`;
+      break;
+    default:
+      return null;
+  }
+
+  return `<marker id="${id}" markerWidth="${mw}" markerHeight="${mh}" refX="${mw}" refY="${mh / 2}" orient="auto" markerUnits="userSpaceOnUse"><path d="${path}" ${fillAttr}${alphaAttr}/></marker>`;
 }

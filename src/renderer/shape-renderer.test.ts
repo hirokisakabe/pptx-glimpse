@@ -32,6 +32,8 @@ function makeShape(overrides: Partial<ShapeElement> = {}): ShapeElement {
       width: 12700,
       fill: { type: "solid", color: { hex: "#000000", alpha: 1 } },
       dashStyle: "solid",
+      headEnd: null,
+      tailEnd: null,
     },
     textBody: null,
     effects: null,
@@ -43,10 +45,13 @@ function makeConnector(overrides: Partial<ConnectorElement> = {}): ConnectorElem
   return {
     type: "connector",
     transform: makeTransform(),
+    geometry: { type: "preset", preset: "line", adjustValues: {} },
     outline: {
       width: 12700,
       fill: { type: "solid", color: { hex: "#000000", alpha: 1 } },
       dashStyle: "solid",
+      headEnd: null,
+      tailEnd: null,
     },
     effects: null,
     ...overrides,
@@ -175,6 +180,8 @@ describe("renderConnector", () => {
           width: 12700,
           fill: { type: "solid", color: { hex: "#FF0000", alpha: 1 } },
           dashStyle: "dash",
+          headEnd: null,
+          tailEnd: null,
         },
       }),
     );

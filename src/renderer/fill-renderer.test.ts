@@ -116,6 +116,8 @@ describe("renderOutlineAttrs", () => {
       width: 12700,
       fill: { type: "solid", color: { hex: "#000000", alpha: 1 } },
       dashStyle: "solid",
+      headEnd: null,
+      tailEnd: null,
     });
     expect(result).toContain('stroke="#000000"');
     expect(result).toContain("stroke-width=");
@@ -126,6 +128,8 @@ describe("renderOutlineAttrs", () => {
       width: 12700,
       fill: { type: "solid", color: { hex: "#000000", alpha: 1 } },
       dashStyle: "dash",
+      headEnd: null,
+      tailEnd: null,
     });
     expect(result).toContain("stroke-dasharray=");
   });
