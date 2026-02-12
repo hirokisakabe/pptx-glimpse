@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { parsePresentation } from "./presentation-parser.js";
+import { initWarningLogger } from "../warning-logger.js";
 
 describe("parsePresentation", () => {
   it("parses valid presentation XML", () => {
@@ -21,22 +22,25 @@ describe("parsePresentation", () => {
   });
 
   it("warns and returns defaults when presentation root is missing", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const xml = `<other/>`;
     const result = parsePresentation(xml);
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Presentation: missing root element "presentation"'),
+      expect.stringContaining('missing root element "presentation" in XML'),
     );
     expect(result.slideSize.width).toBe(9144000);
     expect(result.slideSize.height).toBe(5143500);
     expect(result.slideRIds).toEqual([]);
 
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("warns and uses default size when sldSz is missing", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const xml = `
@@ -46,11 +50,12 @@ describe("parsePresentation", () => {
     `;
     const result = parsePresentation(xml);
 
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Presentation: sldSz missing"));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("sldSz missing"));
     expect(result.slideSize.width).toBe(9144000);
     expect(result.slideSize.height).toBe(5143500);
 
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("parses defaultTextStyle with multiple levels", () => {

@@ -30,6 +30,8 @@ import type { ColorMap } from "./model/theme.js";
 import type { PlaceholderStyleInfo } from "./model/text.js";
 import type { SlideElement } from "./model/shape.js";
 import { applyTextStyleInheritance } from "./text-style-resolver.js";
+import type { LogLevel } from "./warning-logger.js";
+import { initWarningLogger, flushWarnings } from "./warning-logger.js";
 
 export interface ConvertOptions {
   /** 変換対象のスライド番号 (1始まり)。未指定で全スライド */
@@ -38,6 +40,8 @@ export interface ConvertOptions {
   width?: number;
   /** 出力画像の高さ (ピクセル)。widthと同時指定時はwidthが優先 */
   height?: number;
+  /** 警告ログレベル。デフォルト: "off" */
+  logLevel?: LogLevel;
 }
 
 export interface SlideSvg {
@@ -56,6 +60,8 @@ export async function convertPptxToSvg(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
 ): Promise<SlideSvg[]> {
+  initWarningLogger(options?.logLevel ?? "off");
+
   const archive = await readPptx(input);
 
   // Parse presentation.xml
@@ -211,6 +217,8 @@ export async function convertPptxToSvg(
     const svg = renderSlideToSvg(slide, presInfo.slideSize);
     results.push({ slideNumber, svg });
   }
+
+  flushWarnings();
 
   return results;
 }

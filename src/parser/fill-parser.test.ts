@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { parseFillFromNode } from "./fill-parser.js";
+import { initWarningLogger } from "../warning-logger.js";
 import type { FillParseContext } from "./fill-parser.js";
 import { ColorResolver } from "../color/color-resolver.js";
 import type { PptxArchive } from "./pptx-reader.js";
@@ -39,15 +40,17 @@ function createColorResolver() {
 
 describe("parseFillFromNode", () => {
   it("warns when gradFill has no gsLst", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
     const node = { gradFill: {} };
     const result = parseFillFromNode(node, createColorResolver());
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("GradientFill: gsLst not found, skipping gradient"),
+      expect.stringContaining("gsLst not found, skipping gradient"),
     );
     expect(result).toBeNull();
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("does not warn for valid gradient fill", () => {

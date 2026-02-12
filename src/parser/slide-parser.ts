@@ -45,8 +45,7 @@ import {
   parseDefaultRunProperties,
   resolveThemeFont,
 } from "./text-style-parser.js";
-
-const WARN_PREFIX = "[pptx-glimpse]";
+import { warn, debug } from "../warning-logger.js";
 
 const SHAPE_TAGS = new Set(["sp", "pic", "cxnSp", "grpSp", "graphicFrame"]);
 
@@ -77,7 +76,7 @@ export function parseSlide(
   const parsed = parseXml(slideXml) as any;
   const sld = parsed.sld;
   if (!sld) {
-    console.warn(`${WARN_PREFIX} Slide ${slideNumber}: missing root element "sld" in XML`);
+    debug("slide.missing", `missing root element "sld" in XML`, `Slide ${slideNumber}`);
   }
 
   const relsPath = slidePath.replace("ppt/slides/", "ppt/slides/_rels/") + ".rels";
@@ -189,7 +188,7 @@ export function parseShapeTree(
     if (shape) {
       elements.push(shape);
     } else {
-      console.warn(`${WARN_PREFIX} ${ctx}: shape skipped (parse returned null)`);
+      debug("shape.skipped", "shape skipped (parse returned null)", ctx);
     }
   }
 
@@ -199,7 +198,7 @@ export function parseShapeTree(
     if (img) {
       elements.push(img);
     } else {
-      console.warn(`${WARN_PREFIX} ${ctx}: image skipped (parse returned null)`);
+      debug("image.skipped", "image skipped (parse returned null)", ctx);
     }
   }
 
@@ -209,7 +208,7 @@ export function parseShapeTree(
     if (connector) {
       elements.push(connector);
     } else {
-      console.warn(`${WARN_PREFIX} ${ctx}: connector skipped (parse returned null)`);
+      debug("connector.skipped", "connector skipped (parse returned null)", ctx);
     }
   }
 
@@ -219,7 +218,7 @@ export function parseShapeTree(
     if (group) {
       elements.push(group);
     } else {
-      console.warn(`${WARN_PREFIX} ${ctx}: group skipped (parse returned null)`);
+      debug("group.skipped", "group skipped (parse returned null)", ctx);
     }
   }
 
@@ -229,7 +228,7 @@ export function parseShapeTree(
     if (chart) {
       elements.push(chart);
     } else {
-      console.warn(`${WARN_PREFIX} ${ctx}: graphicFrame skipped (parse returned null)`);
+      debug("graphicFrame.skipped", "graphicFrame skipped (parse returned null)", ctx);
     }
   }
 
@@ -365,7 +364,7 @@ function parseAndPushElement(
       if (shape) {
         elements.push(shape);
       } else {
-        console.warn(`${WARN_PREFIX} ${ctx}: shape skipped (parse returned null)`);
+        debug("shape.skipped", "shape skipped (parse returned null)", ctx);
       }
       break;
     }
@@ -374,7 +373,7 @@ function parseAndPushElement(
       if (img) {
         elements.push(img);
       } else {
-        console.warn(`${WARN_PREFIX} ${ctx}: image skipped (parse returned null)`);
+        debug("image.skipped", "image skipped (parse returned null)", ctx);
       }
       break;
     }
@@ -383,7 +382,7 @@ function parseAndPushElement(
       if (connector) {
         elements.push(connector);
       } else {
-        console.warn(`${WARN_PREFIX} ${ctx}: connector skipped (parse returned null)`);
+        debug("connector.skipped", "connector skipped (parse returned null)", ctx);
       }
       break;
     }
@@ -403,7 +402,7 @@ function parseAndPushElement(
       if (group) {
         elements.push(group);
       } else {
-        console.warn(`${WARN_PREFIX} ${ctx}: group skipped (parse returned null)`);
+        debug("group.skipped", "group skipped (parse returned null)", ctx);
       }
       break;
     }
@@ -419,7 +418,7 @@ function parseAndPushElement(
       if (gfResult) {
         elements.push(gfResult);
       } else {
-        console.warn(`${WARN_PREFIX} ${ctx}: graphicFrame skipped (parse returned null)`);
+        debug("graphicFrame.skipped", "graphicFrame skipped (parse returned null)", ctx);
       }
       break;
     }
@@ -439,6 +438,17 @@ function parseShape(
 
   const transform = parseTransform(spPr.xfrm);
   if (!transform) return null;
+
+  // Unsupported feature detection
+  if (sp.style) {
+    warn("sp.style", "shape style references (lnRef/fillRef/effectRef) not implemented");
+  }
+  if (spPr.scene3d) {
+    warn("spPr.scene3d", "3D scene/camera not implemented");
+  }
+  if (spPr.sp3d) {
+    warn("spPr.sp3d", "3D extrusion/bevel not implemented");
+  }
 
   const geometry = parseGeometry(spPr);
   const fill = parseFillFromNode(spPr, colorResolver, fillContext);
@@ -637,6 +647,9 @@ function parseGraphicFrame(
     );
   }
 
+  const uri = graphicData["@_uri"] ?? "unknown";
+  warn("graphicFrame.unsupported", `unsupported graphicFrame content (uri: ${uri})`);
+
   return null;
 }
 
@@ -768,23 +781,23 @@ function parseTransform(xfrm: any): Transform | null {
   let rotation = Number(xfrm["@_rot"] ?? 0);
 
   if (Number.isNaN(offsetX)) {
-    console.warn(`${WARN_PREFIX} NaN detected in transform offsetX, defaulting to 0`);
+    debug("transform.nan", "NaN detected in transform offsetX, defaulting to 0");
     offsetX = 0;
   }
   if (Number.isNaN(offsetY)) {
-    console.warn(`${WARN_PREFIX} NaN detected in transform offsetY, defaulting to 0`);
+    debug("transform.nan", "NaN detected in transform offsetY, defaulting to 0");
     offsetY = 0;
   }
   if (Number.isNaN(extentWidth)) {
-    console.warn(`${WARN_PREFIX} NaN detected in transform extentWidth, defaulting to 0`);
+    debug("transform.nan", "NaN detected in transform extentWidth, defaulting to 0");
     extentWidth = 0;
   }
   if (Number.isNaN(extentHeight)) {
-    console.warn(`${WARN_PREFIX} NaN detected in transform extentHeight, defaulting to 0`);
+    debug("transform.nan", "NaN detected in transform extentHeight, defaulting to 0");
     extentHeight = 0;
   }
   if (Number.isNaN(rotation)) {
-    console.warn(`${WARN_PREFIX} NaN detected in transform rotation, defaulting to 0`);
+    debug("transform.nan", "NaN detected in transform rotation, defaulting to 0");
     rotation = 0;
   }
 
@@ -841,6 +854,15 @@ export function parseTextBody(
   if (!txBody) return null;
 
   const bodyPr = txBody.bodyPr;
+
+  // Unsupported feature detection
+  const vert = bodyPr?.["@_vert"];
+  if (vert && vert !== "horz") {
+    warn("bodyPr@vert", `vertical text (vert="${vert}") not implemented`);
+  }
+  if (bodyPr?.["@_numCol"] && Number(bodyPr["@_numCol"]) > 1) {
+    warn("bodyPr@numCol", "multi-column text not implemented");
+  }
 
   let autoFit: BodyProperties["autoFit"] = "noAutofit";
   let fontScale = 1;
@@ -938,6 +960,14 @@ function parseParagraph(
   fontScheme?: FontScheme | null,
   lstStyle?: DefaultTextStyle,
 ): Paragraph {
+  // Unsupported feature detection
+  if (p.fld) {
+    const fldType = Array.isArray(p.fld)
+      ? (p.fld[0]?.["@_type"] ?? "unknown")
+      : (p.fld["@_type"] ?? "unknown");
+    warn("p.fld", `field code (type="${fldType}") not implemented`);
+  }
+
   const pPr = p.pPr;
   const level = Number(pPr?.["@_lvl"] ?? 0);
 
@@ -1018,6 +1048,14 @@ function parseRunProperties(
       baseline: 0,
       hyperlink: null,
     };
+  }
+
+  // Unsupported feature detection
+  if (rPr.effectLst) {
+    warn("rPr.effectLst", "text run effects not implemented");
+  }
+  if (rPr.highlight) {
+    warn("rPr.highlight", "text highlighting not implemented");
   }
 
   const fontSize = rPr["@_sz"]
