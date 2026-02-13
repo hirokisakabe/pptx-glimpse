@@ -1,5 +1,5 @@
 import type { Paragraph, RunProperties } from "../model/text.js";
-import { measureTextWidth } from "./text-measure.js";
+import { getTextMeasurer } from "../text-measurer.js";
 
 export interface LineSegment {
   text: string;
@@ -131,7 +131,13 @@ function tokenizeRuns(
         const fontFamilyEa = run.properties.fontFamilyEa;
         const fragments = splitTextIntoFragments(part);
         for (const { fragment, breakable } of fragments) {
-          const width = measureTextWidth(fragment, fontSize, bold, fontFamily, fontFamilyEa);
+          const width = getTextMeasurer().measureTextWidth(
+            fragment,
+            fontSize,
+            bold,
+            fontFamily,
+            fontFamilyEa,
+          );
           tokens.push({
             text: fragment,
             properties: run.properties,
@@ -153,7 +159,13 @@ function tokenizeRuns(
     const fragments = splitTextIntoFragments(run.text);
 
     for (const { fragment, breakable } of fragments) {
-      const width = measureTextWidth(fragment, fontSize, bold, fontFamily, fontFamilyEa);
+      const width = getTextMeasurer().measureTextWidth(
+        fragment,
+        fontSize,
+        bold,
+        fontFamily,
+        fontFamilyEa,
+      );
       tokens.push({
         text: fragment,
         properties: run.properties,
@@ -194,7 +206,13 @@ function splitTokenByChars(
   const fontFamilyEa = token.properties.fontFamilyEa;
 
   for (const char of token.text) {
-    const charWidth = measureTextWidth(char, fontSize, bold, fontFamily, fontFamilyEa);
+    const charWidth = getTextMeasurer().measureTextWidth(
+      char,
+      fontSize,
+      bold,
+      fontFamily,
+      fontFamilyEa,
+    );
 
     if (currentWidth + charWidth > availableWidth && currentLine.length > 0) {
       lines.push(currentLine);

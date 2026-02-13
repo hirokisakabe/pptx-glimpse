@@ -33,6 +33,25 @@ import type { SlideElement } from "./model/shape.js";
 import { applyTextStyleInheritance } from "./text-style-resolver.js";
 import type { LogLevel } from "./warning-logger.js";
 import { initWarningLogger, flushWarnings } from "./warning-logger.js";
+import type { TextMeasurer } from "./text-measurer.js";
+import { setTextMeasurer, resetTextMeasurer } from "./text-measurer.js";
+
+export interface FontOptions {
+  /** resvg-wasm に渡すフォントファイルパス (Node.js 向け) */
+  fontFiles?: string[];
+  /** resvg-wasm に渡すフォントディレクトリパス (Node.js 向け) */
+  fontDirs?: string[];
+  /** resvg-wasm に渡すフォントバッファ (ブラウザ/Node.js 両対応) */
+  fontBuffers?: Array<{ name?: string; data: ArrayBuffer | Uint8Array }>;
+  /** resvg-wasm でシステムフォントを読み込むか (デフォルト: false) */
+  loadSystemFonts?: boolean;
+  /** resvg-wasm のデフォルトフォントファミリー */
+  defaultFontFamily?: string;
+  /** resvg-wasm の sans-serif フォントファミリー */
+  sansSerifFamily?: string;
+  /** resvg-wasm の serif フォントファミリー */
+  serifFamily?: string;
+}
 
 export interface ConvertOptions {
   /** 変換対象のスライド番号 (1始まり)。未指定で全スライド */
@@ -43,6 +62,10 @@ export interface ConvertOptions {
   height?: number;
   /** 警告ログレベル。デフォルト: "off" */
   logLevel?: LogLevel;
+  /** テキスト計測のカスタム実装 */
+  textMeasurer?: TextMeasurer;
+  /** PNG 変換時のフォント設定 (resvg-wasm オプション) */
+  fonts?: FontOptions;
 }
 
 export interface SlideSvg {
@@ -61,189 +84,201 @@ export async function convertPptxToSvg(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
 ): Promise<SlideSvg[]> {
-  initWarningLogger(options?.logLevel ?? "off");
-
-  const archive = await readPptx(input);
-
-  // Parse presentation.xml
-  const presentationXml = archive.files.get("ppt/presentation.xml");
-  if (!presentationXml) throw new Error("Invalid PPTX: missing ppt/presentation.xml");
-  const presInfo = parsePresentation(presentationXml);
-
-  // Parse presentation relationships
-  const presRelsXml = archive.files.get("ppt/_rels/presentation.xml.rels");
-  const presRels = presRelsXml ? parseRelationships(presRelsXml) : new Map<string, Relationship>();
-
-  // Parse theme
-  let theme: Theme = {
-    colorScheme: defaultColorScheme(),
-    fontScheme: {
-      majorFont: "Calibri",
-      minorFont: "Calibri",
-      majorFontEa: null,
-      minorFontEa: null,
-    },
-  };
-  for (const [, rel] of presRels) {
-    if (rel.type.includes("theme")) {
-      const themePath = resolveRelationshipTarget("ppt/presentation.xml", rel.target);
-      const themeXml = archive.files.get(themePath);
-      if (themeXml) {
-        theme = parseTheme(themeXml);
-      }
-      break;
-    }
+  if (options?.textMeasurer) {
+    setTextMeasurer(options.textMeasurer);
   }
+  try {
+    initWarningLogger(options?.logLevel ?? "off");
 
-  // Parse slide master for color map and background
-  let colorMap: ColorMap = defaultColorMap();
-  let masterPath: string | null = null;
-  for (const [, rel] of presRels) {
-    if (rel.type.includes("slideMaster")) {
-      masterPath = resolveRelationshipTarget("ppt/presentation.xml", rel.target);
-      const masterXml = archive.files.get(masterPath);
-      if (masterXml) {
-        colorMap = parseSlideMasterColorMap(masterXml);
-      }
-      break;
-    }
-  }
+    const archive = await readPptx(input);
 
-  const colorResolver = new ColorResolver(theme.colorScheme, colorMap);
+    // Parse presentation.xml
+    const presentationXml = archive.files.get("ppt/presentation.xml");
+    if (!presentationXml) throw new Error("Invalid PPTX: missing ppt/presentation.xml");
+    const presInfo = parsePresentation(presentationXml);
 
-  // Parse master background and shapes (used as fallback)
-  const masterXml = masterPath ? archive.files.get(masterPath) : undefined;
-  let masterFillContext: FillParseContext | undefined;
-  if (masterPath) {
-    const masterRelsPath = buildRelsPath(masterPath);
-    const masterRelsXml = archive.files.get(masterRelsPath);
-    const masterRels = masterRelsXml
-      ? parseRelationships(masterRelsXml)
+    // Parse presentation relationships
+    const presRelsXml = archive.files.get("ppt/_rels/presentation.xml.rels");
+    const presRels = presRelsXml
+      ? parseRelationships(presRelsXml)
       : new Map<string, Relationship>();
-    masterFillContext = { rels: masterRels, archive, basePath: masterPath };
-  }
-  const masterBackground = masterXml
-    ? parseSlideMasterBackground(masterXml, colorResolver, masterFillContext)
-    : null;
-  const masterElements =
-    masterPath && masterXml
-      ? parseSlideMasterElements(
-          masterXml,
-          masterPath,
-          archive,
-          colorResolver,
-          theme.fontScheme,
-          theme.fmtScheme,
-        )
-      : [];
-  const masterTxStyles = masterXml ? parseSlideMasterTxStyles(masterXml, colorResolver) : undefined;
-  const masterPlaceholderStyles = masterXml
-    ? parseSlideMasterPlaceholderStyles(masterXml, colorResolver)
-    : [];
-  // Resolve slide paths from relationships
-  const slidePaths: { slideNumber: number; path: string }[] = [];
-  for (let i = 0; i < presInfo.slideRIds.length; i++) {
-    const rId = presInfo.slideRIds[i];
-    const rel = presRels.get(rId);
-    if (rel) {
-      const path = resolveRelationshipTarget("ppt/presentation.xml", rel.target);
-      slidePaths.push({ slideNumber: i + 1, path });
+
+    // Parse theme
+    let theme: Theme = {
+      colorScheme: defaultColorScheme(),
+      fontScheme: {
+        majorFont: "Calibri",
+        minorFont: "Calibri",
+        majorFontEa: null,
+        minorFontEa: null,
+      },
+    };
+    for (const [, rel] of presRels) {
+      if (rel.type.includes("theme")) {
+        const themePath = resolveRelationshipTarget("ppt/presentation.xml", rel.target);
+        const themeXml = archive.files.get(themePath);
+        if (themeXml) {
+          theme = parseTheme(themeXml);
+        }
+        break;
+      }
     }
-  }
 
-  // Filter slides if specified
-  const targetSlides = options?.slides
-    ? slidePaths.filter((s) => options.slides!.includes(s.slideNumber))
-    : slidePaths;
+    // Parse slide master for color map and background
+    let colorMap: ColorMap = defaultColorMap();
+    let masterPath: string | null = null;
+    for (const [, rel] of presRels) {
+      if (rel.type.includes("slideMaster")) {
+        masterPath = resolveRelationshipTarget("ppt/presentation.xml", rel.target);
+        const masterXml = archive.files.get(masterPath);
+        if (masterXml) {
+          colorMap = parseSlideMasterColorMap(masterXml);
+        }
+        break;
+      }
+    }
 
-  // Parse and render each slide
-  const results: SlideSvg[] = [];
-  for (const { slideNumber, path } of targetSlides) {
-    const slideXml = archive.files.get(path);
-    if (!slideXml) continue;
+    const colorResolver = new ColorResolver(theme.colorScheme, colorMap);
 
-    const slide = parseSlide(
-      slideXml,
-      path,
-      slideNumber,
-      archive,
-      colorResolver,
-      theme.fontScheme,
-      theme.fmtScheme,
-    );
+    // Parse master background and shapes (used as fallback)
+    const masterXml = masterPath ? archive.files.get(masterPath) : undefined;
+    let masterFillContext: FillParseContext | undefined;
+    if (masterPath) {
+      const masterRelsPath = buildRelsPath(masterPath);
+      const masterRelsXml = archive.files.get(masterRelsPath);
+      const masterRels = masterRelsXml
+        ? parseRelationships(masterRelsXml)
+        : new Map<string, Relationship>();
+      masterFillContext = { rels: masterRels, archive, basePath: masterPath };
+    }
+    const masterBackground = masterXml
+      ? parseSlideMasterBackground(masterXml, colorResolver, masterFillContext)
+      : null;
+    const masterElements =
+      masterPath && masterXml
+        ? parseSlideMasterElements(
+            masterXml,
+            masterPath,
+            archive,
+            colorResolver,
+            theme.fontScheme,
+            theme.fmtScheme,
+          )
+        : [];
+    const masterTxStyles = masterXml
+      ? parseSlideMasterTxStyles(masterXml, colorResolver)
+      : undefined;
+    const masterPlaceholderStyles = masterXml
+      ? parseSlideMasterPlaceholderStyles(masterXml, colorResolver)
+      : [];
+    // Resolve slide paths from relationships
+    const slidePaths: { slideNumber: number; path: string }[] = [];
+    for (let i = 0; i < presInfo.slideRIds.length; i++) {
+      const rId = presInfo.slideRIds[i];
+      const rel = presRels.get(rId);
+      if (rel) {
+        const path = resolveRelationshipTarget("ppt/presentation.xml", rel.target);
+        slidePaths.push({ slideNumber: i + 1, path });
+      }
+    }
 
-    // Resolve slide layout
-    let layoutElements: SlideElement[] = [];
-    let layoutPlaceholderStyles: PlaceholderStyleInfo[] = [];
-    let layoutShowMasterSp = true;
-    const slideRelsPath = buildRelsPath(path);
-    const slideRelsXml = archive.files.get(slideRelsPath);
-    if (slideRelsXml) {
-      const slideRels = parseRelationships(slideRelsXml);
-      for (const [, rel] of slideRels) {
-        if (rel.type.includes("slideLayout")) {
-          const layoutPath = resolveRelationshipTarget(path, rel.target);
-          const layoutXml = archive.files.get(layoutPath);
-          if (layoutXml) {
-            // Fallback background: slide → layout → master
-            if (!slide.background) {
-              const layoutRelsPath = buildRelsPath(layoutPath);
-              const layoutRelsXml = archive.files.get(layoutRelsPath);
-              const layoutRels = layoutRelsXml
-                ? parseRelationships(layoutRelsXml)
-                : new Map<string, Relationship>();
-              const layoutFillContext: FillParseContext = {
-                rels: layoutRels,
-                archive,
-                basePath: layoutPath,
-              };
-              slide.background = parseSlideLayoutBackground(
+    // Filter slides if specified
+    const targetSlides = options?.slides
+      ? slidePaths.filter((s) => options.slides!.includes(s.slideNumber))
+      : slidePaths;
+
+    // Parse and render each slide
+    const results: SlideSvg[] = [];
+    for (const { slideNumber, path } of targetSlides) {
+      const slideXml = archive.files.get(path);
+      if (!slideXml) continue;
+
+      const slide = parseSlide(
+        slideXml,
+        path,
+        slideNumber,
+        archive,
+        colorResolver,
+        theme.fontScheme,
+        theme.fmtScheme,
+      );
+
+      // Resolve slide layout
+      let layoutElements: SlideElement[] = [];
+      let layoutPlaceholderStyles: PlaceholderStyleInfo[] = [];
+      let layoutShowMasterSp = true;
+      const slideRelsPath = buildRelsPath(path);
+      const slideRelsXml = archive.files.get(slideRelsPath);
+      if (slideRelsXml) {
+        const slideRels = parseRelationships(slideRelsXml);
+        for (const [, rel] of slideRels) {
+          if (rel.type.includes("slideLayout")) {
+            const layoutPath = resolveRelationshipTarget(path, rel.target);
+            const layoutXml = archive.files.get(layoutPath);
+            if (layoutXml) {
+              // Fallback background: slide → layout → master
+              if (!slide.background) {
+                const layoutRelsPath = buildRelsPath(layoutPath);
+                const layoutRelsXml = archive.files.get(layoutRelsPath);
+                const layoutRels = layoutRelsXml
+                  ? parseRelationships(layoutRelsXml)
+                  : new Map<string, Relationship>();
+                const layoutFillContext: FillParseContext = {
+                  rels: layoutRels,
+                  archive,
+                  basePath: layoutPath,
+                };
+                slide.background = parseSlideLayoutBackground(
+                  layoutXml,
+                  colorResolver,
+                  layoutFillContext,
+                );
+              }
+              // Parse layout shapes
+              layoutElements = parseSlideLayoutElements(
                 layoutXml,
+                layoutPath,
+                archive,
                 colorResolver,
-                layoutFillContext,
+                theme.fontScheme,
+                theme.fmtScheme,
               );
+              // Extract placeholder styles for text style inheritance
+              layoutPlaceholderStyles = parseSlideLayoutPlaceholderStyles(layoutXml, colorResolver);
+              layoutShowMasterSp = parseSlideLayoutShowMasterSp(layoutXml);
             }
-            // Parse layout shapes
-            layoutElements = parseSlideLayoutElements(
-              layoutXml,
-              layoutPath,
-              archive,
-              colorResolver,
-              theme.fontScheme,
-              theme.fmtScheme,
-            );
-            // Extract placeholder styles for text style inheritance
-            layoutPlaceholderStyles = parseSlideLayoutPlaceholderStyles(layoutXml, colorResolver);
-            layoutShowMasterSp = parseSlideLayoutShowMasterSp(layoutXml);
+            break;
           }
-          break;
         }
       }
+      if (!slide.background) {
+        slide.background = masterBackground;
+      }
+
+      // Apply text style inheritance chain before merging
+      applyTextStyleInheritance(slide.elements, {
+        layoutPlaceholderStyles,
+        masterPlaceholderStyles,
+        txStyles: masterTxStyles,
+        defaultTextStyle: presInfo.defaultTextStyle,
+        fontScheme: theme.fontScheme,
+      });
+
+      // Merge shapes: master (back) → layout → slide (front)
+      const effectiveMasterElements =
+        slide.showMasterSp && layoutShowMasterSp ? masterElements : [];
+      slide.elements = mergeElements(effectiveMasterElements, layoutElements, slide.elements);
+
+      const svg = renderSlideToSvg(slide, presInfo.slideSize);
+      results.push({ slideNumber, svg });
     }
-    if (!slide.background) {
-      slide.background = masterBackground;
-    }
 
-    // Apply text style inheritance chain before merging
-    applyTextStyleInheritance(slide.elements, {
-      layoutPlaceholderStyles,
-      masterPlaceholderStyles,
-      txStyles: masterTxStyles,
-      defaultTextStyle: presInfo.defaultTextStyle,
-      fontScheme: theme.fontScheme,
-    });
+    flushWarnings();
 
-    // Merge shapes: master (back) → layout → slide (front)
-    const effectiveMasterElements = slide.showMasterSp && layoutShowMasterSp ? masterElements : [];
-    slide.elements = mergeElements(effectiveMasterElements, layoutElements, slide.elements);
-
-    const svg = renderSlideToSvg(slide, presInfo.slideSize);
-    results.push({ slideNumber, svg });
+    return results;
+  } finally {
+    resetTextMeasurer();
   }
-
-  flushWarnings();
-
-  return results;
 }
 
 export async function convertPptxToPng(
@@ -257,7 +292,7 @@ export async function convertPptxToPng(
 
   const results: SlideImage[] = [];
   for (const { slideNumber, svg } of svgResults) {
-    const pngResult = await svgToPng(svg, { width, height });
+    const pngResult = await svgToPng(svg, { width, height, fonts: options?.fonts });
     results.push({
       slideNumber,
       png: pngResult.png,

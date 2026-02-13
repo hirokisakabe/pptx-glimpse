@@ -60,6 +60,14 @@
   },
   "author": "hirokisakabe",
   "license": "MIT",
+  "peerDependencies": {
+    "opentype.js": "^1.3.4"
+  },
+  "peerDependenciesMeta": {
+    "opentype.js": {
+      "optional": true
+    }
+  },
   "dependencies": {
     "@resvg/resvg-wasm": "^2.6.2",
     "fast-xml-parser": "^4.5.0",

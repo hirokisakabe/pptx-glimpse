@@ -13,7 +13,7 @@ import { EMU_PER_INCH } from "../utils/constants.js";
 import { emuToPixels } from "../utils/emu.js";
 import { wrapParagraph } from "../utils/text-wrap.js";
 import { getMetricsFallbackFont } from "../data/font-metrics.js";
-import { getLineHeightRatio } from "../utils/text-measure.js";
+import { getTextMeasurer } from "../text-measurer.js";
 
 const PX_PER_PT = 96 / 72;
 const DEFAULT_LINE_SPACING = 1.0;
@@ -508,7 +508,10 @@ function computeLineNaturalHeight(
   let maxHeight = 0;
   for (const seg of segments) {
     const fontSize = (seg.properties.fontSize ?? defaultFontSize) * fontScale;
-    const ratio = getLineHeightRatio(seg.properties.fontFamily, seg.properties.fontFamilyEa);
+    const ratio = getTextMeasurer().getLineHeightRatio(
+      seg.properties.fontFamily,
+      seg.properties.fontFamilyEa,
+    );
     maxHeight = Math.max(maxHeight, fontSize * ratio);
   }
   return maxHeight > 0 ? maxHeight : defaultFontSize * fontScale * 1.2;
@@ -707,7 +710,10 @@ function getDefaultLineHeightRatio(paragraphs: TextBody["paragraphs"]): number {
   for (const p of paragraphs) {
     for (const r of p.runs) {
       if (r.properties.fontFamily || r.properties.fontFamilyEa) {
-        return getLineHeightRatio(r.properties.fontFamily, r.properties.fontFamilyEa);
+        return getTextMeasurer().getLineHeightRatio(
+          r.properties.fontFamily,
+          r.properties.fontFamilyEa,
+        );
       }
     }
   }
