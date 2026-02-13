@@ -9,8 +9,8 @@ function createMockCanvas() {
   });
   const ctx = { font: "", measureText };
   const canvas = {
-    getContext: vi.fn().mockReturnValue(ctx),
-  } as unknown as HTMLCanvasElement;
+    getContext: (_id: "2d") => ctx,
+  };
   return { canvas, ctx, measureText };
 }
 
@@ -38,19 +38,20 @@ describe("CanvasTextMeasurer", () => {
   });
 
   it("fontBoundingBox がない場合は 1.2 にフォールバックする", () => {
-    const measureText = vi.fn().mockReturnValue({ width: 100 });
-    const ctx = { font: "", measureText };
     const canvas = {
-      getContext: vi.fn().mockReturnValue(ctx),
-    } as unknown as HTMLCanvasElement;
+      getContext: (_id: "2d") => ({
+        font: "",
+        measureText: (_text: string) => ({ width: 100 }),
+      }),
+    };
     const measurer = new CanvasTextMeasurer(canvas);
     expect(measurer.getLineHeightRatio("Arial")).toBe(1.2);
   });
 
   it("getContext が null を返す場合はエラーを投げる", () => {
     const canvas = {
-      getContext: vi.fn().mockReturnValue(null),
-    } as unknown as HTMLCanvasElement;
+      getContext: (_id: "2d") => null,
+    };
     expect(() => new CanvasTextMeasurer(canvas)).toThrow("Failed to get 2D context");
   });
 });
