@@ -20,8 +20,11 @@ let nativeResvg: ResvgConstructor | null | undefined; // undefined = not yet tri
 export async function tryLoadNativeResvg(): Promise<ResvgConstructor | null> {
   if (nativeResvg !== undefined) return nativeResvg;
   try {
-    const mod = await import("@resvg/resvg-js");
-    nativeResvg = mod.Resvg as ResvgConstructor;
+    // Use a variable to prevent bundlers from statically resolving this optional import
+    const specifier = "@resvg/resvg-js";
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    const mod: { Resvg: ResvgConstructor } = await import(/* @vite-ignore */ specifier);
+    nativeResvg = mod.Resvg;
     return nativeResvg;
   } catch {
     nativeResvg = null;
