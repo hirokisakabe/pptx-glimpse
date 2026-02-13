@@ -52,32 +52,53 @@ export function renderSlideToSvg(slide: Slide, slideSize: SlideSize): string {
 }
 
 function renderElement(element: SlideElement, defs: string[]): string | null {
+  let rendered: string | null = null;
   switch (element.type) {
     case "shape": {
       const result = renderShape(element);
-      // Extract defs from result if present
       extractDefs(result, defs);
-      return removeDefs(result);
+      rendered = removeDefs(result);
+      break;
     }
     case "image": {
       const imgResult = renderImage(element);
       extractDefs(imgResult, defs);
-      return removeDefs(imgResult);
+      rendered = removeDefs(imgResult);
+      break;
     }
     case "connector": {
       const cxnResult = renderConnector(element);
       extractDefs(cxnResult, defs);
-      return removeDefs(cxnResult);
+      rendered = removeDefs(cxnResult);
+      break;
     }
     case "group":
-      return renderGroup(element, defs);
+      rendered = renderGroup(element, defs);
+      break;
     case "chart":
-      return renderChart(element);
+      rendered = renderChart(element);
+      break;
     case "table":
-      return renderTable(element, defs);
+      rendered = renderTable(element, defs);
+      break;
     default:
       return null;
   }
+
+  if (rendered && "altText" in element && element.altText) {
+    rendered = addAriaLabel(rendered, element.altText);
+  }
+
+  return rendered;
+}
+
+function addAriaLabel(svgFragment: string, altText: string): string {
+  const escaped = altText
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return svgFragment.replace(/^<(g|image|path)\b/, `<$1 role="img" aria-label="${escaped}"`);
 }
 
 function renderGroup(group: GroupElement, defs: string[]): string {

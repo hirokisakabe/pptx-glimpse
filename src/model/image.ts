@@ -15,4 +15,5 @@ export interface ImageElement {
   mimeType: string;
   effects: EffectList | null;
   srcRect: SrcRect | null;
+  altText?: string;
 }

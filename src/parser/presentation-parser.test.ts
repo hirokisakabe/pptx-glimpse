@@ -173,4 +173,79 @@ describe("parsePresentation", () => {
 
     warnSpy.mockRestore();
   });
+
+  it("parses embeddedFontLst", () => {
+    const xml = `
+      <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                       xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+                       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <p:sldSz cx="9144000" cy="5143500"/>
+        <p:sldIdLst>
+          <p:sldId id="256" r:id="rId2"/>
+        </p:sldIdLst>
+        <p:embeddedFontLst>
+          <p:embeddedFont>
+            <p:font typeface="CustomFont" panose="020B0604020202020204" pitchFamily="34" charset="0"/>
+            <p:regular r:id="rId10"/>
+          </p:embeddedFont>
+          <p:embeddedFont>
+            <p:font typeface="AnotherFont" charset="128"/>
+          </p:embeddedFont>
+        </p:embeddedFontLst>
+      </p:presentation>
+    `;
+    const result = parsePresentation(xml);
+
+    expect(result.embeddedFonts).toBeDefined();
+    expect(result.embeddedFonts).toHaveLength(2);
+    expect(result.embeddedFonts![0].typeface).toBe("CustomFont");
+    expect(result.embeddedFonts![0].panose).toBe("020B0604020202020204");
+    expect(result.embeddedFonts![0].pitchFamily).toBe(34);
+    expect(result.embeddedFonts![0].charset).toBe(0);
+    expect(result.embeddedFonts![1].typeface).toBe("AnotherFont");
+    expect(result.embeddedFonts![1].charset).toBe(128);
+  });
+
+  it("returns undefined embeddedFonts when not present", () => {
+    const xml = `
+      <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <p:sldSz cx="9144000" cy="5143500"/>
+        <p:sldIdLst/>
+      </p:presentation>
+    `;
+    const result = parsePresentation(xml);
+    expect(result.embeddedFonts).toBeUndefined();
+  });
+
+  it("parses modifyVerifier (protection)", () => {
+    const xml = `
+      <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <p:sldSz cx="9144000" cy="5143500"/>
+        <p:sldIdLst/>
+        <p:modifyVerifier algorithmName="SHA-512" hashValue="abc123==" saltValue="xyz789==" spinCount="100000"/>
+      </p:presentation>
+    `;
+    const result = parsePresentation(xml);
+
+    expect(result.protection).toBeDefined();
+    expect(result.protection!.modifyVerifier).toBeDefined();
+    expect(result.protection!.modifyVerifier!.algorithmName).toBe("SHA-512");
+    expect(result.protection!.modifyVerifier!.hashValue).toBe("abc123==");
+    expect(result.protection!.modifyVerifier!.saltValue).toBe("xyz789==");
+    expect(result.protection!.modifyVerifier!.spinCount).toBe(100000);
+  });
+
+  it("returns undefined protection when not present", () => {
+    const xml = `
+      <p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                       xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <p:sldSz cx="9144000" cy="5143500"/>
+        <p:sldIdLst/>
+      </p:presentation>
+    `;
+    const result = parsePresentation(xml);
+    expect(result.protection).toBeUndefined();
+  });
 });

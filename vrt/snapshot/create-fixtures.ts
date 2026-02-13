@@ -5316,6 +5316,176 @@ async function createSpAutofitFixture(): Promise<void> {
   savePptx(buffer, "sp-autofit.pptx");
 }
 
+// --- Style Reference ---
+async function createStyleReferenceFixture(): Promise<void> {
+  // Custom theme with fmtScheme containing fill/line/effect styles
+  const styleRefTheme = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<a:theme xmlns:a="${NS.a}" name="Office Theme">
+  <a:themeElements>
+    <a:clrScheme name="Office">
+      <a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>
+      <a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>
+      <a:dk2><a:srgbClr val="44546A"/></a:dk2>
+      <a:lt2><a:srgbClr val="E7E6E6"/></a:lt2>
+      <a:accent1><a:srgbClr val="4472C4"/></a:accent1>
+      <a:accent2><a:srgbClr val="ED7D31"/></a:accent2>
+      <a:accent3><a:srgbClr val="A5A5A5"/></a:accent3>
+      <a:accent4><a:srgbClr val="FFC000"/></a:accent4>
+      <a:accent5><a:srgbClr val="5B9BD5"/></a:accent5>
+      <a:accent6><a:srgbClr val="70AD47"/></a:accent6>
+      <a:hlink><a:srgbClr val="0563C1"/></a:hlink>
+      <a:folHlink><a:srgbClr val="954F72"/></a:folHlink>
+    </a:clrScheme>
+    <a:fontScheme name="Office">
+      <a:majorFont><a:latin typeface="Calibri Light"/></a:majorFont>
+      <a:minorFont><a:latin typeface="Calibri"/></a:minorFont>
+    </a:fontScheme>
+    <a:fmtScheme name="Office">
+      <a:fillStyleLst>
+        <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+        <a:gradFill rotWithShape="1">
+          <a:gsLst>
+            <a:gs pos="0"><a:schemeClr val="phClr"><a:lumMod val="110000"/></a:schemeClr></a:gs>
+            <a:gs pos="100000"><a:schemeClr val="phClr"><a:lumMod val="75000"/></a:schemeClr></a:gs>
+          </a:gsLst>
+          <a:lin ang="5400000" scaled="0"/>
+        </a:gradFill>
+      </a:fillStyleLst>
+      <a:lnStyleLst>
+        <a:ln w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>
+        <a:ln w="25400"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>
+        <a:ln w="38100"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln>
+      </a:lnStyleLst>
+      <a:effectStyleLst>
+        <a:effectStyle><a:effectLst/></a:effectStyle>
+        <a:effectStyle>
+          <a:effectLst>
+            <a:outerShdw blurRad="57150" dist="19050" dir="5400000" algn="ctr" rotWithShape="0">
+              <a:srgbClr val="000000"><a:alpha val="63000"/></a:srgbClr>
+            </a:outerShdw>
+          </a:effectLst>
+        </a:effectStyle>
+      </a:effectStyleLst>
+      <a:bgFillStyleLst>
+        <a:solidFill><a:schemeClr val="phClr"/></a:solidFill>
+      </a:bgFillStyleLst>
+    </a:fmtScheme>
+  </a:themeElements>
+</a:theme>`;
+
+  const shapes: string[] = [];
+
+  // Shape 1: fillRef=1 (solid fill via style), lnRef=1 (thin line via style)
+  const p1 = gridPosition(0, 0, 3, 2);
+  shapes.push(`<p:sp>
+  <p:nvSpPr><p:cNvPr id="2" name="StyleRef Solid"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="${p1.x}" y="${p1.y}"/><a:ext cx="${p1.w}" cy="${p1.h}"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+  <p:style>
+    <a:lnRef idx="1"><a:schemeClr val="accent1"/></a:lnRef>
+    <a:fillRef idx="1"><a:schemeClr val="accent1"/></a:fillRef>
+    <a:effectRef idx="0"><a:schemeClr val="accent1"/></a:effectRef>
+    <a:fontRef idx="minor"><a:schemeClr val="dk1"/></a:fontRef>
+  </p:style>
+  ${textBodyXmlHelper("fillRef=1, lnRef=1", { fontSize: 12 })}
+</p:sp>`);
+
+  // Shape 2: fillRef=2 (gradient fill via style), lnRef=2 (thick line via style)
+  const p2 = gridPosition(1, 0, 3, 2);
+  shapes.push(`<p:sp>
+  <p:nvSpPr><p:cNvPr id="3" name="StyleRef Gradient"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="${p2.x}" y="${p2.y}"/><a:ext cx="${p2.w}" cy="${p2.h}"/></a:xfrm>
+    <a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+  <p:style>
+    <a:lnRef idx="2"><a:schemeClr val="accent2"/></a:lnRef>
+    <a:fillRef idx="2"><a:schemeClr val="accent2"/></a:fillRef>
+    <a:effectRef idx="1"><a:schemeClr val="accent2"/></a:effectRef>
+    <a:fontRef idx="minor"><a:schemeClr val="dk1"/></a:fontRef>
+  </p:style>
+  ${textBodyXmlHelper("fillRef=2, lnRef=2, effectRef=1", { fontSize: 10 })}
+</p:sp>`);
+
+  // Shape 3: Direct fill overrides style ref (spPr has solidFill, style has fillRef)
+  const p3 = gridPosition(2, 0, 3, 2);
+  shapes.push(`<p:sp>
+  <p:nvSpPr><p:cNvPr id="4" name="Direct Override"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="${p3.x}" y="${p3.y}"/><a:ext cx="${p3.w}" cy="${p3.h}"/></a:xfrm>
+    <a:prstGeom prst="ellipse"><a:avLst/></a:prstGeom>
+    <a:solidFill><a:srgbClr val="FF6384"/></a:solidFill>
+  </p:spPr>
+  <p:style>
+    <a:lnRef idx="2"><a:schemeClr val="accent3"/></a:lnRef>
+    <a:fillRef idx="1"><a:schemeClr val="accent3"/></a:fillRef>
+    <a:effectRef idx="0"><a:schemeClr val="accent3"/></a:effectRef>
+    <a:fontRef idx="minor"><a:schemeClr val="dk1"/></a:fontRef>
+  </p:style>
+  ${textBodyXmlHelper("Direct fill override", { fontSize: 10 })}
+</p:sp>`);
+
+  // Shape 4: lnRef=0 (no line), fillRef=1 with accent4
+  const p4 = gridPosition(0, 1, 3, 2);
+  shapes.push(`<p:sp>
+  <p:nvSpPr><p:cNvPr id="5" name="No Line"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="${p4.x}" y="${p4.y}"/><a:ext cx="${p4.w}" cy="${p4.h}"/></a:xfrm>
+    <a:prstGeom prst="diamond"><a:avLst/></a:prstGeom>
+  </p:spPr>
+  <p:style>
+    <a:lnRef idx="0"><a:schemeClr val="accent4"/></a:lnRef>
+    <a:fillRef idx="1"><a:schemeClr val="accent4"/></a:fillRef>
+    <a:effectRef idx="0"><a:schemeClr val="accent4"/></a:effectRef>
+    <a:fontRef idx="minor"><a:schemeClr val="dk1"/></a:fontRef>
+  </p:style>
+  ${textBodyXmlHelper("lnRef=0, fillRef=1", { fontSize: 10 })}
+</p:sp>`);
+
+  // Shape 5: fillRef=0 (no fill), lnRef=3 (thick line) with accent5
+  const p5 = gridPosition(1, 1, 3, 2);
+  shapes.push(`<p:sp>
+  <p:nvSpPr><p:cNvPr id="6" name="No Fill Thick Line"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="${p5.x}" y="${p5.y}"/><a:ext cx="${p5.w}" cy="${p5.h}"/></a:xfrm>
+    <a:prstGeom prst="hexagon"><a:avLst/></a:prstGeom>
+  </p:spPr>
+  <p:style>
+    <a:lnRef idx="3"><a:schemeClr val="accent5"/></a:lnRef>
+    <a:fillRef idx="0"><a:schemeClr val="accent5"/></a:fillRef>
+    <a:effectRef idx="0"><a:schemeClr val="accent5"/></a:effectRef>
+    <a:fontRef idx="minor"><a:schemeClr val="dk1"/></a:fontRef>
+  </p:style>
+  ${textBodyXmlHelper("fillRef=0, lnRef=3", { fontSize: 10 })}
+</p:sp>`);
+
+  // Connector with style reference
+  const p6 = gridPosition(2, 1, 3, 2);
+  shapes.push(`<p:cxnSp>
+  <p:nvCxnSpPr><p:cNvPr id="7" name="Styled Connector"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="${p6.x}" y="${p6.y}"/><a:ext cx="${p6.w}" cy="${p6.h}"/></a:xfrm>
+    <a:prstGeom prst="line"><a:avLst/></a:prstGeom>
+  </p:spPr>
+  <p:style>
+    <a:lnRef idx="2"><a:schemeClr val="accent6"/></a:lnRef>
+    <a:fillRef idx="0"><a:schemeClr val="accent6"/></a:fillRef>
+    <a:effectRef idx="0"><a:schemeClr val="accent6"/></a:effectRef>
+    <a:fontRef idx="minor"><a:schemeClr val="dk1"/></a:fontRef>
+  </p:style>
+</p:cxnSp>`);
+
+  const slide = wrapSlideXml(shapes.join("\n"));
+  const rels = slideRelsXml();
+  const buffer = await buildPptx({
+    slides: [{ xml: slide, rels }],
+    themeXml: styleRefTheme,
+  });
+  savePptx(buffer, "style-reference.pptx");
+}
+
 async function main(): Promise<void> {
   console.log("Creating VRT fixtures...\n");
 
@@ -5353,6 +5523,7 @@ async function main(): Promise<void> {
   await createTextAdvancedFixture();
   await createShrinkToFitFixture();
   await createSpAutofitFixture();
+  await createStyleReferenceFixture();
 
   console.log("\nDone!");
 }

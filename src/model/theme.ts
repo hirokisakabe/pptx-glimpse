@@ -1,6 +1,18 @@
+import type { Fill } from "./fill.js";
+import type { Outline } from "./line.js";
+import type { EffectList } from "./effect.js";
+
+export interface FormatScheme {
+  fillStyles: Fill[];
+  lnStyles: Outline[];
+  effectStyles: (EffectList | null)[];
+  bgFillStyles: Fill[];
+}
+
 export interface Theme {
   colorScheme: ColorScheme;
   fontScheme: FontScheme;
+  fmtScheme?: FormatScheme;
 }
 
 export interface ColorScheme {
