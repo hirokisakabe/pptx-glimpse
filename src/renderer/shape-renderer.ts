@@ -1,17 +1,27 @@
 import type { ShapeElement, ConnectorElement } from "../model/shape.js";
 import { renderGeometry } from "./geometry/index.js";
 import { renderFillAttrs, renderOutlineAttrs, renderMarkers } from "./fill-renderer.js";
-import { renderTextBody } from "./text-renderer.js";
+import { renderTextBody, computeSpAutofitHeight } from "./text-renderer.js";
 import { renderEffects } from "./effect-renderer.js";
 import { emuToPixels } from "../utils/emu.js";
 import { buildTransformAttr } from "./transform.js";
 
 export function renderShape(shape: ShapeElement): string {
   const { transform, geometry, fill, outline, textBody, effects } = shape;
-  const w = emuToPixels(transform.extentWidth);
-  const h = emuToPixels(transform.extentHeight);
 
-  const transformAttr = buildTransformAttr(transform);
+  // spAutofit: テキスト量に応じて図形の高さを拡大
+  let effectiveTransform = transform;
+  if (textBody?.bodyProperties.autoFit === "spAutofit") {
+    const requiredHeightEmu = computeSpAutofitHeight(textBody, transform);
+    if (requiredHeightEmu !== null) {
+      effectiveTransform = { ...transform, extentHeight: requiredHeightEmu };
+    }
+  }
+
+  const w = emuToPixels(effectiveTransform.extentWidth);
+  const h = emuToPixels(effectiveTransform.extentHeight);
+
+  const transformAttr = buildTransformAttr(effectiveTransform);
   const fillResult = renderFillAttrs(fill);
   const outlineResult = renderOutlineAttrs(outline);
   const effectResult = renderEffects(effects);
@@ -42,7 +52,7 @@ export function renderShape(shape: ShapeElement): string {
   }
 
   if (textBody) {
-    const textSvg = renderTextBody(textBody, transform);
+    const textSvg = renderTextBody(textBody, effectiveTransform);
     if (textSvg) {
       parts.push(textSvg);
     }
