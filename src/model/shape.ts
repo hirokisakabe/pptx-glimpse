@@ -1,6 +1,6 @@
 import type { Fill } from "./fill.js";
 import type { Outline } from "./line.js";
-import type { TextBody } from "./text.js";
+import type { Hyperlink, TextBody } from "./text.js";
 import type { EffectList } from "./effect.js";
 
 export interface Transform {
@@ -43,6 +43,7 @@ export interface ShapeElement {
   placeholderType?: string;
   placeholderIdx?: number;
   altText?: string;
+  hyperlink?: Hyperlink;
 }
 
 export interface ConnectorElement {

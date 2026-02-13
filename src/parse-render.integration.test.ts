@@ -7,6 +7,7 @@ import type { ShapeElement } from "./model/shape.js";
 import type { Relationship } from "./parser/relationship-parser.js";
 import { ColorResolver } from "./color/color-resolver.js";
 import { renderShape } from "./renderer/shape-renderer.js";
+import { renderSlideToSvg } from "./renderer/svg-renderer.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -717,5 +718,128 @@ describe("parse-render integration: fill types", () => {
     expect(svg).toContain("<linearGradient");
     expect(svg).toContain("#FF0000");
     expect(svg).toContain("#0000FF");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 図形全体のハイパーリンク
+// ---------------------------------------------------------------------------
+
+describe("parse-render integration: shape-level hyperlink", () => {
+  it("cNvPr.hlinkClick → shape.hyperlink にパースされる", () => {
+    const xml = buildSpTreeXml(`
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="2" name="Rectangle 1">
+            <a:hlinkClick r:id="rId2"/>
+          </p:cNvPr>
+          <p:cNvSpPr/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="914400" y="914400"/>
+            <a:ext cx="4572000" cy="2743200"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect"/>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:p><a:r><a:rPr lang="en-US" sz="1800"/><a:t>Link shape</a:t></a:r></a:p>
+        </p:txBody>
+      </p:sp>
+    `);
+    const rels = new Map<string, Relationship>([
+      [
+        "rId2",
+        {
+          id: "rId2",
+          type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+          target: "https://example.com/shape",
+          targetMode: "External",
+        },
+      ],
+    ]);
+    const { shape } = parseAndRenderShape(xml, rels);
+    expect(shape.hyperlink).toEqual({ url: "https://example.com/shape" });
+  });
+
+  it("cNvPr.hlinkClick → renderSlideToSvg で <a> タグでラップされる", () => {
+    const xml = buildSpTreeXml(`
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="2" name="Rectangle 1">
+            <a:hlinkClick r:id="rId2"/>
+          </p:cNvPr>
+          <p:cNvSpPr/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="914400" y="914400"/>
+            <a:ext cx="4572000" cy="2743200"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect"/>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:p><a:r><a:rPr lang="en-US" sz="1800"/><a:t>Link shape</a:t></a:r></a:p>
+        </p:txBody>
+      </p:sp>
+    `);
+    const rels = new Map<string, Relationship>([
+      [
+        "rId2",
+        {
+          id: "rId2",
+          type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+          target: "https://example.com/shape",
+          targetMode: "External",
+        },
+      ],
+    ]);
+    const { shape } = parseAndRenderShape(xml, rels);
+    const slide = {
+      elements: [shape],
+      background: null,
+    };
+    const slideSize = { width: 9144000, height: 5143500 };
+    const svg = renderSlideToSvg(slide, slideSize);
+    expect(svg).toContain('<a href="https://example.com/shape">');
+    expect(svg).toContain("</a>");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// テキストアウトライン (rPr.ln)
+// ---------------------------------------------------------------------------
+
+describe("parse-render integration: text outline", () => {
+  it("rPr.ln → SVG に stroke/stroke-width が含まれる", () => {
+    const xml = buildShapeXml(`
+      <p:txBody>
+        <a:bodyPr/>
+        <a:p>
+          <a:r>
+            <a:rPr lang="en-US" sz="3600">
+              <a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>
+              <a:ln w="12700">
+                <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+              </a:ln>
+            </a:rPr>
+            <a:t>Outlined</a:t>
+          </a:r>
+        </a:p>
+      </p:txBody>
+    `);
+    const { shape, svg } = parseAndRenderShape(xml);
+    const run = shape.textBody!.paragraphs[0].runs[0];
+    expect(run.properties.outline).toEqual({
+      width: 12700,
+      color: { hex: "#000000", alpha: 1 },
+    });
+    expect(svg).toContain('stroke="#000000"');
+    expect(svg).toContain("stroke-width=");
+    expect(svg).toContain('paint-order="stroke"');
   });
 });

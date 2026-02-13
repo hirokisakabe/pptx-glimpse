@@ -42,6 +42,7 @@ export const VRT_CASES = [
   { name: "style-reference", fixture: "style-reference.pptx" },
   { name: "blip-effects", fixture: "blip-effects.pptx" },
   { name: "image-stretch-tile", fixture: "image-stretch-tile.pptx" },
+  { name: "shape-hyperlink-text-outline", fixture: "shape-hyperlink-text-outline.pptx" },
 ] as const;
 
 export type VrtCase = (typeof VRT_CASES)[number];

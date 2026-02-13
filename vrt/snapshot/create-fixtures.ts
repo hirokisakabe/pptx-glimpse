@@ -5699,6 +5699,107 @@ async function createImageStretchTileFixture(): Promise<void> {
   savePptx(buffer, "image-stretch-tile.pptx");
 }
 
+// --- Shape Hyperlink & Text Outline ---
+
+async function createShapeHyperlinkTextOutlineFixture(): Promise<void> {
+  const margin = 457200; // 0.5 inch
+  const shapeW = 8229600; // 8.5 inch
+  const shapeH = 1371600; // 1.5 inch
+
+  // Shape 1: Shape-level hyperlink (entire shape is clickable)
+  const shape1 = `<p:sp>
+  <p:nvSpPr>
+    <p:cNvPr id="2" name="Shape 1">
+      <a:hlinkClick r:id="rId2"/>
+    </p:cNvPr>
+    <p:cNvSpPr/><p:nvPr/>
+  </p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="${margin}" y="${margin}"/><a:ext cx="${shapeW}" cy="${shapeH}"/></a:xfrm>
+    <a:prstGeom prst="roundRect"><a:avLst/></a:prstGeom>
+    <a:solidFill><a:srgbClr val="4472C4"/></a:solidFill>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr anchor="ctr"/>
+    <a:lstStyle/>
+    <a:p>
+      <a:pPr algn="ctr"/>
+      <a:r>
+        <a:rPr lang="en-US" sz="1800">
+          <a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>
+        </a:rPr>
+        <a:t>Shape-level hyperlink (click entire shape)</a:t>
+      </a:r>
+    </a:p>
+  </p:txBody>
+</p:sp>`;
+
+  // Shape 2: Text outline (black stroke on red text)
+  const shape2 = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="3" name="Shape 2"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="${margin}" y="${margin + shapeH + margin}"/><a:ext cx="${shapeW}" cy="${shapeH}"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:solidFill><a:srgbClr val="F2F2F2"/></a:solidFill>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr anchor="ctr"/>
+    <a:lstStyle/>
+    <a:p>
+      <a:pPr algn="ctr"/>
+      <a:r>
+        <a:rPr lang="en-US" sz="3600">
+          <a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>
+          <a:ln w="12700">
+            <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+          </a:ln>
+        </a:rPr>
+        <a:t>Text Outline</a:t>
+      </a:r>
+    </a:p>
+  </p:txBody>
+</p:sp>`;
+
+  // Shape 3: Text outline with thick stroke (white text with blue outline)
+  const shape3 = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="4" name="Shape 3"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="${margin}" y="${margin + (shapeH + margin) * 2}"/><a:ext cx="${shapeW}" cy="${shapeH}"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:solidFill><a:srgbClr val="333333"/></a:solidFill>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr anchor="ctr"/>
+    <a:lstStyle/>
+    <a:p>
+      <a:pPr algn="ctr"/>
+      <a:r>
+        <a:rPr lang="en-US" sz="4800">
+          <a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>
+          <a:ln w="25400">
+            <a:solidFill><a:srgbClr val="4472C4"/></a:solidFill>
+          </a:ln>
+        </a:rPr>
+        <a:t>Thick Outline</a:t>
+      </a:r>
+    </a:p>
+  </p:txBody>
+</p:sp>`;
+
+  const slide = wrapSlideXml([shape1, shape2, shape3].join("\n"));
+  const rels = slideRelsXml([
+    {
+      id: "rId2",
+      type: REL_TYPES.hyperlink,
+      target: "https://example.com/shape-link",
+      targetMode: "External",
+    },
+  ]);
+
+  const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
+  savePptx(buffer, "shape-hyperlink-text-outline.pptx");
+}
+
 const FIXTURE_CREATORS: Record<string, () => Promise<void>> = {
   "shapes.pptx": createShapesFixture,
   "fill-and-lines.pptx": createFillAndLinesFixture,
@@ -5737,6 +5838,7 @@ const FIXTURE_CREATORS: Record<string, () => Promise<void>> = {
   "style-reference.pptx": createStyleReferenceFixture,
   "blip-effects.pptx": createBlipEffectsFixture,
   "image-stretch-tile.pptx": createImageStretchTileFixture,
+  "shape-hyperlink-text-outline.pptx": createShapeHyperlinkTextOutlineFixture,
 };
 
 async function main(): Promise<void> {
