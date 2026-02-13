@@ -21,6 +21,7 @@ import type { PptxArchive } from "./pptx-reader.js";
 import type { Relationship } from "./relationship-parser.js";
 import { resolveRelationshipTarget } from "./relationship-parser.js";
 import type { XmlNode } from "./xml-parser.js";
+import { uint8ArrayToBase64 } from "../utils/base64.js";
 import { warn, debug } from "../warning-logger.js";
 
 export interface FillParseContext {
@@ -91,7 +92,7 @@ function parseBlipFill(blipFillNode: XmlNode, context: FillParseContext): ImageF
     wmf: "image/wmf",
   };
   const mimeType = mimeMap[ext] ?? "image/png";
-  const imageData = mediaData.toString("base64");
+  const imageData = uint8ArrayToBase64(mediaData);
 
   const tileNode = blipFillNode.tile as XmlNode | undefined;
   const tile = tileNode

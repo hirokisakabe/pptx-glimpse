@@ -2,14 +2,14 @@ import JSZip from "jszip";
 
 export interface PptxArchive {
   files: Map<string, string>;
-  media: Map<string, Buffer>;
+  media: Map<string, Uint8Array>;
 }
 
 export async function readPptx(input: Buffer | Uint8Array): Promise<PptxArchive> {
   const zip = await JSZip.loadAsync(input);
 
   const files = new Map<string, string>();
-  const media = new Map<string, Buffer>();
+  const media = new Map<string, Uint8Array>();
 
   const promises: Promise<void>[] = [];
 
@@ -18,7 +18,7 @@ export async function readPptx(input: Buffer | Uint8Array): Promise<PptxArchive>
 
     if (relativePath.startsWith("ppt/media/")) {
       promises.push(
-        zipEntry.async("nodebuffer").then((buf) => {
+        zipEntry.async("uint8array").then((buf) => {
           media.set(relativePath, buf);
         }),
       );

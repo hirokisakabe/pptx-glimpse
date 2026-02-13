@@ -52,7 +52,7 @@ export interface SlideSvg {
 
 export interface SlideImage {
   slideNumber: number;
-  png: Buffer;
+  png: Uint8Array;
   width: number;
   height: number;
 }
