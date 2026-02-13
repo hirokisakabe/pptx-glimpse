@@ -10,6 +10,7 @@ import { parsePptxData, parseSlideWithLayout } from "./pptx-data-parser.js";
 import type { FontMapping } from "./font-mapping.js";
 import { createFontMapping } from "./font-mapping.js";
 import { setFontMapping, resetFontMapping } from "./font-mapping-context.js";
+import { createOpentypeTextMeasurerFromBuffers } from "./opentype-helpers.js";
 
 export interface FontOptions {
   /** resvg-wasm に渡すフォントファイルパス (Node.js 向け) */
@@ -63,6 +64,14 @@ export async function convertPptxToSvg(
 ): Promise<SlideSvg[]> {
   if (options?.textMeasurer) {
     setTextMeasurer(options.textMeasurer);
+  } else if (options?.fonts?.fontBuffers && options.fonts.fontBuffers.length > 0) {
+    const measurer = await createOpentypeTextMeasurerFromBuffers(
+      options.fonts.fontBuffers,
+      options.fontMapping,
+    );
+    if (measurer) {
+      setTextMeasurer(measurer);
+    }
   }
   setFontMapping(createFontMapping(options?.fontMapping));
   try {
