@@ -335,3 +335,180 @@ describe("convertPptxToPng", () => {
     expect(results[0].height).toBeGreaterThan(0);
   });
 });
+
+describe("master placeholder text filtering", () => {
+  async function createPptxWithMasterPlaceholder(): Promise<Buffer> {
+    const masterWithPlaceholder = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr>
+        <p:cNvPr id="1" name=""/>
+        <p:cNvGrpSpPr/>
+        <p:nvPr/>
+      </p:nvGrpSpPr>
+      <p:grpSpPr/>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="2" name="Title Placeholder"/>
+          <p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
+          <p:nvPr><p:ph type="title"/></p:nvPr>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="457200" y="274638"/>
+            <a:ext cx="8229600" cy="1143000"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:lstStyle/>
+          <a:p>
+            <a:r>
+              <a:rPr lang="en-US" sz="4400"/>
+              <a:t>MASTER_TITLE_TEMPLATE</a:t>
+            </a:r>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="3" name="Body Placeholder"/>
+          <p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
+          <p:nvPr><p:ph type="body" idx="1"/></p:nvPr>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="457200" y="1600200"/>
+            <a:ext cx="8229600" cy="3200400"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:lstStyle/>
+          <a:p>
+            <a:r>
+              <a:rPr lang="en-US" sz="2400"/>
+              <a:t>MASTER_BODY_TEMPLATE</a:t>
+            </a:r>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="4" name="Decorative Logo"/>
+          <p:cNvSpPr/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="0" y="0"/>
+            <a:ext cx="914400" cy="457200"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+          <a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:lstStyle/>
+          <a:p>
+            <a:r>
+              <a:rPr lang="en-US" sz="1200"/>
+              <a:t>MASTER_DECORATIVE_TEXT</a:t>
+            </a:r>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+    </p:spTree>
+  </p:cSld>
+  <p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>
+  <p:sldLayoutIdLst>
+    <p:sldLayoutId r:id="rId1"/>
+  </p:sldLayoutIdLst>
+</p:sldMaster>`;
+
+    const simpleSlide = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr>
+        <p:cNvPr id="1" name=""/>
+        <p:cNvGrpSpPr/>
+        <p:nvPr/>
+      </p:nvGrpSpPr>
+      <p:grpSpPr>
+        <a:xfrm>
+          <a:off x="0" y="0"/>
+          <a:ext cx="0" cy="0"/>
+          <a:chOff x="0" y="0"/>
+          <a:chExt cx="0" cy="0"/>
+        </a:xfrm>
+      </p:grpSpPr>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="2" name="TextBox 1"/>
+          <p:cNvSpPr/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="457200" y="2743200"/>
+            <a:ext cx="3048000" cy="914400"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:lstStyle/>
+          <a:p>
+            <a:r>
+              <a:rPr lang="en-US" sz="1800"/>
+              <a:t>SLIDE_ACTUAL_TEXT</a:t>
+            </a:r>
+          </a:p>
+        </p:txBody>
+      </p:sp>
+    </p:spTree>
+  </p:cSld>
+</p:sld>`;
+
+    const zip = new JSZip();
+    zip.file("[Content_Types].xml", contentTypes);
+    zip.file("_rels/.rels", rootRels);
+    zip.file("ppt/presentation.xml", presentationXml);
+    zip.file("ppt/_rels/presentation.xml.rels", presentationRels);
+    zip.file("ppt/slides/slide1.xml", simpleSlide);
+    zip.file("ppt/slides/_rels/slide1.xml.rels", slide1Rels);
+    zip.file("ppt/slideMasters/slideMaster1.xml", masterWithPlaceholder);
+    zip.file("ppt/slideMasters/_rels/slideMaster1.xml.rels", slideMaster1Rels);
+    zip.file("ppt/slideLayouts/slideLayout1.xml", slideLayout1);
+    zip.file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", slideLayout1Rels);
+    zip.file("ppt/theme/theme1.xml", theme1);
+    return zip.generateAsync({ type: "nodebuffer" });
+  }
+
+  it("does not render master placeholder text on actual slides", async () => {
+    const pptx = await createPptxWithMasterPlaceholder();
+    const results = await convertPptxToSvg(pptx);
+    const svg = results[0].svg;
+
+    // Master placeholder template text should NOT appear
+    expect(svg).not.toContain("MASTER_TITLE_TEMPLATE");
+    expect(svg).not.toContain("MASTER_BODY_TEMPLATE");
+
+    // Slide's own text should appear
+    expect(svg).toContain("SLIDE_ACTUAL_TEXT");
+  });
+
+  it("renders non-placeholder decorative shapes from master", async () => {
+    const pptx = await createPptxWithMasterPlaceholder();
+    const results = await convertPptxToSvg(pptx);
+    const svg = results[0].svg;
+
+    // Non-placeholder master shapes (decorative) should still appear
+    // Text may be wrapped across multiple tspan elements, so check for a substring
+    expect(svg).toContain("MASTER_D");
+  });
+});

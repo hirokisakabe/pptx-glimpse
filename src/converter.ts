@@ -275,12 +275,14 @@ function mergeElements(
   slideElements: SlideElement[],
 ): SlideElement[] {
   const slidePh = collectPlaceholderTypes(slideElements);
-  const layoutPh = collectPlaceholderTypes(layoutElements);
 
-  // Slide placeholders override layout and master
-  // Layout placeholders override master
-  const allOverrides = new Set([...slidePh, ...layoutPh]);
-  const filteredMaster = filterByPlaceholder(masterElements, allOverrides);
+  // Master placeholder shapes are always templates (position/style definitions).
+  // Their text content should never appear on actual slides.
+  // Only non-placeholder master shapes (decorative elements, logos, etc.) are shown.
+  const filteredMaster = masterElements.filter((el) => {
+    if (el.type !== "shape") return true;
+    return !el.placeholderType;
+  });
   const filteredLayout = filterByPlaceholder(layoutElements, slidePh);
 
   return [...filteredMaster, ...filteredLayout, ...slideElements];
