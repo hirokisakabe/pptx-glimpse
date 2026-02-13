@@ -1,4 +1,4 @@
-import type { SlideSize } from "../model/presentation.js";
+import type { SlideSize, EmbeddedFont, Protection } from "../model/presentation.js";
 import type { DefaultTextStyle } from "../model/text.js";
 import { parseXml, type XmlNode } from "./xml-parser.js";
 import { parseListStyle } from "./text-style-parser.js";
@@ -8,6 +8,8 @@ export interface PresentationInfo {
   slideSize: SlideSize;
   slideRIds: string[];
   defaultTextStyle?: DefaultTextStyle;
+  embeddedFonts?: EmbeddedFont[];
+  protection?: Protection;
 }
 
 const DEFAULT_SLIDE_WIDTH = 9144000;
@@ -53,6 +55,45 @@ export function parsePresentation(xml: string): PresentationInfo {
     });
 
   const defaultTextStyle = parseListStyle(pres.defaultTextStyle as XmlNode);
+  const embeddedFonts = parseEmbeddedFontList(pres.embeddedFontLst as XmlNode | undefined);
+  const protection = parseProtection(pres.modifyVerifier as XmlNode | undefined);
 
-  return { slideSize, slideRIds, defaultTextStyle };
+  return {
+    slideSize,
+    slideRIds,
+    defaultTextStyle,
+    ...(embeddedFonts && { embeddedFonts }),
+    ...(protection && { protection }),
+  };
+}
+
+function parseEmbeddedFontList(node: XmlNode | undefined): EmbeddedFont[] | undefined {
+  if (!node) return undefined;
+  const fonts = node.embeddedFont;
+  if (!fonts) return undefined;
+  const fontArr = (Array.isArray(fonts) ? fonts : [fonts]) as XmlNode[];
+  const result: EmbeddedFont[] = [];
+  for (const f of fontArr) {
+    const fontNode = f.font as XmlNode | undefined;
+    if (!fontNode) continue;
+    const font: EmbeddedFont = {
+      typeface: (fontNode["@_typeface"] as string | undefined) ?? "",
+    };
+    if (fontNode["@_panose"]) font.panose = fontNode["@_panose"] as string;
+    if (fontNode["@_pitchFamily"] !== undefined)
+      font.pitchFamily = Number(fontNode["@_pitchFamily"]);
+    if (fontNode["@_charset"] !== undefined) font.charset = Number(fontNode["@_charset"]);
+    result.push(font);
+  }
+  return result.length > 0 ? result : undefined;
+}
+
+function parseProtection(node: XmlNode | undefined): Protection | undefined {
+  if (!node) return undefined;
+  const verifier: NonNullable<Protection["modifyVerifier"]> = {};
+  if (node["@_algorithmName"]) verifier.algorithmName = node["@_algorithmName"] as string;
+  if (node["@_hashValue"]) verifier.hashValue = node["@_hashValue"] as string;
+  if (node["@_saltValue"]) verifier.saltValue = node["@_saltValue"] as string;
+  if (node["@_spinCount"] !== undefined) verifier.spinCount = Number(node["@_spinCount"]);
+  return { modifyVerifier: verifier };
 }

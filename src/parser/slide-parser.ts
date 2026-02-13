@@ -27,12 +27,13 @@ import type {
 import type { PptxArchive } from "./pptx-reader.js";
 import type { Relationship } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
-import type { FontScheme } from "../model/theme.js";
+import type { FontScheme, FormatScheme } from "../model/theme.js";
 import { parseXml, parseXmlOrdered } from "./xml-parser.js";
 import type { XmlNode, XmlOrderedNode } from "./xml-parser.js";
 import { parseFillFromNode, parseOutline } from "./fill-parser.js";
 import type { FillParseContext } from "./fill-parser.js";
 import { parseEffectList } from "./effect-parser.js";
+import { resolveShapeStyle } from "./style-reference-resolver.js";
 import { parseBlipEffects } from "./blip-effect-parser.js";
 import { parseChart } from "./chart-parser.js";
 import { parseCustomGeometry } from "./custom-geometry-parser.js";
@@ -74,6 +75,7 @@ export function parseSlide(
   archive: PptxArchive,
   colorResolver: ColorResolver,
   fontScheme?: FontScheme | null,
+  fmtScheme?: FormatScheme,
 ): Slide {
   const parsed = parseXml(slideXml);
   const sld = parsed.sld as XmlNode | undefined;
@@ -103,6 +105,7 @@ export function parseSlide(
     fillContext,
     fontScheme,
     orderedSpTree,
+    fmtScheme,
   );
 
   const showMasterSpAttr = sld?.["@_showMasterSp"];
@@ -150,6 +153,7 @@ export function parseShapeTree(
   fillContext?: FillParseContext,
   fontScheme?: FontScheme | null,
   orderedChildren?: XmlOrderedNode[] | null,
+  fmtScheme?: FormatScheme,
 ): SlideElement[] {
   if (!spTree) return [];
 
@@ -165,6 +169,7 @@ export function parseShapeTree(
       context,
       fillContext,
       fontScheme,
+      fmtScheme,
     );
   }
 
@@ -183,7 +188,15 @@ export function parseShapeTree(
 
   const shapes = (spTree.sp as XmlNode[] | undefined) ?? [];
   for (const sp of shapes) {
-    const shape = parseShape(sp, colorResolver, rels, fillContext, fontScheme);
+    const shape = parseShape(
+      sp,
+      colorResolver,
+      rels,
+      fillContext,
+      fontScheme,
+      undefined,
+      fmtScheme,
+    );
     if (shape) {
       elements.push(shape);
     } else {
@@ -203,7 +216,7 @@ export function parseShapeTree(
 
   const cxnSps = (spTree.cxnSp as XmlNode[] | undefined) ?? [];
   for (const cxn of cxnSps) {
-    const connector = parseConnector(cxn, colorResolver);
+    const connector = parseConnector(cxn, colorResolver, fmtScheme);
     if (connector) {
       elements.push(connector);
     } else {
@@ -213,7 +226,17 @@ export function parseShapeTree(
 
   const grpSps = (spTree.grpSp as XmlNode[] | undefined) ?? [];
   for (const grp of grpSps) {
-    const group = parseGroup(grp, rels, slidePath, archive, colorResolver, fillContext, fontScheme);
+    const group = parseGroup(
+      grp,
+      rels,
+      slidePath,
+      archive,
+      colorResolver,
+      fillContext,
+      fontScheme,
+      undefined,
+      fmtScheme,
+    );
     if (group) {
       elements.push(group);
     } else {
@@ -245,6 +268,7 @@ function parseShapeTreeOrdered(
   context?: string,
   fillContext?: FillParseContext,
   fontScheme?: FontScheme | null,
+  fmtScheme?: FormatScheme,
 ): SlideElement[] {
   const ctx = context ?? slidePath;
   const elements: SlideElement[] = [];
@@ -306,6 +330,7 @@ function parseShapeTreeOrdered(
             ctx,
             fillContext,
             fontScheme,
+            fmtScheme,
           );
         }
       }
@@ -333,6 +358,7 @@ function parseShapeTreeOrdered(
       ctx,
       fillContext,
       fontScheme,
+      fmtScheme,
     );
   }
 
@@ -352,10 +378,19 @@ function parseAndPushElement(
   ctx: string,
   fillContext?: FillParseContext,
   fontScheme?: FontScheme | null,
+  fmtScheme?: FormatScheme,
 ): void {
   switch (tag) {
     case "sp": {
-      const shape = parseShape(element, colorResolver, rels, fillContext, fontScheme, orderedNode);
+      const shape = parseShape(
+        element,
+        colorResolver,
+        rels,
+        fillContext,
+        fontScheme,
+        orderedNode,
+        fmtScheme,
+      );
       if (shape) {
         elements.push(shape);
       } else {
@@ -373,7 +408,7 @@ function parseAndPushElement(
       break;
     }
     case "cxnSp": {
-      const connector = parseConnector(element, colorResolver);
+      const connector = parseConnector(element, colorResolver, fmtScheme);
       if (connector) {
         elements.push(connector);
       } else {
@@ -393,6 +428,7 @@ function parseAndPushElement(
         fillContext,
         fontScheme,
         grpOrderedChildren,
+        fmtScheme,
       );
       if (group) {
         elements.push(group);
@@ -427,6 +463,7 @@ function parseShape(
   fillContext?: FillParseContext,
   fontScheme?: FontScheme | null,
   orderedNode?: XmlOrderedNode,
+  fmtScheme?: FormatScheme,
 ): ShapeElement | null {
   const spPr = sp.spPr as XmlNode | undefined;
   if (!spPr) return null;
@@ -435,9 +472,6 @@ function parseShape(
   if (!transform) return null;
 
   // Unsupported feature detection
-  if (sp.style) {
-    warn("sp.style", "shape style references (lnRef/fillRef/effectRef) not implemented");
-  }
   if (spPr.scene3d) {
     warn("spPr.scene3d", "3D scene/camera not implemented");
   }
@@ -446,8 +480,15 @@ function parseShape(
   }
 
   const geometry = parseGeometry(spPr);
-  const fill = parseFillFromNode(spPr, colorResolver, fillContext);
-  const outline = parseOutline(spPr.ln as XmlNode, colorResolver);
+
+  // Resolve style references (sp.style) as fallback for direct attributes
+  const styleRef = resolveShapeStyle(sp.style as XmlNode | undefined, fmtScheme, colorResolver);
+
+  const directFill = parseFillFromNode(spPr, colorResolver, fillContext);
+  const fill = directFill ?? styleRef?.fill ?? null;
+
+  const directOutline = parseOutline(spPr.ln as XmlNode, colorResolver);
+  const outline = directOutline ?? styleRef?.outline ?? null;
 
   // ordered ノードから txBody の ordered children を抽出
   let orderedTxBody: XmlOrderedNode[] | undefined;
@@ -467,9 +508,13 @@ function parseShape(
     undefined,
     orderedTxBody,
   );
-  const effects = parseEffectList(spPr.effectLst as XmlNode, colorResolver);
+
+  const directEffects = parseEffectList(spPr.effectLst as XmlNode, colorResolver);
+  const effects = directEffects ?? styleRef?.effects ?? null;
 
   const nvSpPr = sp.nvSpPr as XmlNode | undefined;
+  const cNvPr = nvSpPr?.cNvPr as XmlNode | undefined;
+  const altText = cNvPr?.["@_descr"] as string | undefined;
   const nvPr = nvSpPr?.nvPr as XmlNode | undefined;
   const ph = nvPr?.ph as XmlNode | undefined;
   const placeholderType = ph ? ((ph["@_type"] as string | undefined) ?? "body") : undefined;
@@ -485,6 +530,7 @@ function parseShape(
     effects,
     ...(placeholderType !== undefined && { placeholderType }),
     ...(placeholderIdx !== undefined && { placeholderIdx }),
+    ...(altText && { altText }),
   };
 }
 
@@ -532,6 +578,10 @@ function parseImage(
   const stretch = parseStretchFillRect(blipFill?.stretch as XmlNode | undefined);
   const tile = parseTileInfo(blipFill?.tile as XmlNode | undefined);
 
+  const nvPicPr = pic.nvPicPr as XmlNode | undefined;
+  const cNvPr = nvPicPr?.cNvPr as XmlNode | undefined;
+  const altText = cNvPr?.["@_descr"] as string | undefined;
+
   return {
     type: "image",
     transform,
@@ -540,6 +590,7 @@ function parseImage(
     effects,
     blipEffects,
     srcRect,
+    ...(altText && { altText }),
     stretch,
     tile,
   };
@@ -579,7 +630,11 @@ function parseTileInfo(node: XmlNode | undefined): TileInfo | null {
   };
 }
 
-function parseConnector(cxn: XmlNode, colorResolver: ColorResolver): ConnectorElement | null {
+function parseConnector(
+  cxn: XmlNode,
+  colorResolver: ColorResolver,
+  fmtScheme?: FormatScheme,
+): ConnectorElement | null {
   const spPr = cxn.spPr as XmlNode | undefined;
   if (!spPr) return null;
 
@@ -587,10 +642,18 @@ function parseConnector(cxn: XmlNode, colorResolver: ColorResolver): ConnectorEl
   if (!transform) return null;
 
   const geometry = parseGeometry(spPr);
-  const outline = parseOutline(spPr.ln as XmlNode, colorResolver);
-  const effects = parseEffectList(spPr.effectLst as XmlNode, colorResolver);
 
-  return { type: "connector", transform, geometry, outline, effects };
+  const styleRef = resolveShapeStyle(cxn.style as XmlNode | undefined, fmtScheme, colorResolver);
+  const directOutline = parseOutline(spPr.ln as XmlNode, colorResolver);
+  const outline = directOutline ?? styleRef?.outline ?? null;
+  const directEffects = parseEffectList(spPr.effectLst as XmlNode, colorResolver);
+  const effects = directEffects ?? styleRef?.effects ?? null;
+
+  const nvCxnSpPr = cxn.nvCxnSpPr as XmlNode | undefined;
+  const cNvPr = nvCxnSpPr?.cNvPr as XmlNode | undefined;
+  const altText = cNvPr?.["@_descr"] as string | undefined;
+
+  return { type: "connector", transform, geometry, outline, effects, ...(altText && { altText }) };
 }
 
 function parseGroup(
@@ -602,6 +665,7 @@ function parseGroup(
   parentFillContext?: FillParseContext,
   fontScheme?: FontScheme | null,
   orderedChildren?: XmlOrderedNode[] | null,
+  fmtScheme?: FormatScheme,
 ): GroupElement | null {
   const grpSpPr = grp.grpSpPr as XmlNode | undefined;
   if (!grpSpPr) return null;
@@ -640,10 +704,22 @@ function parseGroup(
     childFillContext,
     fontScheme,
     orderedChildren,
+    fmtScheme,
   );
   const effects = parseEffectList(grpSpPr.effectLst as XmlNode, colorResolver);
 
-  return { type: "group", transform, childTransform, children, effects };
+  const nvGrpSpPr = grp.nvGrpSpPr as XmlNode | undefined;
+  const cNvPr = nvGrpSpPr?.cNvPr as XmlNode | undefined;
+  const altText = cNvPr?.["@_descr"] as string | undefined;
+
+  return {
+    type: "group",
+    transform,
+    childTransform,
+    children,
+    effects,
+    ...(altText && { altText }),
+  };
 }
 
 function parseGraphicFrame(

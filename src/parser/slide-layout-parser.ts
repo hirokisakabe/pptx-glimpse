@@ -9,7 +9,7 @@ import { parseShapeTree, navigateOrdered } from "./slide-parser.js";
 import { buildRelsPath, parseRelationships, type Relationship } from "./relationship-parser.js";
 import { parseListStyle } from "./text-style-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
-import type { FontScheme } from "../model/theme.js";
+import type { FontScheme, FormatScheme } from "../model/theme.js";
 import { debug } from "../warning-logger.js";
 
 export function parseSlideLayoutBackground(
@@ -42,6 +42,7 @@ export function parseSlideLayoutElements(
   archive: PptxArchive,
   colorResolver: ColorResolver,
   fontScheme?: FontScheme | null,
+  fmtScheme?: FormatScheme,
 ): SlideElement[] {
   const parsed = parseXml(xml);
 
@@ -72,6 +73,7 @@ export function parseSlideLayoutElements(
     undefined,
     fontScheme,
     orderedSpTree,
+    fmtScheme,
   );
 }
 

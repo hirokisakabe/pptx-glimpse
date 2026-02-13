@@ -1,5 +1,11 @@
-import type { Theme, ColorScheme, FontScheme } from "../model/theme.js";
-import { parseXml, type XmlNode } from "./xml-parser.js";
+import type { Theme, ColorScheme, FontScheme, FormatScheme } from "../model/theme.js";
+import type { Fill } from "../model/fill.js";
+import type { Outline } from "../model/line.js";
+import type { EffectList } from "../model/effect.js";
+import { parseXml, parseXmlOrdered, type XmlNode, type XmlOrderedNode } from "./xml-parser.js";
+import { parseFillFromNode, parseOutline } from "./fill-parser.js";
+import { parseEffectList } from "./effect-parser.js";
+import { ColorResolver } from "../color/color-resolver.js";
 import { debug } from "../warning-logger.js";
 
 export function parseTheme(xml: string): Theme {
@@ -42,7 +48,13 @@ export function parseTheme(xml: string): Theme {
   const colorScheme = parseColorScheme(themeElements.clrScheme as XmlNode);
   const fontScheme = parseFontScheme(themeElements.fontScheme as XmlNode);
 
-  return { colorScheme, fontScheme };
+  const fmtScheme = parseFmtScheme(
+    themeElements.fmtScheme as XmlNode | undefined,
+    colorScheme,
+    xml,
+  );
+
+  return { colorScheme, fontScheme, ...(fmtScheme && { fmtScheme }) };
 }
 
 function parseColorScheme(clrScheme: XmlNode): ColorScheme {
@@ -113,4 +125,140 @@ function defaultColorScheme(): ColorScheme {
     hlink: "#0563C1",
     folHlink: "#954F72",
   };
+}
+
+const defaultColorMap = {
+  bg1: "lt1" as const,
+  tx1: "dk1" as const,
+  bg2: "lt2" as const,
+  tx2: "dk2" as const,
+  accent1: "accent1" as const,
+  accent2: "accent2" as const,
+  accent3: "accent3" as const,
+  accent4: "accent4" as const,
+  accent5: "accent5" as const,
+  accent6: "accent6" as const,
+  hlink: "hlink" as const,
+  folHlink: "folHlink" as const,
+};
+
+const FILL_TAGS = new Set(["solidFill", "gradFill", "pattFill", "blipFill", "noFill"]);
+
+function parseFmtScheme(
+  fmtSchemeNode: XmlNode | undefined,
+  colorScheme: ColorScheme,
+  xml: string,
+): FormatScheme | undefined {
+  if (!fmtSchemeNode) return undefined;
+
+  const colorResolver = new ColorResolver(colorScheme, defaultColorMap);
+
+  // fillStyleLst/bgFillStyleLst contain mixed fill types — use the ordered parser
+  // to preserve their document order (fast-xml-parser groups by tag name)
+  const ordered = parseXmlOrdered(xml);
+  const fmtSchemeOrdered = navigateThemeOrdered(ordered, ["theme", "themeElements", "fmtScheme"]);
+
+  const fillStyles = parseFillStyleListOrdered(
+    fmtSchemeOrdered,
+    "fillStyleLst",
+    fmtSchemeNode.fillStyleLst as XmlNode | undefined,
+    colorResolver,
+  );
+  const bgFillStyles = parseFillStyleListOrdered(
+    fmtSchemeOrdered,
+    "bgFillStyleLst",
+    fmtSchemeNode.bgFillStyleLst as XmlNode | undefined,
+    colorResolver,
+  );
+  const lnStyles = parseLineStyleList(
+    fmtSchemeNode.lnStyleLst as XmlNode | undefined,
+    colorResolver,
+  );
+  const effectStyles = parseEffectStyleList(
+    fmtSchemeNode.effectStyleLst as XmlNode | undefined,
+    colorResolver,
+  );
+
+  if (
+    fillStyles.length === 0 &&
+    lnStyles.length === 0 &&
+    effectStyles.length === 0 &&
+    bgFillStyles.length === 0
+  ) {
+    return undefined;
+  }
+
+  return { fillStyles, lnStyles, effectStyles, bgFillStyles };
+}
+
+function navigateThemeOrdered(ordered: XmlOrderedNode[], path: string[]): XmlOrderedNode[] | null {
+  let current: XmlOrderedNode[] = ordered;
+  for (const key of path) {
+    const entry = current.find((item: XmlOrderedNode) => key in item);
+    if (!entry) return null;
+    current = entry[key] as XmlOrderedNode[];
+    if (!Array.isArray(current)) return null;
+  }
+  return current;
+}
+
+function parseFillStyleListOrdered(
+  fmtSchemeOrdered: XmlOrderedNode[] | null,
+  listTag: string,
+  listNode: XmlNode | undefined,
+  colorResolver: ColorResolver,
+): Fill[] {
+  if (!listNode || !fmtSchemeOrdered) return [];
+
+  const listOrdered = fmtSchemeOrdered.find((c: XmlOrderedNode) => listTag in c);
+  if (!listOrdered) return [];
+  const children = listOrdered[listTag] as XmlOrderedNode[] | undefined;
+  if (!Array.isArray(children)) return [];
+
+  const fills: Fill[] = [];
+  const tagCounters: Record<string, number> = {};
+
+  for (const child of children) {
+    const tag = Object.keys(child).find((k) => k !== ":@" && FILL_TAGS.has(k));
+    if (!tag) continue;
+
+    const idx = tagCounters[tag] ?? 0;
+    tagCounters[tag] = idx + 1;
+
+    // Wrap the fill in a container node for parseFillFromNode
+    const rawItems = listNode[tag];
+    const items = Array.isArray(rawItems) ? rawItems : rawItems ? [rawItems] : [];
+    const fillData = items[idx] as XmlNode | undefined;
+    if (!fillData) continue;
+
+    const wrapper: XmlNode = { [tag]: fillData };
+    const fill = parseFillFromNode(wrapper, colorResolver);
+    if (fill) fills.push(fill);
+  }
+
+  return fills;
+}
+
+function parseLineStyleList(
+  lnStyleLstNode: XmlNode | undefined,
+  colorResolver: ColorResolver,
+): Outline[] {
+  if (!lnStyleLstNode) return [];
+  const lnItems = lnStyleLstNode.ln;
+  const lnArr = Array.isArray(lnItems) ? lnItems : lnItems ? [lnItems] : [];
+  const outlines: Outline[] = [];
+  for (const ln of lnArr) {
+    const outline = parseOutline(ln as XmlNode, colorResolver);
+    if (outline) outlines.push(outline);
+  }
+  return outlines;
+}
+
+function parseEffectStyleList(
+  effectStyleLstNode: XmlNode | undefined,
+  colorResolver: ColorResolver,
+): (EffectList | null)[] {
+  if (!effectStyleLstNode) return [];
+  const items = (effectStyleLstNode.effectStyle as XmlNode[] | undefined) ?? [];
+  return items.map((es) => parseEffectList(es.effectLst as XmlNode, colorResolver));
 }

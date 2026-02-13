@@ -127,7 +127,14 @@ export async function convertPptxToSvg(
     : null;
   const masterElements =
     masterPath && masterXml
-      ? parseSlideMasterElements(masterXml, masterPath, archive, colorResolver, theme.fontScheme)
+      ? parseSlideMasterElements(
+          masterXml,
+          masterPath,
+          archive,
+          colorResolver,
+          theme.fontScheme,
+          theme.fmtScheme,
+        )
       : [];
   const masterTxStyles = masterXml ? parseSlideMasterTxStyles(masterXml, colorResolver) : undefined;
   const masterPlaceholderStyles = masterXml
@@ -155,7 +162,15 @@ export async function convertPptxToSvg(
     const slideXml = archive.files.get(path);
     if (!slideXml) continue;
 
-    const slide = parseSlide(slideXml, path, slideNumber, archive, colorResolver, theme.fontScheme);
+    const slide = parseSlide(
+      slideXml,
+      path,
+      slideNumber,
+      archive,
+      colorResolver,
+      theme.fontScheme,
+      theme.fmtScheme,
+    );
 
     // Resolve slide layout
     let layoutElements: SlideElement[] = [];
@@ -195,6 +210,7 @@ export async function convertPptxToSvg(
               archive,
               colorResolver,
               theme.fontScheme,
+              theme.fmtScheme,
             );
             // Extract placeholder styles for text style inheritance
             layoutPlaceholderStyles = parseSlideLayoutPlaceholderStyles(layoutXml, colorResolver);

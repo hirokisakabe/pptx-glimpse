@@ -42,6 +42,7 @@ export interface ShapeElement {
   effects: EffectList | null;
   placeholderType?: string;
   placeholderIdx?: number;
+  altText?: string;
 }
 
 export interface ConnectorElement {
@@ -50,6 +51,7 @@ export interface ConnectorElement {
   geometry: Geometry;
   outline: Outline | null;
   effects: EffectList | null;
+  altText?: string;
 }
 
 export interface GroupElement {
@@ -58,6 +60,7 @@ export interface GroupElement {
   childTransform: Transform;
   children: SlideElement[];
   effects: EffectList | null;
+  altText?: string;
 }
 
 export type SlideElement =

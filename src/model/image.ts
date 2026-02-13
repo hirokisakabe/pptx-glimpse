@@ -32,6 +32,7 @@ export interface ImageElement {
   effects: EffectList | null;
   blipEffects: BlipEffects | null;
   srcRect: SrcRect | null;
+  altText?: string;
   stretch: StretchFillRect | null;
   tile: TileInfo | null;
 }

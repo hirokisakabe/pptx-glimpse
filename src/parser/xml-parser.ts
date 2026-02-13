@@ -31,6 +31,8 @@ const ARRAY_TAGS = new Set([
   "gd", // ガイド定義 (Guide Definition)
   "ds", // カスタムダッシュセグメント (Custom Dash Segment)
   "AlternateContent", // mc:AlternateContent (SmartArt 等)
+  "embeddedFont", // 埋め込みフォント (Embedded Font)
+  "effectStyle", // エフェクトスタイル (Effect Style)
 ]);
 
 export function createXmlParser(): XMLParser {

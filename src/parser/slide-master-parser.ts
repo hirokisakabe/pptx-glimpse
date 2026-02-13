@@ -1,4 +1,4 @@
-import type { ColorMap, ColorSchemeKey } from "../model/theme.js";
+import type { ColorMap, ColorSchemeKey, FormatScheme } from "../model/theme.js";
 import type { Background } from "../model/slide.js";
 import type { SlideElement } from "../model/shape.js";
 import type { TxStyles, PlaceholderStyleInfo } from "../model/text.js";
@@ -80,6 +80,7 @@ export function parseSlideMasterElements(
   archive: PptxArchive,
   colorResolver: ColorResolver,
   fontScheme?: FontScheme | null,
+  fmtScheme?: FormatScheme,
 ): SlideElement[] {
   const parsed = parseXml(xml);
 
@@ -110,6 +111,7 @@ export function parseSlideMasterElements(
     undefined,
     fontScheme,
     orderedSpTree,
+    fmtScheme,
   );
 }
 
