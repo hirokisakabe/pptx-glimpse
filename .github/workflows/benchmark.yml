@@ -31,8 +31,29 @@ jobs:
       - name: Transform results for benchmark-action
         run: npx tsx scripts/transform-bench-json.ts bench-results.json benchmark-output.json
 
+      - name: Check if benchmark-data branch exists
+        id: benchmark-branch
+        run: |
+          if git ls-remote --exit-code origin benchmark-data > /dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Store benchmark result (push to main, first run)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.benchmark-branch.outputs.exists == 'false'
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: customBiggerIsBetter
+          output-file-path: benchmark-output.json
+          gh-pages-branch: benchmark-data
+          benchmark-data-dir-path: dev/bench
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          auto-push: true
+          skip-fetch-gh-pages: true
+
       - name: Store benchmark result (push to main)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.benchmark-branch.outputs.exists == 'true'
         uses: benchmark-action/github-action-benchmark@v1
         with:
           tool: customBiggerIsBetter
@@ -42,19 +63,12 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           auto-push: true
 
-      - name: Check if baseline exists
-        if: github.event_name == 'pull_request'
-        id: baseline
-        run: |
-          if git ls-remote --exit-code origin benchmark-data > /dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::No baseline data yet. Benchmark comparison will be available after the first merge to main."
-          fi
+      - name: Notice when no baseline
+        if: github.event_name == 'pull_request' && steps.benchmark-branch.outputs.exists == 'false'
+        run: echo "::notice::No baseline data yet. Benchmark comparison will be available after the first merge to main."
 
       - name: Compare benchmark result (PR)
-        if: github.event_name == 'pull_request' && steps.baseline.outputs.exists == 'true'
+        if: github.event_name == 'pull_request' && steps.benchmark-branch.outputs.exists == 'true'
         uses: benchmark-action/github-action-benchmark@v1
         with:
           tool: customBiggerIsBetter
