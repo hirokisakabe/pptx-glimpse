@@ -7,7 +7,7 @@ export interface ChartElement {
   chart: ChartData;
 }
 
-export type ChartType = "bar" | "line" | "pie" | "doughnut" | "scatter" | "bubble";
+export type ChartType = "bar" | "line" | "pie" | "doughnut" | "scatter" | "bubble" | "area";
 
 export interface ChartData {
   chartType: ChartType;
