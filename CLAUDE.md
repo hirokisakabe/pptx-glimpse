@@ -27,7 +27,7 @@ npm run dev -- file.pptx  # Live preview dev server (auto-reload on src/ changes
 CI consists of 3 jobs:
 
 - **ci**: `lint` → `format:check` → `typecheck` → `test` (excluding VRT) → `build` (Node 20/22/24)
-- **vrt**: Standard VRT (self-comparison)
+- **vrt**: Internal VRT (Docker-based, self-comparison)
 - **libreoffice-vrt**: LibreOffice VRT (generates fixtures and reference images via Docker)
 
 ## Architecture
@@ -60,12 +60,13 @@ Visual regression tests for rendering output. When modifying the parser or rende
 ```
 vrt/
 ├── compare-utils.ts                          # Shared image comparison utilities
-├── internal/                                 # Standard VRT (self-comparison)
+├── internal/                                 # Standard VRT (self-comparison, Docker-based)
 │   ├── regression.test.ts                    # Test file
 │   ├── create-fixtures.ts                    # Fixture generation script
 │   ├── update-snapshots.ts                   # Snapshot update script
-│   ├── fixtures/                             # VRT PPTX fixtures (dynamically generated in CI)
-│   └── snapshots/                            # Reference snapshot images
+│   ├── docker-run.sh                         # Docker entrypoint (npm ci + exec)
+│   ├── fixtures/                             # VRT PPTX fixtures (dynamically generated)
+│   └── snapshots/                            # Reference snapshot images (Docker-generated)
 └── libreoffice/                              # LibreOffice VRT
     ├── regression.test.ts                    # Test file
     ├── create_fixtures.py                    # Fixture generation (Python, Docker)
@@ -74,13 +75,24 @@ vrt/
     └── snapshots/                            # Dynamically generated in CI
 ```
 
+### Internal VRT (Docker-based)
+
+Snapshots are generated inside a Docker container (Node.js + sharp + fonts) to ensure consistent rendering across macOS and Linux. Both snapshot generation and CI test execution use the same Docker image.
+
+#### Setup
+
+```bash
+npm run vrt:internal:docker-build   # Build the Docker image
+npm run vrt:internal:update          # Generate fixtures + snapshots (Docker required)
+```
+
 ### VRT Update Procedure
 
 When changes to the parser, renderer, or model affect rendering output:
 
-1. **Update fixtures** (if adding new features or modifying existing fixtures): Edit `vrt/internal/create-fixtures.ts` and run `npm run vrt:internal:fixtures`
-2. **Update snapshots**: Regenerate reference images with `npm run vrt:internal:update`
-3. **Verify tests**: Confirm VRT tests pass with `npm run test`
+1. **Update fixtures** (if adding new features or modifying existing fixtures): Edit `vrt/internal/create-fixtures.ts` and run `npm run vrt:internal:update`
+2. **Update snapshots**: `npm run vrt:internal:update` regenerates both fixtures and snapshots in Docker
+3. **Verify tests**: Confirm VRT tests pass in CI after pushing
 
 ### 3 Locations That Must Stay in Sync
 

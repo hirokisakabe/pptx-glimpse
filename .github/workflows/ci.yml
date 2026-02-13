@@ -78,20 +78,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Pull Docker image
+        run: docker pull ghcr.io/hirokisakabe/pptx-glimpse-internal-vrt:latest
+
+      - name: Generate VRT fixtures and run VRT
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}":/workspace \
+            ghcr.io/hirokisakabe/pptx-glimpse-internal-vrt:latest \
+            bash /workspace/vrt/internal/docker-run.sh \
+            bash -c "npm run vrt:internal:fixtures && npx vitest run vrt/internal/regression.test.ts"
+
+      - name: Upload diff images on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
         with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Generate VRT fixtures
-        run: npm run vrt:internal:fixtures
-
-      - name: Run VRT
-        run: npx vitest run vrt/internal/regression.test.ts
+          name: internal-vrt-diffs
+          path: vrt/internal/diffs/
+          retention-days: 7
 
   libreoffice-vrt:
     runs-on: ubuntu-latest
