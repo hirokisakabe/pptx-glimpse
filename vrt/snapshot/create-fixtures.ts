@@ -8,6 +8,7 @@ import sharp from "sharp";
 import { writeFileSync, mkdirSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { VRT_CASES } from "./vrt-cases.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -5316,43 +5317,56 @@ async function createSpAutofitFixture(): Promise<void> {
   savePptx(buffer, "sp-autofit.pptx");
 }
 
+const FIXTURE_CREATORS: Record<string, () => Promise<void>> = {
+  "shapes.pptx": createShapesFixture,
+  "fill-and-lines.pptx": createFillAndLinesFixture,
+  "text.pptx": createTextFixture,
+  "transform.pptx": createTransformFixture,
+  "background.pptx": createBackgroundFixture,
+  "groups.pptx": createGroupsFixture,
+  "charts.pptx": createChartsFixture,
+  "connectors.pptx": createConnectorsFixture,
+  "custom-geometry.pptx": createCustomGeometryFixture,
+  "image.pptx": createImageFixture,
+  "tables.pptx": createTablesFixture,
+  "bullets.pptx": createBulletsFixture,
+  "flowchart.pptx": createFlowchartFixture,
+  "callouts-arcs.pptx": createCalloutsArcsFixture,
+  "arrows-stars.pptx": createArrowsStarsFixture,
+  "math-other.pptx": createMathOtherFixture,
+  "word-wrap.pptx": createWordWrapFixture,
+  "background-blipfill.pptx": createBackgroundBlipFillFixture,
+  "composite.pptx": createCompositeFixture,
+  "text-decoration.pptx": createTextDecorationFixture,
+  "slide-size-4-3.pptx": createSlideSize43Fixture,
+  "effects.pptx": createEffectsFixture,
+  "hyperlinks.pptx": createHyperlinksFixture,
+  "pattern-image-fill.pptx": createPatternImageFillFixture,
+  "smartart.pptx": createSmartArtFixture,
+  "theme-fonts.pptx": createThemeFontFixture,
+  "text-style-inheritance.pptx": createTextStyleInheritanceFixture,
+  "z-order-mixed.pptx": createZOrderMixedFixture,
+  "paragraph-spacing.pptx": createParagraphSpacingFixture,
+  "placeholder-overlap.pptx": createPlaceholderOverlapFixture,
+  "image-crop.pptx": createImageCropFixture,
+  "text-advanced.pptx": createTextAdvancedFixture,
+  "shrink-to-fit.pptx": createShrinkToFitFixture,
+  "sp-autofit.pptx": createSpAutofitFixture,
+};
+
 async function main(): Promise<void> {
   console.log("Creating VRT fixtures...\n");
 
-  await createShapesFixture();
-  await createFillAndLinesFixture();
-  await createTextFixture();
-  await createTransformFixture();
-  await createBackgroundFixture();
-  await createGroupsFixture();
-  await createChartsFixture();
-  await createConnectorsFixture();
-  await createCustomGeometryFixture();
-  await createImageFixture();
-  await createTablesFixture();
-  await createBulletsFixture();
-  await createFlowchartFixture();
-  await createCalloutsArcsFixture();
-  await createArrowsStarsFixture();
-  await createMathOtherFixture();
-  await createWordWrapFixture();
-  await createBackgroundBlipFillFixture();
-  await createCompositeFixture();
-  await createTextDecorationFixture();
-  await createSlideSize43Fixture();
-  await createEffectsFixture();
-  await createHyperlinksFixture();
-  await createPatternImageFillFixture();
-  await createSmartArtFixture();
-  await createThemeFontFixture();
-  await createTextStyleInheritanceFixture();
-  await createZOrderMixedFixture();
-  await createParagraphSpacingFixture();
-  await createPlaceholderOverlapFixture();
-  await createImageCropFixture();
-  await createTextAdvancedFixture();
-  await createShrinkToFitFixture();
-  await createSpAutofitFixture();
+  for (const { fixture } of VRT_CASES) {
+    const creator = FIXTURE_CREATORS[fixture];
+    if (!creator) {
+      throw new Error(
+        `No fixture creator found for "${fixture}". ` +
+          `Add a creator function to FIXTURE_CREATORS in create-fixtures.ts.`,
+      );
+    }
+    await creator();
+  }
 
   console.log("\nDone!");
 }
