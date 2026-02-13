@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { renderTextBody, formatAutoNum, buildFontFamilyValue } from "./text-renderer.js";
+import {
+  renderTextBody,
+  formatAutoNum,
+  buildFontFamilyValue,
+  computeSpAutofitHeight,
+} from "./text-renderer.js";
 import type { TextBody, Paragraph, BulletType, SpacingValue } from "../model/text.js";
 import type { Transform } from "../model/shape.js";
 
@@ -905,5 +910,40 @@ describe("shrinkToFit (normAutofit 動的縮小)", () => {
     const fontSizeMatch = result.match(/font-size="([0-9.]+)pt"/);
     expect(fontSizeMatch).not.toBeNull();
     expect(Number(fontSizeMatch![1])).toBeLessThan(28.8);
+  });
+});
+
+describe("spAutofit (図形サイズ自動拡大)", () => {
+  it("spAutofit でテキストがはみ出す場合にフォントサイズは変わらない", () => {
+    const textBody = makeTextBody(
+      ["This is a long text that should overflow the small text box but font size stays the same"],
+      { fontSize: 36, autoFit: "spAutofit" },
+    );
+    const smallTransform = makeTransform(960000, 480000);
+    const result = renderTextBody(textBody, smallTransform);
+    expect(result).toContain('font-size="36pt"');
+  });
+
+  it("spAutofit でテキストが収まる場合は null を返す", () => {
+    const textBody = makeTextBody(["Hi"], { fontSize: 12, autoFit: "spAutofit" });
+    const result = computeSpAutofitHeight(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).toBeNull();
+  });
+
+  it("spAutofit でテキストがはみ出す場合に必要な高さを返す", () => {
+    const textBody = makeTextBody(
+      ["This is a long text that should overflow the small text box and require more height"],
+      { fontSize: 36, autoFit: "spAutofit" },
+    );
+    const smallTransform = makeTransform(960000, 480000);
+    const result = computeSpAutofitHeight(textBody, smallTransform);
+    expect(result).not.toBeNull();
+    expect(result!).toBeGreaterThan(480000);
+  });
+
+  it("テキストがない場合は null を返す", () => {
+    const textBody = makeTextBody([""], { autoFit: "spAutofit" });
+    const result = computeSpAutofitHeight(textBody, makeTransform(960000, 480000));
+    expect(result).toBeNull();
   });
 });

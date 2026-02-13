@@ -5207,6 +5207,115 @@ async function createShrinkToFitFixture(): Promise<void> {
   savePptx(buffer, "shrink-to-fit.pptx");
 }
 
+async function createSpAutofitFixture(): Promise<void> {
+  let id = 2;
+  const shapes: string[] = [];
+
+  // 1. spAutofit — テキストがはみ出すケース → 図形が拡大される
+  const pos1 = gridPosition(0, 0, 2, 2);
+  shapes.push(
+    shapeXml(id++, "sp-autofit-overflow", {
+      preset: "rect",
+      x: pos1.x,
+      y: pos1.y,
+      cx: pos1.w,
+      cy: pos1.h,
+      fillXml: solidFillXml("E8F0FE"),
+      outlineXml: outlineXml(12700, "4472C4"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="t"><a:spAutoFit/></a:bodyPr>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US" sz="3600">
+        <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      </a:rPr>
+      <a:t>Long text that causes the shape to grow taller automatically.</a:t>
+    </a:r>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  // 2. spAutofit — テキストが収まるケース → 図形はそのまま
+  const pos2 = gridPosition(1, 0, 2, 2);
+  shapes.push(
+    shapeXml(id++, "sp-autofit-fits", {
+      preset: "rect",
+      x: pos2.x,
+      y: pos2.y,
+      cx: pos2.w,
+      cy: pos2.h,
+      fillXml: solidFillXml("E8FDE8"),
+      outlineXml: outlineXml(12700, "70AD47"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="t"><a:spAutoFit/></a:bodyPr>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US" sz="1400">
+        <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      </a:rPr>
+      <a:t>Short text</a:t>
+    </a:r>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  // 3. spAutofit + 複数段落
+  const pos3 = gridPosition(0, 1, 2, 2);
+  shapes.push(
+    shapeXml(id++, "sp-autofit-multi-para", {
+      preset: "rect",
+      x: pos3.x,
+      y: pos3.y,
+      cx: pos3.w,
+      cy: pos3.h,
+      fillXml: solidFillXml("FFF0E0"),
+      outlineXml: outlineXml(12700, "ED7D31"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="t"><a:spAutoFit/></a:bodyPr>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US" sz="2400">
+        <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      </a:rPr>
+      <a:t>First paragraph with enough text to overflow.</a:t>
+    </a:r>
+  </a:p>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US" sz="2400">
+        <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      </a:rPr>
+      <a:t>Second paragraph adds more content.</a:t>
+    </a:r>
+  </a:p>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US" sz="2400">
+        <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      </a:rPr>
+      <a:t>Third paragraph for extra height.</a:t>
+    </a:r>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  const slide = wrapSlideXml(shapes.join("\n"));
+  const rels = slideRelsXml();
+  const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
+  savePptx(buffer, "sp-autofit.pptx");
+}
+
 async function main(): Promise<void> {
   console.log("Creating VRT fixtures...\n");
 
@@ -5243,6 +5352,7 @@ async function main(): Promise<void> {
   await createImageCropFixture();
   await createTextAdvancedFixture();
   await createShrinkToFitFixture();
+  await createSpAutofitFixture();
 
   console.log("\nDone!");
 }
