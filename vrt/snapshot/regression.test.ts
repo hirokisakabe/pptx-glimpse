@@ -47,6 +47,8 @@ const VRT_CASES = [
   { name: "text-advanced", fixture: "text-advanced.pptx" },
   { name: "shrink-to-fit", fixture: "shrink-to-fit.pptx" },
   { name: "sp-autofit", fixture: "sp-autofit.pptx" },
+  { name: "blip-effects", fixture: "blip-effects.pptx" },
+  { name: "image-stretch-tile", fixture: "image-stretch-tile.pptx" },
 ] as const;
 
 describe("Visual Regression Tests", { timeout: 60000 }, () => {

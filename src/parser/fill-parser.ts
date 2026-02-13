@@ -3,6 +3,7 @@ import type {
   GradientFill,
   GradientStop,
   ImageFill,
+  ImageFillTile,
   PatternFill,
   SolidFill,
 } from "../model/fill.js";
@@ -92,7 +93,19 @@ function parseBlipFill(blipFillNode: XmlNode, context: FillParseContext): ImageF
   const mimeType = mimeMap[ext] ?? "image/png";
   const imageData = mediaData.toString("base64");
 
-  return { type: "image", imageData, mimeType };
+  const tileNode = blipFillNode.tile as XmlNode | undefined;
+  const tile = tileNode
+    ? {
+        tx: Number(tileNode["@_tx"] ?? 0),
+        ty: Number(tileNode["@_ty"] ?? 0),
+        sx: Number(tileNode["@_sx"] ?? 100000) / 100000,
+        sy: Number(tileNode["@_sy"] ?? 100000) / 100000,
+        flip: ((tileNode["@_flip"] as string) ?? "none") as ImageFillTile["flip"],
+        align: (tileNode["@_algn"] as string) ?? "tl",
+      }
+    : null;
+
+  return { type: "image", imageData, mimeType, tile };
 }
 
 function parseGradientFill(gradNode: XmlNode, colorResolver: ColorResolver): Fill | null {

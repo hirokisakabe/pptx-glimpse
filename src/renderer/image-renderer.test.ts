@@ -30,7 +30,10 @@ function makeImage(overrides: Partial<ImageElement> = {}): ImageElement {
     imageData: "iVBORw0KGgo=",
     mimeType: "image/png",
     effects: null,
+    blipEffects: null,
     srcRect: null,
+    stretch: null,
+    tile: null,
     ...overrides,
   };
 }
@@ -116,5 +119,105 @@ describe("renderImage", () => {
 
     expect(result).toContain('<filter id="effect-test-uuid-0"');
     expect(result).toContain('filter="url(#effect-test-uuid-0)"');
+  });
+
+  it("renders EMF placeholder", () => {
+    const result = renderImage(makeImage({ mimeType: "image/emf" }));
+    expect(result).toContain('fill="#E0E0E0"');
+    expect(result).toContain("[EMF]");
+    expect(result).toContain("<rect");
+    expect(result).toContain("<text");
+    expect(result).not.toContain("<image");
+  });
+
+  it("renders WMF placeholder", () => {
+    const result = renderImage(makeImage({ mimeType: "image/wmf" }));
+    expect(result).toContain("[WMF]");
+    expect(result).not.toContain("<image");
+  });
+
+  it("renders image with blipEffects grayscale", () => {
+    const result = renderImage(
+      makeImage({
+        blipEffects: {
+          grayscale: true,
+          biLevel: null,
+          blur: null,
+          lum: null,
+          duotone: null,
+        },
+      }),
+    );
+    expect(result).toContain('<filter id="blip-effect-');
+    expect(result).toContain('type="saturate" values="0"');
+    expect(result).toContain('filter="url(#blip-effect-');
+  });
+
+  it("renders image with stretch fillRect", () => {
+    const result = renderImage(
+      makeImage({
+        stretch: { left: 0.1, top: 0.1, right: 0.1, bottom: 0.1 },
+      }),
+    );
+    // 192 * 0.1 = 19, 144 * 0.1 = 14
+    expect(result).toContain('x="19"');
+    expect(result).toContain('y="14"');
+    // 192 * 0.8 = 154, 144 * 0.8 = 115
+    expect(result).toContain('width="154"');
+    expect(result).toContain('height="115"');
+  });
+
+  it("renders image with tile", () => {
+    const result = renderImage(
+      makeImage({
+        tile: { tx: 0, ty: 0, sx: 0.5, sy: 0.5, flip: "none", align: "tl" },
+      }),
+    );
+    expect(result).toContain("<pattern");
+    expect(result).toContain("patternUnits=");
+    expect(result).toContain('width="96"');
+    expect(result).toContain('height="72"');
+    expect(result).toContain("<rect");
+    expect(result).toContain('fill="url(#tile-');
+  });
+
+  it("renders tiled image with flip x", () => {
+    const result = renderImage(
+      makeImage({
+        tile: { tx: 0, ty: 0, sx: 0.5, sy: 0.5, flip: "x", align: "tl" },
+      }),
+    );
+    expect(result).toContain("scale(-1, 1)");
+  });
+
+  it("applies both blipEffects and effectLst with nested g", () => {
+    const result = renderImage(
+      makeImage({
+        effects: {
+          outerShadow: {
+            blurRadius: 50800,
+            distance: 38100,
+            direction: 45,
+            color: { hex: "#000000", alpha: 0.5 },
+            alignment: "br",
+            rotateWithShape: false,
+          },
+          innerShadow: null,
+          glow: null,
+          softEdge: null,
+        },
+        blipEffects: {
+          grayscale: true,
+          biLevel: null,
+          blur: null,
+          lum: null,
+          duotone: null,
+        },
+      }),
+    );
+    expect(result).toContain('<filter id="effect-');
+    expect(result).toContain('<filter id="blip-effect-');
+    expect(result).toContain('filter="url(#effect-');
+    expect(result).toContain('filter="url(#blip-effect-');
   });
 });

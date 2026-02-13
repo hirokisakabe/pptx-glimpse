@@ -31,3 +31,30 @@ export interface Glow {
 export interface SoftEdge {
   radius: number;
 }
+
+export interface BlipEffects {
+  grayscale: boolean;
+  biLevel: BiLevelEffect | null;
+  blur: BlurEffect | null;
+  lum: LumEffect | null;
+  duotone: DuotoneEffect | null;
+}
+
+export interface BiLevelEffect {
+  threshold: number;
+}
+
+export interface BlurEffect {
+  radius: number;
+  grow: boolean;
+}
+
+export interface LumEffect {
+  brightness: number;
+  contrast: number;
+}
+
+export interface DuotoneEffect {
+  color1: ResolvedColor;
+  color2: ResolvedColor;
+}

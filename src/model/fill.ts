@@ -23,6 +23,16 @@ export interface ImageFill {
   type: "image";
   imageData: string;
   mimeType: string;
+  tile: ImageFillTile | null;
+}
+
+export interface ImageFillTile {
+  tx: number;
+  ty: number;
+  sx: number;
+  sy: number;
+  flip: "none" | "x" | "y" | "xy";
+  align: string;
 }
 
 export interface PatternFill {
