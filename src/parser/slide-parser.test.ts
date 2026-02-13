@@ -1644,4 +1644,49 @@ describe("parseTextBody", () => {
     // ordered data があれば r, fld, r の順序が保持される
     expect(runs.map((r) => r.text)).toEqual(["Before", "1", "After"]);
   });
+
+  it("parses vert attribute from bodyPr", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr vert="vert"/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Vertical</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    expect(result!.bodyProperties.vert).toBe("vert");
+  });
+
+  it("parses vert270 attribute from bodyPr", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr vert="vert270"/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Vertical 270</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    expect(result!.bodyProperties.vert).toBe("vert270");
+  });
+
+  it("defaults vert to horz when not specified", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Horizontal</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    expect(result!.bodyProperties.vert).toBe("horz");
+  });
 });

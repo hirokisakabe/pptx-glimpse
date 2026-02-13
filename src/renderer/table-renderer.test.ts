@@ -260,6 +260,7 @@ describe("renderTable", () => {
                     fontScale: 1,
                     lnSpcReduction: 0,
                     numCol: 1,
+                    vert: "horz",
                   },
                 },
                 fill: null,
