@@ -7,7 +7,7 @@ import type {
   Transform,
   Geometry,
 } from "../model/shape.js";
-import type { ImageElement, SrcRect } from "../model/image.js";
+import type { ImageElement, SrcRect, StretchFillRect, TileInfo } from "../model/image.js";
 import type { ChartElement } from "../model/chart.js";
 import type { TableElement } from "../model/table.js";
 import type {
@@ -34,6 +34,7 @@ import { parseFillFromNode, parseOutline } from "./fill-parser.js";
 import type { FillParseContext } from "./fill-parser.js";
 import { parseEffectList } from "./effect-parser.js";
 import { resolveShapeStyle } from "./style-reference-resolver.js";
+import { parseBlipEffects } from "./blip-effect-parser.js";
 import { parseChart } from "./chart-parser.js";
 import { parseCustomGeometry } from "./custom-geometry-parser.js";
 import { parseTable } from "./table-parser.js";
@@ -572,7 +573,10 @@ function parseImage(
   const mimeType = mimeMap[ext] ?? "image/png";
   const imageData = mediaData.toString("base64");
   const effects = parseEffectList(spPr.effectLst as XmlNode, colorResolver);
+  const blipEffects = parseBlipEffects(blip as XmlNode, colorResolver);
   const srcRect = parseSrcRect(blipFill?.srcRect as XmlNode | undefined);
+  const stretch = parseStretchFillRect(blipFill?.stretch as XmlNode | undefined);
+  const tile = parseTileInfo(blipFill?.tile as XmlNode | undefined);
 
   const nvPicPr = pic.nvPicPr as XmlNode | undefined;
   const cNvPr = nvPicPr?.cNvPr as XmlNode | undefined;
@@ -584,8 +588,11 @@ function parseImage(
     imageData,
     mimeType,
     effects,
+    blipEffects,
     srcRect,
     ...(altText && { altText }),
+    stretch,
+    tile,
   };
 }
 
@@ -597,6 +604,30 @@ function parseSrcRect(node: XmlNode | undefined): SrcRect | null {
   const b = Number(node["@_b"] ?? 0) / 100000;
   if (l === 0 && t === 0 && r === 0 && b === 0) return null;
   return { left: l, top: t, right: r, bottom: b };
+}
+
+function parseStretchFillRect(stretchNode: XmlNode | undefined): StretchFillRect | null {
+  if (!stretchNode) return null;
+  const fillRect = stretchNode.fillRect as XmlNode | undefined;
+  if (!fillRect) return null;
+  const l = Number(fillRect["@_l"] ?? 0) / 100000;
+  const t = Number(fillRect["@_t"] ?? 0) / 100000;
+  const r = Number(fillRect["@_r"] ?? 0) / 100000;
+  const b = Number(fillRect["@_b"] ?? 0) / 100000;
+  if (l === 0 && t === 0 && r === 0 && b === 0) return null;
+  return { left: l, top: t, right: r, bottom: b };
+}
+
+function parseTileInfo(node: XmlNode | undefined): TileInfo | null {
+  if (!node) return null;
+  return {
+    tx: Number(node["@_tx"] ?? 0),
+    ty: Number(node["@_ty"] ?? 0),
+    sx: Number(node["@_sx"] ?? 100000) / 100000,
+    sy: Number(node["@_sy"] ?? 100000) / 100000,
+    flip: ((node["@_flip"] as string) ?? "none") as TileInfo["flip"],
+    align: (node["@_algn"] as string) ?? "tl",
+  };
 }
 
 function parseConnector(

@@ -40,6 +40,8 @@ export const VRT_CASES = [
   { name: "shrink-to-fit", fixture: "shrink-to-fit.pptx" },
   { name: "sp-autofit", fixture: "sp-autofit.pptx" },
   { name: "style-reference", fixture: "style-reference.pptx" },
+  { name: "blip-effects", fixture: "blip-effects.pptx" },
+  { name: "image-stretch-tile", fixture: "image-stretch-tile.pptx" },
 ] as const;
 
 export type VrtCase = (typeof VRT_CASES)[number];

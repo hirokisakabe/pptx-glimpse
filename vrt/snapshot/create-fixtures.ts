@@ -5524,6 +5524,181 @@ async function createStyleReferenceFixture(): Promise<void> {
   savePptx(buffer, "style-reference.pptx");
 }
 
+async function createBlipEffectsFixture(): Promise<void> {
+  // Generate a small test image (colored grid)
+  const imgSize = 100;
+  const pixels = Buffer.alloc(imgSize * imgSize * 4);
+  for (let y = 0; y < imgSize; y++) {
+    for (let x = 0; x < imgSize; x++) {
+      const idx = (y * imgSize + x) * 4;
+      pixels[idx] = x < imgSize / 2 ? 255 : 0;
+      pixels[idx + 1] = y < imgSize / 2 ? 255 : 0;
+      pixels[idx + 2] = 128;
+      pixels[idx + 3] = 255;
+    }
+  }
+  const testImage = await sharp(pixels, {
+    raw: { width: imgSize, height: imgSize, channels: 4 },
+  })
+    .png()
+    .toBuffer();
+
+  const cols = 4;
+  const rows = 2;
+
+  const blipEffects: { name: string; blipXml: string }[] = [
+    { name: "Original", blipXml: `<a:blip r:embed="rId2"/>` },
+    { name: "Grayscale", blipXml: `<a:blip r:embed="rId2"><a:grayscl/></a:blip>` },
+    { name: "BiLevel", blipXml: `<a:blip r:embed="rId2"><a:biLevel thresh="50000"/></a:blip>` },
+    { name: "Blur", blipXml: `<a:blip r:embed="rId2"><a:blur rad="50800" grow="0"/></a:blip>` },
+    {
+      name: "Bright",
+      blipXml: `<a:blip r:embed="rId2"><a:lum bright="40000" contrast="0"/></a:blip>`,
+    },
+    {
+      name: "Duotone",
+      blipXml: `<a:blip r:embed="rId2"><a:duotone><a:prstClr val="black"/><a:srgbClr val="D9C3A5"/></a:duotone></a:blip>`,
+    },
+    { name: "EMF Placeholder", blipXml: "" },
+    { name: "WMF Placeholder", blipXml: "" },
+  ];
+
+  let id = 2;
+  const shapes: string[] = [];
+  const relsExtra: { id: string; type: string; target: string }[] = [
+    { id: "rId2", type: REL_TYPES.image, target: "../media/image1.png" },
+    { id: "rId3", type: REL_TYPES.image, target: "../media/image2.emf" },
+    { id: "rId4", type: REL_TYPES.image, target: "../media/image3.wmf" },
+  ];
+
+  for (let i = 0; i < blipEffects.length; i++) {
+    const { name, blipXml } = blipEffects[i];
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    const pos = gridPosition(col, row, cols, rows);
+
+    if (name === "EMF Placeholder") {
+      shapes.push(`<p:pic>
+  <p:nvPicPr><p:cNvPr id="${id}" name="${name}"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>
+  <p:blipFill>
+    <a:blip r:embed="rId3"/>
+    <a:stretch><a:fillRect/></a:stretch>
+  </p:blipFill>
+  <p:spPr>
+    <a:xfrm><a:off x="${pos.x}" y="${pos.y}"/><a:ext cx="${pos.w}" cy="${pos.h}"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+</p:pic>`);
+    } else if (name === "WMF Placeholder") {
+      shapes.push(`<p:pic>
+  <p:nvPicPr><p:cNvPr id="${id}" name="${name}"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>
+  <p:blipFill>
+    <a:blip r:embed="rId4"/>
+    <a:stretch><a:fillRect/></a:stretch>
+  </p:blipFill>
+  <p:spPr>
+    <a:xfrm><a:off x="${pos.x}" y="${pos.y}"/><a:ext cx="${pos.w}" cy="${pos.h}"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+</p:pic>`);
+    } else {
+      shapes.push(`<p:pic>
+  <p:nvPicPr><p:cNvPr id="${id}" name="${name}"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>
+  <p:blipFill>
+    ${blipXml}
+    <a:stretch><a:fillRect/></a:stretch>
+  </p:blipFill>
+  <p:spPr>
+    <a:xfrm><a:off x="${pos.x}" y="${pos.y}"/><a:ext cx="${pos.w}" cy="${pos.h}"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+</p:pic>`);
+    }
+    id++;
+  }
+
+  const slide = wrapSlideXml(shapes.join("\n"));
+  const rels = slideRelsXml(relsExtra);
+
+  const media = new Map<string, Buffer>();
+  media.set("ppt/media/image1.png", testImage);
+  media.set("ppt/media/image2.emf", Buffer.from("dummy-emf-data"));
+  media.set("ppt/media/image3.wmf", Buffer.from("dummy-wmf-data"));
+
+  const buffer = await buildPptx({
+    slides: [{ xml: slide, rels }],
+    media,
+    contentTypesExtra: [
+      `<Default Extension="emf" ContentType="image/x-emf"/>`,
+      `<Default Extension="wmf" ContentType="image/x-wmf"/>`,
+    ],
+  });
+  savePptx(buffer, "blip-effects.pptx");
+}
+
+async function createImageStretchTileFixture(): Promise<void> {
+  const imgSize = 100;
+  const pixels = Buffer.alloc(imgSize * imgSize * 4);
+  for (let y = 0; y < imgSize; y++) {
+    for (let x = 0; x < imgSize; x++) {
+      const idx = (y * imgSize + x) * 4;
+      pixels[idx] = x < imgSize / 2 ? 255 : 0;
+      pixels[idx + 1] = y < imgSize / 2 ? 255 : 0;
+      pixels[idx + 2] = 128;
+      pixels[idx + 3] = 255;
+    }
+  }
+  const testImage = await sharp(pixels, {
+    raw: { width: imgSize, height: imgSize, channels: 4 },
+  })
+    .png()
+    .toBuffer();
+
+  const cols = 3;
+  const rows = 1;
+
+  const cases: { name: string; fillXml: string }[] = [
+    {
+      name: "Stretch Default",
+      fillXml: `<a:blip r:embed="rId2"/><a:stretch><a:fillRect/></a:stretch>`,
+    },
+    {
+      name: "Stretch Inset",
+      fillXml: `<a:blip r:embed="rId2"/><a:stretch><a:fillRect l="15000" t="15000" r="15000" b="15000"/></a:stretch>`,
+    },
+    {
+      name: "Tile 50%",
+      fillXml: `<a:blip r:embed="rId2"/><a:tile tx="0" ty="0" sx="50000" sy="50000" flip="none" algn="tl"/>`,
+    },
+  ];
+
+  let id = 2;
+  const shapes: string[] = [];
+
+  for (let i = 0; i < cases.length; i++) {
+    const { name, fillXml } = cases[i];
+    const pos = gridPosition(i % cols, Math.floor(i / cols), cols, rows);
+    shapes.push(`<p:pic>
+  <p:nvPicPr><p:cNvPr id="${id}" name="${name}"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>
+  <p:blipFill>${fillXml}</p:blipFill>
+  <p:spPr>
+    <a:xfrm><a:off x="${pos.x}" y="${pos.y}"/><a:ext cx="${pos.w}" cy="${pos.h}"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+</p:pic>`);
+    id++;
+  }
+
+  const slide = wrapSlideXml(shapes.join("\n"));
+  const rels = slideRelsXml([{ id: "rId2", type: REL_TYPES.image, target: "../media/image1.png" }]);
+
+  const media = new Map<string, Buffer>();
+  media.set("ppt/media/image1.png", testImage);
+
+  const buffer = await buildPptx({ slides: [{ xml: slide, rels }], media });
+  savePptx(buffer, "image-stretch-tile.pptx");
+}
+
 const FIXTURE_CREATORS: Record<string, () => Promise<void>> = {
   "shapes.pptx": createShapesFixture,
   "fill-and-lines.pptx": createFillAndLinesFixture,
@@ -5560,6 +5735,8 @@ const FIXTURE_CREATORS: Record<string, () => Promise<void>> = {
   "shrink-to-fit.pptx": createShrinkToFitFixture,
   "sp-autofit.pptx": createSpAutofitFixture,
   "style-reference.pptx": createStyleReferenceFixture,
+  "blip-effects.pptx": createBlipEffectsFixture,
+  "image-stretch-tile.pptx": createImageStretchTileFixture,
 };
 
 async function main(): Promise<void> {
