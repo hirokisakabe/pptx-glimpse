@@ -13,7 +13,7 @@ async function main(): Promise<void> {
   const fixtures = readdirSync(FIXTURE_DIR).filter((f) => f.endsWith(".pptx"));
 
   if (fixtures.length === 0) {
-    console.error('No VRT fixtures found. Run "npm run vrt:internal:fixtures" first.');
+    console.error('No VRT fixtures found. Run "npm run vrt:snapshot:fixtures" first.');
     process.exit(1);
   }
 

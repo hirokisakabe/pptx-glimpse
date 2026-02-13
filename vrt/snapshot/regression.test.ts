@@ -56,7 +56,7 @@ describe("Visual Regression Tests", { timeout: 60000 }, () => {
         const fixturePath = join(FIXTURE_DIR, fixture);
         if (!existsSync(fixturePath)) {
           throw new Error(
-            `Fixture not found: ${fixturePath}. Run "npm run vrt:internal:fixtures" first.`,
+            `Fixture not found: ${fixturePath}. Run "npm run vrt:snapshot:fixtures" first.`,
           );
         }
 

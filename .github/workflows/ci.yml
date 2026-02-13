@@ -79,22 +79,22 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Pull or build Docker image
-        run: docker pull ghcr.io/hirokisakabe/pptx-glimpse-internal-vrt:latest || docker build -t ghcr.io/hirokisakabe/pptx-glimpse-internal-vrt:latest docker/internal-vrt
+        run: docker pull ghcr.io/hirokisakabe/pptx-glimpse-snapshot-vrt:latest || docker build -t ghcr.io/hirokisakabe/pptx-glimpse-snapshot-vrt:latest docker/snapshot-vrt
 
       - name: Generate VRT fixtures and run VRT
         run: |
           docker run --rm \
             -v "${{ github.workspace }}":/workspace \
-            ghcr.io/hirokisakabe/pptx-glimpse-internal-vrt:latest \
-            bash /workspace/vrt/internal/docker-run.sh \
-            bash -c "npm run vrt:internal:fixtures && npx vitest run vrt/internal/regression.test.ts"
+            ghcr.io/hirokisakabe/pptx-glimpse-snapshot-vrt:latest \
+            bash /workspace/vrt/snapshot/docker-run.sh \
+            bash -c "npm run vrt:snapshot:fixtures && npx vitest run vrt/snapshot/regression.test.ts"
 
       - name: Upload diff images on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: internal-vrt-diffs
-          path: vrt/internal/diffs/
+          name: snapshot-vrt-diffs
+          path: vrt/snapshot/diffs/
           retention-days: 7
 
   libreoffice-vrt:

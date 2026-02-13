@@ -1,7 +1,7 @@
 /**
  * VRT (Visual Regression Testing) 用 PPTX フィクスチャ生成スクリプト
  *
- * 使い方: npx tsx vrt/internal/create-fixtures.ts
+ * 使い方: npx tsx vrt/snapshot/create-fixtures.ts
  */
 import JSZip from "jszip";
 import sharp from "sharp";
