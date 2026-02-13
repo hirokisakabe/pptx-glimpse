@@ -64,6 +64,9 @@ export function renderChart(element: ChartElement): string {
       case "area":
         parts.push(renderAreaChart(chart, plotX, plotY, plotW, plotH));
         break;
+      case "radar":
+        parts.push(renderRadarChart(chart, plotX, plotY, plotW, plotH));
+        break;
     }
   }
 
@@ -436,6 +439,90 @@ function renderBubbleChart(chart: ChartData, x: number, y: number, w: number, h:
       parts.push(
         `<circle cx="${round(px)}" cy="${round(py)}" r="${round(r)}" ${fillAttr(color)} fill-opacity="0.6"/>`,
       );
+    }
+  }
+
+  return parts.join("");
+}
+
+function renderRadarChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
+  const parts: string[] = [];
+  const { series, categories } = chart;
+  if (series.length === 0) return "";
+
+  const maxVal = getMaxValue(series);
+  if (maxVal === 0) return "";
+
+  const catCount = categories.length || Math.max(...series.map((s) => s.values.length));
+  if (catCount === 0) return "";
+
+  const cx = x + w / 2;
+  const cy = y + h / 2;
+  const radius = (Math.min(w, h) / 2) * 0.85;
+  const gridLevels = 5;
+
+  // Concentric grid circles
+  for (let level = 1; level <= gridLevels; level++) {
+    const r = (radius / gridLevels) * level;
+    parts.push(
+      `<circle cx="${round(cx)}" cy="${round(cy)}" r="${round(r)}" fill="none" stroke="#D9D9D9" stroke-width="0.5"/>`,
+    );
+  }
+
+  // Axis lines and category labels
+  for (let i = 0; i < catCount; i++) {
+    const angle = (i / catCount) * 2 * Math.PI - Math.PI / 2;
+    const ax = cx + radius * Math.cos(angle);
+    const ay = cy + radius * Math.sin(angle);
+    parts.push(
+      `<line x1="${round(cx)}" y1="${round(cy)}" x2="${round(ax)}" y2="${round(ay)}" stroke="#D9D9D9" stroke-width="0.5"/>`,
+    );
+
+    const label = categories[i] ?? "";
+    if (label) {
+      const labelR = radius + 12;
+      const lx = cx + labelR * Math.cos(angle);
+      const ly = cy + labelR * Math.sin(angle);
+      const anchor =
+        Math.abs(Math.cos(angle)) < 0.01 ? "middle" : Math.cos(angle) > 0 ? "start" : "end";
+      parts.push(
+        `<text x="${round(lx)}" y="${round(ly + 4)}" text-anchor="${anchor}" font-size="10" fill="#595959">${escapeXml(label)}</text>`,
+      );
+    }
+  }
+
+  const isFilled = chart.radarStyle === "filled";
+  const showMarkers = chart.radarStyle === "marker";
+
+  // Data polygons
+  for (let s = 0; s < series.length; s++) {
+    const color = series[s].color;
+    const points: string[] = [];
+    const coords: { px: number; py: number }[] = [];
+    for (let i = 0; i < catCount; i++) {
+      const val = series[s].values[i] ?? 0;
+      const angle = (i / catCount) * 2 * Math.PI - Math.PI / 2;
+      const r = (val / maxVal) * radius;
+      const px = cx + r * Math.cos(angle);
+      const py = cy + r * Math.sin(angle);
+      points.push(`${round(px)},${round(py)}`);
+      coords.push({ px, py });
+    }
+
+    if (isFilled) {
+      parts.push(
+        `<polygon points="${points.join(" ")}" fill="${color.hex}" fill-opacity="0.3" stroke="${color.hex}" stroke-width="2"${color.alpha < 1 ? ` stroke-opacity="${color.alpha}"` : ""}/>`,
+      );
+    } else {
+      parts.push(
+        `<polygon points="${points.join(" ")}" fill="none" stroke="${color.hex}" stroke-width="2"${color.alpha < 1 ? ` stroke-opacity="${color.alpha}"` : ""}/>`,
+      );
+    }
+
+    if (showMarkers) {
+      for (const { px, py } of coords) {
+        parts.push(`<circle cx="${round(px)}" cy="${round(py)}" r="3" ${fillAttr(color)}/>`);
+      }
     }
   }
 

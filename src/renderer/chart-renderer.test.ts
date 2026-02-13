@@ -253,6 +253,68 @@ describe("renderChart", () => {
     });
   });
 
+  describe("radar chart", () => {
+    it("renders grid circles and data polygon", () => {
+      const element = createChartElement({
+        chartType: "radar",
+        radarStyle: "standard",
+        series: [{ name: "S1", values: [8, 6, 9, 7], color: { hex: "#4472C4", alpha: 1 } }],
+        categories: ["A", "B", "C", "D"],
+      });
+
+      const svg = renderChart(element);
+      // Grid circles (5 levels)
+      const circles = svg.match(/<circle[^>]*stroke="#D9D9D9"[^>]*\/>/g);
+      expect(circles).not.toBeNull();
+      expect(circles!.length).toBe(5);
+      // Data polygon
+      expect(svg).toContain("<polygon");
+      expect(svg).toContain('fill="none"');
+      expect(svg).toContain('stroke="#4472C4"');
+    });
+
+    it("renders filled polygon for filled radarStyle", () => {
+      const element = createChartElement({
+        chartType: "radar",
+        radarStyle: "filled",
+        series: [{ name: "S1", values: [5, 3, 7], color: { hex: "#4472C4", alpha: 1 } }],
+        categories: ["A", "B", "C"],
+      });
+
+      const svg = renderChart(element);
+      expect(svg).toContain('fill="#4472C4"');
+      expect(svg).toContain('fill-opacity="0.3"');
+    });
+
+    it("renders markers for marker radarStyle", () => {
+      const element = createChartElement({
+        chartType: "radar",
+        radarStyle: "marker",
+        series: [{ name: "S1", values: [5, 3, 7], color: { hex: "#4472C4", alpha: 1 } }],
+        categories: ["A", "B", "C"],
+      });
+
+      const svg = renderChart(element);
+      // 3 data point markers
+      const markers = svg.match(/<circle[^>]*r="3"[^>]*\/>/g);
+      expect(markers).not.toBeNull();
+      expect(markers!.length).toBe(3);
+    });
+
+    it("renders category labels", () => {
+      const element = createChartElement({
+        chartType: "radar",
+        radarStyle: "standard",
+        series: [{ name: "S1", values: [5, 3], color: { hex: "#4472C4", alpha: 1 } }],
+        categories: ["Speed", "Power"],
+      });
+
+      const svg = renderChart(element);
+      expect(svg).toContain("Speed");
+      expect(svg).toContain("Power");
+    });
+  });
+
   describe("title", () => {
     it("renders title text", () => {
       const element = createChartElement({

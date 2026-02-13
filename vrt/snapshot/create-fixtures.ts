@@ -8,6 +8,7 @@ import sharp from "sharp";
 import { writeFileSync, mkdirSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import { VRT_CASES } from "./vrt-cases.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -1063,6 +1064,7 @@ function chartXml(
   opts: {
     barDir?: string;
     holeSize?: number;
+    radarStyle?: string;
     title?: string;
     legendPos?: string;
     series: {
@@ -1102,6 +1104,7 @@ function chartXml(
 
   const barDirXml = opts.barDir ? `<c:barDir val="${opts.barDir}"/>` : "";
   const holeSizeXml = opts.holeSize !== undefined ? `<c:holeSize val="${opts.holeSize}"/>` : "";
+  const radarStyleXml = opts.radarStyle ? `<c:radarStyle val="${opts.radarStyle}"/>` : "";
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <c:chartSpace xmlns:c="${NS.c}" xmlns:a="${NS.a}">
@@ -1109,6 +1112,7 @@ function chartXml(
     ${titleXml}
     <c:plotArea>
       <c:${chartType}>
+        ${radarStyleXml}
         ${barDirXml}
         ${seriesXml}
         ${holeSizeXml}
@@ -1333,6 +1337,39 @@ async function createChartsFixture(): Promise<void> {
     rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart7.xml" }]),
   });
 
+  // Slide 8: Radar chart
+  const radarChart = chartXml("radarChart", {
+    radarStyle: "marker",
+    title: "Skill Assessment",
+    legendPos: "b",
+    series: [
+      {
+        name: "Team A",
+        categories: ["Speed", "Power", "Accuracy", "Endurance", "Agility"],
+        values: [8, 7, 9, 6, 8],
+      },
+      {
+        name: "Team B",
+        categories: ["Speed", "Power", "Accuracy", "Endurance", "Agility"],
+        values: [7, 8, 7, 8, 7],
+      },
+    ],
+  });
+  charts.set("ppt/charts/chart8.xml", radarChart);
+  const gf8 = graphicFrameXml(
+    2,
+    "Radar Chart",
+    margin,
+    margin,
+    SLIDE_W - margin * 2,
+    SLIDE_H - margin * 2,
+    "rId2",
+  );
+  slides.push({
+    xml: wrapSlideXml(gf8),
+    rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart8.xml" }]),
+  });
+
   const buffer = await buildPptx({
     slides,
     charts,
@@ -1344,6 +1381,7 @@ async function createChartsFixture(): Promise<void> {
       `<Override PartName="/ppt/charts/chart5.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
       `<Override PartName="/ppt/charts/chart6.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
       `<Override PartName="/ppt/charts/chart7.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
+      `<Override PartName="/ppt/charts/chart8.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
     ],
   });
   savePptx(buffer, "charts.pptx");
@@ -5491,45 +5529,58 @@ async function createImageStretchTileFixture(): Promise<void> {
   savePptx(buffer, "image-stretch-tile.pptx");
 }
 
+const FIXTURE_CREATORS: Record<string, () => Promise<void>> = {
+  "shapes.pptx": createShapesFixture,
+  "fill-and-lines.pptx": createFillAndLinesFixture,
+  "text.pptx": createTextFixture,
+  "transform.pptx": createTransformFixture,
+  "background.pptx": createBackgroundFixture,
+  "groups.pptx": createGroupsFixture,
+  "charts.pptx": createChartsFixture,
+  "connectors.pptx": createConnectorsFixture,
+  "custom-geometry.pptx": createCustomGeometryFixture,
+  "image.pptx": createImageFixture,
+  "tables.pptx": createTablesFixture,
+  "bullets.pptx": createBulletsFixture,
+  "flowchart.pptx": createFlowchartFixture,
+  "callouts-arcs.pptx": createCalloutsArcsFixture,
+  "arrows-stars.pptx": createArrowsStarsFixture,
+  "math-other.pptx": createMathOtherFixture,
+  "word-wrap.pptx": createWordWrapFixture,
+  "background-blipfill.pptx": createBackgroundBlipFillFixture,
+  "composite.pptx": createCompositeFixture,
+  "text-decoration.pptx": createTextDecorationFixture,
+  "slide-size-4-3.pptx": createSlideSize43Fixture,
+  "effects.pptx": createEffectsFixture,
+  "hyperlinks.pptx": createHyperlinksFixture,
+  "pattern-image-fill.pptx": createPatternImageFillFixture,
+  "smartart.pptx": createSmartArtFixture,
+  "theme-fonts.pptx": createThemeFontFixture,
+  "text-style-inheritance.pptx": createTextStyleInheritanceFixture,
+  "z-order-mixed.pptx": createZOrderMixedFixture,
+  "paragraph-spacing.pptx": createParagraphSpacingFixture,
+  "placeholder-overlap.pptx": createPlaceholderOverlapFixture,
+  "image-crop.pptx": createImageCropFixture,
+  "text-advanced.pptx": createTextAdvancedFixture,
+  "shrink-to-fit.pptx": createShrinkToFitFixture,
+  "sp-autofit.pptx": createSpAutofitFixture,
+  "blip-effects.pptx": createBlipEffectsFixture,
+  "image-stretch-tile.pptx": createImageStretchTileFixture,
+};
+
 async function main(): Promise<void> {
   console.log("Creating VRT fixtures...\n");
 
-  await createShapesFixture();
-  await createFillAndLinesFixture();
-  await createTextFixture();
-  await createTransformFixture();
-  await createBackgroundFixture();
-  await createGroupsFixture();
-  await createChartsFixture();
-  await createConnectorsFixture();
-  await createCustomGeometryFixture();
-  await createImageFixture();
-  await createTablesFixture();
-  await createBulletsFixture();
-  await createFlowchartFixture();
-  await createCalloutsArcsFixture();
-  await createArrowsStarsFixture();
-  await createMathOtherFixture();
-  await createWordWrapFixture();
-  await createBackgroundBlipFillFixture();
-  await createCompositeFixture();
-  await createTextDecorationFixture();
-  await createSlideSize43Fixture();
-  await createEffectsFixture();
-  await createHyperlinksFixture();
-  await createPatternImageFillFixture();
-  await createSmartArtFixture();
-  await createThemeFontFixture();
-  await createTextStyleInheritanceFixture();
-  await createZOrderMixedFixture();
-  await createParagraphSpacingFixture();
-  await createPlaceholderOverlapFixture();
-  await createImageCropFixture();
-  await createTextAdvancedFixture();
-  await createShrinkToFitFixture();
-  await createSpAutofitFixture();
-  await createBlipEffectsFixture();
-  await createImageStretchTileFixture();
+  for (const { fixture } of VRT_CASES) {
+    const creator = FIXTURE_CREATORS[fixture];
+    if (!creator) {
+      throw new Error(
+        `No fixture creator found for "${fixture}". ` +
+          `Add a creator function to FIXTURE_CREATORS in create-fixtures.ts.`,
+      );
+    }
+    await creator();
+  }
 
   console.log("\nDone!");
 }

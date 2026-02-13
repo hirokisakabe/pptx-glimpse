@@ -57,10 +57,10 @@ Supports conversion of static visual content in PowerPoint. Dynamic elements suc
 
 | Feature       | Details                                                                                                                        |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| Preset shapes | 123 types (rectangles, ellipses, arrows, flowcharts, callouts, stars, math symbols, etc.)                                      |
+| Preset shapes | 136 types (rectangles, ellipses, arrows, flowcharts, callouts, stars, math symbols, etc.)                                      |
 | Custom shapes | Arbitrary shape drawing using custom paths (moveTo, lnTo, cubicBezTo, quadBezTo, arcTo, close), adjust values / guide formulas |
-| Connectors    | Line connector drawing, line style / color / width settings                                                                    |
-| Groups        | Shape grouping, nested groups                                                                                                  |
+| Connectors    | Straight / bent / curved connectors, arrow endpoints (headEnd/tailEnd), line style / color / width                             |
+| Groups        | Shape grouping, nested groups, group rotation / flip                                                                           |
 | Transforms    | Position, size, rotation, flip (flipH/flipV), adjustment values                                                                |
 
 #### Text
@@ -72,6 +72,8 @@ Supports conversion of static visual content in PowerPoint. Dynamic elements suc
 | Bullet points        | Character bullets (buChar), auto-numbering (buAutoNum, 9 types), bullet font / color / size                                                 |
 | Text boxes           | Word wrap (square/none), auto-fit (noAutofit/normAutofit/spAutofit), font scaling, margins                                                  |
 | Word wrapping        | Word wrapping for English, Japanese, and CJK text, wrapping with mixed font sizes                                                           |
+| Style inheritance    | Full text style inheritance chain (run → paragraph default → body lstStyle → layout → master → txStyles → defaultTextStyle → theme fonts)   |
+| Tab stops / fields   | Tab stop positions, field codes (slide number, date, etc.)                                                                                  |
 
 #### Fill
 
@@ -79,17 +81,18 @@ Supports conversion of static visual content in PowerPoint. Dynamic elements suc
 | ------------ | ---------------------------------------------------------------- |
 | Solid color  | RGB color specification, transparency                            |
 | Gradient     | Linear gradient, radial gradient, multiple gradient stops, angle |
-| Image fill   | PNG/JPEG/GIF, stretch mode                                       |
+| Image fill   | PNG/JPEG/GIF, stretch mode, cropping (srcRect)                   |
 | Pattern fill | Hatching patterns (horizontal, vertical, diagonal, cross, etc.)  |
 | Group fill   | Inherit fill from parent group                                   |
 | No fill      | noFill specification                                             |
 
 #### Lines & Borders
 
-| Feature    | Details                                                       |
-| ---------- | ------------------------------------------------------------- |
-| Line style | Line width, solid color, transparency                         |
-| Dash style | solid, dash, dot, dashDot, lgDash, lgDashDot, sysDash, sysDot |
+| Feature    | Details                                                           |
+| ---------- | ----------------------------------------------------------------- |
+| Line style | Line width, solid color, transparency, lineCap, lineJoin          |
+| Dash style | solid, dash, dot, dashDot, lgDash, lgDashDot, sysDash, sysDot     |
+| Arrows     | Head / tail arrow endpoints with type, width, and length settings |
 
 #### Colors
 
@@ -110,10 +113,10 @@ Supports conversion of static visual content in PowerPoint. Dynamic elements suc
 
 #### Images
 
-| Feature        | Details                                                  |
-| -------------- | -------------------------------------------------------- |
-| Image elements | PNG/JPEG/GIF, position / size / rotation / flip, effects |
-| Image fill     | Image fill for shapes and backgrounds                    |
+| Feature        | Details                                                                      |
+| -------------- | ---------------------------------------------------------------------------- |
+| Image elements | PNG/JPEG/GIF, position / size / rotation / flip, cropping (srcRect), effects |
+| Image fill     | Image fill for shapes and backgrounds                                        |
 
 #### Tables
 
@@ -131,18 +134,19 @@ Supports conversion of static visual content in PowerPoint. Dynamic elements suc
 
 #### SmartArt
 
-| Feature              | Details                                                                            |
-| -------------------- | ---------------------------------------------------------------------------------- |
-| Pre-rendered shapes  | Renders SmartArt using PowerPoint's pre-rendered drawing shapes (drawingN.xml)      |
-| mc:AlternateContent  | Handles AlternateContent fallback mechanism used by SmartArt                        |
+| Feature             | Details                                                                        |
+| ------------------- | ------------------------------------------------------------------------------ |
+| Pre-rendered shapes | Renders SmartArt using PowerPoint's pre-rendered drawing shapes (drawingN.xml) |
+| mc:AlternateContent | Handles AlternateContent fallback mechanism used by SmartArt                   |
 
 #### Background & Slide Settings
 
-| Feature    | Details                                                         |
-| ---------- | --------------------------------------------------------------- |
-| Background | Solid, gradient, image. Fallback order: slide → layout → master |
-| Slide size | 16:9, 4:3, custom sizes                                         |
-| Theme      | Theme color scheme, theme fonts (majorFont/minorFont)           |
+| Feature      | Details                                                                |
+| ------------ | ---------------------------------------------------------------------- |
+| Background   | Solid, gradient, image. Fallback order: slide → layout → master        |
+| Slide size   | 16:9, 4:3, custom sizes                                                |
+| Theme        | Theme color scheme, theme fonts (majorFont/minorFont), theme font refs |
+| showMasterSp | Control visibility of master shapes per slide / layout                 |
 
 ### Unsupported Features
 

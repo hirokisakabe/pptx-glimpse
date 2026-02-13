@@ -18,6 +18,7 @@ const CHART_TYPE_MAP: [string, ChartType][] = [
   ["bubbleChart", "bubble"],
   ["areaChart", "area"],
   ["area3DChart", "area"],
+  ["radarChart", "radar"],
 ];
 
 export function parseChart(chartXml: string, colorResolver: ColorResolver): ChartData | null {
@@ -32,10 +33,8 @@ export function parseChart(chartXml: string, colorResolver: ColorResolver): Char
   if (!plotArea) return null;
 
   const title = parseChartTitle(chart.title as XmlNode);
-  const { chartType, series, categories, barDirection, holeSize } = parseChartTypeAndData(
-    plotArea,
-    colorResolver,
-  );
+  const { chartType, series, categories, barDirection, holeSize, radarStyle } =
+    parseChartTypeAndData(plotArea, colorResolver);
   if (!chartType) return null;
 
   const legend = parseLegend(chart.legend as XmlNode);
@@ -47,6 +46,7 @@ export function parseChart(chartXml: string, colorResolver: ColorResolver): Char
     categories,
     ...(barDirection !== undefined && { barDirection }),
     ...(holeSize !== undefined && { holeSize }),
+    ...(radarStyle !== undefined && { radarStyle }),
     legend,
   };
 }
@@ -60,6 +60,7 @@ function parseChartTypeAndData(
   categories: string[];
   barDirection?: "col" | "bar";
   holeSize?: number;
+  radarStyle?: "standard" | "marker" | "filled";
 } {
   for (const [xmlTag, chartType] of CHART_TYPE_MAP) {
     const chartNode = plotArea[xmlTag] as XmlNode | undefined;
@@ -79,12 +80,21 @@ function parseChartTypeAndData(
     const holeSizeNode = chartNode.holeSize as XmlNode | undefined;
     const holeSize = chartType === "doughnut" ? Number(holeSizeNode?.["@_val"] ?? 50) : undefined;
 
-    return { chartType, series, categories, barDirection, holeSize };
+    const radarStyleNode = chartNode.radarStyle as XmlNode | undefined;
+    const radarStyle =
+      chartType === "radar"
+        ? (((radarStyleNode?.["@_val"] as string | undefined) ?? "standard") as
+            | "standard"
+            | "marker"
+            | "filled")
+        : undefined;
+
+    return { chartType, series, categories, barDirection, holeSize, radarStyle };
   }
 
   // Detect unsupported chart types
   const knownTags = new Set(CHART_TYPE_MAP.map(([tag]) => tag));
-  const chartTags = ["surfaceChart", "surface3DChart", "radarChart", "stockChart", "ofPieChart"];
+  const chartTags = ["surfaceChart", "surface3DChart", "stockChart", "ofPieChart"];
   for (const tag of chartTags) {
     if (!knownTags.has(tag) && plotArea[tag]) {
       warn(`chart.${tag}`, `chart type "${tag}" not implemented`);

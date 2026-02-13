@@ -7,7 +7,15 @@ export interface ChartElement {
   chart: ChartData;
 }
 
-export type ChartType = "bar" | "line" | "pie" | "doughnut" | "scatter" | "bubble" | "area";
+export type ChartType =
+  | "bar"
+  | "line"
+  | "pie"
+  | "doughnut"
+  | "scatter"
+  | "bubble"
+  | "area"
+  | "radar";
 
 export interface ChartData {
   chartType: ChartType;
@@ -16,6 +24,7 @@ export interface ChartData {
   categories: string[];
   barDirection?: "col" | "bar";
   holeSize?: number;
+  radarStyle?: "standard" | "marker" | "filled";
   legend: ChartLegend | null;
 }
 
