@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
+  contents: read
   pull-requests: write
 
 jobs:
@@ -25,59 +25,80 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run benchmarks
-        run: npx vitest bench --outputJson bench-results.json
+      # --- PR: ベースライン復元 ---
+      - name: Restore baseline from cache
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v4
+        with:
+          path: bench-results.json
+          key: bench-baseline-main-${{ github.event.pull_request.base.sha }}
+          restore-keys: |
+            bench-baseline-main-
 
-      - name: Transform results for benchmark-action
-        run: npx tsx scripts/transform-bench-json.ts bench-results.json benchmark-output.json
-
-      - name: Check if benchmark-data branch exists
-        id: benchmark-branch
+      - name: Prepare baseline
+        if: github.event_name == 'pull_request'
         run: |
-          if git ls-remote --exit-code origin benchmark-data > /dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
+          if [ -f bench-results.json ]; then
+            mv bench-results.json bench-baseline.json
+            echo "BASELINE_EXISTS=true" >> "$GITHUB_ENV"
           else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "BASELINE_EXISTS=false" >> "$GITHUB_ENV"
           fi
 
-      - name: Store benchmark result (push to main, first run)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.benchmark-branch.outputs.exists == 'false'
-        uses: benchmark-action/github-action-benchmark@v1
-        with:
-          tool: customBiggerIsBetter
-          output-file-path: benchmark-output.json
-          gh-pages-branch: benchmark-data
-          benchmark-data-dir-path: dev/bench
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: true
-          skip-fetch-gh-pages: true
+      # --- ベンチマーク実行 ---
+      - name: Run benchmarks (with comparison)
+        if: env.BASELINE_EXISTS == 'true'
+        run: npx vitest bench --compare bench-baseline.json --outputJson bench-results.json
 
-      - name: Store benchmark result (push to main)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.benchmark-branch.outputs.exists == 'true'
-        uses: benchmark-action/github-action-benchmark@v1
-        with:
-          tool: customBiggerIsBetter
-          output-file-path: benchmark-output.json
-          gh-pages-branch: benchmark-data
-          benchmark-data-dir-path: dev/bench
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          auto-push: true
+      - name: Run benchmarks
+        if: env.BASELINE_EXISTS != 'true'
+        run: npx vitest bench --outputJson bench-results.json
 
-      - name: Notice when no baseline
-        if: github.event_name == 'pull_request' && steps.benchmark-branch.outputs.exists == 'false'
-        run: echo "::notice::No baseline data yet. Benchmark comparison will be available after the first merge to main."
-
-      - name: Compare benchmark result (PR)
-        if: github.event_name == 'pull_request' && steps.benchmark-branch.outputs.exists == 'true'
-        uses: benchmark-action/github-action-benchmark@v1
+      # --- main: キャッシュ保存 ---
+      - name: Save baseline to cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
         with:
-          tool: customBiggerIsBetter
-          output-file-path: benchmark-output.json
-          gh-pages-branch: benchmark-data
-          benchmark-data-dir-path: dev/bench
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          alert-threshold: "130%"
-          comment-on-alert: true
-          comment-always: true
-          fail-on-alert: false
-          save-data-file: false
+          path: bench-results.json
+          key: bench-baseline-main-${{ github.sha }}
+
+      # --- PR: コメント投稿 ---
+      - name: Generate benchmark comment
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ "$BASELINE_EXISTS" = "true" ]; then
+            npx tsx scripts/format-bench-comment.ts bench-results.json bench-baseline.json > bench-comment.md
+          else
+            npx tsx scripts/format-bench-comment.ts bench-results.json > bench-comment.md
+          fi
+
+      - name: Post or update PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('bench-comment.md', 'utf-8');
+            const marker = '<!-- benchmark-comment -->';
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(marker));
+            const fullBody = marker + '\n' + body;
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: fullBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: fullBody,
+              });
+            }
