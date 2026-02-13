@@ -5,7 +5,13 @@ import {
   buildFontFamilyValue,
   computeSpAutofitHeight,
 } from "./text-renderer.js";
-import type { TextBody, Paragraph, BulletType, SpacingValue } from "../model/text.js";
+import type {
+  TextBody,
+  Paragraph,
+  BulletType,
+  SpacingValue,
+  BodyProperties,
+} from "../model/text.js";
 import type { Transform } from "../model/shape.js";
 
 function makeTransform(widthEmu: number, heightEmu: number): Transform {
@@ -50,6 +56,7 @@ function makeTextBody(
     fontScale?: number;
     lnSpcReduction?: number;
     autoFit?: "noAutofit" | "normAutofit" | "spAutofit";
+    vert?: BodyProperties["vert"];
   },
 ): TextBody {
   const autoFit =
@@ -66,6 +73,7 @@ function makeTextBody(
       fontScale: overrides?.fontScale ?? 1,
       lnSpcReduction: overrides?.lnSpcReduction ?? 0,
       numCol: 1,
+      vert: overrides?.vert ?? "horz",
     },
     paragraphs: [
       {
@@ -112,6 +120,7 @@ function makeBulletTextBody(
       fontScale: 1,
       lnSpcReduction: 0,
       numCol: 1,
+      vert: "horz" as const,
     },
     paragraphs: paragraphs.map((p) => ({
       runs: [
@@ -217,6 +226,8 @@ describe("renderTextBody", () => {
         autoFit: "noAutofit",
         fontScale: 1,
         lnSpcReduction: 0,
+        numCol: 1,
+        vert: "horz",
       },
       paragraphs: [
         {
@@ -306,6 +317,8 @@ describe("renderTextBody", () => {
         autoFit: "noAutofit",
         fontScale: 1,
         lnSpcReduction: 0,
+        numCol: 1,
+        vert: "horz",
       },
       paragraphs: [
         {
@@ -373,6 +386,8 @@ describe("renderTextBody", () => {
         autoFit: "noAutofit",
         fontScale: 1,
         lnSpcReduction: 0,
+        numCol: 1,
+        vert: "horz",
       },
       paragraphs: [
         {
@@ -464,6 +479,8 @@ describe("段落間隔 (spaceBefore / spaceAfter)", () => {
         autoFit: "noAutofit",
         fontScale: 1,
         lnSpcReduction: 0,
+        numCol: 1,
+        vert: "horz",
       },
       paragraphs: paragraphs.map((p) => ({
         runs: [{ text: p.text, properties: makeRunProps() }],
@@ -687,6 +704,8 @@ describe("latin/ea フォント切り替え", () => {
         autoFit: "noAutofit",
         fontScale: 1,
         lnSpcReduction: 0,
+        numCol: 1,
+        vert: "horz",
       },
       paragraphs: [
         {
@@ -736,6 +755,8 @@ describe("latin/ea フォント切り替え", () => {
         autoFit: "noAutofit",
         fontScale: 1,
         lnSpcReduction: 0,
+        numCol: 1,
+        vert: "horz",
       },
       paragraphs: [
         {
@@ -778,6 +799,8 @@ describe("latin/ea フォント切り替え", () => {
         autoFit: "noAutofit",
         fontScale: 1,
         lnSpcReduction: 0,
+        numCol: 1,
+        vert: "horz",
       },
       paragraphs: [
         {
@@ -945,5 +968,53 @@ describe("spAutofit (図形サイズ自動拡大)", () => {
     const textBody = makeTextBody([""], { autoFit: "spAutofit" });
     const result = computeSpAutofitHeight(textBody, makeTransform(960000, 480000));
     expect(result).toBeNull();
+  });
+});
+
+describe("縦書きテキスト (vertical text)", () => {
+  it("vert='vert' の場合、<g> でラップされ rotate(90) 変換が適用される", () => {
+    const textBody = makeTextBody(["Vertical"], { vert: "vert" });
+    const result = renderTextBody(textBody, makeTransform(4000000, 2000000));
+    expect(result).toContain("<g transform=");
+    expect(result).toContain("rotate(90)");
+    expect(result).toContain("Vertical");
+  });
+
+  it("vert='vert270' の場合、rotate(-90) 変換が適用される", () => {
+    const textBody = makeTextBody(["Vertical270"], { vert: "vert270" });
+    const result = renderTextBody(textBody, makeTransform(4000000, 2000000));
+    expect(result).toContain("<g transform=");
+    expect(result).toContain("rotate(-90)");
+    expect(result).toContain("Vertical270");
+  });
+
+  it("vert='eaVert' の場合、vert と同様に rotate(90) が適用される", () => {
+    const textBody = makeTextBody(["EAVertical"], { vert: "eaVert" });
+    const result = renderTextBody(textBody, makeTransform(4000000, 2000000));
+    expect(result).toContain("<g transform=");
+    expect(result).toContain("rotate(90)");
+  });
+
+  it("vert='horz' (デフォルト) の場合、<g> ラッピングなし", () => {
+    const textBody = makeTextBody(["Horizontal"]);
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).not.toContain("<g transform=");
+    expect(result).toMatch(/^<text/);
+  });
+
+  it("vert='vert' で translate にシェイプの幅が使われる", () => {
+    const widthEmu = 4000000;
+    const textBody = makeTextBody(["Test"], { vert: "vert" });
+    const result = renderTextBody(textBody, makeTransform(widthEmu, 2000000));
+    const widthPx = (widthEmu / 914400) * 96;
+    expect(result).toContain(`translate(${widthPx}, 0)`);
+  });
+
+  it("vert='vert270' で translate にシェイプの高さが使われる", () => {
+    const heightEmu = 2000000;
+    const textBody = makeTextBody(["Test"], { vert: "vert270" });
+    const result = renderTextBody(textBody, makeTransform(4000000, heightEmu));
+    const heightPx = (heightEmu / 914400) * 96;
+    expect(result).toContain(`translate(0, ${heightPx})`);
   });
 });

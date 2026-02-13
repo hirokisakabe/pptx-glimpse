@@ -72,6 +72,7 @@ function makeShape(overrides: Partial<ShapeElement> = {}): ShapeElement {
         fontScale: 1,
         lnSpcReduction: 0,
         numCol: 1,
+        vert: "horz",
       },
     },
     effects: null,

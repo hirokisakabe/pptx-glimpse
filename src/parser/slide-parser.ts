@@ -989,11 +989,7 @@ export function parseTextBody(
 
   const bodyPr = txBody.bodyPr as XmlNode | undefined;
 
-  // Unsupported feature detection
-  const vert = bodyPr?.["@_vert"] as string | undefined;
-  if (vert && vert !== "horz") {
-    warn("bodyPr@vert", `vertical text (vert="${vert}") not implemented`);
-  }
+  const vert = (bodyPr?.["@_vert"] as BodyProperties["vert"] | undefined) ?? "horz";
 
   const numCol = bodyPr?.["@_numCol"] ? Math.max(1, Number(bodyPr["@_numCol"])) : 1;
 
@@ -1025,6 +1021,7 @@ export function parseTextBody(
     fontScale,
     lnSpcReduction,
     numCol,
+    vert,
   };
 
   const lstStyle = lstStyleOverride ?? parseListStyle(txBody.lstStyle as XmlNode);
