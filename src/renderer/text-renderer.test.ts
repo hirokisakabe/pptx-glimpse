@@ -44,8 +44,11 @@ function makeTextBody(
     fontSize?: number;
     fontScale?: number;
     lnSpcReduction?: number;
+    autoFit?: "noAutofit" | "normAutofit" | "spAutofit";
   },
 ): TextBody {
+  const autoFit =
+    overrides?.autoFit ?? (overrides?.fontScale !== undefined ? "normAutofit" : "noAutofit");
   return {
     bodyProperties: {
       anchor: overrides?.anchor ?? "t",
@@ -54,7 +57,7 @@ function makeTextBody(
       marginTop: 45720, // ~4.8px
       marginBottom: 45720,
       wrap: overrides?.wrap ?? "square",
-      autoFit: overrides?.fontScale !== undefined ? "normAutofit" : "noAutofit",
+      autoFit,
       fontScale: overrides?.fontScale ?? 1,
       lnSpcReduction: overrides?.lnSpcReduction ?? 0,
       numCol: 1,
@@ -853,5 +856,54 @@ describe("buildFontFamilyValue", () => {
 
   it("未知のフォントにはフォールバックが追加されない", () => {
     expect(buildFontFamilyValue(["UnknownFont"])).toBe("UnknownFont, sans-serif");
+  });
+});
+
+describe("shrinkToFit (normAutofit 動的縮小)", () => {
+  it("normAutofit でテキストがはみ出す場合にフォントサイズが自動縮小される", () => {
+    // 小さいテキストボックスに大きなテキストを入れる
+    const textBody = makeTextBody(
+      ["This is a long text that should overflow the small text box and be shrunk to fit"],
+      { fontSize: 36, autoFit: "normAutofit" },
+    );
+    // 非常に小さい図形 (約100x50px)
+    const smallTransform = makeTransform(960000, 480000);
+    const result = renderTextBody(textBody, smallTransform);
+    // フォントサイズが36ptより小さくなっているはず
+    expect(result).not.toContain('font-size="36pt"');
+    expect(result).toContain("font-size=");
+    // font-size の値を抽出して36未満であることを確認
+    const fontSizeMatch = result.match(/font-size="([0-9.]+)pt"/);
+    expect(fontSizeMatch).not.toBeNull();
+    expect(Number(fontSizeMatch![1])).toBeLessThan(36);
+  });
+
+  it("normAutofit でテキストが収まる場合はフォントサイズが変わらない", () => {
+    const textBody = makeTextBody(["Hi"], { fontSize: 12, autoFit: "normAutofit" });
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).toContain('font-size="12pt"');
+  });
+
+  it("noAutofit の場合はテキストがはみ出してもフォントサイズが変わらない", () => {
+    const textBody = makeTextBody(
+      ["This is a long text that should overflow the small text box but NOT be shrunk"],
+      { fontSize: 36, autoFit: "noAutofit" },
+    );
+    const smallTransform = makeTransform(960000, 480000);
+    const result = renderTextBody(textBody, smallTransform);
+    expect(result).toContain('font-size="36pt"');
+  });
+
+  it("normAutofit で既存の fontScale が設定されている場合でもさらに縮小される", () => {
+    const textBody = makeTextBody(
+      ["This is a long text that should overflow even with fontScale 0.8 applied"],
+      { fontSize: 36, fontScale: 0.8, autoFit: "normAutofit" },
+    );
+    const smallTransform = makeTransform(960000, 480000);
+    const result = renderTextBody(textBody, smallTransform);
+    // 36 * 0.8 = 28.8 よりさらに小さくなっているはず
+    const fontSizeMatch = result.match(/font-size="([0-9.]+)pt"/);
+    expect(fontSizeMatch).not.toBeNull();
+    expect(Number(fontSizeMatch![1])).toBeLessThan(28.8);
   });
 });

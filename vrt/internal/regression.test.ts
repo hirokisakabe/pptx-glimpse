@@ -45,6 +45,7 @@ const VRT_CASES = [
   { name: "placeholder-overlap", fixture: "placeholder-overlap.pptx" },
   { name: "image-crop", fixture: "image-crop.pptx" },
   { name: "text-advanced", fixture: "text-advanced.pptx" },
+  { name: "shrink-to-fit", fixture: "shrink-to-fit.pptx" },
 ] as const;
 
 describe("Visual Regression Tests", { timeout: 60000 }, () => {
