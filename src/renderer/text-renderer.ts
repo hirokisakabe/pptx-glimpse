@@ -7,6 +7,7 @@ import type {
   TextBody,
 } from "../model/text.js";
 import type { Transform } from "../model/shape.js";
+import { EMU_PER_INCH } from "../utils/constants.js";
 import { emuToPixels } from "../utils/emu.js";
 import { wrapParagraph } from "../utils/text-wrap.js";
 import { getMetricsFallbackFont } from "../data/font-metrics.js";
@@ -638,6 +639,38 @@ function getDefaultLineHeightRatio(paragraphs: TextBody["paragraphs"]): number {
     }
   }
   return 1.2;
+}
+
+/**
+ * spAutofit: テキスト量に応じた必要な図形の高さ (EMU) を計算する。
+ * テキストが元の図形に収まる場合は null を返す。
+ */
+export function computeSpAutofitHeight(textBody: TextBody, transform: Transform): number | null {
+  const { bodyProperties, paragraphs } = textBody;
+
+  const hasText = paragraphs.some((p) => p.runs.some((r) => r.text.length > 0));
+  if (!hasText) return null;
+
+  const width = emuToPixels(transform.extentWidth);
+  const height = emuToPixels(transform.extentHeight);
+  const marginLeft = emuToPixels(bodyProperties.marginLeft);
+  const marginRight = emuToPixels(bodyProperties.marginRight);
+  const marginTop = emuToPixels(bodyProperties.marginTop);
+  const marginBottom = emuToPixels(bodyProperties.marginBottom);
+
+  const fullTextWidth = width - marginLeft - marginRight;
+  const numCol = bodyProperties.numCol ?? 1;
+  const textWidth = numCol > 1 ? fullTextWidth / numCol : fullTextWidth;
+  const defaultFontSize = getDefaultFontSize(paragraphs);
+  const shouldWrap = bodyProperties.wrap !== "none";
+
+  const textHeight = estimateTextHeight(paragraphs, defaultFontSize, shouldWrap, textWidth);
+  const requiredHeightPx = textHeight + marginTop + marginBottom;
+
+  if (requiredHeightPx <= height) return null;
+
+  const DEFAULT_DPI = 96;
+  return (requiredHeightPx / DEFAULT_DPI) * EMU_PER_INCH;
 }
 
 function computeShrinkToFitScale(
