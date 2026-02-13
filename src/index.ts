@@ -12,3 +12,5 @@ export { collectUsedFonts } from "./font-collector.js";
 export type { UsedFonts } from "./font-collector.js";
 export { DEFAULT_FONT_MAPPING, createFontMapping, getMappedFont } from "./font-mapping.js";
 export type { FontMapping } from "./font-mapping.js";
+export { fetchGoogleFonts, resolveGoogleFontNames, parseFontUrlsFromCss } from "./google-fonts.js";
+export type { FetchGoogleFontsOptions } from "./google-fonts.js";
