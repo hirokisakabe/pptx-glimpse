@@ -58,6 +58,9 @@ export function renderChart(element: ChartElement): string {
       case "scatter":
         parts.push(renderScatterChart(chart, plotX, plotY, plotW, plotH));
         break;
+      case "bubble":
+        parts.push(renderBubbleChart(chart, plotX, plotY, plotW, plotH));
+        break;
     }
   }
 
@@ -326,6 +329,56 @@ function renderScatterChart(chart: ChartData, x: number, y: number, w: number, h
       const px = x + (xVal / maxX) * w;
       const py = y + h - (yVal / maxY) * h;
       parts.push(`<circle cx="${round(px)}" cy="${round(py)}" r="4" ${fillAttr(color)}/>`);
+    }
+  }
+
+  return parts.join("");
+}
+
+function renderBubbleChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
+  const parts: string[] = [];
+  const { series } = chart;
+  if (series.length === 0) return "";
+
+  let maxX = 0;
+  let maxY = 0;
+  let maxBubble = 0;
+  for (const s of series) {
+    const xVals = s.xValues ?? [];
+    for (const v of xVals) maxX = Math.max(maxX, v);
+    for (const v of s.values) maxY = Math.max(maxY, v);
+    const sizes = s.bubbleSizes ?? [];
+    for (const v of sizes) maxBubble = Math.max(maxBubble, v);
+  }
+  if (maxX === 0) maxX = 1;
+  if (maxY === 0) maxY = 1;
+  if (maxBubble === 0) maxBubble = 1;
+
+  const maxRadius = Math.min(w, h) * 0.08;
+
+  // Axes
+  parts.push(
+    `<line x1="${round(x)}" y1="${round(y + h)}" x2="${round(x + w)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
+  );
+  parts.push(
+    `<line x1="${round(x)}" y1="${round(y)}" x2="${round(x)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
+  );
+
+  // Bubbles
+  for (let s = 0; s < series.length; s++) {
+    const color = series[s].color;
+    const xVals = series[s].xValues ?? [];
+    const sizes = series[s].bubbleSizes ?? [];
+    for (let i = 0; i < series[s].values.length; i++) {
+      const xVal = xVals[i] ?? i;
+      const yVal = series[s].values[i];
+      const size = sizes[i] ?? 1;
+      const px = x + (xVal / maxX) * w;
+      const py = y + h - (yVal / maxY) * h;
+      const r = Math.max(2, Math.sqrt(size / maxBubble) * maxRadius);
+      parts.push(
+        `<circle cx="${round(px)}" cy="${round(py)}" r="${round(r)}" ${fillAttr(color)} fill-opacity="0.6"/>`,
+      );
     }
   }
 

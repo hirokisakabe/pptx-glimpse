@@ -268,6 +268,42 @@ describe("parseChart", () => {
     expect(result!.holeSize).toBe(50);
   });
 
+  it("parses a bubble chart with xValues and bubbleSizes", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+        <c:chart>
+          <c:plotArea>
+            <c:bubbleChart>
+              <c:ser>
+                <c:idx val="0"/>
+                <c:xVal><c:numRef><c:numCache>
+                  <c:pt idx="0"><c:v>1</c:v></c:pt>
+                  <c:pt idx="1"><c:v>2</c:v></c:pt>
+                  <c:pt idx="2"><c:v>3</c:v></c:pt>
+                </c:numCache></c:numRef></c:xVal>
+                <c:yVal><c:numRef><c:numCache>
+                  <c:pt idx="0"><c:v>10</c:v></c:pt>
+                  <c:pt idx="1"><c:v>20</c:v></c:pt>
+                  <c:pt idx="2"><c:v>15</c:v></c:pt>
+                </c:numCache></c:numRef></c:yVal>
+                <c:bubbleSize><c:numRef><c:numCache>
+                  <c:pt idx="0"><c:v>5</c:v></c:pt>
+                  <c:pt idx="1"><c:v>10</c:v></c:pt>
+                  <c:pt idx="2"><c:v>8</c:v></c:pt>
+                </c:numCache></c:numRef></c:bubbleSize>
+              </c:ser>
+            </c:bubbleChart>
+          </c:plotArea>
+        </c:chart>
+      </c:chartSpace>`;
+
+    const result = parseChart(xml, createColorResolver());
+    expect(result!.chartType).toBe("bubble");
+    expect(result!.series[0].xValues).toEqual([1, 2, 3]);
+    expect(result!.series[0].values).toEqual([10, 20, 15]);
+    expect(result!.series[0].bubbleSizes).toEqual([5, 10, 8]);
+  });
+
   it("parses a scatter chart with xValues", () => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
       <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">

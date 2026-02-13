@@ -1070,6 +1070,7 @@ function chartXml(
       categories?: string[];
       values: number[];
       xValues?: number[];
+      bubbleSizes?: number[];
     }[];
   },
 ): string {
@@ -1086,12 +1087,16 @@ function chartXml(
       const catXml = s.categories
         ? `<c:cat><c:strRef><c:strCache>${s.categories.map((c, j) => `<c:pt idx="${j}"><c:v>${c}</c:v></c:pt>`).join("")}</c:strCache></c:strRef></c:cat>`
         : "";
-      const valTag = chartType === "scatterChart" ? "c:yVal" : "c:val";
+      const usesXY = chartType === "scatterChart" || chartType === "bubbleChart";
+      const valTag = usesXY ? "c:yVal" : "c:val";
       const valXml = `<${valTag}><c:numRef><c:numCache>${s.values.map((v, j) => `<c:pt idx="${j}"><c:v>${v}</c:v></c:pt>`).join("")}</c:numCache></c:numRef></${valTag}>`;
       const xValXml = s.xValues
         ? `<c:xVal><c:numRef><c:numCache>${s.xValues.map((v, j) => `<c:pt idx="${j}"><c:v>${v}</c:v></c:pt>`).join("")}</c:numCache></c:numRef></c:xVal>`
         : "";
-      return `<c:ser><c:idx val="${i}"/><c:order val="${i}"/>${nameXml}${catXml}${xValXml}${valXml}</c:ser>`;
+      const bubbleSizeXml = s.bubbleSizes
+        ? `<c:bubbleSize><c:numRef><c:numCache>${s.bubbleSizes.map((v, j) => `<c:pt idx="${j}"><c:v>${v}</c:v></c:pt>`).join("")}</c:numCache></c:numRef></c:bubbleSize>`
+        : "";
+      return `<c:ser><c:idx val="${i}"/><c:order val="${i}"/>${nameXml}${catXml}${xValXml}${valXml}${bubbleSizeXml}</c:ser>`;
     })
     .join("");
 
@@ -1262,6 +1267,40 @@ async function createChartsFixture(): Promise<void> {
     rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart5.xml" }]),
   });
 
+  // Slide 6: Bubble chart
+  const bubbleChart = chartXml("bubbleChart", {
+    title: "Bubble Data",
+    legendPos: "b",
+    series: [
+      {
+        name: "Dataset A",
+        xValues: [1, 3, 5, 7, 9],
+        values: [10, 30, 20, 40, 25],
+        bubbleSizes: [4, 8, 12, 6, 16],
+      },
+      {
+        name: "Dataset B",
+        xValues: [2, 4, 6, 8],
+        values: [15, 25, 35, 10],
+        bubbleSizes: [10, 5, 14, 8],
+      },
+    ],
+  });
+  charts.set("ppt/charts/chart6.xml", bubbleChart);
+  const gf6 = graphicFrameXml(
+    2,
+    "Bubble Chart",
+    margin,
+    margin,
+    SLIDE_W - margin * 2,
+    SLIDE_H - margin * 2,
+    "rId2",
+  );
+  slides.push({
+    xml: wrapSlideXml(gf6),
+    rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart6.xml" }]),
+  });
+
   const buffer = await buildPptx({
     slides,
     charts,
@@ -1271,6 +1310,7 @@ async function createChartsFixture(): Promise<void> {
       `<Override PartName="/ppt/charts/chart3.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
       `<Override PartName="/ppt/charts/chart4.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
       `<Override PartName="/ppt/charts/chart5.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
+      `<Override PartName="/ppt/charts/chart6.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
     ],
   });
   savePptx(buffer, "charts.pptx");
