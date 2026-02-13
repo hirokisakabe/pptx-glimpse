@@ -113,7 +113,10 @@ export function parseSlideMasterElements(
   );
 }
 
-export function parseSlideMasterTxStyles(xml: string): TxStyles | undefined {
+export function parseSlideMasterTxStyles(
+  xml: string,
+  colorResolver?: ColorResolver,
+): TxStyles | undefined {
   const parsed = parseXml(xml);
 
   const sldMaster = parsed.sldMaster as XmlNode | undefined;
@@ -128,16 +131,19 @@ export function parseSlideMasterTxStyles(xml: string): TxStyles | undefined {
   const titleStyleNode = txStyles.titleStyle as XmlNode | undefined;
   const bodyStyleNode = txStyles.bodyStyle as XmlNode | undefined;
   const otherStyleNode = txStyles.otherStyle as XmlNode | undefined;
-  const titleStyle = titleStyleNode ? parseListStyle(titleStyleNode) : undefined;
-  const bodyStyle = bodyStyleNode ? parseListStyle(bodyStyleNode) : undefined;
-  const otherStyle = otherStyleNode ? parseListStyle(otherStyleNode) : undefined;
+  const titleStyle = titleStyleNode ? parseListStyle(titleStyleNode, colorResolver) : undefined;
+  const bodyStyle = bodyStyleNode ? parseListStyle(bodyStyleNode, colorResolver) : undefined;
+  const otherStyle = otherStyleNode ? parseListStyle(otherStyleNode, colorResolver) : undefined;
 
   if (!titleStyle && !bodyStyle && !otherStyle) return undefined;
 
   return { titleStyle, bodyStyle, otherStyle };
 }
 
-export function parseSlideMasterPlaceholderStyles(xml: string): PlaceholderStyleInfo[] {
+export function parseSlideMasterPlaceholderStyles(
+  xml: string,
+  colorResolver?: ColorResolver,
+): PlaceholderStyleInfo[] {
   const parsed = parseXml(xml);
   const sldMaster = parsed.sldMaster as XmlNode | undefined;
   if (!sldMaster) return [];
@@ -159,7 +165,7 @@ export function parseSlideMasterPlaceholderStyles(xml: string): PlaceholderStyle
     const placeholderIdx = ph["@_idx"] !== undefined ? Number(ph["@_idx"]) : undefined;
     const txBody = sp.txBody as XmlNode | undefined;
     const lstStyleNode = txBody?.lstStyle as XmlNode | undefined;
-    const lstStyle = lstStyleNode ? parseListStyle(lstStyleNode) : undefined;
+    const lstStyle = lstStyleNode ? parseListStyle(lstStyleNode, colorResolver) : undefined;
 
     results.push({
       placeholderType,

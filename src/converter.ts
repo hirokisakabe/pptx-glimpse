@@ -129,8 +129,10 @@ export async function convertPptxToSvg(
     masterPath && masterXml
       ? parseSlideMasterElements(masterXml, masterPath, archive, colorResolver, theme.fontScheme)
       : [];
-  const masterTxStyles = masterXml ? parseSlideMasterTxStyles(masterXml) : undefined;
-  const masterPlaceholderStyles = masterXml ? parseSlideMasterPlaceholderStyles(masterXml) : [];
+  const masterTxStyles = masterXml ? parseSlideMasterTxStyles(masterXml, colorResolver) : undefined;
+  const masterPlaceholderStyles = masterXml
+    ? parseSlideMasterPlaceholderStyles(masterXml, colorResolver)
+    : [];
   // Resolve slide paths from relationships
   const slidePaths: { slideNumber: number; path: string }[] = [];
   for (let i = 0; i < presInfo.slideRIds.length; i++) {
@@ -195,7 +197,7 @@ export async function convertPptxToSvg(
               theme.fontScheme,
             );
             // Extract placeholder styles for text style inheritance
-            layoutPlaceholderStyles = parseSlideLayoutPlaceholderStyles(layoutXml);
+            layoutPlaceholderStyles = parseSlideLayoutPlaceholderStyles(layoutXml, colorResolver);
             layoutShowMasterSp = parseSlideLayoutShowMasterSp(layoutXml);
           }
           break;

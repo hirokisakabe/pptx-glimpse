@@ -5,8 +5,10 @@ import type { ShapeElement, GroupElement } from "./model/shape.js";
 import type {
   DefaultTextStyle,
   DefaultParagraphLevelProperties,
+  DefaultRunProperties,
   RunProperties,
 } from "./model/text.js";
+import type { ResolvedColor } from "./model/fill.js";
 
 function makeRunProperties(overrides: Partial<RunProperties> = {}): RunProperties {
   return {
@@ -88,10 +90,13 @@ function makeDefaultTextStyle(
     fontSize: number;
     fontFamily: string;
     fontFamilyEa: string;
+    color: ResolvedColor;
   }>,
   level = 0,
 ): DefaultTextStyle {
-  const levels = Array<undefined | { defaultRunProperties: typeof levelDefRPr }>(9).fill(undefined);
+  const levels = Array<undefined | { defaultRunProperties: DefaultRunProperties }>(9).fill(
+    undefined,
+  );
   levels[level] = { defaultRunProperties: levelDefRPr };
   return { levels };
 }
@@ -143,6 +148,82 @@ describe("applyTextStyleInheritance", () => {
 
       expect(shape.textBody!.paragraphs[0].runs[0].properties.fontSize).toBe(16);
       expect(shape.textBody!.paragraphs[0].runs[0].properties.fontFamily).toBe("Calibri");
+    });
+  });
+
+  describe("color 継承", () => {
+    it("color が null の場合、txStyles から解決される", () => {
+      const shape = makeShape({ placeholderType: "body" });
+      const context = makeContext({
+        txStyles: {
+          bodyStyle: makeDefaultTextStyle({ color: { hex: "#FFFFFF", alpha: 1 } }),
+        },
+      });
+
+      applyTextStyleInheritance([shape], context);
+
+      expect(shape.textBody!.paragraphs[0].runs[0].properties.color).toEqual({
+        hex: "#FFFFFF",
+        alpha: 1,
+      });
+    });
+
+    it("color が null の場合、defaultTextStyle から解決される", () => {
+      const shape = makeShape();
+      const context = makeContext({
+        defaultTextStyle: makeDefaultTextStyle({ color: { hex: "#000000", alpha: 1 } }),
+      });
+
+      applyTextStyleInheritance([shape], context);
+
+      expect(shape.textBody!.paragraphs[0].runs[0].properties.color).toEqual({
+        hex: "#000000",
+        alpha: 1,
+      });
+    });
+
+    it("既に color が設定されている場合は上書きしない", () => {
+      const shape = makeShape();
+      shape.textBody!.paragraphs[0].runs[0].properties.color = { hex: "#FF0000", alpha: 1 };
+      const context = makeContext({
+        defaultTextStyle: makeDefaultTextStyle({ color: { hex: "#000000", alpha: 1 } }),
+      });
+
+      applyTextStyleInheritance([shape], context);
+
+      expect(shape.textBody!.paragraphs[0].runs[0].properties.color).toEqual({
+        hex: "#FF0000",
+        alpha: 1,
+      });
+    });
+
+    it("layout → master → txStyles → defaultTextStyle の順で color が解決される", () => {
+      const shape = makeShape({ placeholderType: "body" });
+      const context = makeContext({
+        layoutPlaceholderStyles: [
+          {
+            placeholderType: "body",
+            lstStyle: makeDefaultTextStyle({ color: { hex: "#111111", alpha: 1 } }),
+          },
+        ],
+        masterPlaceholderStyles: [
+          {
+            placeholderType: "body",
+            lstStyle: makeDefaultTextStyle({ color: { hex: "#222222", alpha: 1 } }),
+          },
+        ],
+        txStyles: {
+          bodyStyle: makeDefaultTextStyle({ color: { hex: "#333333", alpha: 1 } }),
+        },
+        defaultTextStyle: makeDefaultTextStyle({ color: { hex: "#444444", alpha: 1 } }),
+      });
+
+      applyTextStyleInheritance([shape], context);
+
+      expect(shape.textBody!.paragraphs[0].runs[0].properties.color).toEqual({
+        hex: "#111111",
+        alpha: 1,
+      });
     });
   });
 

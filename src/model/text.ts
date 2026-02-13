@@ -9,6 +9,7 @@ export interface DefaultRunProperties {
   italic?: boolean;
   underline?: boolean;
   strikethrough?: boolean;
+  color?: ResolvedColor;
 }
 
 /** defaultTextStyle の各レベルに対応するデフォルト段落プロパティ */

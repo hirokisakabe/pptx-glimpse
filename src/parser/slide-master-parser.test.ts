@@ -295,6 +295,71 @@ describe("parseSlideMasterTxStyles", () => {
     expect(result!.otherStyle).toBeUndefined();
   });
 
+  it("parses defRPr color when colorResolver is provided", () => {
+    const xml = `
+      <p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                    xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:cSld/>
+        <p:txStyles>
+          <p:titleStyle>
+            <a:lvl1pPr>
+              <a:defRPr sz="4400">
+                <a:solidFill>
+                  <a:schemeClr val="lt1"/>
+                </a:solidFill>
+              </a:defRPr>
+            </a:lvl1pPr>
+          </p:titleStyle>
+          <p:bodyStyle>
+            <a:lvl1pPr>
+              <a:defRPr sz="3200">
+                <a:solidFill>
+                  <a:srgbClr val="FF0000"/>
+                </a:solidFill>
+              </a:defRPr>
+            </a:lvl1pPr>
+          </p:bodyStyle>
+        </p:txStyles>
+      </p:sldMaster>
+    `;
+    const result = parseSlideMasterTxStyles(xml, createColorResolver());
+
+    expect(result).toBeDefined();
+    expect(result!.titleStyle!.levels[0]?.defaultRunProperties?.color).toEqual({
+      hex: "#FFFFFF",
+      alpha: 1,
+    });
+    expect(result!.bodyStyle!.levels[0]?.defaultRunProperties?.color).toEqual({
+      hex: "#FF0000",
+      alpha: 1,
+    });
+  });
+
+  it("does not parse color when colorResolver is not provided", () => {
+    const xml = `
+      <p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                    xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:cSld/>
+        <p:txStyles>
+          <p:titleStyle>
+            <a:lvl1pPr>
+              <a:defRPr sz="4400">
+                <a:solidFill>
+                  <a:schemeClr val="lt1"/>
+                </a:solidFill>
+              </a:defRPr>
+            </a:lvl1pPr>
+          </p:titleStyle>
+        </p:txStyles>
+      </p:sldMaster>
+    `;
+    const result = parseSlideMasterTxStyles(xml);
+
+    expect(result).toBeDefined();
+    expect(result!.titleStyle!.levels[0]?.defaultRunProperties?.fontSize).toBe(44);
+    expect(result!.titleStyle!.levels[0]?.defaultRunProperties?.color).toBeUndefined();
+  });
+
   it("warns and returns undefined for invalid XML", () => {
     initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});

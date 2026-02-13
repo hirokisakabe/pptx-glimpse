@@ -82,7 +82,10 @@ export function parseSlideLayoutShowMasterSp(xml: string): boolean {
   return attr !== "0" && attr !== "false";
 }
 
-export function parseSlideLayoutPlaceholderStyles(xml: string): PlaceholderStyleInfo[] {
+export function parseSlideLayoutPlaceholderStyles(
+  xml: string,
+  colorResolver?: ColorResolver,
+): PlaceholderStyleInfo[] {
   const parsed = parseXml(xml);
 
   const sldLayout = parsed.sldLayout as XmlNode | undefined;
@@ -105,7 +108,7 @@ export function parseSlideLayoutPlaceholderStyles(xml: string): PlaceholderStyle
     const placeholderIdx = ph["@_idx"] !== undefined ? Number(ph["@_idx"]) : undefined;
     const txBody = sp.txBody as XmlNode | undefined;
     const lstStyleNode = txBody?.lstStyle as XmlNode | undefined;
-    const lstStyle = lstStyleNode ? parseListStyle(lstStyleNode) : undefined;
+    const lstStyle = lstStyleNode ? parseListStyle(lstStyleNode, colorResolver) : undefined;
 
     results.push({
       placeholderType,
