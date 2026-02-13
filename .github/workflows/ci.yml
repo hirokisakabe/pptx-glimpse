@@ -111,8 +111,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Pull Docker image
-        run: docker pull ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest
+      - name: Pull or build Docker image
+        run: docker pull ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest || docker build -t ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest docker/libreoffice-vrt
 
       - name: Generate fixtures
         run: docker run --rm -v "${{ github.workspace }}":/workspace ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest python3 /workspace/vrt/libreoffice/create_fixtures.py

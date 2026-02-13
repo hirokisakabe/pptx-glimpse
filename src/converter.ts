@@ -269,39 +269,22 @@ export async function convertPptxToPng(
   return results;
 }
 
-function collectPlaceholderTypes(elements: SlideElement[]): Set<string> {
-  const types = new Set<string>();
-  for (const el of elements) {
-    if (el.type === "shape" && el.placeholderType) {
-      types.add(el.placeholderType);
-    }
-  }
-  return types;
-}
-
-function filterByPlaceholder(elements: SlideElement[], excludeTypes: Set<string>): SlideElement[] {
-  return elements.filter((el) => {
-    if (el.type !== "shape") return true;
-    if (!el.placeholderType) return true;
-    return !excludeTypes.has(el.placeholderType);
-  });
-}
-
 function mergeElements(
   masterElements: SlideElement[],
   layoutElements: SlideElement[],
   slideElements: SlideElement[],
 ): SlideElement[] {
-  const slidePh = collectPlaceholderTypes(slideElements);
-
-  // Master placeholder shapes are always templates (position/style definitions).
+  // Placeholder shapes in master and layout are templates (position/style definitions).
   // Their text content should never appear on actual slides.
-  // Only non-placeholder master shapes (decorative elements, logos, etc.) are shown.
-  const filteredMaster = masterElements.filter((el) => {
-    if (el.type !== "shape") return true;
-    return !el.placeholderType;
-  });
-  const filteredLayout = filterByPlaceholder(layoutElements, slidePh);
+  // Only non-placeholder shapes (decorative elements, logos, etc.) are shown.
+  const filterPlaceholders = (elements: SlideElement[]) =>
+    elements.filter((el) => {
+      if (el.type !== "shape") return true;
+      return !el.placeholderType;
+    });
+
+  const filteredMaster = filterPlaceholders(masterElements);
+  const filteredLayout = filterPlaceholders(layoutElements);
 
   return [...filteredMaster, ...filteredLayout, ...slideElements];
 }
