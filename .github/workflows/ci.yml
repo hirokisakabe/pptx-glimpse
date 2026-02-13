@@ -78,8 +78,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Pull Docker image
-        run: docker pull ghcr.io/hirokisakabe/pptx-glimpse-internal-vrt:latest
+      - name: Pull or build Docker image
+        run: docker pull ghcr.io/hirokisakabe/pptx-glimpse-internal-vrt:latest || docker build -t ghcr.io/hirokisakabe/pptx-glimpse-internal-vrt:latest docker/internal-vrt
 
       - name: Generate VRT fixtures and run VRT
         run: |
