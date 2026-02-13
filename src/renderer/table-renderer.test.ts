@@ -259,6 +259,7 @@ describe("renderTable", () => {
                     autoFit: "noAutofit",
                     fontScale: 1,
                     lnSpcReduction: 0,
+                    numCol: 1,
                   },
                 },
                 fill: null,

@@ -22,6 +22,7 @@ import type {
   DefaultTextStyle,
   DefaultRunProperties,
   SpacingValue,
+  TabStop,
 } from "../model/text.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import type { Relationship } from "./relationship-parser.js";
@@ -353,7 +354,7 @@ function parseAndPushElement(
 ): void {
   switch (tag) {
     case "sp": {
-      const shape = parseShape(element, colorResolver, rels, fillContext, fontScheme);
+      const shape = parseShape(element, colorResolver, rels, fillContext, fontScheme, orderedNode);
       if (shape) {
         elements.push(shape);
       } else {
@@ -424,6 +425,7 @@ function parseShape(
   rels?: Map<string, Relationship>,
   fillContext?: FillParseContext,
   fontScheme?: FontScheme | null,
+  orderedNode?: XmlOrderedNode,
 ): ShapeElement | null {
   const spPr = sp.spPr as XmlNode | undefined;
   if (!spPr) return null;
@@ -445,7 +447,25 @@ function parseShape(
   const geometry = parseGeometry(spPr);
   const fill = parseFillFromNode(spPr, colorResolver, fillContext);
   const outline = parseOutline(spPr.ln as XmlNode, colorResolver);
-  const textBody = parseTextBody(sp.txBody as XmlNode | undefined, colorResolver, rels, fontScheme);
+
+  // ordered ノードから txBody の ordered children を抽出
+  let orderedTxBody: XmlOrderedNode[] | undefined;
+  if (orderedNode) {
+    const spChildren = orderedNode.sp as XmlOrderedNode[] | undefined;
+    if (Array.isArray(spChildren)) {
+      const txBodyEntry = spChildren.find((c: XmlOrderedNode) => "txBody" in c);
+      orderedTxBody = txBodyEntry?.txBody as XmlOrderedNode[] | undefined;
+    }
+  }
+
+  const textBody = parseTextBody(
+    sp.txBody as XmlNode | undefined,
+    colorResolver,
+    rels,
+    fontScheme,
+    undefined,
+    orderedTxBody,
+  );
   const effects = parseEffectList(spPr.effectLst as XmlNode, colorResolver);
 
   const nvSpPr = sp.nvSpPr as XmlNode | undefined;
@@ -855,6 +875,8 @@ export function parseTextBody(
   colorResolver: ColorResolver,
   rels?: Map<string, Relationship>,
   fontScheme?: FontScheme | null,
+  lstStyleOverride?: DefaultTextStyle,
+  orderedTxBody?: XmlOrderedNode[],
 ): TextBody | null {
   if (!txBody) return null;
 
@@ -865,9 +887,8 @@ export function parseTextBody(
   if (vert && vert !== "horz") {
     warn("bodyPr@vert", `vertical text (vert="${vert}") not implemented`);
   }
-  if (bodyPr?.["@_numCol"] && Number(bodyPr["@_numCol"]) > 1) {
-    warn("bodyPr@numCol", "multi-column text not implemented");
-  }
+
+  const numCol = bodyPr?.["@_numCol"] ? Math.max(1, Number(bodyPr["@_numCol"])) : 1;
 
   let autoFit: BodyProperties["autoFit"] = "noAutofit";
   let fontScale = 1;
@@ -896,14 +917,27 @@ export function parseTextBody(
     autoFit,
     fontScale,
     lnSpcReduction,
+    numCol,
   };
 
-  const lstStyle = parseListStyle(txBody.lstStyle as XmlNode);
+  const lstStyle = lstStyleOverride ?? parseListStyle(txBody.lstStyle as XmlNode);
+
+  // ordered data から各段落の ordered children を抽出
+  const orderedParagraphs: (XmlOrderedNode[] | undefined)[] = [];
+  if (orderedTxBody) {
+    for (const child of orderedTxBody) {
+      if ("p" in child) {
+        orderedParagraphs.push(child.p as XmlOrderedNode[]);
+      }
+    }
+  }
 
   const paragraphs: Paragraph[] = [];
   const pList = (txBody.p as XmlNode[] | undefined) ?? [];
-  for (const p of pList) {
-    paragraphs.push(parseParagraph(p, colorResolver, rels, fontScheme, lstStyle));
+  for (let i = 0; i < pList.length; i++) {
+    paragraphs.push(
+      parseParagraph(pList[i], colorResolver, rels, fontScheme, lstStyle, orderedParagraphs[i]),
+    );
   }
 
   if (paragraphs.length === 0) return null;
@@ -967,20 +1001,59 @@ function parseSpacing(spc: XmlNode | undefined): SpacingValue {
   return { type: "pts", value: 0 };
 }
 
+function parseTabStops(pPr: XmlNode | undefined): TabStop[] {
+  const tabLst = pPr?.tabLst as XmlNode | undefined;
+  if (!tabLst) return [];
+
+  const tabs = tabLst.tab;
+  if (!tabs) return [];
+
+  const tabArr = Array.isArray(tabs) ? (tabs as XmlNode[]) : [tabs as XmlNode];
+  return tabArr.map((tab) => ({
+    position: Number(tab["@_pos"] ?? 0),
+    alignment: (tab["@_algn"] as TabStop["alignment"]) ?? "l",
+  }));
+}
+
+/** 数式ノードからテキストを再帰的に抽出する */
+function extractMathText(node: XmlNode): string {
+  let text = "";
+  for (const [key, value] of Object.entries(node)) {
+    if (key.startsWith("@_")) continue;
+    if (key === "t") {
+      if (typeof value === "object" && value !== null) {
+        text += ((value as XmlNode)["#text"] as string) ?? "";
+      } else if (value !== undefined && value !== null) {
+        text += String(value as string | number);
+      }
+    } else if (typeof value === "object" && value !== null) {
+      const items = Array.isArray(value) ? value : [value];
+      for (const item of items) {
+        if (typeof item === "object" && item !== null) {
+          text += extractMathText(item as XmlNode);
+        }
+      }
+    }
+  }
+  return text;
+}
+
+function extractTextContent(node: XmlNode): string {
+  const text = node.t;
+  if (typeof text === "object") {
+    return ((text as XmlNode)["#text"] as string) ?? "";
+  }
+  return text !== undefined && text !== null ? String(text as string | number) : "";
+}
+
 function parseParagraph(
   p: XmlNode,
   colorResolver: ColorResolver,
   rels?: Map<string, Relationship>,
   fontScheme?: FontScheme | null,
   lstStyle?: DefaultTextStyle,
+  orderedPChildren?: XmlOrderedNode[],
 ): Paragraph {
-  // Unsupported feature detection
-  if (p.fld) {
-    const fldArr = Array.isArray(p.fld) ? (p.fld as XmlNode[]) : [p.fld as XmlNode];
-    const fldType = (fldArr[0]?.["@_type"] as string | undefined) ?? "unknown";
-    warn("p.fld", `field code (type="${fldType}") not implemented`);
-  }
-
   const pPr = p.pPr as XmlNode | undefined;
   const level = Number(pPr?.["@_lvl"] ?? 0);
 
@@ -990,6 +1063,7 @@ function parseParagraph(
   const { bullet, bulletFont, bulletColor, bulletSizePct } = parseBullet(pPr, colorResolver);
   const lnSpc = pPr?.lnSpc as XmlNode | undefined;
   const lnSpcSpcPct = lnSpc?.spcPct as XmlNode | undefined;
+  const tabStops = parseTabStops(pPr);
   const properties = {
     alignment: (pPr?.["@_algn"] as "l" | "ctr" | "r" | "just") ?? lstLevelProps?.alignment ?? "l",
     lineSpacing: lnSpcSpcPct ? Number(lnSpcSpcPct["@_val"]) : null,
@@ -1004,6 +1078,7 @@ function parseParagraph(
       pPr?.["@_marL"] !== undefined ? Number(pPr["@_marL"]) : (lstLevelProps?.marginLeft ?? 0),
     indent:
       pPr?.["@_indent"] !== undefined ? Number(pPr["@_indent"]) : (lstLevelProps?.indent ?? 0),
+    tabStops,
   };
 
   // defRPr のマージ: pPr.defRPr > lstStyle.lvl.defRPr
@@ -1012,16 +1087,108 @@ function parseParagraph(
   const mergedDefaults = mergeDefaultRunProperties(pPrDefRPr, lstDefRPr);
 
   const runs: TextRun[] = [];
-  const rList = (p.r as XmlNode[] | undefined) ?? [];
-  for (const r of rList) {
-    const text = r.t;
-    const textContent =
-      typeof text === "object"
-        ? (((text as XmlNode)["#text"] as string) ?? "")
-        : String(text as string | number);
-    const rPr = r.rPr as XmlNode | undefined;
-    const runProps = parseRunProperties(rPr, colorResolver, rels, fontScheme, mergedDefaults);
-    runs.push({ text: textContent, properties: runProps });
+
+  if (orderedPChildren) {
+    // ordered children があれば、ドキュメント順で r/fld/br を処理
+    const tagCounters: Record<string, number> = {};
+    const rList = (p.r as XmlNode[] | undefined) ?? [];
+    const fldList = (p.fld as XmlNode[] | undefined) ?? [];
+    const brList = (p.br as XmlNode[] | undefined) ?? [];
+
+    for (const child of orderedPChildren) {
+      const tag = Object.keys(child).find((k) => k !== ":@");
+      if (!tag) continue;
+
+      const idx = tagCounters[tag] ?? 0;
+      tagCounters[tag] = idx + 1;
+
+      if (tag === "r") {
+        const r = rList[idx];
+        if (r) {
+          const textContent = extractTextContent(r);
+          const rPr = r.rPr as XmlNode | undefined;
+          const runProps = parseRunProperties(rPr, colorResolver, rels, fontScheme, mergedDefaults);
+          runs.push({ text: textContent, properties: runProps });
+        }
+      } else if (tag === "fld") {
+        const fld = fldList[idx];
+        if (fld) {
+          const textContent = extractTextContent(fld);
+          const rPr = fld.rPr as XmlNode | undefined;
+          const runProps = parseRunProperties(rPr, colorResolver, rels, fontScheme, mergedDefaults);
+          runs.push({ text: textContent, properties: runProps });
+        }
+      } else if (tag === "br") {
+        const br = brList[idx];
+        const rPr = br?.rPr as XmlNode | undefined;
+        const runProps = parseRunProperties(rPr, colorResolver, rels, fontScheme, mergedDefaults);
+        runs.push({ text: "\n", properties: runProps });
+      } else if (tag === "m") {
+        // 数式テキスト抽出 (a14:m → NS prefix removed → m)
+        const mNode = p.m as XmlNode | XmlNode[] | undefined;
+        if (mNode) {
+          const mData = Array.isArray(mNode) ? mNode[idx] : idx === 0 ? mNode : undefined;
+          if (mData) {
+            const mathText = extractMathText(mData);
+            if (mathText) {
+              const runProps = parseRunProperties(
+                undefined,
+                colorResolver,
+                rels,
+                fontScheme,
+                mergedDefaults,
+              );
+              runs.push({ text: mathText, properties: runProps });
+            }
+          }
+        }
+      }
+    }
+  } else {
+    // フォールバック: ordered data がない場合は r のみ処理し、fld/br を追加
+    const rList = (p.r as XmlNode[] | undefined) ?? [];
+    for (const r of rList) {
+      const textContent = extractTextContent(r);
+      const rPr = r.rPr as XmlNode | undefined;
+      const runProps = parseRunProperties(rPr, colorResolver, rels, fontScheme, mergedDefaults);
+      runs.push({ text: textContent, properties: runProps });
+    }
+
+    // fld をフォールバック処理（ordered data なしでも最低限表示）
+    const fldList = (p.fld as XmlNode[] | undefined) ?? [];
+    for (const fld of fldList) {
+      const textContent = extractTextContent(fld);
+      const rPr = fld.rPr as XmlNode | undefined;
+      const runProps = parseRunProperties(rPr, colorResolver, rels, fontScheme, mergedDefaults);
+      runs.push({ text: textContent, properties: runProps });
+    }
+
+    // br をフォールバック処理
+    const brList = (p.br as XmlNode[] | undefined) ?? [];
+    for (const _br of brList) {
+      const rPr = _br?.rPr as XmlNode | undefined;
+      const runProps = parseRunProperties(rPr, colorResolver, rels, fontScheme, mergedDefaults);
+      runs.push({ text: "\n", properties: runProps });
+    }
+
+    // 数式テキスト抽出
+    const mNode = p.m as XmlNode | XmlNode[] | undefined;
+    if (mNode) {
+      const mArr = Array.isArray(mNode) ? mNode : [mNode];
+      for (const m of mArr) {
+        const mathText = extractMathText(m);
+        if (mathText) {
+          const runProps = parseRunProperties(
+            undefined,
+            colorResolver,
+            rels,
+            fontScheme,
+            mergedDefaults,
+          );
+          runs.push({ text: mathText, properties: runProps });
+        }
+      }
+    }
   }
 
   return { runs, properties };

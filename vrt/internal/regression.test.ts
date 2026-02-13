@@ -44,6 +44,7 @@ const VRT_CASES = [
   { name: "paragraph-spacing", fixture: "paragraph-spacing.pptx" },
   { name: "placeholder-overlap", fixture: "placeholder-overlap.pptx" },
   { name: "image-crop", fixture: "image-crop.pptx" },
+  { name: "text-advanced", fixture: "text-advanced.pptx" },
 ] as const;
 
 describe("Visual Regression Tests", { timeout: 60000 }, () => {

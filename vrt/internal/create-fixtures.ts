@@ -4701,6 +4701,288 @@ async function createParagraphSpacingFixture(): Promise<void> {
   savePptx(buffer, "paragraph-spacing.pptx");
 }
 
+// --- Text Advanced (field codes, line breaks, tab stops) ---
+async function createTextAdvancedFixture(): Promise<void> {
+  let id = 2;
+  const shapes: string[] = [];
+
+  // Shape 1: Field code (slide number) - テキストラン + フィールドコードの混在
+  const pos1 = gridPosition(0, 0, 3, 3);
+  shapes.push(
+    shapeXml(id++, "field-slidenum", {
+      preset: "rect",
+      x: pos1.x,
+      y: pos1.y,
+      cx: pos1.w,
+      cy: pos1.h,
+      fillXml: solidFillXml("E8F0FE"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="ctr"/>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr algn="ctr"/>
+    <a:r>
+      <a:rPr lang="en-US" sz="1400">
+        <a:solidFill><a:srgbClr val="333333"/></a:solidFill>
+      </a:rPr>
+      <a:t>Slide </a:t>
+    </a:r>
+    <a:fld type="slidenum" uuid="{B5A3C44A-1234-5678-9ABC-DEF012345678}">
+      <a:rPr lang="en-US" sz="1400">
+        <a:solidFill><a:srgbClr val="4472C4"/></a:solidFill>
+      </a:rPr>
+      <a:t>1</a:t>
+    </a:fld>
+    <a:r>
+      <a:rPr lang="en-US" sz="1400">
+        <a:solidFill><a:srgbClr val="333333"/></a:solidFill>
+      </a:rPr>
+      <a:t> of 10</a:t>
+    </a:r>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  // Shape 2: Date field code
+  const pos2 = gridPosition(1, 0, 3, 3);
+  shapes.push(
+    shapeXml(id++, "field-date", {
+      preset: "rect",
+      x: pos2.x,
+      y: pos2.y,
+      cx: pos2.w,
+      cy: pos2.h,
+      fillXml: solidFillXml("FEF3E8"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="ctr"/>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr algn="ctr"/>
+    <a:r>
+      <a:rPr lang="en-US" sz="1400">
+        <a:solidFill><a:srgbClr val="333333"/></a:solidFill>
+      </a:rPr>
+      <a:t>Date: </a:t>
+    </a:r>
+    <a:fld type="datetime1" uuid="{C6B4D55B-2345-6789-ABCD-EF0123456789}">
+      <a:rPr lang="en-US" sz="1400">
+        <a:solidFill><a:srgbClr val="ED7D31"/></a:solidFill>
+      </a:rPr>
+      <a:t>2024-01-15</a:t>
+    </a:fld>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  // Shape 3: Multiple fields interleaved with text
+  const pos3 = gridPosition(2, 0, 3, 3);
+  shapes.push(
+    shapeXml(id++, "field-multi", {
+      preset: "rect",
+      x: pos3.x,
+      y: pos3.y,
+      cx: pos3.w,
+      cy: pos3.h,
+      fillXml: solidFillXml("E8FEE8"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="ctr"/>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr algn="ctr"/>
+    <a:r>
+      <a:rPr lang="en-US" sz="1200">
+        <a:solidFill><a:srgbClr val="333333"/></a:solidFill>
+      </a:rPr>
+      <a:t>Page </a:t>
+    </a:r>
+    <a:fld type="slidenum" uuid="{A1111111-1111-1111-1111-111111111111}">
+      <a:rPr lang="en-US" sz="1200" b="1">
+        <a:solidFill><a:srgbClr val="70AD47"/></a:solidFill>
+      </a:rPr>
+      <a:t>1</a:t>
+    </a:fld>
+    <a:r>
+      <a:rPr lang="en-US" sz="1200">
+        <a:solidFill><a:srgbClr val="333333"/></a:solidFill>
+      </a:rPr>
+      <a:t> | </a:t>
+    </a:r>
+    <a:fld type="datetime1" uuid="{B2222222-2222-2222-2222-222222222222}">
+      <a:rPr lang="en-US" sz="1200">
+        <a:solidFill><a:srgbClr val="70AD47"/></a:solidFill>
+      </a:rPr>
+      <a:t>Jan 15</a:t>
+    </a:fld>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  // Shape 4: Line break (br)
+  const pos4 = gridPosition(0, 1, 3, 3);
+  shapes.push(
+    shapeXml(id++, "line-break", {
+      preset: "rect",
+      x: pos4.x,
+      y: pos4.y,
+      cx: pos4.w,
+      cy: pos4.h,
+      fillXml: solidFillXml("F0F0F0"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="t"/>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US" sz="1400">
+        <a:solidFill><a:srgbClr val="333333"/></a:solidFill>
+      </a:rPr>
+      <a:t>Line One</a:t>
+    </a:r>
+    <a:br>
+      <a:rPr lang="en-US" sz="1400"/>
+    </a:br>
+    <a:r>
+      <a:rPr lang="en-US" sz="1400">
+        <a:solidFill><a:srgbClr val="4472C4"/></a:solidFill>
+      </a:rPr>
+      <a:t>Line Two</a:t>
+    </a:r>
+    <a:br>
+      <a:rPr lang="en-US" sz="1400"/>
+    </a:br>
+    <a:r>
+      <a:rPr lang="en-US" sz="1400">
+        <a:solidFill><a:srgbClr val="ED7D31"/></a:solidFill>
+      </a:rPr>
+      <a:t>Line Three</a:t>
+    </a:r>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  // Shape 5: Tab stops
+  const pos5 = gridPosition(1, 1, 3, 3);
+  shapes.push(
+    shapeXml(id++, "tab-stops", {
+      preset: "rect",
+      x: pos5.x,
+      y: pos5.y,
+      cx: pos5.w,
+      cy: pos5.h,
+      fillXml: solidFillXml("F0F0F0"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="t"/>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr>
+      <a:tabLst>
+        <a:tab pos="914400" algn="l"/>
+        <a:tab pos="2743200" algn="r"/>
+      </a:tabLst>
+    </a:pPr>
+    <a:r>
+      <a:rPr lang="en-US" sz="1200">
+        <a:solidFill><a:srgbClr val="333333"/></a:solidFill>
+      </a:rPr>
+      <a:t>Name&#x9;Value&#x9;Total</a:t>
+    </a:r>
+  </a:p>
+  <a:p>
+    <a:pPr>
+      <a:tabLst>
+        <a:tab pos="914400" algn="l"/>
+        <a:tab pos="2743200" algn="r"/>
+      </a:tabLst>
+    </a:pPr>
+    <a:r>
+      <a:rPr lang="en-US" sz="1200">
+        <a:solidFill><a:srgbClr val="4472C4"/></a:solidFill>
+      </a:rPr>
+      <a:t>Item A&#x9;100&#x9;$500</a:t>
+    </a:r>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  // Shape 6: numCol (multi-column)
+  const pos6 = gridPosition(2, 1, 3, 3);
+  shapes.push(
+    shapeXml(id++, "num-col", {
+      preset: "rect",
+      x: pos6.x,
+      y: pos6.y,
+      cx: pos6.w,
+      cy: pos6.h,
+      fillXml: solidFillXml("FEE8FE"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="t" numCol="2"/>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US" sz="1200">
+        <a:solidFill><a:srgbClr val="333333"/></a:solidFill>
+      </a:rPr>
+      <a:t>This text is in a two-column layout. The text should wrap within the narrower column width.</a:t>
+    </a:r>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  // Shape 7: field + br combined
+  const pos7 = gridPosition(0, 2, 3, 3);
+  shapes.push(
+    shapeXml(id++, "field-br-combo", {
+      preset: "rect",
+      x: pos7.x,
+      y: pos7.y,
+      cx: pos7.w,
+      cy: pos7.h,
+      fillXml: solidFillXml("E8E8FE"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="t"/>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US" sz="1200">
+        <a:solidFill><a:srgbClr val="333333"/></a:solidFill>
+      </a:rPr>
+      <a:t>Title</a:t>
+    </a:r>
+    <a:br>
+      <a:rPr lang="en-US" sz="1200"/>
+    </a:br>
+    <a:r>
+      <a:rPr lang="en-US" sz="1200">
+        <a:solidFill><a:srgbClr val="333333"/></a:solidFill>
+      </a:rPr>
+      <a:t>Slide </a:t>
+    </a:r>
+    <a:fld type="slidenum" uuid="{D4444444-4444-4444-4444-444444444444}">
+      <a:rPr lang="en-US" sz="1200" b="1">
+        <a:solidFill><a:srgbClr val="4472C4"/></a:solidFill>
+      </a:rPr>
+      <a:t>1</a:t>
+    </a:fld>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  const slide = wrapSlideXml(shapes.join("\n"));
+  const rels = slideRelsXml();
+
+  const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
+  savePptx(buffer, "text-advanced.pptx");
+}
+
 async function main(): Promise<void> {
   console.log("Creating VRT fixtures...\n");
 
@@ -4735,6 +5017,7 @@ async function main(): Promise<void> {
   await createParagraphSpacingFixture();
   await createPlaceholderOverlapFixture();
   await createImageCropFixture();
+  await createTextAdvancedFixture();
 
   console.log("\nDone!");
 }

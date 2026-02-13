@@ -19,6 +19,7 @@ const ARRAY_TAGS = new Set([
   "p", // テキスト段落 (Paragraph)
   "r", // テキストラン (Run)
   "br", // 改行 (Break)
+  "fld", // フィールドコード (Field)
   "Relationship", // リレーションシップ
   "sldId", // スライド ID
   "gs", // グラデーションストップ (Gradient Stop)
@@ -37,6 +38,7 @@ export function createXmlParser(): XMLParser {
     ignoreAttributes: false,
     attributeNamePrefix: "@_",
     removeNSPrefix: true,
+    htmlEntities: true,
     isArray: (_name: string, jpath: string) => {
       const tag = jpath.split(".").pop() ?? "";
       return ARRAY_TAGS.has(tag);
