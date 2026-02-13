@@ -1,10 +1,12 @@
 import type {
   AutoNumScheme,
+  BodyProperties,
   Paragraph,
   ParagraphProperties,
   RunProperties,
   SpacingValue,
   TextBody,
+  TextVerticalType,
 } from "../model/text.js";
 import type { Transform } from "../model/shape.js";
 import { EMU_PER_INCH } from "../utils/constants.js";
@@ -17,14 +19,77 @@ const PX_PER_PT = 96 / 72;
 const DEFAULT_LINE_SPACING = 1.0;
 const DEFAULT_FONT_SIZE_PT = 18;
 
+function isVerticalText(vert: TextVerticalType): boolean {
+  return vert === "vert" || vert === "eaVert" || vert === "wordArtVert" || vert === "mongolianVert";
+}
+
+function isVert270Text(vert: TextVerticalType): boolean {
+  return vert === "vert270";
+}
+
+/**
+ * 縦書き時の次元・マージン入れ替えを行う。
+ * 回転変換後にテキストが正しい位置に表示されるよう、レイアウト空間を構成する。
+ */
+function resolveTextDimensions(
+  bodyProperties: BodyProperties,
+  originalWidth: number,
+  originalHeight: number,
+): {
+  width: number;
+  height: number;
+  marginLeft: number;
+  marginRight: number;
+  marginTop: number;
+  marginBottom: number;
+} {
+  const vert = bodyProperties.vert;
+
+  if (isVerticalText(vert)) {
+    // vert (90° CW): レイアウト空間は H×W、マージンを回転に合わせて入れ替え
+    return {
+      width: originalHeight,
+      height: originalWidth,
+      marginLeft: emuToPixels(bodyProperties.marginTop),
+      marginRight: emuToPixels(bodyProperties.marginBottom),
+      marginTop: emuToPixels(bodyProperties.marginRight),
+      marginBottom: emuToPixels(bodyProperties.marginLeft),
+    };
+  }
+
+  if (isVert270Text(vert)) {
+    // vert270 (90° CCW): レイアウト空間は H×W、マージンを逆方向に入れ替え
+    return {
+      width: originalHeight,
+      height: originalWidth,
+      marginLeft: emuToPixels(bodyProperties.marginBottom),
+      marginRight: emuToPixels(bodyProperties.marginTop),
+      marginTop: emuToPixels(bodyProperties.marginLeft),
+      marginBottom: emuToPixels(bodyProperties.marginRight),
+    };
+  }
+
+  // 水平テキスト
+  return {
+    width: originalWidth,
+    height: originalHeight,
+    marginLeft: emuToPixels(bodyProperties.marginLeft),
+    marginRight: emuToPixels(bodyProperties.marginRight),
+    marginTop: emuToPixels(bodyProperties.marginTop),
+    marginBottom: emuToPixels(bodyProperties.marginBottom),
+  };
+}
+
 export function renderTextBody(textBody: TextBody, transform: Transform): string {
   const { bodyProperties, paragraphs } = textBody;
-  const width = emuToPixels(transform.extentWidth);
-  const height = emuToPixels(transform.extentHeight);
-  const marginLeft = emuToPixels(bodyProperties.marginLeft);
-  const marginRight = emuToPixels(bodyProperties.marginRight);
-  const marginTop = emuToPixels(bodyProperties.marginTop);
-  const marginBottom = emuToPixels(bodyProperties.marginBottom);
+  const originalWidth = emuToPixels(transform.extentWidth);
+  const originalHeight = emuToPixels(transform.extentHeight);
+
+  const { width, height, marginLeft, marginRight, marginTop, marginBottom } = resolveTextDimensions(
+    bodyProperties,
+    originalWidth,
+    originalHeight,
+  );
 
   const hasText = paragraphs.some((p) => p.runs.some((r) => r.text.length > 0));
   if (!hasText) return "";
@@ -238,7 +303,15 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
   }
   yStart += defaultNaturalHeight;
 
-  return `<text x="0" y="${yStart}">${tspans.join("")}</text>`;
+  const textElement = `<text x="0" y="${yStart}">${tspans.join("")}</text>`;
+
+  if (isVerticalText(bodyProperties.vert)) {
+    return `<g transform="translate(${originalWidth}, 0) rotate(90)">${textElement}</g>`;
+  }
+  if (isVert270Text(bodyProperties.vert)) {
+    return `<g transform="translate(0, ${originalHeight}) rotate(-90)">${textElement}</g>`;
+  }
+  return textElement;
 }
 
 function resolveBulletText(
@@ -661,12 +734,14 @@ export function computeSpAutofitHeight(textBody: TextBody, transform: Transform)
   const hasText = paragraphs.some((p) => p.runs.some((r) => r.text.length > 0));
   if (!hasText) return null;
 
-  const width = emuToPixels(transform.extentWidth);
-  const height = emuToPixels(transform.extentHeight);
-  const marginLeft = emuToPixels(bodyProperties.marginLeft);
-  const marginRight = emuToPixels(bodyProperties.marginRight);
-  const marginTop = emuToPixels(bodyProperties.marginTop);
-  const marginBottom = emuToPixels(bodyProperties.marginBottom);
+  const originalWidth = emuToPixels(transform.extentWidth);
+  const originalHeight = emuToPixels(transform.extentHeight);
+
+  const { width, height, marginLeft, marginRight, marginTop, marginBottom } = resolveTextDimensions(
+    bodyProperties,
+    originalWidth,
+    originalHeight,
+  );
 
   const fullTextWidth = width - marginLeft - marginRight;
   const numCol = bodyProperties.numCol ?? 1;

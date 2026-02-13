@@ -5800,6 +5800,178 @@ async function createShapeHyperlinkTextOutlineFixture(): Promise<void> {
   savePptx(buffer, "shape-hyperlink-text-outline.pptx");
 }
 
+async function createVerticalTextFixture(): Promise<void> {
+  let id = 2;
+  const shapes: string[] = [];
+
+  // 1. vert="vert" (90° CW) — 基本的な縦書き
+  const pos1 = gridPosition(0, 0, 3, 2);
+  shapes.push(
+    shapeXml(id++, "vert-text-90cw", {
+      preset: "rect",
+      x: pos1.x,
+      y: pos1.y,
+      cx: pos1.w,
+      cy: pos1.h,
+      fillXml: solidFillXml("E8F0FE"),
+      outlineXml: outlineXml(12700, "4472C4"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="t" vert="vert"/>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US" sz="1800">
+        <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      </a:rPr>
+      <a:t>Vertical Text (90 CW)</a:t>
+    </a:r>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  // 2. vert="vert270" (90° CCW)
+  const pos2 = gridPosition(1, 0, 3, 2);
+  shapes.push(
+    shapeXml(id++, "vert-text-270ccw", {
+      preset: "rect",
+      x: pos2.x,
+      y: pos2.y,
+      cx: pos2.w,
+      cy: pos2.h,
+      fillXml: solidFillXml("FDE8E8"),
+      outlineXml: outlineXml(12700, "ED7D31"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="t" vert="vert270"/>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US" sz="1800">
+        <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      </a:rPr>
+      <a:t>Vertical Text (270 CCW)</a:t>
+    </a:r>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  // 3. vert="eaVert" (East Asian vertical)
+  const pos3 = gridPosition(2, 0, 3, 2);
+  shapes.push(
+    shapeXml(id++, "vert-text-ea", {
+      preset: "rect",
+      x: pos3.x,
+      y: pos3.y,
+      cx: pos3.w,
+      cy: pos3.h,
+      fillXml: solidFillXml("E8FDE8"),
+      outlineXml: outlineXml(12700, "70AD47"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="t" vert="eaVert"/>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="ja-JP" sz="1800">
+        <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      </a:rPr>
+      <a:t>縦書きテスト</a:t>
+    </a:r>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  // 4. vert="vert" + anchor="ctr" (中央揃え)
+  const pos4 = gridPosition(0, 1, 3, 2);
+  shapes.push(
+    shapeXml(id++, "vert-text-center", {
+      preset: "rect",
+      x: pos4.x,
+      y: pos4.y,
+      cx: pos4.w,
+      cy: pos4.h,
+      fillXml: solidFillXml("FFF0E0"),
+      outlineXml: outlineXml(12700, "FFC000"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="ctr" vert="vert"/>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr algn="ctr"/>
+    <a:r>
+      <a:rPr lang="en-US" sz="2400">
+        <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      </a:rPr>
+      <a:t>Centered</a:t>
+    </a:r>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  // 5. vert="vert" + 複数行のテキスト折り返し
+  const pos5 = gridPosition(1, 1, 3, 2);
+  shapes.push(
+    shapeXml(id++, "vert-text-wrap", {
+      preset: "rect",
+      x: pos5.x,
+      y: pos5.y,
+      cx: pos5.w,
+      cy: pos5.h,
+      fillXml: solidFillXml("E8E0F8"),
+      outlineXml: outlineXml(12700, "9966FF"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="t" vert="vert"/>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US" sz="1400">
+        <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      </a:rPr>
+      <a:t>This is a longer text that should wrap in vertical mode.</a:t>
+    </a:r>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  // 6. vert="vert" + anchor="b" (下揃え)
+  const pos6 = gridPosition(2, 1, 3, 2);
+  shapes.push(
+    shapeXml(id++, "vert-text-bottom", {
+      preset: "roundRect",
+      x: pos6.x,
+      y: pos6.y,
+      cx: pos6.w,
+      cy: pos6.h,
+      fillXml: solidFillXml("F0E8E8"),
+      outlineXml: outlineXml(12700, "954F72"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="b" vert="vert"/>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US" sz="1800">
+        <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      </a:rPr>
+      <a:t>Bottom Aligned</a:t>
+    </a:r>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  const slide = wrapSlideXml(shapes.join("\n"));
+  const rels = slideRelsXml();
+  const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
+  savePptx(buffer, "vertical-text.pptx");
+}
+
 const FIXTURE_CREATORS: Record<string, () => Promise<void>> = {
   "shapes.pptx": createShapesFixture,
   "fill-and-lines.pptx": createFillAndLinesFixture,
@@ -5838,6 +6010,7 @@ const FIXTURE_CREATORS: Record<string, () => Promise<void>> = {
   "style-reference.pptx": createStyleReferenceFixture,
   "blip-effects.pptx": createBlipEffectsFixture,
   "image-stretch-tile.pptx": createImageStretchTileFixture,
+  "vertical-text.pptx": createVerticalTextFixture,
   "shape-hyperlink-text-outline.pptx": createShapeHyperlinkTextOutlineFixture,
 };
 

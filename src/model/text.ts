@@ -45,6 +45,14 @@ export interface TextBody {
   bodyProperties: BodyProperties;
 }
 
+export type TextVerticalType =
+  | "horz"
+  | "vert"
+  | "vert270"
+  | "eaVert"
+  | "wordArtVert"
+  | "mongolianVert";
+
 export interface BodyProperties {
   anchor: "t" | "ctr" | "b";
   marginLeft: number;
@@ -56,6 +64,7 @@ export interface BodyProperties {
   fontScale: number;
   lnSpcReduction: number;
   numCol: number;
+  vert: TextVerticalType;
 }
 
 export interface Paragraph {
