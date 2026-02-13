@@ -1,10 +1,11 @@
-name: Build LibreOffice VRT Image
+name: Build VRT Docker Images
 
 on:
   push:
     branches: [main]
     paths:
       - "docker/libreoffice-vrt/**"
+      - "docker/internal-vrt/**"
   workflow_dispatch:
 
 jobs:
@@ -12,6 +13,13 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       packages: write
+    strategy:
+      matrix:
+        include:
+          - context: docker/libreoffice-vrt
+            image: ghcr.io/hirokisakabe/pptx-glimpse-vrt
+          - context: docker/internal-vrt
+            image: ghcr.io/hirokisakabe/pptx-glimpse-internal-vrt
     steps:
       - uses: actions/checkout@v4
 
@@ -19,7 +27,7 @@ jobs:
         run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
       - name: Build Docker image
-        run: docker build -t ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest docker/libreoffice-vrt
+        run: docker build -t ${{ matrix.image }}:latest ${{ matrix.context }}
 
       - name: Push Docker image
-        run: docker push ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest
+        run: docker push ${{ matrix.image }}:latest
