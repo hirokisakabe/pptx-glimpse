@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { parseSlide, parseShapeTree, navigateOrdered } from "./slide-parser.js";
+import { parseSlide, parseShapeTree, parseTextBody, navigateOrdered } from "./slide-parser.js";
 import { initWarningLogger } from "../warning-logger.js";
 import { ColorResolver } from "../color/color-resolver.js";
 import { parseXml, parseXmlOrdered } from "./xml-parser.js";
@@ -1482,5 +1482,166 @@ describe("Z-order across element types", () => {
     // フォールバック: sp が cxnSp より先に来る
     expect(elements[0].type).toBe("shape");
     expect(elements[1].type).toBe("connector");
+  });
+});
+
+describe("parseTextBody", () => {
+  it("parses field codes (fld) as text runs", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Slide</a:t></a:r>
+          <a:fld type="slidenum"><a:rPr lang="en-US" sz="1400"/><a:t>1</a:t></a:fld>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>of 10</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    expect(result!.paragraphs).toHaveLength(1);
+    // フォールバック: ordered data なしでも fld テキストが含まれる
+    const allText = result!.paragraphs[0].runs.map((r) => r.text).join("");
+    expect(allText).toContain("Slide");
+    expect(allText).toContain("1");
+    expect(allText).toContain("of 10");
+  });
+
+  it("parses line breaks (br) as newline text runs", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Line One</a:t></a:r>
+          <a:br><a:rPr lang="en-US" sz="1400"/></a:br>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Line Two</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    const runs = result!.paragraphs[0].runs;
+    const allText = runs.map((r) => r.text).join("");
+    expect(allText).toContain("Line One");
+    expect(allText).toContain("\n");
+    expect(allText).toContain("Line Two");
+  });
+
+  it("parses tab stops from pPr.tabLst", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:pPr>
+            <a:tabLst>
+              <a:tab pos="914400" algn="l"/>
+              <a:tab pos="2743200" algn="r"/>
+            </a:tabLst>
+          </a:pPr>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Text</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    const tabStops = result!.paragraphs[0].properties.tabStops;
+    expect(tabStops).toHaveLength(2);
+    expect(tabStops[0]).toEqual({ position: 914400, alignment: "l" });
+    expect(tabStops[1]).toEqual({ position: 2743200, alignment: "r" });
+  });
+
+  it("parses numCol from bodyPr", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr numCol="2"/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Text</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    expect(result!.bodyProperties.numCol).toBe(2);
+  });
+
+  it("defaults numCol to 1 when not specified", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Text</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    expect(result!.bodyProperties.numCol).toBe(1);
+  });
+
+  it("extracts math text from oMathPara", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:m>
+            <a:oMathPara>
+              <a:oMath>
+                <a:r><a:t>x</a:t></a:r>
+                <a:r><a:t>=</a:t></a:r>
+                <a:r><a:t>2</a:t></a:r>
+              </a:oMath>
+            </a:oMathPara>
+          </a:m>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    const allText = result!.paragraphs[0].runs.map((r) => r.text).join("");
+    expect(allText).toContain("x");
+    expect(allText).toContain("=");
+    expect(allText).toContain("2");
+  });
+
+  it("preserves element order with ordered data (r, fld, r)", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Before</a:t></a:r>
+          <a:fld type="slidenum"><a:rPr lang="en-US" sz="1400"/><a:t>1</a:t></a:fld>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>After</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+
+    // ordered data を生成
+    const fullXml = `<sp xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">${xml}</sp>`;
+    const orderedFull = parseXmlOrdered(fullXml);
+    const spChildren = orderedFull[0]?.sp;
+    const txBodyEntry = Array.isArray(spChildren)
+      ? (spChildren as Record<string, unknown>[]).find((c) => "txBody" in c)
+      : null;
+    const orderedTxBody = txBodyEntry?.txBody as Record<string, unknown>[] | undefined;
+
+    const result = parseTextBody(
+      parsed.txBody as XmlNode,
+      createColorResolver(),
+      undefined,
+      undefined,
+      undefined,
+      orderedTxBody,
+    );
+    expect(result).not.toBeNull();
+    const runs = result!.paragraphs[0].runs;
+    // ordered data があれば r, fld, r の順序が保持される
+    expect(runs.map((r) => r.text)).toEqual(["Before", "1", "After"]);
   });
 });

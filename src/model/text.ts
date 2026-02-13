@@ -55,6 +55,7 @@ export interface BodyProperties {
   autoFit: "noAutofit" | "normAutofit" | "spAutofit";
   fontScale: number;
   lnSpcReduction: number;
+  numCol: number;
 }
 
 export interface Paragraph {
@@ -83,6 +84,12 @@ export type SpacingValue =
   | { type: "pts"; value: number } // 1/100 ポイント単位 (spcPts)
   | { type: "pct"; value: number }; // 1/1000 パーセント単位 (spcPct, 50000 = 50%)
 
+/** タブストップ定義 */
+export interface TabStop {
+  position: number; // EMU
+  alignment: "l" | "ctr" | "r" | "dec";
+}
+
 export interface ParagraphProperties {
   alignment: "l" | "ctr" | "r" | "just";
   lineSpacing: number | null;
@@ -95,6 +102,7 @@ export interface ParagraphProperties {
   bulletSizePct: number | null;
   marginLeft: number;
   indent: number;
+  tabStops: TabStop[];
 }
 
 export interface TextRun {

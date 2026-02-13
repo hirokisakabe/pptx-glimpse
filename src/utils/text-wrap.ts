@@ -15,6 +15,7 @@ interface Token {
   properties: RunProperties;
   width: number;
   breakable: boolean;
+  forceBreak?: boolean;
 }
 
 const DEFAULT_FONT_SIZE = 18;
@@ -104,6 +105,44 @@ function tokenizeRuns(
 
   for (const run of runs) {
     if (run.text.length === 0) continue;
+
+    // \n を含むランは分割して強制改行トークンを挿入
+    if (run.text.includes("\n")) {
+      const parts = run.text.split("\n");
+      for (let pi = 0; pi < parts.length; pi++) {
+        if (pi > 0) {
+          // 強制改行トークン
+          tokens.push({
+            text: "",
+            properties: run.properties,
+            width: 0,
+            breakable: true,
+            forceBreak: true,
+          });
+          isFirst = false;
+        }
+        const part = parts[pi];
+        if (part.length === 0) continue;
+        const fontSize = run.properties.fontSize
+          ? run.properties.fontSize * fontScale
+          : defaultFontSize;
+        const bold = run.properties.bold;
+        const fontFamily = run.properties.fontFamily;
+        const fontFamilyEa = run.properties.fontFamilyEa;
+        const fragments = splitTextIntoFragments(part);
+        for (const { fragment, breakable } of fragments) {
+          const width = measureTextWidth(fragment, fontSize, bold, fontFamily, fontFamilyEa);
+          tokens.push({
+            text: fragment,
+            properties: run.properties,
+            width,
+            breakable: isFirst ? false : breakable,
+          });
+          isFirst = false;
+        }
+      }
+      continue;
+    }
 
     const fontSize = run.properties.fontSize
       ? run.properties.fontSize * fontScale
@@ -229,6 +268,15 @@ function layoutTokensIntoLines(
 
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
+
+    // 強制改行トークン: 即座に行を終了
+    if (token.forceBreak) {
+      const segments = trimTrailingSpaces(mergeSegments(currentLine));
+      lines.push({ segments: segments.length > 0 ? segments : [] });
+      currentLine = [];
+      currentWidth = 0;
+      continue;
+    }
 
     if (currentWidth + token.width <= availableWidth + tolerance) {
       currentLine.push(token);

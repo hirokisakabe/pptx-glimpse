@@ -30,6 +30,7 @@ function defaultParagraphProperties(
     bulletSizePct: null,
     marginLeft: 0,
     indent: 0,
+    tabStops: [],
     ...overrides,
   };
 }
@@ -56,6 +57,7 @@ function makeTextBody(
       autoFit: overrides?.fontScale !== undefined ? "normAutofit" : "noAutofit",
       fontScale: overrides?.fontScale ?? 1,
       lnSpcReduction: overrides?.lnSpcReduction ?? 0,
+      numCol: 1,
     },
     paragraphs: [
       {
@@ -101,6 +103,7 @@ function makeBulletTextBody(
       autoFit: "noAutofit",
       fontScale: 1,
       lnSpcReduction: 0,
+      numCol: 1,
     },
     paragraphs: paragraphs.map((p) => ({
       runs: [

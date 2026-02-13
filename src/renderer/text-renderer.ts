@@ -28,7 +28,9 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
   const hasText = paragraphs.some((p) => p.runs.some((r) => r.text.length > 0));
   if (!hasText) return "";
 
-  const textWidth = width - marginLeft - marginRight;
+  const fullTextWidth = width - marginLeft - marginRight;
+  const numCol = bodyProperties.numCol ?? 1;
+  const textWidth = numCol > 1 ? fullTextWidth / numCol : fullTextWidth;
   const defaultFontSize = getDefaultFontSize(paragraphs);
   const shouldWrap = bodyProperties.wrap !== "none";
 
@@ -668,8 +670,12 @@ function estimateTextHeight(
   return totalHeight;
 }
 
+/** デフォルトタブ幅（スペース数） */
+const TAB_SPACES = "    "; // 4 spaces
+
 function escapeXml(str: string): string {
   return str
+    .replace(/\t/g, TAB_SPACES)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
