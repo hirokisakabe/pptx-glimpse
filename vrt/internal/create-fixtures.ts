@@ -5038,6 +5038,142 @@ async function createTextAdvancedFixture(): Promise<void> {
   savePptx(buffer, "text-advanced.pptx");
 }
 
+async function createShrinkToFitFixture(): Promise<void> {
+  let id = 2;
+  const shapes: string[] = [];
+
+  // 1. normAutofit (fontScale なし) — テキストがはみ出すケース → 動的縮小
+  const pos1 = gridPosition(0, 0, 2, 2);
+  shapes.push(
+    shapeXml(id++, "shrink-overflow", {
+      preset: "rect",
+      x: pos1.x,
+      y: pos1.y,
+      cx: pos1.w,
+      cy: pos1.h,
+      fillXml: solidFillXml("F0F0F0"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="t"><a:normAutofit/></a:bodyPr>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US" sz="3600">
+        <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      </a:rPr>
+      <a:t>Long text shrunk to fit within this shape.</a:t>
+    </a:r>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  // 2. normAutofit (fontScale なし) — テキストが収まるケース → 縮小なし
+  const pos2 = gridPosition(1, 0, 2, 2);
+  shapes.push(
+    shapeXml(id++, "shrink-fits", {
+      preset: "rect",
+      x: pos2.x,
+      y: pos2.y,
+      cx: pos2.w,
+      cy: pos2.h,
+      fillXml: solidFillXml("E8F4FD"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="t"><a:normAutofit/></a:bodyPr>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US" sz="1400">
+        <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      </a:rPr>
+      <a:t>Short text</a:t>
+    </a:r>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  // 3. noAutofit — テキストがはみ出してもそのまま
+  const pos3 = gridPosition(0, 1, 2, 2);
+  shapes.push(
+    shapeXml(id++, "no-autofit-overflow", {
+      preset: "rect",
+      x: pos3.x,
+      y: pos3.y,
+      cx: pos3.w,
+      cy: pos3.h,
+      fillXml: solidFillXml("FDE8E8"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="t"/>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US" sz="3600">
+        <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      </a:rPr>
+      <a:t>Long text that overflows without shrinking.</a:t>
+    </a:r>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  // 4. normAutofit + 複数段落
+  const pos4 = gridPosition(1, 1, 2, 2);
+  shapes.push(
+    shapeXml(id++, "shrink-multi-para", {
+      preset: "rect",
+      x: pos4.x,
+      y: pos4.y,
+      cx: pos4.w,
+      cy: pos4.h,
+      fillXml: solidFillXml("FFF0F5"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="t"><a:normAutofit/></a:bodyPr>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US" sz="2400">
+        <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      </a:rPr>
+      <a:t>First paragraph.</a:t>
+    </a:r>
+  </a:p>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US" sz="2400">
+        <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      </a:rPr>
+      <a:t>Second paragraph.</a:t>
+    </a:r>
+  </a:p>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US" sz="2400">
+        <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      </a:rPr>
+      <a:t>Third paragraph.</a:t>
+    </a:r>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  const slide = wrapSlideXml(shapes.join("\n"));
+  const rels = slideRelsXml();
+  const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
+  savePptx(buffer, "shrink-to-fit.pptx");
+}
+
 async function main(): Promise<void> {
   console.log("Creating VRT fixtures...\n");
 
@@ -5073,6 +5209,7 @@ async function main(): Promise<void> {
   await createPlaceholderOverlapFixture();
   await createImageCropFixture();
   await createTextAdvancedFixture();
+  await createShrinkToFitFixture();
 
   console.log("\nDone!");
 }
