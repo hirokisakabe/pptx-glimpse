@@ -858,7 +858,7 @@ describe("buildFontFamilyValue", () => {
 
   it("スペースを含むフォント名をシングルクォートで囲む", () => {
     expect(buildFontFamilyValue(["Times New Roman"])).toBe(
-      "'Times New Roman', 'Liberation Serif', serif",
+      "'Times New Roman', Tinos, 'Liberation Serif', serif",
     );
     expect(buildFontFamilyValue(["Calibri", "Noto Sans JP"])).toBe(
       "Calibri, Carlito, 'Noto Sans JP', sans-serif",
@@ -867,14 +867,16 @@ describe("buildFontFamilyValue", () => {
 
   it("serif 系フォントの汎用ファミリが serif になる", () => {
     expect(buildFontFamilyValue(["Times New Roman"])).toBe(
-      "'Times New Roman', 'Liberation Serif', serif",
+      "'Times New Roman', Tinos, 'Liberation Serif', serif",
     );
-    expect(buildFontFamilyValue(["Yu Mincho"])).toBe("'Yu Mincho', 'Noto Sans JP', serif");
-    expect(buildFontFamilyValue(["游明朝"])).toBe("游明朝, 'Noto Sans JP', serif");
+    expect(buildFontFamilyValue(["Yu Mincho"])).toBe(
+      "'Yu Mincho', 'Noto Serif JP', 'Noto Sans JP', serif",
+    );
+    expect(buildFontFamilyValue(["游明朝"])).toBe("游明朝, 'Noto Serif JP', 'Noto Sans JP', serif");
   });
 
   it("sans-serif 系フォントの汎用ファミリが sans-serif になる", () => {
-    expect(buildFontFamilyValue(["Arial"])).toBe("Arial, 'Liberation Sans', sans-serif");
+    expect(buildFontFamilyValue(["Arial"])).toBe("Arial, Arimo, 'Liberation Sans', sans-serif");
     expect(buildFontFamilyValue(["Meiryo"])).toBe("Meiryo, 'Noto Sans JP', sans-serif");
   });
 

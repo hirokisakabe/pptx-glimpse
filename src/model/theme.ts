@@ -52,4 +52,6 @@ export interface FontScheme {
   minorFont: string;
   majorFontEa: string | null;
   minorFontEa: string | null;
+  majorFontCs: string | null;
+  minorFontCs: string | null;
 }

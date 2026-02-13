@@ -27,6 +27,10 @@ export function parseDefaultRunProperties(
   if (ea?.["@_typeface"] !== undefined) {
     result.fontFamilyEa = ea["@_typeface"] as string;
   }
+  const cs = defRPr.cs as XmlNode | undefined;
+  if (cs?.["@_typeface"] !== undefined) {
+    result.fontFamilyCs = cs["@_typeface"] as string;
+  }
   if (defRPr["@_b"] !== undefined) {
     result.bold = defRPr["@_b"] === "1" || defRPr["@_b"] === "true";
   }
@@ -118,6 +122,10 @@ export function resolveThemeFont(
       return fontScheme.majorFontEa;
     case "+mn-ea":
       return fontScheme.minorFontEa;
+    case "+mj-cs":
+      return fontScheme.majorFontCs;
+    case "+mn-cs":
+      return fontScheme.minorFontCs;
     default:
       return typeface;
   }
