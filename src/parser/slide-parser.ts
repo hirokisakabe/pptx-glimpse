@@ -49,6 +49,7 @@ import {
   parseDefaultRunProperties,
   resolveThemeFont,
 } from "./text-style-parser.js";
+import { uint8ArrayToBase64 } from "../utils/base64.js";
 import { warn, debug } from "../warning-logger.js";
 
 const SHAPE_TAGS = new Set(["sp", "pic", "cxnSp", "grpSp", "graphicFrame"]);
@@ -571,7 +572,7 @@ function parseImage(
     wmf: "image/wmf",
   };
   const mimeType = mimeMap[ext] ?? "image/png";
-  const imageData = mediaData.toString("base64");
+  const imageData = uint8ArrayToBase64(mediaData);
   const effects = parseEffectList(spPr.effectLst as XmlNode, colorResolver);
   const blipEffects = parseBlipEffects(blip as XmlNode, colorResolver);
   const srcRect = parseSrcRect(blipFill?.srcRect as XmlNode | undefined);

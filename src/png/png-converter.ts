@@ -1,4 +1,5 @@
-import sharp from "sharp";
+import { Resvg } from "@resvg/resvg-wasm";
+import { ensureWasmInitialized } from "./wasm-init.js";
 
 export interface PngConvertOptions {
   width?: number;
@@ -8,25 +9,23 @@ export interface PngConvertOptions {
 export async function svgToPng(
   svgString: string,
   options?: PngConvertOptions,
-): Promise<{ png: Buffer; width: number; height: number }> {
-  const svgBuffer = Buffer.from(svgString);
+): Promise<{ png: Uint8Array; width: number; height: number }> {
+  await ensureWasmInitialized();
 
-  let pipeline = sharp(svgBuffer);
+  const resvg = new Resvg(svgString, {
+    fitTo: options?.width
+      ? { mode: "width", value: options.width }
+      : options?.height
+        ? { mode: "height", value: options.height }
+        : { mode: "original" },
+  });
 
-  if (options?.width || options?.height) {
-    pipeline = pipeline.resize({
-      width: options.width,
-      height: options.height,
-      fit: "contain",
-      background: { r: 255, g: 255, b: 255, alpha: 1 },
-    });
-  }
+  const rendered = resvg.render();
+  const png = rendered.asPng();
+  const { width, height } = rendered;
 
-  const result = await pipeline.png().toBuffer({ resolveWithObject: true });
+  rendered.free();
+  resvg.free();
 
-  return {
-    png: result.data,
-    width: result.info.width,
-    height: result.info.height,
-  };
+  return { png, width, height };
 }

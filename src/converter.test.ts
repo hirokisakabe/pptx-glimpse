@@ -319,7 +319,7 @@ describe("convertPptxToPng", () => {
 
     expect(results).toHaveLength(1);
     expect(results[0].slideNumber).toBe(1);
-    expect(results[0].png).toBeInstanceOf(Buffer);
+    expect(results[0].png).toBeInstanceOf(Uint8Array);
     expect(results[0].png.length).toBeGreaterThan(0);
     // PNG magic bytes
     expect(results[0].png[0]).toBe(0x89);
