@@ -23,7 +23,19 @@ export function renderFillAttrs(fill: Fill | null): FillAttrs {
   }
 
   if (fill.type === "image") {
+    if (fill.mimeType === "image/emf" || fill.mimeType === "image/wmf") {
+      return { attrs: `fill="#E0E0E0"`, defs: "" };
+    }
+
     const id = `imgfill-${crypto.randomUUID()}`;
+
+    if (fill.tile) {
+      const t = fill.tile;
+      const scalePct = (v: number) => `${v * 100}%`;
+      const defs = `<pattern id="${id}" patternUnits="objectBoundingBox" width="${scalePct(t.sx)}" height="${scalePct(t.sy)}"><image href="data:${fill.mimeType};base64,${fill.imageData}" width="100%" height="100%" preserveAspectRatio="none"/></pattern>`;
+      return { attrs: `fill="url(#${id})"`, defs };
+    }
+
     const defs = `<pattern id="${id}" patternContentUnits="objectBoundingBox" width="1" height="1"><image href="data:${fill.mimeType};base64,${fill.imageData}" width="1" height="1" preserveAspectRatio="none"/></pattern>`;
     return { attrs: `fill="url(#${id})"`, defs };
   }

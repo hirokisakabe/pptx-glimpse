@@ -72,12 +72,37 @@ describe("renderFillAttrs", () => {
       type: "image",
       imageData: "dGVzdA==",
       mimeType: "image/png",
+      tile: null,
     });
     expect(result.attrs).toContain("url(#imgfill-");
     expect(result.defs).toContain("<pattern");
     expect(result.defs).toContain('patternContentUnits="objectBoundingBox"');
     expect(result.defs).toContain("<image");
     expect(result.defs).toContain("data:image/png;base64,dGVzdA==");
+  });
+
+  it("renders EMF fill as gray placeholder", () => {
+    const result = renderFillAttrs({
+      type: "image",
+      imageData: "dGVzdA==",
+      mimeType: "image/emf",
+      tile: null,
+    });
+    expect(result.attrs).toBe('fill="#E0E0E0"');
+    expect(result.defs).toBe("");
+  });
+
+  it("renders image fill with tile", () => {
+    const result = renderFillAttrs({
+      type: "image",
+      imageData: "dGVzdA==",
+      mimeType: "image/png",
+      tile: { tx: 0, ty: 0, sx: 0.5, sy: 0.5, flip: "none", align: "tl" },
+    });
+    expect(result.attrs).toContain("url(#imgfill-");
+    expect(result.defs).toContain("patternUnits=");
+    expect(result.defs).toContain('width="50%"');
+    expect(result.defs).toContain('height="50%"');
   });
 
   it("renders pattern fill", () => {
