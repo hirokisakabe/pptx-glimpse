@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - "docker/libreoffice-vrt/**"
-      - "docker/internal-vrt/**"
+      - "docker/snapshot-vrt/**"
   workflow_dispatch:
 
 jobs:
@@ -18,8 +18,8 @@ jobs:
         include:
           - context: docker/libreoffice-vrt
             image: ghcr.io/hirokisakabe/pptx-glimpse-vrt
-          - context: docker/internal-vrt
-            image: ghcr.io/hirokisakabe/pptx-glimpse-internal-vrt
+          - context: docker/snapshot-vrt
+            image: ghcr.io/hirokisakabe/pptx-glimpse-snapshot-vrt
     steps:
       - uses: actions/checkout@v4
 

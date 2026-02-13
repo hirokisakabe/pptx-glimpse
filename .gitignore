@@ -5,8 +5,8 @@ dist/
 coverage/
 output/
 scripts/fonts/
-vrt/internal/diffs/
-vrt/internal/fixtures/
+vrt/snapshot/diffs/
+vrt/snapshot/fixtures/
 vrt/libreoffice/diffs/
 vrt/libreoffice/snapshots/
 vrt/libreoffice/fixtures/
