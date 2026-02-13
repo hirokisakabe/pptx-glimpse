@@ -34,8 +34,22 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
   const defaultFontSize = getDefaultFontSize(paragraphs);
   const shouldWrap = bodyProperties.wrap !== "none";
 
-  const fontScale = bodyProperties.fontScale;
+  let fontScale = bodyProperties.fontScale;
   const lnSpcReduction = bodyProperties.lnSpcReduction;
+
+  // normAutofit: テキストが図形からはみ出す場合に fontScale を動的に縮小
+  if (bodyProperties.autoFit === "normAutofit" && shouldWrap) {
+    const availableHeight = height - marginTop - marginBottom;
+    fontScale = computeShrinkToFitScale(
+      paragraphs,
+      defaultFontSize,
+      fontScale,
+      lnSpcReduction,
+      textWidth,
+      availableHeight,
+    );
+  }
+
   const scaledDefaultFontSize = defaultFontSize * fontScale;
 
   // デフォルトフォントの行高さ比率
@@ -624,6 +638,39 @@ function getDefaultLineHeightRatio(paragraphs: TextBody["paragraphs"]): number {
     }
   }
   return 1.2;
+}
+
+function computeShrinkToFitScale(
+  paragraphs: TextBody["paragraphs"],
+  defaultFontSize: number,
+  fontScale: number,
+  lnSpcReduction: number,
+  textWidth: number,
+  availableHeight: number,
+): number {
+  if (availableHeight <= 0) return fontScale;
+
+  const minScale = fontScale * 0.1;
+  let scale = fontScale;
+  const maxIterations = 5;
+
+  for (let i = 0; i < maxIterations; i++) {
+    const scaledDefault = defaultFontSize * scale;
+    const textHeight = estimateTextHeight(
+      paragraphs,
+      scaledDefault,
+      true,
+      textWidth,
+      lnSpcReduction,
+      scale,
+    );
+    if (textHeight <= availableHeight) break;
+    const newScale = scale * (availableHeight / textHeight);
+    scale = Math.max(newScale, minScale);
+    if (scale <= minScale) break;
+  }
+
+  return scale;
 }
 
 function estimateTextHeight(

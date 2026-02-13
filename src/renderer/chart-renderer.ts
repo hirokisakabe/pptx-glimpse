@@ -61,6 +61,9 @@ export function renderChart(element: ChartElement): string {
       case "bubble":
         parts.push(renderBubbleChart(chart, plotX, plotY, plotW, plotH));
         break;
+      case "area":
+        parts.push(renderAreaChart(chart, plotX, plotY, plotW, plotH));
+        break;
     }
   }
 
@@ -200,6 +203,60 @@ function renderLineChart(chart: ChartData, x: number, y: number, w: number, h: n
       const [px, py] = point.split(",");
       parts.push(`<circle cx="${px}" cy="${py}" r="3" ${fillAttr(color)}/>`);
     }
+  }
+
+  return parts.join("");
+}
+
+function renderAreaChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
+  const parts: string[] = [];
+  const { series, categories } = chart;
+  if (series.length === 0) return "";
+
+  const maxVal = getMaxValue(series);
+  if (maxVal === 0) return "";
+
+  const catCount = categories.length || Math.max(...series.map((s) => s.values.length));
+  if (catCount === 0) return "";
+
+  // Axes
+  parts.push(
+    `<line x1="${round(x)}" y1="${round(y + h)}" x2="${round(x + w)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
+  );
+  parts.push(
+    `<line x1="${round(x)}" y1="${round(y)}" x2="${round(x)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
+  );
+
+  // Category labels
+  for (let c = 0; c < catCount; c++) {
+    const label = categories[c] ?? "";
+    const divisor = catCount > 1 ? catCount - 1 : 1;
+    const labelX = x + (c / divisor) * w;
+    parts.push(
+      `<text x="${round(labelX)}" y="${round(y + h + 15)}" text-anchor="middle" font-size="10" fill="#595959">${escapeXml(label)}</text>`,
+    );
+  }
+
+  // Areas (filled polygons)
+  const baseline = round(y + h);
+  for (let s = 0; s < series.length; s++) {
+    const color = series[s].color;
+    const divisor = catCount > 1 ? catCount - 1 : 1;
+    const dataPoints = series[s].values.map((val, i) => {
+      const px = round(x + (i / divisor) * w);
+      const py = round(y + h - (val / maxVal) * h);
+      return { px, py };
+    });
+
+    // Build polygon points: data points + bottom-right + bottom-left
+    const topPoints = dataPoints.map((p) => `${p.px},${p.py}`).join(" ");
+    const lastX = dataPoints[dataPoints.length - 1].px;
+    const firstX = dataPoints[0].px;
+    const polygonPoints = `${topPoints} ${lastX},${baseline} ${firstX},${baseline}`;
+
+    parts.push(
+      `<polygon points="${polygonPoints}" fill="${color.hex}" fill-opacity="${color.alpha < 1 ? color.alpha : 0.5}" stroke="${color.hex}" stroke-width="2"${color.alpha < 1 ? ` stroke-opacity="${color.alpha}"` : ""}/>`,
+    );
   }
 
   return parts.join("");
