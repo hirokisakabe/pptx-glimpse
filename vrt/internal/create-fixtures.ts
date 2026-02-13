@@ -4006,7 +4006,7 @@ async function createThemeFontFixture(): Promise<void> {
 // Text Style Inheritance
 // ============================================================
 async function createTextStyleInheritanceFixture(): Promise<void> {
-  // スライドマスター: txStyles (titleStyle: 36pt, bodyStyle: 24pt, otherStyle: 14pt)
+  // スライドマスター: txStyles (titleStyle: 36pt+白, bodyStyle: 24pt+白, otherStyle: 14pt+白)
   const customSlideMaster = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sldMaster xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}">
   <p:cSld>
@@ -4019,14 +4019,14 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
   <p:sldLayoutIdLst><p:sldLayoutId r:id="rId1"/></p:sldLayoutIdLst>
   <p:txStyles>
     <p:titleStyle>
-      <a:lvl1pPr><a:defRPr sz="3600"/></a:lvl1pPr>
+      <a:lvl1pPr><a:defRPr sz="3600"><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:defRPr></a:lvl1pPr>
     </p:titleStyle>
     <p:bodyStyle>
-      <a:lvl1pPr><a:defRPr sz="2400"/></a:lvl1pPr>
-      <a:lvl2pPr><a:defRPr sz="2000"/></a:lvl2pPr>
+      <a:lvl1pPr><a:defRPr sz="2400"><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:defRPr></a:lvl1pPr>
+      <a:lvl2pPr><a:defRPr sz="2000"><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:defRPr></a:lvl2pPr>
     </p:bodyStyle>
     <p:otherStyle>
-      <a:lvl1pPr><a:defRPr sz="1400"/></a:lvl1pPr>
+      <a:lvl1pPr><a:defRPr sz="1400"><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:defRPr></a:lvl1pPr>
     </p:otherStyle>
   </p:txStyles>
 </p:sldMaster>`;
@@ -4106,9 +4106,23 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
   </p:txBody>
 </p:sp>`;
 
+  // Shape 6: body プレースホルダーで rPr に色直接指定 (赤, txStyles の白より優先)
+  const shape6 = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="7" name="Body Direct Color"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="3"/></p:nvPr></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="4876800" y="3962400"/><a:ext cx="3810000" cy="762000"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr/>
+    <a:p><a:r><a:rPr><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:rPr><a:t>Body direct red</a:t></a:r></a:p>
+  </p:txBody>
+</p:sp>`;
+
   const slideXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}">
   <p:cSld>
+    <p:bg><p:bgPr><a:solidFill><a:srgbClr val="333333"/></a:solidFill></p:bgPr></p:bg>
     <p:spTree>
       <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
       <p:grpSpPr/>
@@ -4117,6 +4131,7 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
       ${shape3}
       ${shape4}
       ${shape5}
+      ${shape6}
     </p:spTree>
   </p:cSld>
 </p:sld>`;

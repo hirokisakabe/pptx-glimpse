@@ -58,7 +58,12 @@ function resolveShapeTextInheritance(shape: ShapeElement, context: TextStyleCont
       const props = run.properties;
 
       for (const source of chainSources) {
-        if (props.fontSize !== null && props.fontFamily !== null && props.fontFamilyEa !== null) {
+        if (
+          props.fontSize !== null &&
+          props.fontFamily !== null &&
+          props.fontFamilyEa !== null &&
+          props.color !== null
+        ) {
           break;
         }
 
@@ -73,6 +78,9 @@ function resolveShapeTextInheritance(shape: ShapeElement, context: TextStyleCont
         }
         if (props.fontFamilyEa === null && defRPr.fontFamilyEa != null) {
           props.fontFamilyEa = resolveThemeFont(defRPr.fontFamilyEa, context.fontScheme);
+        }
+        if (props.color === null && defRPr.color !== undefined) {
+          props.color = defRPr.color;
         }
       }
     }

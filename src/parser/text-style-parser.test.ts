@@ -4,6 +4,40 @@ import {
   parseParagraphLevelProperties,
   parseListStyle,
 } from "./text-style-parser.js";
+import { ColorResolver } from "../color/color-resolver.js";
+
+function createColorResolver() {
+  return new ColorResolver(
+    {
+      dk1: "#000000",
+      lt1: "#FFFFFF",
+      dk2: "#44546A",
+      lt2: "#E7E6E6",
+      accent1: "#4472C4",
+      accent2: "#ED7D31",
+      accent3: "#A5A5A5",
+      accent4: "#FFC000",
+      accent5: "#5B9BD5",
+      accent6: "#70AD47",
+      hlink: "#0563C1",
+      folHlink: "#954F72",
+    },
+    {
+      bg1: "lt1",
+      tx1: "dk1",
+      bg2: "lt2",
+      tx2: "dk2",
+      accent1: "accent1",
+      accent2: "accent2",
+      accent3: "accent3",
+      accent4: "accent4",
+      accent5: "accent5",
+      accent6: "accent6",
+      hlink: "hlink",
+      folHlink: "folHlink",
+    },
+  );
+}
 
 describe("parseDefaultRunProperties", () => {
   it("returns undefined for falsy input", () => {
@@ -51,6 +85,36 @@ describe("parseDefaultRunProperties", () => {
 
   it("returns undefined for empty object", () => {
     expect(parseDefaultRunProperties({})).toBeUndefined();
+  });
+
+  it("parses solidFill with schemeClr when colorResolver is provided", () => {
+    const result = parseDefaultRunProperties(
+      {
+        "@_sz": "1800",
+        solidFill: { schemeClr: { "@_val": "lt1" } },
+      },
+      createColorResolver(),
+    );
+    expect(result?.fontSize).toBe(18);
+    expect(result?.color).toEqual({ hex: "#FFFFFF", alpha: 1 });
+  });
+
+  it("parses solidFill with srgbClr when colorResolver is provided", () => {
+    const result = parseDefaultRunProperties(
+      {
+        solidFill: { srgbClr: { "@_val": "FF0000" } },
+      },
+      createColorResolver(),
+    );
+    expect(result?.color).toEqual({ hex: "#FF0000", alpha: 1 });
+  });
+
+  it("does not parse color when colorResolver is not provided", () => {
+    const result = parseDefaultRunProperties({
+      "@_sz": "1800",
+      solidFill: { schemeClr: { "@_val": "lt1" } },
+    });
+    expect(result?.color).toBeUndefined();
   });
 });
 
