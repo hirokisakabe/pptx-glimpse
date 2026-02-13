@@ -1301,6 +1301,38 @@ async function createChartsFixture(): Promise<void> {
     rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart6.xml" }]),
   });
 
+  // Slide 7: Area chart
+  const areaChart = chartXml("areaChart", {
+    title: "Website Traffic",
+    legendPos: "b",
+    series: [
+      {
+        name: "Visitors",
+        categories: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+        values: [200, 350, 280, 420, 380],
+      },
+      {
+        name: "Page Views",
+        categories: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+        values: [400, 500, 450, 600, 550],
+      },
+    ],
+  });
+  charts.set("ppt/charts/chart7.xml", areaChart);
+  const gf7 = graphicFrameXml(
+    2,
+    "Area Chart",
+    margin,
+    margin,
+    SLIDE_W - margin * 2,
+    SLIDE_H - margin * 2,
+    "rId2",
+  );
+  slides.push({
+    xml: wrapSlideXml(gf7),
+    rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart7.xml" }]),
+  });
+
   const buffer = await buildPptx({
     slides,
     charts,
@@ -1311,6 +1343,7 @@ async function createChartsFixture(): Promise<void> {
       `<Override PartName="/ppt/charts/chart4.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
       `<Override PartName="/ppt/charts/chart5.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
       `<Override PartName="/ppt/charts/chart6.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
+      `<Override PartName="/ppt/charts/chart7.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
     ],
   });
   savePptx(buffer, "charts.pptx");

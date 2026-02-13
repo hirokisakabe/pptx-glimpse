@@ -16,6 +16,8 @@ const CHART_TYPE_MAP: [string, ChartType][] = [
   ["doughnutChart", "doughnut"],
   ["scatterChart", "scatter"],
   ["bubbleChart", "bubble"],
+  ["areaChart", "area"],
+  ["area3DChart", "area"],
 ];
 
 export function parseChart(chartXml: string, colorResolver: ColorResolver): ChartData | null {
@@ -82,15 +84,7 @@ function parseChartTypeAndData(
 
   // Detect unsupported chart types
   const knownTags = new Set(CHART_TYPE_MAP.map(([tag]) => tag));
-  const chartTags = [
-    "areaChart",
-    "area3DChart",
-    "surfaceChart",
-    "surface3DChart",
-    "radarChart",
-    "stockChart",
-    "ofPieChart",
-  ];
+  const chartTags = ["surfaceChart", "surface3DChart", "radarChart", "stockChart", "ofPieChart"];
   for (const tag of chartTags) {
     if (!knownTags.has(tag) && plotArea[tag]) {
       warn(`chart.${tag}`, `chart type "${tag}" not implemented`);
