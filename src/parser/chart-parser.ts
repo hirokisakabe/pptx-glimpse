@@ -15,6 +15,7 @@ const CHART_TYPE_MAP: [string, ChartType][] = [
   ["pie3DChart", "pie"],
   ["doughnutChart", "doughnut"],
   ["scatterChart", "scatter"],
+  ["bubbleChart", "bubble"],
 ];
 
 export function parseChart(chartXml: string, colorResolver: ColorResolver): ChartData | null {
@@ -86,7 +87,6 @@ function parseChartTypeAndData(
     "area3DChart",
     "surfaceChart",
     "surface3DChart",
-    "bubbleChart",
     "radarChart",
     "stockChart",
     "ofPieChart",
@@ -108,16 +108,18 @@ function parseSeries(
   colorResolver: ColorResolver,
 ): ChartSeries {
   const name = parseSeriesName(ser.tx as XmlNode);
-  const values = parseNumericData(
-    chartType === "scatter" ? (ser.yVal as XmlNode) : (ser.val as XmlNode),
-  );
-  const xValues = chartType === "scatter" ? parseNumericData(ser.xVal as XmlNode) : undefined;
+  const usesXY = chartType === "scatter" || chartType === "bubble";
+  const values = parseNumericData(usesXY ? (ser.yVal as XmlNode) : (ser.val as XmlNode));
+  const xValues = usesXY ? parseNumericData(ser.xVal as XmlNode) : undefined;
+  const bubbleSizes =
+    chartType === "bubble" ? parseNumericData(ser.bubbleSize as XmlNode) : undefined;
   const color = resolveSeriesColor(ser.spPr as XmlNode, seriesIndex, colorResolver);
 
   return {
     name,
     values,
     ...(xValues !== undefined && { xValues }),
+    ...(bubbleSizes !== undefined && { bubbleSizes }),
     color,
   };
 }

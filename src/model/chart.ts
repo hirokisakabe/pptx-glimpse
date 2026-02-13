@@ -7,7 +7,7 @@ export interface ChartElement {
   chart: ChartData;
 }
 
-export type ChartType = "bar" | "line" | "pie" | "doughnut" | "scatter";
+export type ChartType = "bar" | "line" | "pie" | "doughnut" | "scatter" | "bubble";
 
 export interface ChartData {
   chartType: ChartType;
@@ -23,6 +23,7 @@ export interface ChartSeries {
   name: string | null;
   values: number[];
   xValues?: number[];
+  bubbleSizes?: number[];
   color: ResolvedColor;
 }
 

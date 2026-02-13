@@ -184,6 +184,75 @@ describe("renderChart", () => {
     });
   });
 
+  describe("bubble chart", () => {
+    it("renders circle elements for data points", () => {
+      const element = createChartElement({
+        chartType: "bubble",
+        series: [
+          {
+            name: "Bubble1",
+            values: [10, 20, 15],
+            xValues: [1, 2, 3],
+            bubbleSizes: [5, 10, 8],
+            color: { hex: "#4472C4", alpha: 1 },
+          },
+        ],
+        categories: [],
+      });
+
+      const svg = renderChart(element);
+      const circles = svg.match(/<circle[^>]*fill="#4472C4"[^>]*\/>/g);
+      expect(circles).not.toBeNull();
+      expect(circles!.length).toBe(3);
+    });
+
+    it("renders circles with varying radii based on bubble sizes", () => {
+      const element = createChartElement({
+        chartType: "bubble",
+        series: [
+          {
+            name: "Bubble1",
+            values: [10, 20],
+            xValues: [1, 2],
+            bubbleSizes: [4, 16],
+            color: { hex: "#4472C4", alpha: 1 },
+          },
+        ],
+        categories: [],
+      });
+
+      const svg = renderChart(element);
+      const circles = svg.match(/<circle[^>]*r="([^"]*)"[^>]*\/>/g);
+      expect(circles).not.toBeNull();
+      expect(circles!.length).toBe(2);
+      // Extract radii — larger bubble size should produce a larger radius
+      const radii = circles!.map((c) => {
+        const match = c.match(/r="([^"]*)"/);
+        return Number(match![1]);
+      });
+      expect(radii[1]).toBeGreaterThan(radii[0]);
+    });
+
+    it("renders bubbles with fill-opacity", () => {
+      const element = createChartElement({
+        chartType: "bubble",
+        series: [
+          {
+            name: "Bubble1",
+            values: [10],
+            xValues: [1],
+            bubbleSizes: [5],
+            color: { hex: "#4472C4", alpha: 1 },
+          },
+        ],
+        categories: [],
+      });
+
+      const svg = renderChart(element);
+      expect(svg).toContain('fill-opacity="0.6"');
+    });
+  });
+
   describe("title", () => {
     it("renders title text", () => {
       const element = createChartElement({
