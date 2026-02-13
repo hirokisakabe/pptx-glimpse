@@ -61,6 +61,7 @@ Visual regression tests for rendering output. When modifying the parser or rende
 vrt/
 ├── compare-utils.ts                          # Shared image comparison utilities
 ├── snapshot/                                 # Standard VRT (self-comparison, Docker-based)
+│   ├── vrt-cases.ts                          # Shared test case definitions
 │   ├── regression.test.ts                    # Test file
 │   ├── create-fixtures.ts                    # Fixture generation script
 │   ├── update-snapshots.ts                   # Snapshot update script
@@ -98,9 +99,11 @@ When changes to the parser, renderer, or model affect rendering output:
 
 When adding a new rendering feature, **all 3 of the following** must be updated:
 
-1. **`vrt/snapshot/create-fixtures.ts`** — Add fixtures (PPTX) covering the new feature
-2. **`vrt/snapshot/regression.test.ts`** — Add new test cases to the `VRT_CASES` array
+1. **`vrt/snapshot/vrt-cases.ts`** — Add a new entry to the `VRT_CASES` array
+2. **`vrt/snapshot/create-fixtures.ts`** — Add a fixture creator function and register it in `FIXTURE_CREATORS`
 3. **`vrt/snapshot/snapshots/`** — Regenerate snapshots with `npm run vrt:snapshot:update`
+
+`VRT_CASES` is the single source of truth shared by both `create-fixtures.ts` and `regression.test.ts`. If a case is added to `VRT_CASES` without a corresponding creator in `FIXTURE_CREATORS`, the fixture generation script will fail with an error.
 
 **Common mistake**: Modifying the parser or renderer but forgetting to update snapshots, causing VRT tests to fail. Always run `npm run vrt:snapshot:update` after making changes that affect rendering.
 
