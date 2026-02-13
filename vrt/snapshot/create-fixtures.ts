@@ -5972,6 +5972,517 @@ async function createVerticalTextFixture(): Promise<void> {
   savePptx(buffer, "vertical-text.pptx");
 }
 
+// --- Charts 3D Fallback ---
+async function createCharts3dFallbackFixture(): Promise<void> {
+  const charts = new Map<string, string>();
+  const slides: SlideData[] = [];
+  const margin = 300000;
+
+  // Slide 1: bar3DChart → bar fallback
+  const bar3D = chartXml("bar3DChart", {
+    barDir: "col",
+    title: "3D Bar (fallback)",
+    legendPos: "b",
+    series: [
+      { name: "FY2024", categories: ["Q1", "Q2", "Q3", "Q4"], values: [10, 25, 15, 30] },
+      { name: "FY2025", categories: ["Q1", "Q2", "Q3", "Q4"], values: [15, 20, 25, 35] },
+    ],
+  });
+  charts.set("ppt/charts/chart1.xml", bar3D);
+  const gf1 = graphicFrameXml(
+    2,
+    "3D Bar Chart",
+    margin,
+    margin,
+    SLIDE_W - margin * 2,
+    SLIDE_H - margin * 2,
+    "rId2",
+  );
+  slides.push({
+    xml: wrapSlideXml(gf1),
+    rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart1.xml" }]),
+  });
+
+  // Slide 2: pie3DChart → pie fallback
+  const pie3D = chartXml("pie3DChart", {
+    title: "3D Pie (fallback)",
+    legendPos: "r",
+    series: [{ name: "Share", categories: ["A", "B", "C", "D"], values: [40, 25, 20, 15] }],
+  });
+  charts.set("ppt/charts/chart2.xml", pie3D);
+  const gf2 = graphicFrameXml(
+    2,
+    "3D Pie Chart",
+    margin,
+    margin,
+    SLIDE_W - margin * 2,
+    SLIDE_H - margin * 2,
+    "rId2",
+  );
+  slides.push({
+    xml: wrapSlideXml(gf2),
+    rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart2.xml" }]),
+  });
+
+  // Slide 3: line3DChart → line fallback
+  const line3D = chartXml("line3DChart", {
+    title: "3D Line (fallback)",
+    legendPos: "b",
+    series: [
+      {
+        name: "Revenue",
+        categories: ["Jan", "Feb", "Mar", "Apr", "May"],
+        values: [100, 120, 90, 150, 130],
+      },
+    ],
+  });
+  charts.set("ppt/charts/chart3.xml", line3D);
+  const gf3 = graphicFrameXml(
+    2,
+    "3D Line Chart",
+    margin,
+    margin,
+    SLIDE_W - margin * 2,
+    SLIDE_H - margin * 2,
+    "rId2",
+  );
+  slides.push({
+    xml: wrapSlideXml(gf3),
+    rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart3.xml" }]),
+  });
+
+  // Slide 4: area3DChart → area fallback
+  const area3D = chartXml("area3DChart", {
+    title: "3D Area (fallback)",
+    legendPos: "b",
+    series: [
+      {
+        name: "Visitors",
+        categories: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+        values: [200, 350, 280, 420, 380],
+      },
+      {
+        name: "Page Views",
+        categories: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+        values: [400, 500, 450, 600, 550],
+      },
+    ],
+  });
+  charts.set("ppt/charts/chart4.xml", area3D);
+  const gf4 = graphicFrameXml(
+    2,
+    "3D Area Chart",
+    margin,
+    margin,
+    SLIDE_W - margin * 2,
+    SLIDE_H - margin * 2,
+    "rId2",
+  );
+  slides.push({
+    xml: wrapSlideXml(gf4),
+    rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart4.xml" }]),
+  });
+
+  const buffer = await buildPptx({
+    slides,
+    charts,
+    contentTypesExtra: [
+      `<Override PartName="/ppt/charts/chart1.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
+      `<Override PartName="/ppt/charts/chart2.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
+      `<Override PartName="/ppt/charts/chart3.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
+      `<Override PartName="/ppt/charts/chart4.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
+    ],
+  });
+  savePptx(buffer, "charts-3d-fallback.pptx");
+}
+
+// --- Color Transforms ---
+async function createColorTransformsFixture(): Promise<void> {
+  const baseColor = "4472C4";
+  const shapes: string[] = [];
+
+  const cases: { label: string; fillXml: string }[] = [
+    // Row 0
+    {
+      label: "Base",
+      fillXml: `<a:solidFill><a:srgbClr val="${baseColor}"/></a:solidFill>`,
+    },
+    {
+      label: "tint 50%",
+      fillXml: `<a:solidFill><a:srgbClr val="${baseColor}"><a:tint val="50000"/></a:srgbClr></a:solidFill>`,
+    },
+    {
+      label: "tint 80%",
+      fillXml: `<a:solidFill><a:srgbClr val="${baseColor}"><a:tint val="80000"/></a:srgbClr></a:solidFill>`,
+    },
+    // Row 1
+    {
+      label: "shade 50%",
+      fillXml: `<a:solidFill><a:srgbClr val="${baseColor}"><a:shade val="50000"/></a:srgbClr></a:solidFill>`,
+    },
+    {
+      label: "shade 80%",
+      fillXml: `<a:solidFill><a:srgbClr val="${baseColor}"><a:shade val="80000"/></a:srgbClr></a:solidFill>`,
+    },
+    {
+      label: "lumMod 75%\n(schemeClr)",
+      fillXml: `<a:solidFill><a:schemeClr val="accent1"><a:lumMod val="75000"/></a:schemeClr></a:solidFill>`,
+    },
+    // Row 2
+    {
+      label: "lumMod 50%\nlumOff 50%",
+      fillXml: `<a:solidFill><a:srgbClr val="${baseColor}"><a:lumMod val="50000"/><a:lumOff val="50000"/></a:srgbClr></a:solidFill>`,
+    },
+    {
+      label: "alpha 50%",
+      fillXml: `<a:solidFill><a:srgbClr val="${baseColor}"><a:alpha val="50000"/></a:srgbClr></a:solidFill>`,
+    },
+    {
+      label: "tint 40%\nshade 80%",
+      fillXml: `<a:solidFill><a:srgbClr val="${baseColor}"><a:tint val="40000"/><a:shade val="80000"/></a:srgbClr></a:solidFill>`,
+    },
+  ];
+
+  cases.forEach((c, i) => {
+    const col = i % 3;
+    const row = Math.floor(i / 3);
+    const pos = gridPosition(col, row, 3, 3);
+    shapes.push(
+      shapeXml(i + 2, c.label, {
+        preset: "roundRect",
+        x: pos.x,
+        y: pos.y,
+        cx: pos.w,
+        cy: pos.h,
+        fillXml: c.fillXml,
+        textBodyXml: textBodyXmlHelper(c.label, { fontSize: 10, color: "FFFFFF" }),
+      }),
+    );
+  });
+
+  const slide = wrapSlideXml(shapes.join("\n"));
+  const rels = slideRelsXml();
+  const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
+  savePptx(buffer, "color-transforms.pptx");
+}
+
+// --- Table Complex Merge ---
+async function createTableComplexMergeFixture(): Promise<void> {
+  const margin = 300000;
+
+  // Slide 1: Complex merge (4x4 table)
+  // Layout:
+  // +----------+----+----+
+  // | A (2x2)  | C  | D  |
+  // |          |    |    |
+  // +----+-----+----+----+
+  // | E  | F   | G (2x1) |
+  // +----+-----+---------+
+  // | H (1x2)  | I  | J  |
+  // |          |    |    |
+  // +----+-----+----+----+
+  const colW = 1714500; // ~4 columns
+  const rowH = 600000;
+
+  const tbl1 = `<a:tbl>
+    <a:tblPr/>
+    <a:tblGrid>
+      <a:gridCol w="${colW}"/><a:gridCol w="${colW}"/><a:gridCol w="${colW}"/><a:gridCol w="${colW}"/>
+    </a:tblGrid>
+    <a:tr h="${rowH}">
+      ${tableCellXml("A (2x2)", { fillColor: "4472C4", fontColor: "FFFFFF", bold: true, gridSpan: 2, rowSpan: 2 })}
+      ${tableCellXml("", { hMerge: true })}
+      ${tableCellXml("C", { fillColor: "D6E4F0" })}
+      ${tableCellXml("D", { fillColor: "FFFFFF" })}
+    </a:tr>
+    <a:tr h="${rowH}">
+      ${tableCellXml("", { vMerge: true })}
+      ${tableCellXml("", { hMerge: true, vMerge: true })}
+      ${tableCellXml("C2", { fillColor: "FFFFFF" })}
+      ${tableCellXml("D2", { fillColor: "D6E4F0" })}
+    </a:tr>
+    <a:tr h="${rowH}">
+      ${tableCellXml("E", { fillColor: "D6E4F0" })}
+      ${tableCellXml("F", { fillColor: "FFFFFF" })}
+      ${tableCellXml("G (2x1)", { fillColor: "ED7D31", fontColor: "FFFFFF", bold: true, gridSpan: 2 })}
+      ${tableCellXml("", { hMerge: true })}
+    </a:tr>
+    <a:tr h="${rowH}">
+      ${tableCellXml("H (1x2)", { fillColor: "A5A5A5", fontColor: "FFFFFF", bold: true, rowSpan: 2 })}
+      ${tableCellXml("I1", { fillColor: "FFFFFF" })}
+      ${tableCellXml("J1", { fillColor: "D6E4F0" })}
+      ${tableCellXml("K1", { fillColor: "FFFFFF" })}
+    </a:tr>
+    <a:tr h="${rowH}">
+      ${tableCellXml("", { vMerge: true })}
+      ${tableCellXml("I2", { fillColor: "D6E4F0" })}
+      ${tableCellXml("J2", { fillColor: "FFFFFF" })}
+      ${tableCellXml("K2", { fillColor: "D6E4F0" })}
+    </a:tr>
+  </a:tbl>`;
+
+  const gf1 = tableGraphicFrameXml(2, "Complex Merge", margin, margin, colW * 4, rowH * 5, tbl1);
+  const slide1 = wrapSlideXml(gf1);
+
+  // Slide 2: Uneven column widths and row heights
+  const colWidths = [1000000, 3000000, 2858000];
+  const rowHeights = [300000, 800000, 500000];
+  const cellColors = ["D6E4F0", "FFFFFF"];
+
+  const rows2 = rowHeights
+    .map(
+      (rh, ri) =>
+        `<a:tr h="${rh}">
+      ${colWidths.map((_, ci) => tableCellXml(`R${ri + 1}C${ci + 1}`, { fillColor: cellColors[(ri + ci) % 2], fontSize: 10 })).join("\n      ")}
+    </a:tr>`,
+    )
+    .join("\n    ");
+
+  const tbl2 = `<a:tbl>
+    <a:tblPr/>
+    <a:tblGrid>
+      ${colWidths.map((w) => `<a:gridCol w="${w}"/>`).join("")}
+    </a:tblGrid>
+    ${rows2}
+  </a:tbl>`;
+
+  const tbl2W = colWidths.reduce((a, b) => a + b, 0);
+  const tbl2H = rowHeights.reduce((a, b) => a + b, 0);
+  const gf2 = tableGraphicFrameXml(2, "Uneven Table", margin, margin, tbl2W, tbl2H, tbl2);
+  const slide2 = wrapSlideXml(gf2);
+
+  const rels = slideRelsXml();
+  const buffer = await buildPptx({
+    slides: [
+      { xml: slide1, rels },
+      { xml: slide2, rels },
+    ],
+  });
+  savePptx(buffer, "table-complex-merge.pptx");
+}
+
+// --- Multi Language Font ---
+async function createMultiLangFontFixture(): Promise<void> {
+  const shapes: string[] = [];
+
+  // Shape 1 (row0, col0): Latin+CJK mixed text with different fonts
+  const pos1 = gridPosition(0, 0, 2, 2);
+  shapes.push(`<p:sp>
+  <p:nvSpPr><p:cNvPr id="2" name="Mixed"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="${pos1.x}" y="${pos1.y}"/><a:ext cx="${pos1.w}" cy="${pos1.h}"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:solidFill><a:srgbClr val="F0F0F0"/></a:solidFill>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr anchor="ctr"/>
+    <a:lstStyle/>
+    <a:p>
+      <a:r>
+        <a:rPr lang="en-US" sz="1600">
+          <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+          <a:latin typeface="Liberation Sans"/>
+          <a:ea typeface="Noto Sans CJK JP"/>
+        </a:rPr>
+        <a:t>Hello World 日本語テスト</a:t>
+      </a:r>
+    </a:p>
+  </p:txBody>
+</p:sp>`);
+
+  // Shape 2 (row0, col1): CJK only
+  const pos2 = gridPosition(1, 0, 2, 2);
+  shapes.push(`<p:sp>
+  <p:nvSpPr><p:cNvPr id="3" name="CJK Only"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="${pos2.x}" y="${pos2.y}"/><a:ext cx="${pos2.w}" cy="${pos2.h}"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:solidFill><a:srgbClr val="E8F4FD"/></a:solidFill>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr anchor="ctr"/>
+    <a:lstStyle/>
+    <a:p>
+      <a:r>
+        <a:rPr lang="ja-JP" sz="1600">
+          <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+          <a:latin typeface="Liberation Sans"/>
+          <a:ea typeface="Noto Sans CJK JP"/>
+        </a:rPr>
+        <a:t>日本語テスト</a:t>
+      </a:r>
+    </a:p>
+  </p:txBody>
+</p:sp>`);
+
+  // Shape 3 (row1, col0): Latin only
+  const pos3 = gridPosition(0, 1, 2, 2);
+  shapes.push(`<p:sp>
+  <p:nvSpPr><p:cNvPr id="4" name="Latin Only"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="${pos3.x}" y="${pos3.y}"/><a:ext cx="${pos3.w}" cy="${pos3.h}"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:solidFill><a:srgbClr val="FDF5E6"/></a:solidFill>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr anchor="ctr"/>
+    <a:lstStyle/>
+    <a:p>
+      <a:r>
+        <a:rPr lang="en-US" sz="1600">
+          <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+          <a:latin typeface="Liberation Serif"/>
+          <a:ea typeface="Noto Sans CJK JP"/>
+        </a:rPr>
+        <a:t>Hello World</a:t>
+      </a:r>
+    </a:p>
+  </p:txBody>
+</p:sp>`);
+
+  // Shape 4 (row1, col1): Same font for both (no split needed)
+  const pos4 = gridPosition(1, 1, 2, 2);
+  shapes.push(`<p:sp>
+  <p:nvSpPr><p:cNvPr id="5" name="Same Font"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="${pos4.x}" y="${pos4.y}"/><a:ext cx="${pos4.w}" cy="${pos4.h}"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:solidFill><a:srgbClr val="F0F0E0"/></a:solidFill>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr anchor="ctr"/>
+    <a:lstStyle/>
+    <a:p>
+      <a:r>
+        <a:rPr lang="en-US" sz="1600">
+          <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+          <a:latin typeface="Liberation Sans"/>
+          <a:ea typeface="Liberation Sans"/>
+        </a:rPr>
+        <a:t>Test テスト (same font)</a:t>
+      </a:r>
+    </a:p>
+  </p:txBody>
+</p:sp>`);
+
+  const slide = wrapSlideXml(shapes.join("\n"));
+  const rels = slideRelsXml();
+  const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
+  savePptx(buffer, "multi-lang-font.pptx");
+}
+
+// --- Placeholder Inheritance Extended ---
+async function createPlaceholderInheritanceExtendedFixture(): Promise<void> {
+  // slideMaster with txStyles: titleStyle(36pt), bodyStyle lvl1-5, otherStyle(14pt)
+  const customSlideMaster = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sldMaster xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr/>
+    </p:spTree>
+  </p:cSld>
+  <p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>
+  <p:sldLayoutIdLst><p:sldLayoutId r:id="rId1"/></p:sldLayoutIdLst>
+  <p:txStyles>
+    <p:titleStyle>
+      <a:lvl1pPr><a:defRPr sz="3600"><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:defRPr></a:lvl1pPr>
+    </p:titleStyle>
+    <p:bodyStyle>
+      <a:lvl1pPr><a:defRPr sz="2400"><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:defRPr></a:lvl1pPr>
+      <a:lvl2pPr><a:defRPr sz="2200"><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:defRPr></a:lvl2pPr>
+      <a:lvl3pPr><a:defRPr sz="2000"><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:defRPr></a:lvl3pPr>
+      <a:lvl4pPr><a:defRPr sz="1800"><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:defRPr></a:lvl4pPr>
+      <a:lvl5pPr><a:defRPr sz="1600"><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:defRPr></a:lvl5pPr>
+    </p:bodyStyle>
+    <p:otherStyle>
+      <a:lvl1pPr><a:defRPr sz="1400"><a:solidFill><a:schemeClr val="lt1"/></a:solidFill></a:defRPr></a:lvl1pPr>
+    </p:otherStyle>
+  </p:txStyles>
+</p:sldMaster>`;
+
+  const slideRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="${REL_TYPES.slideLayout}" Target="../slideLayouts/slideLayout1.xml"/>
+</Relationships>`;
+
+  // Slide 1: body placeholder with lvl 0-4 (5 levels)
+  const bodyLevels = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="2" name="Body Levels"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="457200" y="274638"/><a:ext cx="8229600" cy="4594860"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr anchor="t"/>
+    <a:p><a:pPr lvl="0"/><a:r><a:t>Level 1 (24pt)</a:t></a:r></a:p>
+    <a:p><a:pPr lvl="1"/><a:r><a:t>Level 2 (22pt)</a:t></a:r></a:p>
+    <a:p><a:pPr lvl="2"/><a:r><a:t>Level 3 (20pt)</a:t></a:r></a:p>
+    <a:p><a:pPr lvl="3"/><a:r><a:t>Level 4 (18pt)</a:t></a:r></a:p>
+    <a:p><a:pPr lvl="4"/><a:r><a:t>Level 5 (16pt)</a:t></a:r></a:p>
+  </p:txBody>
+</p:sp>`;
+
+  const slide1Xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}">
+  <p:cSld>
+    <p:bg><p:bgPr><a:solidFill><a:srgbClr val="333333"/></a:solidFill></p:bgPr></p:bg>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr/>
+      ${bodyLevels}
+    </p:spTree>
+  </p:cSld>
+</p:sld>`;
+
+  // Slide 2: ctrTitle and subTitle placeholders
+  const ctrTitle = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="2" name="Center Title"/><p:cNvSpPr/><p:nvPr><p:ph type="ctrTitle"/></p:nvPr></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="685800" y="1143000"/><a:ext cx="7772400" cy="1470025"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr anchor="b"/>
+    <a:p><a:r><a:t>ctrTitle (36pt from titleStyle)</a:t></a:r></a:p>
+  </p:txBody>
+</p:sp>`;
+
+  const subTitle = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="3" name="Subtitle"/><p:cNvSpPr/><p:nvPr><p:ph type="subTitle" idx="1"/></p:nvPr></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="685800" y="2743200"/><a:ext cx="7772400" cy="1143000"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr anchor="t"/>
+    <a:p><a:r><a:t>subTitle (24pt from bodyStyle)</a:t></a:r></a:p>
+  </p:txBody>
+</p:sp>`;
+
+  const slide2Xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}">
+  <p:cSld>
+    <p:bg><p:bgPr><a:solidFill><a:srgbClr val="333333"/></a:solidFill></p:bgPr></p:bg>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr/>
+      ${ctrTitle}
+      ${subTitle}
+    </p:spTree>
+  </p:cSld>
+</p:sld>`;
+
+  const buffer = await buildPptx({
+    slides: [
+      { xml: slide1Xml, rels: slideRels },
+      { xml: slide2Xml, rels: slideRels },
+    ],
+    slideMasterXml: customSlideMaster,
+  });
+  savePptx(buffer, "placeholder-inheritance-extended.pptx");
+}
+
 const FIXTURE_CREATORS: Record<string, () => Promise<void>> = {
   "shapes.pptx": createShapesFixture,
   "fill-and-lines.pptx": createFillAndLinesFixture,
@@ -6012,6 +6523,11 @@ const FIXTURE_CREATORS: Record<string, () => Promise<void>> = {
   "image-stretch-tile.pptx": createImageStretchTileFixture,
   "vertical-text.pptx": createVerticalTextFixture,
   "shape-hyperlink-text-outline.pptx": createShapeHyperlinkTextOutlineFixture,
+  "charts-3d-fallback.pptx": createCharts3dFallbackFixture,
+  "color-transforms.pptx": createColorTransformsFixture,
+  "table-complex-merge.pptx": createTableComplexMergeFixture,
+  "multi-lang-font.pptx": createMultiLangFontFixture,
+  "placeholder-inheritance-extended.pptx": createPlaceholderInheritanceExtendedFixture,
 };
 
 async function main(): Promise<void> {
