@@ -8,3 +8,7 @@ export { DefaultTextMeasurer } from "./text-measurer.js";
 export { CanvasTextMeasurer } from "./canvas-text-measurer.js";
 export { OpentypeTextMeasurer } from "./opentype-text-measurer.js";
 export type { OpentypeFont } from "./opentype-text-measurer.js";
+export { collectUsedFonts } from "./font-collector.js";
+export type { UsedFonts } from "./font-collector.js";
+export { DEFAULT_FONT_MAPPING, createFontMapping, getMappedFont } from "./font-mapping.js";
+export type { FontMapping } from "./font-mapping.js";

@@ -5,6 +5,7 @@ export interface DefaultRunProperties {
   fontSize?: number;
   fontFamily?: string | null;
   fontFamilyEa?: string | null;
+  fontFamilyCs?: string | null;
   bold?: boolean;
   italic?: boolean;
   underline?: boolean;
@@ -128,6 +129,7 @@ export interface RunProperties {
   fontSize: number | null;
   fontFamily: string | null;
   fontFamilyEa: string | null;
+  fontFamilyCs: string | null;
   bold: boolean;
   italic: boolean;
   underline: boolean;

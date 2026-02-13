@@ -14,6 +14,7 @@ import { emuToPixels } from "../utils/emu.js";
 import { wrapParagraph } from "../utils/text-wrap.js";
 import { getMetricsFallbackFont } from "../data/font-metrics.js";
 import { getTextMeasurer } from "../text-measurer.js";
+import { getCurrentMappedFont } from "../font-mapping-context.js";
 
 const PX_PER_PT = 96 / 72;
 const DEFAULT_LINE_SPACING = 1.0;
@@ -594,6 +595,13 @@ export function buildFontFamilyValue(fonts: (string | null)[]): string | null {
     if (font && !seen.has(font)) {
       seen.add(font);
       uniqueFonts.push(font);
+
+      // マッピングテーブルから OSS 代替フォントを追加
+      const mapped = getCurrentMappedFont(font);
+      if (mapped && !seen.has(mapped)) {
+        seen.add(mapped);
+        uniqueFonts.push(mapped);
+      }
 
       // メトリクス互換 OSS フォントをフォールバックとして追加
       const fallback = getMetricsFallbackFont(font);
