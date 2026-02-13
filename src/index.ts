@@ -1,5 +1,10 @@
 export { convertPptxToPng, convertPptxToSvg } from "./converter.js";
-export type { ConvertOptions, SlideImage, SlideSvg } from "./converter.js";
+export type { ConvertOptions, SlideImage, SlideSvg, FontOptions } from "./converter.js";
 export { initPng } from "./png/wasm-init.js";
 export type { LogLevel, WarningSummary, WarningEntry } from "./warning-logger.js";
 export { getWarningSummary, getWarningEntries } from "./warning-logger.js";
+export type { TextMeasurer } from "./text-measurer.js";
+export { DefaultTextMeasurer } from "./text-measurer.js";
+export { CanvasTextMeasurer } from "./canvas-text-measurer.js";
+export { OpentypeTextMeasurer } from "./opentype-text-measurer.js";
+export type { OpentypeFont } from "./opentype-text-measurer.js";
