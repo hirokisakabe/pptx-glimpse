@@ -1063,6 +1063,7 @@ function chartXml(
   opts: {
     barDir?: string;
     holeSize?: number;
+    radarStyle?: string;
     title?: string;
     legendPos?: string;
     series: {
@@ -1102,6 +1103,7 @@ function chartXml(
 
   const barDirXml = opts.barDir ? `<c:barDir val="${opts.barDir}"/>` : "";
   const holeSizeXml = opts.holeSize !== undefined ? `<c:holeSize val="${opts.holeSize}"/>` : "";
+  const radarStyleXml = opts.radarStyle ? `<c:radarStyle val="${opts.radarStyle}"/>` : "";
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <c:chartSpace xmlns:c="${NS.c}" xmlns:a="${NS.a}">
@@ -1109,6 +1111,7 @@ function chartXml(
     ${titleXml}
     <c:plotArea>
       <c:${chartType}>
+        ${radarStyleXml}
         ${barDirXml}
         ${seriesXml}
         ${holeSizeXml}
@@ -1333,6 +1336,39 @@ async function createChartsFixture(): Promise<void> {
     rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart7.xml" }]),
   });
 
+  // Slide 8: Radar chart
+  const radarChart = chartXml("radarChart", {
+    radarStyle: "marker",
+    title: "Skill Assessment",
+    legendPos: "b",
+    series: [
+      {
+        name: "Team A",
+        categories: ["Speed", "Power", "Accuracy", "Endurance", "Agility"],
+        values: [8, 7, 9, 6, 8],
+      },
+      {
+        name: "Team B",
+        categories: ["Speed", "Power", "Accuracy", "Endurance", "Agility"],
+        values: [7, 8, 7, 8, 7],
+      },
+    ],
+  });
+  charts.set("ppt/charts/chart8.xml", radarChart);
+  const gf8 = graphicFrameXml(
+    2,
+    "Radar Chart",
+    margin,
+    margin,
+    SLIDE_W - margin * 2,
+    SLIDE_H - margin * 2,
+    "rId2",
+  );
+  slides.push({
+    xml: wrapSlideXml(gf8),
+    rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart8.xml" }]),
+  });
+
   const buffer = await buildPptx({
     slides,
     charts,
@@ -1344,6 +1380,7 @@ async function createChartsFixture(): Promise<void> {
       `<Override PartName="/ppt/charts/chart5.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
       `<Override PartName="/ppt/charts/chart6.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
       `<Override PartName="/ppt/charts/chart7.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
+      `<Override PartName="/ppt/charts/chart8.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
     ],
   });
   savePptx(buffer, "charts.pptx");
