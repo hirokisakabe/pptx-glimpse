@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/pptx-glimpse)](https://www.npmjs.com/package/pptx-glimpse)
 
-A TypeScript library to render PPTX slides as SVG / PNG.
+A Node.js library to render PPTX as SVG / PNG.
 
 [Demo](https://hirokisakabe.github.io/pptx-glimpse/) | [npm](https://www.npmjs.com/package/pptx-glimpse)
 
