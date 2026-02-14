@@ -15,7 +15,10 @@ export type ChartType =
   | "scatter"
   | "bubble"
   | "area"
-  | "radar";
+  | "radar"
+  | "stock"
+  | "surface"
+  | "ofPie";
 
 export interface ChartData {
   chartType: ChartType;
@@ -25,6 +28,9 @@ export interface ChartData {
   barDirection?: "col" | "bar";
   holeSize?: number;
   radarStyle?: "standard" | "marker" | "filled";
+  ofPieType?: "pie" | "bar";
+  secondPieSize?: number;
+  splitPos?: number;
   legend: ChartLegend | null;
 }
 

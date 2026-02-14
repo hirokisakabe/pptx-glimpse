@@ -2,7 +2,6 @@ import type { ChartData, ChartType, ChartSeries, ChartLegend } from "../model/ch
 import type { ResolvedColor } from "../model/fill.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import { parseXml, type XmlNode } from "./xml-parser.js";
-import { warn } from "../warning-logger.js";
 
 const ACCENT_KEYS = ["accent1", "accent2", "accent3", "accent4", "accent5", "accent6"] as const;
 
@@ -19,6 +18,10 @@ const CHART_TYPE_MAP: [string, ChartType][] = [
   ["areaChart", "area"],
   ["area3DChart", "area"],
   ["radarChart", "radar"],
+  ["stockChart", "stock"],
+  ["surfaceChart", "surface"],
+  ["surface3DChart", "surface"],
+  ["ofPieChart", "ofPie"],
 ];
 
 export function parseChart(chartXml: string, colorResolver: ColorResolver): ChartData | null {
@@ -33,8 +36,17 @@ export function parseChart(chartXml: string, colorResolver: ColorResolver): Char
   if (!plotArea) return null;
 
   const title = parseChartTitle(chart.title as XmlNode);
-  const { chartType, series, categories, barDirection, holeSize, radarStyle } =
-    parseChartTypeAndData(plotArea, colorResolver);
+  const {
+    chartType,
+    series,
+    categories,
+    barDirection,
+    holeSize,
+    radarStyle,
+    ofPieType,
+    secondPieSize,
+    splitPos,
+  } = parseChartTypeAndData(plotArea, colorResolver);
   if (!chartType) return null;
 
   const legend = parseLegend(chart.legend as XmlNode);
@@ -47,6 +59,9 @@ export function parseChart(chartXml: string, colorResolver: ColorResolver): Char
     ...(barDirection !== undefined && { barDirection }),
     ...(holeSize !== undefined && { holeSize }),
     ...(radarStyle !== undefined && { radarStyle }),
+    ...(ofPieType !== undefined && { ofPieType }),
+    ...(secondPieSize !== undefined && { secondPieSize }),
+    ...(splitPos !== undefined && { splitPos }),
     legend,
   };
 }
@@ -61,6 +76,9 @@ function parseChartTypeAndData(
   barDirection?: "col" | "bar";
   holeSize?: number;
   radarStyle?: "standard" | "marker" | "filled";
+  ofPieType?: "pie" | "bar";
+  secondPieSize?: number;
+  splitPos?: number;
 } {
   for (const [xmlTag, chartType] of CHART_TYPE_MAP) {
     const chartNode = plotArea[xmlTag] as XmlNode | undefined;
@@ -89,17 +107,30 @@ function parseChartTypeAndData(
             | "filled")
         : undefined;
 
-    return { chartType, series, categories, barDirection, holeSize, radarStyle };
-  }
+    const ofPieTypeNode = chartNode.ofPieType as XmlNode | undefined;
+    const ofPieType =
+      chartType === "ofPie"
+        ? (((ofPieTypeNode?.["@_val"] as string | undefined) ?? "pie") as "pie" | "bar")
+        : undefined;
 
-  // Detect unsupported chart types
-  const knownTags = new Set(CHART_TYPE_MAP.map(([tag]) => tag));
-  const chartTags = ["surfaceChart", "surface3DChart", "stockChart", "ofPieChart"];
-  for (const tag of chartTags) {
-    if (!knownTags.has(tag) && plotArea[tag]) {
-      warn(`chart.${tag}`, `chart type "${tag}" not implemented`);
-      break;
-    }
+    const secondPieSizeNode = chartNode.secondPieSize as XmlNode | undefined;
+    const secondPieSize =
+      chartType === "ofPie" ? Number(secondPieSizeNode?.["@_val"] ?? 75) : undefined;
+
+    const splitPosNode = chartNode.splitPos as XmlNode | undefined;
+    const splitPos = chartType === "ofPie" ? Number(splitPosNode?.["@_val"] ?? 2) : undefined;
+
+    return {
+      chartType,
+      series,
+      categories,
+      barDirection,
+      holeSize,
+      radarStyle,
+      ofPieType,
+      secondPieSize,
+      splitPos,
+    };
   }
 
   return { chartType: null, series: [], categories: [] };

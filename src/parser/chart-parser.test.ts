@@ -463,4 +463,190 @@ describe("parseChart", () => {
     const result = parseChart(xml, createColorResolver());
     expect(result!.series[0].color.hex).toBe("#FF0000");
   });
+
+  it("parses a stock chart with 3 series (High, Low, Close)", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+        <c:chart>
+          <c:plotArea>
+            <c:stockChart>
+              <c:ser>
+                <c:idx val="0"/>
+                <c:tx><c:strRef><c:strCache>
+                  <c:pt idx="0"><c:v>High</c:v></c:pt>
+                </c:strCache></c:strRef></c:tx>
+                <c:cat><c:strRef><c:strCache>
+                  <c:pt idx="0"><c:v>Day 1</c:v></c:pt>
+                  <c:pt idx="1"><c:v>Day 2</c:v></c:pt>
+                </c:strCache></c:strRef></c:cat>
+                <c:val><c:numRef><c:numCache>
+                  <c:pt idx="0"><c:v>150</c:v></c:pt>
+                  <c:pt idx="1"><c:v>160</c:v></c:pt>
+                </c:numCache></c:numRef></c:val>
+              </c:ser>
+              <c:ser>
+                <c:idx val="1"/>
+                <c:tx><c:strRef><c:strCache>
+                  <c:pt idx="0"><c:v>Low</c:v></c:pt>
+                </c:strCache></c:strRef></c:tx>
+                <c:val><c:numRef><c:numCache>
+                  <c:pt idx="0"><c:v>100</c:v></c:pt>
+                  <c:pt idx="1"><c:v>110</c:v></c:pt>
+                </c:numCache></c:numRef></c:val>
+              </c:ser>
+              <c:ser>
+                <c:idx val="2"/>
+                <c:tx><c:strRef><c:strCache>
+                  <c:pt idx="0"><c:v>Close</c:v></c:pt>
+                </c:strCache></c:strRef></c:tx>
+                <c:val><c:numRef><c:numCache>
+                  <c:pt idx="0"><c:v>130</c:v></c:pt>
+                  <c:pt idx="1"><c:v>140</c:v></c:pt>
+                </c:numCache></c:numRef></c:val>
+              </c:ser>
+            </c:stockChart>
+          </c:plotArea>
+        </c:chart>
+      </c:chartSpace>`;
+
+    const result = parseChart(xml, createColorResolver());
+    expect(result!.chartType).toBe("stock");
+    expect(result!.categories).toEqual(["Day 1", "Day 2"]);
+    expect(result!.series).toHaveLength(3);
+    expect(result!.series[0].name).toBe("High");
+    expect(result!.series[0].values).toEqual([150, 160]);
+    expect(result!.series[1].name).toBe("Low");
+    expect(result!.series[2].name).toBe("Close");
+  });
+
+  it("parses a surface chart", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+        <c:chart>
+          <c:plotArea>
+            <c:surfaceChart>
+              <c:ser>
+                <c:idx val="0"/>
+                <c:tx><c:strRef><c:strCache>
+                  <c:pt idx="0"><c:v>Row 1</c:v></c:pt>
+                </c:strCache></c:strRef></c:tx>
+                <c:cat><c:strRef><c:strCache>
+                  <c:pt idx="0"><c:v>Col A</c:v></c:pt>
+                  <c:pt idx="1"><c:v>Col B</c:v></c:pt>
+                </c:strCache></c:strRef></c:cat>
+                <c:val><c:numRef><c:numCache>
+                  <c:pt idx="0"><c:v>10</c:v></c:pt>
+                  <c:pt idx="1"><c:v>20</c:v></c:pt>
+                </c:numCache></c:numRef></c:val>
+              </c:ser>
+              <c:ser>
+                <c:idx val="1"/>
+                <c:tx><c:strRef><c:strCache>
+                  <c:pt idx="0"><c:v>Row 2</c:v></c:pt>
+                </c:strCache></c:strRef></c:tx>
+                <c:val><c:numRef><c:numCache>
+                  <c:pt idx="0"><c:v>30</c:v></c:pt>
+                  <c:pt idx="1"><c:v>15</c:v></c:pt>
+                </c:numCache></c:numRef></c:val>
+              </c:ser>
+            </c:surfaceChart>
+          </c:plotArea>
+        </c:chart>
+      </c:chartSpace>`;
+
+    const result = parseChart(xml, createColorResolver());
+    expect(result!.chartType).toBe("surface");
+    expect(result!.categories).toEqual(["Col A", "Col B"]);
+    expect(result!.series).toHaveLength(2);
+    expect(result!.series[0].name).toBe("Row 1");
+    expect(result!.series[0].values).toEqual([10, 20]);
+    expect(result!.series[1].values).toEqual([30, 15]);
+  });
+
+  it("detects surface3DChart as surface type", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+        <c:chart>
+          <c:plotArea>
+            <c:surface3DChart>
+              <c:ser>
+                <c:idx val="0"/>
+                <c:val><c:numRef><c:numCache>
+                  <c:pt idx="0"><c:v>5</c:v></c:pt>
+                </c:numCache></c:numRef></c:val>
+              </c:ser>
+            </c:surface3DChart>
+          </c:plotArea>
+        </c:chart>
+      </c:chartSpace>`;
+
+    const result = parseChart(xml, createColorResolver());
+    expect(result!.chartType).toBe("surface");
+  });
+
+  it("parses an ofPieChart with ofPieType, secondPieSize, and splitPos", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+        <c:chart>
+          <c:plotArea>
+            <c:ofPieChart>
+              <c:ofPieType val="bar"/>
+              <c:splitPos val="3"/>
+              <c:secondPieSize val="50"/>
+              <c:ser>
+                <c:idx val="0"/>
+                <c:cat><c:strRef><c:strCache>
+                  <c:pt idx="0"><c:v>A</c:v></c:pt>
+                  <c:pt idx="1"><c:v>B</c:v></c:pt>
+                  <c:pt idx="2"><c:v>C</c:v></c:pt>
+                  <c:pt idx="3"><c:v>D</c:v></c:pt>
+                  <c:pt idx="4"><c:v>E</c:v></c:pt>
+                </c:strCache></c:strRef></c:cat>
+                <c:val><c:numRef><c:numCache>
+                  <c:pt idx="0"><c:v>40</c:v></c:pt>
+                  <c:pt idx="1"><c:v>30</c:v></c:pt>
+                  <c:pt idx="2"><c:v>15</c:v></c:pt>
+                  <c:pt idx="3"><c:v>10</c:v></c:pt>
+                  <c:pt idx="4"><c:v>5</c:v></c:pt>
+                </c:numCache></c:numRef></c:val>
+              </c:ser>
+            </c:ofPieChart>
+          </c:plotArea>
+        </c:chart>
+      </c:chartSpace>`;
+
+    const result = parseChart(xml, createColorResolver());
+    expect(result!.chartType).toBe("ofPie");
+    expect(result!.ofPieType).toBe("bar");
+    expect(result!.splitPos).toBe(3);
+    expect(result!.secondPieSize).toBe(50);
+    expect(result!.categories).toEqual(["A", "B", "C", "D", "E"]);
+    expect(result!.series[0].values).toEqual([40, 30, 15, 10, 5]);
+  });
+
+  it("parses an ofPieChart with defaults", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+        <c:chart>
+          <c:plotArea>
+            <c:ofPieChart>
+              <c:ser>
+                <c:idx val="0"/>
+                <c:val><c:numRef><c:numCache>
+                  <c:pt idx="0"><c:v>60</c:v></c:pt>
+                  <c:pt idx="1"><c:v>30</c:v></c:pt>
+                  <c:pt idx="2"><c:v>10</c:v></c:pt>
+                </c:numCache></c:numRef></c:val>
+              </c:ser>
+            </c:ofPieChart>
+          </c:plotArea>
+        </c:chart>
+      </c:chartSpace>`;
+
+    const result = parseChart(xml, createColorResolver());
+    expect(result!.chartType).toBe("ofPie");
+    expect(result!.ofPieType).toBe("pie");
+    expect(result!.splitPos).toBe(2);
+    expect(result!.secondPieSize).toBe(75);
+  });
 });
