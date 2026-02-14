@@ -4,6 +4,7 @@ import { fileURLToPath } from "url";
 import { convertPptxToPng } from "../../src/converter.js";
 import { compareImages } from "../compare-utils.js";
 import { VRT_CASES } from "./vrt-cases.js";
+import { loadSystemFontBuffers, VRT_FONT_MAPPING } from "./load-fonts.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SNAPSHOT_DIR = join(__dirname, "snapshots");
@@ -12,6 +13,8 @@ const FIXTURE_DIR = join(__dirname, "fixtures");
 
 const PIXEL_THRESHOLD = 0.1;
 const MISMATCH_TOLERANCE = 0.015;
+
+const fontBuffers = loadSystemFontBuffers();
 
 describe("Visual Regression Tests", { timeout: 60000 }, () => {
   for (const { name, fixture } of VRT_CASES) {
@@ -25,7 +28,10 @@ describe("Visual Regression Tests", { timeout: 60000 }, () => {
         }
 
         const input = readFileSync(fixturePath);
-        const results = await convertPptxToPng(input);
+        const results = await convertPptxToPng(input, {
+          fonts: { fontBuffers },
+          fontMapping: VRT_FONT_MAPPING,
+        });
 
         for (const result of results) {
           const refPath = join(SNAPSHOT_DIR, `${name}-slide${result.slideNumber}.png`);

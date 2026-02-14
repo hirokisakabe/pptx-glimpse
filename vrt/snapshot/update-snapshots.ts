@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, mkdirSync, readdirSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { convertPptxToPng } from "../../src/converter.js";
+import { loadSystemFontBuffers, VRT_FONT_MAPPING } from "./load-fonts.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_DIR = join(__dirname, "fixtures");
@@ -17,6 +18,9 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  const fontBuffers = loadSystemFontBuffers();
+  console.log(`Loaded ${fontBuffers.length} font(s) for text-to-path conversion`);
+
   let totalSlides = 0;
 
   for (const fixture of fixtures.sort()) {
@@ -25,7 +29,10 @@ async function main(): Promise<void> {
     const input = readFileSync(fixturePath);
 
     console.log(`Processing: ${fixture}`);
-    const results = await convertPptxToPng(input);
+    const results = await convertPptxToPng(input, {
+      fonts: { fontBuffers },
+      fontMapping: VRT_FONT_MAPPING,
+    });
 
     for (const result of results) {
       const snapshotPath = join(SNAPSHOT_DIR, `${name}-slide${result.slideNumber}.png`);
