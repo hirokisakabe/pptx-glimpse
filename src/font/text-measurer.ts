@@ -1,7 +1,7 @@
 import {
   measureTextWidth as defaultMeasureTextWidth,
   getLineHeightRatio as defaultGetLineHeightRatio,
-} from "./utils/text-measure.js";
+} from "../utils/text-measure.js";
 
 /**
  * テキストの幅と行高さを計測するインターフェース。

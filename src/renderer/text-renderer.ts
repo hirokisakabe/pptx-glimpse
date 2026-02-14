@@ -13,10 +13,10 @@ import { EMU_PER_INCH } from "../utils/constants.js";
 import { emuToPixels } from "../utils/emu.js";
 import { wrapParagraph } from "../utils/text-wrap.js";
 import { getMetricsFallbackFont } from "../data/font-metrics.js";
-import { getTextMeasurer } from "../text-measurer.js";
-import { getCurrentMappedFont } from "../font-mapping-context.js";
-import type { TextPathFontResolver } from "../text-path-context.js";
-import { getTextPathFontResolver } from "../text-path-context.js";
+import { getTextMeasurer } from "../font/text-measurer.js";
+import { getCurrentMappedFont } from "../font/font-mapping-context.js";
+import type { TextPathFontResolver } from "../font/text-path-context.js";
+import { getTextPathFontResolver } from "../font/text-path-context.js";
 
 const PX_PER_PT = 96 / 72;
 const DEFAULT_LINE_SPACING = 1.0;

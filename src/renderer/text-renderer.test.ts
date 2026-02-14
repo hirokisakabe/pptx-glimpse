@@ -17,8 +17,8 @@ import {
   setTextPathFontResolver,
   resetTextPathFontResolver,
   DefaultTextPathFontResolver,
-} from "../text-path-context.js";
-import type { OpentypeFullFont } from "../text-path-context.js";
+} from "../font/text-path-context.js";
+import type { OpentypeFullFont } from "../font/text-path-context.js";
 
 function makeTransform(widthEmu: number, heightEmu: number): Transform {
   return {
