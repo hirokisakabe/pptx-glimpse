@@ -18,7 +18,7 @@ export interface CompareOptions {
 }
 
 export async function compareImages(
-  actualPng: Buffer,
+  actualPng: Uint8Array | Buffer,
   referencePath: string,
   diffPath: string,
   options: CompareOptions,

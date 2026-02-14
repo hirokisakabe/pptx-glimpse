@@ -1,7 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { parseSlide, parseShapeTree } from "./slide-parser.js";
+import { parseSlide, parseShapeTree, parseTextBody, navigateOrdered } from "./slide-parser.js";
+import { initWarningLogger } from "../warning-logger.js";
 import { ColorResolver } from "../color/color-resolver.js";
-import { parseXml } from "./xml-parser.js";
+import { parseXml, parseXmlOrdered } from "./xml-parser.js";
+import type { XmlNode } from "./xml-parser.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import type { ShapeElement } from "../model/shape.js";
 
@@ -65,11 +67,9 @@ describe("parseShapeTree", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
-    const spTree = parsed.spTree;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -103,11 +103,9 @@ describe("parseShapeTree", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
-    const spTree = parsed.spTree;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -140,11 +138,9 @@ describe("parseShapeTree", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
-    const spTree = parsed.spTree;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -188,10 +184,9 @@ describe("parseShapeTree", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -236,10 +231,9 @@ describe("parseShapeTree", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -281,10 +275,9 @@ describe("parseShapeTree", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -326,10 +319,9 @@ describe("parseShapeTree", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -369,10 +361,9 @@ describe("parseShapeTree", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -412,10 +403,9 @@ describe("parseShapeTree", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -450,10 +440,9 @@ describe("parseShapeTree", () => {
           </p:sp>
         </p:spTree>
       `;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const parsed = parseXml(xml) as any;
+      const parsed = parseXml(xml);
       const elements = parseShapeTree(
-        parsed.spTree,
+        parsed.spTree as XmlNode | undefined,
         new Map(),
         "ppt/slides/slide1.xml",
         createEmptyArchive(),
@@ -497,10 +486,9 @@ describe("bullet parsing", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -546,10 +534,9 @@ describe("bullet parsing", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -597,10 +584,9 @@ describe("bullet parsing", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -645,10 +631,9 @@ describe("bullet parsing", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -690,10 +675,9 @@ describe("bullet parsing", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -710,6 +694,7 @@ describe("bullet parsing", () => {
 
 describe("structural validation warnings", () => {
   it("warns when parseSlide receives XML without sld root", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const xml = `<other><cSld/></other>`;
@@ -722,14 +707,16 @@ describe("structural validation warnings", () => {
     );
 
     expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining('Slide 3: missing root element "sld"'),
+      expect.stringContaining('missing root element "sld" in XML'),
     );
     expect(result.elements).toEqual([]);
 
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("warns when a shape is skipped due to parse returning null", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const xml = `
@@ -742,10 +729,9 @@ describe("structural validation warnings", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -754,12 +740,14 @@ describe("structural validation warnings", () => {
     );
 
     expect(elements).toHaveLength(0);
-    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Slide 1: shape skipped"));
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("shape skipped"));
 
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("warns when NaN is detected in transform values", () => {
+    initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     const xml = `
@@ -781,10 +769,9 @@ describe("structural validation warnings", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide2.xml",
       createEmptyArchive(),
@@ -797,6 +784,7 @@ describe("structural validation warnings", () => {
     );
 
     warnSpy.mockRestore();
+    initWarningLogger("off");
   });
 
   it("does not warn for valid structures", () => {
@@ -821,10 +809,9 @@ describe("structural validation warnings", () => {
         </p:sp>
       </p:spTree>
     `;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const parsed = parseXml(xml) as any;
+    const parsed = parseXml(xml);
     parseShapeTree(
-      parsed.spTree,
+      parsed.spTree as XmlNode | undefined,
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -834,5 +821,872 @@ describe("structural validation warnings", () => {
     expect(warnSpy).not.toHaveBeenCalled();
 
     warnSpy.mockRestore();
+  });
+
+  it("resolves theme font references (+mj-lt, +mn-lt) to actual font names", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:p>
+              <a:r>
+                <a:rPr lang="en-US">
+                  <a:latin typeface="+mj-lt"/>
+                  <a:ea typeface="+mj-ea"/>
+                </a:rPr>
+                <a:t>Major</a:t>
+              </a:r>
+              <a:r>
+                <a:rPr lang="en-US">
+                  <a:latin typeface="+mn-lt"/>
+                  <a:ea typeface="+mn-ea"/>
+                </a:rPr>
+                <a:t>Minor</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+    const fontScheme = {
+      majorFont: "Calibri Light",
+      minorFont: "Calibri",
+      majorFontEa: "Yu Gothic",
+      minorFontEa: "Yu Mincho",
+    };
+    const elements = parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+      undefined,
+      undefined,
+      fontScheme,
+    );
+
+    expect(elements).toHaveLength(1);
+    const shape = elements[0] as ShapeElement;
+    const runs = shape.textBody!.paragraphs[0].runs;
+
+    expect(runs[0].properties.fontFamily).toBe("Calibri Light");
+    expect(runs[0].properties.fontFamilyEa).toBe("Yu Gothic");
+    expect(runs[1].properties.fontFamily).toBe("Calibri");
+    expect(runs[1].properties.fontFamilyEa).toBe("Yu Mincho");
+  });
+
+  it("does not resolve font names that are not theme references", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:p>
+              <a:r>
+                <a:rPr lang="en-US">
+                  <a:latin typeface="Arial"/>
+                  <a:ea typeface="Meiryo"/>
+                </a:rPr>
+                <a:t>Hello</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+    const fontScheme = {
+      majorFont: "Calibri Light",
+      minorFont: "Calibri",
+      majorFontEa: "Yu Gothic",
+      minorFontEa: "Yu Mincho",
+    };
+    const elements = parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+      undefined,
+      undefined,
+      fontScheme,
+    );
+
+    expect(elements).toHaveLength(1);
+    const shape = elements[0] as ShapeElement;
+    const runs = shape.textBody!.paragraphs[0].runs;
+
+    expect(runs[0].properties.fontFamily).toBe("Arial");
+    expect(runs[0].properties.fontFamilyEa).toBe("Meiryo");
+  });
+});
+
+describe("lstStyle and defRPr parsing", () => {
+  it("applies lstStyle defRPr as fallback when rPr has no values", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:lstStyle>
+              <a:lvl1pPr algn="ctr">
+                <a:defRPr sz="2400" b="1">
+                  <a:latin typeface="Arial"/>
+                </a:defRPr>
+              </a:lvl1pPr>
+            </a:lstStyle>
+            <a:p>
+              <a:r>
+                <a:rPr lang="en-US"/>
+                <a:t>Hello</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+    const elements = parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    const para = shape.textBody!.paragraphs[0];
+    // lstStyle の段落プロパティが適用される
+    expect(para.properties.alignment).toBe("ctr");
+    // lstStyle の defRPr がフォールバックされる
+    expect(para.runs[0].properties.fontSize).toBe(24);
+    expect(para.runs[0].properties.bold).toBe(true);
+    expect(para.runs[0].properties.fontFamily).toBe("Arial");
+  });
+
+  it("applies pPr defRPr as fallback when rPr has no values", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:p>
+              <a:pPr>
+                <a:defRPr sz="1800" i="1">
+                  <a:latin typeface="Calibri"/>
+                  <a:ea typeface="Yu Gothic"/>
+                </a:defRPr>
+              </a:pPr>
+              <a:r>
+                <a:rPr lang="en-US"/>
+                <a:t>World</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+    const elements = parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    const run = shape.textBody!.paragraphs[0].runs[0];
+    expect(run.properties.fontSize).toBe(18);
+    expect(run.properties.italic).toBe(true);
+    expect(run.properties.fontFamily).toBe("Calibri");
+    expect(run.properties.fontFamilyEa).toBe("Yu Gothic");
+  });
+
+  it("rPr takes priority over defRPr and lstStyle", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:lstStyle>
+              <a:lvl1pPr>
+                <a:defRPr sz="3200" b="1">
+                  <a:latin typeface="Times New Roman"/>
+                </a:defRPr>
+              </a:lvl1pPr>
+            </a:lstStyle>
+            <a:p>
+              <a:pPr>
+                <a:defRPr sz="2400">
+                  <a:latin typeface="Georgia"/>
+                </a:defRPr>
+              </a:pPr>
+              <a:r>
+                <a:rPr lang="en-US" sz="1200">
+                  <a:latin typeface="Helvetica"/>
+                </a:rPr>
+                <a:t>Priority test</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+    const elements = parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    const run = shape.textBody!.paragraphs[0].runs[0];
+    // rPr が最優先
+    expect(run.properties.fontSize).toBe(12);
+    expect(run.properties.fontFamily).toBe("Helvetica");
+    // rPr に bold がないので defRPr にフォールバック（defRPr にもないので lstStyle の b=1）
+    expect(run.properties.bold).toBe(true);
+  });
+
+  it("defRPr takes priority over lstStyle", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:lstStyle>
+              <a:lvl1pPr>
+                <a:defRPr sz="3200">
+                  <a:latin typeface="Times New Roman"/>
+                </a:defRPr>
+              </a:lvl1pPr>
+            </a:lstStyle>
+            <a:p>
+              <a:pPr>
+                <a:defRPr sz="2400">
+                  <a:latin typeface="Georgia"/>
+                </a:defRPr>
+              </a:pPr>
+              <a:r>
+                <a:rPr lang="en-US"/>
+                <a:t>DefRPr priority</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+    const elements = parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    const run = shape.textBody!.paragraphs[0].runs[0];
+    // pPr.defRPr > lstStyle.lvl.defRPr
+    expect(run.properties.fontSize).toBe(24);
+    expect(run.properties.fontFamily).toBe("Georgia");
+  });
+
+  it("applies lstStyle paragraph properties (marginLeft, indent) as fallback", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:lstStyle>
+              <a:lvl1pPr marL="342900" indent="-342900" algn="r"/>
+            </a:lstStyle>
+            <a:p>
+              <a:r>
+                <a:rPr lang="en-US" sz="1800"/>
+                <a:t>Indented</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+    const elements = parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    const para = shape.textBody!.paragraphs[0];
+    expect(para.properties.marginLeft).toBe(342900);
+    expect(para.properties.indent).toBe(-342900);
+    expect(para.properties.alignment).toBe("r");
+  });
+
+  it("uses level-specific lstStyle for different paragraph levels", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:lstStyle>
+              <a:lvl1pPr>
+                <a:defRPr sz="2400"/>
+              </a:lvl1pPr>
+              <a:lvl2pPr>
+                <a:defRPr sz="1800"/>
+              </a:lvl2pPr>
+            </a:lstStyle>
+            <a:p>
+              <a:pPr lvl="0"/>
+              <a:r>
+                <a:rPr lang="en-US"/>
+                <a:t>Level 0</a:t>
+              </a:r>
+            </a:p>
+            <a:p>
+              <a:pPr lvl="1"/>
+              <a:r>
+                <a:rPr lang="en-US"/>
+                <a:t>Level 1</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+    const elements = parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    expect(shape.textBody!.paragraphs[0].runs[0].properties.fontSize).toBe(24);
+    expect(shape.textBody!.paragraphs[1].runs[0].properties.fontSize).toBe(18);
+  });
+
+  it("applies defRPr defaults when rPr is absent", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:lstStyle>
+              <a:lvl1pPr>
+                <a:defRPr sz="2000" b="1" i="1"/>
+              </a:lvl1pPr>
+            </a:lstStyle>
+            <a:p>
+              <a:r>
+                <a:t>No rPr</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+    const elements = parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    const shape = elements[0] as ShapeElement;
+    const run = shape.textBody!.paragraphs[0].runs[0];
+    expect(run.properties.fontSize).toBe(20);
+    expect(run.properties.bold).toBe(true);
+    expect(run.properties.italic).toBe(true);
+  });
+
+  it("resolves theme font references in lstStyle defRPr", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Text 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="100" y="200"/>
+              <a:ext cx="300" cy="400"/>
+            </a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:lstStyle>
+              <a:lvl1pPr>
+                <a:defRPr>
+                  <a:latin typeface="+mj-lt"/>
+                  <a:ea typeface="+mn-ea"/>
+                </a:defRPr>
+              </a:lvl1pPr>
+            </a:lstStyle>
+            <a:p>
+              <a:r>
+                <a:rPr lang="en-US"/>
+                <a:t>Theme font</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+    const fontScheme = {
+      majorFont: "Calibri Light",
+      minorFont: "Calibri",
+      majorFontEa: "Yu Gothic",
+      minorFontEa: "Yu Mincho",
+    };
+    const elements = parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+      undefined,
+      undefined,
+      fontScheme,
+    );
+
+    const shape = elements[0] as ShapeElement;
+    const run = shape.textBody!.paragraphs[0].runs[0];
+    expect(run.properties.fontFamily).toBe("Calibri Light");
+    expect(run.properties.fontFamilyEa).toBe("Yu Mincho");
+  });
+});
+
+describe("Z-order across element types", () => {
+  it("preserves document order when orderedChildren is provided (sp → cxnSp → sp)", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+        <p:grpSpPr/>
+        <p:sp>
+          <p:nvSpPr><p:cNvPr id="2" name="Shape 1"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+          <p:spPr>
+            <a:xfrm><a:off x="0" y="0"/><a:ext cx="100" cy="100"/></a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+        </p:sp>
+        <p:cxnSp>
+          <p:nvCxnSpPr><p:cNvPr id="3" name="Connector 1"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
+          <p:spPr>
+            <a:xfrm><a:off x="100" y="100"/><a:ext cx="200" cy="0"/></a:xfrm>
+            <a:prstGeom prst="line"/>
+            <a:ln w="12700"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln>
+          </p:spPr>
+        </p:cxnSp>
+        <p:sp>
+          <p:nvSpPr><p:cNvPr id="4" name="Shape 2"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+          <p:spPr>
+            <a:xfrm><a:off x="200" y="200"/><a:ext cx="100" cy="100"/></a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+        </p:sp>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+    const orderedParsed = parseXmlOrdered(xml);
+    const orderedSpTree = navigateOrdered(orderedParsed, ["spTree"]);
+
+    const elements = parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+      undefined,
+      undefined,
+      undefined,
+      orderedSpTree,
+    );
+
+    expect(elements).toHaveLength(3);
+    expect(elements[0].type).toBe("shape");
+    expect(elements[1].type).toBe("connector");
+    expect(elements[2].type).toBe("shape");
+  });
+
+  it("falls back to type-based iteration when orderedChildren is not provided", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:cxnSp>
+          <p:nvCxnSpPr><p:cNvPr id="2" name="Connector 1"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
+          <p:spPr>
+            <a:xfrm><a:off x="0" y="0"/><a:ext cx="200" cy="0"/></a:xfrm>
+            <a:prstGeom prst="line"/>
+            <a:ln w="12700"><a:solidFill><a:srgbClr val="000000"/></a:solidFill></a:ln>
+          </p:spPr>
+        </p:cxnSp>
+        <p:sp>
+          <p:nvSpPr><p:cNvPr id="3" name="Shape 1"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+          <p:spPr>
+            <a:xfrm><a:off x="100" y="100"/><a:ext cx="100" cy="100"/></a:xfrm>
+            <a:prstGeom prst="rect"/>
+          </p:spPr>
+        </p:sp>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+
+    // orderedChildren なし → タイプ別イテレーション（sp が先）
+    const elements = parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    expect(elements).toHaveLength(2);
+    // フォールバック: sp が cxnSp より先に来る
+    expect(elements[0].type).toBe("shape");
+    expect(elements[1].type).toBe("connector");
+  });
+});
+
+describe("parseTextBody", () => {
+  it("parses field codes (fld) as text runs", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Slide</a:t></a:r>
+          <a:fld type="slidenum"><a:rPr lang="en-US" sz="1400"/><a:t>1</a:t></a:fld>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>of 10</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    expect(result!.paragraphs).toHaveLength(1);
+    // フォールバック: ordered data なしでも fld テキストが含まれる
+    const allText = result!.paragraphs[0].runs.map((r) => r.text).join("");
+    expect(allText).toContain("Slide");
+    expect(allText).toContain("1");
+    expect(allText).toContain("of 10");
+  });
+
+  it("parses line breaks (br) as newline text runs", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Line One</a:t></a:r>
+          <a:br><a:rPr lang="en-US" sz="1400"/></a:br>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Line Two</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    const runs = result!.paragraphs[0].runs;
+    const allText = runs.map((r) => r.text).join("");
+    expect(allText).toContain("Line One");
+    expect(allText).toContain("\n");
+    expect(allText).toContain("Line Two");
+  });
+
+  it("parses tab stops from pPr.tabLst", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:pPr>
+            <a:tabLst>
+              <a:tab pos="914400" algn="l"/>
+              <a:tab pos="2743200" algn="r"/>
+            </a:tabLst>
+          </a:pPr>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Text</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    const tabStops = result!.paragraphs[0].properties.tabStops;
+    expect(tabStops).toHaveLength(2);
+    expect(tabStops[0]).toEqual({ position: 914400, alignment: "l" });
+    expect(tabStops[1]).toEqual({ position: 2743200, alignment: "r" });
+  });
+
+  it("parses numCol from bodyPr", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr numCol="2"/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Text</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    expect(result!.bodyProperties.numCol).toBe(2);
+  });
+
+  it("defaults numCol to 1 when not specified", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Text</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    expect(result!.bodyProperties.numCol).toBe(1);
+  });
+
+  it("extracts math text from oMathPara", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:m>
+            <a:oMathPara>
+              <a:oMath>
+                <a:r><a:t>x</a:t></a:r>
+                <a:r><a:t>=</a:t></a:r>
+                <a:r><a:t>2</a:t></a:r>
+              </a:oMath>
+            </a:oMathPara>
+          </a:m>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    const allText = result!.paragraphs[0].runs.map((r) => r.text).join("");
+    expect(allText).toContain("x");
+    expect(allText).toContain("=");
+    expect(allText).toContain("2");
+  });
+
+  it("preserves element order with ordered data (r, fld, r)", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Before</a:t></a:r>
+          <a:fld type="slidenum"><a:rPr lang="en-US" sz="1400"/><a:t>1</a:t></a:fld>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>After</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+
+    // ordered data を生成
+    const fullXml = `<sp xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">${xml}</sp>`;
+    const orderedFull = parseXmlOrdered(fullXml);
+    const spChildren = orderedFull[0]?.sp;
+    const txBodyEntry = Array.isArray(spChildren)
+      ? (spChildren as Record<string, unknown>[]).find((c) => "txBody" in c)
+      : null;
+    const orderedTxBody = txBodyEntry?.txBody as Record<string, unknown>[] | undefined;
+
+    const result = parseTextBody(
+      parsed.txBody as XmlNode,
+      createColorResolver(),
+      undefined,
+      undefined,
+      undefined,
+      orderedTxBody,
+    );
+    expect(result).not.toBeNull();
+    const runs = result!.paragraphs[0].runs;
+    // ordered data があれば r, fld, r の順序が保持される
+    expect(runs.map((r) => r.text)).toEqual(["Before", "1", "After"]);
+  });
+
+  it("parses vert attribute from bodyPr", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr vert="vert"/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Vertical</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    expect(result!.bodyProperties.vert).toBe("vert");
+  });
+
+  it("parses vert270 attribute from bodyPr", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr vert="vert270"/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Vertical 270</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    expect(result!.bodyProperties.vert).toBe("vert270");
+  });
+
+  it("defaults vert to horz when not specified", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Horizontal</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    expect(result!.bodyProperties.vert).toBe("horz");
   });
 });

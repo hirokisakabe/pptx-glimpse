@@ -1,17 +1,17 @@
 import type { EffectList, OuterShadow, InnerShadow, Glow, SoftEdge } from "../model/effect.js";
 import type { ColorResolver } from "../color/color-resolver.js";
+import type { XmlNode } from "./xml-parser.js";
 
 export function parseEffectList(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  effectLstNode: any,
+  effectLstNode: XmlNode,
   colorResolver: ColorResolver,
 ): EffectList | null {
   if (!effectLstNode) return null;
 
-  const outerShadow = parseOuterShadow(effectLstNode.outerShdw, colorResolver);
-  const innerShadow = parseInnerShadow(effectLstNode.innerShdw, colorResolver);
-  const glow = parseGlow(effectLstNode.glow, colorResolver);
-  const softEdge = parseSoftEdge(effectLstNode.softEdge);
+  const outerShadow = parseOuterShadow(effectLstNode.outerShdw as XmlNode, colorResolver);
+  const innerShadow = parseInnerShadow(effectLstNode.innerShdw as XmlNode, colorResolver);
+  const glow = parseGlow(effectLstNode.glow as XmlNode, colorResolver);
+  const softEdge = parseSoftEdge(effectLstNode.softEdge as XmlNode);
 
   if (!outerShadow && !innerShadow && !glow && !softEdge) {
     return null;
@@ -20,8 +20,7 @@ export function parseEffectList(
   return { outerShadow, innerShadow, glow, softEdge };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseOuterShadow(node: any, colorResolver: ColorResolver): OuterShadow | null {
+function parseOuterShadow(node: XmlNode, colorResolver: ColorResolver): OuterShadow | null {
   if (!node) return null;
 
   const color = colorResolver.resolve(node);
@@ -32,13 +31,12 @@ function parseOuterShadow(node: any, colorResolver: ColorResolver): OuterShadow 
     distance: Number(node["@_dist"] ?? 0),
     direction: Number(node["@_dir"] ?? 0) / 60000,
     color,
-    alignment: node["@_algn"] ?? "b",
+    alignment: (node["@_algn"] as string | undefined) ?? "b",
     rotateWithShape: node["@_rotWithShape"] !== "0",
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseInnerShadow(node: any, colorResolver: ColorResolver): InnerShadow | null {
+function parseInnerShadow(node: XmlNode, colorResolver: ColorResolver): InnerShadow | null {
   if (!node) return null;
 
   const color = colorResolver.resolve(node);
@@ -52,8 +50,7 @@ function parseInnerShadow(node: any, colorResolver: ColorResolver): InnerShadow 
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseGlow(node: any, colorResolver: ColorResolver): Glow | null {
+function parseGlow(node: XmlNode, colorResolver: ColorResolver): Glow | null {
   if (!node) return null;
 
   const color = colorResolver.resolve(node);
@@ -65,8 +62,7 @@ function parseGlow(node: any, colorResolver: ColorResolver): Glow | null {
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function parseSoftEdge(node: any): SoftEdge | null {
+function parseSoftEdge(node: XmlNode): SoftEdge | null {
   if (!node) return null;
 
   return {

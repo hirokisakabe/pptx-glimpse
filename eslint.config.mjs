@@ -5,7 +5,7 @@ import prettier from "eslint-config-prettier";
 
 export default tseslint.config(
   {
-    files: ["src/**/*.ts", "vrt/**/*.ts", "scripts/**/*.ts"],
+    files: ["src/**/*.ts", "vrt/**/*.ts", "scripts/**/*.ts", "bench/**/*.ts"],
     extends: tseslint.configs.recommendedTypeChecked,
     languageOptions: {
       parserOptions: {
@@ -18,7 +18,16 @@ export default tseslint.config(
         "error",
         { argsIgnorePattern: "^_" },
       ],
-      // XML パーサーが any を多用するため段階的に有効化する
+      "@typescript-eslint/no-unsafe-argument": "error",
+      "@typescript-eslint/no-unsafe-assignment": "error",
+      "@typescript-eslint/no-unsafe-call": "error",
+      "@typescript-eslint/no-unsafe-member-access": "error",
+      "@typescript-eslint/no-unsafe-return": "error",
+    },
+  },
+  {
+    files: ["scripts/**/*.ts", "vrt/**/*.ts", "bench/**/*.ts"],
+    rules: {
       "@typescript-eslint/no-unsafe-argument": "off",
       "@typescript-eslint/no-unsafe-assignment": "off",
       "@typescript-eslint/no-unsafe-call": "off",

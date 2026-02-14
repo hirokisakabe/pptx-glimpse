@@ -1,6 +1,6 @@
 {
   "name": "pptx-glimpse",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A Node.js library to render PPTX as SVG / PNG.",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -15,20 +15,27 @@
   },
   "scripts": {
     "build": "tsup src/index.ts --format cjs,esm --dts",
-    "lint": "eslint src/ vrt/ scripts/",
-    "lint:fix": "eslint src/ vrt/ scripts/ --fix",
-    "format": "prettier --write 'src/**/*.ts' 'vrt/**/*.ts' 'scripts/**/*.ts'",
-    "format:check": "prettier --check 'src/**/*.ts' 'vrt/**/*.ts' 'scripts/**/*.ts'",
+    "bench": "vitest bench",
+    "lint": "eslint src/ vrt/ scripts/ bench/",
+    "lint:fix": "eslint src/ vrt/ scripts/ bench/ --fix",
+    "format": "prettier --write 'src/**/*.ts' 'vrt/**/*.ts' 'scripts/**/*.ts' 'bench/**/*.ts'",
+    "format:check": "prettier --check 'src/**/*.ts' 'vrt/**/*.ts' 'scripts/**/*.ts' 'bench/**/*.ts'",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "dev": "tsx scripts/dev-server.ts",
     "render": "tsx scripts/test-render.ts",
-    "test:vrt:fixtures": "tsx vrt/internal/create-fixtures.ts",
-    "test:vrt:update": "tsx vrt/internal/update-snapshots.ts",
+    "inspect": "tsx scripts/inspect-pptx.ts",
+    "vrt:snapshot:docker-build": "docker build -t pptx-glimpse-snapshot-vrt docker/snapshot-vrt",
+    "vrt:snapshot:fixtures": "tsx vrt/snapshot/create-fixtures.ts",
+    "vrt:snapshot:update": "docker run --rm -v \"$(pwd)\":/workspace -v pptx-glimpse-snapshot-vrt-nm:/workspace/node_modules pptx-glimpse-snapshot-vrt bash /workspace/vrt/snapshot/docker-run.sh npx tsx vrt/snapshot/create-fixtures.ts && docker run --rm -v \"$(pwd)\":/workspace -v pptx-glimpse-snapshot-vrt-nm:/workspace/node_modules pptx-glimpse-snapshot-vrt bash /workspace/vrt/snapshot/docker-run.sh npx tsx vrt/snapshot/update-snapshots.ts",
     "vrt:lo:docker-build": "docker build -t pptx-glimpse-vrt docker/libreoffice-vrt",
-    "vrt:lo:fixtures": "docker run --rm -v \"$(pwd)\":/workspace pptx-glimpse-vrt python3 /workspace/vrt/libreoffice/generate_fixtures.py",
-    "vrt:lo:reference": "docker run --rm -v \"$(pwd)\":/workspace pptx-glimpse-vrt bash /workspace/vrt/libreoffice/render_references.sh",
-    "vrt:lo:update": "npm run vrt:lo:docker-build && npm run vrt:lo:fixtures && npm run vrt:lo:reference"
+    "vrt:lo:fixtures": "docker run --rm -v \"$(pwd)\":/workspace pptx-glimpse-vrt python3 /workspace/vrt/libreoffice/create_fixtures.py",
+    "vrt:lo:update": "npm run vrt:lo:docker-build && npm run vrt:lo:fixtures && docker run --rm -v \"$(pwd)\":/workspace pptx-glimpse-vrt bash /workspace/vrt/libreoffice/update_snapshots.sh",
+    "test:package": "npm run build && bash scripts/test-package.sh",
+    "demo:dev": "cd demo && npm run dev",
+    "demo:build": "cd demo && npm run build"
   },
   "files": [
     "dist"
@@ -56,19 +63,22 @@
   "dependencies": {
     "fast-xml-parser": "^4.5.0",
     "jszip": "^3.10.0",
-    "sharp": "^0.33.0"
+    "opentype.js": "^1.3.4",
+    "sharp": "^0.34.5"
   },
   "devDependencies": {
     "@types/node": "^25.2.2",
+    "@types/ws": "^8.18.1",
+    "@vitest/coverage-v8": "^3.2.4",
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^10.0.0",
-    "opentype.js": "^1.3.4",
     "pixelmatch": "^7.1.0",
     "prettier": "^3.0.0",
     "tsup": "^8.0.0",
     "tsx": "^4.21.0",
     "typescript": "^5.5.0",
     "typescript-eslint": "^8.55.0",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "ws": "^8.19.0"
   }
 }

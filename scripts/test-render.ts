@@ -24,7 +24,7 @@ async function main() {
   console.log(`Output dir: ${outputDir}`);
   console.log("");
 
-  const svgResults = await convertPptxToSvg(input);
+  const svgResults = await convertPptxToSvg(input, { logLevel: "warn" });
   const pngResults = await convertPptxToPng(input);
 
   for (const svg of svgResults) {

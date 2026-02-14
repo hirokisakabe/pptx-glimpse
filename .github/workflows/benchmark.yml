@@ -1,0 +1,104 @@
+name: Benchmark
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # --- PR: ベースライン復元 ---
+      - name: Restore baseline from cache
+        if: github.event_name == 'pull_request'
+        uses: actions/cache/restore@v4
+        with:
+          path: bench-results.json
+          key: bench-baseline-main-${{ github.event.pull_request.base.sha }}
+          restore-keys: |
+            bench-baseline-main-
+
+      - name: Prepare baseline
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ -f bench-results.json ]; then
+            mv bench-results.json bench-baseline.json
+            echo "BASELINE_EXISTS=true" >> "$GITHUB_ENV"
+          else
+            echo "BASELINE_EXISTS=false" >> "$GITHUB_ENV"
+          fi
+
+      # --- ベンチマーク実行 ---
+      - name: Run benchmarks (with comparison)
+        if: env.BASELINE_EXISTS == 'true'
+        run: npx vitest bench --compare bench-baseline.json --outputJson bench-results.json
+
+      - name: Run benchmarks
+        if: env.BASELINE_EXISTS != 'true'
+        run: npx vitest bench --outputJson bench-results.json
+
+      # --- main: キャッシュ保存 ---
+      - name: Save baseline to cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@v4
+        with:
+          path: bench-results.json
+          key: bench-baseline-main-${{ github.sha }}
+
+      # --- PR: コメント投稿 ---
+      - name: Generate benchmark comment
+        if: github.event_name == 'pull_request'
+        run: |
+          if [ "$BASELINE_EXISTS" = "true" ]; then
+            npx tsx scripts/format-bench-comment.ts bench-results.json bench-baseline.json > bench-comment.md
+          else
+            npx tsx scripts/format-bench-comment.ts bench-results.json > bench-comment.md
+          fi
+
+      - name: Post or update PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('bench-comment.md', 'utf-8');
+            const marker = '<!-- benchmark-comment -->';
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const existing = comments.find(c => c.body.includes(marker));
+            const fullBody = marker + '\n' + body;
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: fullBody,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: fullBody,
+              });
+            }

@@ -121,6 +121,47 @@ describe("renderChart", () => {
     });
   });
 
+  describe("doughnut chart", () => {
+    it("renders path elements with inner and outer arcs", () => {
+      const element = createChartElement({
+        chartType: "doughnut",
+        holeSize: 50,
+        series: [{ name: "D1", values: [60, 40], color: { hex: "#4472C4", alpha: 1 } }],
+        categories: ["A", "B"],
+      });
+
+      const svg = renderChart(element);
+      const paths = svg.match(/<path[^>]*d="M[^"]*A[^"]*A[^"]*Z"[^>]*\/>/g);
+      expect(paths).not.toBeNull();
+      expect(paths!.length).toBe(2);
+    });
+
+    it("renders circles for single-value doughnut", () => {
+      const element = createChartElement({
+        chartType: "doughnut",
+        holeSize: 50,
+        series: [{ name: "D1", values: [100], color: { hex: "#4472C4", alpha: 1 } }],
+        categories: ["A"],
+      });
+
+      const svg = renderChart(element);
+      const circles = svg.match(/<circle[^>]*\/>/g);
+      expect(circles).not.toBeNull();
+      expect(circles!.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("uses default holeSize of 50 when not specified", () => {
+      const element = createChartElement({
+        chartType: "doughnut",
+        series: [{ name: "D1", values: [60, 40], color: { hex: "#4472C4", alpha: 1 } }],
+        categories: ["A", "B"],
+      });
+
+      const svg = renderChart(element);
+      expect(svg).toContain("<path");
+    });
+  });
+
   describe("scatter chart", () => {
     it("renders circle elements for data points", () => {
       const element = createChartElement({
@@ -140,6 +181,137 @@ describe("renderChart", () => {
       const circles = svg.match(/<circle[^>]*fill="#4472C4"[^>]*\/>/g);
       expect(circles).not.toBeNull();
       expect(circles!.length).toBe(3);
+    });
+  });
+
+  describe("bubble chart", () => {
+    it("renders circle elements for data points", () => {
+      const element = createChartElement({
+        chartType: "bubble",
+        series: [
+          {
+            name: "Bubble1",
+            values: [10, 20, 15],
+            xValues: [1, 2, 3],
+            bubbleSizes: [5, 10, 8],
+            color: { hex: "#4472C4", alpha: 1 },
+          },
+        ],
+        categories: [],
+      });
+
+      const svg = renderChart(element);
+      const circles = svg.match(/<circle[^>]*fill="#4472C4"[^>]*\/>/g);
+      expect(circles).not.toBeNull();
+      expect(circles!.length).toBe(3);
+    });
+
+    it("renders circles with varying radii based on bubble sizes", () => {
+      const element = createChartElement({
+        chartType: "bubble",
+        series: [
+          {
+            name: "Bubble1",
+            values: [10, 20],
+            xValues: [1, 2],
+            bubbleSizes: [4, 16],
+            color: { hex: "#4472C4", alpha: 1 },
+          },
+        ],
+        categories: [],
+      });
+
+      const svg = renderChart(element);
+      const circles = svg.match(/<circle[^>]*r="([^"]*)"[^>]*\/>/g);
+      expect(circles).not.toBeNull();
+      expect(circles!.length).toBe(2);
+      // Extract radii — larger bubble size should produce a larger radius
+      const radii = circles!.map((c) => {
+        const match = c.match(/r="([^"]*)"/);
+        return Number(match![1]);
+      });
+      expect(radii[1]).toBeGreaterThan(radii[0]);
+    });
+
+    it("renders bubbles with fill-opacity", () => {
+      const element = createChartElement({
+        chartType: "bubble",
+        series: [
+          {
+            name: "Bubble1",
+            values: [10],
+            xValues: [1],
+            bubbleSizes: [5],
+            color: { hex: "#4472C4", alpha: 1 },
+          },
+        ],
+        categories: [],
+      });
+
+      const svg = renderChart(element);
+      expect(svg).toContain('fill-opacity="0.6"');
+    });
+  });
+
+  describe("radar chart", () => {
+    it("renders grid circles and data polygon", () => {
+      const element = createChartElement({
+        chartType: "radar",
+        radarStyle: "standard",
+        series: [{ name: "S1", values: [8, 6, 9, 7], color: { hex: "#4472C4", alpha: 1 } }],
+        categories: ["A", "B", "C", "D"],
+      });
+
+      const svg = renderChart(element);
+      // Grid circles (5 levels)
+      const circles = svg.match(/<circle[^>]*stroke="#D9D9D9"[^>]*\/>/g);
+      expect(circles).not.toBeNull();
+      expect(circles!.length).toBe(5);
+      // Data polygon
+      expect(svg).toContain("<polygon");
+      expect(svg).toContain('fill="none"');
+      expect(svg).toContain('stroke="#4472C4"');
+    });
+
+    it("renders filled polygon for filled radarStyle", () => {
+      const element = createChartElement({
+        chartType: "radar",
+        radarStyle: "filled",
+        series: [{ name: "S1", values: [5, 3, 7], color: { hex: "#4472C4", alpha: 1 } }],
+        categories: ["A", "B", "C"],
+      });
+
+      const svg = renderChart(element);
+      expect(svg).toContain('fill="#4472C4"');
+      expect(svg).toContain('fill-opacity="0.3"');
+    });
+
+    it("renders markers for marker radarStyle", () => {
+      const element = createChartElement({
+        chartType: "radar",
+        radarStyle: "marker",
+        series: [{ name: "S1", values: [5, 3, 7], color: { hex: "#4472C4", alpha: 1 } }],
+        categories: ["A", "B", "C"],
+      });
+
+      const svg = renderChart(element);
+      // 3 data point markers
+      const markers = svg.match(/<circle[^>]*r="3"[^>]*\/>/g);
+      expect(markers).not.toBeNull();
+      expect(markers!.length).toBe(3);
+    });
+
+    it("renders category labels", () => {
+      const element = createChartElement({
+        chartType: "radar",
+        radarStyle: "standard",
+        series: [{ name: "S1", values: [5, 3], color: { hex: "#4472C4", alpha: 1 } }],
+        categories: ["Speed", "Power"],
+      });
+
+      const svg = renderChart(element);
+      expect(svg).toContain("Speed");
+      expect(svg).toContain("Power");
     });
   });
 

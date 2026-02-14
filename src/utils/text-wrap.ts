@@ -1,5 +1,5 @@
 import type { Paragraph, RunProperties } from "../model/text.js";
-import { measureTextWidth } from "./text-measure.js";
+import { getTextMeasurer } from "../text-measurer.js";
 
 export interface LineSegment {
   text: string;
@@ -15,9 +15,18 @@ interface Token {
   properties: RunProperties;
   width: number;
   breakable: boolean;
+  forceBreak?: boolean;
 }
 
 const DEFAULT_FONT_SIZE = 18;
+
+/**
+ * フォントメトリクスの近似誤差を吸収するための折り返しトレランス。
+ * availableWidth に対する比率で指定する。
+ * 代替フォントメトリクス（例: Meiryo → Noto Sans JP）による幅の過大評価で、
+ * 本来1行に収まるテキストの末尾文字が次行に送られる問題を緩和する。
+ */
+const WRAP_TOLERANCE_RATIO = 0.02;
 
 function isCjk(codePoint: number): boolean {
   return (
@@ -97,6 +106,50 @@ function tokenizeRuns(
   for (const run of runs) {
     if (run.text.length === 0) continue;
 
+    // \n を含むランは分割して強制改行トークンを挿入
+    if (run.text.includes("\n")) {
+      const parts = run.text.split("\n");
+      for (let pi = 0; pi < parts.length; pi++) {
+        if (pi > 0) {
+          // 強制改行トークン
+          tokens.push({
+            text: "",
+            properties: run.properties,
+            width: 0,
+            breakable: true,
+            forceBreak: true,
+          });
+          isFirst = false;
+        }
+        const part = parts[pi];
+        if (part.length === 0) continue;
+        const fontSize = run.properties.fontSize
+          ? run.properties.fontSize * fontScale
+          : defaultFontSize;
+        const bold = run.properties.bold;
+        const fontFamily = run.properties.fontFamily;
+        const fontFamilyEa = run.properties.fontFamilyEa;
+        const fragments = splitTextIntoFragments(part);
+        for (const { fragment, breakable } of fragments) {
+          const width = getTextMeasurer().measureTextWidth(
+            fragment,
+            fontSize,
+            bold,
+            fontFamily,
+            fontFamilyEa,
+          );
+          tokens.push({
+            text: fragment,
+            properties: run.properties,
+            width,
+            breakable: isFirst ? false : breakable,
+          });
+          isFirst = false;
+        }
+      }
+      continue;
+    }
+
     const fontSize = run.properties.fontSize
       ? run.properties.fontSize * fontScale
       : defaultFontSize;
@@ -106,7 +159,13 @@ function tokenizeRuns(
     const fragments = splitTextIntoFragments(run.text);
 
     for (const { fragment, breakable } of fragments) {
-      const width = measureTextWidth(fragment, fontSize, bold, fontFamily, fontFamilyEa);
+      const width = getTextMeasurer().measureTextWidth(
+        fragment,
+        fontSize,
+        bold,
+        fontFamily,
+        fontFamilyEa,
+      );
       tokens.push({
         text: fragment,
         properties: run.properties,
@@ -147,7 +206,13 @@ function splitTokenByChars(
   const fontFamilyEa = token.properties.fontFamilyEa;
 
   for (const char of token.text) {
-    const charWidth = measureTextWidth(char, fontSize, bold, fontFamily, fontFamilyEa);
+    const charWidth = getTextMeasurer().measureTextWidth(
+      char,
+      fontSize,
+      bold,
+      fontFamily,
+      fontFamilyEa,
+    );
 
     if (currentWidth + charWidth > availableWidth && currentLine.length > 0) {
       lines.push(currentLine);
@@ -217,11 +282,21 @@ function layoutTokensIntoLines(
   const lines: WrappedLine[] = [];
   let currentLine: Token[] = [];
   let currentWidth = 0;
+  const tolerance = availableWidth * WRAP_TOLERANCE_RATIO;
 
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
 
-    if (currentWidth + token.width <= availableWidth) {
+    // 強制改行トークン: 即座に行を終了
+    if (token.forceBreak) {
+      const segments = trimTrailingSpaces(mergeSegments(currentLine));
+      lines.push({ segments: segments.length > 0 ? segments : [] });
+      currentLine = [];
+      currentWidth = 0;
+      continue;
+    }
+
+    if (currentWidth + token.width <= availableWidth + tolerance) {
       currentLine.push(token);
       currentWidth += token.width;
     } else if (currentLine.length === 0) {

@@ -5,6 +5,7 @@ export interface Slide {
   slideNumber: number;
   background: Background | null;
   elements: SlideElement[];
+  showMasterSp: boolean;
 }
 
 export interface Background {

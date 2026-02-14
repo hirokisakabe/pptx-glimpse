@@ -1,23 +1,39 @@
-import type { ResolvedColor } from "../model/fill.js";
+// OOXML 色変換 (ECMA-376 §20.1.2.3)
+// lumMod/lumOff: HSL 色空間の輝度チャネルを変更
+// tint: 白方向にブレンド (RGB 各チャネル: c + (255 - c) * amount)
+// shade: 黒方向にブレンド (RGB 各チャネル: c * amount)
+// alpha: 不透明度 (100000 = 100%)
+// 値は 100000 分率 (e.g. 50000 = 50%)
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function applyColorTransforms(color: ResolvedColor, node: any): ResolvedColor {
+import type { ResolvedColor } from "../model/fill.js";
+import type { XmlNode } from "../parser/xml-parser.js";
+
+export function applyColorTransforms(color: ResolvedColor, node: XmlNode): ResolvedColor {
   let { hex, alpha } = color;
 
-  if (node.lumMod || node.lumOff) {
-    hex = applyLuminance(hex, node.lumMod?.["@_val"], node.lumOff?.["@_val"]);
+  const lumMod = node.lumMod as XmlNode | undefined;
+  const lumOff = node.lumOff as XmlNode | undefined;
+  if (lumMod || lumOff) {
+    hex = applyLuminance(
+      hex,
+      lumMod?.["@_val"] as string | undefined,
+      lumOff?.["@_val"] as string | undefined,
+    );
   }
 
-  if (node.tint) {
-    hex = applyTint(hex, Number(node.tint["@_val"]) / 100000);
+  const tintNode = node.tint as XmlNode | undefined;
+  if (tintNode) {
+    hex = applyTint(hex, Number(tintNode["@_val"]) / 100000);
   }
 
-  if (node.shade) {
-    hex = applyShade(hex, Number(node.shade["@_val"]) / 100000);
+  const shadeNode = node.shade as XmlNode | undefined;
+  if (shadeNode) {
+    hex = applyShade(hex, Number(shadeNode["@_val"]) / 100000);
   }
 
-  if (node.alpha) {
-    alpha = Number(node.alpha["@_val"]) / 100000;
+  const alphaNode = node.alpha as XmlNode | undefined;
+  if (alphaNode) {
+    alpha = Number(alphaNode["@_val"]) / 100000;
   }
 
   return { hex, alpha };
@@ -61,6 +77,7 @@ function rgbToHex(r: number, g: number, b: number): string {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
+// RGB ↔ HSL 変換: W3C CSS Color Module Level 3 §4.2.4 のアルゴリズムに準拠
 function hexToHsl(hex: string): { h: number; s: number; l: number } {
   const { r: r255, g: g255, b: b255 } = hexToRgb(hex);
   const r = r255 / 255;

@@ -8,6 +8,9 @@ import { renderChart } from "./chart-renderer.js";
 import { renderTable } from "./table-renderer.js";
 import { renderFillAttrs } from "./fill-renderer.js";
 
+// SVG 1.1 (W3C) で出力。CSS クラスは使わずインライン属性のみ使用する。
+// 理由: sharp (内部で librsvg を使用) が CSS セレクタを正しく解釈しないため。
+
 export function renderSlideToSvg(slide: Slide, slideSize: SlideSize): string {
   const width = emuToPixels(slideSize.width);
   const height = emuToPixels(slideSize.height);
@@ -49,32 +52,58 @@ export function renderSlideToSvg(slide: Slide, slideSize: SlideSize): string {
 }
 
 function renderElement(element: SlideElement, defs: string[]): string | null {
+  let rendered: string | null = null;
   switch (element.type) {
     case "shape": {
       const result = renderShape(element);
-      // Extract defs from result if present
       extractDefs(result, defs);
-      return removeDefs(result);
+      rendered = removeDefs(result);
+      break;
     }
     case "image": {
       const imgResult = renderImage(element);
       extractDefs(imgResult, defs);
-      return removeDefs(imgResult);
+      rendered = removeDefs(imgResult);
+      break;
     }
     case "connector": {
       const cxnResult = renderConnector(element);
       extractDefs(cxnResult, defs);
-      return removeDefs(cxnResult);
+      rendered = removeDefs(cxnResult);
+      break;
     }
     case "group":
-      return renderGroup(element, defs);
+      rendered = renderGroup(element, defs);
+      break;
     case "chart":
-      return renderChart(element);
+      rendered = renderChart(element);
+      break;
     case "table":
-      return renderTable(element, defs);
+      rendered = renderTable(element, defs);
+      break;
     default:
       return null;
   }
+
+  if (rendered && "altText" in element && element.altText) {
+    rendered = addAriaLabel(rendered, element.altText);
+  }
+
+  if (rendered && "hyperlink" in element && element.hyperlink) {
+    const href = escapeXmlAttr(element.hyperlink.url);
+    rendered = `<a href="${href}">${rendered}</a>`;
+  }
+
+  return rendered;
+}
+
+function addAriaLabel(svgFragment: string, altText: string): string {
+  const escaped = altText
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return svgFragment.replace(/^<(g|image|path)\b/, `<$1 role="img" aria-label="${escaped}"`);
 }
 
 function renderGroup(group: GroupElement, defs: string[]): string {
@@ -90,10 +119,27 @@ function renderGroup(group: GroupElement, defs: string[]): string {
   const scaleX = chW !== 0 ? w / chW : 1;
   const scaleY = chH !== 0 ? h / chH : 1;
 
+  const transformParts: string[] = [];
+  transformParts.push(`translate(${x}, ${y})`);
+
+  if (group.transform.rotation !== 0) {
+    transformParts.push(`rotate(${group.transform.rotation}, ${w / 2}, ${h / 2})`);
+  }
+
+  if (group.transform.flipH || group.transform.flipV) {
+    const sx = group.transform.flipH ? -1 : 1;
+    const sy = group.transform.flipV ? -1 : 1;
+    transformParts.push(
+      `translate(${group.transform.flipH ? w : 0}, ${group.transform.flipV ? h : 0})`,
+    );
+    transformParts.push(`scale(${sx}, ${sy})`);
+  }
+
+  transformParts.push(`scale(${scaleX}, ${scaleY})`);
+  transformParts.push(`translate(${-chX}, ${-chY})`);
+
   const parts: string[] = [];
-  parts.push(
-    `<g transform="translate(${x}, ${y}) scale(${scaleX}, ${scaleY}) translate(${-chX}, ${-chY})">`,
-  );
+  parts.push(`<g transform="${transformParts.join(" ")}">`);
 
   for (const child of group.children) {
     const rendered = renderElement(child, defs);
@@ -105,18 +151,41 @@ function renderGroup(group: GroupElement, defs: string[]): string {
 }
 
 function extractDefs(svgFragment: string, defs: string[]): void {
-  const gradientMatch = svgFragment.match(/<linearGradient[^]*?<\/linearGradient>/g);
-  if (gradientMatch) {
-    defs.push(...gradientMatch);
+  const linearGradientMatch = svgFragment.match(/<linearGradient[^]*?<\/linearGradient>/g);
+  if (linearGradientMatch) {
+    defs.push(...linearGradientMatch);
+  }
+  const radialGradientMatch = svgFragment.match(/<radialGradient[^]*?<\/radialGradient>/g);
+  if (radialGradientMatch) {
+    defs.push(...radialGradientMatch);
+  }
+  const patternMatch = svgFragment.match(/<pattern[^]*?<\/pattern>/g);
+  if (patternMatch) {
+    defs.push(...patternMatch);
   }
   const filterMatch = svgFragment.match(/<filter[^]*?<\/filter>/g);
   if (filterMatch) {
     defs.push(...filterMatch);
+  }
+  const markerMatch = svgFragment.match(/<marker[^]*?<\/marker>/g);
+  if (markerMatch) {
+    defs.push(...markerMatch);
   }
 }
 
 function removeDefs(svgFragment: string): string {
   return svgFragment
     .replace(/<linearGradient[^]*?<\/linearGradient>/g, "")
-    .replace(/<filter[^]*?<\/filter>/g, "");
+    .replace(/<radialGradient[^]*?<\/radialGradient>/g, "")
+    .replace(/<pattern[^]*?<\/pattern>/g, "")
+    .replace(/<filter[^]*?<\/filter>/g, "")
+    .replace(/<marker[^]*?<\/marker>/g, "");
+}
+
+function escapeXmlAttr(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }

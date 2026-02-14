@@ -1,15 +1,17 @@
-import type { ColorMap, ColorSchemeKey } from "../model/theme.js";
+import type { ColorMap, ColorSchemeKey, FormatScheme } from "../model/theme.js";
 import type { Background } from "../model/slide.js";
 import type { SlideElement } from "../model/shape.js";
+import type { TxStyles, PlaceholderStyleInfo } from "../model/text.js";
 import type { PptxArchive } from "./pptx-reader.js";
-import { parseXml } from "./xml-parser.js";
+import { parseXml, parseXmlOrdered, type XmlNode } from "./xml-parser.js";
 import { parseFillFromNode } from "./fill-parser.js";
 import type { FillParseContext } from "./fill-parser.js";
-import { parseShapeTree } from "./slide-parser.js";
-import { buildRelsPath, parseRelationships } from "./relationship-parser.js";
+import { parseShapeTree, navigateOrdered } from "./slide-parser.js";
+import { buildRelsPath, parseRelationships, type Relationship } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
-
-const WARN_PREFIX = "[pptx-glimpse]";
+import type { FontScheme } from "../model/theme.js";
+import { parseListStyle } from "./text-style-parser.js";
+import { debug } from "../warning-logger.js";
 
 const DEFAULT_COLOR_MAP: ColorMap = {
   bg1: "lt1",
@@ -27,21 +29,21 @@ const DEFAULT_COLOR_MAP: ColorMap = {
 };
 
 export function parseSlideMasterColorMap(xml: string): ColorMap {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const parsed = parseXml(xml) as any;
+  const parsed = parseXml(xml);
 
-  if (!parsed.sldMaster) {
-    console.warn(`${WARN_PREFIX} SlideMaster: missing root element "sldMaster" in XML`);
+  const sldMaster = parsed.sldMaster as XmlNode | undefined;
+  if (!sldMaster) {
+    debug("slideMaster.missing", `missing root element "sldMaster" in XML`);
     return { ...DEFAULT_COLOR_MAP };
   }
 
-  const clrMap = parsed.sldMaster.clrMap;
+  const clrMap = sldMaster.clrMap as XmlNode | undefined;
 
   if (!clrMap) return { ...DEFAULT_COLOR_MAP };
 
   const result: Record<string, string> = {};
   for (const key of Object.keys(DEFAULT_COLOR_MAP)) {
-    const val = clrMap[`@_${key}`];
+    const val = clrMap[`@_${key}`] as string | undefined;
     result[key] = val ?? DEFAULT_COLOR_MAP[key as keyof ColorMap];
   }
 
@@ -53,18 +55,19 @@ export function parseSlideMasterBackground(
   colorResolver: ColorResolver,
   context?: FillParseContext,
 ): Background | null {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const parsed = parseXml(xml) as any;
+  const parsed = parseXml(xml);
 
-  if (!parsed.sldMaster) {
-    console.warn(`${WARN_PREFIX} SlideMaster: missing root element "sldMaster" in XML`);
+  const sldMaster = parsed.sldMaster as XmlNode | undefined;
+  if (!sldMaster) {
+    debug("slideMaster.missing", `missing root element "sldMaster" in XML`);
     return null;
   }
 
-  const bg = parsed.sldMaster.cSld?.bg;
+  const cSld = sldMaster.cSld as XmlNode | undefined;
+  const bg = cSld?.bg as XmlNode | undefined;
   if (!bg) return null;
 
-  const bgPr = bg.bgPr;
+  const bgPr = bg.bgPr as XmlNode | undefined;
   if (!bgPr) return null;
 
   const fill = parseFillFromNode(bgPr, colorResolver, context);
@@ -76,23 +79,104 @@ export function parseSlideMasterElements(
   masterPath: string,
   archive: PptxArchive,
   colorResolver: ColorResolver,
+  fontScheme?: FontScheme | null,
+  fmtScheme?: FormatScheme,
 ): SlideElement[] {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const parsed = parseXml(xml) as any;
+  const parsed = parseXml(xml);
 
-  if (!parsed.sldMaster) {
-    console.warn(`${WARN_PREFIX} SlideMaster: missing root element "sldMaster" in XML`);
+  const sldMaster = parsed.sldMaster as XmlNode | undefined;
+  if (!sldMaster) {
+    debug("slideMaster.missing", `missing root element "sldMaster" in XML`);
     return [];
   }
 
-  const spTree = parsed.sldMaster.cSld?.spTree;
+  const cSld = sldMaster.cSld as XmlNode | undefined;
+  const spTree = cSld?.spTree as XmlNode | undefined;
   if (!spTree) return [];
 
   const relsPath = buildRelsPath(masterPath);
   const relsXml = archive.files.get(relsPath);
-  const rels = relsXml ? parseRelationships(relsXml) : new Map();
+  const rels = relsXml ? parseRelationships(relsXml) : new Map<string, Relationship>();
 
-  return parseShapeTree(spTree, rels, masterPath, archive, colorResolver);
+  const orderedParsed = parseXmlOrdered(xml);
+  const orderedSpTree = navigateOrdered(orderedParsed, ["sldMaster", "cSld", "spTree"]);
+
+  return parseShapeTree(
+    spTree,
+    rels,
+    masterPath,
+    archive,
+    colorResolver,
+    undefined,
+    undefined,
+    fontScheme,
+    orderedSpTree,
+    fmtScheme,
+  );
+}
+
+export function parseSlideMasterTxStyles(
+  xml: string,
+  colorResolver?: ColorResolver,
+): TxStyles | undefined {
+  const parsed = parseXml(xml);
+
+  const sldMaster = parsed.sldMaster as XmlNode | undefined;
+  if (!sldMaster) {
+    debug("slideMaster.missing", `missing root element "sldMaster" in XML`);
+    return undefined;
+  }
+
+  const txStyles = sldMaster.txStyles as XmlNode | undefined;
+  if (!txStyles) return undefined;
+
+  const titleStyleNode = txStyles.titleStyle as XmlNode | undefined;
+  const bodyStyleNode = txStyles.bodyStyle as XmlNode | undefined;
+  const otherStyleNode = txStyles.otherStyle as XmlNode | undefined;
+  const titleStyle = titleStyleNode ? parseListStyle(titleStyleNode, colorResolver) : undefined;
+  const bodyStyle = bodyStyleNode ? parseListStyle(bodyStyleNode, colorResolver) : undefined;
+  const otherStyle = otherStyleNode ? parseListStyle(otherStyleNode, colorResolver) : undefined;
+
+  if (!titleStyle && !bodyStyle && !otherStyle) return undefined;
+
+  return { titleStyle, bodyStyle, otherStyle };
+}
+
+export function parseSlideMasterPlaceholderStyles(
+  xml: string,
+  colorResolver?: ColorResolver,
+): PlaceholderStyleInfo[] {
+  const parsed = parseXml(xml);
+  const sldMaster = parsed.sldMaster as XmlNode | undefined;
+  if (!sldMaster) return [];
+
+  const cSld = sldMaster.cSld as XmlNode | undefined;
+  const spTree = cSld?.spTree as XmlNode | undefined;
+  if (!spTree) return [];
+
+  const results: PlaceholderStyleInfo[] = [];
+  const shapes = (spTree.sp as XmlNode[] | undefined) ?? [];
+
+  for (const sp of shapes) {
+    const nvSpPr = sp.nvSpPr as XmlNode | undefined;
+    const nvPr = nvSpPr?.nvPr as XmlNode | undefined;
+    const ph = nvPr?.ph as XmlNode | undefined;
+    if (!ph) continue;
+
+    const placeholderType: string = (ph["@_type"] as string) ?? "body";
+    const placeholderIdx = ph["@_idx"] !== undefined ? Number(ph["@_idx"]) : undefined;
+    const txBody = sp.txBody as XmlNode | undefined;
+    const lstStyleNode = txBody?.lstStyle as XmlNode | undefined;
+    const lstStyle = lstStyleNode ? parseListStyle(lstStyleNode, colorResolver) : undefined;
+
+    results.push({
+      placeholderType,
+      ...(placeholderIdx !== undefined && { placeholderIdx }),
+      ...(lstStyle && { lstStyle }),
+    });
+  }
+
+  return results;
 }
 
 export function getDefaultColorMap(): ColorMap {

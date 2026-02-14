@@ -1,29 +1,16 @@
-import { readPptx } from "./parser/pptx-reader.js";
-import { parsePresentation } from "./parser/presentation-parser.js";
-import { parseTheme } from "./parser/theme-parser.js";
-import type { Theme } from "./model/theme.js";
-import {
-  parseSlideMasterColorMap,
-  parseSlideMasterBackground,
-  parseSlideMasterElements,
-} from "./parser/slide-master-parser.js";
-import {
-  parseSlideLayoutBackground,
-  parseSlideLayoutElements,
-} from "./parser/slide-layout-parser.js";
-import { parseSlide } from "./parser/slide-parser.js";
-import {
-  parseRelationships,
-  resolveRelationshipTarget,
-  buildRelsPath,
-} from "./parser/relationship-parser.js";
-import type { FillParseContext } from "./parser/fill-parser.js";
-import { ColorResolver } from "./color/color-resolver.js";
 import { renderSlideToSvg } from "./renderer/svg-renderer.js";
 import { svgToPng } from "./png/png-converter.js";
 import { DEFAULT_OUTPUT_WIDTH } from "./utils/constants.js";
-import type { ColorMap } from "./model/theme.js";
 import type { SlideElement } from "./model/shape.js";
+import type { LogLevel } from "./warning-logger.js";
+import { initWarningLogger, flushWarnings } from "./warning-logger.js";
+import { setTextMeasurer, resetTextMeasurer } from "./text-measurer.js";
+import { parsePptxData, parseSlideWithLayout } from "./pptx-data-parser.js";
+import type { FontMapping } from "./font-mapping.js";
+import { createFontMapping } from "./font-mapping.js";
+import { setFontMapping, resetFontMapping } from "./font-mapping-context.js";
+import { createOpentypeSetupFromSystem } from "./opentype-helpers.js";
+import { setTextPathFontResolver, resetTextPathFontResolver } from "./text-path-context.js";
 
 export interface ConvertOptions {
   /** 変換対象のスライド番号 (1始まり)。未指定で全スライド */
@@ -32,6 +19,12 @@ export interface ConvertOptions {
   width?: number;
   /** 出力画像の高さ (ピクセル)。widthと同時指定時はwidthが優先 */
   height?: number;
+  /** 警告ログレベル。デフォルト: "off" */
+  logLevel?: LogLevel;
+  /** 追加のフォントディレクトリパス。システムフォントに加えて検索する */
+  fontDirs?: string[];
+  /** PPTX フォント名 → OSS 代替フォントのカスタムマッピング。デフォルトマッピングにマージされる */
+  fontMapping?: FontMapping;
 }
 
 export interface SlideSvg {
@@ -50,146 +43,47 @@ export async function convertPptxToSvg(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
 ): Promise<SlideSvg[]> {
-  const archive = await readPptx(input);
-
-  // Parse presentation.xml
-  const presentationXml = archive.files.get("ppt/presentation.xml");
-  if (!presentationXml) throw new Error("Invalid PPTX: missing ppt/presentation.xml");
-  const presInfo = parsePresentation(presentationXml);
-
-  // Parse presentation relationships
-  const presRelsXml = archive.files.get("ppt/_rels/presentation.xml.rels");
-  const presRels = presRelsXml ? parseRelationships(presRelsXml) : new Map();
-
-  // Parse theme
-  let theme: Theme = {
-    colorScheme: defaultColorScheme(),
-    fontScheme: {
-      majorFont: "Calibri",
-      minorFont: "Calibri",
-      majorFontEa: null,
-      minorFontEa: null,
-    },
-  };
-  for (const [, rel] of presRels) {
-    if (rel.type.includes("theme")) {
-      const themePath = resolveRelationshipTarget("ppt/presentation.xml", rel.target);
-      const themeXml = archive.files.get(themePath);
-      if (themeXml) {
-        theme = parseTheme(themeXml);
-      }
-      break;
-    }
+  const setup = await createOpentypeSetupFromSystem(options?.fontDirs, options?.fontMapping);
+  if (setup) {
+    setTextMeasurer(setup.measurer);
+    setTextPathFontResolver(setup.fontResolver);
   }
+  setFontMapping(createFontMapping(options?.fontMapping));
+  try {
+    initWarningLogger(options?.logLevel ?? "off");
 
-  // Parse slide master for color map and background
-  let colorMap: ColorMap = defaultColorMap();
-  let masterPath: string | null = null;
-  for (const [, rel] of presRels) {
-    if (rel.type.includes("slideMaster")) {
-      masterPath = resolveRelationshipTarget("ppt/presentation.xml", rel.target);
-      const masterXml = archive.files.get(masterPath);
-      if (masterXml) {
-        colorMap = parseSlideMasterColorMap(masterXml);
-      }
-      break;
-    }
-  }
+    const data = await parsePptxData(input);
 
-  const colorResolver = new ColorResolver(theme.colorScheme, colorMap);
+    // Filter slides if specified
+    const targetSlides = options?.slides
+      ? data.slidePaths.filter((s) => options.slides!.includes(s.slideNumber))
+      : data.slidePaths;
 
-  // Parse master background and shapes (used as fallback)
-  const masterXml = masterPath ? archive.files.get(masterPath) : undefined;
-  let masterFillContext: FillParseContext | undefined;
-  if (masterPath) {
-    const masterRelsPath = buildRelsPath(masterPath);
-    const masterRelsXml = archive.files.get(masterRelsPath);
-    const masterRels = masterRelsXml ? parseRelationships(masterRelsXml) : new Map();
-    masterFillContext = { rels: masterRels, archive, basePath: masterPath };
-  }
-  const masterBackground = masterXml
-    ? parseSlideMasterBackground(masterXml, colorResolver, masterFillContext)
-    : null;
-  const masterElements =
-    masterPath && masterXml
-      ? parseSlideMasterElements(masterXml, masterPath, archive, colorResolver)
-      : [];
+    // Parse and render each slide
+    const results: SlideSvg[] = [];
+    for (const { slideNumber, path } of targetSlides) {
+      const parsed = parseSlideWithLayout(slideNumber, path, data);
+      if (!parsed) continue;
 
-  // Resolve slide paths from relationships
-  const slidePaths: { slideNumber: number; path: string }[] = [];
-  for (let i = 0; i < presInfo.slideRIds.length; i++) {
-    const rId = presInfo.slideRIds[i];
-    const rel = presRels.get(rId);
-    if (rel) {
-      const path = resolveRelationshipTarget("ppt/presentation.xml", rel.target);
-      slidePaths.push({ slideNumber: i + 1, path });
-    }
-  }
+      const { slide, layoutElements, layoutShowMasterSp } = parsed;
 
-  // Filter slides if specified
-  const targetSlides = options?.slides
-    ? slidePaths.filter((s) => options.slides!.includes(s.slideNumber))
-    : slidePaths;
+      // Merge shapes: master (back) → layout → slide (front)
+      const effectiveMasterElements =
+        slide.showMasterSp && layoutShowMasterSp ? data.masterElements : [];
+      slide.elements = mergeElements(effectiveMasterElements, layoutElements, slide.elements);
 
-  // Parse and render each slide
-  const results: SlideSvg[] = [];
-  for (const { slideNumber, path } of targetSlides) {
-    const slideXml = archive.files.get(path);
-    if (!slideXml) continue;
-
-    const slide = parseSlide(slideXml, path, slideNumber, archive, colorResolver);
-
-    // Resolve slide layout
-    let layoutElements: SlideElement[] = [];
-    const slideRelsPath = buildRelsPath(path);
-    const slideRelsXml = archive.files.get(slideRelsPath);
-    if (slideRelsXml) {
-      const slideRels = parseRelationships(slideRelsXml);
-      for (const [, rel] of slideRels) {
-        if (rel.type.includes("slideLayout")) {
-          const layoutPath = resolveRelationshipTarget(path, rel.target);
-          const layoutXml = archive.files.get(layoutPath);
-          if (layoutXml) {
-            // Fallback background: slide → layout → master
-            if (!slide.background) {
-              const layoutRelsPath = buildRelsPath(layoutPath);
-              const layoutRelsXml = archive.files.get(layoutRelsPath);
-              const layoutRels = layoutRelsXml ? parseRelationships(layoutRelsXml) : new Map();
-              const layoutFillContext: FillParseContext = {
-                rels: layoutRels,
-                archive,
-                basePath: layoutPath,
-              };
-              slide.background = parseSlideLayoutBackground(
-                layoutXml,
-                colorResolver,
-                layoutFillContext,
-              );
-            }
-            // Parse layout shapes
-            layoutElements = parseSlideLayoutElements(
-              layoutXml,
-              layoutPath,
-              archive,
-              colorResolver,
-            );
-          }
-          break;
-        }
-      }
-    }
-    if (!slide.background) {
-      slide.background = masterBackground;
+      const svg = renderSlideToSvg(slide, data.presInfo.slideSize);
+      results.push({ slideNumber, svg });
     }
 
-    // Merge shapes: master (back) → layout → slide (front)
-    slide.elements = mergeElements(masterElements, layoutElements, slide.elements);
+    flushWarnings();
 
-    const svg = renderSlideToSvg(slide, presInfo.slideSize);
-    results.push({ slideNumber, svg });
+    return results;
+  } finally {
+    resetTextMeasurer();
+    resetTextPathFontResolver();
+    resetFontMapping();
   }
-
-  return results;
 }
 
 export async function convertPptxToPng(
@@ -215,71 +109,22 @@ export async function convertPptxToPng(
   return results;
 }
 
-function collectPlaceholderTypes(elements: SlideElement[]): Set<string> {
-  const types = new Set<string>();
-  for (const el of elements) {
-    if (el.type === "shape" && el.placeholderType) {
-      types.add(el.placeholderType);
-    }
-  }
-  return types;
-}
-
-function filterByPlaceholder(elements: SlideElement[], excludeTypes: Set<string>): SlideElement[] {
-  return elements.filter((el) => {
-    if (el.type !== "shape") return true;
-    if (!el.placeholderType) return true;
-    return !excludeTypes.has(el.placeholderType);
-  });
-}
-
 function mergeElements(
   masterElements: SlideElement[],
   layoutElements: SlideElement[],
   slideElements: SlideElement[],
 ): SlideElement[] {
-  const slidePh = collectPlaceholderTypes(slideElements);
-  const layoutPh = collectPlaceholderTypes(layoutElements);
+  // Placeholder shapes in master and layout are templates (position/style definitions).
+  // Their text content should never appear on actual slides.
+  // Only non-placeholder shapes (decorative elements, logos, etc.) are shown.
+  const filterPlaceholders = (elements: SlideElement[]) =>
+    elements.filter((el) => {
+      if (el.type !== "shape") return true;
+      return !el.placeholderType;
+    });
 
-  // Slide placeholders override layout and master
-  // Layout placeholders override master
-  const allOverrides = new Set([...slidePh, ...layoutPh]);
-  const filteredMaster = filterByPlaceholder(masterElements, allOverrides);
-  const filteredLayout = filterByPlaceholder(layoutElements, slidePh);
+  const filteredMaster = filterPlaceholders(masterElements);
+  const filteredLayout = filterPlaceholders(layoutElements);
 
   return [...filteredMaster, ...filteredLayout, ...slideElements];
-}
-
-function defaultColorScheme() {
-  return {
-    dk1: "#000000",
-    lt1: "#FFFFFF",
-    dk2: "#44546A",
-    lt2: "#E7E6E6",
-    accent1: "#4472C4",
-    accent2: "#ED7D31",
-    accent3: "#A5A5A5",
-    accent4: "#FFC000",
-    accent5: "#5B9BD5",
-    accent6: "#70AD47",
-    hlink: "#0563C1",
-    folHlink: "#954F72",
-  };
-}
-
-function defaultColorMap() {
-  return {
-    bg1: "lt1" as const,
-    tx1: "dk1" as const,
-    bg2: "lt2" as const,
-    tx2: "dk2" as const,
-    accent1: "accent1" as const,
-    accent2: "accent2" as const,
-    accent3: "accent3" as const,
-    accent4: "accent4" as const,
-    accent5: "accent5" as const,
-    accent6: "accent6" as const,
-    hlink: "hlink" as const,
-    folHlink: "folHlink" as const,
-  };
 }
