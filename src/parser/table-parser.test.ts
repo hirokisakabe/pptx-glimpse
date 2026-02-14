@@ -231,4 +231,110 @@ describe("parseTable", () => {
     expect(result!.rows[0].cells[0].fill).toBeNull();
     expect(result!.rows[0].cells[0].borders).toBeNull();
   });
+
+  it("applies default borders when tableStyleId is present and no inline borders", () => {
+    const tblNode = {
+      tblPr: {
+        tableStyleId: "{D198CDD0-A2AB-4776-9A92-BCB6353A44E2}",
+      },
+      tblGrid: { gridCol: [{ "@_w": "914400" }] },
+      tr: [
+        {
+          "@_h": "457200",
+          tc: [{ txBody: null, tcPr: {} }],
+        },
+      ],
+    };
+
+    const result = parseTable(tblNode, createColorResolver());
+    const borders = result!.rows[0].cells[0].borders;
+    expect(borders).not.toBeNull();
+    expect(borders!.top).not.toBeNull();
+    expect(borders!.bottom).not.toBeNull();
+    expect(borders!.left).not.toBeNull();
+    expect(borders!.right).not.toBeNull();
+    expect(borders!.top!.fill).toEqual({
+      type: "solid",
+      color: { hex: "#000000", alpha: 1 },
+    });
+  });
+
+  it("does not apply default borders when no tableStyleId", () => {
+    const tblNode = {
+      tblPr: {},
+      tblGrid: { gridCol: [{ "@_w": "914400" }] },
+      tr: [
+        {
+          "@_h": "457200",
+          tc: [{ txBody: null, tcPr: {} }],
+        },
+      ],
+    };
+
+    const result = parseTable(tblNode, createColorResolver());
+    const borders = result!.rows[0].cells[0].borders;
+    expect(borders).toBeNull();
+  });
+
+  it("inline borders take precedence over table-style defaults", () => {
+    const tblNode = {
+      tblPr: {
+        tableStyleId: "{D198CDD0-A2AB-4776-9A92-BCB6353A44E2}",
+      },
+      tblGrid: { gridCol: [{ "@_w": "914400" }] },
+      tr: [
+        {
+          "@_h": "457200",
+          tc: [
+            {
+              txBody: null,
+              tcPr: {
+                lnT: { "@_w": "25400", solidFill: { srgbClr: { "@_val": "FF0000" } } },
+                lnB: { "@_w": "25400", solidFill: { srgbClr: { "@_val": "FF0000" } } },
+                lnL: { "@_w": "25400", solidFill: { srgbClr: { "@_val": "FF0000" } } },
+                lnR: { "@_w": "25400", solidFill: { srgbClr: { "@_val": "FF0000" } } },
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = parseTable(tblNode, createColorResolver());
+    const borders = result!.rows[0].cells[0].borders;
+    expect(borders).not.toBeNull();
+    expect(borders!.top!.width).toBe(25400);
+    expect(borders!.top!.fill).toEqual({
+      type: "solid",
+      color: { hex: "#FF0000", alpha: 1 },
+    });
+  });
+
+  it("applies default black fill to border with width but no color", () => {
+    const tblNode = {
+      tblGrid: { gridCol: [{ "@_w": "914400" }] },
+      tr: [
+        {
+          "@_h": "457200",
+          tc: [
+            {
+              txBody: null,
+              tcPr: {
+                lnT: { "@_w": "12700" },
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = parseTable(tblNode, createColorResolver());
+    const borders = result!.rows[0].cells[0].borders;
+    expect(borders).not.toBeNull();
+    expect(borders!.top).not.toBeNull();
+    expect(borders!.top!.fill).toEqual({
+      type: "solid",
+      color: { hex: "#000000", alpha: 1 },
+    });
+  });
 });

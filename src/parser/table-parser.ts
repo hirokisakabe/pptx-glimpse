@@ -1,4 +1,5 @@
 import type { TableData, TableRow, TableColumn, TableCell, CellBorders } from "../model/table.js";
+import type { Outline } from "../model/line.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import type { FontScheme } from "../model/theme.js";
 import { parseFillFromNode, parseOutline } from "./fill-parser.js";
@@ -16,7 +17,11 @@ export function parseTable(
   const columns = parseColumns(tblNode.tblGrid as XmlNode);
   if (columns.length === 0) return null;
 
-  const rows = parseRows(tblNode.tr as XmlNode, colorResolver, fontScheme);
+  const tblPr = tblNode.tblPr as XmlNode | undefined;
+  const hasTableStyle = tblPr?.tableStyleId !== undefined;
+  const defaultBorders = hasTableStyle ? createDefaultBorders() : null;
+
+  const rows = parseRows(tblNode.tr as XmlNode, colorResolver, fontScheme, defaultBorders);
 
   return { rows, columns };
 }
@@ -34,6 +39,7 @@ function parseRows(
   trList: XmlNode,
   colorResolver: ColorResolver,
   fontScheme?: FontScheme | null,
+  defaultBorders?: CellBorders | null,
 ): TableRow[] {
   if (!trList) return [];
 
@@ -41,7 +47,7 @@ function parseRows(
   const rows: TableRow[] = [];
   for (const tr of trArr) {
     const height = asEmu(Number(tr["@_h"] ?? 0));
-    const cells = parseCells(tr.tc as XmlNode, colorResolver, fontScheme);
+    const cells = parseCells(tr.tc as XmlNode, colorResolver, fontScheme, defaultBorders);
     rows.push({ height, cells });
   }
   return rows;
@@ -51,6 +57,7 @@ function parseCells(
   tcList: XmlNode,
   colorResolver: ColorResolver,
   fontScheme?: FontScheme | null,
+  defaultBorders?: CellBorders | null,
 ): TableCell[] {
   if (!tcList) return [];
 
@@ -60,7 +67,8 @@ function parseCells(
     const textBody = parseTextBody(tc.txBody as XmlNode, colorResolver, undefined, fontScheme);
     const tcPr = tc.tcPr as XmlNode | undefined;
     const fill = tcPr ? parseFillFromNode(tcPr, colorResolver) : null;
-    const borders = tcPr ? parseCellBorders(tcPr, colorResolver) : null;
+    const inlineBorders = tcPr ? parseCellBorders(tcPr, colorResolver) : null;
+    const borders = inlineBorders ?? defaultBorders ?? null;
     const gridSpan = Number(tc["@_gridSpan"] ?? 1);
     const rowSpan = Number(tc["@_rowSpan"] ?? 1);
     const hMerge =
@@ -81,7 +89,29 @@ function parseCellBorders(tcPr: XmlNode, colorResolver: ColorResolver): CellBord
   const left = parseOutline(tcPr.lnL as XmlNode, colorResolver);
   const right = parseOutline(tcPr.lnR as XmlNode, colorResolver);
 
+  for (const border of [top, bottom, left, right]) {
+    if (border && !border.fill) {
+      border.fill = { type: "solid", color: { hex: "#000000", alpha: 1 } };
+    }
+  }
+
   if (!top && !bottom && !left && !right) return null;
 
   return { top, bottom, left, right };
+}
+
+function createDefaultBorders(): CellBorders {
+  const defaultOutline: Outline = {
+    width: asEmu(12700),
+    fill: { type: "solid", color: { hex: "#000000", alpha: 1 } },
+    dashStyle: "solid",
+    headEnd: null,
+    tailEnd: null,
+  };
+  return {
+    top: { ...defaultOutline },
+    bottom: { ...defaultOutline },
+    left: { ...defaultOutline },
+    right: { ...defaultOutline },
+  };
 }
