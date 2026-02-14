@@ -145,8 +145,7 @@ Changes that do NOT require a changeset: docs-only updates, CI config, test-only
 1. PR with changeset is merged to main
 2. `release.yml` (changesets/action) automatically creates a "Version Packages" PR that bumps `package.json` and updates `CHANGELOG.md`
 3. "Version Packages" PR is reviewed and merged
-4. `release.yml` creates and pushes a `v{version}` tag on main
-5. `publish.yml` (existing) is triggered by the tag and runs `npm publish --provenance`
+4. `release.yml` runs `npx changeset publish` — creates a `v{version}` tag and publishes to npm with provenance (Trusted Publishing)
 
 ## Coding Conventions
 
