@@ -49,6 +49,7 @@ export const VRT_CASES = [
   { name: "table-complex-merge", fixture: "table-complex-merge.pptx" },
   { name: "multi-lang-font", fixture: "multi-lang-font.pptx" },
   { name: "placeholder-inheritance-extended", fixture: "placeholder-inheritance-extended.pptx" },
+  { name: "table-style-border", fixture: "table-style-border.pptx" },
 ] as const;
 
 export type VrtCase = (typeof VRT_CASES)[number];

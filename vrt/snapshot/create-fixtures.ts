@@ -6483,6 +6483,86 @@ async function createPlaceholderInheritanceExtendedFixture(): Promise<void> {
   savePptx(buffer, "placeholder-inheritance-extended.pptx");
 }
 
+// --- Table with table style border (no inline borders) ---
+function tableCellXmlNoBorder(
+  text: string,
+  opts?: {
+    fillColor?: string;
+    bold?: boolean;
+    fontSize?: number;
+    fontColor?: string;
+  },
+): string {
+  const sz = opts?.fontSize ? ` sz="${opts.fontSize * 100}"` : ` sz="1200"`;
+  const b = opts?.bold ? ` b="1"` : "";
+  const fontColor = opts?.fontColor ?? "000000";
+
+  const fillXml = opts?.fillColor
+    ? `<a:solidFill><a:srgbClr val="${opts.fillColor}"/></a:solidFill>`
+    : "";
+
+  return `<a:tc>
+    <a:txBody>
+      <a:bodyPr/>
+      <a:lstStyle/>
+      <a:p>
+        <a:r>
+          <a:rPr lang="en-US"${sz}${b}>
+            <a:solidFill><a:srgbClr val="${fontColor}"/></a:solidFill>
+          </a:rPr>
+          <a:t>${text}</a:t>
+        </a:r>
+      </a:p>
+    </a:txBody>
+    <a:tcPr>
+      ${fillXml}
+    </a:tcPr>
+  </a:tc>`;
+}
+
+async function createTableStyleBorderFixture(): Promise<void> {
+  const margin = 300000;
+  const colW = 2286000;
+  const rowH = 457200;
+  const tblW = colW * 3;
+  const tblH = rowH * 3;
+
+  const tbl1 = `<a:tbl>
+    <a:tblPr firstRow="1">
+      <a:tableStyleId>{5C22544A-7EE6-4342-B048-85BDC9FD1C3A}</a:tableStyleId>
+    </a:tblPr>
+    <a:tblGrid>
+      <a:gridCol w="${colW}"/>
+      <a:gridCol w="${colW}"/>
+      <a:gridCol w="${colW}"/>
+    </a:tblGrid>
+    <a:tr h="${rowH}">
+      ${tableCellXmlNoBorder("Header A", { fillColor: "4472C4", fontColor: "FFFFFF", bold: true })}
+      ${tableCellXmlNoBorder("Header B", { fillColor: "4472C4", fontColor: "FFFFFF", bold: true })}
+      ${tableCellXmlNoBorder("Header C", { fillColor: "4472C4", fontColor: "FFFFFF", bold: true })}
+    </a:tr>
+    <a:tr h="${rowH}">
+      ${tableCellXmlNoBorder("Cell 1", { fillColor: "D6E4F0" })}
+      ${tableCellXmlNoBorder("Cell 2", { fillColor: "D6E4F0" })}
+      ${tableCellXmlNoBorder("Cell 3", { fillColor: "D6E4F0" })}
+    </a:tr>
+    <a:tr h="${rowH}">
+      ${tableCellXmlNoBorder("Cell 4", { fillColor: "FFFFFF" })}
+      ${tableCellXmlNoBorder("Cell 5", { fillColor: "FFFFFF" })}
+      ${tableCellXmlNoBorder("Cell 6", { fillColor: "FFFFFF" })}
+    </a:tr>
+  </a:tbl>`;
+
+  const gf1 = tableGraphicFrameXml(2, "Style Border Table", margin, margin, tblW, tblH, tbl1);
+  const slide1 = wrapSlideXml(gf1);
+  const rels = slideRelsXml();
+
+  const buffer = await buildPptx({
+    slides: [{ xml: slide1, rels }],
+  });
+  savePptx(buffer, "table-style-border.pptx");
+}
+
 const FIXTURE_CREATORS: Record<string, () => Promise<void>> = {
   "shapes.pptx": createShapesFixture,
   "fill-and-lines.pptx": createFillAndLinesFixture,
@@ -6528,6 +6608,7 @@ const FIXTURE_CREATORS: Record<string, () => Promise<void>> = {
   "table-complex-merge.pptx": createTableComplexMergeFixture,
   "multi-lang-font.pptx": createMultiLangFontFixture,
   "placeholder-inheritance-extended.pptx": createPlaceholderInheritanceExtendedFixture,
+  "table-style-border.pptx": createTableStyleBorderFixture,
 };
 
 async function main(): Promise<void> {
