@@ -34,13 +34,14 @@ CI consists of 3 jobs:
 
 Data flow: **PPTX binary → Parser (ZIP extraction + XML parsing) → Intermediate model → Renderer (SVG generation) → PNG conversion (optional)**
 
-- `src/parser/` — Builds intermediate model from PPTX via ZIP extraction (`jszip`) and XML parsing (`fast-xml-parser`)
+- `src/parser/` — Builds intermediate model from PPTX via ZIP extraction (`fflate`) and XML parsing (`fast-xml-parser`)
 - `src/model/` — TypeScript interfaces for the intermediate model (Slide, Shape, Fill, Text, Theme, Table, Chart, Image, Line, Effect, Presentation, etc.)
 - `src/renderer/` — Generates SVG strings from the intermediate model. Includes preset shape definitions in `geometry/`, plus dedicated renderers for tables, charts, and images
 - `src/color/` — Theme color resolution (schemeClr → colorMap → colorScheme) and color transformations (lumMod/tint/shade)
+- `src/font/` — Font loading (system font scanning), font mapping (proprietary → OSS alternatives), text measurement and text-to-SVG-path conversion via `opentype.js`
 - `src/png/` — SVG → PNG conversion using sharp
-- `src/data/` — Font metrics data (character width information extracted from OSS-compatible fonts)
-- `src/utils/` — EMU ↔ pixel conversion (1 inch = 914400 EMU, 96 DPI), text width measurement, and text wrapping
+- `src/data/` — Font metrics data (fallback character width information)
+- `src/utils/` — EMU ↔ pixel conversion (1 inch = 914400 EMU, 96 DPI) and text wrapping
 
 Entry point: `src/index.ts` exports `convertPptxToSvg` and `convertPptxToPng`.
 
