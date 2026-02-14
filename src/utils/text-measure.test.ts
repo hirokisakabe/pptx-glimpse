@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { measureTextWidth, getLineHeightRatio } from "./text-measure.js";
+import { measureTextWidth, getLineHeightRatio, getAscenderRatio } from "./text-measure.js";
 
 const PX_PER_PT = 96 / 72;
 
@@ -193,5 +193,56 @@ describe("getLineHeightRatio", () => {
   it("引数なしの場合はデフォルト値 1.2 を返す", () => {
     const ratio = getLineHeightRatio();
     expect(ratio).toBe(1.2);
+  });
+});
+
+describe("getAscenderRatio", () => {
+  it("Calibri (Carlito) の ascender 比率を返す", () => {
+    // Carlito: ascender=1950, unitsPerEm=2048
+    const ratio = getAscenderRatio("Calibri");
+    expect(ratio).toBeCloseTo(1950 / 2048, 5);
+  });
+
+  it("Arial (LiberationSans) の ascender 比率を返す", () => {
+    // LiberationSans: ascender=1854, unitsPerEm=2048
+    const ratio = getAscenderRatio("Arial");
+    expect(ratio).toBeCloseTo(1854 / 2048, 5);
+  });
+
+  it("NotoSansJP の ascender 比率を返す", () => {
+    // NotoSansJP: ascender=1160, unitsPerEm=1000
+    const ratio = getAscenderRatio(null, "Meiryo");
+    expect(ratio).toBeCloseTo(1160 / 1000, 5);
+  });
+
+  it("fontFamily を優先して使用する", () => {
+    const ratio = getAscenderRatio("Calibri", "Meiryo");
+    expect(ratio).toBeCloseTo(1950 / 2048, 5);
+  });
+
+  it("fontFamily が null の場合は fontFamilyEa を使用する", () => {
+    const ratio = getAscenderRatio(null, "Meiryo");
+    expect(ratio).toBeCloseTo(1160 / 1000, 5);
+  });
+
+  it("未知のフォントの場合はデフォルト値 1.0 を返す", () => {
+    const ratio = getAscenderRatio("UnknownFont");
+    expect(ratio).toBe(1.0);
+  });
+
+  it("両方 null の場合はデフォルト値 1.0 を返す", () => {
+    const ratio = getAscenderRatio(null, null);
+    expect(ratio).toBe(1.0);
+  });
+
+  it("引数なしの場合はデフォルト値 1.0 を返す", () => {
+    const ratio = getAscenderRatio();
+    expect(ratio).toBe(1.0);
+  });
+
+  it("行高さ比率より小さい値を返す", () => {
+    const ascRatio = getAscenderRatio("Calibri");
+    const lhRatio = getLineHeightRatio("Calibri");
+    expect(ascRatio).toBeLessThan(lhRatio);
   });
 });

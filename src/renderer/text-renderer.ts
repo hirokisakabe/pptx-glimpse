@@ -125,6 +125,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
 
   // デフォルトフォントの行高さ比率
   const defaultLineHeightRatio = getDefaultLineHeightRatio(paragraphs);
+  const defaultAscenderRatio = getDefaultAscenderRatio(paragraphs);
   const defaultNaturalHeightPt = scaledDefaultFontSizePt * defaultLineHeightRatio;
 
   const tspans: string[] = [];
@@ -308,8 +309,8 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
     yStart = Math.max(marginTopPx, height - totalTextHeight - marginBottomPx);
   }
   const firstParaFontSizePt = getParagraphFontSize(paragraphs[0], defaultFontSize) * fontScale;
-  const firstLineNaturalHeightPt = firstParaFontSizePt * defaultLineHeightRatio;
-  yStart += firstLineNaturalHeightPt * PX_PER_PT;
+  const firstLineBaselineOffsetPt = firstParaFontSizePt * defaultAscenderRatio;
+  yStart += firstLineBaselineOffsetPt * PX_PER_PT;
 
   const textElement = `<text x="0" y="${yStart}">${tspans.join("")}</text>`;
 
@@ -748,6 +749,20 @@ function getDefaultLineHeightRatio(paragraphs: TextBody["paragraphs"]): number {
   return 1.2;
 }
 
+function getDefaultAscenderRatio(paragraphs: TextBody["paragraphs"]): number {
+  for (const p of paragraphs) {
+    for (const r of p.runs) {
+      if (r.properties.fontFamily || r.properties.fontFamilyEa) {
+        return getTextMeasurer().getAscenderRatio(
+          r.properties.fontFamily,
+          r.properties.fontFamilyEa,
+        );
+      }
+    }
+  }
+  return 1.0;
+}
+
 /**
  * spAutofit: テキスト量に応じた必要な図形の高さ (EMU) を計算する。
  * テキストが元の図形に収まる場合は null を返す。
@@ -1118,6 +1133,7 @@ function renderTextBodyAsPath(
 
   const scaledDefaultFontSizePt = defaultFontSize * fontScale;
   const defaultLineHeightRatio = getDefaultLineHeightRatio(paragraphs);
+  const defaultAscenderRatio = getDefaultAscenderRatio(paragraphs);
   const defaultNaturalHeightPt = scaledDefaultFontSizePt * defaultLineHeightRatio;
 
   // 垂直位置の計算（既存ロジック再利用）
@@ -1136,8 +1152,8 @@ function renderTextBodyAsPath(
     yStart = Math.max(marginTopPx, height - totalTextHeight - marginBottomPx);
   }
   const firstParaFontSizePt = getParagraphFontSize(paragraphs[0], defaultFontSize) * fontScale;
-  const firstLineNaturalHeightPt = firstParaFontSizePt * defaultLineHeightRatio;
-  yStart += firstLineNaturalHeightPt * PX_PER_PT;
+  const firstLineBaselineOffsetPt = firstParaFontSizePt * defaultAscenderRatio;
+  yStart += firstLineBaselineOffsetPt * PX_PER_PT;
 
   // パスレンダリング
   const elements: string[] = [];

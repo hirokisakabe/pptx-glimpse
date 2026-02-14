@@ -1,6 +1,7 @@
 import {
   measureTextWidth as defaultMeasureTextWidth,
   getLineHeightRatio as defaultGetLineHeightRatio,
+  getAscenderRatio as defaultGetAscenderRatio,
 } from "../utils/text-measure.js";
 
 /**
@@ -33,6 +34,15 @@ export interface TextMeasurer {
    * @param fontFamilyEa - 東アジア文字用フォントファミリー名
    */
   getLineHeightRatio(fontFamily?: string | null, fontFamilyEa?: string | null): number;
+
+  /**
+   * フォントの ascender 比率 (ascender / unitsPerEm) を返す。
+   * 1行目のベースラインオフセット計算に使用する。
+   * メトリクスが不明な場合は 1.0 をフォールバック値として返す。
+   * @param fontFamily - ラテン文字用フォントファミリー名
+   * @param fontFamilyEa - 東アジア文字用フォントファミリー名
+   */
+  getAscenderRatio(fontFamily?: string | null, fontFamilyEa?: string | null): number;
 }
 
 export class DefaultTextMeasurer implements TextMeasurer {
@@ -48,6 +58,10 @@ export class DefaultTextMeasurer implements TextMeasurer {
 
   getLineHeightRatio(fontFamily?: string | null, fontFamilyEa?: string | null): number {
     return defaultGetLineHeightRatio(fontFamily, fontFamilyEa);
+  }
+
+  getAscenderRatio(fontFamily?: string | null, fontFamilyEa?: string | null): number {
+    return defaultGetAscenderRatio(fontFamily, fontFamilyEa);
   }
 }
 

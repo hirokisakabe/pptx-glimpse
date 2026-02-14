@@ -56,6 +56,12 @@ export class OpentypeTextMeasurer implements TextMeasurer {
     return (font.ascender + Math.abs(font.descender)) / font.unitsPerEm;
   }
 
+  getAscenderRatio(fontFamily?: string | null, fontFamilyEa?: string | null): number {
+    const font = this.resolveFont(fontFamily) ?? this.resolveFont(fontFamilyEa) ?? this.defaultFont;
+    if (!font) return 1.0;
+    return font.ascender / font.unitsPerEm;
+  }
+
   private resolveFont(name: string | null | undefined): OpentypeFont | null {
     if (!name) return null;
     return this.fonts.get(name) ?? null;

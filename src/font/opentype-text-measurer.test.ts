@@ -70,6 +70,23 @@ describe("OpentypeTextMeasurer", () => {
     expect(measurer.getLineHeightRatio("Unknown")).toBe(1.2);
   });
 
+  it("getAscenderRatio を計算する", () => {
+    const font = createMockFont({
+      unitsPerEm: 1000,
+      ascender: 800,
+      descender: -200,
+      glyphWidths: {},
+    });
+    const fonts = new Map([["TestFont", font]]);
+    const measurer = new OpentypeTextMeasurer(fonts);
+    expect(measurer.getAscenderRatio("TestFont")).toBeCloseTo(0.8, 5);
+  });
+
+  it("getAscenderRatio でフォントが見つからない場合は 1.0 を返す", () => {
+    const measurer = new OpentypeTextMeasurer(new Map());
+    expect(measurer.getAscenderRatio("Unknown")).toBe(1.0);
+  });
+
   it("defaultFont をフォールバックとして使用する", () => {
     const font = createMockFont({
       unitsPerEm: 1000,
