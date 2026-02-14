@@ -14,5 +14,10 @@ export { DEFAULT_FONT_MAPPING, createFontMapping, getMappedFont } from "./font-m
 export type { FontMapping } from "./font-mapping.js";
 export { fetchGoogleFonts, resolveGoogleFontNames, parseFontUrlsFromCss } from "./google-fonts.js";
 export type { FetchGoogleFontsOptions } from "./google-fonts.js";
-export { createOpentypeTextMeasurerFromBuffers } from "./opentype-helpers.js";
-export type { FontBuffer } from "./opentype-helpers.js";
+export {
+  createOpentypeTextMeasurerFromBuffers,
+  createOpentypeSetupFromBuffers,
+} from "./opentype-helpers.js";
+export type { FontBuffer, OpentypeSetup } from "./opentype-helpers.js";
+export type { TextPathFontResolver, OpentypeFullFont, OpentypePath } from "./text-path-context.js";
+export { DefaultTextPathFontResolver } from "./text-path-context.js";

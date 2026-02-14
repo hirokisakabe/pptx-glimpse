@@ -5,6 +5,8 @@ import type { OpentypeFont } from "./opentype-text-measurer.js";
 import { OpentypeTextMeasurer } from "./opentype-text-measurer.js";
 import type { FontMapping } from "./font-mapping.js";
 import { createFontMapping } from "./font-mapping.js";
+import type { OpentypeFullFont, TextPathFontResolver } from "./text-path-context.js";
+import { DefaultTextPathFontResolver } from "./text-path-context.js";
 
 /** フォントバッファの入力形式（ConvertOptions.fonts.fontBuffers と互換） */
 export interface FontBuffer {
@@ -112,4 +114,79 @@ export async function createOpentypeTextMeasurerFromBuffers(
   if (fonts.size === 0 && !firstFont) return null;
 
   return new OpentypeTextMeasurer(fonts, firstFont ?? undefined);
+}
+
+export interface OpentypeSetup {
+  measurer: OpentypeTextMeasurer;
+  fontResolver: TextPathFontResolver;
+}
+
+/**
+ * フォントバッファ配列から OpentypeTextMeasurer と TextPathFontResolver を同時に構築する。
+ *
+ * opentype.parse() が返すオブジェクトは OpentypeFont と OpentypeFullFont の両方を満たすため、
+ * 同じ Font オブジェクトを measurer と fontResolver の両方に渡す。
+ */
+export async function createOpentypeSetupFromBuffers(
+  fontBuffers: FontBuffer[],
+  fontMapping?: FontMapping,
+): Promise<OpentypeSetup | null> {
+  if (fontBuffers.length === 0) return null;
+
+  const opentype = await tryLoadOpentype();
+  if (!opentype) return null;
+
+  const mapping = createFontMapping(fontMapping);
+  const reverseMap = buildReverseMapping(mapping);
+  const measurerFonts = new Map<string, OpentypeFont>();
+  const resolverFonts = new Map<string, OpentypeFullFont>();
+  let firstMeasurerFont: OpentypeFont | null = null;
+  let firstResolverFont: OpentypeFullFont | null = null;
+
+  for (const buffer of fontBuffers) {
+    try {
+      let arrayBuffer: ArrayBuffer;
+      if (buffer.data instanceof ArrayBuffer) {
+        arrayBuffer = buffer.data;
+      } else {
+        arrayBuffer = buffer.data.buffer.slice(
+          buffer.data.byteOffset,
+          buffer.data.byteOffset + buffer.data.byteLength,
+        ) as ArrayBuffer;
+      }
+      // opentype.parse() の返却値は OpentypeFont & OpentypeFullFont を満たす
+      const font = opentype.parse(arrayBuffer);
+      const fullFont = font as unknown as OpentypeFullFont;
+
+      if (!firstMeasurerFont) firstMeasurerFont = font;
+      if (!firstResolverFont) firstResolverFont = fullFont;
+
+      if (buffer.name) {
+        measurerFonts.set(buffer.name, font);
+        resolverFonts.set(buffer.name, fullFont);
+
+        const pptxNames = reverseMap.get(buffer.name);
+        if (pptxNames) {
+          for (const pptxName of pptxNames) {
+            if (!measurerFonts.has(pptxName)) {
+              measurerFonts.set(pptxName, font);
+              resolverFonts.set(pptxName, fullFont);
+            }
+          }
+        }
+      }
+    } catch {
+      // パース失敗のフォントはスキップ
+    }
+  }
+
+  if (measurerFonts.size === 0 && !firstMeasurerFont) return null;
+
+  const measurer = new OpentypeTextMeasurer(measurerFonts, firstMeasurerFont ?? undefined);
+  const fontResolver = new DefaultTextPathFontResolver(
+    resolverFonts,
+    firstResolverFont ?? undefined,
+  );
+
+  return { measurer, fontResolver };
 }

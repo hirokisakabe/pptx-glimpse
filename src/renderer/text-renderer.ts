@@ -15,6 +15,8 @@ import { wrapParagraph } from "../utils/text-wrap.js";
 import { getMetricsFallbackFont } from "../data/font-metrics.js";
 import { getTextMeasurer } from "../text-measurer.js";
 import { getCurrentMappedFont } from "../font-mapping-context.js";
+import type { TextPathFontResolver } from "../text-path-context.js";
+import { getTextPathFontResolver } from "../text-path-context.js";
 
 const PX_PER_PT = 96 / 72;
 const DEFAULT_LINE_SPACING = 1.0;
@@ -82,6 +84,11 @@ function resolveTextDimensions(
 }
 
 export function renderTextBody(textBody: TextBody, transform: Transform): string {
+  const fontResolver = getTextPathFontResolver();
+  if (fontResolver) {
+    return renderTextBodyAsPath(textBody, transform, fontResolver);
+  }
+
   const { bodyProperties, paragraphs } = textBody;
   const originalWidth = emuToPixels(transform.extentWidth);
   const originalHeight = emuToPixels(transform.extentHeight);
@@ -837,6 +844,468 @@ function estimateTextHeight(
   }
 
   return totalHeight;
+}
+
+// ============================================================
+// テキスト→パス変換 (Satori 方式)
+// ============================================================
+
+/**
+ * alignment に基づいて行の開始 x 位置を計算する。
+ * tspan レンダリングの text-anchor に代わるもの。
+ */
+function computePathLineX(
+  alignment: "l" | "ctr" | "r" | "just",
+  textStartX: number,
+  effectiveTextWidth: number,
+  width: number,
+  marginRight: number,
+  lineWidth: number,
+): number {
+  switch (alignment) {
+    case "ctr":
+      return textStartX + (effectiveTextWidth - lineWidth) / 2;
+    case "r":
+      return width - marginRight - lineWidth;
+    default:
+      return textStartX;
+  }
+}
+
+/**
+ * 行内の全セグメントの幅合計を計測する。
+ */
+function measureLineWidth(
+  segments: { text: string; properties: RunProperties }[],
+  defaultFontSize: number,
+  fontScale: number,
+): number {
+  let totalWidth = 0;
+  for (const seg of segments) {
+    const fontSize = (seg.properties.fontSize ?? defaultFontSize) * fontScale;
+    totalWidth += getTextMeasurer().measureTextWidth(
+      seg.text,
+      fontSize,
+      seg.properties.bold,
+      seg.properties.fontFamily,
+      seg.properties.fontFamilyEa,
+    );
+  }
+  return totalWidth;
+}
+
+/**
+ * path 要素の fill 属性を構築する。
+ */
+function buildPathFillAttrs(props: RunProperties): string {
+  const attrs: string[] = [];
+  if (props.color) {
+    attrs.push(`fill="${props.color.hex}"`);
+    if (props.color.alpha < 1) {
+      attrs.push(`fill-opacity="${props.color.alpha}"`);
+    }
+  } else {
+    attrs.push('fill="#000000"');
+  }
+  return attrs.join(" ");
+}
+
+/**
+ * 下線・取り消し線を SVG line 要素として描画する。
+ */
+function renderTextDecorations(
+  x: number,
+  y: number,
+  segmentWidth: number,
+  fontSizePx: number,
+  props: RunProperties,
+): string[] {
+  const lines: string[] = [];
+  const strokeColor = props.color?.hex ?? "#000000";
+  const strokeWidth = Math.max(1, fontSizePx * 0.05);
+  const opacityAttr =
+    props.color && props.color.alpha < 1 ? ` stroke-opacity="${props.color.alpha}"` : "";
+
+  if (props.underline) {
+    const underlineY = y + fontSizePx * 0.15;
+    lines.push(
+      `<line x1="${x.toFixed(2)}" y1="${underlineY.toFixed(2)}" x2="${(x + segmentWidth).toFixed(2)}" y2="${underlineY.toFixed(2)}" stroke="${strokeColor}" stroke-width="${strokeWidth.toFixed(2)}"${opacityAttr}/>`,
+    );
+  }
+
+  if (props.strikethrough) {
+    const strikeY = y - fontSizePx * 0.3;
+    lines.push(
+      `<line x1="${x.toFixed(2)}" y1="${strikeY.toFixed(2)}" x2="${(x + segmentWidth).toFixed(2)}" y2="${strikeY.toFixed(2)}" stroke="${strokeColor}" stroke-width="${strokeWidth.toFixed(2)}"${opacityAttr}/>`,
+    );
+  }
+
+  return lines;
+}
+
+/**
+ * 単一テキストセグメントを path 要素にレンダリングし、幅を返す。
+ */
+function renderSegmentAsPath(
+  text: string,
+  props: RunProperties,
+  x: number,
+  y: number,
+  fontScale: number,
+  defaultFontSize: number,
+  fontResolver: TextPathFontResolver,
+): { svg: string; width: number } {
+  const fontSize = (props.fontSize ?? defaultFontSize) * fontScale;
+  const fontSizePx = fontSize * PX_PER_PT;
+  const parts: string[] = [];
+  let totalWidth = 0;
+
+  // タブ→スペース変換
+  const processedText = text.replace(/\t/g, "    ");
+
+  // baseline-shift 処理
+  let yOffset = 0;
+  if (props.baseline > 0) yOffset = -fontSizePx * 0.35;
+  else if (props.baseline < 0) yOffset = fontSizePx * 0.2;
+  const effectiveY = y + yOffset;
+
+  const processSegment = (
+    segText: string,
+    fontFamily: string | null,
+    fontFamilyEa: string | null,
+  ) => {
+    if (segText.length === 0) return;
+
+    const font = fontResolver.resolveFont(fontFamily, fontFamilyEa);
+    const segWidth = getTextMeasurer().measureTextWidth(
+      segText,
+      fontSize,
+      props.bold,
+      fontFamily,
+      fontFamilyEa,
+    );
+
+    if (font) {
+      const path = font.getPath(segText, x + totalWidth, effectiveY, fontSizePx);
+      const pathData = path.toPathData(2);
+
+      if (pathData && pathData.length > 0) {
+        const fillAttrs = buildPathFillAttrs(props);
+        parts.push(`<path d="${pathData}" ${fillAttrs}/>`);
+      }
+    }
+
+    // 下線・取り消し線
+    if (props.underline || props.strikethrough) {
+      parts.push(...renderTextDecorations(x + totalWidth, effectiveY, segWidth, fontSizePx, props));
+    }
+
+    totalWidth += segWidth;
+  };
+
+  // CJK/ラテンのスクリプト分割
+  if (needsScriptSplit(props)) {
+    const scriptParts = splitByScript(processedText);
+    for (const part of scriptParts) {
+      const ff = part.isEa ? props.fontFamilyEa : props.fontFamily;
+      const ffEa = part.isEa ? props.fontFamily : props.fontFamilyEa;
+      processSegment(part.text, ff, ffEa);
+    }
+  } else {
+    processSegment(processedText, props.fontFamily, props.fontFamilyEa);
+  }
+
+  let svg = parts.join("");
+  if (props.hyperlink && svg.length > 0) {
+    const href = escapeXml(props.hyperlink.url);
+    svg = `<a href="${href}">${svg}</a>`;
+  }
+
+  return { svg, width: totalWidth };
+}
+
+/**
+ * 箇条書き記号をパスとしてレンダリングする。
+ */
+function renderBulletAsPath(
+  bulletText: string,
+  x: number,
+  y: number,
+  paraProps: ParagraphProperties,
+  textFontSizePt: number,
+  fontScale: number,
+  fontResolver: TextPathFontResolver,
+): string[] {
+  let bulletFontSize = textFontSizePt;
+  if (paraProps.bulletSizePct !== null) {
+    bulletFontSize = textFontSizePt * (paraProps.bulletSizePct / 100000);
+  }
+  const fontSizePx = bulletFontSize * PX_PER_PT;
+
+  const font = fontResolver.resolveFont(paraProps.bulletFont, null);
+  if (!font) return [];
+
+  const path = font.getPath(bulletText, x, y, fontSizePx);
+  const pathData = path.toPathData(2);
+  if (!pathData || pathData.length === 0) return [];
+
+  const attrs: string[] = [];
+  if (paraProps.bulletColor) {
+    attrs.push(`fill="${paraProps.bulletColor.hex}"`);
+    if (paraProps.bulletColor.alpha < 1) {
+      attrs.push(`fill-opacity="${paraProps.bulletColor.alpha}"`);
+    }
+  } else {
+    attrs.push('fill="#000000"');
+  }
+
+  return [`<path d="${pathData}" ${attrs.join(" ")}/>`];
+}
+
+/**
+ * テキストを SVG path 要素として描画する（Satori 方式）。
+ * フォントバッファが提供されている場合にのみ呼ばれる。
+ */
+function renderTextBodyAsPath(
+  textBody: TextBody,
+  transform: Transform,
+  fontResolver: TextPathFontResolver,
+): string {
+  const { bodyProperties, paragraphs } = textBody;
+  const originalWidth = emuToPixels(transform.extentWidth);
+  const originalHeight = emuToPixels(transform.extentHeight);
+
+  const { width, height, marginLeft, marginRight, marginTop, marginBottom } = resolveTextDimensions(
+    bodyProperties,
+    originalWidth,
+    originalHeight,
+  );
+
+  const hasText = paragraphs.some((p) => p.runs.some((r) => r.text.length > 0));
+  if (!hasText) return "";
+
+  const fullTextWidth = width - marginLeft - marginRight;
+  const numCol = bodyProperties.numCol ?? 1;
+  const textWidth = numCol > 1 ? fullTextWidth / numCol : fullTextWidth;
+  const defaultFontSize = getDefaultFontSize(paragraphs);
+  const shouldWrap = bodyProperties.wrap !== "none";
+
+  let fontScale = bodyProperties.fontScale;
+  const lnSpcReduction = bodyProperties.lnSpcReduction;
+
+  if (bodyProperties.autoFit === "normAutofit" && shouldWrap) {
+    const availableHeight = height - marginTop - marginBottom;
+    fontScale = computeShrinkToFitScale(
+      paragraphs,
+      defaultFontSize,
+      fontScale,
+      lnSpcReduction,
+      textWidth,
+      availableHeight,
+    );
+  }
+
+  const scaledDefaultFontSize = defaultFontSize * fontScale;
+  const defaultLineHeightRatio = getDefaultLineHeightRatio(paragraphs);
+  const defaultNaturalHeight = scaledDefaultFontSize * defaultLineHeightRatio;
+
+  // 垂直位置の計算（既存ロジック再利用）
+  let yStart = marginTop;
+  const totalTextHeight = estimateTextHeight(
+    paragraphs,
+    scaledDefaultFontSize,
+    shouldWrap,
+    textWidth,
+    lnSpcReduction,
+    fontScale,
+  );
+  if (bodyProperties.anchor === "ctr") {
+    yStart = Math.max(marginTop, (height - totalTextHeight) / 2);
+  } else if (bodyProperties.anchor === "b") {
+    yStart = Math.max(marginTop, height - totalTextHeight - marginBottom);
+  }
+  yStart += defaultNaturalHeight;
+
+  // パスレンダリング
+  const elements: string[] = [];
+  let currentY = yStart;
+  let isFirstLine = true;
+  const autoNumCounters = new Map<string, number>();
+  let prevSpaceAfterPx = 0;
+
+  for (const para of paragraphs) {
+    const paraMarginLeft = emuToPixels(para.properties.marginLeft);
+    const paraIndent = emuToPixels(para.properties.indent);
+    const textStartX = marginLeft + paraMarginLeft;
+    const bulletX = textStartX + paraIndent;
+    const effectiveTextWidth = textWidth - paraMarginLeft;
+
+    const bulletText = resolveBulletText(para.properties, autoNumCounters);
+
+    const paraFontSize = getParagraphFontSize(para, defaultFontSize) * fontScale;
+    const spaceBeforePx = resolveSpacingPx(para.properties.spaceBefore, paraFontSize);
+    const paragraphGap = Math.max(prevSpaceAfterPx, spaceBeforePx);
+
+    // 空段落
+    if (para.runs.length === 0 || !para.runs.some((r) => r.text.length > 0)) {
+      if (!isFirstLine) {
+        currentY += defaultNaturalHeight * PX_PER_PT * DEFAULT_LINE_SPACING + paragraphGap;
+      }
+      isFirstLine = false;
+      prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSize);
+      continue;
+    }
+
+    if (shouldWrap) {
+      const wrappedLines = wrapParagraph(
+        para,
+        effectiveTextWidth,
+        scaledDefaultFontSize,
+        fontScale,
+      );
+
+      for (let lineIdx = 0; lineIdx < wrappedLines.length; lineIdx++) {
+        const line = wrappedLines[lineIdx];
+        const lineGap = lineIdx === 0 ? paragraphGap : 0;
+
+        if (line.segments.length === 0) {
+          if (!isFirstLine) {
+            currentY +=
+              defaultNaturalHeight * PX_PER_PT * getLineSpacing(para, lnSpcReduction) + lineGap;
+          }
+          isFirstLine = false;
+          continue;
+        }
+
+        // 行の高さ計算と y 位置更新
+        const lineNaturalHeight = computeLineNaturalHeight(
+          line.segments,
+          defaultFontSize,
+          fontScale,
+        );
+        if (!isFirstLine) {
+          currentY +=
+            lineNaturalHeight * PX_PER_PT * getLineSpacing(para, lnSpcReduction) + lineGap;
+        }
+
+        // 行の幅を計測して alignment 用の x 位置を計算
+        const lineWidth = measureLineWidth(line.segments, defaultFontSize, fontScale);
+        const lineStartX = computePathLineX(
+          para.properties.alignment,
+          textStartX,
+          effectiveTextWidth,
+          width,
+          marginRight,
+          lineWidth,
+        );
+
+        let currentX = lineStartX;
+
+        // 箇条書き記号（最初の行のみ）
+        if (lineIdx === 0 && bulletText) {
+          const lineFontSize = getLineFontSize(line.segments, defaultFontSize) * fontScale;
+          elements.push(
+            ...renderBulletAsPath(
+              bulletText,
+              bulletX,
+              currentY,
+              para.properties,
+              lineFontSize,
+              fontScale,
+              fontResolver,
+            ),
+          );
+        }
+
+        // 各セグメントをパスにレンダリング
+        for (const seg of line.segments) {
+          const result = renderSegmentAsPath(
+            seg.text,
+            seg.properties,
+            currentX,
+            currentY,
+            fontScale,
+            defaultFontSize,
+            fontResolver,
+          );
+          if (result.svg) elements.push(result.svg);
+          currentX += result.width;
+        }
+
+        isFirstLine = false;
+      }
+    } else {
+      // wrap="none": 折り返しなし
+      const naturalHeight = computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
+      if (!isFirstLine) {
+        currentY += naturalHeight * PX_PER_PT * getLineSpacing(para, lnSpcReduction) + paragraphGap;
+      }
+
+      // 行の幅を計測
+      const runsAsSegments = para.runs
+        .filter((r) => r.text.length > 0)
+        .map((r) => ({ text: r.text, properties: r.properties }));
+      const lineWidth = measureLineWidth(runsAsSegments, defaultFontSize, fontScale);
+      const lineStartX = computePathLineX(
+        para.properties.alignment,
+        textStartX,
+        effectiveTextWidth,
+        width,
+        marginRight,
+        lineWidth,
+      );
+
+      let currentX = lineStartX;
+
+      // 箇条書き記号
+      if (bulletText) {
+        const firstRun = para.runs.find((r) => r.text.length > 0);
+        const fontSize = (firstRun?.properties.fontSize ?? defaultFontSize) * fontScale;
+        elements.push(
+          ...renderBulletAsPath(
+            bulletText,
+            bulletX,
+            currentY,
+            para.properties,
+            fontSize,
+            fontScale,
+            fontResolver,
+          ),
+        );
+      }
+
+      // 各ランをパスにレンダリング
+      for (const run of para.runs) {
+        if (run.text.length === 0) continue;
+        const result = renderSegmentAsPath(
+          run.text,
+          run.properties,
+          currentX,
+          currentY,
+          fontScale,
+          defaultFontSize,
+          fontResolver,
+        );
+        if (result.svg) elements.push(result.svg);
+        currentX += result.width;
+      }
+
+      isFirstLine = false;
+    }
+
+    prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSize);
+  }
+
+  const content = elements.join("");
+  if (content.length === 0) return "";
+
+  if (isVerticalText(bodyProperties.vert)) {
+    return `<g transform="translate(${originalWidth}, 0) rotate(90)">${content}</g>`;
+  }
+  if (isVert270Text(bodyProperties.vert)) {
+    return `<g transform="translate(0, ${originalHeight}) rotate(-90)">${content}</g>`;
+  }
+  return content;
 }
 
 /** デフォルトタブ幅（スペース数） */
