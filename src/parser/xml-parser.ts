@@ -35,32 +35,61 @@ const ARRAY_TAGS = new Set([
   "effectStyle", // エフェクトスタイル (Effect Style)
 ]);
 
-export function createXmlParser(): XMLParser {
-  return new XMLParser({
-    ignoreAttributes: false,
-    attributeNamePrefix: "@_",
-    removeNSPrefix: true,
-    htmlEntities: true,
-    isArray: (_name: string, jpath: string) => {
-      const tag = jpath.split(".").pop() ?? "";
-      return ARRAY_TAGS.has(tag);
-    },
-  });
+// シングルトンパーサーインスタンス。
+// XMLParser.parse() はステートレスなため、安全に再利用できる。
+const standardParser = new XMLParser({
+  ignoreAttributes: false,
+  attributeNamePrefix: "@_",
+  removeNSPrefix: true,
+  htmlEntities: true,
+  isArray: (_name: string, jpath: string) => {
+    const tag = jpath.split(".").pop() ?? "";
+    return ARRAY_TAGS.has(tag);
+  },
+});
+
+const orderedParser = new XMLParser({
+  preserveOrder: true,
+  removeNSPrefix: true,
+  ignoreAttributes: true,
+});
+
+// 変換単位のパース結果キャッシュ。
+// 同一 XML 文字列（マスター・レイアウト等）の重複パースを回避する。
+let xmlCache: Map<string, Record<string, unknown>> | null = null;
+let xmlOrderedCache: Map<string, XmlOrderedNode[]> | null = null;
+
+/** 変換開始時にキャッシュを有効化する */
+export function enableXmlCache(): void {
+  xmlCache = new Map();
+  xmlOrderedCache = new Map();
+}
+
+/** 変換完了時にキャッシュをクリアする（メモリリーク防止） */
+export function clearXmlCache(): void {
+  xmlCache = null;
+  xmlOrderedCache = null;
 }
 
 export function parseXml(xml: string): Record<string, unknown> {
-  const parser = createXmlParser();
-  return parser.parse(xml) as Record<string, unknown>;
+  if (xmlCache) {
+    const cached = xmlCache.get(xml);
+    if (cached) return cached;
+  }
+  const result = standardParser.parse(xml) as Record<string, unknown>;
+  xmlCache?.set(xml, result);
+  return result;
 }
 
 // preserveOrder: true で子要素の出現順序を保持するパーサー。
 // spTree 内の異なる要素タイプ（sp, pic, cxnSp 等）の Z-order を正しく復元するために使用。
 // データ取得には既存の parseXml を使い、本関数は順序情報のみに使用する。
 export function parseXmlOrdered(xml: string): XmlOrderedNode[] {
-  const parser = new XMLParser({
-    preserveOrder: true,
-    removeNSPrefix: true,
-    ignoreAttributes: true,
-  });
-  return parser.parse(xml) as XmlOrderedNode[];
+  if (xmlOrderedCache) {
+    const cached = xmlOrderedCache.get(xml);
+    if (cached) return cached;
+  }
+  const result = orderedParser.parse(xml) as XmlOrderedNode[];
+  xmlOrderedCache?.set(xml, result);
+  return result;
 }

@@ -5,6 +5,7 @@ import type { SlideElement } from "../model/shape.js";
 import type { TextBody } from "../model/text.js";
 import type { FontScheme } from "../model/theme.js";
 import { parsePptxData, parseSlideWithLayout } from "../pptx-data-parser.js";
+import { enableXmlCache, clearXmlCache } from "../parser/xml-parser.js";
 
 /** フォント収集結果 */
 export interface UsedFonts {
@@ -25,36 +26,41 @@ export interface UsedFonts {
  * PPTX をパースして使用されているフォント名を収集する。
  * レンダリングは行わないため軽量。
  */
-export async function collectUsedFonts(input: Buffer | Uint8Array): Promise<UsedFonts> {
-  const data = await parsePptxData(input);
-  const fontScheme = data.theme.fontScheme;
+export function collectUsedFonts(input: Buffer | Uint8Array): UsedFonts {
+  enableXmlCache();
+  try {
+    const data = parsePptxData(input);
+    const fontScheme = data.theme.fontScheme;
 
-  const fonts = new Set<string>();
+    const fonts = new Set<string>();
 
-  // テーマフォントを収集
-  collectThemeFonts(fontScheme, fonts);
+    // テーマフォントを収集
+    collectThemeFonts(fontScheme, fonts);
 
-  // 各スライドから収集
-  for (const { slideNumber, path } of data.slidePaths) {
-    const parsed = parseSlideWithLayout(slideNumber, path, data);
-    if (!parsed) continue;
-    collectFontsFromElements(parsed.slide.elements, fonts);
+    // 各スライドから収集
+    for (const { slideNumber, path } of data.slidePaths) {
+      const parsed = parseSlideWithLayout(slideNumber, path, data);
+      if (!parsed) continue;
+      collectFontsFromElements(parsed.slide.elements, fonts);
+    }
+
+    // マスター要素からも収集
+    collectFontsFromElements(data.masterElements, fonts);
+
+    return {
+      theme: {
+        majorFont: fontScheme.majorFont,
+        minorFont: fontScheme.minorFont,
+        majorFontEa: fontScheme.majorFontEa,
+        minorFontEa: fontScheme.minorFontEa,
+        majorFontCs: fontScheme.majorFontCs,
+        minorFontCs: fontScheme.minorFontCs,
+      },
+      fonts: [...fonts].sort(),
+    };
+  } finally {
+    clearXmlCache();
   }
-
-  // マスター要素からも収集
-  collectFontsFromElements(data.masterElements, fonts);
-
-  return {
-    theme: {
-      majorFont: fontScheme.majorFont,
-      minorFont: fontScheme.minorFont,
-      majorFontEa: fontScheme.majorFontEa,
-      minorFontEa: fontScheme.minorFontEa,
-      majorFontCs: fontScheme.majorFontCs,
-      minorFontCs: fontScheme.minorFontCs,
-    },
-    fonts: [...fonts].sort(),
-  };
 }
 
 function collectThemeFonts(fontScheme: FontScheme, fonts: Set<string>): void {

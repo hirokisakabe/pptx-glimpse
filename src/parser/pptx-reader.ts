@@ -1,40 +1,29 @@
-import JSZip from "jszip";
+import { unzipSync, strFromU8 } from "fflate";
 
 export interface PptxArchive {
   files: Map<string, string>;
   media: Map<string, Uint8Array>;
 }
 
-export async function readPptx(input: Buffer | Uint8Array): Promise<PptxArchive> {
-  const zip = await JSZip.loadAsync(input);
+export function readPptx(input: Buffer | Uint8Array): PptxArchive {
+  const unzipped = unzipSync(new Uint8Array(input));
 
   const files = new Map<string, string>();
   const media = new Map<string, Uint8Array>();
 
-  const promises: Promise<void>[] = [];
-
-  zip.forEach((relativePath, zipEntry) => {
-    if (zipEntry.dir) return;
+  for (const [relativePath, data] of Object.entries(unzipped)) {
+    if (relativePath.endsWith("/")) continue;
 
     if (relativePath.startsWith("ppt/media/")) {
-      promises.push(
-        zipEntry.async("uint8array").then((buf) => {
-          media.set(relativePath, buf);
-        }),
-      );
+      media.set(relativePath, data);
     } else if (
       relativePath.endsWith(".xml") ||
       relativePath.endsWith(".rels") ||
       relativePath === "[Content_Types].xml"
     ) {
-      promises.push(
-        zipEntry.async("string").then((str) => {
-          files.set(relativePath, str);
-        }),
-      );
+      files.set(relativePath, strFromU8(data));
     }
-  });
+  }
 
-  await Promise.all(promises);
   return { files, media };
 }

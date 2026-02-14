@@ -193,8 +193,8 @@ beforeAll(async () => {
 });
 
 describe("collectUsedFonts", () => {
-  it("テーマフォント情報を返す", async () => {
-    const result = await collectUsedFonts(testPptx);
+  it("テーマフォント情報を返す", () => {
+    const result = collectUsedFonts(testPptx);
 
     expect(result.theme.majorFont).toBe("Calibri Light");
     expect(result.theme.minorFont).toBe("Calibri");
@@ -204,8 +204,8 @@ describe("collectUsedFonts", () => {
     expect(result.theme.minorFontCs).toBe("Arial");
   });
 
-  it("テキストランのフォント名を収集する", async () => {
-    const result = await collectUsedFonts(testPptx);
+  it("テキストランのフォント名を収集する", () => {
+    const result = collectUsedFonts(testPptx);
 
     // テキストランで指定されたフォント
     expect(result.fonts).toContain("Arial");
@@ -214,15 +214,15 @@ describe("collectUsedFonts", () => {
     expect(result.fonts).toContain("Yu Gothic");
   });
 
-  it("テーマフォント名も fonts 一覧に含まれる", async () => {
-    const result = await collectUsedFonts(testPptx);
+  it("テーマフォント名も fonts 一覧に含まれる", () => {
+    const result = collectUsedFonts(testPptx);
 
     expect(result.fonts).toContain("Calibri Light");
     expect(result.fonts).toContain("Calibri");
   });
 
-  it("フォント名は重複なしでソート済み", async () => {
-    const result = await collectUsedFonts(testPptx);
+  it("フォント名は重複なしでソート済み", () => {
+    const result = collectUsedFonts(testPptx);
 
     // 重複がないことを確認
     const unique = [...new Set(result.fonts)];
