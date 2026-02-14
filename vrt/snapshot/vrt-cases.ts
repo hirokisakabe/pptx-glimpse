@@ -44,6 +44,11 @@ export const VRT_CASES = [
   { name: "image-stretch-tile", fixture: "image-stretch-tile.pptx" },
   { name: "vertical-text", fixture: "vertical-text.pptx" },
   { name: "shape-hyperlink-text-outline", fixture: "shape-hyperlink-text-outline.pptx" },
+  { name: "charts-3d-fallback", fixture: "charts-3d-fallback.pptx" },
+  { name: "color-transforms", fixture: "color-transforms.pptx" },
+  { name: "table-complex-merge", fixture: "table-complex-merge.pptx" },
+  { name: "multi-lang-font", fixture: "multi-lang-font.pptx" },
+  { name: "placeholder-inheritance-extended", fixture: "placeholder-inheritance-extended.pptx" },
 ] as const;
 
 export type VrtCase = (typeof VRT_CASES)[number];
