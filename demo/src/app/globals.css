@@ -11,7 +11,7 @@ body {
   min-height: 100vh;
 }
 
-#app {
+.app {
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem 1rem;
@@ -32,7 +32,7 @@ header p {
   margin-top: 0.5rem;
 }
 
-#drop-zone {
+.drop-zone {
   border: 3px dashed #ccc;
   border-radius: 12px;
   padding: 4rem 2rem;
@@ -43,17 +43,17 @@ header p {
     background 0.2s;
 }
 
-#drop-zone.drag-over {
+.drop-zone.drag-over {
   border-color: #4472c4;
   background: #eef3fb;
 }
 
-#drop-zone p {
+.drop-zone p {
   margin: 0.5rem 0;
   color: #888;
 }
 
-#file-label {
+.file-label {
   display: inline-block;
   padding: 0.75rem 1.5rem;
   background: #4472c4;
@@ -64,18 +64,18 @@ header p {
   transition: background 0.2s;
 }
 
-#file-label:hover {
+.file-label:hover {
   background: #3561b0;
 }
 
-#loading {
+.loading {
   text-align: center;
   padding: 4rem;
   font-size: 1.2rem;
   color: #666;
 }
 
-#error {
+.error {
   text-align: center;
   padding: 2rem;
   color: #d32f2f;
@@ -84,7 +84,7 @@ header p {
   margin-top: 1rem;
 }
 
-#slide-nav {
+.slide-nav {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -92,7 +92,7 @@ header p {
   margin-bottom: 1rem;
 }
 
-#slide-nav button {
+.slide-nav button {
   padding: 0.5rem 1rem;
   border: 1px solid #ccc;
   border-radius: 4px;
@@ -100,23 +100,25 @@ header p {
   cursor: pointer;
 }
 
-#slide-nav button:disabled {
+.slide-nav button:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-#slide-container {
+.slide-container {
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   overflow: hidden;
 }
 
-#slide-container svg {
+.slide-container svg {
   display: block;
+  width: 100%;
+  height: auto;
 }
 
-#thumbnail-strip {
+.thumbnail-strip {
   display: flex;
   gap: 8px;
   margin-top: 1rem;
@@ -141,6 +143,12 @@ header p {
 
 .thumbnail:hover {
   border-color: #90b0db;
+}
+
+.thumbnail svg {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 footer {
