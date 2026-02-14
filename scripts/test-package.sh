@@ -36,11 +36,9 @@ const assert = (condition, message) => {
 
 assert(typeof pkg.convertPptxToSvg === "function", "convertPptxToSvg should be a function");
 assert(typeof pkg.convertPptxToPng === "function", "convertPptxToPng should be a function");
-assert(typeof pkg.initPng === "function", "initPng should be a function");
 
 console.log("  convertPptxToSvg: function OK");
 console.log("  convertPptxToPng: function OK");
-console.log("  initPng: function OK");
 console.log("CJS test passed!");
 TESTEOF
 node test-cjs.cjs
@@ -50,7 +48,7 @@ echo ""
 # --- ESM テスト ---
 echo "--- Test: ESM (import) ---"
 cat > test-esm.mjs << 'TESTEOF'
-import { convertPptxToSvg, convertPptxToPng, initPng } from "pptx-glimpse";
+import { convertPptxToSvg, convertPptxToPng } from "pptx-glimpse";
 
 const assert = (condition, message) => {
   if (!condition) {
@@ -61,11 +59,9 @@ const assert = (condition, message) => {
 
 assert(typeof convertPptxToSvg === "function", "convertPptxToSvg should be a function");
 assert(typeof convertPptxToPng === "function", "convertPptxToPng should be a function");
-assert(typeof initPng === "function", "initPng should be a function");
 
 console.log("  convertPptxToSvg: function OK");
 console.log("  convertPptxToPng: function OK");
-console.log("  initPng: function OK");
 console.log("ESM test passed!");
 TESTEOF
 node test-esm.mjs
@@ -94,7 +90,7 @@ cat > tsconfig.json << 'TESTEOF'
 TESTEOF
 
 cat > test-types.ts << 'TESTEOF'
-import { convertPptxToSvg, convertPptxToPng, initPng } from "pptx-glimpse";
+import { convertPptxToSvg, convertPptxToPng } from "pptx-glimpse";
 import type { ConvertOptions, SlideImage, SlideSvg } from "pptx-glimpse";
 
 // Verify function signatures
@@ -102,19 +98,16 @@ const _svgFn: (input: Buffer | Uint8Array, options?: ConvertOptions) => Promise<
   convertPptxToSvg;
 const _pngFn: (input: Buffer | Uint8Array, options?: ConvertOptions) => Promise<SlideImage[]> =
   convertPptxToPng;
-// Verify initPng exists and is callable
-const _initPngFn = initPng;
-void _initPngFn;
 
-// Verify SlideImage.png is Uint8Array
+// Verify SlideImage.png is Buffer
 async function _verifyPngType(input: Uint8Array) {
   const results = await convertPptxToPng(input);
-  const _png: Uint8Array = results[0].png;
+  const _png: Buffer = results[0].png;
   void _png;
 }
 
-// Verify type structures
-const _options: ConvertOptions = { slides: [1], width: 960 };
+// Verify ConvertOptions includes fontDirs
+const _options: ConvertOptions = { slides: [1], width: 960, fontDirs: ["/custom/fonts"] };
 void _svgFn;
 void _pngFn;
 void _options;

@@ -21,8 +21,8 @@ rather than pixel-perfect rendering of every PowerPoint feature.
 
 ## Requirements
 
-- **Node.js >= 20** (does not work in browser environments)
-- Requires a platform supported by [sharp](https://sharp.pixelplumbing.com/), which is used for PNG conversion
+- **Node.js >= 20**
+- PNG conversion uses [sharp](https://sharp.pixelplumbing.com/) (librsvg-based)
 
 ## Installation
 
@@ -33,7 +33,7 @@ npm install pptx-glimpse
 ## Usage
 
 ```typescript
-import { readFileSync } from "fs";
+import { readFileSync, writeFileSync } from "fs";
 import { convertPptxToSvg, convertPptxToPng } from "pptx-glimpse";
 
 const pptx = readFileSync("presentation.pptx");
@@ -45,6 +45,67 @@ const svgResults = await convertPptxToSvg(pptx);
 // Convert to PNG
 const pngResults = await convertPptxToPng(pptx);
 // [{ slideNumber: 1, png: Buffer, width: 960, height: 540 }, ...]
+
+writeFileSync("slide1.png", pngResults[0].png);
+```
+
+### Options
+
+Both `convertPptxToSvg` and `convertPptxToPng` accept an optional `ConvertOptions` object.
+
+```typescript
+const results = await convertPptxToPng(pptx, {
+  slides: [1, 3], // Convert only slides 1 and 3
+  width: 1920, // Output width in pixels (default: 960)
+  logLevel: "warn", // Warning log level: "off" | "warn" | "error"
+  fontDirs: ["/custom/fonts"], // Additional font directories to search
+  fontMapping: {
+    "Custom Corp Font": "Noto Sans", // Custom font name mapping
+  },
+});
+```
+
+## Fonts
+
+### Automatic Font Loading
+
+pptx-glimpse automatically scans system font directories and loads fonts using [opentype.js](https://opentype.js.org/). Text in SVG output is converted to `<path>` elements, ensuring consistent rendering regardless of the environment.
+
+Default system font directories:
+
+| OS      | Directories                                                      |
+| ------- | ---------------------------------------------------------------- |
+| Linux   | `/usr/share/fonts`, `/usr/local/share/fonts`                     |
+| macOS   | `/System/Library/Fonts`, `/Library/Fonts`, `~/Library/Fonts`     |
+| Windows | `C:\Windows\Fonts`                                               |
+
+Use the `fontDirs` option to add custom font directories.
+
+### Font Mapping
+
+PPTX files often reference proprietary fonts (e.g., Calibri, Meiryo). pptx-glimpse maps these to open-source alternatives available on Google Fonts.
+
+Default mapping:
+
+| PPTX Font                           | Mapped to     |
+| ----------------------------------- | ------------- |
+| Calibri                             | Carlito       |
+| Arial                               | Arimo         |
+| Times New Roman                     | Tinos         |
+| Courier New                         | Cousine       |
+| Cambria                             | Caladea       |
+| Meiryo / Yu Gothic / MS Gothic etc. | Noto Sans JP  |
+| MS Mincho / Yu Mincho etc.          | Noto Serif JP |
+
+You can customize the mapping via the `fontMapping` option:
+
+```typescript
+const results = await convertPptxToSvg(pptx, {
+  fontMapping: {
+    "Custom Corp Font": "Noto Sans", // Add a new mapping
+    Arial: "Inter", // Override the default
+  },
+});
 ```
 
 ## Feature Support

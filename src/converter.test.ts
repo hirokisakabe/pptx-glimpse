@@ -276,9 +276,8 @@ describe("convertPptxToSvg", () => {
     expect(svg).toContain("<rect");
     // Should contain ellipse (orange)
     expect(svg).toContain("<ellipse");
-    // Should contain text
-    expect(svg).toContain("Hello World");
-    expect(svg).toContain("Rounded Rectangle");
+    // Should contain text (as <text> or converted to <path> by opentype.js)
+    expect(svg).toMatch(/<text|<path/);
   });
 
   it("has correct viewBox dimensions for 16:9", async () => {
@@ -489,27 +488,21 @@ describe("master placeholder text filtering", () => {
     return zip.generateAsync({ type: "nodebuffer" });
   }
 
-  it("does not render master placeholder text on actual slides", async () => {
+  it("does not render master placeholder shapes on actual slides", async () => {
     const pptx = await createPptxWithMasterPlaceholder();
     const results = await convertPptxToSvg(pptx);
     const svg = results[0].svg;
 
-    // Master placeholder template text should NOT appear
-    expect(svg).not.toContain("MASTER_TITLE_TEMPLATE");
-    expect(svg).not.toContain("MASTER_BODY_TEMPLATE");
+    // Master has 3 shapes: title placeholder (id=2), body placeholder (id=3), decorative (id=4)
+    // Only decorative (non-placeholder) should be rendered (red fill #FF0000)
+    // Placeholder shapes should be filtered out
 
-    // Slide's own text should appear
-    expect(svg).toContain("SLIDE_ACTUAL_TEXT");
-  });
+    // Decorative shape's red fill should appear
+    expect(svg).toContain("#FF0000");
 
-  it("renders non-placeholder decorative shapes from master", async () => {
-    const pptx = await createPptxWithMasterPlaceholder();
-    const results = await convertPptxToSvg(pptx);
-    const svg = results[0].svg;
-
-    // Non-placeholder master shapes (decorative) should still appear
-    // Text may be wrapped across multiple tspan elements, so check for a substring
-    expect(svg).toContain("MASTER_D");
+    // Count shape groups — should have decorative master shape + slide shape = 2 groups
+    const groupCount = (svg.match(/<g transform="translate/g) || []).length;
+    expect(groupCount).toBe(2);
   });
 });
 
@@ -710,27 +703,20 @@ describe("layout placeholder text filtering", () => {
     return zip.generateAsync({ type: "nodebuffer" });
   }
 
-  it("does not render layout placeholder text on actual slides", async () => {
+  it("does not render layout placeholder shapes on actual slides", async () => {
     const pptx = await createPptxWithLayoutPlaceholder();
     const results = await convertPptxToSvg(pptx);
     const svg = results[0].svg;
 
-    // Layout placeholder template text should NOT appear
-    expect(svg).not.toContain("LAYOUT_TITLE_TEMPLATE");
-    expect(svg).not.toContain("LAYOUT_SUBTITLE_TEMPLATE");
-    expect(svg).not.toContain("LAYOUT_DATE_TEMPLATE");
-    expect(svg).not.toContain("LAYOUT_FOOTER_TEMPLATE");
+    // Layout has 5 shapes: ctrTitle, subTitle, dt, ftr (all placeholders), decorative (non-placeholder)
+    // Only decorative (non-placeholder) should be rendered (blue fill #0000FF)
+    // Placeholder shapes should be filtered out
 
-    // Slide's own text should appear
-    expect(svg).toContain("SLIDE_ACTUAL_TEXT");
-  });
+    // Decorative shape's blue fill should appear
+    expect(svg).toContain("#0000FF");
 
-  it("renders non-placeholder decorative shapes from layout", async () => {
-    const pptx = await createPptxWithLayoutPlaceholder();
-    const results = await convertPptxToSvg(pptx);
-    const svg = results[0].svg;
-
-    // Non-placeholder layout shapes (decorative) should still appear
-    expect(svg).toContain("LAYOUT_D");
+    // Count shape groups — should have decorative layout shape + slide shape = 2 groups
+    const groupCount = (svg.match(/<g transform="translate/g) || []).length;
+    expect(groupCount).toBe(2);
   });
 });
