@@ -10,7 +10,8 @@ import { parsePptxData, parseSlideWithLayout } from "./pptx-data-parser.js";
 import type { FontMapping } from "./font-mapping.js";
 import { createFontMapping } from "./font-mapping.js";
 import { setFontMapping, resetFontMapping } from "./font-mapping-context.js";
-import { createOpentypeTextMeasurerFromBuffers } from "./opentype-helpers.js";
+import { createOpentypeSetupFromBuffers } from "./opentype-helpers.js";
+import { setTextPathFontResolver, resetTextPathFontResolver } from "./text-path-context.js";
 
 export interface FontOptions {
   /** resvg-wasm に渡すフォントファイルパス (Node.js 向け) */
@@ -65,12 +66,13 @@ export async function convertPptxToSvg(
   if (options?.textMeasurer) {
     setTextMeasurer(options.textMeasurer);
   } else if (options?.fonts?.fontBuffers && options.fonts.fontBuffers.length > 0) {
-    const measurer = await createOpentypeTextMeasurerFromBuffers(
+    const setup = await createOpentypeSetupFromBuffers(
       options.fonts.fontBuffers,
       options.fontMapping,
     );
-    if (measurer) {
-      setTextMeasurer(measurer);
+    if (setup) {
+      setTextMeasurer(setup.measurer);
+      setTextPathFontResolver(setup.fontResolver);
     }
   }
   setFontMapping(createFontMapping(options?.fontMapping));
@@ -106,6 +108,7 @@ export async function convertPptxToSvg(
     return results;
   } finally {
     resetTextMeasurer();
+    resetTextPathFontResolver();
     resetFontMapping();
   }
 }
