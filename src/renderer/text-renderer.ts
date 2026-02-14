@@ -310,7 +310,9 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
   } else if (bodyProperties.anchor === "b") {
     yStart = Math.max(marginTop, height - totalTextHeight - marginBottom);
   }
-  yStart += defaultNaturalHeight;
+  const firstParaFontSize = getParagraphFontSize(paragraphs[0], defaultFontSize) * fontScale;
+  const firstLineNaturalHeight = firstParaFontSize * defaultLineHeightRatio;
+  yStart += firstLineNaturalHeight * PX_PER_PT;
 
   const textElement = `<text x="0" y="${yStart}">${tspans.join("")}</text>`;
 
@@ -1142,7 +1144,9 @@ function renderTextBodyAsPath(
   } else if (bodyProperties.anchor === "b") {
     yStart = Math.max(marginTop, height - totalTextHeight - marginBottom);
   }
-  yStart += defaultNaturalHeight;
+  const firstParaFontSize = getParagraphFontSize(paragraphs[0], defaultFontSize) * fontScale;
+  const firstLineNaturalHeight = firstParaFontSize * defaultLineHeightRatio;
+  yStart += firstLineNaturalHeight * PX_PER_PT;
 
   // パスレンダリング
   const elements: string[] = [];
