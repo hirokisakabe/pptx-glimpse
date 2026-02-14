@@ -41,10 +41,10 @@ function resolveTextDimensions(
 ): {
   width: number;
   height: number;
-  marginLeft: number;
-  marginRight: number;
-  marginTop: number;
-  marginBottom: number;
+  marginLeftPx: number;
+  marginRightPx: number;
+  marginTopPx: number;
+  marginBottomPx: number;
 } {
   const vert = bodyProperties.vert;
 
@@ -53,10 +53,10 @@ function resolveTextDimensions(
     return {
       width: originalHeight,
       height: originalWidth,
-      marginLeft: emuToPixels(bodyProperties.marginTop),
-      marginRight: emuToPixels(bodyProperties.marginBottom),
-      marginTop: emuToPixels(bodyProperties.marginRight),
-      marginBottom: emuToPixels(bodyProperties.marginLeft),
+      marginLeftPx: emuToPixels(bodyProperties.marginTop),
+      marginRightPx: emuToPixels(bodyProperties.marginBottom),
+      marginTopPx: emuToPixels(bodyProperties.marginRight),
+      marginBottomPx: emuToPixels(bodyProperties.marginLeft),
     };
   }
 
@@ -65,10 +65,10 @@ function resolveTextDimensions(
     return {
       width: originalHeight,
       height: originalWidth,
-      marginLeft: emuToPixels(bodyProperties.marginBottom),
-      marginRight: emuToPixels(bodyProperties.marginTop),
-      marginTop: emuToPixels(bodyProperties.marginLeft),
-      marginBottom: emuToPixels(bodyProperties.marginRight),
+      marginLeftPx: emuToPixels(bodyProperties.marginBottom),
+      marginRightPx: emuToPixels(bodyProperties.marginTop),
+      marginTopPx: emuToPixels(bodyProperties.marginLeft),
+      marginBottomPx: emuToPixels(bodyProperties.marginRight),
     };
   }
 
@@ -76,10 +76,10 @@ function resolveTextDimensions(
   return {
     width: originalWidth,
     height: originalHeight,
-    marginLeft: emuToPixels(bodyProperties.marginLeft),
-    marginRight: emuToPixels(bodyProperties.marginRight),
-    marginTop: emuToPixels(bodyProperties.marginTop),
-    marginBottom: emuToPixels(bodyProperties.marginBottom),
+    marginLeftPx: emuToPixels(bodyProperties.marginLeft),
+    marginRightPx: emuToPixels(bodyProperties.marginRight),
+    marginTopPx: emuToPixels(bodyProperties.marginTop),
+    marginBottomPx: emuToPixels(bodyProperties.marginBottom),
   };
 }
 
@@ -93,16 +93,13 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
   const originalWidth = emuToPixels(transform.extentWidth);
   const originalHeight = emuToPixels(transform.extentHeight);
 
-  const { width, height, marginLeft, marginRight, marginTop, marginBottom } = resolveTextDimensions(
-    bodyProperties,
-    originalWidth,
-    originalHeight,
-  );
+  const { width, height, marginLeftPx, marginRightPx, marginTopPx, marginBottomPx } =
+    resolveTextDimensions(bodyProperties, originalWidth, originalHeight);
 
   const hasText = paragraphs.some((p) => p.runs.some((r) => r.text.length > 0));
   if (!hasText) return "";
 
-  const fullTextWidth = width - marginLeft - marginRight;
+  const fullTextWidth = width - marginLeftPx - marginRightPx;
   const numCol = bodyProperties.numCol ?? 1;
   const textWidth = numCol > 1 ? fullTextWidth / numCol : fullTextWidth;
   const defaultFontSize = getDefaultFontSize(paragraphs);
@@ -113,7 +110,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
 
   // normAutofit: テキストが図形からはみ出す場合に fontScale を動的に縮小
   if (bodyProperties.autoFit === "normAutofit" && shouldWrap) {
-    const availableHeight = height - marginTop - marginBottom;
+    const availableHeight = height - marginTopPx - marginBottomPx;
     fontScale = computeShrinkToFitScale(
       paragraphs,
       defaultFontSize,
@@ -124,11 +121,11 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
     );
   }
 
-  const scaledDefaultFontSize = defaultFontSize * fontScale;
+  const scaledDefaultFontSizePt = defaultFontSize * fontScale;
 
   // デフォルトフォントの行高さ比率
   const defaultLineHeightRatio = getDefaultLineHeightRatio(paragraphs);
-  const defaultNaturalHeight = scaledDefaultFontSize * defaultLineHeightRatio;
+  const defaultNaturalHeightPt = scaledDefaultFontSizePt * defaultLineHeightRatio;
 
   const tspans: string[] = [];
   let isFirstLine = true;
@@ -144,7 +141,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
     const paraIndent = emuToPixels(para.properties.indent);
 
     // テキスト開始位置 = bodyMarginLeft + paraMarginLeft
-    const textStartX = marginLeft + paraMarginLeft;
+    const textStartX = marginLeftPx + paraMarginLeft;
     // 箇条書き記号位置 = textStartX + indent (indent は通常負値)
     const bulletX = textStartX + paraIndent;
 
@@ -157,20 +154,20 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
       textStartX,
       effectiveTextWidth,
       width,
-      marginRight,
+      marginRightPx,
     );
 
     // 段落間隔の計算: max(前段落のspaceAfter, 現段落のspaceBefore)
-    const paraFontSize = getParagraphFontSize(para, defaultFontSize) * fontScale;
-    const spaceBeforePx = resolveSpacingPx(para.properties.spaceBefore, paraFontSize);
-    const paragraphGap = Math.max(prevSpaceAfterPx, spaceBeforePx);
+    const paraFontSizePt = getParagraphFontSize(para, defaultFontSize) * fontScale;
+    const spaceBeforePx = resolveSpacingPx(para.properties.spaceBefore, paraFontSizePt);
+    const paragraphGapPx = Math.max(prevSpaceAfterPx, spaceBeforePx);
 
     if (para.runs.length === 0 || !para.runs.some((r) => r.text.length > 0)) {
-      const emptyParaHeight = paraFontSize > 0 ? paraFontSize : defaultNaturalHeight;
-      const dy = computeDy(isFirstLine, emptyParaHeight, DEFAULT_LINE_SPACING, paragraphGap);
+      const emptyParaHeightPt = paraFontSizePt > 0 ? paraFontSizePt : defaultNaturalHeightPt;
+      const dy = computeDy(isFirstLine, emptyParaHeightPt, DEFAULT_LINE_SPACING, paragraphGapPx);
       tspans.push(`<tspan x="${xPos}" dy="${dy}" text-anchor="${anchorValue}"> </tspan>`);
       isFirstLine = false;
-      prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSize);
+      prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSizePt);
       continue;
     }
 
@@ -178,18 +175,18 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
       const wrappedLines = wrapParagraph(
         para,
         effectiveTextWidth,
-        scaledDefaultFontSize,
+        scaledDefaultFontSizePt,
         fontScale,
       );
       for (let lineIdx = 0; lineIdx < wrappedLines.length; lineIdx++) {
         const line = wrappedLines[lineIdx];
-        const lineGap = lineIdx === 0 ? paragraphGap : 0;
+        const lineGapPx = lineIdx === 0 ? paragraphGapPx : 0;
         if (line.segments.length === 0) {
           const dy = computeDy(
             isFirstLine,
-            defaultNaturalHeight,
+            defaultNaturalHeightPt,
             getLineSpacing(para, lnSpcReduction),
-            lineGap,
+            lineGapPx,
           );
           tspans.push(`<tspan x="${xPos}" dy="${dy}" text-anchor="${anchorValue}"> </tspan>`);
           isFirstLine = false;
@@ -199,16 +196,16 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
         // 最初の行に箇条書き記号を挿入
         if (lineIdx === 0 && bulletText) {
           const lineFontSize = getLineFontSize(line.segments, defaultFontSize) * fontScale;
-          const lineNaturalHeight = computeLineNaturalHeight(
+          const lineNaturalHeightPt = computeLineNaturalHeight(
             line.segments,
             defaultFontSize,
             fontScale,
           );
           const dy = computeDy(
             isFirstLine,
-            lineNaturalHeight,
+            lineNaturalHeightPt,
             getLineSpacing(para, lnSpcReduction),
-            paragraphGap,
+            paragraphGapPx,
           );
           const bulletStyles = buildBulletStyleAttrs(para.properties, lineFontSize, fontScale);
           tspans.push(
@@ -225,16 +222,16 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
             const seg = line.segments[segIdx];
 
             if (segIdx === 0) {
-              const lineNaturalHeight = computeLineNaturalHeight(
+              const lineNaturalHeightPt = computeLineNaturalHeight(
                 line.segments,
                 defaultFontSize,
                 fontScale,
               );
               const dy = computeDy(
                 isFirstLine,
-                lineNaturalHeight,
+                lineNaturalHeightPt,
                 getLineSpacing(para, lnSpcReduction),
-                lineGap,
+                lineGapPx,
               );
               const prefix = `x="${xPos}" dy="${dy}" text-anchor="${anchorValue}" `;
               tspans.push(renderSegment(seg.text, seg.properties, fontScale, prefix));
@@ -251,12 +248,12 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
       if (bulletText) {
         const firstRun = para.runs.find((r) => r.text.length > 0);
         const fontSize = (firstRun?.properties.fontSize ?? defaultFontSize) * fontScale;
-        const naturalHeight = computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
+        const naturalHeightPt = computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
         const dy = computeDy(
           isFirstLine,
-          naturalHeight,
+          naturalHeightPt,
           getLineSpacing(para, lnSpcReduction),
-          paragraphGap,
+          paragraphGapPx,
         );
         const bulletStyles = buildBulletStyleAttrs(para.properties, fontSize, fontScale);
         tspans.push(
@@ -274,12 +271,12 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
             const prefix = `x="${xPos}" text-anchor="${anchorValue}" `;
             tspans.push(renderSegment(run.text, run.properties, fontScale, prefix));
           } else {
-            const naturalHeight = computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
+            const naturalHeightPt = computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
             const dy = computeDy(
               isFirstLine,
-              naturalHeight,
+              naturalHeightPt,
               getLineSpacing(para, lnSpcReduction),
-              paragraphGap,
+              paragraphGapPx,
             );
             const prefix = `x="${xPos}" dy="${dy}" text-anchor="${anchorValue}" `;
             tspans.push(renderSegment(run.text, run.properties, fontScale, prefix));
@@ -292,27 +289,27 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
       isFirstLine = false;
     }
 
-    prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSize);
+    prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSizePt);
   }
 
   // 垂直位置の計算
-  let yStart = marginTop;
+  let yStart = marginTopPx;
   const totalTextHeight = estimateTextHeight(
     paragraphs,
-    scaledDefaultFontSize,
+    scaledDefaultFontSizePt,
     shouldWrap,
     textWidth,
     lnSpcReduction,
     fontScale,
   );
   if (bodyProperties.anchor === "ctr") {
-    yStart = Math.max(marginTop, (height - totalTextHeight) / 2);
+    yStart = Math.max(marginTopPx, (height - totalTextHeight) / 2);
   } else if (bodyProperties.anchor === "b") {
-    yStart = Math.max(marginTop, height - totalTextHeight - marginBottom);
+    yStart = Math.max(marginTopPx, height - totalTextHeight - marginBottomPx);
   }
-  const firstParaFontSize = getParagraphFontSize(paragraphs[0], defaultFontSize) * fontScale;
-  const firstLineNaturalHeight = firstParaFontSize * defaultLineHeightRatio;
-  yStart += firstLineNaturalHeight * PX_PER_PT;
+  const firstParaFontSizePt = getParagraphFontSize(paragraphs[0], defaultFontSize) * fontScale;
+  const firstLineNaturalHeightPt = firstParaFontSizePt * defaultLineHeightRatio;
+  yStart += firstLineNaturalHeightPt * PX_PER_PT;
 
   const textElement = `<text x="0" y="${yStart}">${tspans.join("")}</text>`;
 
@@ -444,18 +441,18 @@ function buildBulletStyleAttrs(
 
 function getAlignmentInfo(
   alignment: "l" | "ctr" | "r" | "just",
-  marginLeft: number,
+  marginLeftPx: number,
   textWidth: number,
   width: number,
-  marginRight: number,
+  marginRightPx: number,
 ): { xPos: number; anchorValue: string } {
   switch (alignment) {
     case "ctr":
-      return { xPos: marginLeft + textWidth / 2, anchorValue: "middle" };
+      return { xPos: marginLeftPx + textWidth / 2, anchorValue: "middle" };
     case "r":
-      return { xPos: width - marginRight, anchorValue: "end" };
+      return { xPos: width - marginRightPx, anchorValue: "end" };
     default:
-      return { xPos: marginLeft, anchorValue: "start" };
+      return { xPos: marginLeftPx, anchorValue: "start" };
   }
 }
 
@@ -494,12 +491,12 @@ function computeDy(
   isFirstLine: boolean,
   fontSizePt: number,
   lineSpacingFactor: number,
-  paragraphGap: number,
+  paragraphGapPx: number,
 ): string {
   if (isFirstLine) return "0";
 
   const lineHeight = fontSizePt * PX_PER_PT * lineSpacingFactor;
-  const dy = lineHeight + paragraphGap;
+  const dy = lineHeight + paragraphGapPx;
 
   return dy.toFixed(2);
 }
@@ -764,20 +761,17 @@ export function computeSpAutofitHeight(textBody: TextBody, transform: Transform)
   const originalWidth = emuToPixels(transform.extentWidth);
   const originalHeight = emuToPixels(transform.extentHeight);
 
-  const { width, height, marginLeft, marginRight, marginTop, marginBottom } = resolveTextDimensions(
-    bodyProperties,
-    originalWidth,
-    originalHeight,
-  );
+  const { width, height, marginLeftPx, marginRightPx, marginTopPx, marginBottomPx } =
+    resolveTextDimensions(bodyProperties, originalWidth, originalHeight);
 
-  const fullTextWidth = width - marginLeft - marginRight;
+  const fullTextWidth = width - marginLeftPx - marginRightPx;
   const numCol = bodyProperties.numCol ?? 1;
   const textWidth = numCol > 1 ? fullTextWidth / numCol : fullTextWidth;
   const defaultFontSize = getDefaultFontSize(paragraphs);
   const shouldWrap = bodyProperties.wrap !== "none";
 
   const textHeight = estimateTextHeight(paragraphs, defaultFontSize, shouldWrap, textWidth);
-  const requiredHeightPx = textHeight + marginTop + marginBottom;
+  const requiredHeightPx = textHeight + marginTopPx + marginBottomPx;
 
   if (requiredHeightPx <= height) return null;
 
@@ -834,12 +828,12 @@ function estimateTextHeight(
     const para = paragraphs[pIdx];
     const lineSpacing = getLineSpacing(para, lnSpcReduction);
     const isEmpty = !para.runs.some((r) => r.text.length > 0);
-    const naturalHeight =
+    const naturalHeightPt =
       isEmpty && para.endParaRunProperties?.fontSize
         ? para.endParaRunProperties.fontSize * fontScale * defaultRatio
         : computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
     const lineHeight =
-      (naturalHeight > 0 ? naturalHeight : defaultFontSize * fontScale * defaultRatio) *
+      (naturalHeightPt > 0 ? naturalHeightPt : defaultFontSize * fontScale * defaultRatio) *
       PX_PER_PT *
       lineSpacing;
 
@@ -854,13 +848,13 @@ function estimateTextHeight(
     totalHeight += lineCount * lineHeight;
 
     if (pIdx > 0) {
-      const paraFontSize = getParagraphFontSize(para, defaultFontSize) * fontScale;
-      const spaceBeforePx = resolveSpacingPx(para.properties.spaceBefore, paraFontSize);
+      const paraFontSizePt = getParagraphFontSize(para, defaultFontSize) * fontScale;
+      const spaceBeforePx = resolveSpacingPx(para.properties.spaceBefore, paraFontSizePt);
       totalHeight += Math.max(prevSpaceAfterPx, spaceBeforePx);
     }
 
-    const paraFontSizeForAfter = getParagraphFontSize(para, defaultFontSize) * fontScale;
-    prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSizeForAfter);
+    const paraFontSizeForAfterPt = getParagraphFontSize(para, defaultFontSize) * fontScale;
+    prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSizeForAfterPt);
   }
 
   return totalHeight;
@@ -879,14 +873,14 @@ function computePathLineX(
   textStartX: number,
   effectiveTextWidth: number,
   width: number,
-  marginRight: number,
+  marginRightPx: number,
   lineWidth: number,
 ): number {
   switch (alignment) {
     case "ctr":
       return textStartX + (effectiveTextWidth - lineWidth) / 2;
     case "r":
-      return width - marginRight - lineWidth;
+      return width - marginRightPx - lineWidth;
     default:
       return textStartX;
   }
@@ -1095,16 +1089,13 @@ function renderTextBodyAsPath(
   const originalWidth = emuToPixels(transform.extentWidth);
   const originalHeight = emuToPixels(transform.extentHeight);
 
-  const { width, height, marginLeft, marginRight, marginTop, marginBottom } = resolveTextDimensions(
-    bodyProperties,
-    originalWidth,
-    originalHeight,
-  );
+  const { width, height, marginLeftPx, marginRightPx, marginTopPx, marginBottomPx } =
+    resolveTextDimensions(bodyProperties, originalWidth, originalHeight);
 
   const hasText = paragraphs.some((p) => p.runs.some((r) => r.text.length > 0));
   if (!hasText) return "";
 
-  const fullTextWidth = width - marginLeft - marginRight;
+  const fullTextWidth = width - marginLeftPx - marginRightPx;
   const numCol = bodyProperties.numCol ?? 1;
   const textWidth = numCol > 1 ? fullTextWidth / numCol : fullTextWidth;
   const defaultFontSize = getDefaultFontSize(paragraphs);
@@ -1114,7 +1105,7 @@ function renderTextBodyAsPath(
   const lnSpcReduction = bodyProperties.lnSpcReduction;
 
   if (bodyProperties.autoFit === "normAutofit" && shouldWrap) {
-    const availableHeight = height - marginTop - marginBottom;
+    const availableHeight = height - marginTopPx - marginBottomPx;
     fontScale = computeShrinkToFitScale(
       paragraphs,
       defaultFontSize,
@@ -1125,28 +1116,28 @@ function renderTextBodyAsPath(
     );
   }
 
-  const scaledDefaultFontSize = defaultFontSize * fontScale;
+  const scaledDefaultFontSizePt = defaultFontSize * fontScale;
   const defaultLineHeightRatio = getDefaultLineHeightRatio(paragraphs);
-  const defaultNaturalHeight = scaledDefaultFontSize * defaultLineHeightRatio;
+  const defaultNaturalHeightPt = scaledDefaultFontSizePt * defaultLineHeightRatio;
 
   // 垂直位置の計算（既存ロジック再利用）
-  let yStart = marginTop;
+  let yStart = marginTopPx;
   const totalTextHeight = estimateTextHeight(
     paragraphs,
-    scaledDefaultFontSize,
+    scaledDefaultFontSizePt,
     shouldWrap,
     textWidth,
     lnSpcReduction,
     fontScale,
   );
   if (bodyProperties.anchor === "ctr") {
-    yStart = Math.max(marginTop, (height - totalTextHeight) / 2);
+    yStart = Math.max(marginTopPx, (height - totalTextHeight) / 2);
   } else if (bodyProperties.anchor === "b") {
-    yStart = Math.max(marginTop, height - totalTextHeight - marginBottom);
+    yStart = Math.max(marginTopPx, height - totalTextHeight - marginBottomPx);
   }
-  const firstParaFontSize = getParagraphFontSize(paragraphs[0], defaultFontSize) * fontScale;
-  const firstLineNaturalHeight = firstParaFontSize * defaultLineHeightRatio;
-  yStart += firstLineNaturalHeight * PX_PER_PT;
+  const firstParaFontSizePt = getParagraphFontSize(paragraphs[0], defaultFontSize) * fontScale;
+  const firstLineNaturalHeightPt = firstParaFontSizePt * defaultLineHeightRatio;
+  yStart += firstLineNaturalHeightPt * PX_PER_PT;
 
   // パスレンダリング
   const elements: string[] = [];
@@ -1158,24 +1149,24 @@ function renderTextBodyAsPath(
   for (const para of paragraphs) {
     const paraMarginLeft = emuToPixels(para.properties.marginLeft);
     const paraIndent = emuToPixels(para.properties.indent);
-    const textStartX = marginLeft + paraMarginLeft;
+    const textStartX = marginLeftPx + paraMarginLeft;
     const bulletX = textStartX + paraIndent;
     const effectiveTextWidth = textWidth - paraMarginLeft;
 
     const bulletText = resolveBulletText(para.properties, autoNumCounters);
 
-    const paraFontSize = getParagraphFontSize(para, defaultFontSize) * fontScale;
-    const spaceBeforePx = resolveSpacingPx(para.properties.spaceBefore, paraFontSize);
-    const paragraphGap = Math.max(prevSpaceAfterPx, spaceBeforePx);
+    const paraFontSizePt = getParagraphFontSize(para, defaultFontSize) * fontScale;
+    const spaceBeforePx = resolveSpacingPx(para.properties.spaceBefore, paraFontSizePt);
+    const paragraphGapPx = Math.max(prevSpaceAfterPx, spaceBeforePx);
 
     // 空段落
     if (para.runs.length === 0 || !para.runs.some((r) => r.text.length > 0)) {
       if (!isFirstLine) {
-        const emptyParaHeight = paraFontSize > 0 ? paraFontSize : defaultNaturalHeight;
-        currentY += emptyParaHeight * PX_PER_PT * DEFAULT_LINE_SPACING + paragraphGap;
+        const emptyParaHeightPt = paraFontSizePt > 0 ? paraFontSizePt : defaultNaturalHeightPt;
+        currentY += emptyParaHeightPt * PX_PER_PT * DEFAULT_LINE_SPACING + paragraphGapPx;
       }
       isFirstLine = false;
-      prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSize);
+      prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSizePt);
       continue;
     }
 
@@ -1183,32 +1174,32 @@ function renderTextBodyAsPath(
       const wrappedLines = wrapParagraph(
         para,
         effectiveTextWidth,
-        scaledDefaultFontSize,
+        scaledDefaultFontSizePt,
         fontScale,
       );
 
       for (let lineIdx = 0; lineIdx < wrappedLines.length; lineIdx++) {
         const line = wrappedLines[lineIdx];
-        const lineGap = lineIdx === 0 ? paragraphGap : 0;
+        const lineGapPx = lineIdx === 0 ? paragraphGapPx : 0;
 
         if (line.segments.length === 0) {
           if (!isFirstLine) {
             currentY +=
-              defaultNaturalHeight * PX_PER_PT * getLineSpacing(para, lnSpcReduction) + lineGap;
+              defaultNaturalHeightPt * PX_PER_PT * getLineSpacing(para, lnSpcReduction) + lineGapPx;
           }
           isFirstLine = false;
           continue;
         }
 
         // 行の高さ計算と y 位置更新
-        const lineNaturalHeight = computeLineNaturalHeight(
+        const lineNaturalHeightPt = computeLineNaturalHeight(
           line.segments,
           defaultFontSize,
           fontScale,
         );
         if (!isFirstLine) {
           currentY +=
-            lineNaturalHeight * PX_PER_PT * getLineSpacing(para, lnSpcReduction) + lineGap;
+            lineNaturalHeightPt * PX_PER_PT * getLineSpacing(para, lnSpcReduction) + lineGapPx;
         }
 
         // 行の幅を計測して alignment 用の x 位置を計算
@@ -1218,7 +1209,7 @@ function renderTextBodyAsPath(
           textStartX,
           effectiveTextWidth,
           width,
-          marginRight,
+          marginRightPx,
           lineWidth,
         );
 
@@ -1259,9 +1250,10 @@ function renderTextBodyAsPath(
       }
     } else {
       // wrap="none": 折り返しなし
-      const naturalHeight = computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
+      const naturalHeightPt = computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
       if (!isFirstLine) {
-        currentY += naturalHeight * PX_PER_PT * getLineSpacing(para, lnSpcReduction) + paragraphGap;
+        currentY +=
+          naturalHeightPt * PX_PER_PT * getLineSpacing(para, lnSpcReduction) + paragraphGapPx;
       }
 
       // 行の幅を計測
@@ -1274,7 +1266,7 @@ function renderTextBodyAsPath(
         textStartX,
         effectiveTextWidth,
         width,
-        marginRight,
+        marginRightPx,
         lineWidth,
       );
 
@@ -1316,7 +1308,7 @@ function renderTextBodyAsPath(
       isFirstLine = false;
     }
 
-    prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSize);
+    prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSizePt);
   }
 
   const content = elements.join("");
