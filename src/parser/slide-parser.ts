@@ -45,6 +45,7 @@ import {
   buildRelsPath,
 } from "./relationship-parser.js";
 import { hundredthPointToPoint } from "../utils/emu.js";
+import { asEmu, asHundredthPt } from "../utils/unit-types.js";
 import {
   parseListStyle,
   parseDefaultRunProperties,
@@ -625,8 +626,8 @@ function parseStretchFillRect(stretchNode: XmlNode | undefined): StretchFillRect
 function parseTileInfo(node: XmlNode | undefined): TileInfo | null {
   if (!node) return null;
   return {
-    tx: Number(node["@_tx"] ?? 0),
-    ty: Number(node["@_ty"] ?? 0),
+    tx: asEmu(Number(node["@_tx"] ?? 0)),
+    ty: asEmu(Number(node["@_ty"] ?? 0)),
     sx: Number(node["@_sx"] ?? 100000) / 100000,
     sy: Number(node["@_sy"] ?? 100000) / 100000,
     flip: ((node["@_flip"] as string) ?? "none") as TileInfo["flip"],
@@ -681,10 +682,10 @@ function parseGroup(
   const childOff = xfrm?.chOff as XmlNode | undefined;
   const childExt = xfrm?.chExt as XmlNode | undefined;
   const childTransform: Transform = {
-    offsetX: Number(childOff?.["@_x"] ?? 0),
-    offsetY: Number(childOff?.["@_y"] ?? 0),
-    extentWidth: Number(childExt?.["@_cx"] ?? transform.extentWidth),
-    extentHeight: Number(childExt?.["@_cy"] ?? transform.extentHeight),
+    offsetX: asEmu(Number(childOff?.["@_x"] ?? 0)),
+    offsetY: asEmu(Number(childOff?.["@_y"] ?? 0)),
+    extentWidth: asEmu(Number(childExt?.["@_cx"] ?? transform.extentWidth)),
+    extentHeight: asEmu(Number(childExt?.["@_cy"] ?? transform.extentHeight)),
     rotation: 0,
     flipH: false,
     flipV: false,
@@ -861,10 +862,10 @@ function parseSmartArt(
   const childOff = grpXfrm?.chOff as XmlNode | undefined;
   const childExt = grpXfrm?.chExt as XmlNode | undefined;
   const childTransform: Transform = {
-    offsetX: Number(childOff?.["@_x"] ?? 0),
-    offsetY: Number(childOff?.["@_y"] ?? 0),
-    extentWidth: Number(childExt?.["@_cx"] ?? transform.extentWidth),
-    extentHeight: Number(childExt?.["@_cy"] ?? transform.extentHeight),
+    offsetX: asEmu(Number(childOff?.["@_x"] ?? 0)),
+    offsetY: asEmu(Number(childOff?.["@_y"] ?? 0)),
+    extentWidth: asEmu(Number(childExt?.["@_cx"] ?? transform.extentWidth)),
+    extentHeight: asEmu(Number(childExt?.["@_cy"] ?? transform.extentHeight)),
     rotation: 0,
     flipH: false,
     flipV: false,
@@ -910,27 +911,27 @@ function parseTransform(xfrm: XmlNode | undefined): Transform | null {
   const ext = xfrm.ext as XmlNode | undefined;
   if (!off || !ext) return null;
 
-  let offsetX = Number(off["@_x"] ?? 0);
-  let offsetY = Number(off["@_y"] ?? 0);
-  let extentWidth = Number(ext["@_cx"] ?? 0);
-  let extentHeight = Number(ext["@_cy"] ?? 0);
+  let offsetX = asEmu(Number(off["@_x"] ?? 0));
+  let offsetY = asEmu(Number(off["@_y"] ?? 0));
+  let extentWidth = asEmu(Number(ext["@_cx"] ?? 0));
+  let extentHeight = asEmu(Number(ext["@_cy"] ?? 0));
   let rotation = Number(xfrm["@_rot"] ?? 0);
 
   if (Number.isNaN(offsetX)) {
     debug("transform.nan", "NaN detected in transform offsetX, defaulting to 0");
-    offsetX = 0;
+    offsetX = asEmu(0);
   }
   if (Number.isNaN(offsetY)) {
     debug("transform.nan", "NaN detected in transform offsetY, defaulting to 0");
-    offsetY = 0;
+    offsetY = asEmu(0);
   }
   if (Number.isNaN(extentWidth)) {
     debug("transform.nan", "NaN detected in transform extentWidth, defaulting to 0");
-    extentWidth = 0;
+    extentWidth = asEmu(0);
   }
   if (Number.isNaN(extentHeight)) {
     debug("transform.nan", "NaN detected in transform extentHeight, defaulting to 0");
-    extentHeight = 0;
+    extentHeight = asEmu(0);
   }
   if (Number.isNaN(rotation)) {
     debug("transform.nan", "NaN detected in transform rotation, defaulting to 0");
@@ -1016,10 +1017,10 @@ export function parseTextBody(
 
   const bodyProperties: BodyProperties = {
     anchor: (bodyPr?.["@_anchor"] as "t" | "ctr" | "b") ?? "t",
-    marginLeft: Number(bodyPr?.["@_lIns"] ?? 91440),
-    marginRight: Number(bodyPr?.["@_rIns"] ?? 91440),
-    marginTop: Number(bodyPr?.["@_tIns"] ?? 45720),
-    marginBottom: Number(bodyPr?.["@_bIns"] ?? 45720),
+    marginLeft: asEmu(Number(bodyPr?.["@_lIns"] ?? 91440)),
+    marginRight: asEmu(Number(bodyPr?.["@_rIns"] ?? 91440)),
+    marginTop: asEmu(Number(bodyPr?.["@_tIns"] ?? 45720)),
+    marginBottom: asEmu(Number(bodyPr?.["@_bIns"] ?? 45720)),
     wrap: (bodyPr?.["@_wrap"] as "square" | "none") ?? "square",
     autoFit,
     fontScale,
@@ -1100,13 +1101,13 @@ function parseBullet(pPr: XmlNode | undefined, colorResolver: ColorResolver) {
 function parseSpacing(spc: XmlNode | undefined): SpacingValue {
   if (spc?.spcPts) {
     const spcPts = spc.spcPts as XmlNode;
-    return { type: "pts", value: Number(spcPts["@_val"]) };
+    return { type: "pts", value: asHundredthPt(Number(spcPts["@_val"])) };
   }
   if (spc?.spcPct) {
     const spcPct = spc.spcPct as XmlNode;
     return { type: "pct", value: Number(spcPct["@_val"]) };
   }
-  return { type: "pts", value: 0 };
+  return { type: "pts", value: asHundredthPt(0) };
 }
 
 function parseTabStops(pPr: XmlNode | undefined): TabStop[] {
@@ -1118,7 +1119,7 @@ function parseTabStops(pPr: XmlNode | undefined): TabStop[] {
 
   const tabArr = Array.isArray(tabs) ? (tabs as XmlNode[]) : [tabs as XmlNode];
   return tabArr.map((tab) => ({
-    position: Number(tab["@_pos"] ?? 0),
+    position: asEmu(Number(tab["@_pos"] ?? 0)),
     alignment: (tab["@_algn"] as TabStop["alignment"]) ?? "l",
   }));
 }
@@ -1183,9 +1184,13 @@ function parseParagraph(
     bulletColor,
     bulletSizePct,
     marginLeft:
-      pPr?.["@_marL"] !== undefined ? Number(pPr["@_marL"]) : (lstLevelProps?.marginLeft ?? 0),
+      pPr?.["@_marL"] !== undefined
+        ? asEmu(Number(pPr["@_marL"]))
+        : (lstLevelProps?.marginLeft ?? asEmu(0)),
     indent:
-      pPr?.["@_indent"] !== undefined ? Number(pPr["@_indent"]) : (lstLevelProps?.indent ?? 0),
+      pPr?.["@_indent"] !== undefined
+        ? asEmu(Number(pPr["@_indent"]))
+        : (lstLevelProps?.indent ?? asEmu(0)),
     tabStops,
   };
 
@@ -1364,7 +1369,7 @@ function parseRunProperties(
   const cs = rPr.cs as XmlNode | undefined;
 
   const fontSize = rPr["@_sz"]
-    ? hundredthPointToPoint(Number(rPr["@_sz"]))
+    ? hundredthPointToPoint(asHundredthPt(Number(rPr["@_sz"])))
     : (defaults?.fontSize ?? null);
   const fontFamily = resolveThemeFont(
     (latin?.["@_typeface"] as string | undefined) ?? defaults?.fontFamily ?? null,
@@ -1405,7 +1410,7 @@ function parseRunProperties(
   const ln = rPr.ln as XmlNode | undefined;
   let outline: TextOutline | null = null;
   if (ln) {
-    const lnWidth = Number(ln["@_w"] ?? 12700);
+    const lnWidth = asEmu(Number(ln["@_w"] ?? 12700));
     const lnFill = ln.solidFill as XmlNode | undefined;
     const lnColor = lnFill ? colorResolver.resolve(lnFill) : null;
     if (lnColor) {

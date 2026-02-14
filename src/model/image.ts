@@ -1,5 +1,6 @@
 import type { Transform } from "./shape.js";
 import type { EffectList, BlipEffects } from "./effect.js";
+import type { Emu } from "../utils/unit-types.js";
 
 export interface SrcRect {
   left: number;
@@ -16,8 +17,8 @@ export interface StretchFillRect {
 }
 
 export interface TileInfo {
-  tx: number;
-  ty: number;
+  tx: Emu;
+  ty: Emu;
   sx: number;
   sy: number;
   flip: "none" | "x" | "y" | "xy";

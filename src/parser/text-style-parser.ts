@@ -6,6 +6,7 @@ import type {
 import type { FontScheme } from "../model/theme.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import { hundredthPointToPoint } from "../utils/emu.js";
+import { asEmu, asHundredthPt } from "../utils/unit-types.js";
 import type { XmlNode } from "./xml-parser.js";
 
 export function parseDefaultRunProperties(
@@ -17,7 +18,7 @@ export function parseDefaultRunProperties(
   const result: DefaultRunProperties = {};
 
   if (defRPr["@_sz"] !== undefined) {
-    result.fontSize = hundredthPointToPoint(Number(defRPr["@_sz"]));
+    result.fontSize = hundredthPointToPoint(asHundredthPt(Number(defRPr["@_sz"])));
   }
   const latin = defRPr.latin as XmlNode | undefined;
   if (latin?.["@_typeface"] !== undefined) {
@@ -69,10 +70,10 @@ export function parseParagraphLevelProperties(
     result.alignment = node["@_algn"] as "l" | "ctr" | "r" | "just";
   }
   if (node["@_marL"] !== undefined) {
-    result.marginLeft = Number(node["@_marL"]);
+    result.marginLeft = asEmu(Number(node["@_marL"]));
   }
   if (node["@_indent"] !== undefined) {
-    result.indent = Number(node["@_indent"]);
+    result.indent = asEmu(Number(node["@_indent"]));
   }
 
   const defRPr = parseDefaultRunProperties(node.defRPr as XmlNode, colorResolver);

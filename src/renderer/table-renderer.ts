@@ -1,5 +1,7 @@
 import type { TableElement } from "../model/table.js";
 import type { Transform } from "../model/shape.js";
+import type { Emu } from "../utils/unit-types.js";
+import { asEmu } from "../utils/unit-types.js";
 import type { RenderResult } from "./render-result.js";
 import { emuToPixels } from "../utils/emu.js";
 import { buildTransformAttr } from "./transform.js";
@@ -72,8 +74,8 @@ export function renderTable(element: TableElement): RenderResult {
       // Cell text
       if (cell.textBody) {
         const cellTransform: Transform = {
-          offsetX: 0,
-          offsetY: 0,
+          offsetX: asEmu(0),
+          offsetY: asEmu(0),
           extentWidth: pixelsToEmu(cellW),
           extentHeight: pixelsToEmu(cellH),
           rotation: 0,
@@ -105,6 +107,6 @@ function computeSpannedSize(sizes: number[], startIdx: number, span: number): nu
   return total;
 }
 
-function pixelsToEmu(px: number): number {
-  return (px / 96) * 914400;
+function pixelsToEmu(px: number): Emu {
+  return asEmu((px / 96) * 914400);
 }

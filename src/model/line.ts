@@ -1,4 +1,5 @@
 import type { GradientFill, SolidFill } from "./fill.js";
+import type { Emu } from "../utils/unit-types.js";
 
 export type ArrowType = "none" | "triangle" | "stealth" | "diamond" | "oval" | "arrow";
 export type ArrowSize = "sm" | "med" | "lg";
@@ -13,7 +14,7 @@ export type LineCap = "butt" | "round" | "square";
 export type LineJoin = "miter" | "round" | "bevel";
 
 export interface Outline {
-  width: number;
+  width: Emu;
   fill: SolidFill | GradientFill | null;
   dashStyle: DashStyle;
   customDash?: number[];

@@ -8,6 +8,7 @@ import type {
 import type { ResolvedColor } from "../model/fill.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import type { XmlNode } from "./xml-parser.js";
+import { asEmu } from "../utils/unit-types.js";
 import { warn } from "../warning-logger.js";
 
 const PRESET_COLORS: Record<string, string> = {
@@ -53,7 +54,7 @@ function parseBiLevel(node: XmlNode | undefined): BiLevelEffect | null {
 function parseBlur(node: XmlNode | undefined): BlurEffect | null {
   if (!node) return null;
   return {
-    radius: Number(node["@_rad"] ?? 0),
+    radius: asEmu(Number(node["@_rad"] ?? 0)),
     grow: node["@_grow"] !== "0",
   };
 }

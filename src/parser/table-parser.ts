@@ -4,6 +4,7 @@ import type { FontScheme } from "../model/theme.js";
 import { parseFillFromNode, parseOutline } from "./fill-parser.js";
 import { parseTextBody } from "./slide-parser.js";
 import type { XmlNode } from "./xml-parser.js";
+import { asEmu } from "../utils/unit-types.js";
 
 export function parseTable(
   tblNode: XmlNode,
@@ -25,7 +26,7 @@ function parseColumns(tblGrid: XmlNode): TableColumn[] {
 
   const gridCols = (tblGrid.gridCol as XmlNode[] | undefined) ?? [];
   return gridCols.map((col) => ({
-    width: Number(col["@_w"] ?? 0),
+    width: asEmu(Number(col["@_w"] ?? 0)),
   }));
 }
 
@@ -39,7 +40,7 @@ function parseRows(
   const trArr = Array.isArray(trList) ? (trList as XmlNode[]) : [trList];
   const rows: TableRow[] = [];
   for (const tr of trArr) {
-    const height = Number(tr["@_h"] ?? 0);
+    const height = asEmu(Number(tr["@_h"] ?? 0));
     const cells = parseCells(tr.tc as XmlNode, colorResolver, fontScheme);
     rows.push({ height, cells });
   }
