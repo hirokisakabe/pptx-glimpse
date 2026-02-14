@@ -1,39 +1,40 @@
 import type { ImageElement } from "../model/image.js";
+import type { RenderResult } from "./render-result.js";
 import { renderEffects } from "./effect-renderer.js";
 import { renderBlipEffects } from "./blip-effect-renderer.js";
 import { emuToPixels } from "../utils/emu.js";
 import { buildTransformAttr } from "./transform.js";
 
-export function renderImage(image: ImageElement): string {
+export function renderImage(image: ImageElement): RenderResult {
   const w = emuToPixels(image.transform.extentWidth);
   const h = emuToPixels(image.transform.extentHeight);
   const transformAttr = buildTransformAttr(image.transform);
 
   if (image.mimeType === "image/emf" || image.mimeType === "image/wmf") {
-    return renderPlaceholder(image.mimeType, w, h, transformAttr);
+    return { content: renderPlaceholder(image.mimeType, w, h, transformAttr), defs: [] };
   }
 
   const effectResult = renderEffects(image.effects);
   const blipEffectResult = renderBlipEffects(image.blipEffects);
 
-  const parts: string[] = [];
-  if (effectResult.filterDefs) parts.push(effectResult.filterDefs);
-  if (blipEffectResult.filterDefs) parts.push(blipEffectResult.filterDefs);
+  const defs: string[] = [];
+  if (effectResult.filterDefs) defs.push(effectResult.filterDefs);
+  if (blipEffectResult.filterDefs) defs.push(blipEffectResult.filterDefs);
 
   const filterAttr = effectResult.filterAttr ? ` ${effectResult.filterAttr}` : "";
   const blipFilterAttr = blipEffectResult.filterAttr ? ` ${blipEffectResult.filterAttr}` : "";
 
   if (image.tile) {
-    return renderTiled(image, w, h, transformAttr, filterAttr, blipFilterAttr, parts);
+    return renderTiled(image, w, h, transformAttr, filterAttr, blipFilterAttr, defs);
   }
 
   const imgTag = buildImageTag(image, w, h);
 
   let inner = imgTag;
   if (blipFilterAttr) inner = `<g${blipFilterAttr}>${inner}</g>`;
-  parts.push(`<g transform="${transformAttr}"${filterAttr}>${inner}</g>`);
+  const content = `<g transform="${transformAttr}"${filterAttr}>${inner}</g>`;
 
-  return parts.join("");
+  return { content, defs };
 }
 
 function buildImageTag(image: ImageElement, w: number, h: number): string {
@@ -70,8 +71,8 @@ function renderTiled(
   transformAttr: string,
   filterAttr: string,
   blipFilterAttr: string,
-  parts: string[],
-): string {
+  defs: string[],
+): RenderResult {
   const t = image.tile!;
   const patternId = `tile-${crypto.randomUUID()}`;
 
@@ -90,13 +91,13 @@ function renderTiled(
   }
 
   const patternDef = `<pattern id="${patternId}" patternUnits="userSpaceOnUse" x="${offsetX}" y="${offsetY}" width="${tileW}" height="${tileH}"><image href="data:${image.mimeType};base64,${image.imageData}" width="${tileW}" height="${tileH}" preserveAspectRatio="none"${imgTransform}/></pattern>`;
-  parts.push(patternDef);
+  defs.push(patternDef);
 
   let inner = `<rect width="${w}" height="${h}" fill="url(#${patternId})"/>`;
   if (blipFilterAttr) inner = `<g${blipFilterAttr}>${inner}</g>`;
-  parts.push(`<g transform="${transformAttr}"${filterAttr}>${inner}</g>`);
+  const content = `<g transform="${transformAttr}"${filterAttr}>${inner}</g>`;
 
-  return parts.join("");
+  return { content, defs };
 }
 
 function renderPlaceholder(mimeType: string, w: number, h: number, transformAttr: string): string {

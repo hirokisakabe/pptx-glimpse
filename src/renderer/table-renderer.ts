@@ -1,11 +1,12 @@
 import type { TableElement } from "../model/table.js";
 import type { Transform } from "../model/shape.js";
+import type { RenderResult } from "./render-result.js";
 import { emuToPixels } from "../utils/emu.js";
 import { buildTransformAttr } from "./transform.js";
 import { renderFillAttrs, renderOutlineAttrs } from "./fill-renderer.js";
 import { renderTextBody } from "./text-renderer.js";
 
-export function renderTable(element: TableElement, defs: string[]): string {
+export function renderTable(element: TableElement): RenderResult {
   const { transform, table } = element;
   const transformAttr = buildTransformAttr(transform);
 
@@ -13,6 +14,7 @@ export function renderTable(element: TableElement, defs: string[]): string {
   const rowHeights = table.rows.map((row) => emuToPixels(row.height));
 
   const parts: string[] = [];
+  const defs: string[] = [];
   parts.push(`<g transform="${transformAttr}">`);
 
   let y = 0;
@@ -92,7 +94,7 @@ export function renderTable(element: TableElement, defs: string[]): string {
   }
 
   parts.push("</g>");
-  return parts.join("");
+  return { content: parts.join(""), defs };
 }
 
 function computeSpannedSize(sizes: number[], startIdx: number, span: number): number {
