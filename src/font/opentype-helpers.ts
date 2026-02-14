@@ -58,6 +58,15 @@ function buildReverseMapping(mapping: FontMapping): Map<string, string[]> {
 }
 
 /**
+ * ArrayBuffer | Uint8Array → ArrayBuffer に変換する。
+ * Uint8Array の場合は slice で独立した ArrayBuffer を取得する。
+ */
+function toArrayBuffer(data: ArrayBuffer | Uint8Array): ArrayBuffer {
+  if (data instanceof ArrayBuffer) return data;
+  return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
+}
+
+/**
  * フォントバッファ配列から OpentypeTextMeasurer を構築する。
  *
  * 内部で opentype.js を動的 import してフォントをパースする。
@@ -67,54 +76,8 @@ export async function createOpentypeTextMeasurerFromBuffers(
   fontBuffers: FontBuffer[],
   fontMapping?: FontMapping,
 ): Promise<OpentypeTextMeasurer | null> {
-  if (fontBuffers.length === 0) return null;
-
-  const opentype = await tryLoadOpentype();
-  if (!opentype) return null;
-
-  const mapping = createFontMapping(fontMapping);
-  const reverseMap = buildReverseMapping(mapping);
-  const fonts = new Map<string, OpentypeFont>();
-  let firstFont: OpentypeFont | null = null;
-
-  for (const buffer of fontBuffers) {
-    try {
-      let arrayBuffer: ArrayBuffer;
-      if (buffer.data instanceof ArrayBuffer) {
-        arrayBuffer = buffer.data;
-      } else {
-        // Uint8Array → ArrayBuffer: slice で独立した ArrayBuffer を取得
-        arrayBuffer = buffer.data.buffer.slice(
-          buffer.data.byteOffset,
-          buffer.data.byteOffset + buffer.data.byteLength,
-        ) as ArrayBuffer;
-      }
-      const font = opentype.parse(arrayBuffer);
-
-      if (!firstFont) firstFont = font;
-
-      // バッファの name があればそのキーで登録
-      if (buffer.name) {
-        fonts.set(buffer.name, font);
-
-        // 逆引きで PPTX フォント名も登録
-        const pptxNames = reverseMap.get(buffer.name);
-        if (pptxNames) {
-          for (const pptxName of pptxNames) {
-            if (!fonts.has(pptxName)) {
-              fonts.set(pptxName, font);
-            }
-          }
-        }
-      }
-    } catch {
-      // パース失敗のフォントはスキップ
-    }
-  }
-
-  if (fonts.size === 0 && !firstFont) return null;
-
-  return new OpentypeTextMeasurer(fonts, firstFont ?? undefined);
+  const setup = await createOpentypeSetupFromBuffers(fontBuffers, fontMapping);
+  return setup?.measurer ?? null;
 }
 
 export interface OpentypeSetup {
@@ -146,35 +109,14 @@ export async function createOpentypeSetupFromBuffers(
 
   for (const buffer of fontBuffers) {
     try {
-      let arrayBuffer: ArrayBuffer;
-      if (buffer.data instanceof ArrayBuffer) {
-        arrayBuffer = buffer.data;
-      } else {
-        arrayBuffer = buffer.data.buffer.slice(
-          buffer.data.byteOffset,
-          buffer.data.byteOffset + buffer.data.byteLength,
-        ) as ArrayBuffer;
-      }
-      // opentype.parse() の返却値は OpentypeFont & OpentypeFullFont を満たす
+      const arrayBuffer = toArrayBuffer(buffer.data);
       const font = opentype.parse(arrayBuffer);
-      const fullFont = font as unknown as OpentypeFullFont;
 
       if (!firstMeasurerFont) firstMeasurerFont = font;
-      if (!firstResolverFont) firstResolverFont = fullFont;
+      if (!firstResolverFont) firstResolverFont = font as unknown as OpentypeFullFont;
 
       if (buffer.name) {
-        measurerFonts.set(buffer.name, font);
-        resolverFonts.set(buffer.name, fullFont);
-
-        const pptxNames = reverseMap.get(buffer.name);
-        if (pptxNames) {
-          for (const pptxName of pptxNames) {
-            if (!measurerFonts.has(pptxName)) {
-              measurerFonts.set(pptxName, font);
-              resolverFonts.set(pptxName, fullFont);
-            }
-          }
-        }
+        registerFont(buffer.name, font, reverseMap, measurerFonts, resolverFonts);
       }
     } catch {
       // パース失敗のフォントはスキップ
@@ -244,7 +186,7 @@ export async function createOpentypeSetupFromSystem(
   for (const filePath of fontFilePaths) {
     try {
       const data = await readFile(filePath);
-      const arrayBuffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+      const arrayBuffer = toArrayBuffer(data);
       const font = opentype.parse(arrayBuffer);
 
       if (!firstMeasurerFont) firstMeasurerFont = font;
