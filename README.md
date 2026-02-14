@@ -4,7 +4,7 @@
 
 A Node.js library to render PPTX as SVG / PNG.
 
-[Demo](https://hirokisakabe.github.io/pptx-glimpse/) | [npm](https://www.npmjs.com/package/pptx-glimpse)
+[Demo](https://pptx-glimpse.vercel.app/) | [npm](https://www.npmjs.com/package/pptx-glimpse)
 
 ## Motivation
 
