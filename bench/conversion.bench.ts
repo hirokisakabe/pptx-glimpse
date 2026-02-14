@@ -1,20 +1,11 @@
 import { bench, describe, beforeAll } from "vitest";
 import JSZip from "jszip";
 import { convertPptxToSvg, convertPptxToPng } from "../src/converter.js";
-import { readPptx } from "../src/parser/pptx-reader.js";
-import { parsePresentation } from "../src/parser/presentation-parser.js";
-import { parseTheme } from "../src/parser/theme-parser.js";
-import { parseSlideMasterColorMap } from "../src/parser/slide-master-parser.js";
-import { parseSlide } from "../src/parser/slide-parser.js";
-import {
-  parseRelationships,
-  resolveRelationshipTarget,
-} from "../src/parser/relationship-parser.js";
-import { ColorResolver } from "../src/color/color-resolver.js";
+import { parsePptxData, parseSlideWithLayout } from "../src/pptx-data-parser.js";
 import { renderSlideToSvg } from "../src/renderer/svg-renderer.js";
 import type { Slide } from "../src/model/slide.js";
 import type { SlideSize } from "../src/model/presentation.js";
-import type { ColorMap } from "../src/model/theme.js";
+import type { SlideElement } from "../src/model/shape.js";
 
 // ---------------------------------------------------------------------------
 // XML templates (minimal PPTX structure)
@@ -90,44 +81,6 @@ const slideLayoutRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="${NAMESPACES.rels}">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/>
 </Relationships>`;
-
-// ---------------------------------------------------------------------------
-// Helper: defaults (copied from converter.ts private functions)
-// ---------------------------------------------------------------------------
-
-function defaultColorScheme() {
-  return {
-    dk1: "#000000",
-    lt1: "#FFFFFF",
-    dk2: "#44546A",
-    lt2: "#E7E6E6",
-    accent1: "#4472C4",
-    accent2: "#ED7D31",
-    accent3: "#A5A5A5",
-    accent4: "#FFC000",
-    accent5: "#5B9BD5",
-    accent6: "#70AD47",
-    hlink: "#0563C1",
-    folHlink: "#954F72",
-  };
-}
-
-function defaultColorMap(): ColorMap {
-  return {
-    bg1: "lt1" as const,
-    tx1: "dk1" as const,
-    bg2: "lt2" as const,
-    tx2: "dk2" as const,
-    accent1: "accent1" as const,
-    accent2: "accent2" as const,
-    accent3: "accent3" as const,
-    accent4: "accent4" as const,
-    accent5: "accent5" as const,
-    accent6: "accent6" as const,
-    hlink: "hlink" as const,
-    folHlink: "folHlink" as const,
-  };
-}
 
 // ---------------------------------------------------------------------------
 // Helper: shape XML generation
@@ -411,61 +364,39 @@ function createMultiSlideEntries(count: number): SlideEntry[] {
 }
 
 // ---------------------------------------------------------------------------
-// Parse pipeline helper (reproduces converter.ts internal logic)
+// Parse pipeline helper (uses the real parse pipeline from pptx-data-parser.ts)
 // ---------------------------------------------------------------------------
 
-function parsePptx(input: Buffer): { slides: Slide[]; slideSize: SlideSize } {
-  const archive = readPptx(input);
+function filterPlaceholders(elements: SlideElement[]): SlideElement[] {
+  return elements.filter((el) => {
+    if (el.type !== "shape") return true;
+    return !el.placeholderType;
+  });
+}
 
-  const presentationXml = archive.files.get("ppt/presentation.xml");
-  if (!presentationXml) throw new Error("Missing presentation.xml");
-  const presInfo = parsePresentation(presentationXml);
-
-  const presRelsXml = archive.files.get("ppt/_rels/presentation.xml.rels");
-  const presRels = presRelsXml ? parseRelationships(presRelsXml) : new Map();
-
-  let theme = {
-    colorScheme: defaultColorScheme(),
-    fontScheme: {
-      majorFont: "Calibri",
-      minorFont: "Calibri",
-      majorFontEa: null as string | null,
-      minorFontEa: null as string | null,
-    },
-  };
-  for (const [, rel] of presRels) {
-    if (rel.type.includes("theme")) {
-      const themePath = resolveRelationshipTarget("ppt/presentation.xml", rel.target);
-      const themeXml = archive.files.get(themePath);
-      if (themeXml) theme = parseTheme(themeXml);
-      break;
-    }
-  }
-
-  let colorMap: ColorMap = defaultColorMap();
-  for (const [, rel] of presRels) {
-    if (rel.type.includes("slideMaster")) {
-      const masterPath = resolveRelationshipTarget("ppt/presentation.xml", rel.target);
-      const masterXml = archive.files.get(masterPath);
-      if (masterXml) colorMap = parseSlideMasterColorMap(masterXml);
-      break;
-    }
-  }
-
-  const colorResolver = new ColorResolver(theme.colorScheme, colorMap);
+function parsePptxFull(input: Buffer): { slides: Slide[]; slideSize: SlideSize } {
+  const data = parsePptxData(input);
 
   const slides: Slide[] = [];
-  for (let i = 0; i < presInfo.slideRIds.length; i++) {
-    const rId = presInfo.slideRIds[i];
-    const rel = presRels.get(rId);
-    if (!rel) continue;
-    const path = resolveRelationshipTarget("ppt/presentation.xml", rel.target);
-    const slideXml = archive.files.get(path);
-    if (!slideXml) continue;
-    slides.push(parseSlide(slideXml, path, i + 1, archive, colorResolver, theme.fontScheme));
+  for (const { slideNumber, path } of data.slidePaths) {
+    const parsed = parseSlideWithLayout(slideNumber, path, data);
+    if (!parsed) continue;
+
+    const { slide, layoutElements, layoutShowMasterSp } = parsed;
+
+    // Merge shapes: master → layout → slide (same as converter.ts)
+    const effectiveMasterElements =
+      slide.showMasterSp && layoutShowMasterSp ? data.masterElements : [];
+    slide.elements = [
+      ...filterPlaceholders(effectiveMasterElements),
+      ...filterPlaceholders(layoutElements),
+      ...slide.elements,
+    ];
+
+    slides.push(slide);
   }
 
-  return { slides, slideSize: presInfo.slideSize };
+  return { slides, slideSize: data.presInfo.slideSize };
 }
 
 // ---------------------------------------------------------------------------
@@ -490,11 +421,11 @@ beforeAll(async () => {
   ]);
 
   // Pre-parse slides for renderer-only benchmarks
-  const simpleResult = parsePptx(simplePptx);
+  const simpleResult = parsePptxFull(simplePptx);
   parsedSimpleSlide = simpleResult.slides[0];
   slideSize = simpleResult.slideSize;
 
-  const complexResult = parsePptx(complexPptx);
+  const complexResult = parsePptxFull(complexPptx);
   parsedComplexSlide = complexResult.slides[0];
 });
 
@@ -532,11 +463,11 @@ describe("PNG conversion", () => {
 
 describe("parser standalone", () => {
   bench("parse simple slide", () => {
-    parsePptx(simplePptx);
+    parsePptxFull(simplePptx);
   });
 
   bench("parse complex slide", () => {
-    parsePptx(complexPptx);
+    parsePptxFull(complexPptx);
   });
 });
 
