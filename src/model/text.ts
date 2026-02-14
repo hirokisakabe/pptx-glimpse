@@ -71,6 +71,7 @@ export interface BodyProperties {
 export interface Paragraph {
   runs: TextRun[];
   properties: ParagraphProperties;
+  endParaRunProperties?: RunProperties;
 }
 
 export type AutoNumScheme =

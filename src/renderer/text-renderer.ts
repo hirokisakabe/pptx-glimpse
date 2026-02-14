@@ -166,7 +166,8 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
     const paragraphGap = Math.max(prevSpaceAfterPx, spaceBeforePx);
 
     if (para.runs.length === 0 || !para.runs.some((r) => r.text.length > 0)) {
-      const dy = computeDy(isFirstLine, defaultNaturalHeight, DEFAULT_LINE_SPACING, paragraphGap);
+      const emptyParaHeight = paraFontSize > 0 ? paraFontSize : defaultNaturalHeight;
+      const dy = computeDy(isFirstLine, emptyParaHeight, DEFAULT_LINE_SPACING, paragraphGap);
       tspans.push(`<tspan x="${xPos}" dy="${dy}" text-anchor="${anchorValue}"> </tspan>`);
       isFirstLine = false;
       prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSize);
@@ -309,7 +310,9 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
   } else if (bodyProperties.anchor === "b") {
     yStart = Math.max(marginTop, height - totalTextHeight - marginBottom);
   }
-  yStart += defaultNaturalHeight;
+  const firstParaFontSize = getParagraphFontSize(paragraphs[0], defaultFontSize) * fontScale;
+  const firstLineNaturalHeight = firstParaFontSize * defaultLineHeightRatio;
+  yStart += firstLineNaturalHeight * PX_PER_PT;
 
   const textElement = `<text x="0" y="${yStart}">${tspans.join("")}</text>`;
 
@@ -480,6 +483,9 @@ function getParagraphFontSize(para: Paragraph, defaultFontSize: number): number 
     if (run.text.length > 0 && run.properties.fontSize) {
       return run.properties.fontSize;
     }
+  }
+  if (para.endParaRunProperties?.fontSize) {
+    return para.endParaRunProperties.fontSize;
   }
   return defaultFontSize;
 }
@@ -827,7 +833,11 @@ function estimateTextHeight(
   for (let pIdx = 0; pIdx < paragraphs.length; pIdx++) {
     const para = paragraphs[pIdx];
     const lineSpacing = getLineSpacing(para, lnSpcReduction);
-    const naturalHeight = computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
+    const isEmpty = !para.runs.some((r) => r.text.length > 0);
+    const naturalHeight =
+      isEmpty && para.endParaRunProperties?.fontSize
+        ? para.endParaRunProperties.fontSize * fontScale * defaultRatio
+        : computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
     const lineHeight =
       (naturalHeight > 0 ? naturalHeight : defaultFontSize * fontScale * defaultRatio) *
       PX_PER_PT *
@@ -1134,7 +1144,9 @@ function renderTextBodyAsPath(
   } else if (bodyProperties.anchor === "b") {
     yStart = Math.max(marginTop, height - totalTextHeight - marginBottom);
   }
-  yStart += defaultNaturalHeight;
+  const firstParaFontSize = getParagraphFontSize(paragraphs[0], defaultFontSize) * fontScale;
+  const firstLineNaturalHeight = firstParaFontSize * defaultLineHeightRatio;
+  yStart += firstLineNaturalHeight * PX_PER_PT;
 
   // パスレンダリング
   const elements: string[] = [];
@@ -1159,7 +1171,8 @@ function renderTextBodyAsPath(
     // 空段落
     if (para.runs.length === 0 || !para.runs.some((r) => r.text.length > 0)) {
       if (!isFirstLine) {
-        currentY += defaultNaturalHeight * PX_PER_PT * DEFAULT_LINE_SPACING + paragraphGap;
+        const emptyParaHeight = paraFontSize > 0 ? paraFontSize : defaultNaturalHeight;
+        currentY += emptyParaHeight * PX_PER_PT * DEFAULT_LINE_SPACING + paragraphGap;
       }
       isFirstLine = false;
       prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSize);

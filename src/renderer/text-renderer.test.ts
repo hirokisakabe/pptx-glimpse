@@ -11,6 +11,7 @@ import type {
   BulletType,
   SpacingValue,
   BodyProperties,
+  RunProperties,
 } from "../model/text.js";
 import type { Transform } from "../model/shape.js";
 import {
@@ -1308,5 +1309,80 @@ describe("renderTextBody (path mode)", () => {
     expect(result).toContain("<text");
     expect(result).toContain("<tspan");
     expect(result).not.toContain("<path");
+  });
+
+  it("endParaRunProperties の fontSize が空段落の高さ計算に使用される", () => {
+    const defaultRunProps: RunProperties = {
+      fontSize: null,
+      fontFamily: null,
+      fontFamilyEa: null,
+      fontFamilyCs: null,
+      bold: false,
+      italic: false,
+      underline: false,
+      strikethrough: false,
+      color: null,
+      baseline: 0,
+      hyperlink: null,
+      outline: null,
+    };
+    const textBody: TextBody = {
+      bodyProperties: {
+        anchor: "ctr",
+        marginLeft: 91440,
+        marginRight: 91440,
+        marginTop: 45720,
+        marginBottom: 45720,
+        wrap: "square",
+        autoFit: "noAutofit",
+        fontScale: 1,
+        lnSpcReduction: 0,
+        numCol: 1,
+        vert: "horz",
+      },
+      paragraphs: [
+        {
+          // 空段落（スペーサー）: endParaRPr で 3pt を指定
+          runs: [{ text: "", properties: { ...defaultRunProps } }],
+          properties: defaultParagraphProperties(),
+          endParaRunProperties: { ...defaultRunProps, fontSize: 3 },
+        },
+        {
+          // 実際のテキスト段落: 12pt
+          runs: [{ text: "テスト", properties: { ...defaultRunProps, fontSize: 12 } }],
+          properties: defaultParagraphProperties(),
+        },
+      ],
+    };
+
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    // 空段落の dy が endParaRunProperties の fontSize (3pt) ベースで計算される
+    // デフォルト (12pt) を使った場合とは異なる値になる
+    const dyMatches = result.match(/dy="([^"]+)"/g) ?? [];
+    // 少なくとも 2 つの tspan が出力される
+    expect(dyMatches.length).toBeGreaterThanOrEqual(2);
+
+    // endParaRunProperties なしの場合と比較
+    const textBodyNoEndPara: TextBody = {
+      ...textBody,
+      paragraphs: [
+        {
+          runs: [{ text: "", properties: { ...defaultRunProps } }],
+          properties: defaultParagraphProperties(),
+          // endParaRunProperties なし → デフォルトサイズ
+        },
+        {
+          runs: [{ text: "テスト", properties: { ...defaultRunProps, fontSize: 12 } }],
+          properties: defaultParagraphProperties(),
+        },
+      ],
+    };
+    const resultNoEndPara = renderTextBody(
+      textBodyNoEndPara,
+      makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT),
+    );
+    // endParaRunProperties がある場合はスペーサー段落が小さいため、
+    // テキストの位置が異なるはず
+    expect(result).not.toEqual(resultNoEndPara);
   });
 });

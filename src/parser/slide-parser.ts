@@ -1299,7 +1299,13 @@ function parseParagraph(
     }
   }
 
-  return { runs, properties };
+  // endParaRPr をパース（空段落の高さ計算に使用）
+  const endParaRPrNode = p.endParaRPr as XmlNode | undefined;
+  const endParaRunProperties = endParaRPrNode
+    ? parseRunProperties(endParaRPrNode, colorResolver, rels, fontScheme, mergedDefaults)
+    : undefined;
+
+  return { runs, properties, endParaRunProperties };
 }
 
 function mergeDefaultRunProperties(
