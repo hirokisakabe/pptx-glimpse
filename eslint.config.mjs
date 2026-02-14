@@ -5,7 +5,7 @@ import prettier from "eslint-config-prettier";
 
 export default tseslint.config(
   {
-    files: ["src/**/*.ts", "vrt/**/*.ts", "scripts/**/*.ts", "bench/**/*.ts"],
+    files: ["src/**/*.ts", "vrt/**/*.ts", "scripts/**/*.ts", "bench/**/*.ts", "e2e/**/*.ts"],
     extends: tseslint.configs.recommendedTypeChecked,
     languageOptions: {
       parserOptions: {
@@ -26,7 +26,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["scripts/**/*.ts", "vrt/**/*.ts", "bench/**/*.ts"],
+    files: ["scripts/**/*.ts", "vrt/**/*.ts", "bench/**/*.ts", "e2e/**/*.ts"],
     rules: {
       "@typescript-eslint/no-unsafe-argument": "off",
       "@typescript-eslint/no-unsafe-assignment": "off",

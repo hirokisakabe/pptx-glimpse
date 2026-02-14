@@ -4,6 +4,6 @@
     "rootDir": ".",
     "noEmit": true
   },
-  "include": ["src/**/*", "vrt/**/*", "scripts/**/*", "bench/**/*"],
+  "include": ["src/**/*", "vrt/**/*", "scripts/**/*", "bench/**/*", "e2e/**/*"],
   "exclude": ["node_modules", "dist"]
 }
