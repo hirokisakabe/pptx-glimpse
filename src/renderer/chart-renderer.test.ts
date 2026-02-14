@@ -383,6 +383,157 @@ describe("renderChart", () => {
     });
   });
 
+  describe("stock chart", () => {
+    it("renders hi-lo vertical lines and close tick marks", () => {
+      const element = createChartElement({
+        chartType: "stock",
+        series: [
+          { name: "High", values: [150, 160], color: { hex: "#4472C4", alpha: 1 } },
+          { name: "Low", values: [100, 110], color: { hex: "#ED7D31", alpha: 1 } },
+          { name: "Close", values: [130, 140], color: { hex: "#A5A5A5", alpha: 1 } },
+        ],
+        categories: ["Day 1", "Day 2"],
+      });
+
+      const result = renderChart(element);
+      // Hi-lo vertical lines (2 categories)
+      const hiLoLines = result.content.match(
+        /<line[^>]*stroke="#404040"[^>]*stroke-width="2"[^>]*\/>/g,
+      );
+      expect(hiLoLines).not.toBeNull();
+      // 2 hi-lo lines + 2 close tick marks = 4 lines
+      expect(hiLoLines!.length).toBe(4);
+    });
+
+    it("renders category labels", () => {
+      const element = createChartElement({
+        chartType: "stock",
+        series: [
+          { name: "High", values: [150], color: { hex: "#4472C4", alpha: 1 } },
+          { name: "Low", values: [100], color: { hex: "#ED7D31", alpha: 1 } },
+          { name: "Close", values: [130], color: { hex: "#A5A5A5", alpha: 1 } },
+        ],
+        categories: ["Day 1"],
+      });
+
+      const result = renderChart(element);
+      expect(result.content).toContain("Day 1");
+    });
+
+    it("returns empty string when fewer than 3 series", () => {
+      const element = createChartElement({
+        chartType: "stock",
+        series: [
+          { name: "High", values: [150], color: { hex: "#4472C4", alpha: 1 } },
+          { name: "Low", values: [100], color: { hex: "#ED7D31", alpha: 1 } },
+        ],
+        categories: ["Day 1"],
+      });
+
+      const result = renderChart(element);
+      // Should have no hi-lo lines since there are not enough series
+      expect(result.content).not.toContain('stroke="#404040"');
+    });
+  });
+
+  describe("surface chart", () => {
+    it("renders heatmap cells as rect elements", () => {
+      const element = createChartElement({
+        chartType: "surface",
+        series: [
+          { name: "Row 1", values: [10, 20, 30], color: { hex: "#4472C4", alpha: 1 } },
+          { name: "Row 2", values: [15, 25, 35], color: { hex: "#ED7D31", alpha: 1 } },
+        ],
+        categories: ["A", "B", "C"],
+      });
+
+      const result = renderChart(element);
+      // 2 rows × 3 cols = 6 heatmap cells + 1 background rect = 7 total rects
+      const rects = result.content.match(/<rect[^>]*\/>/g);
+      expect(rects).not.toBeNull();
+      expect(rects!.length).toBe(7); // 6 cells + 1 background
+    });
+
+    it("renders category labels", () => {
+      const element = createChartElement({
+        chartType: "surface",
+        series: [{ name: "Row 1", values: [10, 20], color: { hex: "#4472C4", alpha: 1 } }],
+        categories: ["Col A", "Col B"],
+      });
+
+      const result = renderChart(element);
+      expect(result.content).toContain("Col A");
+      expect(result.content).toContain("Col B");
+    });
+
+    it("renders series labels", () => {
+      const element = createChartElement({
+        chartType: "surface",
+        series: [
+          { name: "Row 1", values: [10], color: { hex: "#4472C4", alpha: 1 } },
+          { name: "Row 2", values: [20], color: { hex: "#ED7D31", alpha: 1 } },
+        ],
+        categories: ["A"],
+      });
+
+      const result = renderChart(element);
+      expect(result.content).toContain("Row 1");
+      expect(result.content).toContain("Row 2");
+    });
+  });
+
+  describe("ofPie chart", () => {
+    it("renders main pie slices and secondary pie", () => {
+      const element = createChartElement({
+        chartType: "ofPie",
+        ofPieType: "pie",
+        splitPos: 2,
+        secondPieSize: 75,
+        series: [
+          {
+            name: "Data",
+            values: [40, 30, 20, 10],
+            color: { hex: "#4472C4", alpha: 1 },
+          },
+        ],
+        categories: ["A", "B", "C", "D"],
+      });
+
+      const result = renderChart(element);
+      // Should contain path elements for pie slices
+      const paths = result.content.match(/<path[^>]*d="M[^"]*"[^>]*\/>/g);
+      expect(paths).not.toBeNull();
+      expect(paths!.length).toBeGreaterThanOrEqual(3);
+      // Should contain connection lines
+      const lines = result.content.match(/<line[^>]*stroke="#A6A6A6"[^>]*\/>/g);
+      expect(lines).not.toBeNull();
+      expect(lines!.length).toBe(2);
+    });
+
+    it("renders bar-of-pie with rect elements for secondary chart", () => {
+      const element = createChartElement({
+        chartType: "ofPie",
+        ofPieType: "bar",
+        splitPos: 2,
+        secondPieSize: 75,
+        series: [
+          {
+            name: "Data",
+            values: [50, 30, 15, 5],
+            color: { hex: "#4472C4", alpha: 1 },
+          },
+        ],
+        categories: ["A", "B", "C", "D"],
+      });
+
+      const result = renderChart(element);
+      // Background rect + 2 bar segments = 3 rects
+      const rects = result.content.match(/<rect[^>]*\/>/g);
+      expect(rects).not.toBeNull();
+      expect(rects!.length).toBe(3); // 1 background + 2 bar segments
+    });
+  });
+
   describe("fill opacity", () => {
     it("applies fill-opacity for transparent colors", () => {
       const element = createChartElement({

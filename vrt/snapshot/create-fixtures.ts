@@ -1065,6 +1065,9 @@ function chartXml(
     barDir?: string;
     holeSize?: number;
     radarStyle?: string;
+    ofPieType?: string;
+    secondPieSize?: number;
+    splitPos?: number;
     title?: string;
     legendPos?: string;
     series: {
@@ -1105,6 +1108,10 @@ function chartXml(
   const barDirXml = opts.barDir ? `<c:barDir val="${opts.barDir}"/>` : "";
   const holeSizeXml = opts.holeSize !== undefined ? `<c:holeSize val="${opts.holeSize}"/>` : "";
   const radarStyleXml = opts.radarStyle ? `<c:radarStyle val="${opts.radarStyle}"/>` : "";
+  const ofPieTypeXml = opts.ofPieType ? `<c:ofPieType val="${opts.ofPieType}"/>` : "";
+  const secondPieSizeXml =
+    opts.secondPieSize !== undefined ? `<c:secondPieSize val="${opts.secondPieSize}"/>` : "";
+  const splitPosXml = opts.splitPos !== undefined ? `<c:splitPos val="${opts.splitPos}"/>` : "";
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <c:chartSpace xmlns:c="${NS.c}" xmlns:a="${NS.a}">
@@ -1114,8 +1121,11 @@ function chartXml(
       <c:${chartType}>
         ${radarStyleXml}
         ${barDirXml}
+        ${ofPieTypeXml}
         ${seriesXml}
         ${holeSizeXml}
+        ${splitPosXml}
+        ${secondPieSizeXml}
       </c:${chartType}>
     </c:plotArea>
     ${legendXml}
@@ -1370,6 +1380,97 @@ async function createChartsFixture(): Promise<void> {
     rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart8.xml" }]),
   });
 
+  // Slide 9: Stock chart (HLC)
+  const stockChart = chartXml("stockChart", {
+    title: "Stock Price (HLC)",
+    legendPos: "b",
+    series: [
+      {
+        name: "High",
+        categories: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+        values: [150, 160, 155, 170, 165],
+      },
+      {
+        name: "Low",
+        categories: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+        values: [100, 110, 105, 120, 115],
+      },
+      {
+        name: "Close",
+        categories: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+        values: [130, 140, 135, 150, 145],
+      },
+    ],
+  });
+  charts.set("ppt/charts/chart9.xml", stockChart);
+  const gf9 = graphicFrameXml(
+    2,
+    "Stock Chart",
+    margin,
+    margin,
+    SLIDE_W - margin * 2,
+    SLIDE_H - margin * 2,
+    "rId2",
+  );
+  slides.push({
+    xml: wrapSlideXml(gf9),
+    rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart9.xml" }]),
+  });
+
+  // Slide 10: Surface chart (contour/heatmap)
+  const surfaceChart = chartXml("surfaceChart", {
+    title: "Temperature Map",
+    series: [
+      { name: "North", categories: ["Jan", "Apr", "Jul", "Oct"], values: [5, 15, 30, 12] },
+      { name: "Central", categories: ["Jan", "Apr", "Jul", "Oct"], values: [10, 20, 35, 18] },
+      { name: "South", categories: ["Jan", "Apr", "Jul", "Oct"], values: [15, 25, 40, 22] },
+    ],
+  });
+  charts.set("ppt/charts/chart10.xml", surfaceChart);
+  const gf10 = graphicFrameXml(
+    2,
+    "Surface Chart",
+    margin,
+    margin,
+    SLIDE_W - margin * 2,
+    SLIDE_H - margin * 2,
+    "rId2",
+  );
+  slides.push({
+    xml: wrapSlideXml(gf10),
+    rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart10.xml" }]),
+  });
+
+  // Slide 11: OfPie chart (pie-of-pie)
+  const ofPieChartData = chartXml("ofPieChart", {
+    ofPieType: "pie",
+    splitPos: 3,
+    secondPieSize: 75,
+    title: "Revenue Breakdown",
+    legendPos: "b",
+    series: [
+      {
+        name: "Revenue",
+        categories: ["Product A", "Product B", "Service X", "Service Y", "Other"],
+        values: [45, 25, 15, 10, 5],
+      },
+    ],
+  });
+  charts.set("ppt/charts/chart11.xml", ofPieChartData);
+  const gf11 = graphicFrameXml(
+    2,
+    "OfPie Chart",
+    margin,
+    margin,
+    SLIDE_W - margin * 2,
+    SLIDE_H - margin * 2,
+    "rId2",
+  );
+  slides.push({
+    xml: wrapSlideXml(gf11),
+    rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart11.xml" }]),
+  });
+
   const buffer = await buildPptx({
     slides,
     charts,
@@ -1382,6 +1483,9 @@ async function createChartsFixture(): Promise<void> {
       `<Override PartName="/ppt/charts/chart6.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
       `<Override PartName="/ppt/charts/chart7.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
       `<Override PartName="/ppt/charts/chart8.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
+      `<Override PartName="/ppt/charts/chart9.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
+      `<Override PartName="/ppt/charts/chart10.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
+      `<Override PartName="/ppt/charts/chart11.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
     ],
   });
   savePptx(buffer, "charts.pptx");

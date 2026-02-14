@@ -68,6 +68,15 @@ export function renderChart(element: ChartElement): RenderResult {
       case "radar":
         parts.push(renderRadarChart(chart, plotX, plotY, plotW, plotH));
         break;
+      case "stock":
+        parts.push(renderStockChart(chart, plotX, plotY, plotW, plotH));
+        break;
+      case "surface":
+        parts.push(renderSurfaceChart(chart, plotX, plotY, plotW, plotH));
+        break;
+      case "ofPie":
+        parts.push(renderOfPieChart(chart, plotX, plotY, plotW, plotH));
+        break;
     }
   }
 
@@ -530,11 +539,301 @@ function renderRadarChart(chart: ChartData, x: number, y: number, w: number, h: 
   return parts.join("");
 }
 
+function renderStockChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
+  const parts: string[] = [];
+  const { series, categories } = chart;
+
+  // Stock chart expects series in order: High (0), Low (1), Close (2)
+  if (series.length < 3) return "";
+
+  const highSeries = series[0];
+  const lowSeries = series[1];
+  const closeSeries = series[2];
+  const catCount = categories.length || highSeries.values.length;
+  if (catCount === 0) return "";
+
+  let maxVal = 0;
+  let minVal = Infinity;
+  for (const s of [highSeries, lowSeries, closeSeries]) {
+    for (const v of s.values) {
+      maxVal = Math.max(maxVal, v);
+      minVal = Math.min(minVal, v);
+    }
+  }
+  if (maxVal === minVal) return "";
+
+  // Axes
+  parts.push(
+    `<line x1="${round(x)}" y1="${round(y + h)}" x2="${round(x + w)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
+  );
+  parts.push(
+    `<line x1="${round(x)}" y1="${round(y)}" x2="${round(x)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
+  );
+
+  // Category labels
+  for (let c = 0; c < catCount; c++) {
+    const label = categories[c] ?? "";
+    const labelX = x + (c + 0.5) * (w / catCount);
+    parts.push(
+      `<text x="${round(labelX)}" y="${round(y + h + 15)}" text-anchor="middle" font-size="10" fill="#595959">${escapeXml(label)}</text>`,
+    );
+  }
+
+  const range = maxVal - minVal;
+
+  // Hi-Lo lines and Close tick marks
+  for (let c = 0; c < catCount; c++) {
+    const cx = x + (c + 0.5) * (w / catCount);
+    const highVal = highSeries.values[c] ?? 0;
+    const lowVal = lowSeries.values[c] ?? 0;
+    const closeVal = closeSeries.values[c] ?? 0;
+
+    const highY = y + h - ((highVal - minVal) / range) * h;
+    const lowY = y + h - ((lowVal - minVal) / range) * h;
+    const closeY = y + h - ((closeVal - minVal) / range) * h;
+
+    // Hi-Lo vertical line
+    parts.push(
+      `<line x1="${round(cx)}" y1="${round(highY)}" x2="${round(cx)}" y2="${round(lowY)}" stroke="#404040" stroke-width="2"/>`,
+    );
+
+    // Close tick mark (horizontal line to the right)
+    const tickW = (w / catCount) * 0.2;
+    parts.push(
+      `<line x1="${round(cx)}" y1="${round(closeY)}" x2="${round(cx + tickW)}" y2="${round(closeY)}" stroke="#404040" stroke-width="2"/>`,
+    );
+  }
+
+  return parts.join("");
+}
+
+function renderSurfaceChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
+  const parts: string[] = [];
+  const { series, categories } = chart;
+  if (series.length === 0) return "";
+
+  const rows = series.length;
+  const cols = categories.length || Math.max(...series.map((s) => s.values.length));
+  if (cols === 0) return "";
+
+  // Find min/max values across all data
+  let minVal = Infinity;
+  let maxVal = -Infinity;
+  for (const s of series) {
+    for (const v of s.values) {
+      minVal = Math.min(minVal, v);
+      maxVal = Math.max(maxVal, v);
+    }
+  }
+  if (minVal === maxVal) maxVal = minVal + 1;
+
+  const cellW = w / cols;
+  const cellH = h / rows;
+
+  // Render heatmap cells
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      const val = series[r].values[c] ?? 0;
+      const t = (val - minVal) / (maxVal - minVal);
+      const color = heatmapColor(t);
+      const cx = x + c * cellW;
+      const cy = y + r * cellH;
+      parts.push(
+        `<rect x="${round(cx)}" y="${round(cy)}" width="${round(cellW)}" height="${round(cellH)}" fill="${color}" stroke="#FFFFFF" stroke-width="0.5"/>`,
+      );
+    }
+  }
+
+  // Category labels along bottom
+  for (let c = 0; c < cols; c++) {
+    const label = categories[c] ?? "";
+    if (label) {
+      const labelX = x + (c + 0.5) * cellW;
+      parts.push(
+        `<text x="${round(labelX)}" y="${round(y + h + 15)}" text-anchor="middle" font-size="10" fill="#595959">${escapeXml(label)}</text>`,
+      );
+    }
+  }
+
+  // Series labels along left
+  for (let r = 0; r < rows; r++) {
+    const label = series[r].name ?? "";
+    if (label) {
+      const labelY = y + (r + 0.5) * cellH;
+      parts.push(
+        `<text x="${round(x - 5)}" y="${round(labelY + 4)}" text-anchor="end" font-size="10" fill="#595959">${escapeXml(label)}</text>`,
+      );
+    }
+  }
+
+  return parts.join("");
+}
+
+function heatmapColor(t: number): string {
+  // Blue (cold) → Cyan → Green → Yellow → Red (hot)
+  const clamped = Math.max(0, Math.min(1, t));
+  let r: number, g: number, b: number;
+  if (clamped < 0.25) {
+    const s = clamped / 0.25;
+    r = 0;
+    g = Math.round(s * 255);
+    b = 255;
+  } else if (clamped < 0.5) {
+    const s = (clamped - 0.25) / 0.25;
+    r = 0;
+    g = 255;
+    b = Math.round((1 - s) * 255);
+  } else if (clamped < 0.75) {
+    const s = (clamped - 0.5) / 0.25;
+    r = Math.round(s * 255);
+    g = 255;
+    b = 0;
+  } else {
+    const s = (clamped - 0.75) / 0.25;
+    r = 255;
+    g = Math.round((1 - s) * 255);
+    b = 0;
+  }
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
+}
+
+function renderOfPieChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
+  const parts: string[] = [];
+  const series = chart.series[0];
+  if (!series || series.values.length === 0) return "";
+
+  const total = series.values.reduce((sum, v) => sum + v, 0);
+  if (total === 0) return "";
+
+  const splitPos = chart.splitPos ?? 2;
+  const secondPieSize = chart.secondPieSize ?? 75;
+  const isBarOfPie = chart.ofPieType === "bar";
+
+  // Split data: primary (first N) and secondary (last splitPos)
+  const splitIdx = Math.max(0, series.values.length - splitPos);
+  const primaryValues = series.values.slice(0, splitIdx);
+  const secondaryValues = series.values.slice(splitIdx);
+  const secondaryTotal = secondaryValues.reduce((sum, v) => sum + v, 0);
+
+  // Primary pie occupies left 55% of the plot area
+  const pieW = w * 0.45;
+  const pieCx = x + pieW / 2;
+  const pieCy = y + h / 2;
+  const pieR = (Math.min(pieW, h) / 2) * 0.85;
+
+  // Draw primary pie slices
+  let currentAngle = -Math.PI / 2;
+
+  // Regular slices
+  for (let i = 0; i < primaryValues.length; i++) {
+    const val = primaryValues[i];
+    const sliceAngle = (val / total) * 2 * Math.PI;
+    const color = getPieSliceColor(i, chart);
+
+    const x1 = pieCx + pieR * Math.cos(currentAngle);
+    const y1 = pieCy + pieR * Math.sin(currentAngle);
+    const x2 = pieCx + pieR * Math.cos(currentAngle + sliceAngle);
+    const y2 = pieCy + pieR * Math.sin(currentAngle + sliceAngle);
+    const largeArc = sliceAngle > Math.PI ? 1 : 0;
+
+    parts.push(
+      `<path d="M${round(pieCx)},${round(pieCy)} L${round(x1)},${round(y1)} A${round(pieR)},${round(pieR)} 0 ${largeArc},1 ${round(x2)},${round(y2)} Z" ${fillAttr(color)}/>`,
+    );
+    currentAngle += sliceAngle;
+  }
+
+  // "Other" slice (represents secondary total)
+  const otherAngleStart = currentAngle;
+  const otherSliceAngle = (secondaryTotal / total) * 2 * Math.PI;
+  const otherColor: ResolvedColor = { hex: "#D9D9D9", alpha: 1 };
+
+  if (primaryValues.length === 0 && secondaryValues.length > 0) {
+    // All values go to secondary — draw full circle for "other"
+    parts.push(
+      `<circle cx="${round(pieCx)}" cy="${round(pieCy)}" r="${round(pieR)}" ${fillAttr(otherColor)}/>`,
+    );
+  } else if (secondaryTotal > 0) {
+    const x1 = pieCx + pieR * Math.cos(otherAngleStart);
+    const y1 = pieCy + pieR * Math.sin(otherAngleStart);
+    const x2 = pieCx + pieR * Math.cos(otherAngleStart + otherSliceAngle);
+    const y2 = pieCy + pieR * Math.sin(otherAngleStart + otherSliceAngle);
+    const largeArc = otherSliceAngle > Math.PI ? 1 : 0;
+
+    parts.push(
+      `<path d="M${round(pieCx)},${round(pieCy)} L${round(x1)},${round(y1)} A${round(pieR)},${round(pieR)} 0 ${largeArc},1 ${round(x2)},${round(y2)} Z" ${fillAttr(otherColor)}/>`,
+    );
+  }
+
+  // Secondary chart position (right 35% of plot area)
+  const secW = w * 0.25;
+  const secH = h * (secondPieSize / 100) * 0.85;
+  const secX = x + w * 0.65;
+  const secCy = y + h / 2;
+
+  // Connection lines from "other" slice to secondary chart
+  const lineStartX = pieCx + pieR * Math.cos(otherAngleStart);
+  const lineStartY = pieCy + pieR * Math.sin(otherAngleStart);
+  const lineEndStartX = pieCx + pieR * Math.cos(otherAngleStart + otherSliceAngle);
+  const lineEndStartY = pieCy + pieR * Math.sin(otherAngleStart + otherSliceAngle);
+
+  parts.push(
+    `<line x1="${round(lineStartX)}" y1="${round(lineStartY)}" x2="${round(secX)}" y2="${round(secCy - secH / 2)}" stroke="#A6A6A6" stroke-width="1"/>`,
+  );
+  parts.push(
+    `<line x1="${round(lineEndStartX)}" y1="${round(lineEndStartY)}" x2="${round(secX)}" y2="${round(secCy + secH / 2)}" stroke="#A6A6A6" stroke-width="1"/>`,
+  );
+
+  if (isBarOfPie) {
+    // Render stacked bar
+    let barY = secCy - secH / 2;
+    for (let i = 0; i < secondaryValues.length; i++) {
+      const val = secondaryValues[i];
+      const barH = secondaryTotal > 0 ? (val / secondaryTotal) * secH : 0;
+      const color = getPieSliceColor(splitIdx + i, chart);
+      parts.push(
+        `<rect x="${round(secX)}" y="${round(barY)}" width="${round(secW)}" height="${round(barH)}" ${fillAttr(color)}/>`,
+      );
+      barY += barH;
+    }
+  } else {
+    // Render secondary pie
+    const secPieCx = secX + secW / 2;
+    const secR = Math.min(secW, secH) / 2;
+    let secAngle = -Math.PI / 2;
+
+    if (secondaryValues.length === 1) {
+      const color = getPieSliceColor(splitIdx, chart);
+      parts.push(
+        `<circle cx="${round(secPieCx)}" cy="${round(secCy)}" r="${round(secR)}" ${fillAttr(color)}/>`,
+      );
+    } else {
+      for (let i = 0; i < secondaryValues.length; i++) {
+        const val = secondaryValues[i];
+        const sliceAngle = secondaryTotal > 0 ? (val / secondaryTotal) * 2 * Math.PI : 0;
+        const color = getPieSliceColor(splitIdx + i, chart);
+
+        const sx1 = secPieCx + secR * Math.cos(secAngle);
+        const sy1 = secCy + secR * Math.sin(secAngle);
+        const sx2 = secPieCx + secR * Math.cos(secAngle + sliceAngle);
+        const sy2 = secCy + secR * Math.sin(secAngle + sliceAngle);
+        const largeArc = sliceAngle > Math.PI ? 1 : 0;
+
+        parts.push(
+          `<path d="M${round(secPieCx)},${round(secCy)} L${round(sx1)},${round(sy1)} A${round(secR)},${round(secR)} 0 ${largeArc},1 ${round(sx2)},${round(sy2)} Z" ${fillAttr(color)}/>`,
+        );
+        secAngle += sliceAngle;
+      }
+    }
+  }
+
+  return parts.join("");
+}
+
 function renderLegend(chart: ChartData, chartW: number, chartH: number, position: string): string {
   const parts: string[] = [];
 
   const entries =
-    chart.chartType === "pie" || chart.chartType === "doughnut"
+    chart.chartType === "pie" || chart.chartType === "doughnut" || chart.chartType === "ofPie"
       ? chart.categories.map((cat, i) => ({
           label: cat,
           color: getPieSliceColor(i, chart),
