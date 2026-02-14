@@ -14,6 +14,8 @@ const BOLD_FACTOR = 1.05;
 const PX_PER_PT = 96 / 72;
 // OpenType メトリクスが無いフォントの行高さフォールバック (CSS 既定値相当)
 const DEFAULT_LINE_HEIGHT_RATIO = 1.2;
+// OpenType メトリクスが無いフォントの ascender 比率フォールバック
+const DEFAULT_ASCENDER_RATIO = 1.0;
 
 /**
  * フォントの自然な行高さ比率を返す。
@@ -27,6 +29,19 @@ export function getLineHeightRatio(
   const metrics = getFontMetrics(fontFamily) ?? getFontMetrics(fontFamilyEa);
   if (!metrics) return DEFAULT_LINE_HEIGHT_RATIO;
   return (metrics.ascender + Math.abs(metrics.descender)) / metrics.unitsPerEm;
+}
+
+/**
+ * フォントの ascender 比率を返す。
+ * ascender / unitsPerEm で計算。
+ * SVG の `<text y="...">` はベースライン位置を指定するため、
+ * 1行目のベースラインオフセットには行高さ比率ではなくこの値を使う。
+ * メトリクスが見つからない場合はフォールバック値 (1.0) を返す。
+ */
+export function getAscenderRatio(fontFamily?: string | null, fontFamilyEa?: string | null): number {
+  const metrics = getFontMetrics(fontFamily) ?? getFontMetrics(fontFamilyEa);
+  if (!metrics) return DEFAULT_ASCENDER_RATIO;
+  return metrics.ascender / metrics.unitsPerEm;
 }
 
 // CJK 文字判定 (Unicode Standard に基づくコードポイント範囲)

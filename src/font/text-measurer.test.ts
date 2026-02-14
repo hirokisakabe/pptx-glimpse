@@ -6,7 +6,7 @@ import {
   resetTextMeasurer,
   type TextMeasurer,
 } from "./text-measurer.js";
-import { measureTextWidth, getLineHeightRatio } from "../utils/text-measure.js";
+import { measureTextWidth, getLineHeightRatio, getAscenderRatio } from "../utils/text-measure.js";
 
 afterEach(() => {
   resetTextMeasurer();
@@ -24,6 +24,11 @@ describe("DefaultTextMeasurer", () => {
     const measurer = new DefaultTextMeasurer();
     expect(measurer.getLineHeightRatio("Calibri")).toBe(getLineHeightRatio("Calibri"));
   });
+
+  it("getAscenderRatio は既存関数と同じ結果を返す", () => {
+    const measurer = new DefaultTextMeasurer();
+    expect(measurer.getAscenderRatio("Calibri")).toBe(getAscenderRatio("Calibri"));
+  });
 });
 
 describe("setTextMeasurer / getTextMeasurer / resetTextMeasurer", () => {
@@ -35,16 +40,19 @@ describe("setTextMeasurer / getTextMeasurer / resetTextMeasurer", () => {
     const custom: TextMeasurer = {
       measureTextWidth: () => 42,
       getLineHeightRatio: () => 1.5,
+      getAscenderRatio: () => 0.9,
     };
     setTextMeasurer(custom);
     expect(getTextMeasurer().measureTextWidth("x", 12, false)).toBe(42);
     expect(getTextMeasurer().getLineHeightRatio()).toBe(1.5);
+    expect(getTextMeasurer().getAscenderRatio()).toBe(0.9);
   });
 
   it("resetTextMeasurer でデフォルトに戻る", () => {
     const custom: TextMeasurer = {
       measureTextWidth: () => 42,
       getLineHeightRatio: () => 1.5,
+      getAscenderRatio: () => 0.9,
     };
     setTextMeasurer(custom);
     resetTextMeasurer();
