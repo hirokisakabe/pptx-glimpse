@@ -2,12 +2,13 @@ import type { Fill } from "./fill.js";
 import type { Outline } from "./line.js";
 import type { Hyperlink, TextBody } from "./text.js";
 import type { EffectList } from "./effect.js";
+import type { Emu } from "../utils/unit-types.js";
 
 export interface Transform {
-  offsetX: number;
-  offsetY: number;
-  extentWidth: number;
-  extentHeight: number;
+  offsetX: Emu;
+  offsetY: Emu;
+  extentWidth: Emu;
+  extentHeight: Emu;
   rotation: number;
   flipH: boolean;
   flipV: boolean;

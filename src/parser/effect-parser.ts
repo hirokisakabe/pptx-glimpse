@@ -1,6 +1,7 @@
 import type { EffectList, OuterShadow, InnerShadow, Glow, SoftEdge } from "../model/effect.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import type { XmlNode } from "./xml-parser.js";
+import { asEmu } from "../utils/unit-types.js";
 
 export function parseEffectList(
   effectLstNode: XmlNode,
@@ -27,8 +28,8 @@ function parseOuterShadow(node: XmlNode, colorResolver: ColorResolver): OuterSha
   if (!color) return null;
 
   return {
-    blurRadius: Number(node["@_blurRad"] ?? 0),
-    distance: Number(node["@_dist"] ?? 0),
+    blurRadius: asEmu(Number(node["@_blurRad"] ?? 0)),
+    distance: asEmu(Number(node["@_dist"] ?? 0)),
     direction: Number(node["@_dir"] ?? 0) / 60000,
     color,
     alignment: (node["@_algn"] as string | undefined) ?? "b",
@@ -43,8 +44,8 @@ function parseInnerShadow(node: XmlNode, colorResolver: ColorResolver): InnerSha
   if (!color) return null;
 
   return {
-    blurRadius: Number(node["@_blurRad"] ?? 0),
-    distance: Number(node["@_dist"] ?? 0),
+    blurRadius: asEmu(Number(node["@_blurRad"] ?? 0)),
+    distance: asEmu(Number(node["@_dist"] ?? 0)),
     direction: Number(node["@_dir"] ?? 0) / 60000,
     color,
   };
@@ -57,7 +58,7 @@ function parseGlow(node: XmlNode, colorResolver: ColorResolver): Glow | null {
   if (!color) return null;
 
   return {
-    radius: Number(node["@_rad"] ?? 0),
+    radius: asEmu(Number(node["@_rad"] ?? 0)),
     color,
   };
 }
@@ -66,6 +67,6 @@ function parseSoftEdge(node: XmlNode): SoftEdge | null {
   if (!node) return null;
 
   return {
-    radius: Number(node["@_rad"] ?? 0),
+    radius: asEmu(Number(node["@_rad"] ?? 0)),
   };
 }

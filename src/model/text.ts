@@ -1,8 +1,9 @@
 import type { ResolvedColor } from "./fill.js";
+import type { Emu, HundredthPt, Pt } from "../utils/unit-types.js";
 
 /** defRPr に対応するデフォルトランプロパティ */
 export interface DefaultRunProperties {
-  fontSize?: number;
+  fontSize?: Pt;
   fontFamily?: string | null;
   fontFamilyEa?: string | null;
   fontFamilyCs?: string | null;
@@ -16,8 +17,8 @@ export interface DefaultRunProperties {
 /** defaultTextStyle の各レベルに対応するデフォルト段落プロパティ */
 export interface DefaultParagraphLevelProperties {
   alignment?: "l" | "ctr" | "r" | "just";
-  marginLeft?: number;
-  indent?: number;
+  marginLeft?: Emu;
+  indent?: Emu;
   defaultRunProperties?: DefaultRunProperties;
 }
 
@@ -56,10 +57,10 @@ export type TextVerticalType =
 
 export interface BodyProperties {
   anchor: "t" | "ctr" | "b";
-  marginLeft: number;
-  marginRight: number;
-  marginTop: number;
-  marginBottom: number;
+  marginLeft: Emu;
+  marginRight: Emu;
+  marginTop: Emu;
+  marginBottom: Emu;
   wrap: "square" | "none";
   autoFit: "noAutofit" | "normAutofit" | "spAutofit";
   fontScale: number;
@@ -92,12 +93,12 @@ export type BulletType =
 
 /** 段落間隔の値（ポイント指定またはパーセント指定） */
 export type SpacingValue =
-  | { type: "pts"; value: number } // 1/100 ポイント単位 (spcPts)
+  | { type: "pts"; value: HundredthPt } // 1/100 ポイント単位 (spcPts)
   | { type: "pct"; value: number }; // 1/1000 パーセント単位 (spcPct, 50000 = 50%)
 
 /** タブストップ定義 */
 export interface TabStop {
-  position: number; // EMU
+  position: Emu;
   alignment: "l" | "ctr" | "r" | "dec";
 }
 
@@ -111,8 +112,8 @@ export interface ParagraphProperties {
   bulletFont: string | null;
   bulletColor: ResolvedColor | null;
   bulletSizePct: number | null;
-  marginLeft: number;
-  indent: number;
+  marginLeft: Emu;
+  indent: Emu;
   tabStops: TabStop[];
 }
 
@@ -127,12 +128,12 @@ export interface Hyperlink {
 }
 
 export interface TextOutline {
-  width: number; // EMU
+  width: Emu;
   color: ResolvedColor;
 }
 
 export interface RunProperties {
-  fontSize: number | null;
+  fontSize: Pt | null;
   fontFamily: string | null;
   fontFamilyEa: string | null;
   fontFamilyCs: string | null;

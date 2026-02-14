@@ -1,3 +1,5 @@
+export type { Emu, Pt, HundredthPt } from "../utils/unit-types.js";
+export { asEmu, asPt, asHundredthPt } from "../utils/unit-types.js";
 export type { Presentation, SlideSize } from "./presentation.js";
 export type { Slide, Background } from "./slide.js";
 export type {

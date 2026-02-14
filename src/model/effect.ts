@@ -1,4 +1,5 @@
 import type { ResolvedColor } from "./fill.js";
+import type { Emu } from "../utils/unit-types.js";
 
 export interface EffectList {
   outerShadow: OuterShadow | null;
@@ -8,8 +9,8 @@ export interface EffectList {
 }
 
 export interface OuterShadow {
-  blurRadius: number;
-  distance: number;
+  blurRadius: Emu;
+  distance: Emu;
   direction: number;
   color: ResolvedColor;
   alignment: string;
@@ -17,19 +18,19 @@ export interface OuterShadow {
 }
 
 export interface InnerShadow {
-  blurRadius: number;
-  distance: number;
+  blurRadius: Emu;
+  distance: Emu;
   direction: number;
   color: ResolvedColor;
 }
 
 export interface Glow {
-  radius: number;
+  radius: Emu;
   color: ResolvedColor;
 }
 
 export interface SoftEdge {
-  radius: number;
+  radius: Emu;
 }
 
 export interface BlipEffects {
@@ -45,7 +46,7 @@ export interface BiLevelEffect {
 }
 
 export interface BlurEffect {
-  radius: number;
+  radius: Emu;
   grow: boolean;
 }
 

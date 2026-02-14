@@ -3,6 +3,7 @@ import type { DefaultTextStyle } from "../model/text.js";
 import { parseXml, type XmlNode } from "./xml-parser.js";
 import { parseListStyle } from "./text-style-parser.js";
 import { debug } from "../warning-logger.js";
+import { asEmu } from "../utils/unit-types.js";
 
 export interface PresentationInfo {
   slideSize: SlideSize;
@@ -12,8 +13,8 @@ export interface PresentationInfo {
   protection?: Protection;
 }
 
-const DEFAULT_SLIDE_WIDTH = 9144000;
-const DEFAULT_SLIDE_HEIGHT = 5143500;
+const DEFAULT_SLIDE_WIDTH = asEmu(9144000);
+const DEFAULT_SLIDE_HEIGHT = asEmu(5143500);
 
 export function parsePresentation(xml: string): PresentationInfo {
   const parsed = parseXml(xml);
@@ -37,8 +38,8 @@ export function parsePresentation(xml: string): PresentationInfo {
     slideSize = { width: DEFAULT_SLIDE_WIDTH, height: DEFAULT_SLIDE_HEIGHT };
   } else {
     slideSize = {
-      width: Number(sldSz["@_cx"]),
-      height: Number(sldSz["@_cy"]),
+      width: asEmu(Number(sldSz["@_cx"])),
+      height: asEmu(Number(sldSz["@_cy"])),
     };
   }
 

@@ -1,6 +1,7 @@
 import type { Slide } from "./slide.js";
 import type { Theme, ColorMap } from "./theme.js";
 import type { DefaultTextStyle, TxStyles } from "./text.js";
+import type { Emu } from "../utils/unit-types.js";
 
 export interface EmbeddedFont {
   typeface: string;
@@ -30,6 +31,6 @@ export interface Presentation {
 }
 
 export interface SlideSize {
-  width: number;
-  height: number;
+  width: Emu;
+  height: Emu;
 }

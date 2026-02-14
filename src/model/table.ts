@@ -2,6 +2,7 @@ import type { Fill } from "./fill.js";
 import type { Outline } from "./line.js";
 import type { TextBody } from "./text.js";
 import type { Transform } from "./shape.js";
+import type { Emu } from "../utils/unit-types.js";
 
 export interface TableElement {
   type: "table";
@@ -15,12 +16,12 @@ export interface TableData {
 }
 
 export interface TableRow {
-  height: number;
+  height: Emu;
   cells: TableCell[];
 }
 
 export interface TableColumn {
-  width: number;
+  width: Emu;
 }
 
 export interface TableCell {

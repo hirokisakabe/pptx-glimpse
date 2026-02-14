@@ -1,3 +1,5 @@
+import type { Emu } from "../utils/unit-types.js";
+
 export type Fill = SolidFill | GradientFill | ImageFill | PatternFill | NoFill;
 
 export interface SolidFill {
@@ -27,8 +29,8 @@ export interface ImageFill {
 }
 
 export interface ImageFillTile {
-  tx: number;
-  ty: number;
+  tx: Emu;
+  ty: Emu;
   sx: number;
   sy: number;
   flip: "none" | "x" | "y" | "xy";

@@ -22,6 +22,7 @@ import type { Relationship } from "./relationship-parser.js";
 import { resolveRelationshipTarget } from "./relationship-parser.js";
 import type { XmlNode } from "./xml-parser.js";
 import { uint8ArrayToBase64 } from "../utils/base64.js";
+import { asEmu } from "../utils/unit-types.js";
 import { warn, debug } from "../warning-logger.js";
 
 export interface FillParseContext {
@@ -97,8 +98,8 @@ function parseBlipFill(blipFillNode: XmlNode, context: FillParseContext): ImageF
   const tileNode = blipFillNode.tile as XmlNode | undefined;
   const tile = tileNode
     ? {
-        tx: Number(tileNode["@_tx"] ?? 0),
-        ty: Number(tileNode["@_ty"] ?? 0),
+        tx: asEmu(Number(tileNode["@_tx"] ?? 0)),
+        ty: asEmu(Number(tileNode["@_ty"] ?? 0)),
         sx: Number(tileNode["@_sx"] ?? 100000) / 100000,
         sy: Number(tileNode["@_sy"] ?? 100000) / 100000,
         flip: ((tileNode["@_flip"] as string) ?? "none") as ImageFillTile["flip"],
@@ -169,7 +170,7 @@ export function parseOutline(lnNode: XmlNode, colorResolver: ColorResolver): Out
     warn("ln.pattFill", "pattern line fill not implemented");
   }
 
-  const width = Number(lnNode["@_w"] ?? 12700);
+  const width = asEmu(Number(lnNode["@_w"] ?? 12700));
 
   let fill: SolidFill | GradientFill | null = null;
   if (lnNode.solidFill) {

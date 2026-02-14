@@ -11,6 +11,8 @@ import type {
 import type { Transform } from "../model/shape.js";
 import { EMU_PER_INCH } from "../utils/constants.js";
 import { emuToPixels } from "../utils/emu.js";
+import type { Emu } from "../utils/unit-types.js";
+import { asEmu } from "../utils/unit-types.js";
 import { wrapParagraph } from "../utils/text-wrap.js";
 import { getMetricsFallbackFont } from "../data/font-metrics.js";
 import { getTextMeasurer } from "../font/text-measurer.js";
@@ -767,7 +769,7 @@ function getDefaultAscenderRatio(paragraphs: TextBody["paragraphs"]): number {
  * spAutofit: テキスト量に応じた必要な図形の高さ (EMU) を計算する。
  * テキストが元の図形に収まる場合は null を返す。
  */
-export function computeSpAutofitHeight(textBody: TextBody, transform: Transform): number | null {
+export function computeSpAutofitHeight(textBody: TextBody, transform: Transform): Emu | null {
   const { bodyProperties, paragraphs } = textBody;
 
   const hasText = paragraphs.some((p) => p.runs.some((r) => r.text.length > 0));
@@ -791,7 +793,7 @@ export function computeSpAutofitHeight(textBody: TextBody, transform: Transform)
   if (requiredHeightPx <= height) return null;
 
   const DEFAULT_DPI = 96;
-  return (requiredHeightPx / DEFAULT_DPI) * EMU_PER_INCH;
+  return asEmu((requiredHeightPx / DEFAULT_DPI) * EMU_PER_INCH);
 }
 
 function computeShrinkToFitScale(
