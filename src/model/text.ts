@@ -125,6 +125,11 @@ export interface Hyperlink {
   tooltip?: string;
 }
 
+export interface TextOutline {
+  width: number; // EMU
+  color: ResolvedColor;
+}
+
 export interface RunProperties {
   fontSize: number | null;
   fontFamily: string | null;
@@ -137,4 +142,5 @@ export interface RunProperties {
   color: ResolvedColor | null;
   baseline: number;
   hyperlink: Hyperlink | null;
+  outline: TextOutline | null;
 }

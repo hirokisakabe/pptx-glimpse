@@ -674,6 +674,16 @@ function buildStyleAttrs(
     styles.push(`baseline-shift="sub"`);
   }
 
+  if (props.outline) {
+    const strokeWidth = emuToPixels(props.outline.width);
+    styles.push(`stroke="${props.outline.color.hex}"`);
+    styles.push(`stroke-width="${strokeWidth}"`);
+    if (props.outline.color.alpha < 1) {
+      styles.push(`stroke-opacity="${props.outline.color.alpha}"`);
+    }
+    styles.push(`paint-order="stroke"`);
+  }
+
   return styles.join(" ");
 }
 

@@ -89,6 +89,11 @@ function renderElement(element: SlideElement, defs: string[]): string | null {
     rendered = addAriaLabel(rendered, element.altText);
   }
 
+  if (rendered && "hyperlink" in element && element.hyperlink) {
+    const href = escapeXmlAttr(element.hyperlink.url);
+    rendered = `<a href="${href}">${rendered}</a>`;
+  }
+
   return rendered;
 }
 
@@ -175,4 +180,12 @@ function removeDefs(svgFragment: string): string {
     .replace(/<pattern[^]*?<\/pattern>/g, "")
     .replace(/<filter[^]*?<\/filter>/g, "")
     .replace(/<marker[^]*?<\/marker>/g, "");
+}
+
+function escapeXmlAttr(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }

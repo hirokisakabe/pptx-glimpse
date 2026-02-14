@@ -17,6 +17,7 @@ import type {
   TextRun,
   RunProperties,
   Hyperlink,
+  TextOutline,
   BulletType,
   AutoNumScheme,
   DefaultTextStyle,
@@ -516,6 +517,7 @@ function parseShape(
   const nvSpPr = sp.nvSpPr as XmlNode | undefined;
   const cNvPr = nvSpPr?.cNvPr as XmlNode | undefined;
   const altText = cNvPr?.["@_descr"] as string | undefined;
+  const hyperlink = parseHyperlink(cNvPr?.hlinkClick as XmlNode | undefined, rels);
   const nvPr = nvSpPr?.nvPr as XmlNode | undefined;
   const ph = nvPr?.ph as XmlNode | undefined;
   const placeholderType = ph ? ((ph["@_type"] as string | undefined) ?? "body") : undefined;
@@ -532,6 +534,7 @@ function parseShape(
     ...(placeholderType !== undefined && { placeholderType }),
     ...(placeholderIdx !== undefined && { placeholderIdx }),
     ...(altText && { altText }),
+    ...(hyperlink && { hyperlink }),
   };
 }
 
@@ -1338,6 +1341,7 @@ function parseRunProperties(
       color: null,
       baseline: 0,
       hyperlink: null,
+      outline: null,
     };
   }
 
@@ -1392,6 +1396,17 @@ function parseRunProperties(
 
   const hyperlink = parseHyperlink(rPr.hlinkClick as XmlNode | undefined, rels);
 
+  const ln = rPr.ln as XmlNode | undefined;
+  let outline: TextOutline | null = null;
+  if (ln) {
+    const lnWidth = Number(ln["@_w"] ?? 12700);
+    const lnFill = ln.solidFill as XmlNode | undefined;
+    const lnColor = lnFill ? colorResolver.resolve(lnFill) : null;
+    if (lnColor) {
+      outline = { width: lnWidth, color: lnColor };
+    }
+  }
+
   return {
     fontSize,
     fontFamily,
@@ -1404,6 +1419,7 @@ function parseRunProperties(
     color,
     baseline,
     hyperlink,
+    outline,
   };
 }
 
