@@ -1,6 +1,6 @@
 # pptx-glimpse
 
-A TypeScript library to render PPTX slides as SVG / PNG.
+A Node.js library to render PPTX as SVG / PNG.
 
 ## Requirements
 
