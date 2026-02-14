@@ -84,7 +84,7 @@ function buildShapeXml(txBodyContent: string, spPrExtra: string = ""): string {
 function parseAndRenderShape(
   xml: string,
   rels?: Map<string, Relationship>,
-): { shape: ShapeElement; svg: string } {
+): { shape: ShapeElement; svg: string; defs: string[] } {
   const parsed = parseXml(xml);
   const elements = parseShapeTree(
     parsed.spTree as XmlNode | undefined,
@@ -96,8 +96,9 @@ function parseAndRenderShape(
   expect(elements).toHaveLength(1);
   expect(elements[0].type).toBe("shape");
   const shape = elements[0] as ShapeElement;
-  const svg = renderShape(shape);
-  return { shape, svg };
+  const result = renderShape(shape);
+  const svg = result.content;
+  return { shape, svg, defs: result.defs };
 }
 
 function extractDyValues(svg: string): number[] {
@@ -714,10 +715,12 @@ describe("parse-render integration: fill types", () => {
         </p:spPr>
       </p:sp>
     `);
-    const { svg } = parseAndRenderShape(xml);
-    expect(svg).toContain("<linearGradient");
-    expect(svg).toContain("#FF0000");
-    expect(svg).toContain("#0000FF");
+    const { svg, defs } = parseAndRenderShape(xml);
+    const allDefs = defs.join("");
+    expect(allDefs).toContain("<linearGradient");
+    expect(allDefs).toContain("#FF0000");
+    expect(allDefs).toContain("#0000FF");
+    expect(svg).toContain("url(#grad-");
   });
 });
 

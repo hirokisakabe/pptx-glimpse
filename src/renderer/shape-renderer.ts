@@ -1,4 +1,5 @@
 import type { ShapeElement, ConnectorElement } from "../model/shape.js";
+import type { RenderResult } from "./render-result.js";
 import { renderGeometry } from "./geometry/index.js";
 import { renderFillAttrs, renderOutlineAttrs, renderMarkers } from "./fill-renderer.js";
 import { renderTextBody, computeSpAutofitHeight } from "./text-renderer.js";
@@ -6,7 +7,7 @@ import { renderEffects } from "./effect-renderer.js";
 import { emuToPixels } from "../utils/emu.js";
 import { buildTransformAttr } from "./transform.js";
 
-export function renderShape(shape: ShapeElement): string {
+export function renderShape(shape: ShapeElement): RenderResult {
   const { transform, geometry, fill, outline, textBody, effects } = shape;
 
   // spAutofit: テキスト量に応じて図形の高さを拡大
@@ -28,17 +29,12 @@ export function renderShape(shape: ShapeElement): string {
 
   const geometrySvg = renderGeometry(geometry, w, h);
 
-  const parts: string[] = [];
-  if (fillResult.defs) {
-    parts.push(fillResult.defs);
-  }
-  if (outlineResult.defs) {
-    parts.push(outlineResult.defs);
-  }
-  if (effectResult.filterDefs) {
-    parts.push(effectResult.filterDefs);
-  }
+  const defs: string[] = [];
+  if (fillResult.defs) defs.push(fillResult.defs);
+  if (outlineResult.defs) defs.push(outlineResult.defs);
+  if (effectResult.filterDefs) defs.push(effectResult.filterDefs);
 
+  const parts: string[] = [];
   const filterAttr = effectResult.filterAttr ? ` ${effectResult.filterAttr}` : "";
   parts.push(`<g transform="${transformAttr}"${filterAttr}>`);
 
@@ -59,10 +55,10 @@ export function renderShape(shape: ShapeElement): string {
   }
 
   parts.push("</g>");
-  return parts.join("");
+  return { content: parts.join(""), defs };
 }
 
-export function renderConnector(connector: ConnectorElement): string {
+export function renderConnector(connector: ConnectorElement): RenderResult {
   const { transform, geometry, outline, effects } = connector;
   const w = emuToPixels(transform.extentWidth);
   const h = emuToPixels(transform.extentHeight);
@@ -71,11 +67,12 @@ export function renderConnector(connector: ConnectorElement): string {
   const effectResult = renderEffects(effects);
   const markerResult = renderMarkers(outline);
 
-  const parts: string[] = [];
-  if (outlineResult.defs) parts.push(outlineResult.defs);
-  if (markerResult.defs) parts.push(markerResult.defs);
-  if (effectResult.filterDefs) parts.push(effectResult.filterDefs);
+  const defs: string[] = [];
+  if (outlineResult.defs) defs.push(outlineResult.defs);
+  if (markerResult.defs) defs.push(markerResult.defs);
+  if (effectResult.filterDefs) defs.push(effectResult.filterDefs);
 
+  const parts: string[] = [];
   const filterAttr = effectResult.filterAttr ? ` ${effectResult.filterAttr}` : "";
   const markerAttrs = [markerResult.startAttr, markerResult.endAttr].filter(Boolean).join(" ");
   const markerAttrStr = markerAttrs ? ` ${markerAttrs}` : "";
@@ -93,5 +90,5 @@ export function renderConnector(connector: ConnectorElement): string {
     );
   }
   parts.push("</g>");
-  return parts.join("");
+  return { content: parts.join(""), defs };
 }
