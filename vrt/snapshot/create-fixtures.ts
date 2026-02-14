@@ -5881,6 +5881,17 @@ async function createVerticalTextFixture(): Promise<void> {
       <a:t>縦書きテスト</a:t>
     </a:r>
   </a:p>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="ja-JP" sz="1400">
+        <a:solidFill><a:srgbClr val="333333"/></a:solidFill>
+        <a:latin typeface="Calibri"/>
+        <a:ea typeface="Meiryo"/>
+      </a:rPr>
+      <a:t>ABC漢字DEF</a:t>
+    </a:r>
+  </a:p>
 </p:txBody>`,
     }),
   );

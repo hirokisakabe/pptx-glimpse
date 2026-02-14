@@ -985,6 +985,7 @@ function renderSegmentAsPath(
   fontScale: number,
   defaultFontSize: number,
   fontResolver: TextPathFontResolver,
+  vert?: TextVerticalType,
 ): { svg: string; width: number } {
   const fontSize = (props.fontSize ?? defaultFontSize) * fontScale;
   const fontSizePx = fontSize * PX_PER_PT;
@@ -1034,8 +1035,71 @@ function renderSegmentAsPath(
     totalWidth += segWidth;
   };
 
-  // CJK/ラテンのスクリプト分割
-  if (needsScriptSplit(props)) {
+  /**
+   * eaVert 時の CJK 文字直立レンダリング。
+   * 各 CJK 文字を個別にレンダリングし、-90° カウンター回転で
+   * グループの 90° CW 回転を打ち消して直立表示にする。
+   */
+  const processCjkUpright = (
+    segText: string,
+    fontFamily: string | null,
+    fontFamilyEa: string | null,
+  ) => {
+    if (segText.length === 0) return;
+
+    const font = fontResolver.resolveFont(fontFamily, fontFamilyEa);
+    const fillAttrs = buildPathFillAttrs(props);
+
+    for (const char of segText) {
+      const charWidth = getTextMeasurer().measureTextWidth(
+        char,
+        fontSize,
+        props.bold,
+        fontFamily,
+        fontFamilyEa,
+      );
+
+      if (font) {
+        const charX = x + totalWidth;
+        const path = font.getPath(char, charX, effectiveY, fontSizePx);
+        const pathData = path.toPathData(2);
+
+        if (pathData && pathData.length > 0) {
+          // 回転中心: 文字の中心点
+          const cx = charX + charWidth / 2;
+          const cy =
+            effectiveY - (fontSizePx * (font.ascender + font.descender)) / 2 / font.unitsPerEm;
+          parts.push(
+            `<g transform="rotate(-90, ${cx.toFixed(2)}, ${cy.toFixed(2)})"><path d="${pathData}" ${fillAttrs}/></g>`,
+          );
+        }
+      }
+
+      // 下線・取り消し線（カウンター回転の外側に配置）
+      if (props.underline || props.strikethrough) {
+        parts.push(
+          ...renderTextDecorations(x + totalWidth, effectiveY, charWidth, fontSizePx, props),
+        );
+      }
+
+      totalWidth += charWidth;
+    }
+  };
+
+  // eaVert: CJK 文字は直立、非 CJK はグループ回転で 90° CW
+  if (vert === "eaVert") {
+    const scriptParts = splitByScript(processedText);
+    for (const part of scriptParts) {
+      const ff = part.isEa ? (props.fontFamilyEa ?? props.fontFamily) : props.fontFamily;
+      const ffEa = part.isEa ? props.fontFamilyEa : props.fontFamilyEa;
+      if (part.isEa) {
+        processCjkUpright(part.text, ff, ffEa);
+      } else {
+        processSegment(part.text, ff, ffEa);
+      }
+    }
+  } else if (needsScriptSplit(props)) {
+    // CJK/ラテンのスクリプト分割
     const scriptParts = splitByScript(processedText);
     for (const part of scriptParts) {
       const ff = part.isEa ? props.fontFamilyEa : props.fontFamily;
@@ -1259,6 +1323,7 @@ function renderTextBodyAsPath(
             fontScale,
             defaultFontSize,
             fontResolver,
+            bodyProperties.vert,
           );
           if (result.svg) elements.push(result.svg);
           currentX += result.width;
@@ -1318,6 +1383,7 @@ function renderTextBodyAsPath(
           fontScale,
           defaultFontSize,
           fontResolver,
+          bodyProperties.vert,
         );
         if (result.svg) elements.push(result.svg);
         currentX += result.width;
