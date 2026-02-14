@@ -187,10 +187,10 @@ Supports conversion of static visual content in PowerPoint. Dynamic elements suc
 
 #### Charts
 
-| Feature          | Details                                                                                    |
-| ---------------- | ------------------------------------------------------------------------------------------ |
-| Supported charts | Bar chart (vertical/horizontal), line chart, pie chart, scatter plot                       |
-| Chart elements   | Title, legend (position), series (name/values/categories/color), category axis, value axis |
+| Feature          | Details                                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| Supported charts | Bar chart (vertical/horizontal), line chart, pie chart, scatter plot, area chart, doughnut, bubble, radar     |
+| Chart elements   | Title, legend (position), series (name/values/categories/color), category axis, value axis                   |
 
 #### SmartArt
 
@@ -214,9 +214,9 @@ Supports conversion of static visual content in PowerPoint. Dynamic elements suc
 | -------------- | ---------------------------------------------------------------------------------------------- |
 | Fill           | Path gradient (rect/shape type)                                                                |
 | Effects        | Reflection, 3D rotation / extrusion, artistic effects                                          |
-| Charts         | Area, radar, doughnut, bubble, stock, combo, histogram, box plot, waterfall, treemap, sunburst |
+| Charts         | Stock, combo, histogram, box plot, waterfall, treemap, sunburst                                |
 | Chart details  | Data labels, axis titles / tick marks / grid lines, error bars, trendlines                     |
-| Text           | Vertical text, individual text effects (shadow/glow), text outline, text columns               |
+| Text           | Individual text effects (shadow/glow), text columns                                            |
 | Tables         | Table style template application, diagonal borders                                             |
 | Shapes         | Shape operations (Union/Subtract/Intersect/Fragment)                                           |
 | Multimedia     | Embedded video / audio                                                                         |

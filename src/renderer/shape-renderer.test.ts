@@ -62,30 +62,31 @@ describe("renderShape", () => {
   it("renders basic shape with fill and outline", () => {
     const result = renderShape(makeShape());
 
-    expect(result).toContain('<g transform="translate(96, 96)">');
-    expect(result).toContain('fill="#FF0000"');
-    expect(result).toContain('stroke="#000000"');
-    expect(result).toContain("</g>");
+    expect(result.content).toContain('<g transform="translate(96, 96)">');
+    expect(result.content).toContain('fill="#FF0000"');
+    expect(result.content).toContain('stroke="#000000"');
+    expect(result.content).toContain("</g>");
+    expect(result.defs).toHaveLength(0);
   });
 
   it("renders shape with no fill", () => {
     const result = renderShape(makeShape({ fill: { type: "none" } }));
-    expect(result).toContain('fill="none"');
+    expect(result.content).toContain('fill="none"');
   });
 
   it("renders shape with null fill", () => {
     const result = renderShape(makeShape({ fill: null }));
-    expect(result).toContain('fill="none"');
+    expect(result.content).toContain('fill="none"');
   });
 
   it("renders shape with null outline", () => {
     const result = renderShape(makeShape({ outline: null }));
-    expect(result).toContain('stroke="none"');
+    expect(result.content).toContain('stroke="none"');
   });
 
   it("renders shape with rotation", () => {
     const result = renderShape(makeShape({ transform: makeTransform({ rotation: 90 }) }));
-    expect(result).toContain("rotate(90, 96, 48)");
+    expect(result.content).toContain("rotate(90, 96, 48)");
   });
 
   it("renders shape with effects", () => {
@@ -107,8 +108,10 @@ describe("renderShape", () => {
       }),
     );
 
-    expect(result).toContain('<filter id="effect-test-uuid-0"');
-    expect(result).toContain('filter="url(#effect-test-uuid-0)"');
+    expect(result.defs).toHaveLength(1);
+    expect(result.defs[0]).toContain('<filter id="effect-test-uuid-0"');
+    expect(result.content).toContain('filter="url(#effect-test-uuid-0)"');
+    expect(result.content).not.toContain("<filter");
   });
 
   it("renders shape with gradient fill", () => {
@@ -126,8 +129,10 @@ describe("renderShape", () => {
       }),
     );
 
-    expect(result).toContain("<linearGradient");
-    expect(result).toContain("url(#grad-");
+    expect(result.defs).toHaveLength(1);
+    expect(result.defs[0]).toContain("<linearGradient");
+    expect(result.content).toContain("url(#grad-");
+    expect(result.content).not.toContain("<linearGradient");
   });
 });
 
@@ -135,26 +140,27 @@ describe("renderConnector", () => {
   it("renders basic connector with line element", () => {
     const result = renderConnector(makeConnector());
 
-    expect(result).toContain('<g transform="translate(96, 96)">');
-    expect(result).toContain('<line x1="0" y1="0" x2="192" y2="96"');
-    expect(result).toContain('stroke="#000000"');
-    expect(result).toContain('fill="none"');
-    expect(result).toContain("</g>");
+    expect(result.content).toContain('<g transform="translate(96, 96)">');
+    expect(result.content).toContain('<line x1="0" y1="0" x2="192" y2="96"');
+    expect(result.content).toContain('stroke="#000000"');
+    expect(result.content).toContain('fill="none"');
+    expect(result.content).toContain("</g>");
+    expect(result.defs).toHaveLength(0);
   });
 
   it("renders connector with null outline", () => {
     const result = renderConnector(makeConnector({ outline: null }));
-    expect(result).toContain('stroke="none"');
+    expect(result.content).toContain('stroke="none"');
   });
 
   it("renders connector with rotation", () => {
     const result = renderConnector(makeConnector({ transform: makeTransform({ rotation: 45 }) }));
-    expect(result).toContain("rotate(45, 96, 48)");
+    expect(result.content).toContain("rotate(45, 96, 48)");
   });
 
   it("renders connector with flipH", () => {
     const result = renderConnector(makeConnector({ transform: makeTransform({ flipH: true }) }));
-    expect(result).toContain("translate(192, 0) scale(-1, 1)");
+    expect(result.content).toContain("translate(192, 0) scale(-1, 1)");
   });
 
   it("renders connector with effects", () => {
@@ -169,8 +175,9 @@ describe("renderConnector", () => {
       }),
     );
 
-    expect(result).toContain("<filter");
-    expect(result).toContain("filter=");
+    expect(result.defs).toHaveLength(1);
+    expect(result.defs[0]).toContain("<filter");
+    expect(result.content).toContain("filter=");
   });
 
   it("renders connector with dash style", () => {
@@ -186,7 +193,7 @@ describe("renderConnector", () => {
       }),
     );
 
-    expect(result).toContain('stroke="#FF0000"');
-    expect(result).toContain("stroke-dasharray=");
+    expect(result.content).toContain('stroke="#FF0000"');
+    expect(result.content).toContain("stroke-dasharray=");
   });
 });

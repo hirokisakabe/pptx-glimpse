@@ -1,5 +1,6 @@
 import type { ChartElement, ChartData, ChartSeries } from "../model/chart.js";
 import type { ResolvedColor } from "../model/fill.js";
+import type { RenderResult } from "./render-result.js";
 import { emuToPixels } from "../utils/emu.js";
 import { buildTransformAttr } from "./transform.js";
 
@@ -12,7 +13,7 @@ const DEFAULT_SERIES_COLORS: ResolvedColor[] = [
   { hex: "#70AD47", alpha: 1 },
 ];
 
-export function renderChart(element: ChartElement): string {
+export function renderChart(element: ChartElement): RenderResult {
   const { transform, chart } = element;
   const w = emuToPixels(transform.extentWidth);
   const h = emuToPixels(transform.extentHeight);
@@ -75,7 +76,7 @@ export function renderChart(element: ChartElement): string {
   }
 
   parts.push("</g>");
-  return parts.join("");
+  return { content: parts.join(""), defs: [] };
 }
 
 function renderChartTitle(title: string, chartWidth: number): string {

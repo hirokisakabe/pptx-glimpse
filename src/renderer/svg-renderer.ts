@@ -1,6 +1,7 @@
 import type { Slide } from "../model/slide.js";
 import type { SlideSize } from "../model/presentation.js";
 import type { SlideElement, GroupElement } from "../model/shape.js";
+import type { RenderResult } from "./render-result.js";
 import { emuToPixels } from "../utils/emu.js";
 import { renderShape, renderConnector } from "./shape-renderer.js";
 import { renderImage } from "./image-renderer.js";
@@ -38,8 +39,11 @@ export function renderSlideToSvg(slide: Slide, slideSize: SlideSize): string {
 
   // Elements
   for (const element of slide.elements) {
-    const rendered = renderElement(element, defs);
-    if (rendered) parts.push(rendered);
+    const result = renderElement(element);
+    if (result) {
+      parts.push(result.content);
+      defs.push(...result.defs);
+    }
   }
 
   // Insert defs if any
@@ -51,44 +55,41 @@ export function renderSlideToSvg(slide: Slide, slideSize: SlideSize): string {
   return parts.join("");
 }
 
-function renderElement(element: SlideElement, defs: string[]): string | null {
-  let rendered: string | null = null;
+function renderElement(element: SlideElement): RenderResult | null {
+  let result: RenderResult | null = null;
   switch (element.type) {
-    case "shape": {
-      rendered = extractAndRemoveDefs(renderShape(element), defs);
+    case "shape":
+      result = renderShape(element);
       break;
-    }
-    case "image": {
-      rendered = extractAndRemoveDefs(renderImage(element), defs);
+    case "image":
+      result = renderImage(element);
       break;
-    }
-    case "connector": {
-      rendered = extractAndRemoveDefs(renderConnector(element), defs);
+    case "connector":
+      result = renderConnector(element);
       break;
-    }
     case "group":
-      rendered = renderGroup(element, defs);
+      result = renderGroup(element);
       break;
     case "chart":
-      rendered = renderChart(element);
+      result = renderChart(element);
       break;
     case "table":
-      rendered = renderTable(element, defs);
+      result = renderTable(element);
       break;
     default:
       return null;
   }
 
-  if (rendered && "altText" in element && element.altText) {
-    rendered = addAriaLabel(rendered, element.altText);
+  if (result && "altText" in element && element.altText) {
+    result = { ...result, content: addAriaLabel(result.content, element.altText) };
   }
 
-  if (rendered && "hyperlink" in element && element.hyperlink) {
+  if (result && "hyperlink" in element && element.hyperlink) {
     const href = escapeXmlAttr(element.hyperlink.url);
-    rendered = `<a href="${href}">${rendered}</a>`;
+    result = { ...result, content: `<a href="${href}">${result.content}</a>` };
   }
 
-  return rendered;
+  return result;
 }
 
 function addAriaLabel(svgFragment: string, altText: string): string {
@@ -100,7 +101,7 @@ function addAriaLabel(svgFragment: string, altText: string): string {
   return svgFragment.replace(/^<(g|image|path)\b/, `<$1 role="img" aria-label="${escaped}"`);
 }
 
-function renderGroup(group: GroupElement, defs: string[]): string {
+function renderGroup(group: GroupElement): RenderResult {
   const x = emuToPixels(group.transform.offsetX);
   const y = emuToPixels(group.transform.offsetY);
   const w = emuToPixels(group.transform.extentWidth);
@@ -133,27 +134,19 @@ function renderGroup(group: GroupElement, defs: string[]): string {
   transformParts.push(`translate(${-chX}, ${-chY})`);
 
   const parts: string[] = [];
+  const defs: string[] = [];
   parts.push(`<g transform="${transformParts.join(" ")}">`);
 
   for (const child of group.children) {
-    const rendered = renderElement(child, defs);
-    if (rendered) parts.push(rendered);
+    const childResult = renderElement(child);
+    if (childResult) {
+      parts.push(childResult.content);
+      defs.push(...childResult.defs);
+    }
   }
 
   parts.push("</g>");
-  return parts.join("");
-}
-
-// 5 種類の defs タグを 1 つの正規表現で抽出・除去する。
-// 各パターンは開始タグと終了タグが一致するため、誤マッチのリスクはない。
-const DEFS_TAGS = ["linearGradient", "radialGradient", "pattern", "filter", "marker"];
-const DEFS_RE = new RegExp(DEFS_TAGS.map((tag) => `<${tag}[^]*?<\\/${tag}>`).join("|"), "g");
-
-function extractAndRemoveDefs(svgFragment: string, defs: string[]): string {
-  return svgFragment.replace(DEFS_RE, (match) => {
-    defs.push(match);
-    return "";
-  });
+  return { content: parts.join(""), defs };
 }
 
 function escapeXmlAttr(str: string): string {

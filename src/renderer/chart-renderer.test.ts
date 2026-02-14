@@ -34,9 +34,9 @@ describe("renderChart", () => {
         categories: ["A", "B", "C"],
       });
 
-      const svg = renderChart(element);
+      const result = renderChart(element);
       // Should contain rect elements for the 3 bars
-      const barRects = svg.match(/<rect[^>]*fill="#4472C4"[^>]*\/>/g);
+      const barRects = result.content.match(/<rect[^>]*fill="#4472C4"[^>]*\/>/g);
       expect(barRects).not.toBeNull();
       expect(barRects!.length).toBe(3);
     });
@@ -48,8 +48,8 @@ describe("renderChart", () => {
         categories: ["Category 1"],
       });
 
-      const svg = renderChart(element);
-      expect(svg).toContain("Category 1");
+      const result = renderChart(element);
+      expect(result.content).toContain("Category 1");
     });
 
     it("renders multiple series", () => {
@@ -62,9 +62,9 @@ describe("renderChart", () => {
         categories: ["A"],
       });
 
-      const svg = renderChart(element);
-      expect(svg).toContain('fill="#4472C4"');
-      expect(svg).toContain('fill="#ED7D31"');
+      const result = renderChart(element);
+      expect(result.content).toContain('fill="#4472C4"');
+      expect(result.content).toContain('fill="#ED7D31"');
     });
   });
 
@@ -76,9 +76,9 @@ describe("renderChart", () => {
         categories: ["A", "B", "C"],
       });
 
-      const svg = renderChart(element);
-      expect(svg).toContain("<polyline");
-      expect(svg).toContain('stroke="#4472C4"');
+      const result = renderChart(element);
+      expect(result.content).toContain("<polyline");
+      expect(result.content).toContain('stroke="#4472C4"');
     });
 
     it("renders data point markers", () => {
@@ -88,8 +88,8 @@ describe("renderChart", () => {
         categories: ["A", "B"],
       });
 
-      const svg = renderChart(element);
-      const circles = svg.match(/<circle[^>]*fill="#4472C4"[^>]*\/>/g);
+      const result = renderChart(element);
+      const circles = result.content.match(/<circle[^>]*fill="#4472C4"[^>]*\/>/g);
       expect(circles).not.toBeNull();
       expect(circles!.length).toBe(2);
     });
@@ -103,8 +103,8 @@ describe("renderChart", () => {
         categories: ["A", "B"],
       });
 
-      const svg = renderChart(element);
-      const paths = svg.match(/<path[^>]*d="M[^"]*A[^"]*Z"[^>]*\/>/g);
+      const result = renderChart(element);
+      const paths = result.content.match(/<path[^>]*d="M[^"]*A[^"]*Z"[^>]*\/>/g);
       expect(paths).not.toBeNull();
       expect(paths!.length).toBe(2);
     });
@@ -116,8 +116,8 @@ describe("renderChart", () => {
         categories: ["A"],
       });
 
-      const svg = renderChart(element);
-      expect(svg).toContain("<circle");
+      const result = renderChart(element);
+      expect(result.content).toContain("<circle");
     });
   });
 
@@ -130,8 +130,8 @@ describe("renderChart", () => {
         categories: ["A", "B"],
       });
 
-      const svg = renderChart(element);
-      const paths = svg.match(/<path[^>]*d="M[^"]*A[^"]*A[^"]*Z"[^>]*\/>/g);
+      const result = renderChart(element);
+      const paths = result.content.match(/<path[^>]*d="M[^"]*A[^"]*A[^"]*Z"[^>]*\/>/g);
       expect(paths).not.toBeNull();
       expect(paths!.length).toBe(2);
     });
@@ -144,8 +144,8 @@ describe("renderChart", () => {
         categories: ["A"],
       });
 
-      const svg = renderChart(element);
-      const circles = svg.match(/<circle[^>]*\/>/g);
+      const result = renderChart(element);
+      const circles = result.content.match(/<circle[^>]*\/>/g);
       expect(circles).not.toBeNull();
       expect(circles!.length).toBeGreaterThanOrEqual(2);
     });
@@ -157,8 +157,8 @@ describe("renderChart", () => {
         categories: ["A", "B"],
       });
 
-      const svg = renderChart(element);
-      expect(svg).toContain("<path");
+      const result = renderChart(element);
+      expect(result.content).toContain("<path");
     });
   });
 
@@ -177,8 +177,8 @@ describe("renderChart", () => {
         categories: [],
       });
 
-      const svg = renderChart(element);
-      const circles = svg.match(/<circle[^>]*fill="#4472C4"[^>]*\/>/g);
+      const result = renderChart(element);
+      const circles = result.content.match(/<circle[^>]*fill="#4472C4"[^>]*\/>/g);
       expect(circles).not.toBeNull();
       expect(circles!.length).toBe(3);
     });
@@ -200,8 +200,8 @@ describe("renderChart", () => {
         categories: [],
       });
 
-      const svg = renderChart(element);
-      const circles = svg.match(/<circle[^>]*fill="#4472C4"[^>]*\/>/g);
+      const result = renderChart(element);
+      const circles = result.content.match(/<circle[^>]*fill="#4472C4"[^>]*\/>/g);
       expect(circles).not.toBeNull();
       expect(circles!.length).toBe(3);
     });
@@ -221,8 +221,8 @@ describe("renderChart", () => {
         categories: [],
       });
 
-      const svg = renderChart(element);
-      const circles = svg.match(/<circle[^>]*r="([^"]*)"[^>]*\/>/g);
+      const result = renderChart(element);
+      const circles = result.content.match(/<circle[^>]*r="([^"]*)"[^>]*\/>/g);
       expect(circles).not.toBeNull();
       expect(circles!.length).toBe(2);
       // Extract radii — larger bubble size should produce a larger radius
@@ -248,8 +248,8 @@ describe("renderChart", () => {
         categories: [],
       });
 
-      const svg = renderChart(element);
-      expect(svg).toContain('fill-opacity="0.6"');
+      const result = renderChart(element);
+      expect(result.content).toContain('fill-opacity="0.6"');
     });
   });
 
@@ -262,15 +262,15 @@ describe("renderChart", () => {
         categories: ["A", "B", "C", "D"],
       });
 
-      const svg = renderChart(element);
+      const result = renderChart(element);
       // Grid circles (5 levels)
-      const circles = svg.match(/<circle[^>]*stroke="#D9D9D9"[^>]*\/>/g);
+      const circles = result.content.match(/<circle[^>]*stroke="#D9D9D9"[^>]*\/>/g);
       expect(circles).not.toBeNull();
       expect(circles!.length).toBe(5);
       // Data polygon
-      expect(svg).toContain("<polygon");
-      expect(svg).toContain('fill="none"');
-      expect(svg).toContain('stroke="#4472C4"');
+      expect(result.content).toContain("<polygon");
+      expect(result.content).toContain('fill="none"');
+      expect(result.content).toContain('stroke="#4472C4"');
     });
 
     it("renders filled polygon for filled radarStyle", () => {
@@ -281,9 +281,9 @@ describe("renderChart", () => {
         categories: ["A", "B", "C"],
       });
 
-      const svg = renderChart(element);
-      expect(svg).toContain('fill="#4472C4"');
-      expect(svg).toContain('fill-opacity="0.3"');
+      const result = renderChart(element);
+      expect(result.content).toContain('fill="#4472C4"');
+      expect(result.content).toContain('fill-opacity="0.3"');
     });
 
     it("renders markers for marker radarStyle", () => {
@@ -294,9 +294,9 @@ describe("renderChart", () => {
         categories: ["A", "B", "C"],
       });
 
-      const svg = renderChart(element);
+      const result = renderChart(element);
       // 3 data point markers
-      const markers = svg.match(/<circle[^>]*r="3"[^>]*\/>/g);
+      const markers = result.content.match(/<circle[^>]*r="3"[^>]*\/>/g);
       expect(markers).not.toBeNull();
       expect(markers!.length).toBe(3);
     });
@@ -309,9 +309,9 @@ describe("renderChart", () => {
         categories: ["Speed", "Power"],
       });
 
-      const svg = renderChart(element);
-      expect(svg).toContain("Speed");
-      expect(svg).toContain("Power");
+      const result = renderChart(element);
+      expect(result.content).toContain("Speed");
+      expect(result.content).toContain("Power");
     });
   });
 
@@ -323,9 +323,9 @@ describe("renderChart", () => {
         categories: ["A"],
       });
 
-      const svg = renderChart(element);
-      expect(svg).toContain("My Chart");
-      expect(svg).toContain('font-weight="bold"');
+      const result = renderChart(element);
+      expect(result.content).toContain("My Chart");
+      expect(result.content).toContain('font-weight="bold"');
     });
 
     it("escapes XML characters in title", () => {
@@ -335,8 +335,8 @@ describe("renderChart", () => {
         categories: ["A"],
       });
 
-      const svg = renderChart(element);
-      expect(svg).toContain("A &amp; B &lt;C&gt;");
+      const result = renderChart(element);
+      expect(result.content).toContain("A &amp; B &lt;C&gt;");
     });
   });
 
@@ -351,9 +351,9 @@ describe("renderChart", () => {
         legend: { position: "b" },
       });
 
-      const svg = renderChart(element);
-      expect(svg).toContain("Series A");
-      expect(svg).toContain("Series B");
+      const result = renderChart(element);
+      expect(result.content).toContain("Series A");
+      expect(result.content).toContain("Series B");
     });
 
     it("does not render legend when not present", () => {
@@ -363,9 +363,9 @@ describe("renderChart", () => {
         legend: null,
       });
 
-      const svg = renderChart(element);
+      const result = renderChart(element);
       // Should not contain legend rect elements (aside from chart background and bar)
-      expect(svg).not.toContain("Series 1");
+      expect(result.content).not.toContain("Series 1");
     });
   });
 
@@ -376,10 +376,10 @@ describe("renderChart", () => {
         categories: [],
       });
 
-      const svg = renderChart(element);
+      const result = renderChart(element);
       // Should still return valid SVG with just the background
-      expect(svg).toContain("<g");
-      expect(svg).toContain("</g>");
+      expect(result.content).toContain("<g");
+      expect(result.content).toContain("</g>");
     });
   });
 
@@ -391,8 +391,8 @@ describe("renderChart", () => {
         categories: ["A"],
       });
 
-      const svg = renderChart(element);
-      expect(svg).toContain('fill-opacity="0.5"');
+      const result = renderChart(element);
+      expect(result.content).toContain('fill-opacity="0.5"');
     });
   });
 });

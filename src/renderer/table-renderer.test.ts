@@ -72,17 +72,17 @@ function createTableElement(overrides?: Partial<TableElement["table"]>): TableEl
 describe("renderTable", () => {
   it("renders a basic 2x2 table with cell backgrounds", () => {
     const element = createTableElement();
-    const defs: string[] = [];
-    const svg = renderTable(element, defs);
+    const result = renderTable(element);
 
-    expect(svg).toContain("<g transform=");
+    expect(result.content).toContain("<g transform=");
     // 4 cells, each with a rect
-    const rects = svg.match(/<rect /g);
+    const rects = result.content.match(/<rect /g);
     expect(rects).toHaveLength(4);
-    expect(svg).toContain('fill="#FF0000"');
-    expect(svg).toContain('fill="#00FF00"');
-    expect(svg).toContain('fill="#0000FF"');
-    expect(svg).toContain('fill="#FFFF00"');
+    expect(result.content).toContain('fill="#FF0000"');
+    expect(result.content).toContain('fill="#00FF00"');
+    expect(result.content).toContain('fill="#0000FF"');
+    expect(result.content).toContain('fill="#FFFF00"');
+    expect(result.defs).toHaveLength(0);
   });
 
   it("renders cell borders as lines", () => {
@@ -147,9 +147,8 @@ describe("renderTable", () => {
       },
     };
 
-    const defs: string[] = [];
-    const svg = renderTable(element, defs);
-    const lines = svg.match(/<line /g);
+    const result = renderTable(element);
+    const lines = result.content.match(/<line /g);
     expect(lines).toHaveLength(4);
   });
 
@@ -195,10 +194,9 @@ describe("renderTable", () => {
       },
     };
 
-    const defs: string[] = [];
-    const svg = renderTable(element, defs);
+    const result = renderTable(element);
     // Only 1 rect for the merged cell, hMerge cell is skipped
-    const rects = svg.match(/<rect /g);
+    const rects = result.content.match(/<rect /g);
     expect(rects).toHaveLength(1);
   });
 
@@ -276,9 +274,8 @@ describe("renderTable", () => {
       },
     };
 
-    const defs: string[] = [];
-    const svg = renderTable(element, defs);
-    expect(svg).toContain("<text");
-    expect(svg).toContain("Hello");
+    const result = renderTable(element);
+    expect(result.content).toContain("<text");
+    expect(result.content).toContain("Hello");
   });
 });
