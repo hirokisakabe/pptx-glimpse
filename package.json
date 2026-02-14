@@ -35,7 +35,7 @@
     "vrt:lo:update": "npm run vrt:lo:docker-build && npm run vrt:lo:fixtures && docker run --rm -v \"$(pwd)\":/workspace pptx-glimpse-vrt bash /workspace/vrt/libreoffice/update_snapshots.sh",
     "test:package": "npm run build && bash scripts/test-package.sh",
     "demo:dev": "cd demo && npm run dev",
-    "demo:build": "cd demo && npm run build"
+    "demo:build": "npm run build && cd demo && npm install && npm run build"
   },
   "files": [
     "dist"

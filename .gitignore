@@ -10,5 +10,5 @@ vrt/snapshot/fixtures/
 vrt/libreoffice/diffs/
 vrt/libreoffice/snapshots/
 vrt/libreoffice/fixtures/
-demo/dist/
+demo/.next/
 demo/node_modules/
