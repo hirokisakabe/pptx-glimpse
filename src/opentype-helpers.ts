@@ -1,17 +1,25 @@
 /**
- * opentype.js を使ってフォントバッファから OpentypeTextMeasurer を構築するヘルパー。
+ * opentype.js を使ってフォントを読み込み OpentypeTextMeasurer を構築するヘルパー。
  */
+import { readFile } from "node:fs/promises";
 import type { OpentypeFont } from "./opentype-text-measurer.js";
 import { OpentypeTextMeasurer } from "./opentype-text-measurer.js";
 import type { FontMapping } from "./font-mapping.js";
 import { createFontMapping } from "./font-mapping.js";
 import type { OpentypeFullFont, TextPathFontResolver } from "./text-path-context.js";
 import { DefaultTextPathFontResolver } from "./text-path-context.js";
+import { collectFontFilePaths } from "./system-font-loader.js";
 
-/** フォントバッファの入力形式（ConvertOptions.fonts.fontBuffers と互換） */
+/** フォントバッファの入力形式 */
 export interface FontBuffer {
   name?: string;
   data: ArrayBuffer | Uint8Array;
+}
+
+interface OpentypeFontWithNames extends OpentypeFont {
+  names: {
+    fontFamily?: Record<string, string>;
+  };
 }
 
 /**
@@ -19,13 +27,13 @@ export interface FontBuffer {
  * opentype.js がインストールされていない場合は null を返す。
  */
 async function tryLoadOpentype(): Promise<{
-  parse: (buffer: ArrayBuffer) => OpentypeFont;
+  parse: (buffer: ArrayBuffer) => OpentypeFontWithNames;
 } | null> {
   try {
-    // Use a variable to prevent bundlers from statically resolving this optional import
+    // Use a variable to prevent bundlers from statically resolving this import
     const specifier = "opentype.js";
     // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const mod: { parse: (buffer: ArrayBuffer) => OpentypeFont } = await import(
+    const mod: { parse: (buffer: ArrayBuffer) => OpentypeFontWithNames } = await import(
       /* @vite-ignore */ specifier
     );
     return { parse: mod.parse };
@@ -54,13 +62,6 @@ function buildReverseMapping(mapping: FontMapping): Map<string, string[]> {
  *
  * 内部で opentype.js を動的 import してフォントをパースする。
  * opentype.js が利用不可な場合は null を返す。
- *
- * Map には以下のキーで登録する:
- * 1. バッファの name フィールド（例: "Carlito"）
- * 2. フォントマッピングの逆引きで得られる PPTX 名（例: "Calibri"）
- *
- * これにより OpentypeTextMeasurer.resolveFont("Calibri") が
- * Carlito のフォントデータで解決できる。
  */
 export async function createOpentypeTextMeasurerFromBuffers(
   fontBuffers: FontBuffer[],
@@ -173,6 +174,87 @@ export async function createOpentypeSetupFromBuffers(
               resolverFonts.set(pptxName, fullFont);
             }
           }
+        }
+      }
+    } catch {
+      // パース失敗のフォントはスキップ
+    }
+  }
+
+  if (measurerFonts.size === 0 && !firstMeasurerFont) return null;
+
+  const measurer = new OpentypeTextMeasurer(measurerFonts, firstMeasurerFont ?? undefined);
+  const fontResolver = new DefaultTextPathFontResolver(
+    resolverFonts,
+    firstResolverFont ?? undefined,
+  );
+
+  return { measurer, fontResolver };
+}
+
+function registerFont(
+  name: string,
+  font: OpentypeFontWithNames,
+  reverseMap: Map<string, string[]>,
+  measurerFonts: Map<string, OpentypeFont>,
+  resolverFonts: Map<string, OpentypeFullFont>,
+): void {
+  const fullFont = font as unknown as OpentypeFullFont;
+  if (!measurerFonts.has(name)) {
+    measurerFonts.set(name, font);
+    resolverFonts.set(name, fullFont);
+  }
+
+  // 逆引きで PPTX フォント名も登録
+  const pptxNames = reverseMap.get(name);
+  if (pptxNames) {
+    for (const pptxName of pptxNames) {
+      if (!measurerFonts.has(pptxName)) {
+        measurerFonts.set(pptxName, font);
+        resolverFonts.set(pptxName, fullFont);
+      }
+    }
+  }
+}
+
+/**
+ * システムフォント + 追加ディレクトリから OpentypeTextMeasurer と TextPathFontResolver を構築する。
+ *
+ * 1. collectFontFilePaths() でフォントファイルパスを収集
+ * 2. 各ファイルを readFile + opentype.parse でパース
+ * 3. フォント名をキーとしてマップに登録（逆引きマッピング含む）
+ */
+export async function createOpentypeSetupFromSystem(
+  additionalFontDirs?: string[],
+  fontMapping?: FontMapping,
+): Promise<OpentypeSetup | null> {
+  const opentype = await tryLoadOpentype();
+  if (!opentype) return null;
+
+  const fontFilePaths = collectFontFilePaths(additionalFontDirs);
+  if (fontFilePaths.length === 0) return null;
+
+  const mapping = createFontMapping(fontMapping);
+  const reverseMap = buildReverseMapping(mapping);
+  const measurerFonts = new Map<string, OpentypeFont>();
+  const resolverFonts = new Map<string, OpentypeFullFont>();
+  let firstMeasurerFont: OpentypeFont | null = null;
+  let firstResolverFont: OpentypeFullFont | null = null;
+
+  for (const filePath of fontFilePaths) {
+    try {
+      const data = await readFile(filePath);
+      const arrayBuffer = data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength);
+      const font = opentype.parse(arrayBuffer);
+
+      if (!firstMeasurerFont) firstMeasurerFont = font;
+      if (!firstResolverFont) firstResolverFont = font as unknown as OpentypeFullFont;
+
+      // names.fontFamily からフォント名を取得して登録
+      const fontFamily = font.names.fontFamily;
+      if (fontFamily) {
+        for (const name of Object.values(fontFamily)) {
+          registerFont(name, font, reverseMap, measurerFonts, resolverFonts);
         }
       }
     } catch {

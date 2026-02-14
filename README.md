@@ -21,8 +21,8 @@ rather than pixel-perfect rendering of every PowerPoint feature.
 
 ## Requirements
 
-- **Node.js >= 20** or modern browser environments
-- PNG conversion uses [@resvg/resvg-wasm](https://github.com/nicolo-ribaudo/resvg-js) (no native dependencies)
+- **Node.js >= 20**
+- PNG conversion uses [sharp](https://sharp.pixelplumbing.com/) (librsvg-based)
 
 ## Installation
 
@@ -31,8 +31,6 @@ npm install pptx-glimpse
 ```
 
 ## Usage
-
-### Node.js
 
 ```typescript
 import { readFileSync, writeFileSync } from "fs";
@@ -46,25 +44,9 @@ const svgResults = await convertPptxToSvg(pptx);
 
 // Convert to PNG
 const pngResults = await convertPptxToPng(pptx);
-// [{ slideNumber: 1, png: Uint8Array, width: 960, height: 540 }, ...]
+// [{ slideNumber: 1, png: Buffer, width: 960, height: 540 }, ...]
 
 writeFileSync("slide1.png", pngResults[0].png);
-```
-
-### Browser
-
-In browser environments, call `initPng()` before using `convertPptxToPng()`.
-
-```typescript
-import { initPng, convertPptxToSvg, convertPptxToPng } from "pptx-glimpse";
-
-// Initialize the WASM module for PNG conversion
-await initPng(fetch("/path/to/index_bg.wasm"));
-
-const pptx = new Uint8Array(/* file data from input, fetch, etc. */);
-
-const svgResults = await convertPptxToSvg(pptx);
-const pngResults = await convertPptxToPng(pptx);
 ```
 
 ### Options
@@ -76,16 +58,28 @@ const results = await convertPptxToPng(pptx, {
   slides: [1, 3], // Convert only slides 1 and 3
   width: 1920, // Output width in pixels (default: 960)
   logLevel: "warn", // Warning log level: "off" | "warn" | "error"
-  fonts: {
-    /* ... */
-  }, // Font options for PNG conversion (see below)
+  fontDirs: ["/custom/fonts"], // Additional font directories to search
   fontMapping: {
-    /* ... */
-  }, // Custom font name mapping (see below)
+    "Custom Corp Font": "Noto Sans", // Custom font name mapping
+  },
 });
 ```
 
 ## Fonts
+
+### Automatic Font Loading
+
+pptx-glimpse automatically scans system font directories and loads fonts using [opentype.js](https://opentype.js.org/). Text in SVG output is converted to `<path>` elements, ensuring consistent rendering regardless of the environment.
+
+Default system font directories:
+
+| OS      | Directories                                                      |
+| ------- | ---------------------------------------------------------------- |
+| Linux   | `/usr/share/fonts`, `/usr/local/share/fonts`                     |
+| macOS   | `/System/Library/Fonts`, `/Library/Fonts`, `~/Library/Fonts`     |
+| Windows | `C:\Windows\Fonts`                                               |
+
+Use the `fontDirs` option to add custom font directories.
 
 ### Font Mapping
 
@@ -111,64 +105,6 @@ const results = await convertPptxToSvg(pptx, {
     "Custom Corp Font": "Noto Sans", // Add a new mapping
     Arial: "Inter", // Override the default
   },
-});
-```
-
-### Font Buffers (PNG)
-
-For accurate PNG rendering, supply font files via `fonts.fontBuffers`:
-
-```typescript
-import { readFileSync } from "fs";
-
-const results = await convertPptxToPng(pptx, {
-  fonts: {
-    fontBuffers: [
-      { name: "Carlito", data: readFileSync("Carlito-Regular.ttf") },
-      { name: "Noto Sans JP", data: readFileSync("NotoSansJP-Regular.ttf") },
-    ],
-  },
-});
-```
-
-When `fontBuffers` are provided, text in SVG is automatically converted from `<text>` elements to `<path>` elements using [opentype.js](https://opentype.js.org/) (optional peer dependency). This ensures text renders identically regardless of installed fonts.
-
-### Google Fonts Auto-Fetch (Browser)
-
-`fetchGoogleFonts()` automatically fetches the required fonts from Google Fonts based on the fonts used in the PPTX file.
-
-```typescript
-import { initPng, convertPptxToPng, collectUsedFonts, fetchGoogleFonts } from "pptx-glimpse";
-
-await initPng(fetch("/path/to/index_bg.wasm"));
-
-const pptx = new Uint8Array(/* ... */);
-
-// 1. Collect font names used in the PPTX
-const usedFonts = await collectUsedFonts(pptx);
-
-// 2. Fetch mapped fonts from Google Fonts
-const fontBuffers = await fetchGoogleFonts(usedFonts);
-
-// 3. Convert with the fetched fonts
-const results = await convertPptxToPng(pptx, {
-  fonts: { fontBuffers },
-});
-```
-
-### Custom Text Measurement
-
-By default, pptx-glimpse uses built-in static font metrics for text measurement. You can replace this with a custom `TextMeasurer` for more accurate results:
-
-- **`DefaultTextMeasurer`** — Built-in static metrics (no dependencies)
-- **`CanvasTextMeasurer`** — Uses Canvas 2D API (browser environments)
-- **`OpentypeTextMeasurer`** — Uses opentype.js for precise glyph-level measurement
-
-```typescript
-import { convertPptxToSvg, CanvasTextMeasurer } from "pptx-glimpse";
-
-const results = await convertPptxToSvg(pptx, {
-  textMeasurer: new CanvasTextMeasurer(),
 });
 ```
 
