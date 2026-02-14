@@ -1,38 +1,34 @@
-import { readPptx } from "./parser/pptx-reader.js";
-import { parsePresentation } from "./parser/presentation-parser.js";
-import { parseTheme } from "./parser/theme-parser.js";
-import type { Theme } from "./model/theme.js";
-import {
-  parseSlideMasterColorMap,
-  parseSlideMasterBackground,
-  parseSlideMasterElements,
-  parseSlideMasterTxStyles,
-  parseSlideMasterPlaceholderStyles,
-} from "./parser/slide-master-parser.js";
-import {
-  parseSlideLayoutBackground,
-  parseSlideLayoutElements,
-  parseSlideLayoutPlaceholderStyles,
-  parseSlideLayoutShowMasterSp,
-} from "./parser/slide-layout-parser.js";
-import { parseSlide } from "./parser/slide-parser.js";
-import {
-  parseRelationships,
-  resolveRelationshipTarget,
-  buildRelsPath,
-  type Relationship,
-} from "./parser/relationship-parser.js";
-import type { FillParseContext } from "./parser/fill-parser.js";
-import { ColorResolver } from "./color/color-resolver.js";
 import { renderSlideToSvg } from "./renderer/svg-renderer.js";
 import { svgToPng } from "./png/png-converter.js";
 import { DEFAULT_OUTPUT_WIDTH } from "./utils/constants.js";
-import type { ColorMap } from "./model/theme.js";
-import type { PlaceholderStyleInfo } from "./model/text.js";
 import type { SlideElement } from "./model/shape.js";
-import { applyTextStyleInheritance } from "./text-style-resolver.js";
 import type { LogLevel } from "./warning-logger.js";
 import { initWarningLogger, flushWarnings } from "./warning-logger.js";
+import type { TextMeasurer } from "./text-measurer.js";
+import { setTextMeasurer, resetTextMeasurer } from "./text-measurer.js";
+import { parsePptxData, parseSlideWithLayout } from "./pptx-data-parser.js";
+import type { FontMapping } from "./font-mapping.js";
+import { createFontMapping } from "./font-mapping.js";
+import { setFontMapping, resetFontMapping } from "./font-mapping-context.js";
+import { createOpentypeSetupFromBuffers } from "./opentype-helpers.js";
+import { setTextPathFontResolver, resetTextPathFontResolver } from "./text-path-context.js";
+
+export interface FontOptions {
+  /** resvg-wasm に渡すフォントファイルパス (Node.js 向け) */
+  fontFiles?: string[];
+  /** resvg-wasm に渡すフォントディレクトリパス (Node.js 向け) */
+  fontDirs?: string[];
+  /** resvg-wasm に渡すフォントバッファ (ブラウザ/Node.js 両対応) */
+  fontBuffers?: Array<{ name?: string; data: ArrayBuffer | Uint8Array }>;
+  /** resvg-wasm でシステムフォントを読み込むか (デフォルト: false) */
+  loadSystemFonts?: boolean;
+  /** resvg-wasm のデフォルトフォントファミリー */
+  defaultFontFamily?: string;
+  /** resvg-wasm の sans-serif フォントファミリー */
+  sansSerifFamily?: string;
+  /** resvg-wasm の serif フォントファミリー */
+  serifFamily?: string;
+}
 
 export interface ConvertOptions {
   /** 変換対象のスライド番号 (1始まり)。未指定で全スライド */
@@ -43,6 +39,12 @@ export interface ConvertOptions {
   height?: number;
   /** 警告ログレベル。デフォルト: "off" */
   logLevel?: LogLevel;
+  /** テキスト計測のカスタム実装 */
+  textMeasurer?: TextMeasurer;
+  /** PNG 変換時のフォント設定 (resvg-wasm オプション) */
+  fonts?: FontOptions;
+  /** PPTX フォント名 → OSS 代替フォントのカスタムマッピング。デフォルトマッピングにマージされる */
+  fontMapping?: FontMapping;
 }
 
 export interface SlideSvg {
@@ -61,189 +63,54 @@ export async function convertPptxToSvg(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
 ): Promise<SlideSvg[]> {
-  initWarningLogger(options?.logLevel ?? "off");
-
-  const archive = await readPptx(input);
-
-  // Parse presentation.xml
-  const presentationXml = archive.files.get("ppt/presentation.xml");
-  if (!presentationXml) throw new Error("Invalid PPTX: missing ppt/presentation.xml");
-  const presInfo = parsePresentation(presentationXml);
-
-  // Parse presentation relationships
-  const presRelsXml = archive.files.get("ppt/_rels/presentation.xml.rels");
-  const presRels = presRelsXml ? parseRelationships(presRelsXml) : new Map<string, Relationship>();
-
-  // Parse theme
-  let theme: Theme = {
-    colorScheme: defaultColorScheme(),
-    fontScheme: {
-      majorFont: "Calibri",
-      minorFont: "Calibri",
-      majorFontEa: null,
-      minorFontEa: null,
-    },
-  };
-  for (const [, rel] of presRels) {
-    if (rel.type.includes("theme")) {
-      const themePath = resolveRelationshipTarget("ppt/presentation.xml", rel.target);
-      const themeXml = archive.files.get(themePath);
-      if (themeXml) {
-        theme = parseTheme(themeXml);
-      }
-      break;
-    }
-  }
-
-  // Parse slide master for color map and background
-  let colorMap: ColorMap = defaultColorMap();
-  let masterPath: string | null = null;
-  for (const [, rel] of presRels) {
-    if (rel.type.includes("slideMaster")) {
-      masterPath = resolveRelationshipTarget("ppt/presentation.xml", rel.target);
-      const masterXml = archive.files.get(masterPath);
-      if (masterXml) {
-        colorMap = parseSlideMasterColorMap(masterXml);
-      }
-      break;
-    }
-  }
-
-  const colorResolver = new ColorResolver(theme.colorScheme, colorMap);
-
-  // Parse master background and shapes (used as fallback)
-  const masterXml = masterPath ? archive.files.get(masterPath) : undefined;
-  let masterFillContext: FillParseContext | undefined;
-  if (masterPath) {
-    const masterRelsPath = buildRelsPath(masterPath);
-    const masterRelsXml = archive.files.get(masterRelsPath);
-    const masterRels = masterRelsXml
-      ? parseRelationships(masterRelsXml)
-      : new Map<string, Relationship>();
-    masterFillContext = { rels: masterRels, archive, basePath: masterPath };
-  }
-  const masterBackground = masterXml
-    ? parseSlideMasterBackground(masterXml, colorResolver, masterFillContext)
-    : null;
-  const masterElements =
-    masterPath && masterXml
-      ? parseSlideMasterElements(
-          masterXml,
-          masterPath,
-          archive,
-          colorResolver,
-          theme.fontScheme,
-          theme.fmtScheme,
-        )
-      : [];
-  const masterTxStyles = masterXml ? parseSlideMasterTxStyles(masterXml, colorResolver) : undefined;
-  const masterPlaceholderStyles = masterXml
-    ? parseSlideMasterPlaceholderStyles(masterXml, colorResolver)
-    : [];
-  // Resolve slide paths from relationships
-  const slidePaths: { slideNumber: number; path: string }[] = [];
-  for (let i = 0; i < presInfo.slideRIds.length; i++) {
-    const rId = presInfo.slideRIds[i];
-    const rel = presRels.get(rId);
-    if (rel) {
-      const path = resolveRelationshipTarget("ppt/presentation.xml", rel.target);
-      slidePaths.push({ slideNumber: i + 1, path });
-    }
-  }
-
-  // Filter slides if specified
-  const targetSlides = options?.slides
-    ? slidePaths.filter((s) => options.slides!.includes(s.slideNumber))
-    : slidePaths;
-
-  // Parse and render each slide
-  const results: SlideSvg[] = [];
-  for (const { slideNumber, path } of targetSlides) {
-    const slideXml = archive.files.get(path);
-    if (!slideXml) continue;
-
-    const slide = parseSlide(
-      slideXml,
-      path,
-      slideNumber,
-      archive,
-      colorResolver,
-      theme.fontScheme,
-      theme.fmtScheme,
+  if (options?.textMeasurer) {
+    setTextMeasurer(options.textMeasurer);
+  } else if (options?.fonts?.fontBuffers && options.fonts.fontBuffers.length > 0) {
+    const setup = await createOpentypeSetupFromBuffers(
+      options.fonts.fontBuffers,
+      options.fontMapping,
     );
-
-    // Resolve slide layout
-    let layoutElements: SlideElement[] = [];
-    let layoutPlaceholderStyles: PlaceholderStyleInfo[] = [];
-    let layoutShowMasterSp = true;
-    const slideRelsPath = buildRelsPath(path);
-    const slideRelsXml = archive.files.get(slideRelsPath);
-    if (slideRelsXml) {
-      const slideRels = parseRelationships(slideRelsXml);
-      for (const [, rel] of slideRels) {
-        if (rel.type.includes("slideLayout")) {
-          const layoutPath = resolveRelationshipTarget(path, rel.target);
-          const layoutXml = archive.files.get(layoutPath);
-          if (layoutXml) {
-            // Fallback background: slide → layout → master
-            if (!slide.background) {
-              const layoutRelsPath = buildRelsPath(layoutPath);
-              const layoutRelsXml = archive.files.get(layoutRelsPath);
-              const layoutRels = layoutRelsXml
-                ? parseRelationships(layoutRelsXml)
-                : new Map<string, Relationship>();
-              const layoutFillContext: FillParseContext = {
-                rels: layoutRels,
-                archive,
-                basePath: layoutPath,
-              };
-              slide.background = parseSlideLayoutBackground(
-                layoutXml,
-                colorResolver,
-                layoutFillContext,
-              );
-            }
-            // Parse layout shapes
-            layoutElements = parseSlideLayoutElements(
-              layoutXml,
-              layoutPath,
-              archive,
-              colorResolver,
-              theme.fontScheme,
-              theme.fmtScheme,
-            );
-            // Extract placeholder styles for text style inheritance
-            layoutPlaceholderStyles = parseSlideLayoutPlaceholderStyles(layoutXml, colorResolver);
-            layoutShowMasterSp = parseSlideLayoutShowMasterSp(layoutXml);
-          }
-          break;
-        }
-      }
+    if (setup) {
+      setTextMeasurer(setup.measurer);
+      setTextPathFontResolver(setup.fontResolver);
     }
-    if (!slide.background) {
-      slide.background = masterBackground;
-    }
-
-    // Apply text style inheritance chain before merging
-    applyTextStyleInheritance(slide.elements, {
-      layoutPlaceholderStyles,
-      masterPlaceholderStyles,
-      txStyles: masterTxStyles,
-      defaultTextStyle: presInfo.defaultTextStyle,
-      fontScheme: theme.fontScheme,
-    });
-
-    // Merge shapes: master (back) → layout → slide (front)
-    const effectiveMasterElements = slide.showMasterSp && layoutShowMasterSp ? masterElements : [];
-    slide.elements = mergeElements(effectiveMasterElements, layoutElements, slide.elements);
-
-    const svg = renderSlideToSvg(slide, presInfo.slideSize);
-    results.push({ slideNumber, svg });
   }
+  setFontMapping(createFontMapping(options?.fontMapping));
+  try {
+    initWarningLogger(options?.logLevel ?? "off");
 
-  flushWarnings();
+    const data = await parsePptxData(input);
 
-  return results;
+    // Filter slides if specified
+    const targetSlides = options?.slides
+      ? data.slidePaths.filter((s) => options.slides!.includes(s.slideNumber))
+      : data.slidePaths;
+
+    // Parse and render each slide
+    const results: SlideSvg[] = [];
+    for (const { slideNumber, path } of targetSlides) {
+      const parsed = parseSlideWithLayout(slideNumber, path, data);
+      if (!parsed) continue;
+
+      const { slide, layoutElements, layoutShowMasterSp } = parsed;
+
+      // Merge shapes: master (back) → layout → slide (front)
+      const effectiveMasterElements =
+        slide.showMasterSp && layoutShowMasterSp ? data.masterElements : [];
+      slide.elements = mergeElements(effectiveMasterElements, layoutElements, slide.elements);
+
+      const svg = renderSlideToSvg(slide, data.presInfo.slideSize);
+      results.push({ slideNumber, svg });
+    }
+
+    flushWarnings();
+
+    return results;
+  } finally {
+    resetTextMeasurer();
+    resetTextPathFontResolver();
+    resetFontMapping();
+  }
 }
 
 export async function convertPptxToPng(
@@ -257,7 +124,7 @@ export async function convertPptxToPng(
 
   const results: SlideImage[] = [];
   for (const { slideNumber, svg } of svgResults) {
-    const pngResult = await svgToPng(svg, { width, height });
+    const pngResult = await svgToPng(svg, { width, height, fonts: options?.fonts });
     results.push({
       slideNumber,
       png: pngResult.png,
@@ -287,38 +154,4 @@ function mergeElements(
   const filteredLayout = filterPlaceholders(layoutElements);
 
   return [...filteredMaster, ...filteredLayout, ...slideElements];
-}
-
-function defaultColorScheme() {
-  return {
-    dk1: "#000000",
-    lt1: "#FFFFFF",
-    dk2: "#44546A",
-    lt2: "#E7E6E6",
-    accent1: "#4472C4",
-    accent2: "#ED7D31",
-    accent3: "#A5A5A5",
-    accent4: "#FFC000",
-    accent5: "#5B9BD5",
-    accent6: "#70AD47",
-    hlink: "#0563C1",
-    folHlink: "#954F72",
-  };
-}
-
-function defaultColorMap() {
-  return {
-    bg1: "lt1" as const,
-    tx1: "dk1" as const,
-    bg2: "lt2" as const,
-    tx2: "dk2" as const,
-    accent1: "accent1" as const,
-    accent2: "accent2" as const,
-    accent3: "accent3" as const,
-    accent4: "accent4" as const,
-    accent5: "accent5" as const,
-    accent6: "accent6" as const,
-    hlink: "hlink" as const,
-    folHlink: "folHlink" as const,
-  };
 }

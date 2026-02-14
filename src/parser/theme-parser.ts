@@ -20,6 +20,8 @@ export function parseTheme(xml: string): Theme {
         minorFont: "Calibri",
         majorFontEa: null,
         minorFontEa: null,
+        majorFontCs: null,
+        minorFontCs: null,
       },
     };
   }
@@ -34,6 +36,8 @@ export function parseTheme(xml: string): Theme {
         minorFont: "Calibri",
         majorFontEa: null,
         minorFontEa: null,
+        majorFontCs: null,
+        minorFontCs: null,
       },
     };
   }
@@ -92,7 +96,14 @@ function extractColor(colorNode: XmlNode): string {
 
 function parseFontScheme(fontScheme: XmlNode): FontScheme {
   if (!fontScheme)
-    return { majorFont: "Calibri", minorFont: "Calibri", majorFontEa: null, minorFontEa: null };
+    return {
+      majorFont: "Calibri",
+      minorFont: "Calibri",
+      majorFontEa: null,
+      minorFontEa: null,
+      majorFontCs: null,
+      minorFontCs: null,
+    };
 
   const majorFontNode = fontScheme.majorFont as XmlNode | undefined;
   const minorFontNode = fontScheme.minorFont as XmlNode | undefined;
@@ -106,8 +117,12 @@ function parseFontScheme(fontScheme: XmlNode): FontScheme {
     ((majorFontNode?.ea as XmlNode | undefined)?.["@_typeface"] as string | undefined) ?? null;
   const minorFontEa =
     ((minorFontNode?.ea as XmlNode | undefined)?.["@_typeface"] as string | undefined) ?? null;
+  const majorFontCs =
+    ((majorFontNode?.cs as XmlNode | undefined)?.["@_typeface"] as string | undefined) ?? null;
+  const minorFontCs =
+    ((minorFontNode?.cs as XmlNode | undefined)?.["@_typeface"] as string | undefined) ?? null;
 
-  return { majorFont, minorFont, majorFontEa, minorFontEa };
+  return { majorFont, minorFont, majorFontEa, minorFontEa, majorFontCs, minorFontCs };
 }
 
 function defaultColorScheme(): ColorScheme {

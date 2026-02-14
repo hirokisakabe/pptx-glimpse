@@ -1313,6 +1313,7 @@ function mergeDefaultRunProperties(
     fontSize: primary.fontSize ?? secondary.fontSize,
     fontFamily: primary.fontFamily ?? secondary.fontFamily,
     fontFamilyEa: primary.fontFamilyEa ?? secondary.fontFamilyEa,
+    fontFamilyCs: primary.fontFamilyCs ?? secondary.fontFamilyCs,
     bold: primary.bold ?? secondary.bold,
     italic: primary.italic ?? secondary.italic,
     underline: primary.underline ?? secondary.underline,
@@ -1332,6 +1333,7 @@ function parseRunProperties(
       fontSize: defaults?.fontSize ?? null,
       fontFamily: resolveThemeFont(defaults?.fontFamily ?? null, fontScheme),
       fontFamilyEa: resolveThemeFont(defaults?.fontFamilyEa ?? null, fontScheme),
+      fontFamilyCs: resolveThemeFont(defaults?.fontFamilyCs ?? null, fontScheme),
       bold: defaults?.bold ?? false,
       italic: defaults?.italic ?? false,
       underline: defaults?.underline ?? false,
@@ -1353,6 +1355,7 @@ function parseRunProperties(
 
   const latin = rPr.latin as XmlNode | undefined;
   const ea = rPr.ea as XmlNode | undefined;
+  const cs = rPr.cs as XmlNode | undefined;
 
   const fontSize = rPr["@_sz"]
     ? hundredthPointToPoint(Number(rPr["@_sz"]))
@@ -1363,6 +1366,10 @@ function parseRunProperties(
   );
   const fontFamilyEa = resolveThemeFont(
     (ea?.["@_typeface"] as string | undefined) ?? defaults?.fontFamilyEa ?? null,
+    fontScheme,
+  );
+  const fontFamilyCs = resolveThemeFont(
+    (cs?.["@_typeface"] as string | undefined) ?? defaults?.fontFamilyCs ?? null,
     fontScheme,
   );
   const bold =
@@ -1404,6 +1411,7 @@ function parseRunProperties(
     fontSize,
     fontFamily,
     fontFamilyEa,
+    fontFamilyCs,
     bold,
     italic,
     underline,

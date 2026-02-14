@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, afterEach } from "vitest";
 import {
   renderTextBody,
   formatAutoNum,
@@ -13,6 +13,12 @@ import type {
   BodyProperties,
 } from "../model/text.js";
 import type { Transform } from "../model/shape.js";
+import {
+  setTextPathFontResolver,
+  resetTextPathFontResolver,
+  DefaultTextPathFontResolver,
+} from "../text-path-context.js";
+import type { OpentypeFullFont } from "../text-path-context.js";
 
 function makeTransform(widthEmu: number, heightEmu: number): Transform {
   return {
@@ -858,7 +864,7 @@ describe("buildFontFamilyValue", () => {
 
   it("スペースを含むフォント名をシングルクォートで囲む", () => {
     expect(buildFontFamilyValue(["Times New Roman"])).toBe(
-      "'Times New Roman', 'Liberation Serif', serif",
+      "'Times New Roman', Tinos, 'Liberation Serif', serif",
     );
     expect(buildFontFamilyValue(["Calibri", "Noto Sans JP"])).toBe(
       "Calibri, Carlito, 'Noto Sans JP', sans-serif",
@@ -867,14 +873,16 @@ describe("buildFontFamilyValue", () => {
 
   it("serif 系フォントの汎用ファミリが serif になる", () => {
     expect(buildFontFamilyValue(["Times New Roman"])).toBe(
-      "'Times New Roman', 'Liberation Serif', serif",
+      "'Times New Roman', Tinos, 'Liberation Serif', serif",
     );
-    expect(buildFontFamilyValue(["Yu Mincho"])).toBe("'Yu Mincho', 'Noto Sans JP', serif");
-    expect(buildFontFamilyValue(["游明朝"])).toBe("游明朝, 'Noto Sans JP', serif");
+    expect(buildFontFamilyValue(["Yu Mincho"])).toBe(
+      "'Yu Mincho', 'Noto Serif JP', 'Noto Sans JP', serif",
+    );
+    expect(buildFontFamilyValue(["游明朝"])).toBe("游明朝, 'Noto Serif JP', 'Noto Sans JP', serif");
   });
 
   it("sans-serif 系フォントの汎用ファミリが sans-serif になる", () => {
-    expect(buildFontFamilyValue(["Arial"])).toBe("Arial, 'Liberation Sans', sans-serif");
+    expect(buildFontFamilyValue(["Arial"])).toBe("Arial, Arimo, 'Liberation Sans', sans-serif");
     expect(buildFontFamilyValue(["Meiryo"])).toBe("Meiryo, 'Noto Sans JP', sans-serif");
   });
 
@@ -1016,5 +1024,289 @@ describe("縦書きテキスト (vertical text)", () => {
     const result = renderTextBody(textBody, makeTransform(4000000, heightEmu));
     const heightPx = (heightEmu / 914400) * 96;
     expect(result).toContain(`translate(0, ${heightPx})`);
+  });
+});
+
+// ============================================================
+// テキスト→パス変換（path モード）
+// ============================================================
+
+function createMockFont(name: string): OpentypeFullFont {
+  return {
+    unitsPerEm: 1000,
+    ascender: 800,
+    descender: -200,
+    getPath: (text: string, x: number, y: number, _fontSize: number) => ({
+      toPathData: () => `M${x.toFixed(1)} ${y.toFixed(1)}L${name} ${text.length}`,
+    }),
+  };
+}
+
+function setupPathMode(fontName = "TestFont"): void {
+  const font = createMockFont(fontName);
+  const fonts = new Map([[fontName, font]]);
+  setTextPathFontResolver(new DefaultTextPathFontResolver(fonts, font));
+}
+
+describe("renderTextBody (path mode)", () => {
+  afterEach(() => {
+    resetTextPathFontResolver();
+  });
+
+  it("フォントリゾルバーが設定されている場合、<path> 要素を生成する", () => {
+    setupPathMode();
+    const textBody = makeTextBody(["Hello"]);
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).toContain("<path");
+    expect(result).toContain('d="M');
+    expect(result).not.toContain("<text");
+    expect(result).not.toContain("<tspan");
+  });
+
+  it("テキスト色が path の fill 属性に反映される", () => {
+    setupPathMode();
+    const textBody: TextBody = {
+      bodyProperties: {
+        anchor: "t",
+        marginLeft: 91440,
+        marginRight: 91440,
+        marginTop: 45720,
+        marginBottom: 45720,
+        wrap: "square",
+        autoFit: "noAutofit",
+        fontScale: 1,
+        lnSpcReduction: 0,
+        numCol: 1,
+        vert: "horz",
+      },
+      paragraphs: [
+        {
+          runs: [
+            {
+              text: "Red Text",
+              properties: {
+                fontSize: 18,
+                fontFamily: null,
+                fontFamilyEa: null,
+                bold: false,
+                italic: false,
+                underline: false,
+                strikethrough: false,
+                color: { hex: "#FF0000", alpha: 1 },
+                baseline: 0,
+              },
+            },
+          ],
+          properties: defaultParagraphProperties(),
+        },
+      ],
+    };
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).toContain('fill="#FF0000"');
+  });
+
+  it("透明度が fill-opacity に反映される", () => {
+    setupPathMode();
+    const textBody: TextBody = {
+      bodyProperties: {
+        anchor: "t",
+        marginLeft: 91440,
+        marginRight: 91440,
+        marginTop: 45720,
+        marginBottom: 45720,
+        wrap: "square",
+        autoFit: "noAutofit",
+        fontScale: 1,
+        lnSpcReduction: 0,
+        numCol: 1,
+        vert: "horz",
+      },
+      paragraphs: [
+        {
+          runs: [
+            {
+              text: "Transparent",
+              properties: {
+                fontSize: 18,
+                fontFamily: null,
+                fontFamilyEa: null,
+                bold: false,
+                italic: false,
+                underline: false,
+                strikethrough: false,
+                color: { hex: "#0000FF", alpha: 0.5 },
+                baseline: 0,
+              },
+            },
+          ],
+          properties: defaultParagraphProperties(),
+        },
+      ],
+    };
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).toContain('fill="#0000FF"');
+    expect(result).toContain('fill-opacity="0.5"');
+  });
+
+  it("ハイパーリンクが <a> タグで包まれる", () => {
+    setupPathMode();
+    const textBody: TextBody = {
+      bodyProperties: {
+        anchor: "t",
+        marginLeft: 91440,
+        marginRight: 91440,
+        marginTop: 45720,
+        marginBottom: 45720,
+        wrap: "square",
+        autoFit: "noAutofit",
+        fontScale: 1,
+        lnSpcReduction: 0,
+        numCol: 1,
+        vert: "horz",
+      },
+      paragraphs: [
+        {
+          runs: [
+            {
+              text: "Click me",
+              properties: {
+                fontSize: 18,
+                fontFamily: null,
+                fontFamilyEa: null,
+                bold: false,
+                italic: false,
+                underline: false,
+                strikethrough: false,
+                color: null,
+                baseline: 0,
+                hyperlink: { url: "https://example.com" },
+              },
+            },
+          ],
+          properties: defaultParagraphProperties(),
+        },
+      ],
+    };
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).toContain('<a href="https://example.com">');
+    expect(result).toContain("</a>");
+  });
+
+  it("下線が <line> 要素として描画される", () => {
+    setupPathMode();
+    const textBody: TextBody = {
+      bodyProperties: {
+        anchor: "t",
+        marginLeft: 91440,
+        marginRight: 91440,
+        marginTop: 45720,
+        marginBottom: 45720,
+        wrap: "square",
+        autoFit: "noAutofit",
+        fontScale: 1,
+        lnSpcReduction: 0,
+        numCol: 1,
+        vert: "horz",
+      },
+      paragraphs: [
+        {
+          runs: [
+            {
+              text: "Underlined",
+              properties: {
+                fontSize: 18,
+                fontFamily: null,
+                fontFamilyEa: null,
+                bold: false,
+                italic: false,
+                underline: true,
+                strikethrough: false,
+                color: null,
+                baseline: 0,
+              },
+            },
+          ],
+          properties: defaultParagraphProperties(),
+        },
+      ],
+    };
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).toContain("<line");
+    expect(result).toContain("stroke=");
+  });
+
+  it("取り消し線が <line> 要素として描画される", () => {
+    setupPathMode();
+    const textBody: TextBody = {
+      bodyProperties: {
+        anchor: "t",
+        marginLeft: 91440,
+        marginRight: 91440,
+        marginTop: 45720,
+        marginBottom: 45720,
+        wrap: "square",
+        autoFit: "noAutofit",
+        fontScale: 1,
+        lnSpcReduction: 0,
+        numCol: 1,
+        vert: "horz",
+      },
+      paragraphs: [
+        {
+          runs: [
+            {
+              text: "Strikethrough",
+              properties: {
+                fontSize: 18,
+                fontFamily: null,
+                fontFamilyEa: null,
+                bold: false,
+                italic: false,
+                underline: false,
+                strikethrough: true,
+                color: null,
+                baseline: 0,
+              },
+            },
+          ],
+          properties: defaultParagraphProperties(),
+        },
+      ],
+    };
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).toContain("<line");
+  });
+
+  it("空のテキストでは空文字列を返す", () => {
+    setupPathMode();
+    const textBody = makeTextBody([""]);
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).toBe("");
+  });
+
+  it("縦書き (vert) で rotate(90) が適用される", () => {
+    setupPathMode();
+    const textBody = makeTextBody(["Vertical"], { vert: "vert" });
+    const result = renderTextBody(textBody, makeTransform(4000000, 2000000));
+    expect(result).toContain("rotate(90)");
+    expect(result).toContain("<path");
+    expect(result).not.toContain("<text");
+  });
+
+  it("縦書き (vert270) で rotate(-90) が適用される", () => {
+    setupPathMode();
+    const textBody = makeTextBody(["Vert270"], { vert: "vert270" });
+    const result = renderTextBody(textBody, makeTransform(4000000, 2000000));
+    expect(result).toContain("rotate(-90)");
+    expect(result).toContain("<path");
+  });
+
+  it("フォントリゾルバーが null の場合は tspan レンダリングにフォールバック", () => {
+    // setupPathMode() を呼ばない → fontResolver は null
+    const textBody = makeTextBody(["Fallback"]);
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    expect(result).toContain("<text");
+    expect(result).toContain("<tspan");
+    expect(result).not.toContain("<path");
   });
 });
