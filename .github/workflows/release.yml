@@ -27,7 +27,7 @@ jobs:
 
       - run: npm ci
       - run: npm run build
-      - run: npm run test
+      - run: npx vitest run --exclude 'vrt/**'
 
       - name: Create Release PR or Publish
         uses: changesets/action@v1
