@@ -1,6 +1,6 @@
-import { readdirSync, existsSync } from "node:fs";
-import { join, extname } from "node:path";
-import { homedir, platform } from "node:os";
+import fs from "node:fs";
+import path from "node:path";
+import os from "node:os";
 
 const FONT_EXTENSIONS = new Set([".ttf", ".otf"]);
 
@@ -8,12 +8,12 @@ let cachedPaths: string[] | null = null;
 let cachedAdditionalDirs: string[] | null = null;
 
 function getSystemFontDirs(): string[] {
-  const os = platform();
-  switch (os) {
+  const p = os.platform();
+  switch (p) {
     case "linux":
       return ["/usr/share/fonts", "/usr/local/share/fonts"];
     case "darwin":
-      return ["/System/Library/Fonts", "/Library/Fonts", join(homedir(), "Library/Fonts")];
+      return ["/System/Library/Fonts", "/Library/Fonts", path.join(os.homedir(), "Library/Fonts")];
     case "win32":
       return ["C:\\Windows\\Fonts"];
     default:
@@ -22,13 +22,13 @@ function getSystemFontDirs(): string[] {
 }
 
 function walk(dir: string, result: string[]): void {
-  if (!existsSync(dir)) return;
+  if (!fs.existsSync(dir)) return;
   try {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      const fullPath = join(dir, entry.name);
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const fullPath = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         walk(fullPath, result);
-      } else if (FONT_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
+      } else if (FONT_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) {
         result.push(fullPath);
       }
     }
