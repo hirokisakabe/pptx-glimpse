@@ -414,8 +414,8 @@ function createMultiSlideEntries(count: number): SlideEntry[] {
 // Parse pipeline helper (reproduces converter.ts internal logic)
 // ---------------------------------------------------------------------------
 
-async function parsePptx(input: Buffer): Promise<{ slides: Slide[]; slideSize: SlideSize }> {
-  const archive = await readPptx(input);
+function parsePptx(input: Buffer): { slides: Slide[]; slideSize: SlideSize } {
+  const archive = readPptx(input);
 
   const presentationXml = archive.files.get("ppt/presentation.xml");
   if (!presentationXml) throw new Error("Missing presentation.xml");
@@ -490,11 +490,11 @@ beforeAll(async () => {
   ]);
 
   // Pre-parse slides for renderer-only benchmarks
-  const simpleResult = await parsePptx(simplePptx);
+  const simpleResult = parsePptx(simplePptx);
   parsedSimpleSlide = simpleResult.slides[0];
   slideSize = simpleResult.slideSize;
 
-  const complexResult = await parsePptx(complexPptx);
+  const complexResult = parsePptx(complexPptx);
   parsedComplexSlide = complexResult.slides[0];
 });
 
@@ -531,12 +531,12 @@ describe("PNG conversion", () => {
 });
 
 describe("parser standalone", () => {
-  bench("parse simple slide", async () => {
-    await parsePptx(simplePptx);
+  bench("parse simple slide", () => {
+    parsePptx(simplePptx);
   });
 
-  bench("parse complex slide", async () => {
-    await parsePptx(complexPptx);
+  bench("parse complex slide", () => {
+    parsePptx(complexPptx);
   });
 });
 

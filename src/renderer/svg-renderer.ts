@@ -55,21 +55,15 @@ function renderElement(element: SlideElement, defs: string[]): string | null {
   let rendered: string | null = null;
   switch (element.type) {
     case "shape": {
-      const result = renderShape(element);
-      extractDefs(result, defs);
-      rendered = removeDefs(result);
+      rendered = extractAndRemoveDefs(renderShape(element), defs);
       break;
     }
     case "image": {
-      const imgResult = renderImage(element);
-      extractDefs(imgResult, defs);
-      rendered = removeDefs(imgResult);
+      rendered = extractAndRemoveDefs(renderImage(element), defs);
       break;
     }
     case "connector": {
-      const cxnResult = renderConnector(element);
-      extractDefs(cxnResult, defs);
-      rendered = removeDefs(cxnResult);
+      rendered = extractAndRemoveDefs(renderConnector(element), defs);
       break;
     }
     case "group":
@@ -150,36 +144,16 @@ function renderGroup(group: GroupElement, defs: string[]): string {
   return parts.join("");
 }
 
-function extractDefs(svgFragment: string, defs: string[]): void {
-  const linearGradientMatch = svgFragment.match(/<linearGradient[^]*?<\/linearGradient>/g);
-  if (linearGradientMatch) {
-    defs.push(...linearGradientMatch);
-  }
-  const radialGradientMatch = svgFragment.match(/<radialGradient[^]*?<\/radialGradient>/g);
-  if (radialGradientMatch) {
-    defs.push(...radialGradientMatch);
-  }
-  const patternMatch = svgFragment.match(/<pattern[^]*?<\/pattern>/g);
-  if (patternMatch) {
-    defs.push(...patternMatch);
-  }
-  const filterMatch = svgFragment.match(/<filter[^]*?<\/filter>/g);
-  if (filterMatch) {
-    defs.push(...filterMatch);
-  }
-  const markerMatch = svgFragment.match(/<marker[^]*?<\/marker>/g);
-  if (markerMatch) {
-    defs.push(...markerMatch);
-  }
-}
+// 5 種類の defs タグを 1 つの正規表現で抽出・除去する。
+// 各パターンは開始タグと終了タグが一致するため、誤マッチのリスクはない。
+const DEFS_TAGS = ["linearGradient", "radialGradient", "pattern", "filter", "marker"];
+const DEFS_RE = new RegExp(DEFS_TAGS.map((tag) => `<${tag}[^]*?<\\/${tag}>`).join("|"), "g");
 
-function removeDefs(svgFragment: string): string {
-  return svgFragment
-    .replace(/<linearGradient[^]*?<\/linearGradient>/g, "")
-    .replace(/<radialGradient[^]*?<\/radialGradient>/g, "")
-    .replace(/<pattern[^]*?<\/pattern>/g, "")
-    .replace(/<filter[^]*?<\/filter>/g, "")
-    .replace(/<marker[^]*?<\/marker>/g, "");
+function extractAndRemoveDefs(svgFragment: string, defs: string[]): string {
+  return svgFragment.replace(DEFS_RE, (match) => {
+    defs.push(match);
+    return "";
+  });
 }
 
 function escapeXmlAttr(str: string): string {

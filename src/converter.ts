@@ -11,6 +11,7 @@ import { createFontMapping } from "./font/font-mapping.js";
 import { setFontMapping, resetFontMapping } from "./font/font-mapping-context.js";
 import { createOpentypeSetupFromSystem } from "./font/opentype-helpers.js";
 import { setTextPathFontResolver, resetTextPathFontResolver } from "./font/text-path-context.js";
+import { enableXmlCache, clearXmlCache } from "./parser/xml-parser.js";
 
 export interface ConvertOptions {
   /** 変換対象のスライド番号 (1始まり)。未指定で全スライド */
@@ -49,10 +50,11 @@ export async function convertPptxToSvg(
     setTextPathFontResolver(setup.fontResolver);
   }
   setFontMapping(createFontMapping(options?.fontMapping));
+  enableXmlCache();
   try {
     initWarningLogger(options?.logLevel ?? "off");
 
-    const data = await parsePptxData(input);
+    const data = parsePptxData(input);
 
     // Filter slides if specified
     const targetSlides = options?.slides
@@ -80,6 +82,7 @@ export async function convertPptxToSvg(
 
     return results;
   } finally {
+    clearXmlCache();
     resetTextMeasurer();
     resetTextPathFontResolver();
     resetFontMapping();

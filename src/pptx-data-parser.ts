@@ -45,8 +45,8 @@ export interface ParsedPptxData {
   archive: PptxArchive;
 }
 
-export async function parsePptxData(input: Buffer | Uint8Array): Promise<ParsedPptxData> {
-  const archive = await readPptx(input);
+export function parsePptxData(input: Buffer | Uint8Array): ParsedPptxData {
+  const archive = readPptx(input);
 
   // Parse presentation.xml
   const presentationXml = archive.files.get("ppt/presentation.xml");
