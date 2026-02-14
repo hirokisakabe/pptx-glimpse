@@ -4,31 +4,13 @@ import { DEFAULT_OUTPUT_WIDTH } from "./utils/constants.js";
 import type { SlideElement } from "./model/shape.js";
 import type { LogLevel } from "./warning-logger.js";
 import { initWarningLogger, flushWarnings } from "./warning-logger.js";
-import type { TextMeasurer } from "./text-measurer.js";
 import { setTextMeasurer, resetTextMeasurer } from "./text-measurer.js";
 import { parsePptxData, parseSlideWithLayout } from "./pptx-data-parser.js";
 import type { FontMapping } from "./font-mapping.js";
 import { createFontMapping } from "./font-mapping.js";
 import { setFontMapping, resetFontMapping } from "./font-mapping-context.js";
-import { createOpentypeSetupFromBuffers } from "./opentype-helpers.js";
+import { createOpentypeSetupFromSystem } from "./opentype-helpers.js";
 import { setTextPathFontResolver, resetTextPathFontResolver } from "./text-path-context.js";
-
-export interface FontOptions {
-  /** resvg-wasm に渡すフォントファイルパス (Node.js 向け) */
-  fontFiles?: string[];
-  /** resvg-wasm に渡すフォントディレクトリパス (Node.js 向け) */
-  fontDirs?: string[];
-  /** resvg-wasm に渡すフォントバッファ (ブラウザ/Node.js 両対応) */
-  fontBuffers?: Array<{ name?: string; data: ArrayBuffer | Uint8Array }>;
-  /** resvg-wasm でシステムフォントを読み込むか (デフォルト: false) */
-  loadSystemFonts?: boolean;
-  /** resvg-wasm のデフォルトフォントファミリー */
-  defaultFontFamily?: string;
-  /** resvg-wasm の sans-serif フォントファミリー */
-  sansSerifFamily?: string;
-  /** resvg-wasm の serif フォントファミリー */
-  serifFamily?: string;
-}
 
 export interface ConvertOptions {
   /** 変換対象のスライド番号 (1始まり)。未指定で全スライド */
@@ -39,10 +21,8 @@ export interface ConvertOptions {
   height?: number;
   /** 警告ログレベル。デフォルト: "off" */
   logLevel?: LogLevel;
-  /** テキスト計測のカスタム実装 */
-  textMeasurer?: TextMeasurer;
-  /** PNG 変換時のフォント設定 (resvg-wasm オプション) */
-  fonts?: FontOptions;
+  /** 追加のフォントディレクトリパス。システムフォントに加えて検索する */
+  fontDirs?: string[];
   /** PPTX フォント名 → OSS 代替フォントのカスタムマッピング。デフォルトマッピングにマージされる */
   fontMapping?: FontMapping;
 }
@@ -54,7 +34,7 @@ export interface SlideSvg {
 
 export interface SlideImage {
   slideNumber: number;
-  png: Uint8Array;
+  png: Buffer;
   width: number;
   height: number;
 }
@@ -63,17 +43,10 @@ export async function convertPptxToSvg(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
 ): Promise<SlideSvg[]> {
-  if (options?.textMeasurer) {
-    setTextMeasurer(options.textMeasurer);
-  } else if (options?.fonts?.fontBuffers && options.fonts.fontBuffers.length > 0) {
-    const setup = await createOpentypeSetupFromBuffers(
-      options.fonts.fontBuffers,
-      options.fontMapping,
-    );
-    if (setup) {
-      setTextMeasurer(setup.measurer);
-      setTextPathFontResolver(setup.fontResolver);
-    }
+  const setup = await createOpentypeSetupFromSystem(options?.fontDirs, options?.fontMapping);
+  if (setup) {
+    setTextMeasurer(setup.measurer);
+    setTextPathFontResolver(setup.fontResolver);
   }
   setFontMapping(createFontMapping(options?.fontMapping));
   try {
@@ -124,7 +97,7 @@ export async function convertPptxToPng(
 
   const results: SlideImage[] = [];
   for (const { slideNumber, svg } of svgResults) {
-    const pngResult = await svgToPng(svg, { width, height, fonts: options?.fonts });
+    const pngResult = await svgToPng(svg, { width, height });
     results.push({
       slideNumber,
       png: pngResult.png,
