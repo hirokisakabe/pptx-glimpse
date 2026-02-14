@@ -6,7 +6,7 @@ import {
   resetTextMeasurer,
   type TextMeasurer,
 } from "./text-measurer.js";
-import { measureTextWidth, getLineHeightRatio } from "./utils/text-measure.js";
+import { measureTextWidth, getLineHeightRatio } from "../utils/text-measure.js";
 
 afterEach(() => {
   resetTextMeasurer();

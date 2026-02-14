@@ -1,5 +1,5 @@
 import type { Paragraph, RunProperties } from "../model/text.js";
-import { getTextMeasurer } from "../text-measurer.js";
+import { getTextMeasurer } from "../font/text-measurer.js";
 
 export interface LineSegment {
   text: string;

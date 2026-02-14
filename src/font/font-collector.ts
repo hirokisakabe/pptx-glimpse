@@ -1,10 +1,10 @@
 /**
  * PPTX から使用フォント名を収集する API。
  */
-import type { SlideElement } from "./model/shape.js";
-import type { TextBody } from "./model/text.js";
-import type { FontScheme } from "./model/theme.js";
-import { parsePptxData, parseSlideWithLayout } from "./pptx-data-parser.js";
+import type { SlideElement } from "../model/shape.js";
+import type { TextBody } from "../model/text.js";
+import type { FontScheme } from "../model/theme.js";
+import { parsePptxData, parseSlideWithLayout } from "../pptx-data-parser.js";
 
 /** フォント収集結果 */
 export interface UsedFonts {
