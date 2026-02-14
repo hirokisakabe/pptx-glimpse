@@ -130,6 +130,23 @@ Since LibreOffice ≠ PowerPoint, differences in font rendering and anti-aliasin
 
 LibreOffice VRT tests are automatically skipped in environments without Docker. `npm run test` will pass without issues.
 
+## Release Workflow (Changesets)
+
+This project uses [Changesets](https://github.com/changesets/changesets) for version management and releases.
+
+### Adding a changeset
+
+When a PR includes changes that affect the published package (bug fixes, new features, breaking changes), run `npx changeset` before committing and select the appropriate version bump type (patch / minor / major) with a summary of the change. This creates a markdown file in `.changeset/` that should be committed with the PR.
+
+Changes that do NOT require a changeset: docs-only updates, CI config, test-only changes, refactoring with no public API impact.
+
+### Release flow
+
+1. PR with changeset is merged to main
+2. `release.yml` (changesets/action) automatically creates a "Version Packages" PR that bumps `package.json` and updates `CHANGELOG.md`
+3. "Version Packages" PR is reviewed and merged
+4. `release.yml` runs `npx changeset publish` — creates a `v{version}` tag and publishes to npm with provenance (Trusted Publishing)
+
 ## Coding Conventions
 
 - Prettier: double quotes, semicolons, trailing commas, printWidth 100
