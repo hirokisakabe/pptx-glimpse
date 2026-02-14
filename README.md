@@ -22,7 +22,6 @@ rather than pixel-perfect rendering of every PowerPoint feature.
 ## Requirements
 
 - **Node.js >= 20**
-- PNG conversion uses [sharp](https://sharp.pixelplumbing.com/) (librsvg-based)
 
 ## Installation
 
@@ -73,11 +72,11 @@ pptx-glimpse automatically scans system font directories and loads fonts using [
 
 Default system font directories:
 
-| OS      | Directories                                                      |
-| ------- | ---------------------------------------------------------------- |
-| Linux   | `/usr/share/fonts`, `/usr/local/share/fonts`                     |
-| macOS   | `/System/Library/Fonts`, `/Library/Fonts`, `~/Library/Fonts`     |
-| Windows | `C:\Windows\Fonts`                                               |
+| OS      | Directories                                                  |
+| ------- | ------------------------------------------------------------ |
+| Linux   | `/usr/share/fonts`, `/usr/local/share/fonts`                 |
+| macOS   | `/System/Library/Fonts`, `/Library/Fonts`, `~/Library/Fonts` |
+| Windows | `C:\Windows\Fonts`                                           |
 
 Use the `fontDirs` option to add custom font directories.
 
