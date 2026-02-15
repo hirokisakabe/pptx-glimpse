@@ -26,7 +26,7 @@ npm run dev -- file.pptx  # Live preview dev server (auto-reload on src/ changes
 
 CI consists of 3 jobs:
 
-- **ci**: `lint` → `format:check` → `typecheck` → `test` (excluding VRT) → `build` (Node 20/22/24)
+- **ci**: `lint` → `format:check` → `typecheck` → `test` with coverage (excluding VRT) → `build` → package verification (Node 20/22/24, coverage report on Node 22)
 - **vrt**: Snapshot VRT (Docker-based, self-comparison)
 - **libreoffice-vrt**: LibreOffice VRT (generates fixtures and reference images via Docker)
 
@@ -43,7 +43,7 @@ Data flow: **PPTX binary → Parser (ZIP extraction + XML parsing) → Intermedi
 - `src/data/` — Font metrics data (fallback character width information)
 - `src/utils/` — EMU ↔ pixel conversion (1 inch = 914400 EMU, 96 DPI) and text wrapping
 
-Entry point: `src/index.ts` exports `convertPptxToSvg` and `convertPptxToPng`.
+Entry point: `src/index.ts` exports `convertPptxToSvg`, `convertPptxToPng`, warning utilities (`getWarningSummary`, `getWarningEntries`), font utilities (`collectUsedFonts`, `DEFAULT_FONT_MAPPING`, `createFontMapping`, `getMappedFont`), and related types.
 
 ## Technical Constraints
 
@@ -67,12 +67,14 @@ vrt/
 │   ├── create-fixtures.ts                    # Fixture generation script
 │   ├── update-snapshots.ts                   # Snapshot update script
 │   ├── docker-run.sh                         # Docker entrypoint (npm ci + exec)
+│   ├── diffs/                                # Diff images on test failure (gitignored)
 │   ├── fixtures/                             # VRT PPTX fixtures (dynamically generated)
 │   └── snapshots/                            # Reference snapshot images (Docker-generated)
 └── libreoffice/                              # LibreOffice VRT
     ├── regression.test.ts                    # Test file
     ├── create_fixtures.py                    # Fixture generation (Python, Docker)
     ├── update_snapshots.sh                   # Snapshot update (Docker)
+    ├── diffs/                                # Diff images on test failure (gitignored)
     ├── fixtures/                             # Dynamically generated in CI
     └── snapshots/                            # Dynamically generated in CI
 ```
