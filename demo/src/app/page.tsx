@@ -5,7 +5,7 @@ export default function Home() {
     <div className="app">
       <header>
         <h1>pptx-glimpse</h1>
-        <p>PPTX to SVG converter &mdash; server-side demo</p>
+        <p>Upload a PPTX file and preview slides as SVG</p>
       </header>
       <main>
         <UploadViewer />
