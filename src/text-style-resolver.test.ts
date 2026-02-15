@@ -560,6 +560,75 @@ describe("applyTextStyleInheritance", () => {
     });
   });
 
+  describe("プレースホルダータイプのフォールバック", () => {
+    it("ctrTitle がマスターの title プレースホルダー lstStyle から色を継承する", () => {
+      const shape = makeShape({ placeholderType: "ctrTitle" });
+      const context = makeContext({
+        masterPlaceholderStyles: [
+          {
+            placeholderType: "title",
+            lstStyle: makeDefaultTextStyle({ color: { hex: "#FFFFFF", alpha: 1 } }),
+          },
+        ],
+        txStyles: {
+          titleStyle: makeDefaultTextStyle({ color: { hex: "#000000", alpha: 1 } }),
+        },
+      });
+
+      applyTextStyleInheritance([shape], context);
+
+      expect(shape.textBody!.paragraphs[0].runs[0].properties.color).toEqual({
+        hex: "#FFFFFF",
+        alpha: 1,
+      });
+    });
+
+    it("subTitle がマスターの body プレースホルダー lstStyle から色を継承する", () => {
+      const shape = makeShape({ placeholderType: "subTitle" });
+      const context = makeContext({
+        masterPlaceholderStyles: [
+          {
+            placeholderType: "body",
+            lstStyle: makeDefaultTextStyle({ color: { hex: "#CCCCCC", alpha: 1 } }),
+          },
+        ],
+        txStyles: {
+          bodyStyle: makeDefaultTextStyle({ color: { hex: "#000000", alpha: 1 } }),
+        },
+      });
+
+      applyTextStyleInheritance([shape], context);
+
+      expect(shape.textBody!.paragraphs[0].runs[0].properties.color).toEqual({
+        hex: "#CCCCCC",
+        alpha: 1,
+      });
+    });
+
+    it("ctrTitle の完全一致がある場合はフォールバックしない", () => {
+      const shape = makeShape({ placeholderType: "ctrTitle" });
+      const context = makeContext({
+        masterPlaceholderStyles: [
+          {
+            placeholderType: "ctrTitle",
+            lstStyle: makeDefaultTextStyle({ color: { hex: "#AAAAAA", alpha: 1 } }),
+          },
+          {
+            placeholderType: "title",
+            lstStyle: makeDefaultTextStyle({ color: { hex: "#FFFFFF", alpha: 1 } }),
+          },
+        ],
+      });
+
+      applyTextStyleInheritance([shape], context);
+
+      expect(shape.textBody!.paragraphs[0].runs[0].properties.color).toEqual({
+        hex: "#AAAAAA",
+        alpha: 1,
+      });
+    });
+  });
+
   describe("テキストボディなし", () => {
     it("textBody が null のシェイプはスキップされる", () => {
       const shape = makeShape({ textBody: null } as Partial<ShapeElement>);

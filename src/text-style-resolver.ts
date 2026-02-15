@@ -106,7 +106,27 @@ function findMatchingPlaceholderStyle(
 
   // type マッチにフォールバック
   const byType = styles.find((s) => s.placeholderType === placeholderType);
-  return byType?.lstStyle;
+  if (byType?.lstStyle) return byType.lstStyle;
+
+  // OOXML 仕様に基づくタイプフォールバック (ctrTitle→title, subTitle→body)
+  const fallbackType = getPlaceholderFallbackType(placeholderType);
+  if (fallbackType) {
+    const byFallback = styles.find((s) => s.placeholderType === fallbackType);
+    return byFallback?.lstStyle;
+  }
+
+  return undefined;
+}
+
+function getPlaceholderFallbackType(type: string): string | undefined {
+  switch (type) {
+    case "ctrTitle":
+      return "title";
+    case "subTitle":
+      return "body";
+    default:
+      return undefined;
+  }
 }
 
 function getTxStyleForPlaceholder(
