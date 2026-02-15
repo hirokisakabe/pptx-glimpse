@@ -4,7 +4,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "pptx-glimpse Demo",
-  description: "PPTX to SVG converter — server-side demo",
+  description: "Upload a PPTX file and preview slides as SVG",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
