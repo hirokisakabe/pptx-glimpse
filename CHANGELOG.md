@@ -1,5 +1,16 @@
 # pptx-glimpse
 
+## 0.2.0
+
+### Minor Changes
+
+- b29fe5c: eaVert モードで CJK 文字を直立表示するように対応
+- a428791: 株価チャート (stockChart)、サーフェスチャート (surfaceChart/surface3DChart)、ofPieチャート (ofPieChart) のパース・レンダリングに対応
+
+### Patch Changes
+
+- 69101bd: ctrTitle/subTitle プレースホルダーがマスターの title/body lstStyle からテキストカラーを正しく継承するよう修正
+
 ## 0.1.4
 
 ### Patch Changes
