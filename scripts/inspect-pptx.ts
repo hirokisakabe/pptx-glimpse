@@ -19,7 +19,7 @@ function prettyPrintXml(rawXml: string): string {
     indentBy: "  ",
     suppressEmptyNode: false,
   });
-  return builder.build(parsed) as string;
+  return builder.build(parsed);
 }
 
 function formatBytes(bytes: number): string {
