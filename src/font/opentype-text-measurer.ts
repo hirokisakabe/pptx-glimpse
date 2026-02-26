@@ -1,5 +1,8 @@
 import type { TextMeasurer } from "./text-measurer.js";
-import { measureTextWidth as defaultMeasureTextWidth } from "../utils/text-measure.js";
+import {
+  measureTextWidth as defaultMeasureTextWidth,
+  isCjkCodePoint,
+} from "../utils/text-measure.js";
 
 const PX_PER_PT = 96 / 72;
 const BOLD_FACTOR = 1.05;
@@ -42,11 +45,16 @@ export class OpentypeTextMeasurer implements TextMeasurer {
     const fontSizePx = fontSizePt * PX_PER_PT;
     const scale = fontSizePx / font.unitsPerEm;
     let totalWidth = 0;
+    const chars = [...text];
     const glyphs = font.stringToGlyphs(text);
-    for (const glyph of glyphs) {
-      totalWidth += (glyph.advanceWidth ?? font.unitsPerEm * 0.6) * scale;
+    for (let i = 0; i < glyphs.length; i++) {
+      let charWidth = (glyphs[i].advanceWidth ?? font.unitsPerEm * 0.6) * scale;
+      const codePoint = chars[i]?.codePointAt(0);
+      if (bold && (codePoint === undefined || !isCjkCodePoint(codePoint))) {
+        charWidth *= BOLD_FACTOR;
+      }
+      totalWidth += charWidth;
     }
-    if (bold) totalWidth *= BOLD_FACTOR;
     return totalWidth;
   }
 

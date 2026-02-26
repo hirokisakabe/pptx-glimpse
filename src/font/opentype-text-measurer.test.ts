@@ -47,6 +47,35 @@ describe("OpentypeTextMeasurer", () => {
     expect(boldWidth).toBeCloseTo(normalWidth * 1.05, 1);
   });
 
+  it("太字でも CJK 文字には BOLD_FACTOR を適用しない", () => {
+    const font = createMockFont({
+      unitsPerEm: 1000,
+      ascender: 800,
+      descender: -200,
+      glyphWidths: { 漢: 1000 },
+    });
+    const fonts = new Map([["TestFont", font]]);
+    const measurer = new OpentypeTextMeasurer(fonts);
+    const normalWidth = measurer.measureTextWidth("漢", 18, false, "TestFont");
+    const boldWidth = measurer.measureTextWidth("漢", 18, true, "TestFont");
+    expect(boldWidth).toBeCloseTo(normalWidth, 5);
+  });
+
+  it("太字の混合テキストではラテン文字のみ BOLD_FACTOR が適用される", () => {
+    const font = createMockFont({
+      unitsPerEm: 1000,
+      ascender: 800,
+      descender: -200,
+      glyphWidths: { A: 600, 漢: 1000 },
+    });
+    const fonts = new Map([["TestFont", font]]);
+    const measurer = new OpentypeTextMeasurer(fonts);
+    const latinNormal = measurer.measureTextWidth("A", 18, false, "TestFont");
+    const cjkNormal = measurer.measureTextWidth("漢", 18, false, "TestFont");
+    const mixedBold = measurer.measureTextWidth("A漢", 18, true, "TestFont");
+    expect(mixedBold).toBeCloseTo(latinNormal * 1.05 + cjkNormal, 1);
+  });
+
   it("フォントが見つからない場合はデフォルト実装にフォールバック", () => {
     const measurer = new OpentypeTextMeasurer(new Map());
     const width = measurer.measureTextWidth("A", 18, false, "Unknown");
