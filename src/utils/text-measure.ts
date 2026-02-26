@@ -45,7 +45,7 @@ export function getAscenderRatio(fontFamily?: string | null, fontFamilyEa?: stri
 }
 
 // CJK 文字判定 (Unicode Standard に基づくコードポイント範囲)
-function isCjkCodePoint(codePoint: number): boolean {
+export function isCjkCodePoint(codePoint: number): boolean {
   return (
     (codePoint >= 0x3000 && codePoint <= 0x9fff) || // CJK 記号・ひらがな・カタカナ・統合漢字
     (codePoint >= 0xf900 && codePoint <= 0xfaff) || // CJK 互換漢字
@@ -128,15 +128,16 @@ export function measureTextWidth(
     const codePoint = char.codePointAt(0)!;
     const isEa = isCjkCodePoint(codePoint);
     const metrics = isEa && eaMetrics ? eaMetrics : latinMetrics;
+    let charWidth: number;
     if (metrics) {
-      totalWidth += measureCharMetrics(char, codePoint, baseSizePx, metrics);
+      charWidth = measureCharMetrics(char, codePoint, baseSizePx, metrics);
     } else {
-      totalWidth += measureCharHeuristic(codePoint, baseSizePx);
+      charWidth = measureCharHeuristic(codePoint, baseSizePx);
     }
-  }
-
-  if (bold) {
-    totalWidth *= BOLD_FACTOR;
+    if (bold && !isEa) {
+      charWidth *= BOLD_FACTOR;
+    }
+    totalWidth += charWidth;
   }
 
   return totalWidth;

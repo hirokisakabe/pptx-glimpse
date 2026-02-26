@@ -27,10 +27,23 @@ describe("measureTextWidth", () => {
     expect(width).toBeCloseTo(1.6 * 18 * PX_PER_PT, 1);
   });
 
-  it("太字の場合は幅が増加する", () => {
+  it("太字の場合はラテン文字の幅が増加する", () => {
     const normalWidth = measureTextWidth("Test", 18, false);
     const boldWidth = measureTextWidth("Test", 18, true);
     expect(boldWidth).toBeCloseTo(normalWidth * 1.05, 1);
+  });
+
+  it("太字でも CJK 文字の幅は変わらない", () => {
+    const normalWidth = measureTextWidth("漢字", 18, false);
+    const boldWidth = measureTextWidth("漢字", 18, true);
+    expect(boldWidth).toBeCloseTo(normalWidth, 5);
+  });
+
+  it("太字の混合テキストではラテン文字のみ BOLD_FACTOR が適用される", () => {
+    const latinNormal = measureTextWidth("A", 18, false);
+    const cjkNormal = measureTextWidth("漢", 18, false);
+    const mixedBold = measureTextWidth("A漢", 18, true);
+    expect(mixedBold).toBeCloseTo(latinNormal * 1.05 + cjkNormal, 1);
   });
 
   it("スペースの幅を推定する", () => {
