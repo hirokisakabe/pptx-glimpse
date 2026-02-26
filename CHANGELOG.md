@@ -1,5 +1,11 @@
 # pptx-glimpse
 
+## 0.2.1
+
+### Patch Changes
+
+- 1060113: CJK 文字に対する BOLD_FACTOR 適用を除外し、太字 CJK テキストの不要な折り返しを修正
+
 ## 0.2.0
 
 ### Minor Changes
