@@ -563,7 +563,10 @@ function parseImage(
 
   const mediaPath = resolveRelationshipTarget(slidePath, rel.target);
   const mediaData = archive.media.get(mediaPath);
-  if (!mediaData) return null;
+  if (!mediaData) {
+    debug("picture.media", `media file not found: ${mediaPath}`);
+    return null;
+  }
 
   const ext = mediaPath.split(".").pop()?.toLowerCase() ?? "png";
   const mimeMap: Record<string, string> = {
@@ -839,10 +842,16 @@ function parseSmartArt(
     }
   }
 
-  if (!drawingPath) return null;
+  if (!drawingPath) {
+    debug("smartArt.drawing", "diagramDrawing relationship not found");
+    return null;
+  }
 
   const drawingXml = archive.files.get(drawingPath);
-  if (!drawingXml) return null;
+  if (!drawingXml) {
+    debug("smartArt.drawing", `drawing XML not found in archive: ${drawingPath}`);
+    return null;
+  }
 
   const parsed = parseXml(drawingXml);
   const drawing = parsed.drawing as XmlNode | undefined;
