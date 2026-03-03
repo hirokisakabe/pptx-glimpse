@@ -3,6 +3,7 @@ import type { ResolvedColor } from "../model/fill.js";
 import type { RenderResult } from "./render-result.js";
 import { emuToPixels } from "../utils/emu.js";
 import { buildTransformAttr } from "./transform.js";
+import { debug } from "../warning-logger.js";
 
 const DEFAULT_SERIES_COLORS: ResolvedColor[] = [
   { hex: "#4472C4", alpha: 1 },
@@ -95,13 +96,22 @@ function renderChartTitle(title: string, chartWidth: number): string {
 function renderBarChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
   const parts: string[] = [];
   const { series, categories } = chart;
-  if (series.length === 0) return "";
+  if (series.length === 0) {
+    debug("chart.bar", "series is empty");
+    return "";
+  }
 
   const maxVal = getMaxValue(series);
-  if (maxVal === 0) return "";
+  if (maxVal === 0) {
+    debug("chart.bar", "max value is 0");
+    return "";
+  }
 
   const catCount = categories.length || Math.max(...series.map((s) => s.values.length));
-  if (catCount === 0) return "";
+  if (catCount === 0) {
+    debug("chart.bar", "category count is 0");
+    return "";
+  }
 
   const isHorizontal = chart.barDirection === "bar";
 
@@ -171,13 +181,22 @@ function renderBarChart(chart: ChartData, x: number, y: number, w: number, h: nu
 function renderLineChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
   const parts: string[] = [];
   const { series, categories } = chart;
-  if (series.length === 0) return "";
+  if (series.length === 0) {
+    debug("chart.line", "series is empty");
+    return "";
+  }
 
   const maxVal = getMaxValue(series);
-  if (maxVal === 0) return "";
+  if (maxVal === 0) {
+    debug("chart.line", "max value is 0");
+    return "";
+  }
 
   const catCount = categories.length || Math.max(...series.map((s) => s.values.length));
-  if (catCount === 0) return "";
+  if (catCount === 0) {
+    debug("chart.line", "category count is 0");
+    return "";
+  }
 
   // Axes
   parts.push(
@@ -224,13 +243,22 @@ function renderLineChart(chart: ChartData, x: number, y: number, w: number, h: n
 function renderAreaChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
   const parts: string[] = [];
   const { series, categories } = chart;
-  if (series.length === 0) return "";
+  if (series.length === 0) {
+    debug("chart.area", "series is empty");
+    return "";
+  }
 
   const maxVal = getMaxValue(series);
-  if (maxVal === 0) return "";
+  if (maxVal === 0) {
+    debug("chart.area", "max value is 0");
+    return "";
+  }
 
   const catCount = categories.length || Math.max(...series.map((s) => s.values.length));
-  if (catCount === 0) return "";
+  if (catCount === 0) {
+    debug("chart.area", "category count is 0");
+    return "";
+  }
 
   // Axes
   parts.push(
@@ -278,10 +306,16 @@ function renderAreaChart(chart: ChartData, x: number, y: number, w: number, h: n
 function renderPieChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
   const parts: string[] = [];
   const series = chart.series[0];
-  if (!series || series.values.length === 0) return "";
+  if (!series || series.values.length === 0) {
+    debug("chart.pie", "series is empty or has no values");
+    return "";
+  }
 
   const total = series.values.reduce((sum, v) => sum + v, 0);
-  if (total === 0) return "";
+  if (total === 0) {
+    debug("chart.pie", "total value is 0");
+    return "";
+  }
 
   const cx = x + w / 2;
   const cy = y + h / 2;
@@ -319,10 +353,16 @@ function renderPieChart(chart: ChartData, x: number, y: number, w: number, h: nu
 function renderDoughnutChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
   const parts: string[] = [];
   const series = chart.series[0];
-  if (!series || series.values.length === 0) return "";
+  if (!series || series.values.length === 0) {
+    debug("chart.doughnut", "series is empty or has no values");
+    return "";
+  }
 
   const total = series.values.reduce((sum, v) => sum + v, 0);
-  if (total === 0) return "";
+  if (total === 0) {
+    debug("chart.doughnut", "total value is 0");
+    return "";
+  }
 
   const cx = x + w / 2;
   const cy = y + h / 2;
@@ -369,7 +409,10 @@ function renderDoughnutChart(chart: ChartData, x: number, y: number, w: number, 
 function renderScatterChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
   const parts: string[] = [];
   const { series } = chart;
-  if (series.length === 0) return "";
+  if (series.length === 0) {
+    debug("chart.scatter", "series is empty");
+    return "";
+  }
 
   let maxX = 0;
   let maxY = 0;
@@ -408,7 +451,10 @@ function renderScatterChart(chart: ChartData, x: number, y: number, w: number, h
 function renderBubbleChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
   const parts: string[] = [];
   const { series } = chart;
-  if (series.length === 0) return "";
+  if (series.length === 0) {
+    debug("chart.bubble", "series is empty");
+    return "";
+  }
 
   let maxX = 0;
   let maxY = 0;
@@ -458,13 +504,22 @@ function renderBubbleChart(chart: ChartData, x: number, y: number, w: number, h:
 function renderRadarChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
   const parts: string[] = [];
   const { series, categories } = chart;
-  if (series.length === 0) return "";
+  if (series.length === 0) {
+    debug("chart.radar", "series is empty");
+    return "";
+  }
 
   const maxVal = getMaxValue(series);
-  if (maxVal === 0) return "";
+  if (maxVal === 0) {
+    debug("chart.radar", "max value is 0");
+    return "";
+  }
 
   const catCount = categories.length || Math.max(...series.map((s) => s.values.length));
-  if (catCount === 0) return "";
+  if (catCount === 0) {
+    debug("chart.radar", "category count is 0");
+    return "";
+  }
 
   const cx = x + w / 2;
   const cy = y + h / 2;
@@ -544,13 +599,19 @@ function renderStockChart(chart: ChartData, x: number, y: number, w: number, h: 
   const { series, categories } = chart;
 
   // Stock chart expects series in order: High (0), Low (1), Close (2)
-  if (series.length < 3) return "";
+  if (series.length < 3) {
+    debug("chart.stock", `insufficient series count: ${series.length} (need at least 3)`);
+    return "";
+  }
 
   const highSeries = series[0];
   const lowSeries = series[1];
   const closeSeries = series[2];
   const catCount = categories.length || highSeries.values.length;
-  if (catCount === 0) return "";
+  if (catCount === 0) {
+    debug("chart.stock", "category count is 0");
+    return "";
+  }
 
   let maxVal = 0;
   let minVal = Infinity;
@@ -560,7 +621,10 @@ function renderStockChart(chart: ChartData, x: number, y: number, w: number, h: 
       minVal = Math.min(minVal, v);
     }
   }
-  if (maxVal === minVal) return "";
+  if (maxVal === minVal) {
+    debug("chart.stock", "max equals min value");
+    return "";
+  }
 
   // Axes
   parts.push(
@@ -610,11 +674,17 @@ function renderStockChart(chart: ChartData, x: number, y: number, w: number, h: 
 function renderSurfaceChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
   const parts: string[] = [];
   const { series, categories } = chart;
-  if (series.length === 0) return "";
+  if (series.length === 0) {
+    debug("chart.surface", "series is empty");
+    return "";
+  }
 
   const rows = series.length;
   const cols = categories.length || Math.max(...series.map((s) => s.values.length));
-  if (cols === 0) return "";
+  if (cols === 0) {
+    debug("chart.surface", "column count is 0");
+    return "";
+  }
 
   // Find min/max values across all data
   let minVal = Infinity;
@@ -700,10 +770,16 @@ function heatmapColor(t: number): string {
 function renderOfPieChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
   const parts: string[] = [];
   const series = chart.series[0];
-  if (!series || series.values.length === 0) return "";
+  if (!series || series.values.length === 0) {
+    debug("chart.ofPie", "series is empty or has no values");
+    return "";
+  }
 
   const total = series.values.reduce((sum, v) => sum + v, 0);
-  if (total === 0) return "";
+  if (total === 0) {
+    debug("chart.ofPie", "total value is 0");
+    return "";
+  }
 
   const splitPos = chart.splitPos ?? 2;
   const secondPieSize = chart.secondPieSize ?? 75;

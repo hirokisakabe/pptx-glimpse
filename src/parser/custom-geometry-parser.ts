@@ -1,6 +1,7 @@
 import type { CustomGeometryPath } from "../model/shape.js";
 import { evaluateGuides, resolveValue, type GuideDefinition } from "./geometry-formula.js";
 import type { XmlNode } from "./xml-parser.js";
+import { debug } from "../warning-logger.js";
 
 /** custGeom ノードをパースして CustomGeometryPath[] を返す */
 export function parseCustomGeometry(custGeom: XmlNode): CustomGeometryPath[] | null {
@@ -20,11 +21,17 @@ export function parseCustomGeometry(custGeom: XmlNode): CustomGeometryPath[] | n
   for (const path of paths) {
     const w = Number(path["@_w"] ?? 0);
     const h = Number(path["@_h"] ?? 0);
-    if (w === 0 && h === 0) continue;
+    if (w === 0 && h === 0) {
+      debug("custGeom.path", "path skipped: width and height are both 0");
+      continue;
+    }
 
     const vars = evaluateGuides(avGd, gdGd, w, h);
     const commands = buildPathCommands(path, vars);
-    if (!commands) continue;
+    if (!commands) {
+      debug("custGeom.path", "path skipped: failed to build path commands");
+      continue;
+    }
 
     result.push({ width: w, height: h, commands });
   }
