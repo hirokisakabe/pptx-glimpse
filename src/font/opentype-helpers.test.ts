@@ -208,13 +208,10 @@ describe("createOpentypeSetupFromBuffers (TTC)", () => {
     const ttf1 = await createTestFontBuffer("FontAlpha");
     const ttc = buildTtcFromTtfs([ttf1]);
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
     const setup = await createOpentypeSetupFromBuffers([{ data: ttc }]);
     expect(setup).not.toBeNull();
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
     expect(setup!.fontResolver).toBeDefined();
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     const font = setup!.fontResolver.resolveFont("FontAlpha", null);
     expect(font).not.toBeNull();
   });
