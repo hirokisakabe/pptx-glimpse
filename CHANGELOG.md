@@ -1,5 +1,11 @@
 # pptx-glimpse
 
+## 0.3.0
+
+### Minor Changes
+
+- 7330871: TTC (TrueType Collection) フォントの fontBuffers 対応を追加。TTC バッファを自動的に個別の TTF/OTF に分割し、opentype.js でパースできるようにした。
+
 ## 0.2.2
 
 ### Patch Changes
