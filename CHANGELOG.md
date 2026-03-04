@@ -1,5 +1,11 @@
 # pptx-glimpse
 
+## 0.2.2
+
+### Patch Changes
+
+- e600c05: パース/レンダリング失敗時のサイレントスキップ箇所に debug レベルの警告を追加
+
 ## 0.2.1
 
 ### Patch Changes
