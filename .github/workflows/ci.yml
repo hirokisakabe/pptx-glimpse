@@ -36,7 +36,7 @@ jobs:
         run: npm run typecheck
 
       - name: Test with coverage
-        run: npx vitest run --coverage --exclude 'vrt/**'
+        run: npx vitest run --coverage
 
       - name: Upload coverage report
         if: matrix.node-version == 22
@@ -58,7 +58,7 @@ jobs:
         working-directory: __main_branch
         run: |
           npm ci
-          npx vitest run --coverage --exclude 'vrt/**'
+          npx vitest run --coverage
 
       - name: Coverage summary comment
         if: matrix.node-version == 22 && github.event_name == 'pull_request'
