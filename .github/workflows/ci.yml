@@ -87,7 +87,7 @@ jobs:
             -v "${{ github.workspace }}":/workspace \
             ghcr.io/hirokisakabe/pptx-glimpse-snapshot-vrt:latest \
             bash /workspace/vrt/snapshot/docker-run.sh \
-            bash -c "npm run vrt:snapshot:fixtures && npx vitest run vrt/snapshot/regression.test.ts --exclude '**/node_modules/**'"
+            bash -c "npm run vrt:snapshot:fixtures && npx vitest run --config vitest.vrt.config.ts vrt/snapshot/regression.test.ts"
 
       - name: Upload diff images on failure
         if: failure()
@@ -121,7 +121,7 @@ jobs:
         run: docker run --rm -v "${{ github.workspace }}":/workspace ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest bash /workspace/vrt/libreoffice/update_snapshots.sh
 
       - name: Run LibreOffice VRT
-        run: npx vitest run vrt/libreoffice/regression.test.ts --exclude '**/node_modules/**'
+        run: npx vitest run --config vitest.vrt.config.ts vrt/libreoffice/regression.test.ts
 
       - name: Upload diff images on failure
         if: failure()
