@@ -208,7 +208,7 @@ describe("createOpentypeSetupFromBuffers (TTC)", () => {
     const ttf1 = await createTestFontBuffer("FontAlpha");
     const ttc = buildTtcFromTtfs([ttf1]);
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
     const setup = await createOpentypeSetupFromBuffers([{ data: ttc }]);
     expect(setup).not.toBeNull();
     // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
