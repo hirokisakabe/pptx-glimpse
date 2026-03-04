@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { createOpentypeTextMeasurerFromBuffers } from "./opentype-helpers.js";
+import {
+  createOpentypeTextMeasurerFromBuffers,
+  createOpentypeSetupFromBuffers,
+} from "./opentype-helpers.js";
+import { buildTtcFromTtfs } from "./ttc-test-helper.js";
 
 /**
  * opentype.js を使って最小限の有効な TTF バッファを作成する。
@@ -156,5 +160,72 @@ describe("createOpentypeTextMeasurerFromBuffers", () => {
     const width2 = measurer!.measureTextWidth("A", 18, false, "Font2");
     expect(width1).toBeGreaterThan(0);
     expect(width2).toBeGreaterThan(0);
+  });
+});
+
+describe("createOpentypeSetupFromBuffers (TTC)", () => {
+  it("TTC バッファから OpentypeTextMeasurer を構築できる", async () => {
+    const ttf1 = await createTestFontBuffer("FontAlpha");
+    const ttf2 = await createTestFontBuffer("FontBeta");
+    const ttc = buildTtcFromTtfs([ttf1, ttf2]);
+
+    const measurer = await createOpentypeTextMeasurerFromBuffers([{ data: ttc }]);
+    expect(measurer).not.toBeNull();
+  });
+
+  it("TTC 内の各フォント名で幅計測ができる", async () => {
+    const ttf1 = await createTestFontBuffer("FontAlpha");
+    const ttf2 = await createTestFontBuffer("FontBeta");
+    const ttc = buildTtcFromTtfs([ttf1, ttf2]);
+
+    const measurer = await createOpentypeTextMeasurerFromBuffers([{ data: ttc }]);
+    expect(measurer).not.toBeNull();
+
+    const widthAlpha = measurer!.measureTextWidth("A", 18, false, "FontAlpha");
+    const widthBeta = measurer!.measureTextWidth("A", 18, false, "FontBeta");
+    expect(widthAlpha).toBeGreaterThan(0);
+    expect(widthBeta).toBeGreaterThan(0);
+  });
+
+  it("TTC と通常 TTF を混在して渡せる", async () => {
+    const ttfSingle = await createTestFontBuffer("SingleFont");
+    const ttf1 = await createTestFontBuffer("TtcFont1");
+    const ttf2 = await createTestFontBuffer("TtcFont2");
+    const ttc = buildTtcFromTtfs([ttf1, ttf2]);
+
+    const measurer = await createOpentypeTextMeasurerFromBuffers([
+      { name: "SingleFont", data: ttfSingle },
+      { data: ttc },
+    ]);
+    expect(measurer).not.toBeNull();
+
+    expect(measurer!.measureTextWidth("A", 18, false, "SingleFont")).toBeGreaterThan(0);
+    expect(measurer!.measureTextWidth("A", 18, false, "TtcFont1")).toBeGreaterThan(0);
+    expect(measurer!.measureTextWidth("A", 18, false, "TtcFont2")).toBeGreaterThan(0);
+  });
+
+  it("TTC バッファで fontResolver も構築される", async () => {
+    const ttf1 = await createTestFontBuffer("FontAlpha");
+    const ttc = buildTtcFromTtfs([ttf1]);
+
+    const setup = await createOpentypeSetupFromBuffers([{ data: ttc }]);
+    expect(setup).not.toBeNull();
+    expect(setup!.fontResolver).toBeDefined();
+
+    const font = setup!.fontResolver.resolveFont("FontAlpha", null);
+    expect(font).not.toBeNull();
+  });
+
+  it("TTC 内のフォントにフォントマッピング逆引きが適用される", async () => {
+    const ttf = await createTestFontBuffer("Carlito");
+    const ttc = buildTtcFromTtfs([ttf]);
+
+    const measurer = await createOpentypeTextMeasurerFromBuffers([{ data: ttc }]);
+    expect(measurer).not.toBeNull();
+
+    // Calibri → Carlito マッピングの逆引き
+    const widthByOss = measurer!.measureTextWidth("A", 18, false, "Carlito");
+    const widthByPptx = measurer!.measureTextWidth("A", 18, false, "Calibri");
+    expect(widthByPptx).toBe(widthByOss);
   });
 });

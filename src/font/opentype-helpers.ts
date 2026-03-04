@@ -9,9 +9,10 @@ import { createFontMapping } from "./font-mapping.js";
 import type { OpentypeFullFont, TextPathFontResolver } from "./text-path-context.js";
 import { DefaultTextPathFontResolver } from "./text-path-context.js";
 import { collectFontFilePaths } from "./system-font-loader.js";
+import { isTtcBuffer, extractTtcFonts } from "./ttc-parser.js";
 
 /** フォントバッファの入力形式 */
-interface FontBuffer {
+export interface FontBuffer {
   name?: string;
   data: ArrayBuffer | Uint8Array;
 }
@@ -67,6 +68,28 @@ function toArrayBuffer(data: ArrayBuffer | Uint8Array): ArrayBuffer {
 }
 
 /**
+ * バッファ (TTF/OTF または TTC) からパース済みフォント配列を返す。
+ * TTC の場合は分割して各フォントをパースする。
+ */
+function parseFontBuffer(
+  arrayBuffer: ArrayBuffer,
+  opentype: { parse: (buffer: ArrayBuffer) => OpentypeFontWithNames },
+): OpentypeFontWithNames[] {
+  if (isTtcBuffer(arrayBuffer)) {
+    const results: OpentypeFontWithNames[] = [];
+    for (const buf of extractTtcFonts(arrayBuffer)) {
+      try {
+        results.push(opentype.parse(buf));
+      } catch {
+        // 個別フォントのパース失敗はスキップ
+      }
+    }
+    return results;
+  }
+  return [opentype.parse(arrayBuffer)];
+}
+
+/**
  * フォントバッファ配列から OpentypeTextMeasurer を構築する。
  *
  * 内部で opentype.js を動的 import してフォントをパースする。
@@ -80,7 +103,7 @@ export async function createOpentypeTextMeasurerFromBuffers(
   return setup?.measurer ?? null;
 }
 
-interface OpentypeSetup {
+export interface OpentypeSetup {
   measurer: OpentypeTextMeasurer;
   fontResolver: TextPathFontResolver;
 }
@@ -91,7 +114,7 @@ interface OpentypeSetup {
  * opentype.parse() が返すオブジェクトは OpentypeFont と OpentypeFullFont の両方を満たすため、
  * 同じ Font オブジェクトを measurer と fontResolver の両方に渡す。
  */
-async function createOpentypeSetupFromBuffers(
+export async function createOpentypeSetupFromBuffers(
   fontBuffers: FontBuffer[],
   fontMapping?: FontMapping,
 ): Promise<OpentypeSetup | null> {
@@ -110,13 +133,24 @@ async function createOpentypeSetupFromBuffers(
   for (const buffer of fontBuffers) {
     try {
       const arrayBuffer = toArrayBuffer(buffer.data);
-      const font = opentype.parse(arrayBuffer);
+      const isTtc = isTtcBuffer(arrayBuffer);
+      const fonts = parseFontBuffer(arrayBuffer, opentype);
 
-      if (!firstMeasurerFont) firstMeasurerFont = font;
-      if (!firstResolverFont) firstResolverFont = font as unknown as OpentypeFullFont;
+      for (const font of fonts) {
+        if (!firstMeasurerFont) firstMeasurerFont = font;
+        if (!firstResolverFont) firstResolverFont = font as unknown as OpentypeFullFont;
 
-      if (buffer.name) {
-        registerFont(buffer.name, font, reverseMap, measurerFonts, resolverFonts);
+        if (isTtc) {
+          // TTC: names.fontFamily から各フォント名を取得して登録
+          const fontFamily = font.names.fontFamily;
+          if (fontFamily) {
+            for (const name of Object.values(fontFamily)) {
+              registerFont(name, font, reverseMap, measurerFonts, resolverFonts);
+            }
+          }
+        } else if (buffer.name) {
+          registerFont(buffer.name, font, reverseMap, measurerFonts, resolverFonts);
+        }
       }
     } catch {
       // パース失敗のフォントはスキップ
@@ -187,16 +221,18 @@ export async function createOpentypeSetupFromSystem(
     try {
       const data = await readFile(filePath);
       const arrayBuffer = toArrayBuffer(data);
-      const font = opentype.parse(arrayBuffer);
+      const fonts = parseFontBuffer(arrayBuffer, opentype);
 
-      if (!firstMeasurerFont) firstMeasurerFont = font;
-      if (!firstResolverFont) firstResolverFont = font as unknown as OpentypeFullFont;
+      for (const font of fonts) {
+        if (!firstMeasurerFont) firstMeasurerFont = font;
+        if (!firstResolverFont) firstResolverFont = font as unknown as OpentypeFullFont;
 
-      // names.fontFamily からフォント名を取得して登録
-      const fontFamily = font.names.fontFamily;
-      if (fontFamily) {
-        for (const name of Object.values(fontFamily)) {
-          registerFont(name, font, reverseMap, measurerFonts, resolverFonts);
+        // names.fontFamily からフォント名を取得して登録
+        const fontFamily = font.names.fontFamily;
+        if (fontFamily) {
+          for (const name of Object.values(fontFamily)) {
+            registerFont(name, font, reverseMap, measurerFonts, resolverFonts);
+          }
         }
       }
     } catch {

@@ -6,3 +6,8 @@ export { collectUsedFonts } from "./font/font-collector.js";
 export type { UsedFonts } from "./font/font-collector.js";
 export { DEFAULT_FONT_MAPPING, createFontMapping, getMappedFont } from "./font/font-mapping.js";
 export type { FontMapping } from "./font/font-mapping.js";
+export {
+  createOpentypeTextMeasurerFromBuffers,
+  createOpentypeSetupFromBuffers,
+} from "./font/opentype-helpers.js";
+export type { FontBuffer, OpentypeSetup } from "./font/opentype-helpers.js";
