@@ -11,7 +11,7 @@ import { DefaultTextPathFontResolver } from "./text-path-context.js";
 import { collectFontFilePaths } from "./system-font-loader.js";
 
 /** フォントバッファの入力形式 */
-export interface FontBuffer {
+interface FontBuffer {
   name?: string;
   data: ArrayBuffer | Uint8Array;
 }
@@ -80,7 +80,7 @@ export async function createOpentypeTextMeasurerFromBuffers(
   return setup?.measurer ?? null;
 }
 
-export interface OpentypeSetup {
+interface OpentypeSetup {
   measurer: OpentypeTextMeasurer;
   fontResolver: TextPathFontResolver;
 }
@@ -91,7 +91,7 @@ export interface OpentypeSetup {
  * opentype.parse() が返すオブジェクトは OpentypeFont と OpentypeFullFont の両方を満たすため、
  * 同じ Font オブジェクトを measurer と fontResolver の両方に渡す。
  */
-export async function createOpentypeSetupFromBuffers(
+async function createOpentypeSetupFromBuffers(
   fontBuffers: FontBuffer[],
   fontMapping?: FontMapping,
 ): Promise<OpentypeSetup | null> {

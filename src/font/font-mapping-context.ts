@@ -11,10 +11,6 @@ export function setFontMapping(mapping: FontMapping): void {
   currentMapping = mapping;
 }
 
-export function getFontMapping(): FontMapping {
-  return currentMapping;
-}
-
 export function resetFontMapping(): void {
   currentMapping = { ...DEFAULT_FONT_MAPPING };
 }

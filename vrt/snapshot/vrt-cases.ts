@@ -51,5 +51,3 @@ export const VRT_CASES = [
   { name: "placeholder-inheritance-extended", fixture: "placeholder-inheritance-extended.pptx" },
   { name: "table-style-border", fixture: "table-style-border.pptx" },
 ] as const;
-
-export type VrtCase = (typeof VRT_CASES)[number];

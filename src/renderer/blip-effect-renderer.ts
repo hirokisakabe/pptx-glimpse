@@ -1,7 +1,7 @@
 import type { BlipEffects } from "../model/effect.js";
 import { emuToPixels } from "../utils/emu.js";
 
-export interface BlipEffectRenderResult {
+interface BlipEffectRenderResult {
   filterAttr: string;
   filterDefs: string;
 }

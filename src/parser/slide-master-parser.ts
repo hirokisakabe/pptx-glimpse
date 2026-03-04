@@ -1,4 +1,4 @@
-import type { ColorMap, ColorSchemeKey, FormatScheme } from "../model/theme.js";
+import type { ColorMap, FormatScheme } from "../model/theme.js";
 import type { Background } from "../model/slide.js";
 import type { SlideElement } from "../model/shape.js";
 import type { TxStyles, PlaceholderStyleInfo } from "../model/text.js";
@@ -177,25 +177,4 @@ export function parseSlideMasterPlaceholderStyles(
   }
 
   return results;
-}
-
-export function getDefaultColorMap(): ColorMap {
-  return { ...DEFAULT_COLOR_MAP };
-}
-
-export function isValidColorSchemeKey(key: string): key is ColorSchemeKey {
-  return [
-    "dk1",
-    "lt1",
-    "dk2",
-    "lt2",
-    "accent1",
-    "accent2",
-    "accent3",
-    "accent4",
-    "accent5",
-    "accent6",
-    "hlink",
-    "folHlink",
-  ].includes(key);
 }
