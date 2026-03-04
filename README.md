@@ -2,7 +2,7 @@
 
 [![npm](https://img.shields.io/npm/v/pptx-glimpse)](https://www.npmjs.com/package/pptx-glimpse)
 
-A Node.js library to render PPTX as SVG / PNG.
+A lightweight JavaScript library for rendering PowerPoint (.pptx) files as SVG or PNG in Node.js. No LibreOffice required.
 
 [Demo](https://pptx-glimpse.vercel.app/) | [npm](https://www.npmjs.com/package/pptx-glimpse)
 
