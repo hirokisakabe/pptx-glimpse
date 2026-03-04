@@ -26,7 +26,10 @@ export default function Home() {
       />
       <header>
         <h1>pptx-glimpse</h1>
-        <p>Upload a PPTX file and preview slides as SVG</p>
+        <p className="description">
+          A lightweight JavaScript library for rendering PowerPoint (.pptx) files as SVG or PNG. No
+          LibreOffice required.
+        </p>
       </header>
       <main>
         <UploadViewer />
