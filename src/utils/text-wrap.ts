@@ -1,12 +1,12 @@
 import type { Paragraph, RunProperties } from "../model/text.js";
 import { getTextMeasurer } from "../font/text-measurer.js";
 
-export interface LineSegment {
+interface LineSegment {
   text: string;
   properties: RunProperties;
 }
 
-export interface WrappedLine {
+interface WrappedLine {
   segments: LineSegment[];
 }
 

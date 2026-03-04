@@ -33,7 +33,7 @@ import type { PlaceholderStyleInfo, TxStyles } from "./model/text.js";
 import type { SlideElement } from "./model/shape.js";
 import { applyTextStyleInheritance } from "./text-style-resolver.js";
 
-export interface ParsedPptxData {
+interface ParsedPptxData {
   presInfo: PresentationInfo;
   theme: Theme;
   colorResolver: ColorResolver;
@@ -150,7 +150,7 @@ export function parsePptxData(input: Buffer | Uint8Array): ParsedPptxData {
   };
 }
 
-export interface ParsedSlide {
+interface ParsedSlide {
   slide: Slide;
   layoutElements: SlideElement[];
   layoutShowMasterSp: boolean;

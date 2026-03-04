@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Knip
+        run: npm run knip
+
       - name: Lint
         run: npm run lint
 

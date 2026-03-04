@@ -23,10 +23,6 @@ export function asEmu(value: number): Emu {
   return value as Emu;
 }
 
-export function asPt(value: number): Pt {
-  return value as Pt;
-}
-
 export function asHundredthPt(value: number): HundredthPt {
   return value as HundredthPt;
 }

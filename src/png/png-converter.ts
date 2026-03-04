@@ -1,6 +1,6 @@
 import sharp from "sharp";
 
-export interface PngConvertOptions {
+interface PngConvertOptions {
   width?: number;
   height?: number;
 }

@@ -1,7 +1,7 @@
 import type { EffectList } from "../model/effect.js";
 import { emuToPixels } from "../utils/emu.js";
 
-export interface EffectRenderResult {
+interface EffectRenderResult {
   filterAttr: string;
   filterDefs: string;
 }

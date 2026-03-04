@@ -6,7 +6,7 @@ import type { EffectList } from "../model/effect.js";
 import type { ColorResolver } from "../color/color-resolver.js";
 import type { XmlNode } from "./xml-parser.js";
 
-export interface ResolvedStyleReference {
+interface ResolvedStyleReference {
   fill: Fill | null;
   outline: Outline | null;
   effects: EffectList | null;

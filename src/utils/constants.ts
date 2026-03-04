@@ -11,6 +11,3 @@ export const DEFAULT_OUTPUT_WIDTH = 960;
 
 /** 回転角度の単位: 1/60,000 度 (ECMA-376 §20.1.10.3) */
 export const ROTATION_UNIT = 60000;
-
-/** フォントサイズの単位: 1/100 ポイント (ECMA-376 §21.1.2.2.25 sz 属性) */
-export const FONT_SIZE_UNIT = 100;

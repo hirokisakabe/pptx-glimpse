@@ -2,7 +2,7 @@ import type { Fill, GradientFill, PatternFill } from "../model/fill.js";
 import type { Outline, ArrowEndpoint, ArrowSize } from "../model/line.js";
 import { emuToPixels } from "../utils/emu.js";
 
-export interface FillAttrs {
+interface FillAttrs {
   attrs: string;
   defs: string;
 }
@@ -261,7 +261,7 @@ function getPatternContent(preset: string, fg: string, fgAlpha: string): Pattern
 
 // --- Arrow marker rendering ---
 
-export interface MarkerResult {
+interface MarkerResult {
   defs: string;
   startAttr: string;
   endAttr: string;
