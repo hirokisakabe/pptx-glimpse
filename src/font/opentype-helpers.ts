@@ -12,7 +12,7 @@ import { collectFontFilePaths } from "./system-font-loader.js";
 import { isTtcBuffer, extractTtcFonts } from "./ttc-parser.js";
 
 /** フォントバッファの入力形式 */
-interface FontBuffer {
+export interface FontBuffer {
   name?: string;
   data: ArrayBuffer | Uint8Array;
 }
@@ -103,7 +103,7 @@ export async function createOpentypeTextMeasurerFromBuffers(
   return setup?.measurer ?? null;
 }
 
-interface OpentypeSetup {
+export interface OpentypeSetup {
   measurer: OpentypeTextMeasurer;
   fontResolver: TextPathFontResolver;
 }
@@ -114,7 +114,7 @@ interface OpentypeSetup {
  * opentype.parse() が返すオブジェクトは OpentypeFont と OpentypeFullFont の両方を満たすため、
  * 同じ Font オブジェクトを measurer と fontResolver の両方に渡す。
  */
-async function createOpentypeSetupFromBuffers(
+export async function createOpentypeSetupFromBuffers(
   fontBuffers: FontBuffer[],
   fontMapping?: FontMapping,
 ): Promise<OpentypeSetup | null> {
