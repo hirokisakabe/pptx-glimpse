@@ -32,6 +32,12 @@ header p {
   margin-top: 0.5rem;
 }
 
+header .description {
+  font-size: 0.95rem;
+  color: #888;
+  margin-top: 0.25rem;
+}
+
 .drop-zone {
   border: 3px dashed #ccc;
   border-radius: 12px;
