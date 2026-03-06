@@ -1,1 +1,1 @@
-export const SITE_URL = "https://pptx-glimpse.vercel.app";
+export const SITE_URL = "https://glimpse.pptx.app";
