@@ -1,12 +1,19 @@
 # pptx-glimpse
 
 [![npm](https://img.shields.io/npm/v/pptx-glimpse)](https://www.npmjs.com/package/pptx-glimpse)
+[![CI](https://github.com/hirokisakabe/pptx-glimpse/actions/workflows/ci.yml/badge.svg)](https://github.com/hirokisakabe/pptx-glimpse/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
 
-A lightweight JavaScript library for rendering PowerPoint (.pptx) files as SVG or PNG in Node.js. No LibreOffice required.
+No LibreOffice required — just `npm install`.
+
+A lightweight JavaScript library that renders PowerPoint (.pptx) slides as SVG or PNG in Node.js.
 
 **[Try the Demo](https://glimpse.pptx.app/)** | [npm](https://www.npmjs.com/package/pptx-glimpse)
 
 ![pptx-glimpse demo](https://raw.githubusercontent.com/hirokisakabe/pptx-glimpse/main/docs/demo.gif)
+
+_Upload a .pptx file → get SVG/PNG output instantly_
 
 ## Motivation
 
@@ -20,6 +27,15 @@ pptx-glimpse is designed for two primary use cases:
 
 The library focuses on accurately reproducing text, shapes, and spatial layout
 rather than pixel-perfect rendering of every PowerPoint feature.
+
+## Why not LibreOffice?
+
+|              | LibreOffice                | pptx-glimpse                   |
+| ------------ | -------------------------- | ------------------------------ |
+| Install size | ~500 MB+                   | `npm install` (~30 MB)         |
+| Docker image | Large base image required  | Works in any Node.js image     |
+| Startup time | Process spawning overhead  | In-process, no spawning        |
+| Concurrency  | One process per conversion | Async, runs in your event loop |
 
 ## Requirements
 
@@ -58,12 +74,58 @@ Both `convertPptxToSvg` and `convertPptxToPng` accept an optional `ConvertOption
 const results = await convertPptxToPng(pptx, {
   slides: [1, 3], // Convert only slides 1 and 3
   width: 1920, // Output width in pixels (default: 960)
-  logLevel: "warn", // Warning log level: "off" | "warn" | "error"
+  height: 1080, // Output height in pixels (width takes priority if both set)
+  logLevel: "warn", // Warning log level: "off" | "warn" | "debug"
   fontDirs: ["/custom/fonts"], // Additional font directories to search
   fontMapping: {
     "Custom Corp Font": "Noto Sans", // Custom font name mapping
   },
 });
+```
+
+### Font Utilities
+
+#### Collecting used fonts
+
+`collectUsedFonts` parses a PPTX file and returns all font names used across slides — without performing a full render. Useful for pre-checking which fonts need to be installed.
+
+```typescript
+import { collectUsedFonts } from "pptx-glimpse";
+
+const fonts = collectUsedFonts(pptx);
+// {
+//   theme: { majorFont: "Calibri Light", minorFont: "Calibri", majorFontEa: "...", ... },
+//   fonts: ["Arial", "Calibri", "Meiryo"]
+// }
+```
+
+#### Font mapping helpers
+
+```typescript
+import { DEFAULT_FONT_MAPPING, createFontMapping, getMappedFont } from "pptx-glimpse";
+
+// Create a custom mapping (merges with defaults, user values take priority)
+const mapping = createFontMapping({ Calibri: "Ubuntu" });
+
+// Look up mapped font (case-insensitive)
+getMappedFont("Meiryo", mapping); // "Noto Sans JP"
+getMappedFont("calibri", mapping); // "Ubuntu"
+```
+
+### Custom Font Loading
+
+In environments where system fonts are not available, you can build a text measurer from font buffers using `createOpentypeSetupFromBuffers`. This is a low-level utility for advanced use cases.
+
+```typescript
+import { readFileSync } from "fs";
+import { createOpentypeSetupFromBuffers } from "pptx-glimpse";
+
+const setup = await createOpentypeSetupFromBuffers([
+  { name: "Carlito", data: readFileSync("fonts/Carlito-Regular.ttf") },
+  { name: "Noto Sans JP", data: readFileSync("fonts/NotoSansJP-Regular.ttf") },
+]);
+// setup.measurer — text width measurement
+// setup.fontResolver — text-to-SVG-path conversion
 ```
 
 ## Fonts
@@ -111,7 +173,7 @@ const results = await convertPptxToSvg(pptx, {
 
 ## Feature Support
 
-Supports conversion of static visual content in PowerPoint. Dynamic elements such as animations and transitions are not supported.
+136 preset shapes, charts, tables, SmartArt, gradients, shadows, and more — covering the most common static PowerPoint content.
 
 ### Supported Features
 
@@ -189,10 +251,10 @@ Supports conversion of static visual content in PowerPoint. Dynamic elements suc
 
 #### Charts
 
-| Feature          | Details                                                                                                      |
-| ---------------- | ------------------------------------------------------------------------------------------------------------ |
-| Supported charts | Bar chart (vertical/horizontal), line chart, pie chart, scatter plot, area chart, doughnut, bubble, radar     |
-| Chart elements   | Title, legend (position), series (name/values/categories/color), category axis, value axis                   |
+| Feature          | Details                                                                                                   |
+| ---------------- | --------------------------------------------------------------------------------------------------------- |
+| Supported charts | Bar chart (vertical/horizontal), line chart, pie chart, scatter plot, area chart, doughnut, bubble, radar |
+| Chart elements   | Title, legend (position), series (name/values/categories/color), category axis, value axis                |
 
 #### SmartArt
 
@@ -210,24 +272,30 @@ Supports conversion of static visual content in PowerPoint. Dynamic elements suc
 | Theme        | Theme color scheme, theme fonts (majorFont/minorFont), theme font refs |
 | showMasterSp | Control visibility of master shapes per slide / layout                 |
 
-### Unsupported Features
+<details>
+<summary>Unsupported Features</summary>
 
-| Category       | Unsupported features                                                                           |
-| -------------- | ---------------------------------------------------------------------------------------------- |
-| Fill           | Path gradient (rect/shape type)                                                                |
-| Effects        | Reflection, 3D rotation / extrusion, artistic effects                                          |
-| Charts         | Stock, combo, histogram, box plot, waterfall, treemap, sunburst                                |
-| Chart details  | Data labels, axis titles / tick marks / grid lines, error bars, trendlines                     |
-| Text           | Individual text effects (shadow/glow), text columns                                            |
-| Tables         | Table style template application, diagonal borders                                             |
-| Shapes         | Shape operations (Union/Subtract/Intersect/Fragment)                                           |
-| Multimedia     | Embedded video / audio                                                                         |
-| Animations     | Object animations, slide transitions                                                           |
-| Slide elements | Slide notes, comments, headers / footers, slide numbers / dates                                |
-| Image formats  | EMF/WMF (parsed but not rendered)                                                              |
-| Other          | Macros / VBA, sections, zoom slides                                                            |
+| Category       | Unsupported features                                                       |
+| -------------- | -------------------------------------------------------------------------- |
+| Fill           | Path gradient (rect/shape type)                                            |
+| Effects        | Reflection, 3D rotation / extrusion, artistic effects                      |
+| Charts         | Stock, combo, histogram, box plot, waterfall, treemap, sunburst            |
+| Chart details  | Data labels, axis titles / tick marks / grid lines, error bars, trendlines |
+| Text           | Individual text effects (shadow/glow), text columns                        |
+| Tables         | Table style template application, diagonal borders                         |
+| Shapes         | Shape operations (Union/Subtract/Intersect/Fragment)                       |
+| Multimedia     | Embedded video / audio                                                     |
+| Animations     | Object animations, slide transitions                                       |
+| Slide elements | Slide notes, comments, headers / footers, slide numbers / dates            |
+| Image formats  | EMF/WMF (parsed but not rendered)                                          |
+| Other          | Macros / VBA, sections, zoom slides                                        |
 
-## Test Rendering
+</details>
+
+## Development
+
+<details>
+<summary>Test rendering</summary>
 
 You can specify a PPTX file to preview SVG and PNG conversion results.
 
@@ -242,6 +310,8 @@ npm run render -- <pptx-file> [output-dir]
 npm run render -- presentation.pptx
 npm run render -- presentation.pptx ./my-output
 ```
+
+</details>
 
 ## License
 
