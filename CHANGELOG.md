@@ -1,5 +1,11 @@
 # pptx-glimpse
 
+## 0.3.1
+
+### Patch Changes
+
+- 62e5eb8: fix: normAutofit の defaultFontSize 二重スケーリングを修正し、テキスト自動縮小が正しく動作するよう改善
+
 ## 0.3.0
 
 ### Minor Changes
