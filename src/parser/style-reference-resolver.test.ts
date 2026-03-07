@@ -1,7 +1,8 @@
-import { describe, it, expect } from "vitest";
-import { resolveShapeStyle } from "./style-reference-resolver.js";
+import { describe, expect, it } from "vitest";
+
 import { ColorResolver } from "../color/color-resolver.js";
 import type { FormatScheme } from "../model/theme.js";
+import { resolveShapeStyle } from "./style-reference-resolver.js";
 import type { XmlNode } from "./xml-parser.js";
 
 const colorScheme = {

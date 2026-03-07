@@ -1,4 +1,4 @@
-import { unzipSync, strFromU8 } from "fflate";
+import { strFromU8, unzipSync } from "fflate";
 
 export interface PptxArchive {
   files: Map<string, string>;

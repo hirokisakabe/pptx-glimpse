@@ -5,11 +5,11 @@
 //     → colorMap でキーを変換 → colorScheme から実際の色を取得
 //   sysClr — システムカラー (@_lastClr で保存された直近値を使用)
 
-import type { ColorScheme, ColorMap, ColorSchemeKey } from "../model/theme.js";
 import type { ResolvedColor } from "../model/fill.js";
+import type { ColorMap, ColorScheme, ColorSchemeKey } from "../model/theme.js";
 import type { XmlNode } from "../parser/xml-parser.js";
-import { applyColorTransforms } from "./color-transforms.js";
 import { debug } from "../warning-logger.js";
+import { applyColorTransforms } from "./color-transforms.js";
 
 export class ColorResolver {
   constructor(

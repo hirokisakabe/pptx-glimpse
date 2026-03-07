@@ -1,9 +1,9 @@
-import type { SlideSize, EmbeddedFont, Protection } from "../model/presentation.js";
+import type { EmbeddedFont, Protection, SlideSize } from "../model/presentation.js";
 import type { DefaultTextStyle } from "../model/text.js";
-import { parseXml, type XmlNode } from "./xml-parser.js";
-import { parseListStyle } from "./text-style-parser.js";
-import { debug } from "../warning-logger.js";
 import { asEmu } from "../utils/unit-types.js";
+import { debug } from "../warning-logger.js";
+import { parseListStyle } from "./text-style-parser.js";
+import { parseXml, type XmlNode } from "./xml-parser.js";
 
 export interface PresentationInfo {
   slideSize: SlideSize;

@@ -6,9 +6,10 @@
  *   2. npx tsx scripts/extract-font-metrics.ts
  *   3. 出力された TypeScript コードを src/data/font-metrics.ts に貼り付け
  */
-import opentype from "opentype.js";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+
+import opentype from "opentype.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 

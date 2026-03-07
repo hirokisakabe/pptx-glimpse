@@ -1,12 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import {
+  debug,
+  flushWarnings,
+  getLogLevel,
+  getWarningEntries,
+  getWarningSummary,
   initWarningLogger,
   warn,
-  debug,
-  getWarningSummary,
-  flushWarnings,
-  getWarningEntries,
-  getLogLevel,
 } from "./warning-logger.js";
 
 describe("warning-logger", () => {

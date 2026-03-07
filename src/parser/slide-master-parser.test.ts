@@ -1,14 +1,15 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+import { ColorResolver } from "../color/color-resolver.js";
+import type { ShapeElement } from "../model/shape.js";
 import { initWarningLogger } from "../warning-logger.js";
+import type { PptxArchive } from "./pptx-reader.js";
 import {
-  parseSlideMasterElements,
-  parseSlideMasterColorMap,
   parseSlideMasterBackground,
+  parseSlideMasterColorMap,
+  parseSlideMasterElements,
   parseSlideMasterTxStyles,
 } from "./slide-master-parser.js";
-import { ColorResolver } from "../color/color-resolver.js";
-import type { PptxArchive } from "./pptx-reader.js";
-import type { ShapeElement } from "../model/shape.js";
 
 function createColorResolver() {
   return new ColorResolver(

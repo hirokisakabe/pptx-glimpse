@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { emuToPixels, emuToPoints, rotationToDegrees, hundredthPointToPoint } from "./emu.js";
+import { describe, expect, it } from "vitest";
+
+import { emuToPixels, emuToPoints, hundredthPointToPoint, rotationToDegrees } from "./emu.js";
 import { asEmu, asHundredthPt } from "./unit-types.js";
 
 describe("emuToPixels", () => {

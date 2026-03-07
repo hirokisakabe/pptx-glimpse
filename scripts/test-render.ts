@@ -1,6 +1,7 @@
-import { readFileSync, writeFileSync, mkdirSync } from "fs";
+import { mkdirSync, readFileSync, writeFileSync } from "fs";
 import { basename, join, resolve } from "path";
-import { convertPptxToSvg, convertPptxToPng } from "../src/converter.js";
+
+import { convertPptxToPng, convertPptxToSvg } from "../src/converter.js";
 
 async function main() {
   const filePath = process.argv[2];

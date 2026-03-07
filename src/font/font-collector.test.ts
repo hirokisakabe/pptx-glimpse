@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeAll } from "vitest";
 import JSZip from "jszip";
+import { beforeAll, describe, expect, it } from "vitest";
+
 import { collectUsedFonts } from "./font-collector.js";
 
 const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

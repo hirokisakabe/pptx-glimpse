@@ -1,9 +1,9 @@
-import type { ChartElement, ChartData, ChartSeries } from "../model/chart.js";
+import type { ChartData, ChartElement, ChartSeries } from "../model/chart.js";
 import type { ResolvedColor } from "../model/fill.js";
-import type { RenderResult } from "./render-result.js";
 import { emuToPixels } from "../utils/emu.js";
-import { buildTransformAttr } from "./transform.js";
 import { debug } from "../warning-logger.js";
+import type { RenderResult } from "./render-result.js";
+import { buildTransformAttr } from "./transform.js";
 
 const DEFAULT_SERIES_COLORS: ResolvedColor[] = [
   { hex: "#4472C4", alpha: 1 },

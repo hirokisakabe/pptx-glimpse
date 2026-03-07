@@ -1,7 +1,8 @@
 import { readFileSync } from "fs";
 import { join } from "path";
-import { describe, it, expect } from "vitest";
-import { convertPptxToSvg, convertPptxToPng } from "../src/converter.js";
+import { describe, expect, it } from "vitest";
+
+import { convertPptxToPng, convertPptxToSvg } from "../src/converter.js";
 
 const FIXTURE_DIR = join(import.meta.dirname, "..", "shared-fixtures");
 

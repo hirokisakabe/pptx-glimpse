@@ -2,35 +2,35 @@
  * PPTX の共通パース処理。
  * converter.ts と font-collector.ts で共有する。
  */
-import { readPptx, type PptxArchive } from "./parser/pptx-reader.js";
+import { ColorResolver } from "./color/color-resolver.js";
+import type { SlideElement } from "./model/shape.js";
+import type { Background, Slide } from "./model/slide.js";
+import type { PlaceholderStyleInfo, TxStyles } from "./model/text.js";
+import type { ColorMap, Theme } from "./model/theme.js";
+import type { FillParseContext } from "./parser/fill-parser.js";
+import { type PptxArchive, readPptx } from "./parser/pptx-reader.js";
 import { parsePresentation, type PresentationInfo } from "./parser/presentation-parser.js";
-import { parseTheme } from "./parser/theme-parser.js";
-import type { Theme, ColorMap } from "./model/theme.js";
 import {
-  parseSlideMasterColorMap,
-  parseSlideMasterBackground,
-  parseSlideMasterElements,
-  parseSlideMasterTxStyles,
-  parseSlideMasterPlaceholderStyles,
-} from "./parser/slide-master-parser.js";
+  buildRelsPath,
+  parseRelationships,
+  type Relationship,
+  resolveRelationshipTarget,
+} from "./parser/relationship-parser.js";
 import {
   parseSlideLayoutBackground,
   parseSlideLayoutElements,
   parseSlideLayoutPlaceholderStyles,
   parseSlideLayoutShowMasterSp,
 } from "./parser/slide-layout-parser.js";
-import { parseSlide } from "./parser/slide-parser.js";
-import type { Slide, Background } from "./model/slide.js";
 import {
-  parseRelationships,
-  resolveRelationshipTarget,
-  buildRelsPath,
-  type Relationship,
-} from "./parser/relationship-parser.js";
-import type { FillParseContext } from "./parser/fill-parser.js";
-import { ColorResolver } from "./color/color-resolver.js";
-import type { PlaceholderStyleInfo, TxStyles } from "./model/text.js";
-import type { SlideElement } from "./model/shape.js";
+  parseSlideMasterBackground,
+  parseSlideMasterColorMap,
+  parseSlideMasterElements,
+  parseSlideMasterPlaceholderStyles,
+  parseSlideMasterTxStyles,
+} from "./parser/slide-master-parser.js";
+import { parseSlide } from "./parser/slide-parser.js";
+import { parseTheme } from "./parser/theme-parser.js";
 import { applyTextStyleInheritance } from "./text-style-resolver.js";
 
 interface ParsedPptxData {

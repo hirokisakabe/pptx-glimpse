@@ -1,13 +1,13 @@
-export { convertPptxToPng, convertPptxToSvg } from "./converter.js";
 export type { ConvertOptions, SlideImage, SlideSvg } from "./converter.js";
-export type { LogLevel, WarningSummary, WarningEntry } from "./warning-logger.js";
-export { getWarningSummary, getWarningEntries } from "./warning-logger.js";
-export { collectUsedFonts } from "./font/font-collector.js";
+export { convertPptxToPng, convertPptxToSvg } from "./converter.js";
 export type { UsedFonts } from "./font/font-collector.js";
-export { DEFAULT_FONT_MAPPING, createFontMapping, getMappedFont } from "./font/font-mapping.js";
+export { collectUsedFonts } from "./font/font-collector.js";
 export type { FontMapping } from "./font/font-mapping.js";
-export {
-  createOpentypeTextMeasurerFromBuffers,
-  createOpentypeSetupFromBuffers,
-} from "./font/opentype-helpers.js";
+export { createFontMapping, DEFAULT_FONT_MAPPING, getMappedFont } from "./font/font-mapping.js";
 export type { FontBuffer, OpentypeSetup } from "./font/opentype-helpers.js";
+export {
+  createOpentypeSetupFromBuffers,
+  createOpentypeTextMeasurerFromBuffers,
+} from "./font/opentype-helpers.js";
+export type { LogLevel, WarningEntry, WarningSummary } from "./warning-logger.js";
+export { getWarningEntries, getWarningSummary } from "./warning-logger.js";

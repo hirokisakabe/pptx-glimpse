@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { OpentypeTextMeasurer, type OpentypeFont } from "./opentype-text-measurer.js";
+import { describe, expect, it } from "vitest";
+
+import { type OpentypeFont, OpentypeTextMeasurer } from "./opentype-text-measurer.js";
 
 function createMockFont(opts: {
   unitsPerEm: number;

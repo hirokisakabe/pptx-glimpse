@@ -1,6 +1,6 @@
-import { readdirSync, existsSync } from "node:fs";
-import { join, extname } from "node:path";
+import { existsSync, readdirSync } from "node:fs";
 import { homedir, platform } from "node:os";
+import { extname, join } from "node:path";
 
 const FONT_EXTENSIONS = new Set([".ttf", ".otf"]);
 

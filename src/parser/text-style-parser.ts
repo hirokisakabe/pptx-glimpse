@@ -1,10 +1,10 @@
+import type { ColorResolver } from "../color/color-resolver.js";
 import type {
-  DefaultTextStyle,
   DefaultParagraphLevelProperties,
   DefaultRunProperties,
+  DefaultTextStyle,
 } from "../model/text.js";
 import type { FontScheme } from "../model/theme.js";
-import type { ColorResolver } from "../color/color-resolver.js";
 import { hundredthPointToPoint } from "../utils/emu.js";
 import { asEmu, asHundredthPt } from "../utils/unit-types.js";
 import type { XmlNode } from "./xml-parser.js";

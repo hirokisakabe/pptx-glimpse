@@ -1,8 +1,8 @@
 import type { ImageElement } from "../model/image.js";
-import type { RenderResult } from "./render-result.js";
-import { renderEffects } from "./effect-renderer.js";
-import { renderBlipEffects } from "./blip-effect-renderer.js";
 import { emuToPixels } from "../utils/emu.js";
+import { renderBlipEffects } from "./blip-effect-renderer.js";
+import { renderEffects } from "./effect-renderer.js";
+import type { RenderResult } from "./render-result.js";
 import { buildTransformAttr } from "./transform.js";
 
 export function renderImage(image: ImageElement): RenderResult {

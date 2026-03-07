@@ -1,12 +1,12 @@
-import type { Theme, ColorScheme, FontScheme, FormatScheme } from "../model/theme.js";
+import { ColorResolver } from "../color/color-resolver.js";
+import type { EffectList } from "../model/effect.js";
 import type { Fill } from "../model/fill.js";
 import type { Outline } from "../model/line.js";
-import type { EffectList } from "../model/effect.js";
-import { parseXml, parseXmlOrdered, type XmlNode, type XmlOrderedNode } from "./xml-parser.js";
-import { parseFillFromNode, parseOutline } from "./fill-parser.js";
-import { parseEffectList } from "./effect-parser.js";
-import { ColorResolver } from "../color/color-resolver.js";
+import type { ColorScheme, FontScheme, FormatScheme, Theme } from "../model/theme.js";
 import { debug } from "../warning-logger.js";
+import { parseEffectList } from "./effect-parser.js";
+import { parseFillFromNode, parseOutline } from "./fill-parser.js";
+import { parseXml, parseXmlOrdered, type XmlNode, type XmlOrderedNode } from "./xml-parser.js";
 
 export function parseTheme(xml: string): Theme {
   const parsed = parseXml(xml);

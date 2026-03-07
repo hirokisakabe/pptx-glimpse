@@ -1,6 +1,6 @@
-import type { ChartData, ChartType, ChartSeries, ChartLegend } from "../model/chart.js";
-import type { ResolvedColor } from "../model/fill.js";
 import type { ColorResolver } from "../color/color-resolver.js";
+import type { ChartData, ChartLegend, ChartSeries, ChartType } from "../model/chart.js";
+import type { ResolvedColor } from "../model/fill.js";
 import { parseXml, type XmlNode } from "./xml-parser.js";
 
 const ACCENT_KEYS = ["accent1", "accent2", "accent3", "accent4", "accent5", "accent6"] as const;

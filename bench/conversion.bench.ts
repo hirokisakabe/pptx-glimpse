@@ -1,11 +1,12 @@
-import { bench, describe, beforeAll } from "vitest";
 import JSZip from "jszip";
-import { convertPptxToSvg, convertPptxToPng } from "../src/converter.js";
-import { parsePptxData, parseSlideWithLayout } from "../src/pptx-data-parser.js";
-import { renderSlideToSvg } from "../src/renderer/svg-renderer.js";
-import type { Slide } from "../src/model/slide.js";
+import { beforeAll, bench, describe } from "vitest";
+
+import { convertPptxToPng, convertPptxToSvg } from "../src/converter.js";
 import type { SlideSize } from "../src/model/presentation.js";
 import type { SlideElement } from "../src/model/shape.js";
+import type { Slide } from "../src/model/slide.js";
+import { parsePptxData, parseSlideWithLayout } from "../src/pptx-data-parser.js";
+import { renderSlideToSvg } from "../src/renderer/svg-renderer.js";
 
 // ---------------------------------------------------------------------------
 // XML templates (minimal PPTX structure)

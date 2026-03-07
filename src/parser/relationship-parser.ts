@@ -1,5 +1,5 @@
-import { parseXml, type XmlNode } from "./xml-parser.js";
 import { debug } from "../warning-logger.js";
+import { parseXml, type XmlNode } from "./xml-parser.js";
 
 export interface Relationship {
   id: string;

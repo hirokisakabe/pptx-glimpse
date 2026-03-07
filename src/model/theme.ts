@@ -1,6 +1,6 @@
+import type { EffectList } from "./effect.js";
 import type { Fill } from "./fill.js";
 import type { Outline } from "./line.js";
-import type { EffectList } from "./effect.js";
 
 export interface FormatScheme {
   fillStyles: Fill[];

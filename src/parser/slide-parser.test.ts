@@ -1,11 +1,12 @@
-import { describe, it, expect, vi } from "vitest";
-import { parseSlide, parseShapeTree, parseTextBody, navigateOrdered } from "./slide-parser.js";
-import { initWarningLogger } from "../warning-logger.js";
+import { describe, expect, it, vi } from "vitest";
+
 import { ColorResolver } from "../color/color-resolver.js";
-import { parseXml, parseXmlOrdered } from "./xml-parser.js";
-import type { XmlNode } from "./xml-parser.js";
-import type { PptxArchive } from "./pptx-reader.js";
 import type { ShapeElement } from "../model/shape.js";
+import { initWarningLogger } from "../warning-logger.js";
+import type { PptxArchive } from "./pptx-reader.js";
+import { navigateOrdered, parseShapeTree, parseSlide, parseTextBody } from "./slide-parser.js";
+import type { XmlNode } from "./xml-parser.js";
+import { parseXml, parseXmlOrdered } from "./xml-parser.js";
 
 function createColorResolver() {
   return new ColorResolver(

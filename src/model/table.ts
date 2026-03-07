@@ -1,8 +1,8 @@
+import type { Emu } from "../utils/unit-types.js";
 import type { Fill } from "./fill.js";
 import type { Outline } from "./line.js";
-import type { TextBody } from "./text.js";
 import type { Transform } from "./shape.js";
-import type { Emu } from "../utils/unit-types.js";
+import type { TextBody } from "./text.js";
 
 export interface TableElement {
   type: "table";

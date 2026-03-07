@@ -1,5 +1,5 @@
-import type { ResolvedColor } from "./fill.js";
 import type { Emu, HundredthPt, Pt } from "../utils/unit-types.js";
+import type { ResolvedColor } from "./fill.js";
 
 /** defRPr に対応するデフォルトランプロパティ */
 export interface DefaultRunProperties {

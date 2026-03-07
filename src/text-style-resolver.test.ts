@@ -1,14 +1,15 @@
-import { describe, it, expect } from "vitest";
-import { applyTextStyleInheritance } from "./text-style-resolver.js";
-import type { TextStyleContext } from "./text-style-resolver.js";
-import type { ShapeElement, GroupElement } from "./model/shape.js";
+import { describe, expect, it } from "vitest";
+
+import type { ResolvedColor } from "./model/fill.js";
+import type { GroupElement, ShapeElement } from "./model/shape.js";
 import type {
-  DefaultTextStyle,
   DefaultParagraphLevelProperties,
   DefaultRunProperties,
+  DefaultTextStyle,
   RunProperties,
 } from "./model/text.js";
-import type { ResolvedColor } from "./model/fill.js";
+import type { TextStyleContext } from "./text-style-resolver.js";
+import { applyTextStyleInheritance } from "./text-style-resolver.js";
 
 function makeRunProperties(overrides: Partial<RunProperties> = {}): RunProperties {
   return {

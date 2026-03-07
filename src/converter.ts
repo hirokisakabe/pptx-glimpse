@@ -1,18 +1,18 @@
-import { renderSlideToSvg } from "./renderer/svg-renderer.js";
-import { svgToPng } from "./png/png-converter.js";
-import { DEFAULT_OUTPUT_WIDTH } from "./utils/constants.js";
-import type { SlideElement } from "./model/shape.js";
-import type { LogLevel } from "./warning-logger.js";
-import { initWarningLogger, flushWarnings } from "./warning-logger.js";
-import { setTextMeasurer, resetTextMeasurer } from "./font/text-measurer.js";
-import { parsePptxData, parseSlideWithLayout } from "./pptx-data-parser.js";
 import type { FontMapping } from "./font/font-mapping.js";
 import { createFontMapping } from "./font/font-mapping.js";
-import { setFontMapping, resetFontMapping } from "./font/font-mapping-context.js";
+import { resetFontMapping, setFontMapping } from "./font/font-mapping-context.js";
 import { createOpentypeSetupFromSystem } from "./font/opentype-helpers.js";
-import { setTextPathFontResolver, resetTextPathFontResolver } from "./font/text-path-context.js";
-import { enableXmlCache, clearXmlCache } from "./parser/xml-parser.js";
-import { setScriptFonts, resetScriptFonts } from "./font/script-font-context.js";
+import { resetScriptFonts, setScriptFonts } from "./font/script-font-context.js";
+import { resetTextMeasurer, setTextMeasurer } from "./font/text-measurer.js";
+import { resetTextPathFontResolver, setTextPathFontResolver } from "./font/text-path-context.js";
+import type { SlideElement } from "./model/shape.js";
+import { clearXmlCache, enableXmlCache } from "./parser/xml-parser.js";
+import { svgToPng } from "./png/png-converter.js";
+import { parsePptxData, parseSlideWithLayout } from "./pptx-data-parser.js";
+import { renderSlideToSvg } from "./renderer/svg-renderer.js";
+import { DEFAULT_OUTPUT_WIDTH } from "./utils/constants.js";
+import type { LogLevel } from "./warning-logger.js";
+import { flushWarnings, initWarningLogger } from "./warning-logger.js";
 
 export interface ConvertOptions {
   /** 変換対象のスライド番号 (1始まり)。未指定で全スライド */

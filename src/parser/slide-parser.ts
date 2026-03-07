@@ -1,58 +1,58 @@
-import type { Slide, Background } from "../model/slide.js";
-import type {
-  SlideElement,
-  ShapeElement,
-  ConnectorElement,
-  GroupElement,
-  Transform,
-  Geometry,
-} from "../model/shape.js";
-import type { ImageElement, SrcRect, StretchFillRect, TileInfo } from "../model/image.js";
+import type { ColorResolver } from "../color/color-resolver.js";
 import type { ChartElement } from "../model/chart.js";
+import type { ImageElement, SrcRect, StretchFillRect, TileInfo } from "../model/image.js";
+import type {
+  ConnectorElement,
+  Geometry,
+  GroupElement,
+  ShapeElement,
+  SlideElement,
+  Transform,
+} from "../model/shape.js";
+import type { Background, Slide } from "../model/slide.js";
 import type { TableElement } from "../model/table.js";
 import type {
-  TextBody,
-  BodyProperties,
-  Paragraph,
-  TextRun,
-  RunProperties,
-  Hyperlink,
-  TextOutline,
-  BulletType,
   AutoNumScheme,
-  DefaultTextStyle,
+  BodyProperties,
+  BulletType,
   DefaultRunProperties,
+  DefaultTextStyle,
+  Hyperlink,
+  Paragraph,
+  RunProperties,
   SpacingValue,
   TabStop,
+  TextBody,
+  TextOutline,
+  TextRun,
 } from "../model/text.js";
-import type { PptxArchive } from "./pptx-reader.js";
-import type { Relationship } from "./relationship-parser.js";
-import type { ColorResolver } from "../color/color-resolver.js";
 import type { FontScheme, FormatScheme } from "../model/theme.js";
-import { parseXml, parseXmlOrdered } from "./xml-parser.js";
-import type { XmlNode, XmlOrderedNode } from "./xml-parser.js";
-import { parseFillFromNode, parseOutline } from "./fill-parser.js";
-import type { FillParseContext } from "./fill-parser.js";
-import { parseEffectList } from "./effect-parser.js";
-import { resolveShapeStyle } from "./style-reference-resolver.js";
+import { uint8ArrayToBase64 } from "../utils/base64.js";
+import { hundredthPointToPoint } from "../utils/emu.js";
+import { asEmu, asHundredthPt } from "../utils/unit-types.js";
+import { debug, warn } from "../warning-logger.js";
 import { parseBlipEffects } from "./blip-effect-parser.js";
 import { parseChart } from "./chart-parser.js";
 import { parseCustomGeometry } from "./custom-geometry-parser.js";
-import { parseTable } from "./table-parser.js";
+import { parseEffectList } from "./effect-parser.js";
+import type { FillParseContext } from "./fill-parser.js";
+import { parseFillFromNode, parseOutline } from "./fill-parser.js";
+import type { PptxArchive } from "./pptx-reader.js";
+import type { Relationship } from "./relationship-parser.js";
 import {
+  buildRelsPath,
   parseRelationships,
   resolveRelationshipTarget,
-  buildRelsPath,
 } from "./relationship-parser.js";
-import { hundredthPointToPoint } from "../utils/emu.js";
-import { asEmu, asHundredthPt } from "../utils/unit-types.js";
+import { resolveShapeStyle } from "./style-reference-resolver.js";
+import { parseTable } from "./table-parser.js";
 import {
-  parseListStyle,
   parseDefaultRunProperties,
+  parseListStyle,
   resolveThemeFont,
 } from "./text-style-parser.js";
-import { uint8ArrayToBase64 } from "../utils/base64.js";
-import { warn, debug } from "../warning-logger.js";
+import type { XmlNode, XmlOrderedNode } from "./xml-parser.js";
+import { parseXml, parseXmlOrdered } from "./xml-parser.js";
 
 const SHAPE_TAGS = new Set(["sp", "pic", "cxnSp", "grpSp", "graphicFrame"]);
 

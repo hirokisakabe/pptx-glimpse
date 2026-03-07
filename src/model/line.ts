@@ -1,5 +1,5 @@
-import type { GradientFill, SolidFill } from "./fill.js";
 import type { Emu } from "../utils/unit-types.js";
+import type { GradientFill, SolidFill } from "./fill.js";
 
 export type ArrowType = "none" | "triangle" | "stealth" | "diamond" | "oval" | "arrow";
 export type ArrowSize = "sm" | "med" | "lg";
