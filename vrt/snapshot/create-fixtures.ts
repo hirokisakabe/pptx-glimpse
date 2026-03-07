@@ -5219,7 +5219,7 @@ async function createShrinkToFitFixture(): Promise<void> {
   const shapes: string[] = [];
 
   // 1. normAutofit (fontScale なし) — テキストがはみ出すケース → 動的縮小
-  const pos1 = gridPosition(0, 0, 2, 2);
+  const pos1 = gridPosition(0, 0, 3, 2);
   shapes.push(
     shapeXml(id++, "shrink-overflow", {
       preset: "rect",
@@ -5246,7 +5246,7 @@ async function createShrinkToFitFixture(): Promise<void> {
   );
 
   // 2. normAutofit (fontScale なし) — テキストが収まるケース → 縮小なし
-  const pos2 = gridPosition(1, 0, 2, 2);
+  const pos2 = gridPosition(1, 0, 3, 2);
   shapes.push(
     shapeXml(id++, "shrink-fits", {
       preset: "rect",
@@ -5272,15 +5272,42 @@ async function createShrinkToFitFixture(): Promise<void> {
     }),
   );
 
-  // 3. noAutofit — テキストがはみ出してもそのまま
-  const pos3 = gridPosition(0, 1, 2, 2);
+  // 3. normAutofit + fontSize 未指定 — デフォルトフォントサイズでの縮小
+  const pos3 = gridPosition(2, 0, 3, 2);
   shapes.push(
-    shapeXml(id++, "no-autofit-overflow", {
+    shapeXml(id++, "shrink-default-fontsize", {
       preset: "rect",
       x: pos3.x,
       y: pos3.y,
       cx: pos3.w,
       cy: pos3.h,
+      fillXml: solidFillXml("E8FDE8"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="t"><a:normAutofit/></a:bodyPr>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US">
+        <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      </a:rPr>
+      <a:t>Text without explicit font size that overflows and should be auto-shrunk by normAutofit.</a:t>
+    </a:r>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  // 4. noAutofit — テキストがはみ出してもそのまま
+  const pos4 = gridPosition(0, 1, 3, 2);
+  shapes.push(
+    shapeXml(id++, "no-autofit-overflow", {
+      preset: "rect",
+      x: pos4.x,
+      y: pos4.y,
+      cx: pos4.w,
+      cy: pos4.h,
       fillXml: solidFillXml("FDE8E8"),
       outlineXml: outlineXml(12700, "999999"),
       textBodyXml: `<p:txBody>
@@ -5299,15 +5326,15 @@ async function createShrinkToFitFixture(): Promise<void> {
     }),
   );
 
-  // 4. normAutofit + 複数段落
-  const pos4 = gridPosition(1, 1, 2, 2);
+  // 5. normAutofit + 複数段落
+  const pos5 = gridPosition(1, 1, 3, 2);
   shapes.push(
     shapeXml(id++, "shrink-multi-para", {
       preset: "rect",
-      x: pos4.x,
-      y: pos4.y,
-      cx: pos4.w,
-      cy: pos4.h,
+      x: pos5.x,
+      y: pos5.y,
+      cx: pos5.w,
+      cy: pos5.h,
       fillXml: solidFillXml("FFF0F5"),
       outlineXml: outlineXml(12700, "999999"),
       textBodyXml: `<p:txBody>
@@ -5338,6 +5365,33 @@ async function createShrinkToFitFixture(): Promise<void> {
         <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
       </a:rPr>
       <a:t>Third paragraph.</a:t>
+    </a:r>
+  </a:p>
+</p:txBody>`,
+    }),
+  );
+
+  // 6. normAutofit + fontScale 事前設定 — さらに動的縮小が必要なケース
+  const pos6 = gridPosition(2, 1, 3, 2);
+  shapes.push(
+    shapeXml(id++, "shrink-with-fontscale", {
+      preset: "rect",
+      x: pos6.x,
+      y: pos6.y,
+      cx: pos6.w,
+      cy: pos6.h,
+      fillXml: solidFillXml("F0E8FD"),
+      outlineXml: outlineXml(12700, "999999"),
+      textBodyXml: `<p:txBody>
+  <a:bodyPr anchor="t"><a:normAutofit fontScale="80000"/></a:bodyPr>
+  <a:lstStyle/>
+  <a:p>
+    <a:pPr/>
+    <a:r>
+      <a:rPr lang="en-US" sz="3600">
+        <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+      </a:rPr>
+      <a:t>Text with fontScale 80% that still overflows and needs further shrinking.</a:t>
     </a:r>
   </a:p>
 </p:txBody>`,

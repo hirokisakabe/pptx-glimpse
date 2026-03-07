@@ -932,6 +932,63 @@ describe("shrinkToFit (normAutofit 動的縮小)", () => {
     expect(result).toContain('font-size="36pt"');
   });
 
+  it("normAutofit で run に fontSize が未指定の場合でも正しく縮小される", () => {
+    // fontSize を undefined にして defaultFontSize へのフォールバックを検証
+    // fontSize 指定ありのケースと dy 値が一致することで二重スケーリングがないことを確認
+    const longText =
+      "This is a long text without explicit fontSize that should be shrunk to fit inside the box";
+
+    const makeBodyWithFontSize = (fontSize: number | undefined): TextBody => ({
+      bodyProperties: {
+        anchor: "t",
+        marginLeft: 91440,
+        marginRight: 91440,
+        marginTop: 45720,
+        marginBottom: 45720,
+        wrap: "square",
+        autoFit: "normAutofit",
+        fontScale: 0.8,
+        lnSpcReduction: 0,
+        numCol: 1,
+        vert: "horz",
+      },
+      paragraphs: [
+        {
+          runs: [
+            {
+              text: longText,
+              properties: {
+                fontSize,
+                fontFamily: null,
+                fontFamilyEa: null,
+                bold: false,
+                italic: false,
+                underline: false,
+                strikethrough: false,
+                color: null,
+                baseline: 0,
+              },
+            },
+          ],
+          properties: defaultParagraphProperties(),
+        },
+      ],
+    });
+
+    const smallTransform = makeTransform(960000, 480000);
+    // fontSize=18 (デフォルト値と同じ) を明示したケース
+    const resultExplicit = renderTextBody(makeBodyWithFontSize(18), smallTransform);
+    // fontSize=undefined でデフォルト値にフォールバックするケース
+    const resultImplicit = renderTextBody(makeBodyWithFontSize(undefined), smallTransform);
+
+    // 両者の dy 値が一致すること（二重スケーリングがなければ同じ結果になる）
+    const dyExplicit = resultExplicit.match(/dy="([0-9.]+)"/g);
+    const dyImplicit = resultImplicit.match(/dy="([0-9.]+)"/g);
+    expect(dyExplicit).not.toBeNull();
+    expect(dyImplicit).not.toBeNull();
+    expect(dyImplicit).toEqual(dyExplicit);
+  });
+
   it("normAutofit で既存の fontScale が設定されている場合でもさらに縮小される", () => {
     const textBody = makeTextBody(
       ["This is a long text that should overflow even with fontScale 0.8 applied"],
