@@ -741,10 +741,10 @@ describe("latin/ea フォント切り替え", () => {
     // Latin セグメントは Calibri が先頭、EA セグメントは Meiryo が先頭のフォールバックリスト
     // メトリクス互換 OSS フォントも含まれる
     expect(result).toContain(
-      "font-family=\"Calibri, Carlito, Meiryo, 'Noto Sans JP', sans-serif\"",
+      "font-family=\"Calibri, Carlito, Meiryo, 'Noto Sans CJK JP', 'Noto Sans JP', sans-serif\"",
     );
     expect(result).toContain(
-      "font-family=\"Meiryo, 'Noto Sans JP', Calibri, Carlito, sans-serif\"",
+      "font-family=\"Meiryo, 'Noto Sans CJK JP', 'Noto Sans JP', Calibri, Carlito, sans-serif\"",
     );
     expect(result).toContain("Hello");
     expect(result).toContain("世界");
@@ -846,7 +846,7 @@ describe("buildFontFamilyValue", () => {
 
   it("latin と ea の両方をフォールバックリストに含める", () => {
     expect(buildFontFamilyValue(["Calibri", "Meiryo"])).toBe(
-      "Calibri, Carlito, Meiryo, 'Noto Sans JP', sans-serif",
+      "Calibri, Carlito, Meiryo, 'Noto Sans CJK JP', 'Noto Sans JP', sans-serif",
     );
   });
 
@@ -856,7 +856,9 @@ describe("buildFontFamilyValue", () => {
 
   it("null を含むリストでも正しく動作する", () => {
     expect(buildFontFamilyValue(["Calibri", null])).toBe("Calibri, Carlito, sans-serif");
-    expect(buildFontFamilyValue([null, "Meiryo"])).toBe("Meiryo, 'Noto Sans JP', sans-serif");
+    expect(buildFontFamilyValue([null, "Meiryo"])).toBe(
+      "Meiryo, 'Noto Sans CJK JP', 'Noto Sans JP', sans-serif",
+    );
   });
 
   it("すべて null の場合は null を返す", () => {
@@ -878,14 +880,18 @@ describe("buildFontFamilyValue", () => {
       "'Times New Roman', Tinos, 'Liberation Serif', serif",
     );
     expect(buildFontFamilyValue(["Yu Mincho"])).toBe(
-      "'Yu Mincho', 'Noto Serif JP', 'Noto Sans JP', serif",
+      "'Yu Mincho', 'Noto Serif CJK JP', 'Noto Sans JP', serif",
     );
-    expect(buildFontFamilyValue(["游明朝"])).toBe("游明朝, 'Noto Serif JP', 'Noto Sans JP', serif");
+    expect(buildFontFamilyValue(["游明朝"])).toBe(
+      "游明朝, 'Noto Serif CJK JP', 'Noto Sans JP', serif",
+    );
   });
 
   it("sans-serif 系フォントの汎用ファミリが sans-serif になる", () => {
     expect(buildFontFamilyValue(["Arial"])).toBe("Arial, Arimo, 'Liberation Sans', sans-serif");
-    expect(buildFontFamilyValue(["Meiryo"])).toBe("Meiryo, 'Noto Sans JP', sans-serif");
+    expect(buildFontFamilyValue(["Meiryo"])).toBe(
+      "Meiryo, 'Noto Sans CJK JP', 'Noto Sans JP', sans-serif",
+    );
   });
 
   it("フォールバックフォントが元フォントと同じ場合は重複しない", () => {

@@ -10,28 +10,29 @@ export type FontMapping = Record<string, string>;
 export const DEFAULT_FONT_MAPPING: Readonly<FontMapping> = {
   // ラテン文字フォント
   Calibri: "Carlito",
+  "Calibri Light": "Carlito",
   Arial: "Arimo",
   "Times New Roman": "Tinos",
   "Courier New": "Cousine",
   Cambria: "Caladea",
 
-  // 日本語ゴシック系 → Noto Sans JP
-  メイリオ: "Noto Sans JP",
-  Meiryo: "Noto Sans JP",
-  游ゴシック: "Noto Sans JP",
-  "Yu Gothic": "Noto Sans JP",
-  "MS ゴシック": "Noto Sans JP",
-  "MS Gothic": "Noto Sans JP",
-  "MS Pゴシック": "Noto Sans JP",
-  "MS PGothic": "Noto Sans JP",
+  // 日本語ゴシック系 → Noto Sans CJK JP
+  メイリオ: "Noto Sans CJK JP",
+  Meiryo: "Noto Sans CJK JP",
+  游ゴシック: "Noto Sans CJK JP",
+  "Yu Gothic": "Noto Sans CJK JP",
+  "MS ゴシック": "Noto Sans CJK JP",
+  "MS Gothic": "Noto Sans CJK JP",
+  "MS Pゴシック": "Noto Sans CJK JP",
+  "MS PGothic": "Noto Sans CJK JP",
 
-  // 日本語明朝系 → Noto Serif JP
-  "MS 明朝": "Noto Serif JP",
-  "MS Mincho": "Noto Serif JP",
-  "MS P明朝": "Noto Serif JP",
-  "MS PMincho": "Noto Serif JP",
-  游明朝: "Noto Serif JP",
-  "Yu Mincho": "Noto Serif JP",
+  // 日本語明朝系 → Noto Serif CJK JP
+  "MS 明朝": "Noto Serif CJK JP",
+  "MS Mincho": "Noto Serif CJK JP",
+  "MS P明朝": "Noto Serif CJK JP",
+  "MS PMincho": "Noto Serif CJK JP",
+  游明朝: "Noto Serif CJK JP",
+  "Yu Mincho": "Noto Serif CJK JP",
 };
 
 /**
