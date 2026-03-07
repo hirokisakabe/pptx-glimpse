@@ -21,6 +21,7 @@ export interface FontBuffer {
 interface OpentypeFontWithNames extends OpentypeFont {
   names: {
     fontFamily?: Record<string, string>;
+    preferredFamily?: Record<string, string>;
   };
 }
 
@@ -144,12 +145,9 @@ export async function createOpentypeSetupFromBuffers(
         if (!firstResolverFont) firstResolverFont = font as unknown as OpentypeFullFont;
 
         if (isTtc) {
-          // TTC: names.fontFamily から各フォント名を取得して登録
-          const fontFamily = font.names.fontFamily;
-          if (fontFamily) {
-            for (const name of Object.values(fontFamily)) {
-              registerFont(name, font, reverseMap, measurerFonts, resolverFonts);
-            }
+          // TTC: names テーブルからフォント名を取得して登録
+          for (const name of collectFontNames(font)) {
+            registerFont(name, font, reverseMap, measurerFonts, resolverFonts);
           }
         } else if (buffer.name) {
           registerFont(buffer.name, font, reverseMap, measurerFonts, resolverFonts);
@@ -197,6 +195,27 @@ function registerFont(
 }
 
 /**
+ * フォントの names テーブルからフォント名のセットを収集する。
+ * fontFamily と preferredFamily の両方を含める。
+ * Variable Font では fontFamily が "Noto Sans JP Thin" のように
+ * インスタンス名になるため、preferredFamily ("Noto Sans JP") も登録する。
+ */
+function collectFontNames(font: OpentypeFontWithNames): Set<string> {
+  const names = new Set<string>();
+  if (font.names.fontFamily) {
+    for (const name of Object.values(font.names.fontFamily)) {
+      names.add(name);
+    }
+  }
+  if (font.names.preferredFamily) {
+    for (const name of Object.values(font.names.preferredFamily)) {
+      names.add(name);
+    }
+  }
+  return names;
+}
+
+/**
  * システムフォント + 追加ディレクトリから OpentypeTextMeasurer と TextPathFontResolver を構築する。
  *
  * 1. collectFontFilePaths() でフォントファイルパスを収集
@@ -230,12 +249,9 @@ export async function createOpentypeSetupFromSystem(
         if (!firstMeasurerFont) firstMeasurerFont = font;
         if (!firstResolverFont) firstResolverFont = font as unknown as OpentypeFullFont;
 
-        // names.fontFamily からフォント名を取得して登録
-        const fontFamily = font.names.fontFamily;
-        if (fontFamily) {
-          for (const name of Object.values(fontFamily)) {
-            registerFont(name, font, reverseMap, measurerFonts, resolverFonts);
-          }
+        // names テーブルからフォント名を取得して登録
+        for (const name of collectFontNames(font)) {
+          registerFont(name, font, reverseMap, measurerFonts, resolverFonts);
         }
       }
     } catch {

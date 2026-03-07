@@ -16,24 +16,24 @@ describe("DEFAULT_FONT_MAPPING", () => {
     expect(DEFAULT_FONT_MAPPING["Cambria"]).toBe("Caladea");
   });
 
-  it("日本語ゴシック系フォントが Noto Sans JP にマッピングされている", () => {
-    expect(DEFAULT_FONT_MAPPING["メイリオ"]).toBe("Noto Sans JP");
-    expect(DEFAULT_FONT_MAPPING["Meiryo"]).toBe("Noto Sans JP");
-    expect(DEFAULT_FONT_MAPPING["游ゴシック"]).toBe("Noto Sans JP");
-    expect(DEFAULT_FONT_MAPPING["Yu Gothic"]).toBe("Noto Sans JP");
-    expect(DEFAULT_FONT_MAPPING["MS ゴシック"]).toBe("Noto Sans JP");
-    expect(DEFAULT_FONT_MAPPING["MS Gothic"]).toBe("Noto Sans JP");
-    expect(DEFAULT_FONT_MAPPING["MS Pゴシック"]).toBe("Noto Sans JP");
-    expect(DEFAULT_FONT_MAPPING["MS PGothic"]).toBe("Noto Sans JP");
+  it("日本語ゴシック系フォントが Noto Sans CJK JP にマッピングされている", () => {
+    expect(DEFAULT_FONT_MAPPING["メイリオ"]).toBe("Noto Sans CJK JP");
+    expect(DEFAULT_FONT_MAPPING["Meiryo"]).toBe("Noto Sans CJK JP");
+    expect(DEFAULT_FONT_MAPPING["游ゴシック"]).toBe("Noto Sans CJK JP");
+    expect(DEFAULT_FONT_MAPPING["Yu Gothic"]).toBe("Noto Sans CJK JP");
+    expect(DEFAULT_FONT_MAPPING["MS ゴシック"]).toBe("Noto Sans CJK JP");
+    expect(DEFAULT_FONT_MAPPING["MS Gothic"]).toBe("Noto Sans CJK JP");
+    expect(DEFAULT_FONT_MAPPING["MS Pゴシック"]).toBe("Noto Sans CJK JP");
+    expect(DEFAULT_FONT_MAPPING["MS PGothic"]).toBe("Noto Sans CJK JP");
   });
 
-  it("日本語明朝系フォントが Noto Serif JP にマッピングされている", () => {
-    expect(DEFAULT_FONT_MAPPING["MS 明朝"]).toBe("Noto Serif JP");
-    expect(DEFAULT_FONT_MAPPING["MS Mincho"]).toBe("Noto Serif JP");
-    expect(DEFAULT_FONT_MAPPING["MS P明朝"]).toBe("Noto Serif JP");
-    expect(DEFAULT_FONT_MAPPING["MS PMincho"]).toBe("Noto Serif JP");
-    expect(DEFAULT_FONT_MAPPING["游明朝"]).toBe("Noto Serif JP");
-    expect(DEFAULT_FONT_MAPPING["Yu Mincho"]).toBe("Noto Serif JP");
+  it("日本語明朝系フォントが Noto Serif CJK JP にマッピングされている", () => {
+    expect(DEFAULT_FONT_MAPPING["MS 明朝"]).toBe("Noto Serif CJK JP");
+    expect(DEFAULT_FONT_MAPPING["MS Mincho"]).toBe("Noto Serif CJK JP");
+    expect(DEFAULT_FONT_MAPPING["MS P明朝"]).toBe("Noto Serif CJK JP");
+    expect(DEFAULT_FONT_MAPPING["MS PMincho"]).toBe("Noto Serif CJK JP");
+    expect(DEFAULT_FONT_MAPPING["游明朝"]).toBe("Noto Serif CJK JP");
+    expect(DEFAULT_FONT_MAPPING["Yu Mincho"]).toBe("Noto Serif CJK JP");
   });
 });
 
@@ -88,10 +88,10 @@ describe("getMappedFont", () => {
   it("全角英数字を半角に正規化してマッチする", () => {
     const fullMapping = createFontMapping();
     // ＭＳ Ｐゴシック（全角P）→ MS Pゴシック（半角P）にマッチ
-    expect(getMappedFont("ＭＳ Ｐゴシック", fullMapping)).toBe("Noto Sans JP");
+    expect(getMappedFont("ＭＳ Ｐゴシック", fullMapping)).toBe("Noto Sans CJK JP");
     // ＭＳ Ｐ明朝（全角P）→ MS P明朝（半角P）にマッチ
-    expect(getMappedFont("ＭＳ Ｐ明朝", fullMapping)).toBe("Noto Serif JP");
+    expect(getMappedFont("ＭＳ Ｐ明朝", fullMapping)).toBe("Noto Serif CJK JP");
     // 全角スペース（\u3000）も半角スペースに正規化
-    expect(getMappedFont("ＭＳ\u3000Ｐゴシック", fullMapping)).toBe("Noto Sans JP");
+    expect(getMappedFont("ＭＳ\u3000Ｐゴシック", fullMapping)).toBe("Noto Sans CJK JP");
   });
 });
