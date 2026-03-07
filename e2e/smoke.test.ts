@@ -56,4 +56,48 @@ describe("Real PPTX E2E smoke tests", () => {
       }
     });
   });
+
+  describe("real-product-page.pptx (product landing page)", () => {
+    it("convertPptxToSvg completes without error", async () => {
+      const input = readFileSync(join(FIXTURE_DIR, "real-product-page.pptx"));
+      const results = await convertPptxToSvg(input);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].svg).toContain("<svg");
+      expect(results[0].svg).toContain("</svg>");
+    });
+
+    it("slide contains text elements", async () => {
+      const input = readFileSync(join(FIXTURE_DIR, "real-product-page.pptx"));
+      const results = await convertPptxToSvg(input);
+      const slide = results[0].svg;
+
+      // タイトルやボタンなどのテキスト（<text> or <path> via opentype）
+      expect(slide).toMatch(/<text|<path/);
+    });
+
+    it("slide contains shapes (roundRect, ellipse)", async () => {
+      const input = readFileSync(join(FIXTURE_DIR, "real-product-page.pptx"));
+      const results = await convertPptxToSvg(input);
+      const slide = results[0].svg;
+
+      // カード・ボタン等の角丸矩形やアイコン用の楕円
+      expect(slide).toContain("<rect");
+      expect(slide).toContain("<path");
+    });
+
+    it("convertPptxToPng produces valid PNG", async () => {
+      const input = readFileSync(join(FIXTURE_DIR, "real-product-page.pptx"));
+      const results = await convertPptxToPng(input);
+
+      expect(results).toHaveLength(1);
+      // PNG magic bytes
+      expect(results[0].png[0]).toBe(0x89);
+      expect(results[0].png[1]).toBe(0x50);
+      expect(results[0].png[2]).toBe(0x4e);
+      expect(results[0].png[3]).toBe(0x47);
+      expect(results[0].width).toBeGreaterThan(0);
+      expect(results[0].height).toBeGreaterThan(0);
+    });
+  });
 });
