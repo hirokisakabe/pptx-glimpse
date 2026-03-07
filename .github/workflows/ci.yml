@@ -96,7 +96,15 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Pull or build Docker image
-        run: docker pull ghcr.io/hirokisakabe/pptx-glimpse-snapshot-vrt:latest || docker build -t ghcr.io/hirokisakabe/pptx-glimpse-snapshot-vrt:latest docker/snapshot-vrt
+        run: |
+          git fetch origin main --depth=1
+          if git diff --name-only origin/main -- docker/snapshot-vrt/ | grep -q .; then
+            echo "docker/snapshot-vrt changed, forcing local build"
+            docker build -t ghcr.io/hirokisakabe/pptx-glimpse-snapshot-vrt:latest docker/snapshot-vrt
+          else
+            docker pull ghcr.io/hirokisakabe/pptx-glimpse-snapshot-vrt:latest || \
+              docker build -t ghcr.io/hirokisakabe/pptx-glimpse-snapshot-vrt:latest docker/snapshot-vrt
+          fi
 
       - name: Generate VRT fixtures and run VRT
         run: |
@@ -129,7 +137,15 @@ jobs:
         run: npm ci
 
       - name: Pull or build Docker image
-        run: docker pull ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest || docker build -t ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest docker/libreoffice-vrt
+        run: |
+          git fetch origin main --depth=1
+          if git diff --name-only origin/main -- docker/libreoffice-vrt/ | grep -q .; then
+            echo "docker/libreoffice-vrt changed, forcing local build"
+            docker build -t ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest docker/libreoffice-vrt
+          else
+            docker pull ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest || \
+              docker build -t ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest docker/libreoffice-vrt
+          fi
 
       - name: Generate fixtures
         run: docker run --rm -v "${{ github.workspace }}":/workspace ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest python3 /workspace/vrt/libreoffice/create_fixtures.py
