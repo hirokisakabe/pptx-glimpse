@@ -1,7 +1,8 @@
-import { describe, it, expect } from "vitest";
-import { parseEffectList } from "./effect-parser.js";
+import { describe, expect, it } from "vitest";
+
 import { ColorResolver } from "../color/color-resolver.js";
-import type { ColorScheme, ColorMap } from "../model/theme.js";
+import type { ColorMap, ColorScheme } from "../model/theme.js";
+import { parseEffectList } from "./effect-parser.js";
 
 const testScheme: ColorScheme = {
   dk1: "#000000",

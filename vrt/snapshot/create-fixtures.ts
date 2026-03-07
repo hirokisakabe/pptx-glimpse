@@ -3,11 +3,12 @@
  *
  * 使い方: npx tsx vrt/snapshot/create-fixtures.ts
  */
+import { mkdirSync, writeFileSync } from "fs";
 import JSZip from "jszip";
-import sharp from "sharp";
-import { writeFileSync, mkdirSync } from "fs";
-import { fileURLToPath } from "url";
 import { dirname, join } from "path";
+import sharp from "sharp";
+import { fileURLToPath } from "url";
+
 import { VRT_CASES } from "./vrt-cases.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

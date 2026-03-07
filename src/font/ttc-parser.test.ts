@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
-import { isTtcBuffer, extractTtcFonts } from "./ttc-parser.js";
+import { describe, expect, it } from "vitest";
+
+import { extractTtcFonts, isTtcBuffer } from "./ttc-parser.js";
 import { buildTtcFromTtfs } from "./ttc-test-helper.js";
 
 /**

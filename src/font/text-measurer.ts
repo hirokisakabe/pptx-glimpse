@@ -1,7 +1,7 @@
 import {
-  measureTextWidth as defaultMeasureTextWidth,
-  getLineHeightRatio as defaultGetLineHeightRatio,
   getAscenderRatio as defaultGetAscenderRatio,
+  getLineHeightRatio as defaultGetLineHeightRatio,
+  measureTextWidth as defaultMeasureTextWidth,
 } from "../utils/text-measure.js";
 
 /**

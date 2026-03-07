@@ -1,7 +1,7 @@
-import type { EffectList, OuterShadow, InnerShadow, Glow, SoftEdge } from "../model/effect.js";
 import type { ColorResolver } from "../color/color-resolver.js";
-import type { XmlNode } from "./xml-parser.js";
+import type { EffectList, Glow, InnerShadow, OuterShadow, SoftEdge } from "../model/effect.js";
 import { asEmu } from "../utils/unit-types.js";
+import type { XmlNode } from "./xml-parser.js";
 
 export function parseEffectList(
   effectLstNode: XmlNode,

@@ -1,11 +1,12 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+
+import type { OpentypeFullFont } from "./text-path-context.js";
 import {
   DefaultTextPathFontResolver,
-  setTextPathFontResolver,
   getTextPathFontResolver,
   resetTextPathFontResolver,
+  setTextPathFontResolver,
 } from "./text-path-context.js";
-import type { OpentypeFullFont } from "./text-path-context.js";
 
 function createMockFont(name: string): OpentypeFullFont {
   return {

@@ -1,4 +1,5 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+
 import { evaluateFormula, evaluateGuides, resolveValue } from "./geometry-formula.js";
 
 describe("evaluateFormula", () => {

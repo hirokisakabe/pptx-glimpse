@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { parseChart } from "./chart-parser.js";
+import { describe, expect, it } from "vitest";
+
 import { ColorResolver } from "../color/color-resolver.js";
+import { parseChart } from "./chart-parser.js";
 
 function createColorResolver() {
   return new ColorResolver(

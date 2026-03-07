@@ -1,8 +1,8 @@
-import type { TextMeasurer } from "./text-measurer.js";
 import {
-  measureTextWidth as defaultMeasureTextWidth,
   isCjkCodePoint,
+  measureTextWidth as defaultMeasureTextWidth,
 } from "../utils/text-measure.js";
+import type { TextMeasurer } from "./text-measurer.js";
 
 const PX_PER_PT = 96 / 72;
 const BOLD_FACTOR = 1.05;

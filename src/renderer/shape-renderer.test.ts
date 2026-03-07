@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderShape, renderConnector } from "./shape-renderer.js";
-import type { ShapeElement, ConnectorElement, Transform } from "../model/shape.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { ConnectorElement, ShapeElement, Transform } from "../model/shape.js";
+import { renderConnector, renderShape } from "./shape-renderer.js";
 
 beforeEach(() => {
   let counter = 0;

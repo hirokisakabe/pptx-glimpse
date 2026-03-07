@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderBlipEffects } from "./blip-effect-renderer.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import type { BlipEffects } from "../model/effect.js";
+import { renderBlipEffects } from "./blip-effect-renderer.js";
 
 beforeEach(() => {
   let counter = 0;

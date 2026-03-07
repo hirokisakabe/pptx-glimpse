@@ -1,5 +1,5 @@
-import type { ResolvedColor } from "./fill.js";
 import type { Emu } from "../utils/unit-types.js";
+import type { ResolvedColor } from "./fill.js";
 
 export interface EffectList {
   outerShadow: OuterShadow | null;

@@ -1,4 +1,5 @@
 import { readFileSync } from "fs";
+
 import { convertPptxToSvg } from "../src/converter.js";
 
 async function main(): Promise<void> {

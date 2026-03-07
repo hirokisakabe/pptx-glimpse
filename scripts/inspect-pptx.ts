@@ -1,6 +1,6 @@
+import { XMLBuilder, XMLParser } from "fast-xml-parser";
 import { readFileSync } from "fs";
 import JSZip from "jszip";
-import { XMLParser, XMLBuilder } from "fast-xml-parser";
 
 function prettyPrintXml(rawXml: string): string {
   const parser = new XMLParser({

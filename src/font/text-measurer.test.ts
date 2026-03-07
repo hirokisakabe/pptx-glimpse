@@ -1,12 +1,13 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+
+import { getAscenderRatio, getLineHeightRatio, measureTextWidth } from "../utils/text-measure.js";
 import {
   DefaultTextMeasurer,
-  setTextMeasurer,
   getTextMeasurer,
   resetTextMeasurer,
+  setTextMeasurer,
   type TextMeasurer,
 } from "./text-measurer.js";
-import { measureTextWidth, getLineHeightRatio, getAscenderRatio } from "../utils/text-measure.js";
 
 afterEach(() => {
   resetTextMeasurer();

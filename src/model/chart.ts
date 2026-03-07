@@ -1,5 +1,5 @@
-import type { Transform } from "./shape.js";
 import type { ResolvedColor } from "./fill.js";
+import type { Transform } from "./shape.js";
 
 export interface ChartElement {
   type: "chart";

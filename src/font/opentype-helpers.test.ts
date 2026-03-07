@@ -1,7 +1,8 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+
 import {
-  createOpentypeTextMeasurerFromBuffers,
   createOpentypeSetupFromBuffers,
+  createOpentypeTextMeasurerFromBuffers,
 } from "./opentype-helpers.js";
 import { buildTtcFromTtfs } from "./ttc-test-helper.js";
 

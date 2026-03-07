@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
-import { buildRelsPath, parseRelationships } from "./relationship-parser.js";
+import { describe, expect, it, vi } from "vitest";
+
 import { initWarningLogger } from "../warning-logger.js";
+import { buildRelsPath, parseRelationships } from "./relationship-parser.js";
 
 describe("buildRelsPath", () => {
   it("builds rels path for slide", () => {

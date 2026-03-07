@@ -1,15 +1,15 @@
+import type { ColorResolver } from "../color/color-resolver.js";
 import type {
-  BlipEffects,
   BiLevelEffect,
+  BlipEffects,
   BlurEffect,
-  LumEffect,
   DuotoneEffect,
+  LumEffect,
 } from "../model/effect.js";
 import type { ResolvedColor } from "../model/fill.js";
-import type { ColorResolver } from "../color/color-resolver.js";
-import type { XmlNode } from "./xml-parser.js";
 import { asEmu } from "../utils/unit-types.js";
 import { warn } from "../warning-logger.js";
+import type { XmlNode } from "./xml-parser.js";
 
 const PRESET_COLORS: Record<string, string> = {
   black: "#000000",

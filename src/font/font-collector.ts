@@ -4,8 +4,8 @@
 import type { SlideElement } from "../model/shape.js";
 import type { TextBody } from "../model/text.js";
 import type { FontScheme } from "../model/theme.js";
+import { clearXmlCache, enableXmlCache } from "../parser/xml-parser.js";
 import { parsePptxData, parseSlideWithLayout } from "../pptx-data-parser.js";
-import { enableXmlCache, clearXmlCache } from "../parser/xml-parser.js";
 
 /** フォント収集結果 */
 export interface UsedFonts {

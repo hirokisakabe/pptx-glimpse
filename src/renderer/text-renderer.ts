@@ -1,3 +1,9 @@
+import { getMetricsFallbackFont } from "../data/font-metrics.js";
+import { getCurrentMappedFont } from "../font/font-mapping-context.js";
+import { getTextMeasurer } from "../font/text-measurer.js";
+import type { TextPathFontResolver } from "../font/text-path-context.js";
+import { getTextPathFontResolver } from "../font/text-path-context.js";
+import type { Transform } from "../model/shape.js";
 import type {
   AutoNumScheme,
   BodyProperties,
@@ -8,17 +14,11 @@ import type {
   TextBody,
   TextVerticalType,
 } from "../model/text.js";
-import type { Transform } from "../model/shape.js";
 import { EMU_PER_INCH } from "../utils/constants.js";
 import { emuToPixels } from "../utils/emu.js";
+import { wrapParagraph } from "../utils/text-wrap.js";
 import type { Emu } from "../utils/unit-types.js";
 import { asEmu } from "../utils/unit-types.js";
-import { wrapParagraph } from "../utils/text-wrap.js";
-import { getMetricsFallbackFont } from "../data/font-metrics.js";
-import { getTextMeasurer } from "../font/text-measurer.js";
-import { getCurrentMappedFont } from "../font/font-mapping-context.js";
-import type { TextPathFontResolver } from "../font/text-path-context.js";
-import { getTextPathFontResolver } from "../font/text-path-context.js";
 
 const PX_PER_PT = 96 / 72;
 const DEFAULT_LINE_SPACING = 1.0;

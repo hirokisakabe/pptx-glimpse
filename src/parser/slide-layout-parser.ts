@@ -1,16 +1,16 @@
-import type { Background } from "../model/slide.js";
-import type { SlideElement } from "../model/shape.js";
-import type { PlaceholderStyleInfo } from "../model/text.js";
-import type { PptxArchive } from "./pptx-reader.js";
-import { parseXml, parseXmlOrdered, type XmlNode } from "./xml-parser.js";
-import { parseFillFromNode } from "./fill-parser.js";
-import type { FillParseContext } from "./fill-parser.js";
-import { parseShapeTree, navigateOrdered } from "./slide-parser.js";
-import { buildRelsPath, parseRelationships, type Relationship } from "./relationship-parser.js";
-import { parseListStyle } from "./text-style-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
+import type { SlideElement } from "../model/shape.js";
+import type { Background } from "../model/slide.js";
+import type { PlaceholderStyleInfo } from "../model/text.js";
 import type { FontScheme, FormatScheme } from "../model/theme.js";
 import { debug } from "../warning-logger.js";
+import type { FillParseContext } from "./fill-parser.js";
+import { parseFillFromNode } from "./fill-parser.js";
+import type { PptxArchive } from "./pptx-reader.js";
+import { buildRelsPath, parseRelationships, type Relationship } from "./relationship-parser.js";
+import { navigateOrdered, parseShapeTree } from "./slide-parser.js";
+import { parseListStyle } from "./text-style-parser.js";
+import { parseXml, parseXmlOrdered, type XmlNode } from "./xml-parser.js";
 
 export function parseSlideLayoutBackground(
   xml: string,

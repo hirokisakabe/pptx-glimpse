@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { buildTransformAttr } from "./transform.js";
+import { describe, expect, it } from "vitest";
+
 import type { Transform } from "../model/shape.js";
+import { buildTransformAttr } from "./transform.js";
 
 function makeTransform(overrides: Partial<Transform> = {}): Transform {
   return {
