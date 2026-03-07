@@ -17,7 +17,7 @@ const PIXEL_THRESHOLD = 0.1;
 const MISMATCH_TOLERANCE = 0.015;
 
 const SHARED_PIXEL_THRESHOLD = 0.3;
-const SHARED_MISMATCH_TOLERANCE = 0.05;
+const SHARED_MISMATCH_TOLERANCE = 0.02;
 
 describe("Visual Regression Tests", { timeout: 60000 }, () => {
   for (const { name, fixture } of VRT_CASES) {
