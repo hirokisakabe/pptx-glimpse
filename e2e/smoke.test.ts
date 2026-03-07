@@ -3,7 +3,7 @@ import { join } from "path";
 import { describe, it, expect } from "vitest";
 import { convertPptxToSvg, convertPptxToPng } from "../src/converter.js";
 
-const FIXTURE_DIR = join(import.meta.dirname, "fixtures");
+const FIXTURE_DIR = join(import.meta.dirname, "..", "shared-fixtures");
 
 describe("Real PPTX E2E smoke tests", () => {
   describe("real-basic-theme.pptx (Google Slides)", () => {

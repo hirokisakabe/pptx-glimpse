@@ -59,10 +59,13 @@ Visual regression tests for rendering output. When modifying the parser or rende
 ### Directory Structure
 
 ```
+shared-fixtures/                              # Real PPTX files shared by e2e and VRT
+├── real-basic-theme.pptx
+└── real-product-page.pptx
 vrt/
 ├── compare-utils.ts                          # Shared image comparison utilities
 ├── snapshot/                                 # Standard VRT (self-comparison, Docker-based)
-│   ├── vrt-cases.ts                          # Shared test case definitions
+│   ├── vrt-cases.ts                          # Shared test case definitions (VRT_CASES + SHARED_FIXTURE_CASES)
 │   ├── regression.test.ts                    # Test file
 │   ├── create-fixtures.ts                    # Fixture generation script
 │   ├── update-snapshots.ts                   # Snapshot update script
