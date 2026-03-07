@@ -15,6 +15,10 @@ A lightweight JavaScript library that renders PowerPoint (.pptx) slides as SVG o
 
 _Upload a .pptx file → get SVG/PNG output instantly_
 
+|                                                   PowerPoint                                                   |                                                    pptx-glimpse                                                    |
+| :------------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------: |
+| ![PowerPoint](https://raw.githubusercontent.com/hirokisakabe/pptx-glimpse/main/docs/comparison-powerpoint.png) | ![pptx-glimpse](https://raw.githubusercontent.com/hirokisakabe/pptx-glimpse/main/docs/comparison-pptx-glimpse.png) |
+
 ## Motivation
 
 pptx-glimpse is designed for two primary use cases:
@@ -83,7 +87,10 @@ const results = await convertPptxToPng(pptx, {
 });
 ```
 
-### Font Utilities
+### Advanced Usage
+
+<details>
+<summary>Font Utilities</summary>
 
 #### Collecting used fonts
 
@@ -112,7 +119,10 @@ getMappedFont("Meiryo", mapping); // "Noto Sans JP"
 getMappedFont("calibri", mapping); // "Ubuntu"
 ```
 
-### Custom Font Loading
+</details>
+
+<details>
+<summary>Custom Font Loading</summary>
 
 In environments where system fonts are not available, you can build a text measurer from font buffers using `createOpentypeSetupFromBuffers`. This is a low-level utility for advanced use cases.
 
@@ -127,6 +137,8 @@ const setup = await createOpentypeSetupFromBuffers([
 // setup.measurer — text width measurement
 // setup.fontResolver — text-to-SVG-path conversion
 ```
+
+</details>
 
 ## Fonts
 
