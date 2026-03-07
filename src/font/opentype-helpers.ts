@@ -69,7 +69,7 @@ function toArrayBuffer(data: ArrayBuffer | Uint8Array): ArrayBuffer {
 
 /**
  * バッファ (TTF/OTF または TTC) からパース済みフォント配列を返す。
- * TTC の場合は分割して各フォントをパースする。
+ * TTC の場合はメモリ消費を抑えるため最初の1フォントのみ抽出してパースする。
  */
 function parseFontBuffer(
   arrayBuffer: ArrayBuffer,
