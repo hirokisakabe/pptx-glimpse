@@ -1,7 +1,7 @@
 import type { CustomGeometryPath } from "../model/shape.js";
-import { evaluateGuides, resolveValue, type GuideDefinition } from "./geometry-formula.js";
-import type { XmlNode } from "./xml-parser.js";
 import { debug } from "../warning-logger.js";
+import { evaluateGuides, type GuideDefinition, resolveValue } from "./geometry-formula.js";
+import type { XmlNode } from "./xml-parser.js";
 
 /** custGeom ノードをパースして CustomGeometryPath[] を返す */
 export function parseCustomGeometry(custGeom: XmlNode): CustomGeometryPath[] | null {

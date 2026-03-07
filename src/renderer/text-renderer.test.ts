@@ -1,25 +1,26 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+
+import type { OpentypeFullFont } from "../font/text-path-context.js";
 import {
-  renderTextBody,
-  formatAutoNum,
+  DefaultTextPathFontResolver,
+  resetTextPathFontResolver,
+  setTextPathFontResolver,
+} from "../font/text-path-context.js";
+import type { Transform } from "../model/shape.js";
+import type {
+  BodyProperties,
+  BulletType,
+  Paragraph,
+  RunProperties,
+  SpacingValue,
+  TextBody,
+} from "../model/text.js";
+import {
   buildFontFamilyValue,
   computeSpAutofitHeight,
+  formatAutoNum,
+  renderTextBody,
 } from "./text-renderer.js";
-import type {
-  TextBody,
-  Paragraph,
-  BulletType,
-  SpacingValue,
-  BodyProperties,
-  RunProperties,
-} from "../model/text.js";
-import type { Transform } from "../model/shape.js";
-import {
-  setTextPathFontResolver,
-  resetTextPathFontResolver,
-  DefaultTextPathFontResolver,
-} from "../font/text-path-context.js";
-import type { OpentypeFullFont } from "../font/text-path-context.js";
 
 function makeTransform(widthEmu: number, heightEmu: number): Transform {
   return {

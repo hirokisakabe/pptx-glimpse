@@ -1,9 +1,9 @@
+import { execFile } from "child_process";
 import { watch } from "fs";
 import { createServer } from "http";
 import { basename, resolve } from "path";
-import { execFile } from "child_process";
 import { promisify } from "util";
-import { WebSocketServer, type WebSocket } from "ws";
+import { type WebSocket, WebSocketServer } from "ws";
 
 const DEFAULT_PORT = 3000;
 const DEBOUNCE_MS = 300;

@@ -1,12 +1,12 @@
-import type { TableElement } from "../model/table.js";
 import type { Transform } from "../model/shape.js";
+import type { TableElement } from "../model/table.js";
+import { emuToPixels } from "../utils/emu.js";
 import type { Emu } from "../utils/unit-types.js";
 import { asEmu } from "../utils/unit-types.js";
-import type { RenderResult } from "./render-result.js";
-import { emuToPixels } from "../utils/emu.js";
-import { buildTransformAttr } from "./transform.js";
 import { renderFillAttrs, renderOutlineAttrs } from "./fill-renderer.js";
+import type { RenderResult } from "./render-result.js";
 import { renderTextBody } from "./text-renderer.js";
+import { buildTransformAttr } from "./transform.js";
 
 export function renderTable(element: TableElement): RenderResult {
   const { transform, table } = element;

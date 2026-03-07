@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeAll } from "vitest";
 import JSZip from "jszip";
-import { convertPptxToSvg, convertPptxToPng } from "./converter.js";
+import { beforeAll, describe, expect, it } from "vitest";
+
+import { convertPptxToPng, convertPptxToSvg } from "./converter.js";
 
 const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">

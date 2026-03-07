@@ -1,11 +1,11 @@
-import type { TableData, TableRow, TableColumn, TableCell, CellBorders } from "../model/table.js";
-import type { Outline } from "../model/line.js";
 import type { ColorResolver } from "../color/color-resolver.js";
+import type { Outline } from "../model/line.js";
+import type { CellBorders, TableCell, TableColumn, TableData, TableRow } from "../model/table.js";
 import type { FontScheme } from "../model/theme.js";
+import { asEmu } from "../utils/unit-types.js";
 import { parseFillFromNode, parseOutline } from "./fill-parser.js";
 import { parseTextBody } from "./slide-parser.js";
 import type { XmlNode } from "./xml-parser.js";
-import { asEmu } from "../utils/unit-types.js";
 
 export function parseTable(
   tblNode: XmlNode,

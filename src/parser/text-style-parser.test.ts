@@ -1,10 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+
+import { ColorResolver } from "../color/color-resolver.js";
 import {
   parseDefaultRunProperties,
-  parseParagraphLevelProperties,
   parseListStyle,
+  parseParagraphLevelProperties,
 } from "./text-style-parser.js";
-import { ColorResolver } from "../color/color-resolver.js";
 
 function createColorResolver() {
   return new ColorResolver(

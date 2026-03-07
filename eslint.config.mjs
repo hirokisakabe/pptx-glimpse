@@ -1,5 +1,6 @@
 import { dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import simpleImportSort from "eslint-plugin-simple-import-sort";
 import tseslint from "typescript-eslint";
 import prettier from "eslint-config-prettier";
 
@@ -7,6 +8,9 @@ export default tseslint.config(
   {
     files: ["src/**/*.ts", "vrt/**/*.ts", "scripts/**/*.ts", "bench/**/*.ts", "e2e/**/*.ts"],
     extends: tseslint.configs.recommendedTypeChecked,
+    plugins: {
+      "simple-import-sort": simpleImportSort,
+    },
     languageOptions: {
       parserOptions: {
         project: "./tsconfig.eslint.json",
@@ -14,6 +18,8 @@ export default tseslint.config(
       },
     },
     rules: {
+      "simple-import-sort/imports": "error",
+      "simple-import-sort/exports": "error",
       "@typescript-eslint/no-unused-vars": [
         "error",
         { argsIgnorePattern: "^_" },

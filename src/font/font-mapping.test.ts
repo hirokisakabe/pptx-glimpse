@@ -1,9 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
+
 import {
-  DEFAULT_FONT_MAPPING,
   createFontMapping,
-  getMappedFont,
+  DEFAULT_FONT_MAPPING,
   type FontMapping,
+  getMappedFont,
 } from "./font-mapping.js";
 
 describe("DEFAULT_FONT_MAPPING", () => {

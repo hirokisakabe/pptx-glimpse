@@ -1,9 +1,9 @@
-import type { FormatScheme } from "../model/theme.js";
+import type { ColorResolver } from "../color/color-resolver.js";
+import type { EffectList } from "../model/effect.js";
 import type { Fill } from "../model/fill.js";
 import type { ResolvedColor } from "../model/fill.js";
 import type { Outline } from "../model/line.js";
-import type { EffectList } from "../model/effect.js";
-import type { ColorResolver } from "../color/color-resolver.js";
+import type { FormatScheme } from "../model/theme.js";
 import type { XmlNode } from "./xml-parser.js";
 
 interface ResolvedStyleReference {

@@ -1,5 +1,5 @@
 import type { Fill, GradientFill, PatternFill } from "../model/fill.js";
-import type { Outline, ArrowEndpoint, ArrowSize } from "../model/line.js";
+import type { ArrowEndpoint, ArrowSize, Outline } from "../model/line.js";
 import { emuToPixels } from "../utils/emu.js";
 
 interface FillAttrs {

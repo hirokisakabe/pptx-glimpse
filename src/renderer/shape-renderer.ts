@@ -1,10 +1,10 @@
-import type { ShapeElement, ConnectorElement } from "../model/shape.js";
-import type { RenderResult } from "./render-result.js";
-import { renderGeometry } from "./geometry/index.js";
-import { renderFillAttrs, renderOutlineAttrs, renderMarkers } from "./fill-renderer.js";
-import { renderTextBody, computeSpAutofitHeight } from "./text-renderer.js";
-import { renderEffects } from "./effect-renderer.js";
+import type { ConnectorElement, ShapeElement } from "../model/shape.js";
 import { emuToPixels } from "../utils/emu.js";
+import { renderEffects } from "./effect-renderer.js";
+import { renderFillAttrs, renderMarkers, renderOutlineAttrs } from "./fill-renderer.js";
+import { renderGeometry } from "./geometry/index.js";
+import type { RenderResult } from "./render-result.js";
+import { computeSpAutofitHeight, renderTextBody } from "./text-renderer.js";
 import { buildTransformAttr } from "./transform.js";
 
 export function renderShape(shape: ShapeElement): RenderResult {

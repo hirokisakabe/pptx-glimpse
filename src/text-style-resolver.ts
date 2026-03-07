@@ -1,10 +1,10 @@
+import type { ShapeElement, SlideElement } from "./model/shape.js";
 import type {
-  DefaultTextStyle,
   DefaultRunProperties,
-  TxStyles,
+  DefaultTextStyle,
   PlaceholderStyleInfo,
+  TxStyles,
 } from "./model/text.js";
-import type { SlideElement, ShapeElement } from "./model/shape.js";
 import type { FontScheme } from "./model/theme.js";
 import { resolveThemeFont } from "./parser/text-style-parser.js";
 

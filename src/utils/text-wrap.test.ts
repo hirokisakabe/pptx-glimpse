@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { wrapParagraph } from "./text-wrap.js";
+import { describe, expect, it } from "vitest";
+
 import type { Paragraph, RunProperties } from "../model/text.js";
+import { wrapParagraph } from "./text-wrap.js";
 
 function makeRunProps(overrides: Partial<RunProperties> = {}): RunProperties {
   return {

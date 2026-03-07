@@ -1,4 +1,4 @@
-import type { Geometry, CustomGeometryPath } from "../../model/shape.js";
+import type { CustomGeometryPath, Geometry } from "../../model/shape.js";
 import { getPresetGeometrySvg } from "./preset-geometries.js";
 
 export function renderGeometry(geometry: Geometry, width: number, height: number): string {

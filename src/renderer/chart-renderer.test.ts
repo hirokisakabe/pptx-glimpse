@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { renderChart } from "./chart-renderer.js";
+import { describe, expect, it } from "vitest";
+
 import type { ChartElement } from "../model/chart.js";
+import { renderChart } from "./chart-renderer.js";
 
 function createChartElement(overrides: Partial<ChartElement["chart"]>): ChartElement {
   return {

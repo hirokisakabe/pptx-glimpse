@@ -1,6 +1,7 @@
-import { readFileSync, existsSync } from "fs";
-import { join, dirname } from "path";
+import { existsSync, readFileSync } from "fs";
+import { dirname, join } from "path";
 import { fileURLToPath } from "url";
+
 import { convertPptxToPng } from "../../src/converter.js";
 import { compareImages } from "../compare-utils.js";
 

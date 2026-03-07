@@ -1,7 +1,8 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { renderImage } from "./image-renderer.js";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
 import type { ImageElement } from "../model/image.js";
 import type { Transform } from "../model/shape.js";
+import { renderImage } from "./image-renderer.js";
 
 beforeEach(() => {
   let counter = 0;

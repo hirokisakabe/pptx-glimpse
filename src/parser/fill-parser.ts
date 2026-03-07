@@ -1,3 +1,4 @@
+import type { ColorResolver } from "../color/color-resolver.js";
 import type {
   Fill,
   GradientFill,
@@ -8,22 +9,21 @@ import type {
   SolidFill,
 } from "../model/fill.js";
 import type {
-  Outline,
+  ArrowEndpoint,
+  ArrowSize,
+  ArrowType,
   DashStyle,
   LineCap,
   LineJoin,
-  ArrowEndpoint,
-  ArrowType,
-  ArrowSize,
+  Outline,
 } from "../model/line.js";
-import type { ColorResolver } from "../color/color-resolver.js";
+import { uint8ArrayToBase64 } from "../utils/base64.js";
+import { asEmu } from "../utils/unit-types.js";
+import { debug, warn } from "../warning-logger.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import type { Relationship } from "./relationship-parser.js";
 import { resolveRelationshipTarget } from "./relationship-parser.js";
 import type { XmlNode } from "./xml-parser.js";
-import { uint8ArrayToBase64 } from "../utils/base64.js";
-import { asEmu } from "../utils/unit-types.js";
-import { warn, debug } from "../warning-logger.js";
 
 export interface FillParseContext {
   rels: Map<string, Relationship>;

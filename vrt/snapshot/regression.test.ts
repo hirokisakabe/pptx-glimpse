@@ -1,9 +1,10 @@
-import { readFileSync, existsSync } from "fs";
-import { join, dirname } from "path";
+import { existsSync, readFileSync } from "fs";
+import { dirname, join } from "path";
 import { fileURLToPath } from "url";
+
 import { convertPptxToPng } from "../../src/converter.js";
 import { compareImages } from "../compare-utils.js";
-import { VRT_CASES, SHARED_FIXTURE_CASES } from "./vrt-cases.js";
+import { SHARED_FIXTURE_CASES, VRT_CASES } from "./vrt-cases.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SNAPSHOT_DIR = join(__dirname, "snapshots");

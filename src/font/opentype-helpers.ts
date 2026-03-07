@@ -2,14 +2,15 @@
  * opentype.js を使ってフォントを読み込み OpentypeTextMeasurer を構築するヘルパー。
  */
 import { readFile } from "node:fs/promises";
-import type { OpentypeFont } from "./opentype-text-measurer.js";
-import { OpentypeTextMeasurer } from "./opentype-text-measurer.js";
+
 import type { FontMapping } from "./font-mapping.js";
 import { createFontMapping } from "./font-mapping.js";
+import type { OpentypeFont } from "./opentype-text-measurer.js";
+import { OpentypeTextMeasurer } from "./opentype-text-measurer.js";
+import { collectFontFilePaths } from "./system-font-loader.js";
 import type { OpentypeFullFont, TextPathFontResolver } from "./text-path-context.js";
 import { DefaultTextPathFontResolver } from "./text-path-context.js";
-import { collectFontFilePaths } from "./system-font-loader.js";
-import { isTtcBuffer, extractTtcFonts } from "./ttc-parser.js";
+import { extractTtcFonts, isTtcBuffer } from "./ttc-parser.js";
 
 /** フォントバッファの入力形式 */
 export interface FontBuffer {

@@ -1,17 +1,17 @@
-import type { ColorMap, FormatScheme } from "../model/theme.js";
-import type { Background } from "../model/slide.js";
-import type { SlideElement } from "../model/shape.js";
-import type { TxStyles, PlaceholderStyleInfo } from "../model/text.js";
-import type { PptxArchive } from "./pptx-reader.js";
-import { parseXml, parseXmlOrdered, type XmlNode } from "./xml-parser.js";
-import { parseFillFromNode } from "./fill-parser.js";
-import type { FillParseContext } from "./fill-parser.js";
-import { parseShapeTree, navigateOrdered } from "./slide-parser.js";
-import { buildRelsPath, parseRelationships, type Relationship } from "./relationship-parser.js";
 import type { ColorResolver } from "../color/color-resolver.js";
+import type { SlideElement } from "../model/shape.js";
+import type { Background } from "../model/slide.js";
+import type { PlaceholderStyleInfo, TxStyles } from "../model/text.js";
+import type { ColorMap, FormatScheme } from "../model/theme.js";
 import type { FontScheme } from "../model/theme.js";
-import { parseListStyle } from "./text-style-parser.js";
 import { debug } from "../warning-logger.js";
+import type { FillParseContext } from "./fill-parser.js";
+import { parseFillFromNode } from "./fill-parser.js";
+import type { PptxArchive } from "./pptx-reader.js";
+import { buildRelsPath, parseRelationships, type Relationship } from "./relationship-parser.js";
+import { navigateOrdered, parseShapeTree } from "./slide-parser.js";
+import { parseListStyle } from "./text-style-parser.js";
+import { parseXml, parseXmlOrdered, type XmlNode } from "./xml-parser.js";
 
 const DEFAULT_COLOR_MAP: ColorMap = {
   bg1: "lt1",

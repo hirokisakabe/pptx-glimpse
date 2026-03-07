@@ -1,6 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
-import { parsePresentation } from "./presentation-parser.js";
+import { describe, expect, it, vi } from "vitest";
+
 import { initWarningLogger } from "../warning-logger.js";
+import { parsePresentation } from "./presentation-parser.js";
 
 describe("parsePresentation", () => {
   it("parses valid presentation XML", () => {

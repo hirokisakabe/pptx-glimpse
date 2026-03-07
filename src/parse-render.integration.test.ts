@@ -1,11 +1,12 @@
-import { describe, it, expect } from "vitest";
-import { parseShapeTree } from "./parser/slide-parser.js";
-import { parseXml } from "./parser/xml-parser.js";
-import type { XmlNode } from "./parser/xml-parser.js";
-import type { PptxArchive } from "./parser/pptx-reader.js";
-import type { ShapeElement } from "./model/shape.js";
-import type { Relationship } from "./parser/relationship-parser.js";
+import { describe, expect, it } from "vitest";
+
 import { ColorResolver } from "./color/color-resolver.js";
+import type { ShapeElement } from "./model/shape.js";
+import type { PptxArchive } from "./parser/pptx-reader.js";
+import type { Relationship } from "./parser/relationship-parser.js";
+import { parseShapeTree } from "./parser/slide-parser.js";
+import type { XmlNode } from "./parser/xml-parser.js";
+import { parseXml } from "./parser/xml-parser.js";
 import { renderShape } from "./renderer/shape-renderer.js";
 import { renderSlideToSvg } from "./renderer/svg-renderer.js";
 
