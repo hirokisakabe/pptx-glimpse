@@ -67,6 +67,8 @@ export function parsePptxData(input: Buffer | Uint8Array): ParsedPptxData {
       minorFontEa: null,
       majorFontCs: null,
       minorFontCs: null,
+      majorFontJpan: null,
+      minorFontJpan: null,
     },
   };
   for (const [, rel] of presRels) {

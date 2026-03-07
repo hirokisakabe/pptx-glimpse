@@ -22,6 +22,8 @@ export function parseTheme(xml: string): Theme {
         minorFontEa: null,
         majorFontCs: null,
         minorFontCs: null,
+        majorFontJpan: null,
+        minorFontJpan: null,
       },
     };
   }
@@ -38,6 +40,8 @@ export function parseTheme(xml: string): Theme {
         minorFontEa: null,
         majorFontCs: null,
         minorFontCs: null,
+        majorFontJpan: null,
+        minorFontJpan: null,
       },
     };
   }
@@ -103,6 +107,8 @@ function parseFontScheme(fontScheme: XmlNode): FontScheme {
       minorFontEa: null,
       majorFontCs: null,
       minorFontCs: null,
+      majorFontJpan: null,
+      minorFontJpan: null,
     };
 
   const majorFontNode = fontScheme.majorFont as XmlNode | undefined;
@@ -119,8 +125,19 @@ function parseFontScheme(fontScheme: XmlNode): FontScheme {
     ((majorFontNode?.cs as XmlNode | undefined)?.["@_typeface"] as string | undefined) ?? null;
   const minorFontCs =
     ((minorFontNode?.cs as XmlNode | undefined)?.["@_typeface"] as string | undefined) ?? null;
+  const majorFontJpan = findScriptFont(majorFontNode, "Jpan");
+  const minorFontJpan = findScriptFont(minorFontNode, "Jpan");
 
-  return { majorFont, minorFont, majorFontEa, minorFontEa, majorFontCs, minorFontCs };
+  return {
+    majorFont,
+    minorFont,
+    majorFontEa,
+    minorFontEa,
+    majorFontCs,
+    minorFontCs,
+    majorFontJpan,
+    minorFontJpan,
+  };
 }
 
 /**
@@ -130,11 +147,17 @@ function resolveEaFont(fontNode: XmlNode | undefined): string | null {
   const eaTypeface = (fontNode?.ea as XmlNode | undefined)?.["@_typeface"] as string | undefined;
   if (eaTypeface) return eaTypeface;
 
-  // <a:font script="Jpan" typeface="..."> にフォールバック
+  return findScriptFont(fontNode, "Jpan");
+}
+
+/**
+ * <a:font script="..." typeface="..."> からスクリプトベースのフォント名を取得する。
+ */
+function findScriptFont(fontNode: XmlNode | undefined, script: string): string | null {
   const fontItems = fontNode?.font as XmlNode[] | undefined;
   if (!fontItems) return null;
   for (const f of fontItems) {
-    if (f["@_script"] === "Jpan" && f["@_typeface"]) {
+    if (f["@_script"] === script && f["@_typeface"]) {
       return f["@_typeface"] as string;
     }
   }

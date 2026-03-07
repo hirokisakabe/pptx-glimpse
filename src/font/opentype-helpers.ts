@@ -76,15 +76,17 @@ function parseFontBuffer(
   opentype: { parse: (buffer: ArrayBuffer) => OpentypeFontWithNames },
 ): OpentypeFontWithNames[] {
   if (isTtcBuffer(arrayBuffer)) {
-    const results: OpentypeFontWithNames[] = [];
-    for (const buf of extractTtcFonts(arrayBuffer)) {
+    // TTC からは最初の1フォントのみ抽出する。
+    // CJK TTC (NotoSansCJK 等) は全フォント展開すると数百MBのメモリを消費するため。
+    const fonts = extractTtcFonts(arrayBuffer);
+    if (fonts.length > 0) {
       try {
-        results.push(opentype.parse(buf));
+        return [opentype.parse(fonts[0])];
       } catch {
-        // 個別フォントのパース失敗はスキップ
+        // パース失敗はスキップ
       }
     }
-    return results;
+    return [];
   }
   return [opentype.parse(arrayBuffer)];
 }

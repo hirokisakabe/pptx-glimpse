@@ -12,6 +12,7 @@ import { setFontMapping, resetFontMapping } from "./font/font-mapping-context.js
 import { createOpentypeSetupFromSystem } from "./font/opentype-helpers.js";
 import { setTextPathFontResolver, resetTextPathFontResolver } from "./font/text-path-context.js";
 import { enableXmlCache, clearXmlCache } from "./parser/xml-parser.js";
+import { setScriptFonts, resetScriptFonts } from "./font/script-font-context.js";
 
 export interface ConvertOptions {
   /** 変換対象のスライド番号 (1始まり)。未指定で全スライド */
@@ -55,6 +56,7 @@ export async function convertPptxToSvg(
     initWarningLogger(options?.logLevel ?? "off");
 
     const data = parsePptxData(input);
+    setScriptFonts(data.theme.fontScheme.majorFontJpan, data.theme.fontScheme.minorFontJpan);
 
     // Filter slides if specified
     const targetSlides = options?.slides
@@ -86,6 +88,7 @@ export async function convertPptxToSvg(
     resetTextMeasurer();
     resetTextPathFontResolver();
     resetFontMapping();
+    resetScriptFonts();
   }
 }
 
