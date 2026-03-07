@@ -70,22 +70,24 @@ function toArrayBuffer(data: ArrayBuffer | Uint8Array): ArrayBuffer {
 
 /**
  * バッファ (TTF/OTF または TTC) からパース済みフォント配列を返す。
- * TTC の場合は分割して各フォントをパースする。
+ * TTC の場合はメモリ消費を抑えるため最初の1フォントのみ抽出してパースする。
  */
 function parseFontBuffer(
   arrayBuffer: ArrayBuffer,
   opentype: { parse: (buffer: ArrayBuffer) => OpentypeFontWithNames },
 ): OpentypeFontWithNames[] {
   if (isTtcBuffer(arrayBuffer)) {
-    const results: OpentypeFontWithNames[] = [];
-    for (const buf of extractTtcFonts(arrayBuffer)) {
+    // TTC からは最初の1フォントのみ抽出する。
+    // CJK TTC (NotoSansCJK 等) は全フォント展開すると数百MBのメモリを消費するため。
+    const fonts = extractTtcFonts(arrayBuffer);
+    if (fonts.length > 0) {
       try {
-        results.push(opentype.parse(buf));
+        return [opentype.parse(fonts[0])];
       } catch {
-        // 個別フォントのパース失敗はスキップ
+        // パース失敗はスキップ
       }
     }
-    return results;
+    return [];
   }
   return [opentype.parse(arrayBuffer)];
 }

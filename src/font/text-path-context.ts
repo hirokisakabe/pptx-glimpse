@@ -3,6 +3,8 @@
  * opentype.js の getPath() メソッドを持つ Font オブジェクトへのアクセスを提供する。
  */
 
+import { getCurrentMappedFont } from "./font-mapping-context.js";
+
 export interface OpentypePath {
   toPathData(decimalPlaces?: number): string;
 }
@@ -18,6 +20,7 @@ export interface TextPathFontResolver {
   resolveFont(
     fontFamily: string | null | undefined,
     fontFamilyEa: string | null | undefined,
+    jpanFallback?: string | null,
   ): OpentypeFullFont | null;
 }
 
@@ -33,16 +36,35 @@ export class DefaultTextPathFontResolver implements TextPathFontResolver {
   resolveFont(
     fontFamily: string | null | undefined,
     fontFamilyEa: string | null | undefined,
+    jpanFallback?: string | null,
   ): OpentypeFullFont | null {
     if (fontFamily) {
-      const font = this.fonts.get(fontFamily);
+      const font = this.findFont(fontFamily);
       if (font) return font;
     }
     if (fontFamilyEa) {
-      const font = this.fonts.get(fontFamilyEa);
+      const font = this.findFont(fontFamilyEa);
+      if (font) return font;
+    }
+    if (jpanFallback) {
+      const font = this.findFont(jpanFallback);
       if (font) return font;
     }
     return this.defaultFont;
+  }
+
+  private findFont(name: string): OpentypeFullFont | null {
+    const direct = this.fonts.get(name);
+    if (direct) return direct;
+
+    // フォントマッピングで OSS 代替名を試行
+    const mapped = getCurrentMappedFont(name);
+    if (mapped) {
+      const mappedFont = this.fonts.get(mapped);
+      if (mappedFont) return mappedFont;
+    }
+
+    return null;
   }
 }
 

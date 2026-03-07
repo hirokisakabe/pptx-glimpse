@@ -4,6 +4,13 @@ import { extname, join } from "node:path";
 
 const FONT_EXTENSIONS = new Set([".ttf", ".otf"]);
 
+/**
+ * CJK TTC フォントの既知パターン。
+ * TTC ファイルは大量にあるとメモリを消費するため、
+ * CJK テキストに必要なもののみを選択的に読み込む。
+ */
+const CJK_TTC_PATTERNS = ["NotoSansCJK", "NotoSerifCJK"];
+
 let cachedPaths: string[] | null = null;
 let cachedAdditionalDirs: string[] | null = null;
 
@@ -21,6 +28,11 @@ function getSystemFontDirs(): string[] {
   }
 }
 
+function isCjkTtc(name: string): boolean {
+  const lower = name.toLowerCase();
+  return lower.endsWith(".ttc") && CJK_TTC_PATTERNS.some((p) => lower.includes(p.toLowerCase()));
+}
+
 function walk(dir: string, result: string[]): void {
   if (!existsSync(dir)) return;
   try {
@@ -28,7 +40,7 @@ function walk(dir: string, result: string[]): void {
       const fullPath = join(dir, entry.name);
       if (entry.isDirectory()) {
         walk(fullPath, result);
-      } else if (FONT_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
+      } else if (FONT_EXTENSIONS.has(extname(entry.name).toLowerCase()) || isCjkTtc(entry.name)) {
         result.push(fullPath);
       }
     }

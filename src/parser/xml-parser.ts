@@ -33,6 +33,7 @@ const ARRAY_TAGS = new Set([
   "AlternateContent", // mc:AlternateContent (SmartArt 等)
   "embeddedFont", // 埋め込みフォント (Embedded Font)
   "effectStyle", // エフェクトスタイル (Effect Style)
+  "font", // スクリプトベースフォント定義 (Script-based Font)
 ]);
 
 // シングルトンパーサーインスタンス。

@@ -22,6 +22,8 @@ export function parseTheme(xml: string): Theme {
         minorFontEa: null,
         majorFontCs: null,
         minorFontCs: null,
+        majorFontJpan: null,
+        minorFontJpan: null,
       },
     };
   }
@@ -38,6 +40,8 @@ export function parseTheme(xml: string): Theme {
         minorFontEa: null,
         majorFontCs: null,
         minorFontCs: null,
+        majorFontJpan: null,
+        minorFontJpan: null,
       },
     };
   }
@@ -103,6 +107,8 @@ function parseFontScheme(fontScheme: XmlNode): FontScheme {
       minorFontEa: null,
       majorFontCs: null,
       minorFontCs: null,
+      majorFontJpan: null,
+      minorFontJpan: null,
     };
 
   const majorFontNode = fontScheme.majorFont as XmlNode | undefined;
@@ -113,16 +119,49 @@ function parseFontScheme(fontScheme: XmlNode): FontScheme {
   const minorFont =
     ((minorFontNode?.latin as XmlNode | undefined)?.["@_typeface"] as string | undefined) ??
     "Calibri";
-  const majorFontEa =
-    ((majorFontNode?.ea as XmlNode | undefined)?.["@_typeface"] as string | undefined) ?? null;
-  const minorFontEa =
-    ((minorFontNode?.ea as XmlNode | undefined)?.["@_typeface"] as string | undefined) ?? null;
+  const majorFontEa = resolveEaFont(majorFontNode);
+  const minorFontEa = resolveEaFont(minorFontNode);
   const majorFontCs =
     ((majorFontNode?.cs as XmlNode | undefined)?.["@_typeface"] as string | undefined) ?? null;
   const minorFontCs =
     ((minorFontNode?.cs as XmlNode | undefined)?.["@_typeface"] as string | undefined) ?? null;
+  const majorFontJpan = findScriptFont(majorFontNode, "Jpan");
+  const minorFontJpan = findScriptFont(minorFontNode, "Jpan");
 
-  return { majorFont, minorFont, majorFontEa, minorFontEa, majorFontCs, minorFontCs };
+  return {
+    majorFont,
+    minorFont,
+    majorFontEa,
+    minorFontEa,
+    majorFontCs,
+    minorFontCs,
+    majorFontJpan,
+    minorFontJpan,
+  };
+}
+
+/**
+ * ea タグの typeface を取得し、空文字の場合は script="Jpan" のフォントにフォールバックする。
+ */
+function resolveEaFont(fontNode: XmlNode | undefined): string | null {
+  const eaTypeface = (fontNode?.ea as XmlNode | undefined)?.["@_typeface"] as string | undefined;
+  if (eaTypeface) return eaTypeface;
+
+  return findScriptFont(fontNode, "Jpan");
+}
+
+/**
+ * <a:font script="..." typeface="..."> からスクリプトベースのフォント名を取得する。
+ */
+function findScriptFont(fontNode: XmlNode | undefined, script: string): string | null {
+  const fontItems = fontNode?.font as XmlNode[] | undefined;
+  if (!fontItems) return null;
+  for (const f of fontItems) {
+    if (f["@_script"] === script && f["@_typeface"]) {
+      return f["@_typeface"] as string;
+    }
+  }
+  return null;
 }
 
 function defaultColorScheme(): ColorScheme {

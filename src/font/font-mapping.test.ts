@@ -84,4 +84,14 @@ describe("getMappedFont", () => {
     expect(getMappedFont(null, mapping)).toBeNull();
     expect(getMappedFont(undefined, mapping)).toBeNull();
   });
+
+  it("全角英数字を半角に正規化してマッチする", () => {
+    const fullMapping = createFontMapping();
+    // ＭＳ Ｐゴシック（全角P）→ MS Pゴシック（半角P）にマッチ
+    expect(getMappedFont("ＭＳ Ｐゴシック", fullMapping)).toBe("Noto Sans JP");
+    // ＭＳ Ｐ明朝（全角P）→ MS P明朝（半角P）にマッチ
+    expect(getMappedFont("ＭＳ Ｐ明朝", fullMapping)).toBe("Noto Serif JP");
+    // 全角スペース（\u3000）も半角スペースに正規化
+    expect(getMappedFont("ＭＳ\u3000Ｐゴシック", fullMapping)).toBe("Noto Sans JP");
+  });
 });

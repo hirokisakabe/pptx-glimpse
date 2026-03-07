@@ -2,6 +2,7 @@ import type { FontMapping } from "./font/font-mapping.js";
 import { createFontMapping } from "./font/font-mapping.js";
 import { resetFontMapping, setFontMapping } from "./font/font-mapping-context.js";
 import { createOpentypeSetupFromSystem } from "./font/opentype-helpers.js";
+import { resetScriptFonts, setScriptFonts } from "./font/script-font-context.js";
 import { resetTextMeasurer, setTextMeasurer } from "./font/text-measurer.js";
 import { resetTextPathFontResolver, setTextPathFontResolver } from "./font/text-path-context.js";
 import type { SlideElement } from "./model/shape.js";
@@ -55,6 +56,7 @@ export async function convertPptxToSvg(
     initWarningLogger(options?.logLevel ?? "off");
 
     const data = parsePptxData(input);
+    setScriptFonts(data.theme.fontScheme.majorFontJpan, data.theme.fontScheme.minorFontJpan);
 
     // Filter slides if specified
     const targetSlides = options?.slides
@@ -86,6 +88,7 @@ export async function convertPptxToSvg(
     resetTextMeasurer();
     resetTextPathFontResolver();
     resetFontMapping();
+    resetScriptFonts();
   }
 }
 

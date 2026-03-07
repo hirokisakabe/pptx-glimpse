@@ -47,6 +47,16 @@ export function createFontMapping(userMapping?: FontMapping): FontMapping {
  * マッピングテーブルから OSS 代替フォント名を取得する。
  * 大文字小文字を区別せずにルックアップする。
  */
+/**
+ * 全角英数字・記号を半角に正規化する。
+ * PPTX テーマでは「ＭＳ Ｐゴシック」のように全角が使われることがある。
+ */
+function normalizeFullWidth(s: string): string {
+  return s
+    .replace(/[\uff01-\uff5e]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xfee0))
+    .replace(/\u3000/g, " ");
+}
+
 export function getMappedFont(
   fontFamily: string | null | undefined,
   mapping: FontMapping,
@@ -56,10 +66,18 @@ export function getMappedFont(
   const direct = mapping[fontFamily];
   if (direct !== undefined) return direct;
 
+  const normalized = normalizeFullWidth(fontFamily);
+
+  // 正規化後の完全一致
+  if (normalized !== fontFamily) {
+    const directNormalized = mapping[normalized];
+    if (directNormalized !== undefined) return directNormalized;
+  }
+
   // 大文字小文字を無視したフォールバック
-  const lower = fontFamily.toLowerCase();
+  const lower = normalized.toLowerCase();
   for (const key of Object.keys(mapping)) {
-    if (key.toLowerCase() === lower) {
+    if (normalizeFullWidth(key).toLowerCase() === lower) {
       return mapping[key];
     }
   }

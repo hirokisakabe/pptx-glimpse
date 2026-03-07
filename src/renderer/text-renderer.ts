@@ -1,5 +1,6 @@
 import { getMetricsFallbackFont } from "../data/font-metrics.js";
 import { getCurrentMappedFont } from "../font/font-mapping-context.js";
+import { getJpanFallbackFont } from "../font/script-font-context.js";
 import { getTextMeasurer } from "../font/text-measurer.js";
 import type { TextPathFontResolver } from "../font/text-path-context.js";
 import { getTextPathFontResolver } from "../font/text-path-context.js";
@@ -709,7 +710,7 @@ function renderSegment(
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
       const fonts = part.isEa
-        ? [props.fontFamilyEa, props.fontFamily]
+        ? [props.fontFamilyEa, getJpanFallbackFont(), props.fontFamily]
         : [props.fontFamily, props.fontFamilyEa];
       const styles = buildStyleAttrs(props, fontScale, fonts);
       if (i === 0) {
@@ -1002,6 +1003,8 @@ function renderSegmentAsPath(
   else if (props.baseline < 0) yOffset = fontSizePx * 0.2;
   const effectiveY = y + yOffset;
 
+  const jpanFallback = getJpanFallbackFont();
+
   const processSegment = (
     segText: string,
     fontFamily: string | null,
@@ -1009,7 +1012,7 @@ function renderSegmentAsPath(
   ) => {
     if (segText.length === 0) return;
 
-    const font = fontResolver.resolveFont(fontFamily, fontFamilyEa);
+    const font = fontResolver.resolveFont(fontFamily, fontFamilyEa, jpanFallback);
     const segWidth = getTextMeasurer().measureTextWidth(
       segText,
       fontSize,
@@ -1048,7 +1051,7 @@ function renderSegmentAsPath(
   ) => {
     if (segText.length === 0) return;
 
-    const font = fontResolver.resolveFont(fontFamily, fontFamilyEa);
+    const font = fontResolver.resolveFont(fontFamily, fontFamilyEa, jpanFallback);
     const fillAttrs = buildPathFillAttrs(props);
 
     for (const char of segText) {

@@ -75,7 +75,8 @@ function parseEmbeddedFontList(node: XmlNode | undefined): EmbeddedFont[] | unde
   const fontArr = (Array.isArray(fonts) ? fonts : [fonts]) as XmlNode[];
   const result: EmbeddedFont[] = [];
   for (const f of fontArr) {
-    const fontNode = f.font as XmlNode | undefined;
+    const fontRaw = f.font;
+    const fontNode = (Array.isArray(fontRaw) ? fontRaw[0] : fontRaw) as XmlNode | undefined;
     if (!fontNode) continue;
     const font: EmbeddedFont = {
       typeface: (fontNode["@_typeface"] as string | undefined) ?? "",
