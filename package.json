@@ -42,6 +42,7 @@
   "files": [
     "dist"
   ],
+  "packageManager": "npm@10.9.6",
   "engines": {
     "node": ">=20"
   },
