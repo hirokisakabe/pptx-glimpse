@@ -37,15 +37,17 @@ export function collectUsedFonts(input: Buffer | Uint8Array): UsedFonts {
     // テーマフォントを収集
     collectThemeFonts(fontScheme, fonts);
 
-    // 各スライドから収集
+    // 各スライドから収集（スライドごとのマスター要素も含む）
+    const collectedMasters = new Set<SlideElement[]>();
     for (const { slideNumber, path } of data.slidePaths) {
       const parsed = parseSlideWithLayout(slideNumber, path, data);
       if (!parsed) continue;
       collectFontsFromElements(parsed.slide.elements, fonts);
+      if (!collectedMasters.has(parsed.masterElements)) {
+        collectedMasters.add(parsed.masterElements);
+        collectFontsFromElements(parsed.masterElements, fonts);
+      }
     }
-
-    // マスター要素からも収集
-    collectFontsFromElements(data.masterElements, fonts);
 
     return {
       theme: {

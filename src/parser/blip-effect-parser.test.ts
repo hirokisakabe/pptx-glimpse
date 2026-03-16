@@ -1,8 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { ColorResolver } from "../color/color-resolver.js";
 import type { ColorMap, ColorScheme } from "../model/theme.js";
-import { initWarningLogger } from "../warning-logger.js";
 import { parseBlipEffects } from "./blip-effect-parser.js";
 
 const testScheme: ColorScheme = {
@@ -122,15 +121,26 @@ describe("parseBlipEffects", () => {
     expect(result).toBeNull();
   });
 
-  it("warns for clrChange and returns null if no other effects", () => {
-    initWarningLogger("debug");
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+  it("parses clrChange with srgbClr colors", () => {
+    const result = parseBlipEffects(
+      {
+        clrChange: {
+          clrFrom: { srgbClr: { "@_val": "FFFFFF" } },
+          clrTo: { srgbClr: { "@_val": "FFFFFF", alpha: { "@_val": "0" } } },
+        },
+      },
+      resolver,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.clrChange).toEqual({
+      clrFrom: { hex: "#FFFFFF", alpha: 1 },
+      clrTo: { hex: "#FFFFFF", alpha: 0 },
+    });
+  });
+
+  it("returns null for clrChange with missing clrFrom/clrTo", () => {
     const result = parseBlipEffects({ clrChange: {} }, resolver);
     expect(result).toBeNull();
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("color change effect not implemented"),
-    );
-    warnSpy.mockRestore();
   });
 
   it("parses multiple effects", () => {

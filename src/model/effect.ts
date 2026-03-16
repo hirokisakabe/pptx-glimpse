@@ -39,6 +39,7 @@ export interface BlipEffects {
   blur: BlurEffect | null;
   lum: LumEffect | null;
   duotone: DuotoneEffect | null;
+  clrChange: ClrChangeEffect | null;
 }
 
 export interface BiLevelEffect {
@@ -58,4 +59,9 @@ export interface LumEffect {
 export interface DuotoneEffect {
   color1: ResolvedColor;
   color2: ResolvedColor;
+}
+
+export interface ClrChangeEffect {
+  clrFrom: ResolvedColor;
+  clrTo: ResolvedColor;
 }
