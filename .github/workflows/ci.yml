@@ -63,26 +63,34 @@ jobs:
           path: coverage/
           retention-days: 7
 
-      - name: Checkout main branch for coverage comparison
-        if: matrix.node-version == 22 && github.event_name == 'pull_request'
-        uses: actions/checkout@v4
+      - name: Cache main branch coverage
+        if: matrix.node-version == 22 && github.event_name == 'push'
+        uses: actions/cache/save@v4
         with:
-          ref: main
-          path: __main_branch
+          path: coverage/coverage-summary.json
+          key: coverage-main-${{ github.sha }}
 
-      - name: Generate main branch coverage
+      - name: Restore main branch coverage
+        id: restore-main-coverage
         if: matrix.node-version == 22 && github.event_name == 'pull_request'
-        working-directory: __main_branch
-        run: |
-          npm ci
-          npx vitest run --coverage --exclude 'vrt/**'
+        uses: actions/cache/restore@v4
+        with:
+          path: __main_coverage/coverage-summary.json
+          key: coverage-main-
+          restore-keys: coverage-main-
 
-      - name: Coverage summary comment
-        if: matrix.node-version == 22 && github.event_name == 'pull_request'
+      - name: Coverage summary comment (with comparison)
+        if: matrix.node-version == 22 && github.event_name == 'pull_request' && steps.restore-main-coverage.outputs.cache-matched-key != ''
         uses: davelosert/vitest-coverage-report-action@v2
         with:
           json-summary-path: coverage/coverage-summary.json
-          json-summary-compare-path: __main_branch/coverage/coverage-summary.json
+          json-summary-compare-path: __main_coverage/coverage-summary.json
+
+      - name: Coverage summary comment (without comparison)
+        if: matrix.node-version == 22 && github.event_name == 'pull_request' && steps.restore-main-coverage.outputs.cache-matched-key == ''
+        uses: davelosert/vitest-coverage-report-action@v2
+        with:
+          json-summary-path: coverage/coverage-summary.json
 
       - name: Build
         run: npm run build
