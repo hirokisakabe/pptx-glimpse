@@ -17,6 +17,7 @@ function makeBlipEffects(overrides: Partial<BlipEffects> = {}): BlipEffects {
     blur: null,
     lum: null,
     duotone: null,
+    clrChange: null,
     ...overrides,
   };
 }
@@ -89,6 +90,33 @@ describe("renderBlipEffects", () => {
     );
     const matches = result.filterDefs.match(/type="saturate" values="0"/g);
     expect(matches).toHaveLength(1);
+  });
+
+  it("renders clrChange filter for transparent color (alpha=0)", () => {
+    const result = renderBlipEffects(
+      makeBlipEffects({
+        clrChange: {
+          clrFrom: { hex: "#FFFFFF", alpha: 1 },
+          clrTo: { hex: "#FFFFFF", alpha: 0 },
+        },
+      }),
+    );
+    expect(result.filterDefs).toContain("feColorMatrix");
+    expect(result.filterDefs).toContain('result="clrChangeResult"');
+    expect(result.filterAttr).toContain("filter=");
+  });
+
+  it("ignores clrChange when clrTo.alpha is not 0", () => {
+    const result = renderBlipEffects(
+      makeBlipEffects({
+        clrChange: {
+          clrFrom: { hex: "#FFFFFF", alpha: 1 },
+          clrTo: { hex: "#FF0000", alpha: 1 },
+        },
+      }),
+    );
+    expect(result.filterAttr).toBe("");
+    expect(result.filterDefs).toBe("");
   });
 
   it("chains multiple effects", () => {

@@ -69,11 +69,11 @@ export async function convertPptxToSvg(
       const parsed = parseSlideWithLayout(slideNumber, path, data);
       if (!parsed) continue;
 
-      const { slide, layoutElements, layoutShowMasterSp } = parsed;
+      const { slide, layoutElements, layoutShowMasterSp, masterElements } = parsed;
 
       // Merge shapes: master (back) → layout → slide (front)
       const effectiveMasterElements =
-        slide.showMasterSp && layoutShowMasterSp ? data.masterElements : [];
+        slide.showMasterSp && layoutShowMasterSp ? masterElements : [];
       slide.elements = mergeElements(effectiveMasterElements, layoutElements, slide.elements);
 
       const svg = renderSlideToSvg(slide, data.presInfo.slideSize);

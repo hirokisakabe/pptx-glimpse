@@ -3,12 +3,12 @@ import type {
   BiLevelEffect,
   BlipEffects,
   BlurEffect,
+  ClrChangeEffect,
   DuotoneEffect,
   LumEffect,
 } from "../model/effect.js";
 import type { ResolvedColor } from "../model/fill.js";
 import { asEmu } from "../utils/unit-types.js";
-import { warn } from "../warning-logger.js";
 import type { XmlNode } from "./xml-parser.js";
 
 const PRESET_COLORS: Record<string, string> = {
@@ -33,16 +33,13 @@ export function parseBlipEffects(
   const blur = parseBlur(blipNode.blur as XmlNode | undefined);
   const lum = parseLum(blipNode.lum as XmlNode | undefined);
   const duotone = parseDuotone(blipNode.duotone as XmlNode | undefined, colorResolver);
+  const clrChange = parseClrChange(blipNode.clrChange as XmlNode | undefined, colorResolver);
 
-  if (blipNode.clrChange !== undefined) {
-    warn("blip.clrChange", "color change effect not implemented");
-  }
-
-  if (!grayscale && !biLevel && !blur && !lum && !duotone) {
+  if (!grayscale && !biLevel && !blur && !lum && !duotone && !clrChange) {
     return null;
   }
 
-  return { grayscale, biLevel, blur, lum, duotone };
+  return { grayscale, biLevel, blur, lum, duotone, clrChange };
 }
 
 function parseBiLevel(node: XmlNode | undefined): BiLevelEffect | null {
@@ -87,6 +84,23 @@ function parseDuotone(
 
   if (colors.length < 2) return null;
   return { color1: colors[0], color2: colors[1] };
+}
+
+function parseClrChange(
+  node: XmlNode | undefined,
+  colorResolver: ColorResolver,
+): ClrChangeEffect | null {
+  if (!node) return null;
+
+  const clrFrom = node.clrFrom as XmlNode | undefined;
+  const clrTo = node.clrTo as XmlNode | undefined;
+  if (!clrFrom || !clrTo) return null;
+
+  const from = colorResolver.resolve(clrFrom);
+  const to = colorResolver.resolve(clrTo);
+  if (!from || !to) return null;
+
+  return { clrFrom: from, clrTo: to };
 }
 
 function resolveColorNode(

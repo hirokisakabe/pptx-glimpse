@@ -31,11 +31,22 @@ import {
 } from "./parser/slide-master-parser.js";
 import { parseSlide } from "./parser/slide-parser.js";
 import { parseTheme } from "./parser/theme-parser.js";
+import { parseXml, type XmlNode } from "./parser/xml-parser.js";
 import { applyTextStyleInheritance } from "./text-style-resolver.js";
+
+interface MasterData {
+  colorMap: ColorMap;
+  colorResolver: ColorResolver;
+  background: Background | null;
+  elements: SlideElement[];
+  txStyles: TxStyles | undefined;
+  placeholderStyles: PlaceholderStyleInfo[];
+}
 
 interface ParsedPptxData {
   presInfo: PresentationInfo;
   theme: Theme;
+  /** @deprecated Use per-slide master data instead. Kept for compatibility. */
   colorResolver: ColorResolver;
   masterBackground: Background | null;
   masterElements: SlideElement[];
@@ -43,6 +54,8 @@ interface ParsedPptxData {
   masterPlaceholderStyles: PlaceholderStyleInfo[];
   slidePaths: { slideNumber: number; path: string }[];
   archive: PptxArchive;
+  /** Cache of parsed master data keyed by master file path */
+  masterCache: Map<string, MasterData>;
 }
 
 export function parsePptxData(input: Buffer | Uint8Array): ParsedPptxData {
@@ -82,51 +95,25 @@ export function parsePptxData(input: Buffer | Uint8Array): ParsedPptxData {
     }
   }
 
-  // Parse slide master for color map and background
-  let colorMap: ColorMap = defaultColorMap();
-  let masterPath: string | null = null;
+  // Parse all slide masters and cache their data
+  const masterCache = new Map<string, MasterData>();
+  let firstMasterPath: string | null = null;
   for (const [, rel] of presRels) {
     if (rel.type.includes("slideMaster")) {
-      masterPath = resolveRelationshipTarget("ppt/presentation.xml", rel.target);
-      const masterXml = archive.files.get(masterPath);
-      if (masterXml) {
-        colorMap = parseSlideMasterColorMap(masterXml);
-      }
-      break;
+      const mPath = resolveRelationshipTarget("ppt/presentation.xml", rel.target);
+      if (!firstMasterPath) firstMasterPath = mPath;
+      parseMasterDataCached(mPath, archive, theme, masterCache);
     }
   }
 
-  const colorResolver = new ColorResolver(theme.colorScheme, colorMap);
-
-  // Parse master background and shapes (used as fallback)
-  const masterXml = masterPath ? archive.files.get(masterPath) : undefined;
-  let masterFillContext: FillParseContext | undefined;
-  if (masterPath) {
-    const masterRelsPath = buildRelsPath(masterPath);
-    const masterRelsXml = archive.files.get(masterRelsPath);
-    const masterRels = masterRelsXml
-      ? parseRelationships(masterRelsXml)
-      : new Map<string, Relationship>();
-    masterFillContext = { rels: masterRels, archive, basePath: masterPath };
-  }
-  const masterBackground = masterXml
-    ? parseSlideMasterBackground(masterXml, colorResolver, masterFillContext)
-    : null;
-  const masterElements =
-    masterPath && masterXml
-      ? parseSlideMasterElements(
-          masterXml,
-          masterPath,
-          archive,
-          colorResolver,
-          theme.fontScheme,
-          theme.fmtScheme,
-        )
-      : [];
-  const masterTxStyles = masterXml ? parseSlideMasterTxStyles(masterXml, colorResolver) : undefined;
-  const masterPlaceholderStyles = masterXml
-    ? parseSlideMasterPlaceholderStyles(masterXml, colorResolver)
-    : [];
+  // Use first master as default (for backward compatibility)
+  const defaultMaster = firstMasterPath ? masterCache.get(firstMasterPath) : undefined;
+  const colorResolver =
+    defaultMaster?.colorResolver ?? new ColorResolver(theme.colorScheme, defaultColorMap());
+  const masterBackground = defaultMaster?.background ?? null;
+  const masterElements = defaultMaster?.elements ?? [];
+  const masterTxStyles = defaultMaster?.txStyles;
+  const masterPlaceholderStyles = defaultMaster?.placeholderStyles ?? [];
 
   // Resolve slide paths from relationships
   const slidePaths: { slideNumber: number; path: string }[] = [];
@@ -149,6 +136,7 @@ export function parsePptxData(input: Buffer | Uint8Array): ParsedPptxData {
     masterPlaceholderStyles,
     slidePaths,
     archive,
+    masterCache,
   };
 }
 
@@ -156,6 +144,7 @@ interface ParsedSlide {
   slide: Slide;
   layoutElements: SlideElement[];
   layoutShowMasterSp: boolean;
+  masterElements: SlideElement[];
 }
 
 export function parseSlideWithLayout(
@@ -166,12 +155,61 @@ export function parseSlideWithLayout(
   const slideXml = data.archive.files.get(path);
   if (!slideXml) return null;
 
+  // Resolve slide → layout → master chain to get correct ColorResolver
+  const slideRelsPath = buildRelsPath(path);
+  const slideRelsXml = data.archive.files.get(slideRelsPath);
+  const slideRels = slideRelsXml
+    ? parseRelationships(slideRelsXml)
+    : new Map<string, Relationship>();
+
+  let layoutPath: string | null = null;
+  let layoutXml: string | undefined;
+  let layoutRels = new Map<string, Relationship>();
+
+  for (const [, rel] of slideRels) {
+    if (rel.type.includes("slideLayout")) {
+      layoutPath = resolveRelationshipTarget(path, rel.target);
+      layoutXml = data.archive.files.get(layoutPath);
+      if (layoutXml) {
+        const layoutRelsPath = buildRelsPath(layoutPath);
+        const layoutRelsXml = data.archive.files.get(layoutRelsPath);
+        layoutRels = layoutRelsXml
+          ? parseRelationships(layoutRelsXml)
+          : new Map<string, Relationship>();
+      }
+      break;
+    }
+  }
+
+  // Resolve the correct slide master from layout → master chain
+  let slideMasterData: MasterData | undefined;
+  for (const [, rel] of layoutRels) {
+    if (rel.type.includes("slideMaster") && layoutPath) {
+      const masterPath = resolveRelationshipTarget(layoutPath, rel.target);
+      slideMasterData = parseMasterDataCached(
+        masterPath,
+        data.archive,
+        data.theme,
+        data.masterCache,
+      );
+      break;
+    }
+  }
+
+  // Apply clrMapOvr (color map override) from slide/layout if present
+  const slideColorResolver = resolveSlideColorResolver(
+    slideXml,
+    layoutXml,
+    slideMasterData,
+    data.theme,
+  );
+
   const slide = parseSlide(
     slideXml,
     path,
     slideNumber,
     data.archive,
-    data.colorResolver,
+    slideColorResolver,
     data.theme.fontScheme,
     data.theme.fmtScheme,
   );
@@ -180,67 +218,53 @@ export function parseSlideWithLayout(
   let layoutElements: SlideElement[] = [];
   let layoutPlaceholderStyles: PlaceholderStyleInfo[] = [];
   let layoutShowMasterSp = true;
-  const slideRelsPath = buildRelsPath(path);
-  const slideRelsXml = data.archive.files.get(slideRelsPath);
-  if (slideRelsXml) {
-    const slideRels = parseRelationships(slideRelsXml);
-    for (const [, rel] of slideRels) {
-      if (rel.type.includes("slideLayout")) {
-        const layoutPath = resolveRelationshipTarget(path, rel.target);
-        const layoutXml = data.archive.files.get(layoutPath);
-        if (layoutXml) {
-          // Fallback background: slide → layout → master
-          if (!slide.background) {
-            const layoutRelsPath = buildRelsPath(layoutPath);
-            const layoutRelsXml = data.archive.files.get(layoutRelsPath);
-            const layoutRels = layoutRelsXml
-              ? parseRelationships(layoutRelsXml)
-              : new Map<string, Relationship>();
-            const layoutFillContext: FillParseContext = {
-              rels: layoutRels,
-              archive: data.archive,
-              basePath: layoutPath,
-            };
-            slide.background = parseSlideLayoutBackground(
-              layoutXml,
-              data.colorResolver,
-              layoutFillContext,
-            );
-          }
-          // Parse layout shapes
-          layoutElements = parseSlideLayoutElements(
-            layoutXml,
-            layoutPath,
-            data.archive,
-            data.colorResolver,
-            data.theme.fontScheme,
-            data.theme.fmtScheme,
-          );
-          // Extract placeholder styles for text style inheritance
-          layoutPlaceholderStyles = parseSlideLayoutPlaceholderStyles(
-            layoutXml,
-            data.colorResolver,
-          );
-          layoutShowMasterSp = parseSlideLayoutShowMasterSp(layoutXml);
-        }
-        break;
-      }
+  if (layoutXml && layoutPath) {
+    // Fallback background: slide → layout → master
+    if (!slide.background) {
+      const layoutFillContext: FillParseContext = {
+        rels: layoutRels,
+        archive: data.archive,
+        basePath: layoutPath,
+      };
+      slide.background = parseSlideLayoutBackground(
+        layoutXml,
+        slideColorResolver,
+        layoutFillContext,
+      );
     }
+    // Parse layout shapes
+    layoutElements = parseSlideLayoutElements(
+      layoutXml,
+      layoutPath,
+      data.archive,
+      slideColorResolver,
+      data.theme.fontScheme,
+      data.theme.fmtScheme,
+    );
+    // Extract placeholder styles for text style inheritance
+    layoutPlaceholderStyles = parseSlideLayoutPlaceholderStyles(layoutXml, slideColorResolver);
+    layoutShowMasterSp = parseSlideLayoutShowMasterSp(layoutXml);
   }
   if (!slide.background) {
-    slide.background = data.masterBackground;
+    slide.background = slideMasterData?.background ?? data.masterBackground;
   }
+
+  const masterPlaceholderStyles =
+    slideMasterData?.placeholderStyles ?? data.masterPlaceholderStyles;
+  const masterTxStyles = slideMasterData?.txStyles ?? data.masterTxStyles;
 
   // Apply text style inheritance chain before merging
   applyTextStyleInheritance(slide.elements, {
     layoutPlaceholderStyles,
-    masterPlaceholderStyles: data.masterPlaceholderStyles,
-    txStyles: data.masterTxStyles,
+    masterPlaceholderStyles,
+    txStyles: masterTxStyles,
     defaultTextStyle: data.presInfo.defaultTextStyle,
     fontScheme: data.theme.fontScheme,
   });
 
-  return { slide, layoutElements, layoutShowMasterSp };
+  const masterElements = slideMasterData?.elements ?? data.masterElements;
+
+  return { slide, layoutElements, layoutShowMasterSp, masterElements };
 }
 
 function defaultColorScheme() {
@@ -260,19 +284,138 @@ function defaultColorScheme() {
   };
 }
 
-function defaultColorMap() {
+function defaultColorMap(): ColorMap {
   return {
-    bg1: "lt1" as const,
-    tx1: "dk1" as const,
-    bg2: "lt2" as const,
-    tx2: "dk2" as const,
-    accent1: "accent1" as const,
-    accent2: "accent2" as const,
-    accent3: "accent3" as const,
-    accent4: "accent4" as const,
-    accent5: "accent5" as const,
-    accent6: "accent6" as const,
-    hlink: "hlink" as const,
-    folHlink: "folHlink" as const,
+    bg1: "lt1",
+    tx1: "dk1",
+    bg2: "lt2",
+    tx2: "dk2",
+    accent1: "accent1",
+    accent2: "accent2",
+    accent3: "accent3",
+    accent4: "accent4",
+    accent5: "accent5",
+    accent6: "accent6",
+    hlink: "hlink",
+    folHlink: "folHlink",
   };
+}
+
+function parseMasterDataCached(
+  masterPath: string,
+  archive: PptxArchive,
+  theme: Theme,
+  cache: Map<string, MasterData>,
+): MasterData | undefined {
+  const cached = cache.get(masterPath);
+  if (cached) return cached;
+
+  const masterXml = archive.files.get(masterPath);
+  if (!masterXml) return undefined;
+
+  const colorMap = parseSlideMasterColorMap(masterXml);
+  const colorResolver = new ColorResolver(theme.colorScheme, colorMap);
+
+  const masterRelsPath = buildRelsPath(masterPath);
+  const masterRelsXml = archive.files.get(masterRelsPath);
+  const masterRels = masterRelsXml
+    ? parseRelationships(masterRelsXml)
+    : new Map<string, Relationship>();
+  const masterFillContext: FillParseContext = { rels: masterRels, archive, basePath: masterPath };
+
+  const background = parseSlideMasterBackground(masterXml, colorResolver, masterFillContext);
+  const elements = parseSlideMasterElements(
+    masterXml,
+    masterPath,
+    archive,
+    colorResolver,
+    theme.fontScheme,
+    theme.fmtScheme,
+  );
+  const txStyles = parseSlideMasterTxStyles(masterXml, colorResolver);
+  const placeholderStyles = parseSlideMasterPlaceholderStyles(masterXml, colorResolver);
+
+  const data: MasterData = {
+    colorMap,
+    colorResolver,
+    background,
+    elements,
+    txStyles,
+    placeholderStyles,
+  };
+  cache.set(masterPath, data);
+  return data;
+}
+
+function resolveSlideColorResolver(
+  slideXml: string,
+  layoutXml: string | undefined,
+  masterData: MasterData | undefined,
+  theme: Theme,
+): ColorResolver {
+  const baseColorMap = masterData?.colorMap ?? defaultColorMap();
+
+  // Check layout clrMapOvr first, then slide clrMapOvr
+  const layoutOverride = layoutXml ? parseClrMapOverride(layoutXml) : null;
+  const slideOverride = parseClrMapOverride(slideXml);
+
+  // Apply overrides: layout override replaces master, slide override replaces layout
+  let effectiveColorMap = baseColorMap;
+  if (layoutOverride) {
+    effectiveColorMap = { ...effectiveColorMap, ...layoutOverride };
+  }
+  if (slideOverride) {
+    effectiveColorMap = { ...effectiveColorMap, ...slideOverride };
+  }
+
+  // If no overrides, reuse master's colorResolver
+  if (!layoutOverride && !slideOverride && masterData) {
+    return masterData.colorResolver;
+  }
+
+  return new ColorResolver(theme.colorScheme, effectiveColorMap);
+}
+
+function parseClrMapOverride(xml: string): Partial<ColorMap> | null {
+  // Quick check to avoid parsing XML unnecessarily
+  if (!xml.includes("clrMapOvr")) return null;
+
+  const parsed = parseXml(xml);
+
+  // Navigate to root element (sld or sldLayout)
+  const root = (parsed.sld ?? parsed.sldLayout) as XmlNode | undefined;
+  if (!root) return null;
+
+  const clrMapOvr = root.clrMapOvr as XmlNode | undefined;
+  if (!clrMapOvr) return null;
+
+  // masterClrMapping = use master as-is (no override)
+  if (clrMapOvr.masterClrMapping !== undefined) return null;
+
+  // overrideClrMapping = individual attribute overrides
+  const override = clrMapOvr.overrideClrMapping as XmlNode | undefined;
+  if (!override) return null;
+
+  const result: Partial<ColorMap> = {};
+  const keys: (keyof ColorMap)[] = [
+    "bg1",
+    "tx1",
+    "bg2",
+    "tx2",
+    "accent1",
+    "accent2",
+    "accent3",
+    "accent4",
+    "accent5",
+    "accent6",
+    "hlink",
+    "folHlink",
+  ];
+  for (const key of keys) {
+    const val = override[`@_${key}`] as string | undefined;
+    if (val) {
+      (result as Record<string, string>)[key] = val;
+    }
+  }
+  return Object.keys(result).length > 0 ? result : null;
 }

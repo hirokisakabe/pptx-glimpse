@@ -78,6 +78,28 @@ export function renderBlipEffects(blipEffects: BlipEffects | null): BlipEffectRe
     lastResult = "duotoneResult";
   }
 
+  if (blipEffects.clrChange && blipEffects.clrChange.clrTo.alpha === 0) {
+    // "Set Transparent Color" approximation using SVG feColorMatrix.
+    // Computes alpha = scale * (R + G + B - Rf - Gf - Bf).
+    // Pixels matching clrFrom (where R+G+B ≈ Rf+Gf+Bf) get alpha near 0.
+    // This is an approximation: near-clrFrom colors become semi-transparent,
+    // and colors darker than clrFrom may also lose alpha. Works well for the
+    // common "white → transparent" case. Exact per-pixel color keying is not
+    // achievable with SVG filters alone.
+    // Only alpha=0 targets are supported; general color replacement is not.
+    const { clrFrom } = blipEffects.clrChange;
+    const [rf, gf, bf] = hexToRgbNorm(clrFrom.hex);
+    const scale = 20;
+    primitives.push(
+      `<feColorMatrix in="${lastResult}" type="matrix" values="` +
+        `1 0 0 0 0 ` +
+        `0 1 0 0 0 ` +
+        `0 0 1 0 0 ` +
+        `${round(scale)} ${round(scale)} ${round(scale)} 0 ${round(-scale * (rf + gf + bf))}" result="clrChangeResult"/>`,
+    );
+    lastResult = "clrChangeResult";
+  }
+
   if (primitives.length === 0) return { filterAttr: "", filterDefs: "" };
 
   const id = `blip-effect-${crypto.randomUUID()}`;
