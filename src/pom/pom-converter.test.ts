@@ -1,7 +1,19 @@
 import JSZip from "jszip";
+import path from "path";
 import { beforeAll, describe, expect, it } from "vitest";
 
 import { convertPptxToPom } from "./index.js";
+
+// Import pom's parseXml via absolute path to bypass package.json "exports" restriction
+async function loadParseXml(): Promise<(xml: string) => unknown[]> {
+  const pomParseXmlPath = path.join(
+    process.cwd(),
+    "node_modules/@hirokisakabe/pom/dist/parseXml/parseXml.js",
+  );
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  const mod: { parseXml: (xml: string) => unknown[] } = await import(pomParseXmlPath);
+  return mod.parseXml;
+}
 
 // --- Minimal PPTX XML templates ---
 
@@ -175,7 +187,7 @@ describe("convertPptxToPom", () => {
       const xml = result[0].xml;
       expect(xml).toContain("<Shape");
       expect(xml).toContain('shapeType="rect"');
-      expect(xml).toContain('fill.color="4472C4"');
+      expect(xml).toContain('fill="{&quot;color&quot;:&quot;4472C4&quot;}"');
       expect(xml).toContain('bold="true"');
       expect(xml).toContain('color="FFFFFF"');
       expect(xml).toContain('alignText="center"');
@@ -256,7 +268,7 @@ describe("convertPptxToPom", () => {
       const xml = result[0].xml;
       expect(xml).toContain("<Shape");
       expect(xml).toContain('shapeType="ellipse"');
-      expect(xml).toContain('fill.color="ED7D31"');
+      expect(xml).toContain('fill="{&quot;color&quot;:&quot;ED7D31&quot;}"');
     });
   });
 
@@ -372,7 +384,7 @@ describe("convertPptxToPom", () => {
       const xml = result[0].xml;
       expect(xml).toContain("<Line");
       expect(xml).toContain('color="FF0000"');
-      expect(xml).toContain('endArrow.type="triangle"');
+      expect(xml).toContain('endArrow="{&quot;type&quot;:&quot;triangle&quot;}"');
     });
   });
 
@@ -400,6 +412,153 @@ describe("convertPptxToPom", () => {
       const result = convertPptxToPom(pptx);
       const xml = result[0].xml;
       expect(xml).toContain('backgroundColor="1A1A2E"');
+    });
+  });
+
+  describe("pom schema validation", () => {
+    let parseXml: (xml: string) => unknown[];
+
+    beforeAll(async () => {
+      parseXml = await loadParseXml();
+    });
+
+    it("shape with fill and line passes pom parseXml validation", async () => {
+      const pptx = await createPptx(
+        makeSlideXml(`
+        <p:sp>
+          <p:nvSpPr><p:cNvPr id="2" name="Rect 1"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+          <p:spPr>
+            <a:xfrm><a:off x="457200" y="274638"/><a:ext cx="3048000" cy="1143000"/></a:xfrm>
+            <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+            <a:solidFill><a:srgbClr val="4472C4"/></a:solidFill>
+            <a:ln w="25400"><a:solidFill><a:srgbClr val="2F528F"/></a:solidFill></a:ln>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr anchor="ctr"/>
+            <a:lstStyle/>
+            <a:p>
+              <a:pPr algn="ctr"/>
+              <a:r>
+                <a:rPr lang="en-US" sz="2400" b="1">
+                  <a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill>
+                </a:rPr>
+                <a:t>Hello World</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>`),
+      );
+      const result = convertPptxToPom(pptx);
+      expect(() => parseXml(result[0].xml)).not.toThrow();
+    });
+
+    it("text-only shape passes pom parseXml validation", async () => {
+      const pptx = await createPptx(
+        makeSlideXml(`
+        <p:sp>
+          <p:nvSpPr><p:cNvPr id="2" name="TextBox 1"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+          <p:spPr>
+            <a:xfrm><a:off x="914400" y="914400"/><a:ext cx="4572000" cy="914400"/></a:xfrm>
+            <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/>
+            <a:lstStyle/>
+            <a:p>
+              <a:r>
+                <a:rPr lang="en-US" sz="1800" i="1">
+                  <a:solidFill><a:srgbClr val="333333"/></a:solidFill>
+                </a:rPr>
+                <a:t>Plain text</a:t>
+              </a:r>
+            </a:p>
+          </p:txBody>
+        </p:sp>`),
+      );
+      const result = convertPptxToPom(pptx);
+      expect(() => parseXml(result[0].xml)).not.toThrow();
+    });
+
+    it("connector with arrow passes pom parseXml validation", async () => {
+      const pptx = await createPptx(
+        makeSlideXml(`
+        <p:cxnSp>
+          <p:nvCxnSpPr>
+            <p:cNvPr id="5" name="Connector 1"/>
+            <p:cNvCxnSpPr/>
+            <p:nvPr/>
+          </p:nvCxnSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="914400" y="914400"/>
+              <a:ext cx="4572000" cy="0"/>
+            </a:xfrm>
+            <a:prstGeom prst="line"><a:avLst/></a:prstGeom>
+            <a:ln w="25400">
+              <a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>
+              <a:tailEnd type="triangle"/>
+            </a:ln>
+          </p:spPr>
+        </p:cxnSp>`),
+      );
+      const result = convertPptxToPom(pptx);
+      expect(() => parseXml(result[0].xml)).not.toThrow();
+    });
+
+    it("table passes pom parseXml validation", async () => {
+      const pptx = await createPptx(
+        makeSlideXml(`
+        <p:graphicFrame>
+          <p:nvGraphicFramePr>
+            <p:cNvPr id="4" name="Table 1"/>
+            <p:cNvGraphicFramePr><a:graphicFrameLocks noGrp="1"/></p:cNvGraphicFramePr>
+            <p:nvPr/>
+          </p:nvGraphicFramePr>
+          <p:xfrm><a:off x="914400" y="1828800"/><a:ext cx="7315200" cy="1828800"/></p:xfrm>
+          <a:graphic>
+            <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table">
+              <a:tbl>
+                <a:tblGrid>
+                  <a:gridCol w="3657600"/>
+                  <a:gridCol w="3657600"/>
+                </a:tblGrid>
+                <a:tr h="914400">
+                  <a:tc>
+                    <a:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="1400" b="1"/><a:t>H1</a:t></a:r></a:p></a:txBody>
+                    <a:tcPr><a:solidFill><a:srgbClr val="4472C4"/></a:solidFill></a:tcPr>
+                  </a:tc>
+                  <a:tc>
+                    <a:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="1400"/><a:t>H2</a:t></a:r></a:p></a:txBody>
+                    <a:tcPr/>
+                  </a:tc>
+                </a:tr>
+              </a:tbl>
+            </a:graphicData>
+          </a:graphic>
+        </p:graphicFrame>`),
+      );
+      const result = convertPptxToPom(pptx);
+      expect(() => parseXml(result[0].xml)).not.toThrow();
+    });
+
+    it("empty slide passes pom parseXml validation", async () => {
+      const pptx = await createPptx(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:cSld>
+    <p:bg>
+      <p:bgPr>
+        <a:solidFill><a:srgbClr val="1A1A2E"/></a:solidFill>
+        <a:effectLst/>
+      </p:bgPr>
+    </p:bg>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr/>
+    </p:spTree>
+  </p:cSld>
+</p:sld>`);
+      const result = convertPptxToPom(pptx);
+      expect(() => parseXml(result[0].xml)).not.toThrow();
     });
   });
 });

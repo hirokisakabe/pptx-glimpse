@@ -166,13 +166,9 @@ function renderShapeNode(node: PomShapeNode, indent: number): string {
   const attrs: string[] = [];
   addBaseAttrs(attrs, node);
   attrs.push(a("shapeType", node.shapeType));
-  if (node.fill?.color) attrs.push(a("fill.color", node.fill.color));
-  if (node.fill?.transparency !== undefined)
-    attrs.push(a("fill.transparency", node.fill.transparency));
-  if (node.line?.color) attrs.push(a("line.color", node.line.color));
-  if (node.line?.width !== undefined) attrs.push(a("line.width", node.line.width));
-  if (node.line?.dashType) attrs.push(a("line.dashType", node.line.dashType));
-  addShadowAttrs(attrs, node.shadow);
+  addJsonAttr(attrs, "fill", node.fill);
+  addJsonAttr(attrs, "line", node.line);
+  addJsonAttr(attrs, "shadow", node.shadow);
   addTextStyleAttrs(attrs, node);
 
   const pad = "  ".repeat(indent);
@@ -194,7 +190,7 @@ function renderChartNode(node: PomChartNode, indent: number): string {
   if (node.title) attrs.push(a("title", node.title));
   if (node.showLegend) attrs.push(a("showLegend", true));
   if (node.chartColors && node.chartColors.length > 0) {
-    attrs.push(a("chartColors", node.chartColors.join(",")));
+    attrs.push(`chartColors="${escapeXmlAttr(JSON.stringify(node.chartColors))}"`);
   }
   if (node.radarStyle) attrs.push(a("radarStyle", node.radarStyle));
 
@@ -231,20 +227,8 @@ function renderLineNode(node: PomLineNode, indent: number): string {
   if (node.color) attrs.push(a("color", node.color));
   if (node.lineWidth !== undefined) attrs.push(a("lineWidth", node.lineWidth));
   if (node.dashType) attrs.push(a("dashType", node.dashType));
-  if (node.beginArrow !== undefined) {
-    if (typeof node.beginArrow === "boolean") {
-      attrs.push(a("beginArrow", true));
-    } else if (node.beginArrow.type) {
-      attrs.push(a("beginArrow.type", node.beginArrow.type));
-    }
-  }
-  if (node.endArrow !== undefined) {
-    if (typeof node.endArrow === "boolean") {
-      attrs.push(a("endArrow", true));
-    } else if (node.endArrow.type) {
-      attrs.push(a("endArrow.type", node.endArrow.type));
-    }
-  }
+  addArrowAttr(attrs, "beginArrow", node.beginArrow);
+  addArrowAttr(attrs, "endArrow", node.endArrow);
 
   const pad = "  ".repeat(indent);
   return `${pad}<Line${attrStr(attrs)} />`;
@@ -336,11 +320,7 @@ function addBaseAttrs(attrs: string[], node: BaseNodeLike): void {
   if (node.w !== undefined) attrs.push(a("w", node.w));
   if (node.h !== undefined) attrs.push(a("h", node.h));
   if (node.backgroundColor) attrs.push(a("backgroundColor", node.backgroundColor));
-  if (node.border) {
-    if (node.border.color) attrs.push(a("border.color", node.border.color));
-    if (node.border.width !== undefined) attrs.push(a("border.width", node.border.width));
-    if (node.border.dashType) attrs.push(a("border.dashType", node.border.dashType));
-  }
+  addJsonAttr(attrs, "border", node.border);
   if (node.borderRadius !== undefined) attrs.push(a("borderRadius", node.borderRadius));
   if (node.opacity !== undefined && node.opacity !== 1) attrs.push(a("opacity", node.opacity));
   if (node.padding !== undefined) {
@@ -378,24 +358,33 @@ function addTextStyleAttrs(
     attrs.push(a("lineSpacingMultiple", node.lineSpacingMultiple));
 }
 
-function addShadowAttrs(
+/** Serialize an object value as a JSON attribute, omitting undefined fields */
+function addJsonAttr(
   attrs: string[],
-  shadow?: {
-    type?: string;
-    color?: string;
-    opacity?: number;
-    blur?: number;
-    offset?: number;
-    angle?: number;
-  },
+  name: string,
+  obj: object | undefined,
 ): void {
-  if (!shadow) return;
-  if (shadow.type) attrs.push(a("shadow.type", shadow.type));
-  if (shadow.color) attrs.push(a("shadow.color", shadow.color));
-  if (shadow.opacity !== undefined) attrs.push(a("shadow.opacity", shadow.opacity));
-  if (shadow.blur !== undefined) attrs.push(a("shadow.blur", shadow.blur));
-  if (shadow.offset !== undefined) attrs.push(a("shadow.offset", shadow.offset));
-  if (shadow.angle !== undefined) attrs.push(a("shadow.angle", shadow.angle));
+  if (!obj) return;
+  const cleaned: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(obj)) {
+    if (v !== undefined) cleaned[k] = v;
+  }
+  if (Object.keys(cleaned).length === 0) return;
+  attrs.push(`${name}="${escapeXmlAttr(JSON.stringify(cleaned))}"`);
+}
+
+/** Serialize a line arrow attribute (boolean | {type}) */
+function addArrowAttr(
+  attrs: string[],
+  name: string,
+  arrow: boolean | { type?: string } | undefined,
+): void {
+  if (arrow === undefined) return;
+  if (typeof arrow === "boolean") {
+    attrs.push(a(name, true));
+  } else {
+    addJsonAttr(attrs, name, arrow as Record<string, unknown>);
+  }
 }
 
 /** Build a single XML attribute string with proper escaping */
