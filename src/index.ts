@@ -9,5 +9,7 @@ export {
   createOpentypeSetupFromBuffers,
   createOpentypeTextMeasurerFromBuffers,
 } from "./font/opentype-helpers.js";
+export type { ConvertPptxToPomOptions, PomSlide } from "./pom/index.js";
+export { convertPptxToPom } from "./pom/index.js";
 export type { LogLevel, WarningEntry, WarningSummary } from "./warning-logger.js";
 export { getWarningEntries, getWarningSummary } from "./warning-logger.js";
