@@ -1,5 +1,11 @@
 # pptx-glimpse
 
+## 0.4.1
+
+### Patch Changes
+
+- 31b78b1: roundRect 系プリセットジオメトリの adj 値を OOXML 仕様通り 0〜50000 にクランプするよう修正
+
 ## 0.4.0
 
 ### Minor Changes
