@@ -815,6 +815,22 @@ describe("parse-render integration: shape-level hyperlink", () => {
 });
 
 // ---------------------------------------------------------------------------
+// SVG ルート要素の overflow 属性
+// ---------------------------------------------------------------------------
+
+describe("parse-render integration: SVG overflow", () => {
+  it("renderSlideToSvg の SVG ルート要素に overflow='hidden' が含まれる", () => {
+    const slide = {
+      elements: [],
+      background: null,
+    };
+    const slideSize = { width: 9144000, height: 5143500 };
+    const svg = renderSlideToSvg(slide, slideSize);
+    expect(svg).toContain('overflow="hidden"');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // テキストアウトライン (rPr.ln)
 // ---------------------------------------------------------------------------
 

@@ -20,7 +20,7 @@ export function renderSlideToSvg(slide: Slide, slideSize: SlideSize): string {
   const defs: string[] = [];
 
   parts.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" overflow="hidden">`,
   );
 
   // Background
