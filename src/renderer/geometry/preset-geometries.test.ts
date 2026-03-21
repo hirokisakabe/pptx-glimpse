@@ -30,6 +30,46 @@ describe("getPresetGeometrySvg", () => {
     expect(svg).toContain("rx=");
   });
 
+  it("clamps roundRect adj to 0..50000", () => {
+    // adj exceeding 50000 should be clamped to 50000 (radius = 50% of min(w,h))
+    const svgOver = getPresetGeometrySvg("roundRect", 100, 100, { adj: 112199 });
+    expect(svgOver).toContain('rx="50"');
+    expect(svgOver).toContain('ry="50"');
+
+    // Negative adj should be clamped to 0 (no rounding)
+    const svgNeg = getPresetGeometrySvg("roundRect", 100, 100, { adj: -1 });
+    expect(svgNeg).toContain('rx="0"');
+    expect(svgNeg).toContain('ry="0"');
+  });
+
+  it("clamps round1Rect adj to 0..50000", () => {
+    const svg = getPresetGeometrySvg("round1Rect", 100, 100, { adj: 80000 });
+    expect(svg).toContain("<path");
+    // radius should be clamped to 50000/100000 * 100 = 50
+    expect(svg).toContain("A 50 50");
+  });
+
+  it("clamps round2SameRect adj values to 0..50000", () => {
+    const svg = getPresetGeometrySvg("round2SameRect", 100, 100, {
+      adj1: 80000,
+      adj2: -5000,
+    });
+    expect(svg).toContain("<path");
+    // adj1 clamped to 50000 → r1=50, adj2 clamped to 0 → r2=0
+    expect(svg).toContain("A 50 50");
+    expect(svg).toContain("A 0 0");
+  });
+
+  it("clamps round2DiagRect adj values to 0..50000", () => {
+    const svg = getPresetGeometrySvg("round2DiagRect", 100, 100, {
+      adj1: 99999,
+      adj2: -100,
+    });
+    expect(svg).toContain("<path");
+    expect(svg).toContain("A 50 50");
+    expect(svg).toContain("A 0 0");
+  });
+
   it("generates triangle", () => {
     const svg = getPresetGeometrySvg("triangle", 100, 80, {});
     expect(svg).toContain("<polygon");
