@@ -114,6 +114,8 @@ function renderBarChart(chart: ChartData, x: number, y: number, w: number, h: nu
   }
 
   const isHorizontal = chart.barDirection === "bar";
+  const ticks = computeNiceTicks(0, maxVal);
+  const scaleMax = ticks[ticks.length - 1];
 
   // Axes
   parts.push(
@@ -122,6 +124,21 @@ function renderBarChart(chart: ChartData, x: number, y: number, w: number, h: nu
   parts.push(
     `<line x1="${round(x)}" y1="${round(y)}" x2="${round(x)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
   );
+
+  // Value axis labels
+  if (isHorizontal) {
+    // For horizontal bars, value axis is along bottom (X)
+    for (const tick of ticks) {
+      const ratio = tick / scaleMax;
+      if (ratio < -0.001 || ratio > 1.001) continue;
+      const tickX = x + ratio * w;
+      parts.push(
+        `<text x="${round(tickX)}" y="${round(y + h + 15)}" text-anchor="middle" font-size="10" fill="#595959">${escapeXml(formatTickValue(tick))}</text>`,
+      );
+    }
+  } else {
+    parts.push(renderValueAxisLabels(ticks, 0, scaleMax, x, y, h));
+  }
 
   if (isHorizontal) {
     const groupHeight = h / catCount;
@@ -140,7 +157,7 @@ function renderBarChart(chart: ChartData, x: number, y: number, w: number, h: nu
       const color = series[s].color;
       for (let c = 0; c < series[s].values.length; c++) {
         const val = series[s].values[c];
-        const barW = (val / maxVal) * w;
+        const barW = (val / scaleMax) * w;
         const barX = x;
         const barY = y + c * groupHeight + groupPadding + s * barHeight;
         parts.push(
@@ -165,7 +182,7 @@ function renderBarChart(chart: ChartData, x: number, y: number, w: number, h: nu
       const color = series[s].color;
       for (let c = 0; c < series[s].values.length; c++) {
         const val = series[s].values[c];
-        const barH = (val / maxVal) * h;
+        const barH = (val / scaleMax) * h;
         const barX = x + c * groupWidth + groupPadding + s * barWidth;
         const barY = y + h - barH;
         parts.push(
@@ -198,6 +215,9 @@ function renderLineChart(chart: ChartData, x: number, y: number, w: number, h: n
     return "";
   }
 
+  const ticks = computeNiceTicks(0, maxVal);
+  const scaleMax = ticks[ticks.length - 1];
+
   // Axes
   parts.push(
     `<line x1="${round(x)}" y1="${round(y + h)}" x2="${round(x + w)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
@@ -205,6 +225,9 @@ function renderLineChart(chart: ChartData, x: number, y: number, w: number, h: n
   parts.push(
     `<line x1="${round(x)}" y1="${round(y)}" x2="${round(x)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
   );
+
+  // Value axis labels
+  parts.push(renderValueAxisLabels(ticks, 0, scaleMax, x, y, h));
 
   // Category labels
   for (let c = 0; c < catCount; c++) {
@@ -222,7 +245,7 @@ function renderLineChart(chart: ChartData, x: number, y: number, w: number, h: n
     const divisor = catCount > 1 ? catCount - 1 : 1;
     const points = series[s].values.map((val, i) => {
       const px = round(x + (i / divisor) * w);
-      const py = round(y + h - (val / maxVal) * h);
+      const py = round(y + h - (val / scaleMax) * h);
       return `${px},${py}`;
     });
 
@@ -260,6 +283,9 @@ function renderAreaChart(chart: ChartData, x: number, y: number, w: number, h: n
     return "";
   }
 
+  const ticks = computeNiceTicks(0, maxVal);
+  const scaleMax = ticks[ticks.length - 1];
+
   // Axes
   parts.push(
     `<line x1="${round(x)}" y1="${round(y + h)}" x2="${round(x + w)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
@@ -267,6 +293,9 @@ function renderAreaChart(chart: ChartData, x: number, y: number, w: number, h: n
   parts.push(
     `<line x1="${round(x)}" y1="${round(y)}" x2="${round(x)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
   );
+
+  // Value axis labels
+  parts.push(renderValueAxisLabels(ticks, 0, scaleMax, x, y, h));
 
   // Category labels
   for (let c = 0; c < catCount; c++) {
@@ -285,7 +314,7 @@ function renderAreaChart(chart: ChartData, x: number, y: number, w: number, h: n
     const divisor = catCount > 1 ? catCount - 1 : 1;
     const dataPoints = series[s].values.map((val, i) => {
       const px = round(x + (i / divisor) * w);
-      const py = round(y + h - (val / maxVal) * h);
+      const py = round(y + h - (val / scaleMax) * h);
       return { px, py };
     });
 
@@ -424,6 +453,9 @@ function renderScatterChart(chart: ChartData, x: number, y: number, w: number, h
   if (maxX === 0) maxX = 1;
   if (maxY === 0) maxY = 1;
 
+  const yTicks = computeNiceTicks(0, maxY);
+  const scaleMaxY = yTicks[yTicks.length - 1];
+
   // Axes
   parts.push(
     `<line x1="${round(x)}" y1="${round(y + h)}" x2="${round(x + w)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
@@ -431,6 +463,9 @@ function renderScatterChart(chart: ChartData, x: number, y: number, w: number, h
   parts.push(
     `<line x1="${round(x)}" y1="${round(y)}" x2="${round(x)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
   );
+
+  // Value axis labels
+  parts.push(renderValueAxisLabels(yTicks, 0, scaleMaxY, x, y, h));
 
   // Points
   for (let s = 0; s < series.length; s++) {
@@ -440,7 +475,7 @@ function renderScatterChart(chart: ChartData, x: number, y: number, w: number, h
       const xVal = xVals[i] ?? i;
       const yVal = series[s].values[i];
       const px = x + (xVal / maxX) * w;
-      const py = y + h - (yVal / maxY) * h;
+      const py = y + h - (yVal / scaleMaxY) * h;
       parts.push(`<circle cx="${round(px)}" cy="${round(py)}" r="4" ${fillAttr(color)}/>`);
     }
   }
@@ -472,6 +507,9 @@ function renderBubbleChart(chart: ChartData, x: number, y: number, w: number, h:
 
   const maxRadius = Math.min(w, h) * 0.08;
 
+  const yTicks = computeNiceTicks(0, maxY);
+  const scaleMaxY = yTicks[yTicks.length - 1];
+
   // Axes
   parts.push(
     `<line x1="${round(x)}" y1="${round(y + h)}" x2="${round(x + w)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
@@ -479,6 +517,9 @@ function renderBubbleChart(chart: ChartData, x: number, y: number, w: number, h:
   parts.push(
     `<line x1="${round(x)}" y1="${round(y)}" x2="${round(x)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
   );
+
+  // Value axis labels
+  parts.push(renderValueAxisLabels(yTicks, 0, scaleMaxY, x, y, h));
 
   // Bubbles
   for (let s = 0; s < series.length; s++) {
@@ -490,7 +531,7 @@ function renderBubbleChart(chart: ChartData, x: number, y: number, w: number, h:
       const yVal = series[s].values[i];
       const size = sizes[i] ?? 1;
       const px = x + (xVal / maxX) * w;
-      const py = y + h - (yVal / maxY) * h;
+      const py = y + h - (yVal / scaleMaxY) * h;
       const r = Math.max(2, Math.sqrt(size / maxBubble) * maxRadius);
       parts.push(
         `<circle cx="${round(px)}" cy="${round(py)}" r="${round(r)}" ${fillAttr(color)} fill-opacity="0.6"/>`,
@@ -626,6 +667,10 @@ function renderStockChart(chart: ChartData, x: number, y: number, w: number, h: 
     return "";
   }
 
+  const ticks = computeNiceTicks(minVal, maxVal);
+  const scaleMin = ticks[0];
+  const scaleMax = ticks[ticks.length - 1];
+
   // Axes
   parts.push(
     `<line x1="${round(x)}" y1="${round(y + h)}" x2="${round(x + w)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
@@ -633,6 +678,9 @@ function renderStockChart(chart: ChartData, x: number, y: number, w: number, h: 
   parts.push(
     `<line x1="${round(x)}" y1="${round(y)}" x2="${round(x)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
   );
+
+  // Value axis labels
+  parts.push(renderValueAxisLabels(ticks, scaleMin, scaleMax, x, y, h));
 
   // Category labels
   for (let c = 0; c < catCount; c++) {
@@ -643,7 +691,7 @@ function renderStockChart(chart: ChartData, x: number, y: number, w: number, h: 
     );
   }
 
-  const range = maxVal - minVal;
+  const range = scaleMax - scaleMin;
 
   // Hi-Lo lines and Close tick marks
   for (let c = 0; c < catCount; c++) {
@@ -652,9 +700,9 @@ function renderStockChart(chart: ChartData, x: number, y: number, w: number, h: 
     const lowVal = lowSeries.values[c] ?? 0;
     const closeVal = closeSeries.values[c] ?? 0;
 
-    const highY = y + h - ((highVal - minVal) / range) * h;
-    const lowY = y + h - ((lowVal - minVal) / range) * h;
-    const closeY = y + h - ((closeVal - minVal) / range) * h;
+    const highY = y + h - ((highVal - scaleMin) / range) * h;
+    const lowY = y + h - ((lowVal - scaleMin) / range) * h;
+    const closeY = y + h - ((closeVal - scaleMin) / range) * h;
 
     // Hi-Lo vertical line
     parts.push(
@@ -947,6 +995,65 @@ function getPieSliceColor(index: number, chart: ChartData): ResolvedColor {
     return DEFAULT_SERIES_COLORS[index % DEFAULT_SERIES_COLORS.length];
   }
   return DEFAULT_SERIES_COLORS[index % DEFAULT_SERIES_COLORS.length];
+}
+
+function computeNiceTicks(minVal: number, maxVal: number, targetCount: number = 5): number[] {
+  const range = maxVal - minVal;
+  if (range === 0) return [minVal];
+
+  const roughStep = range / targetCount;
+  const magnitude = Math.pow(10, Math.floor(Math.log10(roughStep)));
+  const residual = roughStep / magnitude;
+
+  let niceStep: number;
+  if (residual <= 1.5) niceStep = magnitude;
+  else if (residual <= 3) niceStep = 2 * magnitude;
+  else if (residual <= 7) niceStep = 5 * magnitude;
+  else niceStep = 10 * magnitude;
+
+  const niceMin = Math.floor(minVal / niceStep) * niceStep;
+  const niceMax = Math.ceil(maxVal / niceStep) * niceStep;
+
+  const ticks: number[] = [];
+  for (let v = niceMin; v <= niceMax + niceStep * 0.5; v += niceStep) {
+    ticks.push(Math.round(v * 1e10) / 1e10);
+  }
+  return ticks;
+}
+
+function renderValueAxisLabels(
+  ticks: number[],
+  scaleMin: number,
+  scaleMax: number,
+  x: number,
+  y: number,
+  h: number,
+): string {
+  const parts: string[] = [];
+  const range = scaleMax - scaleMin;
+  if (range === 0) return "";
+
+  for (const tick of ticks) {
+    const ratio = (tick - scaleMin) / range;
+    if (ratio < -0.001 || ratio > 1.001) continue;
+    const tickY = y + h - ratio * h;
+    parts.push(
+      `<text x="${round(x - 5)}" y="${round(tickY + 4)}" text-anchor="end" font-size="10" fill="#595959">${escapeXml(formatTickValue(tick))}</text>`,
+    );
+    // Tick mark
+    parts.push(
+      `<line x1="${round(x - 3)}" y1="${round(tickY)}" x2="${round(x)}" y2="${round(tickY)}" stroke="#D9D9D9" stroke-width="1"/>`,
+    );
+  }
+  return parts.join("");
+}
+
+function formatTickValue(value: number): string {
+  if (Math.abs(value) >= 1e9) return `${round(value / 1e9)}B`;
+  if (Math.abs(value) >= 1e6) return `${round(value / 1e6)}M`;
+  if (Math.abs(value) >= 1e4) return `${round(value / 1e3)}K`;
+  if (Number.isInteger(value)) return String(value);
+  return String(round(value));
 }
 
 function getMaxValue(series: ChartSeries[]): number {

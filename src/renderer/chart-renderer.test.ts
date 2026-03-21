@@ -547,4 +547,45 @@ describe("renderChart", () => {
       expect(result.content).toContain('fill-opacity="0.5"');
     });
   });
+
+  describe("value axis labels", () => {
+    it("renders Y-axis numeric labels for bar chart", () => {
+      const element = createChartElement({
+        chartType: "bar",
+        series: [{ name: "S1", values: [10, 20, 30], color: { hex: "#4472C4", alpha: 1 } }],
+        categories: ["A", "B", "C"],
+      });
+
+      const result = renderChart(element);
+      // Should contain numeric tick labels on the Y-axis
+      const tickLabels = result.content.match(/text-anchor="end"[^>]*>\d+</g);
+      expect(tickLabels).not.toBeNull();
+      expect(tickLabels!.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("renders Y-axis numeric labels for line chart", () => {
+      const element = createChartElement({
+        chartType: "line",
+        series: [{ name: "L1", values: [25, 50, 75], color: { hex: "#4472C4", alpha: 1 } }],
+        categories: ["A", "B", "C"],
+      });
+
+      const result = renderChart(element);
+      const tickLabels = result.content.match(/text-anchor="end"[^>]*>\d+</g);
+      expect(tickLabels).not.toBeNull();
+      expect(tickLabels!.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("uses nice scale max (>= data max) for bar chart", () => {
+      const element = createChartElement({
+        chartType: "bar",
+        series: [{ name: "S1", values: [7, 13, 18], color: { hex: "#4472C4", alpha: 1 } }],
+        categories: ["A", "B", "C"],
+      });
+
+      const result = renderChart(element);
+      // The highest tick should be >= 18 (the data max), e.g. 20
+      expect(result.content).toContain(">20<");
+    });
+  });
 });

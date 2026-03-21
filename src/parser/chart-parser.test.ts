@@ -650,4 +650,42 @@ describe("parseChart", () => {
     expect(result!.splitPos).toBe(2);
     expect(result!.secondPieSize).toBe(75);
   });
+
+  it("extracts categories from multiLvlStrRef", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+      <c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+        <c:chart>
+          <c:plotArea>
+            <c:radarChart>
+              <c:radarStyle val="filled"/>
+              <c:ser>
+                <c:idx val="0"/>
+                <c:cat>
+                  <c:multiLvlStrRef>
+                    <c:f>Sheet1!$A$2:$A$4</c:f>
+                    <c:multiLvlStrCache>
+                      <c:ptCount val="3"/>
+                      <c:lvl>
+                        <c:pt idx="0"><c:v>Alpha</c:v></c:pt>
+                        <c:pt idx="1"><c:v>Beta</c:v></c:pt>
+                        <c:pt idx="2"><c:v>Gamma</c:v></c:pt>
+                      </c:lvl>
+                    </c:multiLvlStrCache>
+                  </c:multiLvlStrRef>
+                </c:cat>
+                <c:val><c:numRef><c:numCache>
+                  <c:pt idx="0"><c:v>80</c:v></c:pt>
+                  <c:pt idx="1"><c:v>60</c:v></c:pt>
+                  <c:pt idx="2"><c:v>90</c:v></c:pt>
+                </c:numCache></c:numRef></c:val>
+              </c:ser>
+            </c:radarChart>
+          </c:plotArea>
+        </c:chart>
+      </c:chartSpace>`;
+
+    const result = parseChart(xml, createColorResolver());
+    expect(result!.chartType).toBe("radar");
+    expect(result!.categories).toEqual(["Alpha", "Beta", "Gamma"]);
+  });
 });
