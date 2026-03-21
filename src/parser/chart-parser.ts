@@ -190,6 +190,7 @@ function extractCategories(serList: XmlNode[]): string[] {
     if (!cat) continue;
     const strRef = cat.strRef as XmlNode | undefined;
     const numRef = cat.numRef as XmlNode | undefined;
+    const multiLvlStrRef = cat.multiLvlStrRef as XmlNode | undefined;
     const strCache =
       (strRef?.strCache as XmlNode | undefined) ?? (numRef?.numCache as XmlNode | undefined);
     if (strCache?.pt) {
@@ -197,6 +198,20 @@ function extractCategories(serList: XmlNode[]): string[] {
         .slice()
         .sort((a: XmlNode, b: XmlNode) => Number(a["@_idx"]) - Number(b["@_idx"]))
         .map((pt: XmlNode) => String((pt.v as string | number | undefined) ?? ""));
+    }
+    // multiLvlStrRef: categories stored in lvl > pt structure (uses first level only)
+    const multiCache = multiLvlStrRef?.multiLvlStrCache as XmlNode | undefined;
+    if (multiCache?.lvl) {
+      const lvls = Array.isArray(multiCache.lvl)
+        ? (multiCache.lvl as XmlNode[])
+        : [multiCache.lvl as XmlNode];
+      const firstLvl = lvls[0];
+      if (firstLvl?.pt) {
+        return (firstLvl.pt as XmlNode[])
+          .slice()
+          .sort((a: XmlNode, b: XmlNode) => Number(a["@_idx"]) - Number(b["@_idx"]))
+          .map((pt: XmlNode) => String((pt.v as string | number | undefined) ?? ""));
+      }
     }
   }
   return [];
