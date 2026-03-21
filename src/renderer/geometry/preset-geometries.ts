@@ -42,7 +42,8 @@ const presetGeometries: Record<string, GeometryGenerator> = {
   ellipse: (w, h) => `<ellipse cx="${w / 2}" cy="${h / 2}" rx="${w / 2}" ry="${h / 2}"/>`,
 
   roundRect: (w, h, adj) => {
-    const r = ((adj["adj"] ?? 16667) / 100000) * Math.min(w, h);
+    const a = Math.min(50000, Math.max(0, adj["adj"] ?? 16667));
+    const r = (a / 100000) * Math.min(w, h);
     return `<rect width="${w}" height="${h}" rx="${r}" ry="${r}"/>`;
   },
 
@@ -817,19 +818,24 @@ const presetGeometries: Record<string, GeometryGenerator> = {
   },
 
   round1Rect: (w, h, adj) => {
-    const r = ((adj["adj"] ?? 16667) / 100000) * Math.min(w, h);
+    const a = Math.min(50000, Math.max(0, adj["adj"] ?? 16667));
+    const r = (a / 100000) * Math.min(w, h);
     return `<path d="M 0 0 L ${w - r} 0 A ${r} ${r} 0 0 1 ${w} ${r} L ${w} ${h} L 0 ${h} Z"/>`;
   },
 
   round2SameRect: (w, h, adj) => {
-    const r1 = ((adj["adj1"] ?? 16667) / 100000) * Math.min(w, h);
-    const r2 = ((adj["adj2"] ?? 0) / 100000) * Math.min(w, h);
+    const a1 = Math.min(50000, Math.max(0, adj["adj1"] ?? 16667));
+    const a2 = Math.min(50000, Math.max(0, adj["adj2"] ?? 0));
+    const r1 = (a1 / 100000) * Math.min(w, h);
+    const r2 = (a2 / 100000) * Math.min(w, h);
     return `<path d="M ${r1} 0 L ${w - r1} 0 A ${r1} ${r1} 0 0 1 ${w} ${r1} L ${w} ${h - r2} A ${r2} ${r2} 0 0 1 ${w - r2} ${h} L ${r2} ${h} A ${r2} ${r2} 0 0 1 0 ${h - r2} L 0 ${r1} A ${r1} ${r1} 0 0 1 ${r1} 0 Z"/>`;
   },
 
   round2DiagRect: (w, h, adj) => {
-    const r1 = ((adj["adj1"] ?? 16667) / 100000) * Math.min(w, h);
-    const r2 = ((adj["adj2"] ?? 0) / 100000) * Math.min(w, h);
+    const a1 = Math.min(50000, Math.max(0, adj["adj1"] ?? 16667));
+    const a2 = Math.min(50000, Math.max(0, adj["adj2"] ?? 0));
+    const r1 = (a1 / 100000) * Math.min(w, h);
+    const r2 = (a2 / 100000) * Math.min(w, h);
     return `<path d="M ${r1} 0 L ${w} 0 L ${w} ${h - r2} A ${r2} ${r2} 0 0 1 ${w - r2} ${h} L 0 ${h} L 0 ${r1} A ${r1} ${r1} 0 0 1 ${r1} 0 Z"/>`;
   },
 
