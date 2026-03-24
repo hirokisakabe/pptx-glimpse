@@ -21,6 +21,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build renderer (required for type resolution)
+        run: npm run build:renderer
+
       - name: Knip
         run: npm run knip
 

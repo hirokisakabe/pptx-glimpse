@@ -90,7 +90,8 @@ cat > tsconfig.json << 'TESTEOF'
     "moduleResolution": "Node16",
     "strict": true,
     "noEmit": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "types": ["node"]
   },
   "include": ["test-types.ts"]
 }
