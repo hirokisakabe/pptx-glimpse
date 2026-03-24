@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
-import { convertPptxToPng } from "../../src/converter.js";
+import { convertPptxToPng } from "../../packages/pptx-glimpse/src/converter.js";
 import { SHARED_FIXTURE_CASES } from "./vrt-cases.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

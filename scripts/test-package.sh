@@ -5,20 +5,27 @@ set -euo pipefail
 WORK_DIR=$(mktemp -d)
 trap 'rm -rf "$WORK_DIR"' EXIT
 
+REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+
 echo "=== Package publish verification ==="
 echo "Working directory: $WORK_DIR"
 
-# npm pack でタールボールを生成
-TARBALL=$(npm pack --pack-destination "$WORK_DIR" 2>/dev/null)
-TARBALL_PATH="$WORK_DIR/$TARBALL"
-echo "Packed: $TARBALL"
+# renderer パッケージをパック
+RENDERER_TARBALL=$(cd "$REPO_ROOT/packages/pptx-glimpse-renderer" && npm pack --pack-destination "$WORK_DIR" 2>/dev/null)
+RENDERER_TARBALL_PATH="$WORK_DIR/$RENDERER_TARBALL"
+echo "Packed renderer: $RENDERER_TARBALL"
+
+# main パッケージをパック
+MAIN_TARBALL=$(cd "$REPO_ROOT/packages/pptx-glimpse" && npm pack --pack-destination "$WORK_DIR" 2>/dev/null)
+MAIN_TARBALL_PATH="$WORK_DIR/$MAIN_TARBALL"
+echo "Packed main: $MAIN_TARBALL"
 
 # テスト用ディレクトリにインストール
 TEST_DIR="$WORK_DIR/test-project"
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
 npm init -y > /dev/null 2>&1
-npm install "$TARBALL_PATH" > /dev/null 2>&1
+npm install "$RENDERER_TARBALL_PATH" "$MAIN_TARBALL_PATH" > /dev/null 2>&1
 
 echo ""
 

@@ -2,7 +2,7 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { describe, expect, it } from "vitest";
 
-import { convertPptxToPng, convertPptxToSvg } from "../src/converter.js";
+import { convertPptxToPng, convertPptxToSvg } from "../packages/pptx-glimpse/src/converter.js";
 
 const FIXTURE_DIR = join(import.meta.dirname, "..", "shared-fixtures");
 
