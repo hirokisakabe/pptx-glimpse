@@ -40,7 +40,7 @@ Data flow: **PPTX binary → Parser (ZIP extraction + XML parsing) → Intermedi
 - `src/renderer/` — Generates SVG strings from the intermediate model. Includes preset shape definitions in `geometry/`, plus dedicated renderers for tables, charts, and images
 - `src/color/` — Theme color resolution (schemeClr → colorMap → colorScheme) and color transformations (lumMod/tint/shade)
 - `src/font/` — Font loading (system font scanning), font mapping (proprietary → OSS alternatives), text measurement and text-to-SVG-path conversion via `opentype.js`
-- `src/png/` — SVG → PNG conversion using sharp
+- `src/png/` — SVG → PNG conversion using `@resvg/resvg-js`
 - `src/data/` — Font metrics data (fallback character width information)
 - `src/utils/` — EMU ↔ pixel conversion (1 inch = 914400 EMU, 96 DPI) and text wrapping
 
@@ -48,7 +48,7 @@ Entry point: `src/index.ts` exports `convertPptxToSvg`, `convertPptxToPng`, warn
 
 ## Technical Constraints
 
-- **SVG uses inline attributes only** — No CSS classes. sharp (librsvg) does not correctly interpret CSS
+- **SVG uses inline attributes only** — No CSS classes. resvg and librsvg do not correctly interpret CSS
 - **`isArray` configuration in fast-xml-parser is required** — Tags such as `sp`, `pic`, `p`, `r` must be returned as arrays even for single elements (`ARRAY_TAGS` in `xml-parser.ts`)
 - **EMU units & branded types** — PPTX internal coordinates use EMU (English Metric Units). Convert with `emuToPixels()`. A 16:9 slide is 9144000×5143500 EMU = 960×540 px. Model fields use branded types (`Emu`, `Pt`, `HundredthPt` in `src/utils/unit-types.ts`) to prevent unit confusion at compile time. Use `asEmu()`, `asPt()`, `asHundredthPt()` to create branded values from raw numbers
 - **Background fallback** — Backgrounds are resolved in order: slide → slide layout → slide master
