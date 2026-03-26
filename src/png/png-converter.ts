@@ -1,4 +1,4 @@
-import sharp from "sharp";
+import { renderAsync, type ResvgRenderOptions } from "@resvg/resvg-js";
 
 interface PngConvertOptions {
   width?: number;
@@ -9,15 +9,18 @@ export async function svgToPng(
   svgString: string,
   options?: PngConvertOptions,
 ): Promise<{ png: Buffer; width: number; height: number }> {
-  const svgBuffer = Buffer.from(svgString);
-  let pipeline = sharp(svgBuffer);
+  const resvgOptions: ResvgRenderOptions = {};
 
   if (options?.width) {
-    pipeline = pipeline.resize(options.width);
+    resvgOptions.fitTo = { mode: "width", value: options.width };
   } else if (options?.height) {
-    pipeline = pipeline.resize(null, options.height);
+    resvgOptions.fitTo = { mode: "height", value: options.height };
   }
 
-  const result = await pipeline.png().toBuffer({ resolveWithObject: true });
-  return { png: result.data, width: result.info.width, height: result.info.height };
+  const rendered = await renderAsync(svgString, resvgOptions);
+  return {
+    png: Buffer.from(rendered.asPng()),
+    width: rendered.width,
+    height: rendered.height,
+  };
 }
