@@ -1,5 +1,11 @@
 # pptx-glimpse
 
+## 0.6.0
+
+### Minor Changes
+
+- 5906f6d: SVG→PNG変換のsharpを@resvg/resvg-jsに置き換え、ネイティブモジュール依存を排除
+
 ## 0.5.0
 
 ### Minor Changes
