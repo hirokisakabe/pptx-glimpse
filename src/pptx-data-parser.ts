@@ -204,6 +204,22 @@ export function parseSlideWithLayout(
     data.theme,
   );
 
+  // プレースホルダースタイルをスライドパース前に抽出（geometry 継承に必要）
+  let layoutPlaceholderStyles: PlaceholderStyleInfo[] = [];
+  let layoutShowMasterSp = true;
+  if (layoutXml) {
+    layoutPlaceholderStyles = parseSlideLayoutPlaceholderStyles(layoutXml, slideColorResolver);
+    layoutShowMasterSp = parseSlideLayoutShowMasterSp(layoutXml);
+  }
+  const masterPlaceholderStyles =
+    slideMasterData?.placeholderStyles ?? data.masterPlaceholderStyles;
+
+  // レイアウト→マスターのフォールバックチェーンを構築
+  const mergedPlaceholderStyles = mergePlaceholderGeometry(
+    layoutPlaceholderStyles,
+    masterPlaceholderStyles,
+  );
+
   const slide = parseSlide(
     slideXml,
     path,
@@ -212,12 +228,11 @@ export function parseSlideWithLayout(
     slideColorResolver,
     data.theme.fontScheme,
     data.theme.fmtScheme,
+    mergedPlaceholderStyles,
   );
 
   // Resolve slide layout
   let layoutElements: SlideElement[] = [];
-  let layoutPlaceholderStyles: PlaceholderStyleInfo[] = [];
-  let layoutShowMasterSp = true;
   if (layoutXml && layoutPath) {
     // Fallback background: slide → layout → master
     if (!slide.background) {
@@ -241,16 +256,11 @@ export function parseSlideWithLayout(
       data.theme.fontScheme,
       data.theme.fmtScheme,
     );
-    // Extract placeholder styles for text style inheritance
-    layoutPlaceholderStyles = parseSlideLayoutPlaceholderStyles(layoutXml, slideColorResolver);
-    layoutShowMasterSp = parseSlideLayoutShowMasterSp(layoutXml);
   }
   if (!slide.background) {
     slide.background = slideMasterData?.background ?? data.masterBackground;
   }
 
-  const masterPlaceholderStyles =
-    slideMasterData?.placeholderStyles ?? data.masterPlaceholderStyles;
   const masterTxStyles = slideMasterData?.txStyles ?? data.masterTxStyles;
 
   // Apply text style inheritance chain before merging
@@ -265,6 +275,55 @@ export function parseSlideWithLayout(
   const masterElements = slideMasterData?.elements ?? data.masterElements;
 
   return { slide, layoutElements, layoutShowMasterSp, masterElements };
+}
+
+/**
+ * レイアウト→マスターのプレースホルダー geometry フォールバックチェーンを構築する。
+ * レイアウトの transform/geometry を優先し、未定義の場合はマスターからフォールバック。
+ */
+function mergePlaceholderGeometry(
+  layoutStyles: PlaceholderStyleInfo[],
+  masterStyles: PlaceholderStyleInfo[],
+): PlaceholderStyleInfo[] {
+  const merged = layoutStyles.map((ls) => {
+    if (ls.transform) return ls;
+    // レイアウトに transform がない場合、マスターからフォールバック
+    const masterMatch = findPlaceholderByTypeAndIdx(
+      ls.placeholderType,
+      ls.placeholderIdx,
+      masterStyles,
+    );
+    if (!masterMatch) return ls;
+    return {
+      ...ls,
+      ...(!ls.transform && masterMatch.transform && { transform: masterMatch.transform }),
+      ...(!ls.geometry && masterMatch.geometry && { geometry: masterMatch.geometry }),
+    };
+  });
+
+  // マスターにしかないプレースホルダーも追加
+  for (const ms of masterStyles) {
+    const exists = merged.some(
+      (m) => m.placeholderType === ms.placeholderType && m.placeholderIdx === ms.placeholderIdx,
+    );
+    if (!exists) {
+      merged.push(ms);
+    }
+  }
+
+  return merged;
+}
+
+function findPlaceholderByTypeAndIdx(
+  type: string,
+  idx: number | undefined,
+  styles: PlaceholderStyleInfo[],
+): PlaceholderStyleInfo | undefined {
+  if (idx !== undefined) {
+    const byIdx = styles.find((s) => s.placeholderIdx === idx);
+    if (byIdx) return byIdx;
+  }
+  return styles.find((s) => s.placeholderType === type);
 }
 
 function defaultColorScheme() {

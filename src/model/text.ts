@@ -1,5 +1,6 @@
 import type { Emu, HundredthPt, Pt } from "../utils/unit-types.js";
 import type { ResolvedColor } from "./fill.js";
+import type { Geometry, Transform } from "./shape.js";
 
 /** defRPr に対応するデフォルトランプロパティ */
 export interface DefaultRunProperties {
@@ -35,11 +36,13 @@ export interface TxStyles {
   otherStyle?: DefaultTextStyle;
 }
 
-/** プレースホルダーに紐づくテキストスタイル情報 */
+/** プレースホルダーに紐づくスタイル情報（テキスト・位置・ジオメトリ） */
 export interface PlaceholderStyleInfo {
   placeholderType: string;
   placeholderIdx?: number;
   lstStyle?: DefaultTextStyle;
+  transform?: Transform;
+  geometry?: Geometry;
 }
 
 export interface TextBody {

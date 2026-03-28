@@ -6733,6 +6733,100 @@ async function createTableStyleBorderFixture(): Promise<void> {
   savePptx(buffer, "table-style-border.pptx");
 }
 
+async function createPlaceholderGeometryInheritanceFixture(): Promise<void> {
+  // スライドレイアウトにプレースホルダーの位置・サイズを定義
+  const layoutXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sldLayout xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}" type="obj">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr/>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="2" name="Title 1"/>
+          <p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
+          <p:nvPr><p:ph type="ctrTitle"/></p:nvPr>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="685800" y="1600200"/>
+            <a:ext cx="7772400" cy="1371600"/>
+          </a:xfrm>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr anchor="b"/>
+          <a:lstStyle/>
+          <a:p><a:endParaRPr lang="en-US"/></a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="3" name="Subtitle 2"/>
+          <p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
+          <p:nvPr><p:ph type="subTitle" idx="1"/></p:nvPr>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="1371600" y="3200400"/>
+            <a:ext cx="6400800" cy="914400"/>
+          </a:xfrm>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:lstStyle/>
+          <a:p><a:endParaRPr lang="en-US"/></a:p>
+        </p:txBody>
+      </p:sp>
+    </p:spTree>
+  </p:cSld>
+</p:sldLayout>`;
+
+  // スライドのプレースホルダー図形は spPr が空（レイアウトから継承）
+  const slide1 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr>
+        <a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm>
+      </p:grpSpPr>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="2" name="Title 1"/>
+          <p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
+          <p:nvPr><p:ph type="ctrTitle"/></p:nvPr>
+        </p:nvSpPr>
+        <p:spPr/>
+        <p:txBody>
+          <a:bodyPr/><a:lstStyle/>
+          <a:p><a:r><a:rPr lang="en-US" sz="4400" dirty="0"/><a:t>Inherited Title</a:t></a:r></a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="3" name="Subtitle 2"/>
+          <p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
+          <p:nvPr><p:ph type="subTitle" idx="1"/></p:nvPr>
+        </p:nvSpPr>
+        <p:spPr/>
+        <p:txBody>
+          <a:bodyPr/><a:lstStyle/>
+          <a:p><a:r><a:rPr lang="en-US" sz="2400" dirty="0"/><a:t>Inherited Subtitle</a:t></a:r></a:p>
+        </p:txBody>
+      </p:sp>
+    </p:spTree>
+  </p:cSld>
+</p:sld>`;
+
+  const rels = slideRelsXml();
+
+  const buffer = await buildPptx({
+    slides: [{ xml: slide1, rels }],
+    slideLayoutXml: layoutXml,
+  });
+  savePptx(buffer, "placeholder-geometry-inheritance.pptx");
+}
+
 const FIXTURE_CREATORS: Record<string, () => Promise<void>> = {
   "shapes.pptx": createShapesFixture,
   "fill-and-lines.pptx": createFillAndLinesFixture,
@@ -6779,6 +6873,7 @@ const FIXTURE_CREATORS: Record<string, () => Promise<void>> = {
   "multi-lang-font.pptx": createMultiLangFontFixture,
   "placeholder-inheritance-extended.pptx": createPlaceholderInheritanceExtendedFixture,
   "table-style-border.pptx": createTableStyleBorderFixture,
+  "placeholder-geometry-inheritance.pptx": createPlaceholderGeometryInheritanceFixture,
 };
 
 async function main(): Promise<void> {

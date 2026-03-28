@@ -26,6 +26,7 @@ import type {
   TextOutline,
   TextRun,
 } from "../model/text.js";
+import type { PlaceholderStyleInfo } from "../model/text.js";
 import type { FontScheme, FormatScheme } from "../model/theme.js";
 import { uint8ArrayToBase64 } from "../utils/base64.js";
 import { hundredthPointToPoint } from "../utils/emu.js";
@@ -79,6 +80,7 @@ export function parseSlide(
   colorResolver: ColorResolver,
   fontScheme?: FontScheme | null,
   fmtScheme?: FormatScheme,
+  placeholderStyles?: PlaceholderStyleInfo[],
 ): Slide {
   const parsed = parseXml(slideXml);
   const sld = parsed.sld as XmlNode | undefined;
@@ -109,6 +111,7 @@ export function parseSlide(
     fontScheme,
     orderedSpTree,
     fmtScheme,
+    placeholderStyles,
   );
 
   const showMasterSpAttr = sld?.["@_showMasterSp"];
@@ -157,6 +160,7 @@ export function parseShapeTree(
   fontScheme?: FontScheme | null,
   orderedChildren?: XmlOrderedNode[] | null,
   fmtScheme?: FormatScheme,
+  placeholderStyles?: PlaceholderStyleInfo[],
 ): SlideElement[] {
   if (!spTree) return [];
 
@@ -173,6 +177,7 @@ export function parseShapeTree(
       fillContext,
       fontScheme,
       fmtScheme,
+      placeholderStyles,
     );
   }
 
@@ -199,6 +204,7 @@ export function parseShapeTree(
       fontScheme,
       undefined,
       fmtScheme,
+      placeholderStyles,
     );
     if (shape) {
       elements.push(shape);
@@ -272,6 +278,7 @@ function parseShapeTreeOrdered(
   fillContext?: FillParseContext,
   fontScheme?: FontScheme | null,
   fmtScheme?: FormatScheme,
+  placeholderStyles?: PlaceholderStyleInfo[],
 ): SlideElement[] {
   const ctx = context ?? slidePath;
   const elements: SlideElement[] = [];
@@ -334,6 +341,7 @@ function parseShapeTreeOrdered(
             fillContext,
             fontScheme,
             fmtScheme,
+            placeholderStyles,
           );
         }
       }
@@ -362,6 +370,7 @@ function parseShapeTreeOrdered(
       fillContext,
       fontScheme,
       fmtScheme,
+      placeholderStyles,
     );
   }
 
@@ -382,6 +391,7 @@ function parseAndPushElement(
   fillContext?: FillParseContext,
   fontScheme?: FontScheme | null,
   fmtScheme?: FormatScheme,
+  placeholderStyles?: PlaceholderStyleInfo[],
 ): void {
   switch (tag) {
     case "sp": {
@@ -393,6 +403,7 @@ function parseAndPushElement(
         fontScheme,
         orderedNode,
         fmtScheme,
+        placeholderStyles,
       );
       if (shape) {
         elements.push(shape);
@@ -467,30 +478,57 @@ function parseShape(
   fontScheme?: FontScheme | null,
   orderedNode?: XmlOrderedNode,
   fmtScheme?: FormatScheme,
+  placeholderStyles?: PlaceholderStyleInfo[],
 ): ShapeElement | null {
   const spPr = sp.spPr as XmlNode | undefined;
-  if (!spPr) return null;
+  const spPrIsObject = spPr != null && typeof spPr === "object";
 
-  const transform = parseTransform(spPr.xfrm as XmlNode | undefined);
+  // プレースホルダー情報を先に抽出（transform フォールバックに必要）
+  const nvSpPr = sp.nvSpPr as XmlNode | undefined;
+  const nvPr = nvSpPr?.nvPr as XmlNode | undefined;
+  const ph = nvPr?.ph as XmlNode | undefined;
+  const placeholderType = ph ? ((ph["@_type"] as string | undefined) ?? "body") : undefined;
+  const placeholderIdx = ph?.["@_idx"] !== undefined ? Number(ph["@_idx"]) : undefined;
+
+  // spPr が空/未定義の場合、プレースホルダーならコンテキストからフォールバック
+  let transform: Transform | null = null;
+  let geometry: Geometry;
+
+  if (spPrIsObject) {
+    transform = parseTransform(spPr.xfrm as XmlNode | undefined);
+    geometry = parseGeometry(spPr);
+  } else {
+    geometry = { type: "preset", preset: "rect", adjustValues: {} };
+  }
+
+  // transform が未解決の場合、プレースホルダーコンテキストからフォールバック
+  if (!transform && placeholderType && placeholderStyles) {
+    const inherited = findMatchingPlaceholder(placeholderType, placeholderIdx, placeholderStyles);
+    if (inherited?.transform) {
+      transform = inherited.transform;
+    }
+    if (!spPrIsObject && inherited?.geometry) {
+      geometry = inherited.geometry;
+    }
+  }
+
   if (!transform) return null;
 
   // Unsupported feature detection
-  if (spPr.scene3d) {
+  if (spPrIsObject && spPr.scene3d) {
     warn("spPr.scene3d", "3D scene/camera not implemented");
   }
-  if (spPr.sp3d) {
+  if (spPrIsObject && spPr.sp3d) {
     warn("spPr.sp3d", "3D extrusion/bevel not implemented");
   }
-
-  const geometry = parseGeometry(spPr);
 
   // Resolve style references (sp.style) as fallback for direct attributes
   const styleRef = resolveShapeStyle(sp.style as XmlNode | undefined, fmtScheme, colorResolver);
 
-  const directFill = parseFillFromNode(spPr, colorResolver, fillContext);
+  const directFill = spPrIsObject ? parseFillFromNode(spPr, colorResolver, fillContext) : null;
   const fill = directFill ?? styleRef?.fill ?? null;
 
-  const directOutline = parseOutline(spPr.ln as XmlNode, colorResolver);
+  const directOutline = spPrIsObject ? parseOutline(spPr.ln as XmlNode, colorResolver) : null;
   const outline = directOutline ?? styleRef?.outline ?? null;
 
   // ordered ノードから txBody の ordered children を抽出
@@ -512,17 +550,14 @@ function parseShape(
     orderedTxBody,
   );
 
-  const directEffects = parseEffectList(spPr.effectLst as XmlNode, colorResolver);
+  const directEffects = spPrIsObject
+    ? parseEffectList(spPr.effectLst as XmlNode, colorResolver)
+    : null;
   const effects = directEffects ?? styleRef?.effects ?? null;
 
-  const nvSpPr = sp.nvSpPr as XmlNode | undefined;
   const cNvPr = nvSpPr?.cNvPr as XmlNode | undefined;
   const altText = cNvPr?.["@_descr"] as string | undefined;
   const hyperlink = parseHyperlink(cNvPr?.hlinkClick as XmlNode | undefined, rels);
-  const nvPr = nvSpPr?.nvPr as XmlNode | undefined;
-  const ph = nvPr?.ph as XmlNode | undefined;
-  const placeholderType = ph ? ((ph["@_type"] as string | undefined) ?? "body") : undefined;
-  const placeholderIdx = ph?.["@_idx"] !== undefined ? Number(ph["@_idx"]) : undefined;
 
   return {
     type: "shape",
@@ -913,7 +948,7 @@ function parseSmartArt(
   };
 }
 
-function parseTransform(xfrm: XmlNode | undefined): Transform | null {
+export function parseTransform(xfrm: XmlNode | undefined): Transform | null {
   if (!xfrm) return null;
 
   const off = xfrm.off as XmlNode | undefined;
@@ -958,7 +993,7 @@ function parseTransform(xfrm: XmlNode | undefined): Transform | null {
   };
 }
 
-function parseGeometry(spPr: XmlNode): Geometry {
+export function parseGeometry(spPr: XmlNode): Geometry {
   if (spPr.prstGeom) {
     const prstGeom = spPr.prstGeom as XmlNode;
     const preset = (prstGeom["@_prst"] as string | undefined) ?? "rect";
@@ -989,6 +1024,47 @@ function parseGeometry(spPr: XmlNode): Geometry {
   }
 
   return { type: "preset", preset: "rect", adjustValues: {} };
+}
+
+function findMatchingPlaceholder(
+  placeholderType: string,
+  placeholderIdx: number | undefined,
+  styles: PlaceholderStyleInfo[],
+): PlaceholderStyleInfo | undefined {
+  // idx マッチ優先（transform を持つもの優先）
+  if (placeholderIdx !== undefined) {
+    const byIdx = styles.find((s) => s.placeholderIdx === placeholderIdx && s.transform);
+    if (byIdx) return byIdx;
+    // transform なしでも idx マッチがあれば返す
+    const byIdxAny = styles.find((s) => s.placeholderIdx === placeholderIdx);
+    if (byIdxAny) return byIdxAny;
+  }
+
+  // type マッチ（transform を持つもの優先）
+  const byTypeWithTransform = styles.find(
+    (s) => s.placeholderType === placeholderType && s.transform,
+  );
+  if (byTypeWithTransform) return byTypeWithTransform;
+
+  // フォールバックタイプ (ctrTitle→title, subTitle→body) — transform 優先
+  const fallbackType =
+    placeholderType === "ctrTitle" ? "title" : placeholderType === "subTitle" ? "body" : undefined;
+  if (fallbackType) {
+    const byFallbackWithTransform = styles.find(
+      (s) => s.placeholderType === fallbackType && s.transform,
+    );
+    if (byFallbackWithTransform) return byFallbackWithTransform;
+  }
+
+  // transform なしでも type マッチがあれば返す
+  const byType = styles.find((s) => s.placeholderType === placeholderType);
+  if (byType) return byType;
+
+  if (fallbackType) {
+    return styles.find((s) => s.placeholderType === fallbackType);
+  }
+
+  return undefined;
 }
 
 export function parseTextBody(
