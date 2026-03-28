@@ -1,5 +1,11 @@
 # pptx-glimpse
 
+## 0.7.0
+
+### Minor Changes
+
+- 37b86de: SVG→PNG変換を@resvg/resvg-js（ネイティブアドオン）から@resvg/resvg-wasm（WASM）に移行し、esbuild等でのバンドルを可能にした
+
 ## 0.6.1
 
 ### Patch Changes
