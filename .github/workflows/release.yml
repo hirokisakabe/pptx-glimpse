@@ -33,7 +33,7 @@ jobs:
         uses: changesets/action@v1
         with:
           publish: npx changeset publish
-          version: npx changeset version
+          version: npx changeset version && npm install --package-lock-only
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
