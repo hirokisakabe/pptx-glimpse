@@ -1,5 +1,11 @@
 # pptx-glimpse
 
+## 0.6.1
+
+### Patch Changes
+
+- 90bb744: feat: プレースホルダー図形の位置・サイズ継承に対応
+
 ## 0.6.0
 
 ### Minor Changes
