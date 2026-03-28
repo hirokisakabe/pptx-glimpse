@@ -1691,3 +1691,300 @@ describe("parseTextBody", () => {
     expect(result!.bodyProperties.vert).toBe("horz");
   });
 });
+
+describe("placeholder geometry inheritance", () => {
+  it("inherits transform from placeholderStyles when spPr is empty", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Title 1"/>
+            <p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
+            <p:nvPr><p:ph type="ctrTitle"/></p:nvPr>
+          </p:nvSpPr>
+          <p:spPr/>
+          <p:txBody>
+            <a:bodyPr/><a:lstStyle/>
+            <a:p><a:r><a:t>Hello</a:t></a:r></a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+    const elements = parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [
+        {
+          placeholderType: "ctrTitle",
+          transform: {
+            offsetX: 1000 as never,
+            offsetY: 2000 as never,
+            extentWidth: 5000 as never,
+            extentHeight: 3000 as never,
+            rotation: 0,
+            flipH: false,
+            flipV: false,
+          },
+        },
+      ],
+    );
+
+    expect(elements).toHaveLength(1);
+    const shape = elements[0] as ShapeElement;
+    expect(shape.placeholderType).toBe("ctrTitle");
+    expect(shape.transform.offsetX).toBe(1000);
+    expect(shape.transform.extentWidth).toBe(5000);
+  });
+
+  it("inherits geometry from placeholderStyles when spPr is empty", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Title 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr><p:ph type="title"/></p:nvPr>
+          </p:nvSpPr>
+          <p:spPr/>
+          <p:txBody>
+            <a:bodyPr/><a:lstStyle/>
+            <a:p><a:r><a:t>Text</a:t></a:r></a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+    const elements = parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [
+        {
+          placeholderType: "title",
+          transform: {
+            offsetX: 500 as never,
+            offsetY: 600 as never,
+            extentWidth: 8000 as never,
+            extentHeight: 1200 as never,
+            rotation: 0,
+            flipH: false,
+            flipV: false,
+          },
+          geometry: { type: "preset", preset: "roundRect", adjustValues: {} },
+        },
+      ],
+    );
+
+    expect(elements).toHaveLength(1);
+    const shape = elements[0] as ShapeElement;
+    expect(shape.geometry).toEqual({ type: "preset", preset: "roundRect", adjustValues: {} });
+  });
+
+  it("uses fallback type matching (ctrTitle → title)", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Title 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr><p:ph type="ctrTitle"/></p:nvPr>
+          </p:nvSpPr>
+          <p:spPr/>
+          <p:txBody>
+            <a:bodyPr/><a:lstStyle/>
+            <a:p><a:r><a:t>Center Title</a:t></a:r></a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+    const elements = parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [
+        {
+          placeholderType: "title",
+          transform: {
+            offsetX: 100 as never,
+            offsetY: 200 as never,
+            extentWidth: 9000 as never,
+            extentHeight: 1500 as never,
+            rotation: 0,
+            flipH: false,
+            flipV: false,
+          },
+        },
+      ],
+    );
+
+    expect(elements).toHaveLength(1);
+    const shape = elements[0] as ShapeElement;
+    expect(shape.transform.extentWidth).toBe(9000);
+  });
+
+  it("still returns null for non-placeholder shapes with empty spPr", () => {
+    initWarningLogger("off");
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Rectangle 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr/>
+          </p:nvSpPr>
+          <p:spPr/>
+        </p:sp>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+    const elements = parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    expect(elements).toHaveLength(0);
+  });
+
+  it("uses direct xfrm when spPr has it, even with placeholderStyles", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Title 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr><p:ph type="title"/></p:nvPr>
+          </p:nvSpPr>
+          <p:spPr>
+            <a:xfrm>
+              <a:off x="111" y="222"/>
+              <a:ext cx="333" cy="444"/>
+            </a:xfrm>
+          </p:spPr>
+          <p:txBody>
+            <a:bodyPr/><a:lstStyle/>
+            <a:p><a:r><a:t>Direct</a:t></a:r></a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+    const elements = parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [
+        {
+          placeholderType: "title",
+          transform: {
+            offsetX: 9999 as never,
+            offsetY: 9999 as never,
+            extentWidth: 9999 as never,
+            extentHeight: 9999 as never,
+            rotation: 0,
+            flipH: false,
+            flipV: false,
+          },
+        },
+      ],
+    );
+
+    expect(elements).toHaveLength(1);
+    const shape = elements[0] as ShapeElement;
+    expect(shape.transform.offsetX).toBe(111);
+    expect(shape.transform.offsetY).toBe(222);
+  });
+
+  it("falls through ctrTitle without transform to title with transform", () => {
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:sp>
+          <p:nvSpPr>
+            <p:cNvPr id="2" name="Title 1"/>
+            <p:cNvSpPr/>
+            <p:nvPr><p:ph type="ctrTitle"/></p:nvPr>
+          </p:nvSpPr>
+          <p:spPr/>
+          <p:txBody>
+            <a:bodyPr/><a:lstStyle/>
+            <a:p><a:r><a:t>Fallthrough</a:t></a:r></a:p>
+          </p:txBody>
+        </p:sp>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+    const elements = parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      [
+        // ctrTitle エントリは transform なし（マージ時に発生しうる）
+        { placeholderType: "ctrTitle" },
+        // title エントリに transform あり
+        {
+          placeholderType: "title",
+          transform: {
+            offsetX: 500 as never,
+            offsetY: 600 as never,
+            extentWidth: 7000 as never,
+            extentHeight: 1000 as never,
+            rotation: 0,
+            flipH: false,
+            flipV: false,
+          },
+        },
+      ],
+    );
+
+    expect(elements).toHaveLength(1);
+    const shape = elements[0] as ShapeElement;
+    expect(shape.transform.offsetX).toBe(500);
+    expect(shape.transform.extentWidth).toBe(7000);
+  });
+});

@@ -4,7 +4,11 @@ import { ColorResolver } from "../color/color-resolver.js";
 import type { ShapeElement } from "../model/shape.js";
 import { initWarningLogger } from "../warning-logger.js";
 import type { PptxArchive } from "./pptx-reader.js";
-import { parseSlideLayoutBackground, parseSlideLayoutElements } from "./slide-layout-parser.js";
+import {
+  parseSlideLayoutBackground,
+  parseSlideLayoutElements,
+  parseSlideLayoutPlaceholderStyles,
+} from "./slide-layout-parser.js";
 
 function createColorResolver() {
   return new ColorResolver(
@@ -170,6 +174,80 @@ describe("parseSlideLayoutElements", () => {
     const shape = elements[0] as ShapeElement;
     expect(shape.placeholderType).toBeUndefined();
     expect(shape.fill).toEqual({ type: "solid", color: { hex: "#FF0000", alpha: 1 } });
+  });
+});
+
+describe("parseSlideLayoutPlaceholderStyles", () => {
+  it("extracts transform and geometry from placeholder shapes", () => {
+    const xml = `
+      <p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                    xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:cSld>
+          <p:spTree>
+            <p:sp>
+              <p:nvSpPr>
+                <p:cNvPr id="2" name="Title"/>
+                <p:cNvSpPr/>
+                <p:nvPr><p:ph type="title"/></p:nvPr>
+              </p:nvSpPr>
+              <p:spPr>
+                <a:xfrm>
+                  <a:off x="457200" y="274638"/>
+                  <a:ext cx="8229600" cy="1143000"/>
+                </a:xfrm>
+                <a:prstGeom prst="roundRect"/>
+              </p:spPr>
+            </p:sp>
+          </p:spTree>
+        </p:cSld>
+      </p:sldLayout>
+    `;
+
+    const styles = parseSlideLayoutPlaceholderStyles(xml);
+
+    expect(styles).toHaveLength(1);
+    expect(styles[0].placeholderType).toBe("title");
+    expect(styles[0].transform).toEqual({
+      offsetX: 457200,
+      offsetY: 274638,
+      extentWidth: 8229600,
+      extentHeight: 1143000,
+      rotation: 0,
+      flipH: false,
+      flipV: false,
+    });
+    expect(styles[0].geometry).toEqual({
+      type: "preset",
+      preset: "roundRect",
+      adjustValues: {},
+    });
+  });
+
+  it("does not include transform when spPr is empty", () => {
+    const xml = `
+      <p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                    xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:cSld>
+          <p:spTree>
+            <p:sp>
+              <p:nvSpPr>
+                <p:cNvPr id="2" name="Body"/>
+                <p:cNvSpPr/>
+                <p:nvPr><p:ph idx="1"/></p:nvPr>
+              </p:nvSpPr>
+              <p:spPr/>
+            </p:sp>
+          </p:spTree>
+        </p:cSld>
+      </p:sldLayout>
+    `;
+
+    const styles = parseSlideLayoutPlaceholderStyles(xml);
+
+    expect(styles).toHaveLength(1);
+    expect(styles[0].placeholderType).toBe("body");
+    expect(styles[0].placeholderIdx).toBe(1);
+    expect(styles[0].transform).toBeUndefined();
   });
 });
 

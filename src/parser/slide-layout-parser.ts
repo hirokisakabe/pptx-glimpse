@@ -8,7 +8,7 @@ import type { FillParseContext } from "./fill-parser.js";
 import { parseFillFromNode } from "./fill-parser.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import { buildRelsPath, parseRelationships, type Relationship } from "./relationship-parser.js";
-import { navigateOrdered, parseShapeTree } from "./slide-parser.js";
+import { navigateOrdered, parseGeometry, parseShapeTree, parseTransform } from "./slide-parser.js";
 import { parseListStyle } from "./text-style-parser.js";
 import { parseXml, parseXmlOrdered, type XmlNode } from "./xml-parser.js";
 
@@ -112,10 +112,17 @@ export function parseSlideLayoutPlaceholderStyles(
     const lstStyleNode = txBody?.lstStyle as XmlNode | undefined;
     const lstStyle = lstStyleNode ? parseListStyle(lstStyleNode, colorResolver) : undefined;
 
+    const spPr = sp.spPr as XmlNode | undefined;
+    const transform =
+      spPr && typeof spPr === "object" ? parseTransform(spPr.xfrm as XmlNode | undefined) : null;
+    const geometry = spPr && typeof spPr === "object" ? parseGeometry(spPr) : undefined;
+
     results.push({
       placeholderType,
       ...(placeholderIdx !== undefined && { placeholderIdx }),
       ...(lstStyle && { lstStyle }),
+      ...(transform && { transform }),
+      ...(geometry && { geometry }),
     });
   }
 

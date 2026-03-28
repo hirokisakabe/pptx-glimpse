@@ -61,4 +61,8 @@ export const VRT_CASES = [
   { name: "multi-lang-font", fixture: "multi-lang-font.pptx" },
   { name: "placeholder-inheritance-extended", fixture: "placeholder-inheritance-extended.pptx" },
   { name: "table-style-border", fixture: "table-style-border.pptx" },
+  {
+    name: "placeholder-geometry-inheritance",
+    fixture: "placeholder-geometry-inheritance.pptx",
+  },
 ] as const;
