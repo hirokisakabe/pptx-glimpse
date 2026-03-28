@@ -9,5 +9,6 @@ export {
   createOpentypeSetupFromBuffers,
   createOpentypeTextMeasurerFromBuffers,
 } from "./font/opentype-helpers.js";
+export { initResvgWasm } from "./png/png-converter.js";
 export type { LogLevel, WarningEntry, WarningSummary } from "./warning-logger.js";
 export { getWarningEntries, getWarningSummary } from "./warning-logger.js";

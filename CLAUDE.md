@@ -40,7 +40,7 @@ Data flow: **PPTX binary → Parser (ZIP extraction + XML parsing) → Intermedi
 - `src/renderer/` — Generates SVG strings from the intermediate model. Includes preset shape definitions in `geometry/`, plus dedicated renderers for tables, charts, and images
 - `src/color/` — Theme color resolution (schemeClr → colorMap → colorScheme) and color transformations (lumMod/tint/shade)
 - `src/font/` — Font loading (system font scanning), font mapping (proprietary → OSS alternatives), text measurement and text-to-SVG-path conversion via `opentype.js`
-- `src/png/` — SVG → PNG conversion using `@resvg/resvg-js`
+- `src/png/` — SVG → PNG conversion using `@resvg/resvg-wasm`
 - `src/data/` — Font metrics data (fallback character width information)
 - `src/utils/` — EMU ↔ pixel conversion (1 inch = 914400 EMU, 96 DPI) and text wrapping
 
