@@ -10,6 +10,8 @@ const FIXTURE_DIR = join(__dirname, "fixtures");
 const SHARED_FIXTURE_DIR = join(__dirname, "..", "..", "shared-fixtures");
 const SNAPSHOT_DIR = join(__dirname, "snapshots");
 
+const CONCURRENCY = 4;
+
 async function processFixture(fixturePath: string, name: string): Promise<number> {
   const input = readFileSync(fixturePath);
   console.log(`Processing: ${name}`);
@@ -26,10 +28,28 @@ async function processFixture(fixturePath: string, name: string): Promise<number
   return count;
 }
 
+async function runWithConcurrency<T>(
+  tasks: (() => Promise<T>)[],
+  concurrency: number,
+): Promise<T[]> {
+  const results: T[] = new Array(tasks.length);
+  let nextIndex = 0;
+
+  async function worker(): Promise<void> {
+    while (nextIndex < tasks.length) {
+      const index = nextIndex++;
+      results[index] = await tasks[index]();
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, tasks.length) }, () => worker()));
+  return results;
+}
+
 async function main(): Promise<void> {
   mkdirSync(SNAPSHOT_DIR, { recursive: true });
 
-  let totalSlides = 0;
+  const tasks: (() => Promise<number>)[] = [];
 
   // Generated fixtures
   const fixtures = existsSync(FIXTURE_DIR)
@@ -38,7 +58,8 @@ async function main(): Promise<void> {
 
   for (const fixture of fixtures.sort()) {
     const name = fixture.replace(".pptx", "");
-    totalSlides += await processFixture(join(FIXTURE_DIR, fixture), name);
+    const fixturePath = join(FIXTURE_DIR, fixture);
+    tasks.push(() => processFixture(fixturePath, name));
   }
 
   // Shared fixtures
@@ -48,13 +69,16 @@ async function main(): Promise<void> {
       console.warn(`  Skipped (not found): ${fixturePath}`);
       continue;
     }
-    totalSlides += await processFixture(fixturePath, name);
+    tasks.push(() => processFixture(fixturePath, name));
   }
 
-  if (totalSlides === 0) {
+  if (tasks.length === 0) {
     console.error("No fixtures found. Run 'npm run vrt:snapshot:fixtures' first.");
     process.exit(1);
   }
+
+  const counts = await runWithConcurrency(tasks, CONCURRENCY);
+  const totalSlides = counts.reduce((sum, c) => sum + c, 0);
 
   console.log(`\nDone! Updated ${totalSlides} snapshot(s).`);
 }
