@@ -2,6 +2,8 @@ import {
   isCjkCodePoint,
   measureTextWidth as defaultMeasureTextWidth,
 } from "../utils/text-measure.js";
+import { warn } from "../warning-logger.js";
+import { getCjkFallbackFonts } from "./cjk-font-fallback.js";
 import { getCurrentMappedFont } from "./font-mapping-context.js";
 import type { TextMeasurer } from "./text-measurer.js";
 
@@ -22,6 +24,7 @@ export interface OpentypeFont {
 export class OpentypeTextMeasurer implements TextMeasurer {
   private fonts: Map<string, OpentypeFont>;
   private defaultFont: OpentypeFont | null;
+  private warnedFonts = new Set<string>();
 
   /**
    * @param fonts - フォント名 → opentype.js Font オブジェクトのマップ
@@ -85,6 +88,18 @@ export class OpentypeTextMeasurer implements TextMeasurer {
     if (mapped) {
       const mappedFont = this.fonts.get(mapped);
       if (mappedFont) return mappedFont;
+
+      // CJK フォールバックチェーン
+      for (const fallback of getCjkFallbackFonts(mapped)) {
+        const fallbackFont = this.fonts.get(fallback);
+        if (fallbackFont) return fallbackFont;
+      }
+    }
+
+    // フォント未検出の警告
+    if (!this.warnedFonts.has(name)) {
+      this.warnedFonts.add(name);
+      warn("font.notFound", `Font not found: "${name}"`);
     }
 
     return null;

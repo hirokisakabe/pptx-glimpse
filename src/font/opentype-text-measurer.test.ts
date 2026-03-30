@@ -1,5 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { getWarningEntries, initWarningLogger } from "../warning-logger.js";
+import { resetFontMapping, setFontMapping } from "./font-mapping-context.js";
 import { type OpentypeFont, OpentypeTextMeasurer } from "./opentype-text-measurer.js";
 
 function createMockFont(opts: {
@@ -169,5 +171,76 @@ describe("OpentypeTextMeasurer", () => {
     const width = measurer.measureTextWidth("A", 18, false, null, "EaFont");
     const expected = (700 / 1000) * 18 * (96 / 72);
     expect(width).toBeCloseTo(expected, 1);
+  });
+});
+
+describe("OpentypeTextMeasurer CJK フォールバック", () => {
+  afterEach(() => {
+    resetFontMapping();
+    vi.restoreAllMocks();
+  });
+
+  it("マッピング先が見つからない場合に CJK フォールバックチェーンを試行する", async () => {
+    // Linux CI ではフォールバックチェーンが空のため、macOS 相当の値をモックする
+    const mod = await import("./cjk-font-fallback.js");
+    vi.spyOn(mod, "getCjkFallbackFonts").mockReturnValue([
+      "Hiragino Sans",
+      "Hiragino Kaku Gothic ProN",
+    ]);
+
+    const hiraginoFont = createMockFont({
+      unitsPerEm: 1000,
+      ascender: 800,
+      descender: -200,
+      glyphWidths: { A: 600 },
+    });
+    const fonts = new Map([["Hiragino Sans", hiraginoFont]]);
+    setFontMapping({ Meiryo: "Noto Sans JP" });
+    const measurer = new OpentypeTextMeasurer(fonts);
+    const width = measurer.measureTextWidth("A", 18, false, "Meiryo");
+    const expected = (600 / 1000) * 18 * (96 / 72);
+    expect(width).toBeCloseTo(expected, 1);
+  });
+});
+
+describe("OpentypeTextMeasurer font.notFound 警告", () => {
+  afterEach(() => {
+    resetFontMapping();
+    initWarningLogger("off");
+  });
+
+  it("フォントが見つからない場合に font.notFound 警告を出す", () => {
+    initWarningLogger("warn");
+    const measurer = new OpentypeTextMeasurer(new Map());
+    measurer.measureTextWidth("A", 18, false, "UnknownFont");
+    const entries = getWarningEntries();
+    expect(entries.some((e) => e.feature === "font.notFound")).toBe(true);
+    expect(entries.some((e) => e.message.includes("UnknownFont"))).toBe(true);
+  });
+
+  it("同じフォント名の警告は重複しない", () => {
+    initWarningLogger("warn");
+    const measurer = new OpentypeTextMeasurer(new Map());
+    measurer.measureTextWidth("A", 18, false, "UnknownFont");
+    measurer.measureTextWidth("A", 18, false, "UnknownFont");
+    const entries = getWarningEntries().filter(
+      (e) => e.feature === "font.notFound" && e.message.includes("UnknownFont"),
+    );
+    expect(entries).toHaveLength(1);
+  });
+
+  it("フォントが見つかった場合は警告を出さない", () => {
+    initWarningLogger("warn");
+    const font = createMockFont({
+      unitsPerEm: 1000,
+      ascender: 800,
+      descender: -200,
+      glyphWidths: { A: 600 },
+    });
+    const fonts = new Map([["TestFont", font]]);
+    const measurer = new OpentypeTextMeasurer(fonts);
+    measurer.measureTextWidth("A", 18, false, "TestFont");
+    const entries = getWarningEntries().filter((e) => e.feature === "font.notFound");
+    expect(entries).toHaveLength(0);
   });
 });
