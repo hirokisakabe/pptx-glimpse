@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getWarningEntries, initWarningLogger } from "../warning-logger.js";
 import { resetFontMapping, setFontMapping } from "./font-mapping-context.js";
@@ -177,9 +177,16 @@ describe("OpentypeTextMeasurer", () => {
 describe("OpentypeTextMeasurer CJK フォールバック", () => {
   afterEach(() => {
     resetFontMapping();
+    vi.restoreAllMocks();
   });
 
-  it("マッピング先が見つからない場合に CJK フォールバックチェーンを試行する", () => {
+  it("マッピング先が見つからない場合に CJK フォールバックチェーンを試行する", async () => {
+    const mod = await import("./cjk-font-fallback.js");
+    vi.spyOn(mod, "getCjkFallbackFonts").mockReturnValue([
+      "Hiragino Sans",
+      "Hiragino Kaku Gothic ProN",
+    ]);
+
     const hiraginoFont = createMockFont({
       unitsPerEm: 1000,
       ascender: 800,

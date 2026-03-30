@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { getWarningEntries, initWarningLogger } from "../warning-logger.js";
 import { resetFontMapping, setFontMapping } from "./font-mapping-context.js";
@@ -85,18 +85,30 @@ describe("DefaultTextPathFontResolver", () => {
 describe("DefaultTextPathFontResolver CJK フォールバック", () => {
   afterEach(() => {
     resetFontMapping();
+    vi.restoreAllMocks();
   });
 
-  it("マッピング先が見つからない場合に CJK フォールバックチェーンを試行する", () => {
+  it("マッピング先が見つからない場合に CJK フォールバックチェーンを試行する", async () => {
+    const mod = await import("./cjk-font-fallback.js");
+    vi.spyOn(mod, "getCjkFallbackFonts").mockReturnValue([
+      "Hiragino Sans",
+      "Hiragino Kaku Gothic ProN",
+    ]);
+
     const hiraginoFont = createMockFont("Hiragino Sans");
     const fonts = new Map([["Hiragino Sans", hiraginoFont]]);
-    // Meiryo → Noto Sans JP (マッピング) → 見つからない → Hiragino Sans (フォールバック)
     setFontMapping({ Meiryo: "Noto Sans JP" });
     const resolver = new DefaultTextPathFontResolver(fonts);
     expect(resolver.resolveFont("Meiryo", null)).toBe(hiraginoFont);
   });
 
-  it("CJK フォールバックチェーンの2番目のフォントを返す", () => {
+  it("CJK フォールバックチェーンの2番目のフォントを返す", async () => {
+    const mod = await import("./cjk-font-fallback.js");
+    vi.spyOn(mod, "getCjkFallbackFonts").mockReturnValue([
+      "Hiragino Sans",
+      "Hiragino Kaku Gothic ProN",
+    ]);
+
     const kakuFont = createMockFont("Hiragino Kaku Gothic ProN");
     const fonts = new Map([["Hiragino Kaku Gothic ProN", kakuFont]]);
     setFontMapping({ Meiryo: "Noto Sans JP" });
