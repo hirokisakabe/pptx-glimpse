@@ -181,6 +181,7 @@ describe("OpentypeTextMeasurer CJK フォールバック", () => {
   });
 
   it("マッピング先が見つからない場合に CJK フォールバックチェーンを試行する", async () => {
+    // Linux CI ではフォールバックチェーンが空のため、macOS 相当の値をモックする
     const mod = await import("./cjk-font-fallback.js");
     vi.spyOn(mod, "getCjkFallbackFonts").mockReturnValue([
       "Hiragino Sans",
