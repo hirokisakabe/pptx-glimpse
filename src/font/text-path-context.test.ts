@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
+import { getWarningEntries, initWarningLogger } from "../warning-logger.js";
+import { resetFontMapping, setFontMapping } from "./font-mapping-context.js";
 import type { OpentypeFullFont } from "./text-path-context.js";
 import {
   DefaultTextPathFontResolver,
@@ -77,5 +79,67 @@ describe("DefaultTextPathFontResolver", () => {
     const fonts = new Map([["Noto Sans JP", notoFont]]);
     const resolver = new DefaultTextPathFontResolver(fonts);
     expect(resolver.resolveFont(null, "Noto Sans JP")).toBe(notoFont);
+  });
+});
+
+describe("DefaultTextPathFontResolver CJK フォールバック", () => {
+  afterEach(() => {
+    resetFontMapping();
+  });
+
+  it("マッピング先が見つからない場合に CJK フォールバックチェーンを試行する", () => {
+    const hiraginoFont = createMockFont("Hiragino Sans");
+    const fonts = new Map([["Hiragino Sans", hiraginoFont]]);
+    // Meiryo → Noto Sans JP (マッピング) → 見つからない → Hiragino Sans (フォールバック)
+    setFontMapping({ Meiryo: "Noto Sans JP" });
+    const resolver = new DefaultTextPathFontResolver(fonts);
+    expect(resolver.resolveFont("Meiryo", null)).toBe(hiraginoFont);
+  });
+
+  it("CJK フォールバックチェーンの2番目のフォントを返す", () => {
+    const kakuFont = createMockFont("Hiragino Kaku Gothic ProN");
+    const fonts = new Map([["Hiragino Kaku Gothic ProN", kakuFont]]);
+    setFontMapping({ Meiryo: "Noto Sans JP" });
+    const resolver = new DefaultTextPathFontResolver(fonts);
+    expect(resolver.resolveFont("Meiryo", null)).toBe(kakuFont);
+  });
+});
+
+describe("DefaultTextPathFontResolver font.notFound 警告", () => {
+  afterEach(() => {
+    resetFontMapping();
+    initWarningLogger("off");
+  });
+
+  it("フォントが見つからない場合に font.notFound 警告を出す", () => {
+    initWarningLogger("warn");
+    const fonts = new Map<string, OpentypeFullFont>();
+    const resolver = new DefaultTextPathFontResolver(fonts);
+    resolver.resolveFont("UnknownFont", null);
+    const entries = getWarningEntries();
+    expect(entries.some((e) => e.feature === "font.notFound")).toBe(true);
+    expect(entries.some((e) => e.message.includes("UnknownFont"))).toBe(true);
+  });
+
+  it("同じフォント名の警告は重複しない", () => {
+    initWarningLogger("warn");
+    const fonts = new Map<string, OpentypeFullFont>();
+    const resolver = new DefaultTextPathFontResolver(fonts);
+    resolver.resolveFont("UnknownFont", null);
+    resolver.resolveFont("UnknownFont", null);
+    const entries = getWarningEntries().filter(
+      (e) => e.feature === "font.notFound" && e.message.includes("UnknownFont"),
+    );
+    expect(entries).toHaveLength(1);
+  });
+
+  it("フォントが見つかった場合は警告を出さない", () => {
+    initWarningLogger("warn");
+    const arialFont = createMockFont("Arial");
+    const fonts = new Map([["Arial", arialFont]]);
+    const resolver = new DefaultTextPathFontResolver(fonts);
+    resolver.resolveFont("Arial", null);
+    const entries = getWarningEntries().filter((e) => e.feature === "font.notFound");
+    expect(entries).toHaveLength(0);
   });
 });

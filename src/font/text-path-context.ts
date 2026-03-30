@@ -3,6 +3,8 @@
  * opentype.js の getPath() メソッドを持つ Font オブジェクトへのアクセスを提供する。
  */
 
+import { warn } from "../warning-logger.js";
+import { getCjkFallbackFonts } from "./cjk-font-fallback.js";
 import { getCurrentMappedFont } from "./font-mapping-context.js";
 
 export interface OpentypePath {
@@ -27,6 +29,7 @@ export interface TextPathFontResolver {
 export class DefaultTextPathFontResolver implements TextPathFontResolver {
   private fonts: Map<string, OpentypeFullFont>;
   private defaultFont: OpentypeFullFont | null;
+  private warnedFonts = new Set<string>();
 
   constructor(fonts: Map<string, OpentypeFullFont>, defaultFont?: OpentypeFullFont) {
     this.fonts = fonts;
@@ -50,6 +53,15 @@ export class DefaultTextPathFontResolver implements TextPathFontResolver {
       const font = this.findFont(jpanFallback);
       if (font) return font;
     }
+
+    // フォント未検出の警告
+    for (const name of [fontFamily, fontFamilyEa, jpanFallback]) {
+      if (name && !this.warnedFonts.has(name)) {
+        this.warnedFonts.add(name);
+        warn("font.notFound", `Font not found: "${name}"`);
+      }
+    }
+
     return this.defaultFont;
   }
 
@@ -62,6 +74,12 @@ export class DefaultTextPathFontResolver implements TextPathFontResolver {
     if (mapped) {
       const mappedFont = this.fonts.get(mapped);
       if (mappedFont) return mappedFont;
+
+      // CJK フォールバックチェーン
+      for (const fallback of getCjkFallbackFonts(mapped)) {
+        const fallbackFont = this.fonts.get(fallback);
+        if (fallbackFont) return fallbackFont;
+      }
     }
 
     return null;

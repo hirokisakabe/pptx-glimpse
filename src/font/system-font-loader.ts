@@ -9,7 +9,19 @@ const FONT_EXTENSIONS = new Set([".ttf", ".otf"]);
  * TTC ファイルは大量にあるとメモリを消費するため、
  * CJK テキストに必要なもののみを選択的に読み込む。
  */
-const CJK_TTC_PATTERNS = ["NotoSansCJK", "NotoSerifCJK"];
+const CJK_TTC_PATTERNS = [
+  "NotoSansCJK",
+  "NotoSerifCJK",
+  // macOS
+  "Hiragino",
+  "ヒラギノ",
+  // Windows
+  "YuGoth",
+  "YuMin",
+  "meiryo",
+  "msgothic",
+  "msmincho",
+];
 
 let cachedPaths: string[] | null = null;
 let cachedAdditionalDirs: string[] | null = null;
