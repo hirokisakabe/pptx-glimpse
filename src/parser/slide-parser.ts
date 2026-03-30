@@ -1259,7 +1259,7 @@ function parseParagraph(
   const lnSpcSpcPct = lnSpc?.spcPct as XmlNode | undefined;
   const tabStops = parseTabStops(pPr);
   const properties = {
-    alignment: (pPr?.["@_algn"] as "l" | "ctr" | "r" | "just") ?? lstLevelProps?.alignment ?? "l",
+    alignment: (pPr?.["@_algn"] as "l" | "ctr" | "r" | "just") ?? lstLevelProps?.alignment ?? null,
     lineSpacing: lnSpcSpcPct ? Number(lnSpcSpcPct["@_val"]) : null,
     spaceBefore: parseSpacing(pPr?.spcBef as XmlNode | undefined),
     spaceAfter: parseSpacing(pPr?.spcAft as XmlNode | undefined),

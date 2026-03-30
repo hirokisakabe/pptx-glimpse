@@ -365,6 +365,49 @@ describe("applyTextStyleInheritance", () => {
       expect(shape.textBody!.paragraphs[0].runs[0].properties.fontSize).toBe(44);
     });
 
+    it("ctrTitle プレースホルダーの alignment が txStyles titleStyle から継承される", () => {
+      const shape = makeShape({ placeholderType: "ctrTitle" });
+      // alignment を null（未解決）に設定
+      shape.textBody!.paragraphs[0].properties.alignment = null;
+      const context = makeContext({
+        txStyles: {
+          titleStyle: { levels: [{ alignment: "ctr" }] },
+          bodyStyle: makeDefaultTextStyle({ fontSize: 32 }),
+        },
+      });
+
+      applyTextStyleInheritance([shape], context);
+
+      expect(shape.textBody!.paragraphs[0].properties.alignment).toBe("ctr");
+    });
+
+    it("level に alignment がない場合 defaultParagraph から継承される", () => {
+      const shape = makeShape({ placeholderType: "ctrTitle" });
+      shape.textBody!.paragraphs[0].properties.alignment = null;
+      const context = makeContext({
+        txStyles: {
+          titleStyle: {
+            levels: [{ defaultRunProperties: { fontSize: 44 } }],
+            defaultParagraph: { alignment: "ctr" },
+          },
+        },
+      });
+
+      applyTextStyleInheritance([shape], context);
+
+      expect(shape.textBody!.paragraphs[0].properties.alignment).toBe("ctr");
+    });
+
+    it("alignment が null で継承元もない場合は 'l' にフォールバックする", () => {
+      const shape = makeShape({ placeholderType: "ctrTitle" });
+      shape.textBody!.paragraphs[0].properties.alignment = null;
+      const context = makeContext({});
+
+      applyTextStyleInheritance([shape], context);
+
+      expect(shape.textBody!.paragraphs[0].properties.alignment).toBe("l");
+    });
+
     it("body プレースホルダーは bodyStyle を使う", () => {
       const shape = makeShape({ placeholderType: "body" });
       const context = makeContext({

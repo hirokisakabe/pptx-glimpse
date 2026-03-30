@@ -106,7 +106,7 @@ export interface TabStop {
 }
 
 export interface ParagraphProperties {
-  alignment: "l" | "ctr" | "r" | "just";
+  alignment: "l" | "ctr" | "r" | "just" | null;
   lineSpacing: number | null;
   spaceBefore: SpacingValue;
   spaceAfter: SpacingValue;
