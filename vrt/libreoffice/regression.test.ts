@@ -77,6 +77,12 @@ describeOrSkip("LibreOffice Visual Regression Tests", { timeout: 60000 }, () => 
             resizeRef: true,
           });
 
+          console.log(
+            `[LO-VRT] ${name} slide ${result.slideNumber}: ` +
+              `${(comparison.mismatchPercentage * 100).toFixed(4)}% mismatch ` +
+              `(${comparison.mismatchedPixels}/${comparison.totalPixels})`,
+          );
+
           expect(
             comparison.passed,
             `${name} slide ${result.slideNumber}: ` +
