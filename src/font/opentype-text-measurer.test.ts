@@ -130,6 +130,33 @@ describe("OpentypeTextMeasurer", () => {
     expect(width).toBeCloseTo(expected, 1);
   });
 
+  it("混在文字列で CJK は fontFamilyEa、ラテンは fontFamily のフォントを使う", () => {
+    const latinFont = createMockFont({
+      unitsPerEm: 1000,
+      ascender: 800,
+      descender: -200,
+      glyphWidths: { A: 500, 漢: 300 }, // ラテンフォントの CJK 幅は不正確
+    });
+    const eaFont = createMockFont({
+      unitsPerEm: 1000,
+      ascender: 800,
+      descender: -200,
+      glyphWidths: { A: 400, 漢: 1000 }, // EA フォントの CJK 幅は正確
+    });
+    const fonts = new Map<string, OpentypeFont>([
+      ["Latin", latinFont],
+      ["EA", eaFont],
+    ]);
+    const measurer = new OpentypeTextMeasurer(fonts);
+    const pxPerPt = 96 / 72;
+
+    // "A漢A" → A は latinFont(500), 漢 は eaFont(1000), A は latinFont(500)
+    const width = measurer.measureTextWidth("A漢A", 18, false, "Latin", "EA");
+    const expectedLatin = (500 / 1000) * 18 * pxPerPt;
+    const expectedEa = (1000 / 1000) * 18 * pxPerPt;
+    expect(width).toBeCloseTo(expectedLatin + expectedEa + expectedLatin, 1);
+  });
+
   it("fontFamilyEa で解決できる場合はそちらを使う", () => {
     const font = createMockFont({
       unitsPerEm: 1000,

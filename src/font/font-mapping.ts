@@ -16,15 +16,18 @@ export const DEFAULT_FONT_MAPPING: Readonly<FontMapping> = {
   "Courier New": "Cousine",
   Cambria: "Caladea",
 
-  // 日本語ゴシック系 → Noto Sans CJK JP
-  メイリオ: "Noto Sans CJK JP",
-  Meiryo: "Noto Sans CJK JP",
-  游ゴシック: "Noto Sans CJK JP",
-  "Yu Gothic": "Noto Sans CJK JP",
-  "MS ゴシック": "Noto Sans CJK JP",
-  "MS Gothic": "Noto Sans CJK JP",
-  "MS Pゴシック": "Noto Sans CJK JP",
-  "MS PGothic": "Noto Sans CJK JP",
+  // 日本語ゴシック系 → Noto Sans JP
+  // "Noto Sans CJK JP" ではなく "Noto Sans JP" を使用する。
+  // NotoSansCJK TTC は最初の1フォントのみ抽出するため JP バリアントが取れるとは限らず、
+  // Docker 環境でダウンロードする standalone NotoSansJP.ttf のフォント名に合わせている。
+  メイリオ: "Noto Sans JP",
+  Meiryo: "Noto Sans JP",
+  游ゴシック: "Noto Sans JP",
+  "Yu Gothic": "Noto Sans JP",
+  "MS ゴシック": "Noto Sans JP",
+  "MS Gothic": "Noto Sans JP",
+  "MS Pゴシック": "Noto Sans JP",
+  "MS PGothic": "Noto Sans JP",
 
   // 日本語明朝系 → Noto Serif CJK JP
   "MS 明朝": "Noto Serif CJK JP",
