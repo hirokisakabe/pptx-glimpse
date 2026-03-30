@@ -1,5 +1,11 @@
 # pptx-glimpse
 
+## 0.7.1
+
+### Patch Changes
+
+- 87a455b: Carlito フォントの CJK advance width 不整合によるテキスト重なりを修正
+
 ## 0.7.0
 
 ### Minor Changes
