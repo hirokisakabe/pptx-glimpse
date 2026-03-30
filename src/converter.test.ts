@@ -1,5 +1,5 @@
 import JSZip from "jszip";
-import { beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { convertPptxToPng, convertPptxToSvg } from "./converter.js";
 
@@ -719,5 +719,74 @@ describe("layout placeholder text filtering", () => {
     // Count shape groups — should have decorative layout shape + slide shape = 2 groups
     const groupCount = (svg.match(/<g transform="translate/g) || []).length;
     expect(groupCount).toBe(2);
+  });
+});
+
+describe("presentation.noSlides warning", () => {
+  async function createEmptyPptx(): Promise<Buffer> {
+    const zip = new JSZip();
+
+    const emptyContentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+  <Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>
+  <Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>
+  <Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>
+</Types>`;
+
+    const emptyPresentationXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:sldMasterIdLst>
+    <p:sldMasterId r:id="rId1"/>
+  </p:sldMasterIdLst>
+  <p:sldSz cx="9144000" cy="5143500" type="screen16x9"/>
+</p:presentation>`;
+
+    const emptyPresentationRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/>
+</Relationships>`;
+
+    zip.file("[Content_Types].xml", emptyContentTypes);
+    zip.file("_rels/.rels", rootRels);
+    zip.file("ppt/presentation.xml", emptyPresentationXml);
+    zip.file("ppt/_rels/presentation.xml.rels", emptyPresentationRels);
+    zip.file("ppt/slideMasters/slideMaster1.xml", slideMaster1);
+    zip.file("ppt/slideMasters/_rels/slideMaster1.xml.rels", slideMaster1Rels);
+    zip.file("ppt/slideLayouts/slideLayout1.xml", slideLayout1);
+    zip.file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", slideLayout1Rels);
+    zip.file("ppt/theme/theme1.xml", theme1);
+    return zip.generateAsync({ type: "nodebuffer" });
+  }
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("returns empty array for PPTX with no slides", async () => {
+    const pptx = await createEmptyPptx();
+    const results = await convertPptxToSvg(pptx);
+
+    expect(results).toHaveLength(0);
+  });
+
+  it("emits presentation.noSlides warning for empty PPTX", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const pptx = await createEmptyPptx();
+    await convertPptxToSvg(pptx, { logLevel: "warn" });
+
+    const calls = warnSpy.mock.calls.map((c) => String(c[0]));
+    expect(calls.some((msg) => msg.includes("presentation.noSlides"))).toBe(true);
+  });
+
+  it("does not emit presentation.noSlides when slides exist but filter matches none", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await convertPptxToSvg(testPptx, { slides: [99], logLevel: "warn" });
+
+    const calls = warnSpy.mock.calls.map((c) => String(c[0]));
+    expect(calls.some((msg) => msg.includes("presentation.noSlides"))).toBe(false);
   });
 });

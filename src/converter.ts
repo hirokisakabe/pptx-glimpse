@@ -12,7 +12,7 @@ import { parsePptxData, parseSlideWithLayout } from "./pptx-data-parser.js";
 import { renderSlideToSvg } from "./renderer/svg-renderer.js";
 import { DEFAULT_OUTPUT_WIDTH } from "./utils/constants.js";
 import type { LogLevel } from "./warning-logger.js";
-import { flushWarnings, initWarningLogger } from "./warning-logger.js";
+import { flushWarnings, initWarningLogger, warn } from "./warning-logger.js";
 
 export interface ConvertOptions {
   /** 変換対象のスライド番号 (1始まり)。未指定で全スライド */
@@ -62,6 +62,10 @@ export async function convertPptxToSvg(
     const targetSlides = options?.slides
       ? data.slidePaths.filter((s) => options.slides!.includes(s.slideNumber))
       : data.slidePaths;
+
+    if (data.slidePaths.length === 0) {
+      warn("presentation.noSlides", "No slides found in the PPTX file");
+    }
 
     // Parse and render each slide
     const results: SlideSvg[] = [];
