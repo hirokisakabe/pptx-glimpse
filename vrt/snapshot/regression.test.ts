@@ -13,11 +13,11 @@ const FIXTURE_DIR = join(__dirname, "fixtures");
 
 const SHARED_FIXTURE_DIR = join(__dirname, "..", "..", "shared-fixtures");
 
-const PIXEL_THRESHOLD = 0.1;
-const MISMATCH_TOLERANCE = 0.015;
+const PIXEL_THRESHOLD = 0;
+const MISMATCH_TOLERANCE = 0;
 
-const SHARED_PIXEL_THRESHOLD = 0.3;
-const SHARED_MISMATCH_TOLERANCE = 0.02;
+const SHARED_PIXEL_THRESHOLD = 0;
+const SHARED_MISMATCH_TOLERANCE = 0;
 
 describe("Visual Regression Tests", { timeout: 60000 }, () => {
   for (const { name, fixture } of VRT_CASES) {
