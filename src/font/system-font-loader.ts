@@ -41,7 +41,10 @@ function getSystemFontDirs(): string[] {
 }
 
 function isCjkTtc(name: string): boolean {
-  const lower = name.toLowerCase();
+  // macOS (APFS) はファイル名を NFD (分解形) で返すため、
+  // NFC に正規化してからパターンマッチする。
+  // 例: "ギ" が "キ" + 濁点(U+3099) に分解されている場合がある。
+  const lower = name.normalize("NFC").toLowerCase();
   return lower.endsWith(".ttc") && CJK_TTC_PATTERNS.some((p) => lower.includes(p.toLowerCase()));
 }
 
