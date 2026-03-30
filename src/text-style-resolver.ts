@@ -58,8 +58,7 @@ function resolveShapeTextInheritance(shape: ShapeElement, context: TextStyleCont
     if (paragraph.properties.alignment === null) {
       for (const source of chainSources) {
         if (!source) continue;
-        const alignment =
-          source.levels[level]?.alignment ?? source.defaultParagraph?.alignment;
+        const alignment = source.levels[level]?.alignment ?? source.defaultParagraph?.alignment;
         if (alignment) {
           paragraph.properties.alignment = alignment;
           break;
