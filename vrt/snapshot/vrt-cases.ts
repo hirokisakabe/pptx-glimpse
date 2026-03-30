@@ -13,6 +13,7 @@ export const SHARED_FIXTURE_CASES = [
   { name: "real-basic-theme", fixture: "real-basic-theme.pptx" },
   { name: "real-product-page", fixture: "real-product-page.pptx" },
   { name: "real-financial-report", fixture: "real-financial-report.pptx" },
+  { name: "sample", fixture: "sample.pptx" },
 ] as const;
 
 export const VRT_CASES = [

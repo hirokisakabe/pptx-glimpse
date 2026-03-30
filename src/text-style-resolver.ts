@@ -54,6 +54,23 @@ function resolveShapeTextInheritance(shape: ShapeElement, context: TextStyleCont
   for (const paragraph of shape.textBody.paragraphs) {
     const level = paragraph.properties.level;
 
+    // 段落 alignment の継承解決
+    if (paragraph.properties.alignment === null) {
+      for (const source of chainSources) {
+        if (!source) continue;
+        const alignment =
+          source.levels[level]?.alignment ?? source.defaultParagraph?.alignment;
+        if (alignment) {
+          paragraph.properties.alignment = alignment;
+          break;
+        }
+      }
+      // 継承チェーンでも見つからなければ左揃えにフォールバック
+      if (paragraph.properties.alignment === null) {
+        paragraph.properties.alignment = "l";
+      }
+    }
+
     for (const run of paragraph.runs) {
       const props = run.properties;
 

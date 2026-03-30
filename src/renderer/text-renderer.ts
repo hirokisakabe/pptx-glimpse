@@ -444,7 +444,7 @@ function buildBulletStyleAttrs(
 }
 
 function getAlignmentInfo(
-  alignment: "l" | "ctr" | "r" | "just",
+  alignment: "l" | "ctr" | "r" | "just" | null,
   marginLeftPx: number,
   textWidth: number,
   width: number,
@@ -888,7 +888,7 @@ function estimateTextHeight(
  * tspan レンダリングの text-anchor に代わるもの。
  */
 function computePathLineX(
-  alignment: "l" | "ctr" | "r" | "just",
+  alignment: "l" | "ctr" | "r" | "just" | null,
   textStartX: number,
   effectiveTextWidth: number,
   width: number,
