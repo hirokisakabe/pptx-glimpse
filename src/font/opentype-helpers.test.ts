@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  clearFontCache,
   createOpentypeSetupFromBuffers,
+  createOpentypeSetupFromSystem,
   createOpentypeTextMeasurerFromBuffers,
 } from "./opentype-helpers.js";
 import { buildTtcFromTtfs } from "./ttc-test-helper.js";
@@ -228,5 +230,105 @@ describe("createOpentypeSetupFromBuffers (TTC)", () => {
     const widthByOss = measurer!.measureTextWidth("A", 18, false, "Carlito");
     const widthByPptx = measurer!.measureTextWidth("A", 18, false, "Calibri");
     expect(widthByPptx).toBe(widthByOss);
+  });
+});
+
+describe("createOpentypeSetupFromSystem キャッシュ", () => {
+  let testFontDir: string | null = null;
+  let testFontPath: string | null = null;
+
+  /**
+   * テスト用の一時フォントファイルを作成し、そのパスを返す。
+   * collectFontFilePaths をモックしてこのファイルのみを返すようにすることで、
+   * システムフォントの全読み込みによる OOM を防ぐ。
+   */
+  async function setupTestFont(): Promise<void> {
+    const { mkdtemp, writeFile } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    const { tmpdir } = await import("node:os");
+    testFontDir = await mkdtemp(join(tmpdir(), "pptx-glimpse-test-fonts-"));
+    testFontPath = join(testFontDir, "CacheTestFont.ttf");
+    const buffer = await createTestFontBuffer("CacheTestFont");
+    await writeFile(testFontPath, Buffer.from(buffer));
+  }
+
+  afterEach(async () => {
+    clearFontCache();
+    vi.restoreAllMocks();
+    if (testFontDir) {
+      const { rm } = await import("node:fs/promises");
+      await rm(testFontDir, { recursive: true, force: true });
+      testFontDir = null;
+      testFontPath = null;
+    }
+  });
+
+  /**
+   * collectFontFilePaths をモックしてテスト用フォントのみ返すようにする。
+   */
+  async function mockCollectFontFilePaths(): Promise<void> {
+    const systemFontLoader = await import("./system-font-loader.js");
+    vi.spyOn(systemFontLoader, "collectFontFilePaths").mockReturnValue([testFontPath!]);
+  }
+
+  it("同じ引数での2回目の呼び出しはキャッシュを返す", async () => {
+    await setupTestFont();
+    await mockCollectFontFilePaths();
+
+    const setup1 = await createOpentypeSetupFromSystem();
+    const setup2 = await createOpentypeSetupFromSystem();
+    expect(setup1).not.toBeNull();
+    // キャッシュが効いていれば同一オブジェクト参照
+    expect(setup1).toBe(setup2);
+  });
+
+  it("fontDirs が異なる場合はキャッシュを無効化する", async () => {
+    await setupTestFont();
+    await mockCollectFontFilePaths();
+
+    const setup1 = await createOpentypeSetupFromSystem();
+    const setup2 = await createOpentypeSetupFromSystem(["/some-dir"]);
+    expect(setup1).not.toBeNull();
+    expect(setup2).not.toBeNull();
+    // fontDirs が異なるのでキャッシュキーが変わり別オブジェクト
+    expect(setup1).not.toBe(setup2);
+  });
+
+  it("fontMapping が異なる場合はキャッシュを無効化する", async () => {
+    await setupTestFont();
+    await mockCollectFontFilePaths();
+
+    const setup1 = await createOpentypeSetupFromSystem();
+    const setup2 = await createOpentypeSetupFromSystem(undefined, { Custom: "Font" });
+    expect(setup1).not.toBeNull();
+    expect(setup2).not.toBeNull();
+    expect(setup1).not.toBe(setup2);
+  });
+
+  it("clearFontCache() でキャッシュがクリアされる", async () => {
+    await setupTestFont();
+    await mockCollectFontFilePaths();
+
+    const setup1 = await createOpentypeSetupFromSystem();
+    clearFontCache();
+    const setup2 = await createOpentypeSetupFromSystem();
+    expect(setup1).not.toBeNull();
+    expect(setup2).not.toBeNull();
+    // クリア後は再構築されるので別オブジェクト
+    expect(setup1).not.toBe(setup2);
+  });
+
+  it("キャッシュにより collectFontFilePaths が再呼び出しされない", async () => {
+    await setupTestFont();
+    const systemFontLoader = await import("./system-font-loader.js");
+    const spy = vi.spyOn(systemFontLoader, "collectFontFilePaths").mockReturnValue([testFontPath!]);
+
+    // 1回目: collectFontFilePaths が呼ばれる
+    await createOpentypeSetupFromSystem();
+    expect(spy).toHaveBeenCalledTimes(1);
+
+    // 2回目: キャッシュが効いて collectFontFilePaths が呼ばれない
+    await createOpentypeSetupFromSystem();
+    expect(spy).toHaveBeenCalledTimes(1);
   });
 });
