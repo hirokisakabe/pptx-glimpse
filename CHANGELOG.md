@@ -1,5 +1,11 @@
 # pptx-glimpse
 
+## 0.10.0
+
+### Minor Changes
+
+- e78f34e: feat: フォントオブジェクトキャッシュの導入 - convertPptxToSvg の2回目以降の呼び出しでフォント読み込みをスキップし高速化
+
 ## 0.9.0
 
 ### Minor Changes
