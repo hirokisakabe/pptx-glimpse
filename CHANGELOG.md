@@ -1,5 +1,11 @@
 # pptx-glimpse
 
+## 0.9.0
+
+### Minor Changes
+
+- 61a0fba: CJKフォントが見つからない場合のOS別フォールバックチェーンを追加し、font.notFound警告を出力するようにした
+
 ## 0.8.0
 
 ### Minor Changes
