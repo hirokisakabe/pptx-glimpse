@@ -216,16 +216,49 @@ function collectFontNames(font: OpentypeFontWithNames): Set<string> {
 }
 
 /**
+ * キャッシュキーを生成する。fontDirs と fontMapping の組み合わせで一意に識別する。
+ */
+function buildCacheKey(additionalFontDirs?: string[], fontMapping?: FontMapping): string {
+  const dirsKey = additionalFontDirs ? [...additionalFontDirs].sort().join("\0") : "";
+  const mappingKey = fontMapping
+    ? JSON.stringify(fontMapping, Object.keys(fontMapping).sort())
+    : "";
+  return `${dirsKey}\n${mappingKey}`;
+}
+
+/** パース済み Font オブジェクトのキャッシュ */
+let cachedSetup: OpentypeSetup | null = null;
+let cachedSetupKey: string | null = null;
+
+/**
+ * フォントオブジェクトキャッシュをクリアする。
+ * 通常は呼び出す必要はないが、フォントのインストール/アンインストール後に
+ * 強制的に再読み込みしたい場合に使用する。
+ */
+export function clearFontCache(): void {
+  cachedSetup = null;
+  cachedSetupKey = null;
+}
+
+/**
  * システムフォント + 追加ディレクトリから OpentypeTextMeasurer と TextPathFontResolver を構築する。
  *
  * 1. collectFontFilePaths() でフォントファイルパスを収集
  * 2. 各ファイルを readFile + opentype.parse でパース
  * 3. フォント名をキーとしてマップに登録（逆引きマッピング含む）
+ *
+ * パース済みの Font オブジェクトはモジュールレベルでキャッシュされ、
+ * 同じ fontDirs / fontMapping での 2 回目以降の呼び出しではキャッシュを返す。
  */
 export async function createOpentypeSetupFromSystem(
   additionalFontDirs?: string[],
   fontMapping?: FontMapping,
 ): Promise<OpentypeSetup | null> {
+  const key = buildCacheKey(additionalFontDirs, fontMapping);
+  if (cachedSetup && cachedSetupKey === key) {
+    return cachedSetup;
+  }
+
   const opentype = await tryLoadOpentype();
   if (!opentype) return null;
 
@@ -267,5 +300,9 @@ export async function createOpentypeSetupFromSystem(
     firstResolverFont ?? undefined,
   );
 
-  return { measurer, fontResolver };
+  const setup = { measurer, fontResolver };
+  cachedSetup = setup;
+  cachedSetupKey = key;
+
+  return setup;
 }

@@ -6,6 +6,7 @@ export type { FontMapping } from "./font/font-mapping.js";
 export { createFontMapping, DEFAULT_FONT_MAPPING, getMappedFont } from "./font/font-mapping.js";
 export type { FontBuffer, OpentypeSetup } from "./font/opentype-helpers.js";
 export {
+  clearFontCache,
   createOpentypeSetupFromBuffers,
   createOpentypeTextMeasurerFromBuffers,
 } from "./font/opentype-helpers.js";
