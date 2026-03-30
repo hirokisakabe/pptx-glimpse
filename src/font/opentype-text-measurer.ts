@@ -2,6 +2,7 @@ import {
   isCjkCodePoint,
   measureTextWidth as defaultMeasureTextWidth,
 } from "../utils/text-measure.js";
+import { getCurrentMappedFont } from "./font-mapping-context.js";
 import type { TextMeasurer } from "./text-measurer.js";
 
 const PX_PER_PT = 96 / 72;
@@ -38,19 +39,23 @@ export class OpentypeTextMeasurer implements TextMeasurer {
     fontFamily?: string | null,
     fontFamilyEa?: string | null,
   ): number {
-    const font = this.resolveFont(fontFamily) ?? this.resolveFont(fontFamilyEa) ?? this.defaultFont;
-    if (!font) {
+    const latinFont = this.resolveFont(fontFamily);
+    const eaFont = this.resolveFont(fontFamilyEa);
+    const fallbackFont = latinFont ?? eaFont ?? this.defaultFont;
+    if (!fallbackFont) {
       return defaultMeasureTextWidth(text, fontSizePt, bold, fontFamily, fontFamilyEa);
     }
     const fontSizePx = fontSizePt * PX_PER_PT;
-    const scale = fontSizePx / font.unitsPerEm;
     let totalWidth = 0;
-    const chars = [...text];
-    const glyphs = font.stringToGlyphs(text);
-    for (let i = 0; i < glyphs.length; i++) {
-      let charWidth = (glyphs[i].advanceWidth ?? font.unitsPerEm * 0.6) * scale;
-      const codePoint = chars[i]?.codePointAt(0);
-      if (bold && (codePoint === undefined || !isCjkCodePoint(codePoint))) {
+    for (const char of text) {
+      const codePoint = char.codePointAt(0)!;
+      const isEa = isCjkCodePoint(codePoint);
+      // CJK 文字は東アジアフォントを優先、ラテン文字はラテンフォントを優先
+      const font = isEa ? (eaFont ?? fallbackFont) : (latinFont ?? fallbackFont);
+      const scale = fontSizePx / font.unitsPerEm;
+      const glyphs = font.stringToGlyphs(char);
+      let charWidth = (glyphs[0]?.advanceWidth ?? font.unitsPerEm * 0.6) * scale;
+      if (bold && !isEa) {
         charWidth *= BOLD_FACTOR;
       }
       totalWidth += charWidth;
@@ -72,6 +77,16 @@ export class OpentypeTextMeasurer implements TextMeasurer {
 
   private resolveFont(name: string | null | undefined): OpentypeFont | null {
     if (!name) return null;
-    return this.fonts.get(name) ?? null;
+    const direct = this.fonts.get(name);
+    if (direct) return direct;
+
+    // フォントマッピングで OSS 代替名を試行
+    const mapped = getCurrentMappedFont(name);
+    if (mapped) {
+      const mappedFont = this.fonts.get(mapped);
+      if (mappedFont) return mappedFont;
+    }
+
+    return null;
   }
 }

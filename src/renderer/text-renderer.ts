@@ -1013,12 +1013,15 @@ function renderSegmentAsPath(
     if (segText.length === 0) return;
 
     const font = fontResolver.resolveFont(fontFamily, fontFamilyEa, jpanFallback);
+    // 幅測定には常に原始の props.fontFamily/fontFamilyEa を使う。
+    // スクリプト分割時に fontFamily/fontFamilyEa が入れ替えられるが、
+    // measureTextWidth は文字ごとに適切なフォントを選択するため原始の順序が必要。
     const segWidth = getTextMeasurer().measureTextWidth(
       segText,
       fontSize,
       props.bold,
-      fontFamily,
-      fontFamilyEa,
+      props.fontFamily,
+      props.fontFamilyEa,
     );
 
     if (font) {
@@ -1059,8 +1062,8 @@ function renderSegmentAsPath(
         char,
         fontSize,
         props.bold,
-        fontFamily,
-        fontFamilyEa,
+        props.fontFamily,
+        props.fontFamilyEa,
       );
 
       if (font) {
