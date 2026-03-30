@@ -1,5 +1,11 @@
 # pptx-glimpse
 
+## 0.8.0
+
+### Minor Changes
+
+- d9bb29b: スライドが0枚のPPTXファイルで `presentation.noSlides` 警告を出力するように追加
+
 ## 0.7.1
 
 ### Patch Changes
