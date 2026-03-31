@@ -1362,6 +1362,63 @@ describe("renderTextBody (path mode)", () => {
     expect(result).toContain("<path");
   });
 
+  it("bulletFont が null の場合、テキストランのフォントで箇条書き記号がレンダリングされる", () => {
+    const notoFont = createMockFont("Noto Sans JP");
+    const defaultFont = createMockFont("DefaultFont");
+    const fonts = new Map([
+      ["Noto Sans JP", notoFont],
+      ["DefaultFont", defaultFont],
+    ]);
+    setTextPathFontResolver(new DefaultTextPathFontResolver(fonts, defaultFont));
+
+    const textBody: TextBody = {
+      bodyProperties: {
+        anchor: "t",
+        marginLeft: 91440,
+        marginRight: 91440,
+        marginTop: 45720,
+        marginBottom: 45720,
+        wrap: "square",
+        autoFit: "noAutofit",
+        fontScale: 1,
+        lnSpcReduction: 0,
+        numCol: 1,
+        vert: "horz",
+      },
+      paragraphs: [
+        {
+          runs: [
+            {
+              text: "List item",
+              properties: {
+                fontSize: 18,
+                fontFamily: "Noto Sans JP",
+                fontFamilyEa: null,
+                bold: false,
+                italic: false,
+                underline: false,
+                strikethrough: false,
+                color: null,
+                baseline: 0,
+              },
+            },
+          ],
+          properties: defaultParagraphProperties({
+            bullet: { type: "char", char: "\u2022" },
+            bulletFont: null,
+            marginLeft: 342900,
+            indent: -342900,
+          }),
+        },
+      ],
+    };
+
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+    // 箇条書き記号がパスとして描画される（Noto Sans JP のモックフォントが使われる）
+    expect(result).toContain("<path");
+    expect(result).toContain("Noto Sans JP");
+  });
+
   it("フォントリゾルバーが null の場合は tspan レンダリングにフォールバック", () => {
     // setupPathMode() を呼ばない → fontResolver は null
     const textBody = makeTextBody(["Fallback"]);
