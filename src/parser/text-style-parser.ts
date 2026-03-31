@@ -1,5 +1,6 @@
 import type { ColorResolver } from "../color/color-resolver.js";
 import type {
+  AutoNumScheme,
   DefaultParagraphLevelProperties,
   DefaultRunProperties,
   DefaultTextStyle,
@@ -58,6 +59,18 @@ export function parseDefaultRunProperties(
   return Object.keys(result).length > 0 ? result : undefined;
 }
 
+const VALID_AUTO_NUM_SCHEMES = new Set([
+  "arabicPeriod",
+  "arabicParenR",
+  "romanUcPeriod",
+  "romanLcPeriod",
+  "alphaUcPeriod",
+  "alphaLcPeriod",
+  "alphaLcParenR",
+  "alphaUcParenR",
+  "arabicPlain",
+]);
+
 export function parseParagraphLevelProperties(
   node: XmlNode,
   colorResolver?: ColorResolver,
@@ -74,6 +87,38 @@ export function parseParagraphLevelProperties(
   }
   if (node["@_indent"] !== undefined) {
     result.indent = asEmu(Number(node["@_indent"]));
+  }
+
+  // Bullet の解析
+  if (node.buNone !== undefined) {
+    result.bullet = { type: "none" };
+  } else if (node.buChar) {
+    const buChar = node.buChar as XmlNode;
+    result.bullet = { type: "char", char: (buChar["@_char"] as string | undefined) ?? "\u2022" };
+  } else if (node.buAutoNum) {
+    const buAutoNum = node.buAutoNum as XmlNode;
+    const scheme = (buAutoNum["@_type"] as string | undefined) ?? "arabicPeriod";
+    result.bullet = {
+      type: "autoNum",
+      scheme: VALID_AUTO_NUM_SCHEMES.has(scheme) ? (scheme as AutoNumScheme) : "arabicPeriod",
+      startAt: Number(buAutoNum["@_startAt"] ?? 1),
+    };
+  }
+  if (node.buFont) {
+    const buFont = node.buFont as XmlNode;
+    const typeface = (buFont["@_typeface"] as string | undefined) ?? null;
+    if (typeface) result.bulletFont = typeface;
+  }
+  if (colorResolver) {
+    const buClr = node.buClr as XmlNode | undefined;
+    if (buClr) {
+      const color = colorResolver.resolve(buClr);
+      if (color) result.bulletColor = color;
+    }
+  }
+  const buSzPct = node.buSzPct as XmlNode | undefined;
+  if (buSzPct) {
+    result.bulletSizePct = Number(buSzPct["@_val"]);
   }
 
   const defRPr = parseDefaultRunProperties(node.defRPr as XmlNode, colorResolver);

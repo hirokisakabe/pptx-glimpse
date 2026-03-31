@@ -20,6 +20,10 @@ export interface DefaultParagraphLevelProperties {
   alignment?: "l" | "ctr" | "r" | "just";
   marginLeft?: Emu;
   indent?: Emu;
+  bullet?: BulletType;
+  bulletFont?: string;
+  bulletColor?: ResolvedColor;
+  bulletSizePct?: number;
   defaultRunProperties?: DefaultRunProperties;
 }
 
@@ -115,8 +119,8 @@ export interface ParagraphProperties {
   bulletFont: string | null;
   bulletColor: ResolvedColor | null;
   bulletSizePct: number | null;
-  marginLeft: Emu;
-  indent: Emu;
+  marginLeft: Emu | null;
+  indent: Emu | null;
   tabStops: TabStop[];
 }
 

@@ -1264,18 +1264,18 @@ function parseParagraph(
     spaceBefore: parseSpacing(pPr?.spcBef as XmlNode | undefined),
     spaceAfter: parseSpacing(pPr?.spcAft as XmlNode | undefined),
     level,
-    bullet,
-    bulletFont,
-    bulletColor,
-    bulletSizePct,
+    bullet: bullet ?? lstLevelProps?.bullet ?? null,
+    bulletFont: bulletFont ?? lstLevelProps?.bulletFont ?? null,
+    bulletColor: bulletColor ?? lstLevelProps?.bulletColor ?? null,
+    bulletSizePct: bulletSizePct ?? lstLevelProps?.bulletSizePct ?? null,
     marginLeft:
       pPr?.["@_marL"] !== undefined
         ? asEmu(Number(pPr["@_marL"]))
-        : (lstLevelProps?.marginLeft ?? asEmu(0)),
+        : (lstLevelProps?.marginLeft ?? null),
     indent:
       pPr?.["@_indent"] !== undefined
         ? asEmu(Number(pPr["@_indent"]))
-        : (lstLevelProps?.indent ?? asEmu(0)),
+        : (lstLevelProps?.indent ?? null),
     tabStops,
   };
 
