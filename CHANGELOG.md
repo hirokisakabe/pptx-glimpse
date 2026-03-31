@@ -1,5 +1,12 @@
 # pptx-glimpse
 
+## 0.10.1
+
+### Patch Changes
+
+- bbb366e: fix: buFont未指定時に箇条書き記号がテキストランのフォントにフォールバックするよう修正
+- efbc301: fix: プレースホルダの箇条書きスタイル（bullet, marginLeft, indent）がスライドマスターのtxStylesから正しく継承されるよう修正
+
 ## 0.10.0
 
 ### Minor Changes
