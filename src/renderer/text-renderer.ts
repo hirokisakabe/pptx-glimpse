@@ -1137,6 +1137,8 @@ function renderBulletAsPath(
   textFontSizePt: number,
   fontScale: number,
   fontResolver: TextPathFontResolver,
+  runFontFamily?: string | null,
+  runFontFamilyEa?: string | null,
 ): string[] {
   let bulletFontSize = textFontSizePt;
   if (paraProps.bulletSizePct !== null) {
@@ -1144,7 +1146,10 @@ function renderBulletAsPath(
   }
   const fontSizePx = bulletFontSize * PX_PER_PT;
 
-  const font = fontResolver.resolveFont(paraProps.bulletFont, null);
+  // bulletFont が指定されている場合はそれを使用し、未指定の場合はテキストランのフォントにフォールバック
+  const font = paraProps.bulletFont
+    ? fontResolver.resolveFont(paraProps.bulletFont, null)
+    : fontResolver.resolveFont(runFontFamily ?? null, runFontFamilyEa ?? null);
   if (!font) return [];
 
   const path = font.getPath(bulletText, x, y, fontSizePx);
@@ -1307,6 +1312,7 @@ function renderTextBodyAsPath(
         // 箇条書き記号（最初の行のみ）
         if (lineIdx === 0 && bulletText) {
           const lineFontSize = getLineFontSize(line.segments, defaultFontSize) * fontScale;
+          const firstSeg = line.segments[0];
           elements.push(
             ...renderBulletAsPath(
               bulletText,
@@ -1316,6 +1322,8 @@ function renderTextBodyAsPath(
               lineFontSize,
               fontScale,
               fontResolver,
+              firstSeg?.properties.fontFamily,
+              firstSeg?.properties.fontFamilyEa,
             ),
           );
         }
@@ -1375,6 +1383,8 @@ function renderTextBodyAsPath(
             fontSize,
             fontScale,
             fontResolver,
+            firstRun?.properties.fontFamily,
+            firstRun?.properties.fontFamilyEa,
           ),
         );
       }
