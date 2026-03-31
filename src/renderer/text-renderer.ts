@@ -141,8 +141,8 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
   let prevSpaceAfterPx = 0;
 
   for (const para of paragraphs) {
-    const paraMarginLeft = emuToPixels(para.properties.marginLeft);
-    const paraIndent = emuToPixels(para.properties.indent);
+    const paraMarginLeft = emuToPixels(para.properties.marginLeft ?? asEmu(0));
+    const paraIndent = emuToPixels(para.properties.indent ?? asEmu(0));
 
     // テキスト開始位置 = bodyMarginLeft + paraMarginLeft
     const textStartX = marginLeftPx + paraMarginLeft;
@@ -1241,8 +1241,8 @@ function renderTextBodyAsPath(
   let prevSpaceAfterPx = 0;
 
   for (const para of paragraphs) {
-    const paraMarginLeft = emuToPixels(para.properties.marginLeft);
-    const paraIndent = emuToPixels(para.properties.indent);
+    const paraMarginLeft = emuToPixels(para.properties.marginLeft ?? asEmu(0));
+    const paraIndent = emuToPixels(para.properties.indent ?? asEmu(0));
     const textStartX = marginLeftPx + paraMarginLeft;
     const bulletX = textStartX + paraIndent;
     const effectiveTextWidth = textWidth - paraMarginLeft;

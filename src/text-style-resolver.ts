@@ -70,6 +70,67 @@ function resolveShapeTextInheritance(shape: ShapeElement, context: TextStyleCont
       }
     }
 
+    // 段落 bullet の継承解決
+    if (paragraph.properties.bullet === null) {
+      for (const source of chainSources) {
+        if (!source) continue;
+        const levelProps = source.levels[level] ?? source.defaultParagraph;
+        if (!levelProps?.bullet) continue;
+        paragraph.properties.bullet = levelProps.bullet;
+        break;
+      }
+    }
+
+    // bullet 補助属性の継承解決（bullet 本体とは独立して解決）
+    const hasBullet =
+      paragraph.properties.bullet !== null && paragraph.properties.bullet.type !== "none";
+    if (
+      hasBullet &&
+      (paragraph.properties.bulletFont === null ||
+        paragraph.properties.bulletColor === null ||
+        paragraph.properties.bulletSizePct === null)
+    ) {
+      for (const source of chainSources) {
+        if (!source) continue;
+        const levelProps = source.levels[level] ?? source.defaultParagraph;
+        if (!levelProps) continue;
+        if (paragraph.properties.bulletFont === null && levelProps.bulletFont) {
+          paragraph.properties.bulletFont = levelProps.bulletFont;
+        }
+        if (paragraph.properties.bulletColor === null && levelProps.bulletColor) {
+          paragraph.properties.bulletColor = levelProps.bulletColor;
+        }
+        if (paragraph.properties.bulletSizePct === null && levelProps.bulletSizePct) {
+          paragraph.properties.bulletSizePct = levelProps.bulletSizePct;
+        }
+        if (
+          paragraph.properties.bulletFont !== null &&
+          paragraph.properties.bulletColor !== null &&
+          paragraph.properties.bulletSizePct !== null
+        ) {
+          break;
+        }
+      }
+    }
+
+    // 段落 marginLeft / indent の継承解決
+    if (paragraph.properties.marginLeft === null || paragraph.properties.indent === null) {
+      for (const source of chainSources) {
+        if (!source) continue;
+        const levelProps = source.levels[level] ?? source.defaultParagraph;
+        if (!levelProps) continue;
+        if (paragraph.properties.marginLeft === null && levelProps.marginLeft !== undefined) {
+          paragraph.properties.marginLeft = levelProps.marginLeft;
+        }
+        if (paragraph.properties.indent === null && levelProps.indent !== undefined) {
+          paragraph.properties.indent = levelProps.indent;
+        }
+        if (paragraph.properties.marginLeft !== null && paragraph.properties.indent !== null) {
+          break;
+        }
+      }
+    }
+
     for (const run of paragraph.runs) {
       const props = run.properties;
 

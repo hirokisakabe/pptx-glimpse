@@ -689,8 +689,8 @@ describe("bullet parsing", () => {
     const shape = elements[0] as ShapeElement;
     const para = shape.textBody!.paragraphs[0];
     expect(para.properties.bullet).toBeNull();
-    expect(para.properties.marginLeft).toBe(0);
-    expect(para.properties.indent).toBe(0);
+    expect(para.properties.marginLeft).toBeNull();
+    expect(para.properties.indent).toBeNull();
   });
 });
 
