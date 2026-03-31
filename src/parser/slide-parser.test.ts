@@ -4,6 +4,7 @@ import { ColorResolver } from "../color/color-resolver.js";
 import type { ShapeElement } from "../model/shape.js";
 import { initWarningLogger } from "../warning-logger.js";
 import type { PptxArchive } from "./pptx-reader.js";
+import type { Relationship } from "./relationship-parser.js";
 import { navigateOrdered, parseShapeTree, parseSlide, parseTextBody } from "./slide-parser.js";
 import type { XmlNode } from "./xml-parser.js";
 import { parseXml, parseXmlOrdered } from "./xml-parser.js";
@@ -1689,6 +1690,84 @@ describe("parseTextBody", () => {
     const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
     expect(result).not.toBeNull();
     expect(result!.bodyProperties.vert).toBe("horz");
+  });
+
+  it("applies hlink theme color and underline for hyperlink text without explicit style", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+              xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r>
+            <a:rPr lang="en-US" sz="1400">
+              <a:hlinkClick r:id="rId1"/>
+            </a:rPr>
+            <a:t>Click here</a:t>
+          </a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const rels = new Map<string, Relationship>([
+      ["rId1", { id: "rId1", type: "hyperlink", target: "https://example.com" }],
+    ]);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver(), rels);
+    expect(result).not.toBeNull();
+    const run = result!.paragraphs[0].runs[0];
+    expect(run.properties.hyperlink).toEqual({ url: "https://example.com" });
+    expect(run.properties.color).toEqual({ hex: "#0563C1", alpha: 1 });
+    expect(run.properties.underline).toBe(true);
+  });
+
+  it("preserves explicit color when hyperlink text has explicit solidFill", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+              xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r>
+            <a:rPr lang="en-US" sz="1400">
+              <a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>
+              <a:hlinkClick r:id="rId1"/>
+            </a:rPr>
+            <a:t>Red link</a:t>
+          </a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const rels = new Map<string, Relationship>([
+      ["rId1", { id: "rId1", type: "hyperlink", target: "https://example.com" }],
+    ]);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver(), rels);
+    expect(result).not.toBeNull();
+    const run = result!.paragraphs[0].runs[0];
+    expect(run.properties.color).toEqual({ hex: "#FF0000", alpha: 1 });
+  });
+
+  it("respects explicit u='none' for hyperlink text", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+              xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r>
+            <a:rPr lang="en-US" sz="1400" u="none">
+              <a:hlinkClick r:id="rId1"/>
+            </a:rPr>
+            <a:t>No underline link</a:t>
+          </a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const rels = new Map<string, Relationship>([
+      ["rId1", { id: "rId1", type: "hyperlink", target: "https://example.com" }],
+    ]);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver(), rels);
+    expect(result).not.toBeNull();
+    const run = result!.paragraphs[0].runs[0];
+    expect(run.properties.underline).toBe(false);
   });
 });
 

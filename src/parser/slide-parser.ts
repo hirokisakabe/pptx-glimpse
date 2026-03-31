@@ -1476,8 +1476,8 @@ function parseRunProperties(
     rPr["@_i"] !== undefined
       ? rPr["@_i"] === "1" || rPr["@_i"] === "true"
       : (defaults?.italic ?? false);
-  const underline =
-    rPr["@_u"] !== undefined ? rPr["@_u"] !== "none" : (defaults?.underline ?? false);
+  const hasExplicitUnderline = rPr["@_u"] !== undefined;
+  let underline = hasExplicitUnderline ? rPr["@_u"] !== "none" : (defaults?.underline ?? false);
   const strikethrough =
     rPr["@_strike"] !== undefined
       ? rPr["@_strike"] !== "noStrike"
@@ -1491,6 +1491,16 @@ function parseRunProperties(
   }
 
   const hyperlink = parseHyperlink(rPr.hlinkClick as XmlNode | undefined, rels);
+
+  // Default hyperlink style: theme hlink color + underline
+  if (hyperlink) {
+    if (!color) {
+      color = colorResolver.resolve({ schemeClr: { "@_val": "hlink" } } as XmlNode);
+    }
+    if (!hasExplicitUnderline && !underline) {
+      underline = true;
+    }
+  }
 
   const ln = rPr.ln as XmlNode | undefined;
   let outline: TextOutline | null = null;
