@@ -26,7 +26,7 @@ jobs:
       # 直接 npm install -g が失敗するため、npx 経由で正常な npm を取得してインストールする。
       # Node/npm の修正版がリリースされたらこのステップを削除して良い。
       - name: Upgrade npm for Trusted Publishing
-        run: npx -y npm@10 install -g npm@10
+        run: npx -y npm@11 install -g npm@11
 
       - run: npm ci
       - run: npm run build
