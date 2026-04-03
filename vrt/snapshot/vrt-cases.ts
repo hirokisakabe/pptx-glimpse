@@ -66,4 +66,5 @@ export const VRT_CASES = [
     name: "placeholder-geometry-inheritance",
     fixture: "placeholder-geometry-inheritance.pptx",
   },
+  { name: "interleaved-bullet-ppr", fixture: "interleaved-bullet-ppr.pptx" },
 ] as const;
