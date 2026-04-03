@@ -1067,6 +1067,175 @@ function findMatchingPlaceholder(
   return undefined;
 }
 
+/**
+ * orderedChildren 内に bullet を持つ pPr が2回以上出現するかを判定する。
+ * 複数の pPr があっても bullet 開始が1回だけなら通常の parseParagraph で処理する。
+ */
+function hasMultipleBulletPPr(p: XmlNode, orderedChildren: XmlOrderedNode[]): boolean {
+  const rawPPr = p.pPr;
+  const pPrList: XmlNode[] = Array.isArray(rawPPr)
+    ? (rawPPr as XmlNode[])
+    : rawPPr
+      ? [rawPPr as XmlNode]
+      : [];
+
+  let bulletPPrCount = 0;
+  let pPrCounter = 0;
+  for (const child of orderedChildren) {
+    const tag = Object.keys(child).find((k) => k !== ":@");
+    if (tag === "pPr") {
+      const pPrNode = pPrList[pPrCounter];
+      if (
+        pPrNode &&
+        (pPrNode.buChar !== undefined ||
+          pPrNode.buAutoNum !== undefined ||
+          pPrNode.buBlip !== undefined)
+      ) {
+        bulletPPrCount++;
+        if (bulletPPrCount >= 2) return true;
+      }
+      pPrCounter++;
+    }
+  }
+  return false;
+}
+
+/**
+ * 単一の <a:p> 内に複数の <a:pPr> が交互配置されている非標準XMLを
+ * 複数の Paragraph に分割する。
+ * buChar/buAutoNum/buBlip を持つ pPr を論理段落の開始として扱い、
+ * buNone の pPr は同一段落内のスタイル変更として継続する。
+ */
+function splitInterleavedParagraph(
+  p: XmlNode,
+  orderedPChildren: XmlOrderedNode[],
+  colorResolver: ColorResolver,
+  rels?: Map<string, Relationship>,
+  fontScheme?: FontScheme | null,
+  lstStyle?: DefaultTextStyle,
+): Paragraph[] {
+  const rawPPr = p.pPr;
+  const pPrList: XmlNode[] = Array.isArray(rawPPr)
+    ? (rawPPr as XmlNode[])
+    : rawPPr
+      ? [rawPPr as XmlNode]
+      : [];
+
+  const rList: XmlNode[] = (p.r as XmlNode[] | undefined) ?? [];
+  const fldList: XmlNode[] = (p.fld as XmlNode[] | undefined) ?? [];
+  const brList: XmlNode[] = (p.br as XmlNode[] | undefined) ?? [];
+
+  interface Group {
+    pPrIdx: number;
+    rIndices: number[];
+    fldIndices: number[];
+    brIndices: number[];
+    orderedChildren: XmlOrderedNode[];
+  }
+
+  const groups: Group[] = [];
+  let currentGroup: Group | null = null;
+  let pPrCounter = 0;
+  const tagCounters: Record<string, number> = {};
+
+  for (const child of orderedPChildren) {
+    const tag = Object.keys(child).find((k) => k !== ":@");
+    if (!tag) continue;
+
+    if (tag === "pPr") {
+      const pPrNode = pPrList[pPrCounter];
+      const hasBullet =
+        pPrNode &&
+        (pPrNode.buChar !== undefined ||
+          pPrNode.buAutoNum !== undefined ||
+          pPrNode.buBlip !== undefined);
+
+      if (hasBullet || !currentGroup) {
+        if (currentGroup) groups.push(currentGroup);
+        currentGroup = {
+          pPrIdx: pPrCounter,
+          rIndices: [],
+          fldIndices: [],
+          brIndices: [],
+          orderedChildren: [child],
+        };
+      } else {
+        currentGroup.orderedChildren.push(child);
+      }
+      pPrCounter++;
+    } else if (tag === "endParaRPr") {
+      // endParaRPr は最後のグループに付与（後で処理）
+    } else {
+      const globalIdx = tagCounters[tag] ?? 0;
+      tagCounters[tag] = globalIdx + 1;
+
+      if (!currentGroup) {
+        currentGroup = {
+          pPrIdx: -1,
+          rIndices: [],
+          fldIndices: [],
+          brIndices: [],
+          orderedChildren: [],
+        };
+      }
+
+      if (tag === "r") currentGroup.rIndices.push(globalIdx);
+      else if (tag === "fld") currentGroup.fldIndices.push(globalIdx);
+      else if (tag === "br") currentGroup.brIndices.push(globalIdx);
+      currentGroup.orderedChildren.push(child);
+    }
+  }
+  if (currentGroup) groups.push(currentGroup);
+
+  const results: Paragraph[] = [];
+  for (let g = 0; g < groups.length; g++) {
+    const group = groups[g];
+    const isLast = g === groups.length - 1;
+
+    const syntheticP: XmlNode = {};
+    if (group.pPrIdx >= 0 && pPrList[group.pPrIdx]) {
+      syntheticP.pPr = pPrList[group.pPrIdx];
+    }
+    if (group.rIndices.length > 0) {
+      syntheticP.r = group.rIndices.map((i) => rList[i]);
+    }
+    if (group.fldIndices.length > 0) {
+      syntheticP.fld = group.fldIndices.map((i) => fldList[i]);
+    }
+    if (group.brIndices.length > 0) {
+      syntheticP.br = group.brIndices.map((i) => brList[i]);
+    }
+    if (isLast && p.endParaRPr) {
+      syntheticP.endParaRPr = p.endParaRPr;
+    }
+
+    const paragraph = parseParagraph(
+      syntheticP,
+      colorResolver,
+      rels,
+      fontScheme,
+      lstStyle,
+      group.orderedChildren,
+    );
+
+    // 非最終グループの末尾改行をストリップ（非標準フォーマットで段落区切りとして使われている）
+    // 最終グループは改行を保持する（意図的な改行の可能性がある）
+    if (!isLast && paragraph.runs.length > 0) {
+      const lastRun = paragraph.runs[paragraph.runs.length - 1];
+      if (lastRun.text.endsWith("\n")) {
+        paragraph.runs[paragraph.runs.length - 1] = {
+          ...lastRun,
+          text: lastRun.text.slice(0, -1),
+        };
+      }
+    }
+
+    results.push(paragraph);
+  }
+
+  return results;
+}
+
 export function parseTextBody(
   txBody: XmlNode | undefined,
   colorResolver: ColorResolver,
@@ -1129,9 +1298,25 @@ export function parseTextBody(
   const paragraphs: Paragraph[] = [];
   const pList = (txBody.p as XmlNode[] | undefined) ?? [];
   for (let i = 0; i < pList.length; i++) {
-    paragraphs.push(
-      parseParagraph(pList[i], colorResolver, rels, fontScheme, lstStyle, orderedParagraphs[i]),
-    );
+    const orderedChildren = orderedParagraphs[i];
+    // 単一 <a:p> 内に bullet pPr が複数回交互配置されている非標準XMLを検出して分割
+    // bullet を持つ pPr が2回以上出現するケースのみ分割対象にする
+    if (orderedChildren && hasMultipleBulletPPr(pList[i], orderedChildren)) {
+      paragraphs.push(
+        ...splitInterleavedParagraph(
+          pList[i],
+          orderedChildren,
+          colorResolver,
+          rels,
+          fontScheme,
+          lstStyle,
+        ),
+      );
+    } else {
+      paragraphs.push(
+        parseParagraph(pList[i], colorResolver, rels, fontScheme, lstStyle, orderedChildren),
+      );
+    }
   }
 
   if (paragraphs.length === 0) return null;

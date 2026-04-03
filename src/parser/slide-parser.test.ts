@@ -1769,6 +1769,195 @@ describe("parseTextBody", () => {
     const run = result!.paragraphs[0].runs[0];
     expect(run.properties.underline).toBe(false);
   });
+
+  it("splits interleaved pPr/r in a single <a:p> into multiple paragraphs", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:pPr algn="l" marL="342900" indent="-342900">
+            <a:buChar char="&#x2022;"/>
+          </a:pPr>
+          <a:r><a:rPr lang="en-US" sz="1800" b="1"/><a:t>Item A</a:t></a:r>
+          <a:pPr algn="l" indent="0" marL="0">
+            <a:buNone/>
+          </a:pPr>
+          <a:r><a:rPr lang="en-US" sz="1800"/><a:t>: description A
+</a:t></a:r>
+          <a:pPr algn="l" marL="342900" indent="-342900">
+            <a:buChar char="&#x2022;"/>
+          </a:pPr>
+          <a:r><a:rPr lang="en-US" sz="1800" b="1"/><a:t>Item B</a:t></a:r>
+          <a:pPr algn="l" indent="0" marL="0">
+            <a:buNone/>
+          </a:pPr>
+          <a:r><a:rPr lang="en-US" sz="1800"/><a:t>: description B</a:t></a:r>
+          <a:endParaRPr lang="en-US" sz="1800"/>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+
+    // ordered data を生成
+    const fullXml = `<sp xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">${xml}</sp>`;
+    const orderedFull = parseXmlOrdered(fullXml);
+    const spChildren = orderedFull[0]?.sp;
+    const txBodyEntry = Array.isArray(spChildren)
+      ? (spChildren as Record<string, unknown>[]).find((c) => "txBody" in c)
+      : null;
+    const orderedTxBody = txBodyEntry?.txBody as Record<string, unknown>[] | undefined;
+
+    const result = parseTextBody(
+      parsed.txBody as XmlNode,
+      createColorResolver(),
+      undefined,
+      undefined,
+      undefined,
+      orderedTxBody,
+    );
+    expect(result).not.toBeNull();
+    // 1つの <a:p> が2つの Paragraph に分割される
+    expect(result!.paragraphs).toHaveLength(2);
+
+    // 最初のパラグラフ: bullet あり、2 runs
+    const para1 = result!.paragraphs[0];
+    expect(para1.properties.bullet).toEqual({ type: "char", char: "\u2022" });
+    expect(para1.runs).toHaveLength(2);
+    expect(para1.runs[0].text).toBe("Item A");
+    expect(para1.runs[0].properties.bold).toBe(true);
+    expect(para1.runs[1].text).toBe(": description A");
+    expect(para1.runs[1].properties.bold).toBe(false);
+
+    // 2番目のパラグラフ: bullet あり、2 runs
+    const para2 = result!.paragraphs[1];
+    expect(para2.properties.bullet).toEqual({ type: "char", char: "\u2022" });
+    expect(para2.runs).toHaveLength(2);
+    expect(para2.runs[0].text).toBe("Item B");
+    expect(para2.runs[0].properties.bold).toBe(true);
+    expect(para2.runs[1].text).toBe(": description B");
+    expect(para2.runs[1].properties.bold).toBe(false);
+
+    // endParaRPr は最後のパラグラフにのみ付与
+    expect(para1.endParaRunProperties).toBeUndefined();
+    expect(para2.endParaRunProperties).toBeDefined();
+  });
+
+  it("does not split paragraph with single pPr (standard format)", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:pPr algn="l" marL="342900" indent="-342900">
+            <a:buChar char="&#x2022;"/>
+          </a:pPr>
+          <a:r><a:rPr lang="en-US" sz="1800"/><a:t>Single bullet item</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+
+    const fullXml = `<sp xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">${xml}</sp>`;
+    const orderedFull = parseXmlOrdered(fullXml);
+    const spChildren = orderedFull[0]?.sp;
+    const txBodyEntry = Array.isArray(spChildren)
+      ? (spChildren as Record<string, unknown>[]).find((c) => "txBody" in c)
+      : null;
+    const orderedTxBody = txBodyEntry?.txBody as Record<string, unknown>[] | undefined;
+
+    const result = parseTextBody(
+      parsed.txBody as XmlNode,
+      createColorResolver(),
+      undefined,
+      undefined,
+      undefined,
+      orderedTxBody,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.paragraphs).toHaveLength(1);
+    expect(result!.paragraphs[0].properties.bullet).toEqual({ type: "char", char: "\u2022" });
+    expect(result!.paragraphs[0].runs[0].text).toBe("Single bullet item");
+  });
+
+  it("does not split when multiple pPr exist but only one has bullet", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:pPr algn="l" marL="342900" indent="-342900">
+            <a:buChar char="&#x2022;"/>
+          </a:pPr>
+          <a:r><a:rPr lang="en-US" sz="1800" b="1"/><a:t>Bold part</a:t></a:r>
+          <a:pPr algn="l" indent="0" marL="0">
+            <a:buNone/>
+          </a:pPr>
+          <a:r><a:rPr lang="en-US" sz="1800"/><a:t>: normal part</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+
+    const fullXml = `<sp xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">${xml}</sp>`;
+    const orderedFull = parseXmlOrdered(fullXml);
+    const spChildren = orderedFull[0]?.sp;
+    const txBodyEntry = Array.isArray(spChildren)
+      ? (spChildren as Record<string, unknown>[]).find((c) => "txBody" in c)
+      : null;
+    const orderedTxBody = txBodyEntry?.txBody as Record<string, unknown>[] | undefined;
+
+    const result = parseTextBody(
+      parsed.txBody as XmlNode,
+      createColorResolver(),
+      undefined,
+      undefined,
+      undefined,
+      orderedTxBody,
+    );
+    expect(result).not.toBeNull();
+    // bullet pPr が1回のみなので分割されない
+    expect(result!.paragraphs).toHaveLength(1);
+  });
+
+  it("splits paragraph with only bullet pPr entries (no buNone)", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:pPr algn="l" marL="342900" indent="-342900">
+            <a:buChar char="&#x2022;"/>
+          </a:pPr>
+          <a:r><a:rPr lang="en-US" sz="1800"/><a:t>First</a:t></a:r>
+          <a:pPr algn="l" marL="342900" indent="-342900">
+            <a:buChar char="&#x2022;"/>
+          </a:pPr>
+          <a:r><a:rPr lang="en-US" sz="1800"/><a:t>Second</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+
+    const fullXml = `<sp xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">${xml}</sp>`;
+    const orderedFull = parseXmlOrdered(fullXml);
+    const spChildren = orderedFull[0]?.sp;
+    const txBodyEntry = Array.isArray(spChildren)
+      ? (spChildren as Record<string, unknown>[]).find((c) => "txBody" in c)
+      : null;
+    const orderedTxBody = txBodyEntry?.txBody as Record<string, unknown>[] | undefined;
+
+    const result = parseTextBody(
+      parsed.txBody as XmlNode,
+      createColorResolver(),
+      undefined,
+      undefined,
+      undefined,
+      orderedTxBody,
+    );
+    expect(result).not.toBeNull();
+    expect(result!.paragraphs).toHaveLength(2);
+    expect(result!.paragraphs[0].runs[0].text).toBe("First");
+    expect(result!.paragraphs[0].properties.bullet).toEqual({ type: "char", char: "\u2022" });
+    expect(result!.paragraphs[1].runs[0].text).toBe("Second");
+    expect(result!.paragraphs[1].properties.bullet).toEqual({ type: "char", char: "\u2022" });
+  });
 });
 
 describe("placeholder geometry inheritance", () => {

@@ -6874,7 +6874,91 @@ const FIXTURE_CREATORS: Record<string, () => Promise<void>> = {
   "placeholder-inheritance-extended.pptx": createPlaceholderInheritanceExtendedFixture,
   "table-style-border.pptx": createTableStyleBorderFixture,
   "placeholder-geometry-inheritance.pptx": createPlaceholderGeometryInheritanceFixture,
+  "interleaved-bullet-ppr.pptx": createInterleavedBulletPprFixture,
 };
+
+// --- Interleaved bullet pPr ---
+// 単一 <a:p> 内に複数 <a:pPr> と <a:r> が交互配置される非標準XML
+async function createInterleavedBulletPprFixture(): Promise<void> {
+  const bulletItems = [
+    { label: "Product", desc: "AI dashboard beta release" },
+    { label: "Sales", desc: "ARR target 800M" },
+    { label: "Team", desc: "Hire 15 engineers" },
+    { label: "Partners", desc: "3 new contracts" },
+  ];
+
+  // 交互 pPr/r パターン: buChar pPr + bold r + buNone pPr + normal r (with \n)
+  const interleavedRuns = bulletItems
+    .map((item, i) => {
+      const trailingNewline = i < bulletItems.length - 1 ? "\n" : "";
+      return `
+          <a:pPr algn="l" marL="342900" indent="-342900">
+            <a:lnSpc><a:spcPct val="130000"/></a:lnSpc>
+            <a:buSzPct val="100000"/>
+            <a:buChar char="&#x2022;"/>
+          </a:pPr>
+          <a:r>
+            <a:rPr lang="en-US" sz="1600" b="1">
+              <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+            </a:rPr>
+            <a:t>${item.label}</a:t>
+          </a:r>
+          <a:pPr algn="l" indent="0" marL="0">
+            <a:lnSpc><a:spcPct val="130000"/></a:lnSpc>
+            <a:buNone/>
+          </a:pPr>
+          <a:r>
+            <a:rPr lang="en-US" sz="1600">
+              <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
+            </a:rPr>
+            <a:t>: ${item.desc}${trailingNewline}</a:t>
+          </a:r>`;
+    })
+    .join("");
+
+  const titleShape = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="2" name="Title"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="457200" y="274638"/><a:ext cx="8229600" cy="400000"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:noFill/>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr wrap="square" lIns="0" tIns="0" rIns="0" bIns="0"/>
+    <a:lstStyle/>
+    <a:p>
+      <a:pPr algn="l"/>
+      <a:r>
+        <a:rPr lang="en-US" sz="2000" b="1">
+          <a:solidFill><a:srgbClr val="333333"/></a:solidFill>
+        </a:rPr>
+        <a:t>Interleaved pPr/r bullet list</a:t>
+      </a:r>
+    </a:p>
+  </p:txBody>
+</p:sp>`;
+
+  const bulletShape = `<p:sp>
+  <p:nvSpPr><p:cNvPr id="3" name="Bullets"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="457200" y="800000"/><a:ext cx="8229600" cy="2400000"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:solidFill><a:srgbClr val="F5F5F5"/></a:solidFill>
+  </p:spPr>
+  <p:txBody>
+    <a:bodyPr wrap="square" lIns="91440" tIns="45720" rIns="91440" bIns="45720"/>
+    <a:lstStyle/>
+    <a:p>${interleavedRuns}
+      <a:endParaRPr lang="en-US" sz="1600"/>
+    </a:p>
+  </p:txBody>
+</p:sp>`;
+
+  const slideXml = wrapSlideXml([titleShape, bulletShape].join("\n"));
+  const rels = slideRelsXml();
+  const buffer = await buildPptx({ slides: [{ xml: slideXml, rels }] });
+  savePptx(buffer, "interleaved-bullet-ppr.pptx");
+}
 
 async function main(): Promise<void> {
   console.log("Creating VRT fixtures...\n");
