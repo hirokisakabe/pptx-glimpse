@@ -22,6 +22,12 @@ jobs:
           cache: npm
           registry-url: https://registry.npmjs.org
 
+      # Workaround: Node 22.22.2 のバンドル npm にモジュール欠損 (promise-retry) があり
+      # 直接 npm install -g が失敗するため、npx 経由で正常な npm を取得してインストールする。
+      # Node/npm の修正版がリリースされたらこのステップを削除して良い。
+      - name: Upgrade npm for Trusted Publishing
+        run: npx -y npm@10 install -g npm@10
+
       - run: npm ci
       - run: npm run build
       - run: npx vitest run --exclude 'vrt/**'
