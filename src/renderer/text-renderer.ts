@@ -315,7 +315,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
   const firstLineBaselineOffsetPt = firstParaFontSizePt * defaultAscenderRatio;
   yStart += firstLineBaselineOffsetPt * PX_PER_PT;
 
-  const textElement = `<text x="0" y="${yStart}">${tspans.join("")}</text>`;
+  const textElement = `<text x="0" y="${yStart}" xml:space="preserve">${tspans.join("")}</text>`;
 
   if (isVerticalText(bodyProperties.vert)) {
     return `<g transform="translate(${originalWidth}, 0) rotate(90)">${textElement}</g>`;

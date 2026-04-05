@@ -43,6 +43,7 @@ const standardParser = new XMLParser({
   attributeNamePrefix: "@_",
   removeNSPrefix: true,
   htmlEntities: true,
+  trimValues: false,
   isArray: (_name: string, jpath: unknown, _isLeafNode: boolean, _isAttribute: boolean) => {
     const tag = String(jpath).split(".").pop() ?? "";
     return ARRAY_TAGS.has(tag);
