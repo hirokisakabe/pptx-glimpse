@@ -14,6 +14,7 @@ export const SHARED_FIXTURE_CASES = [
   { name: "real-product-page", fixture: "real-product-page.pptx" },
   { name: "real-financial-report", fixture: "real-financial-report.pptx" },
   { name: "sample", fixture: "sample.pptx" },
+  { name: "sample-issue-387", fixture: "sample-issue-387.pptx" },
 ] as const;
 
 export const VRT_CASES = [
