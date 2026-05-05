@@ -722,6 +722,135 @@ describe("layout placeholder text filtering", () => {
   });
 });
 
+describe("slide placeholder text filtering", () => {
+  async function createPptxWithSlidePlaceholders(slideXml: string): Promise<Buffer> {
+    const zip = new JSZip();
+    zip.file("[Content_Types].xml", contentTypes);
+    zip.file("_rels/.rels", rootRels);
+    zip.file("ppt/presentation.xml", presentationXml);
+    zip.file("ppt/_rels/presentation.xml.rels", presentationRels);
+    zip.file("ppt/slides/slide1.xml", slideXml);
+    zip.file("ppt/slides/_rels/slide1.xml.rels", slide1Rels);
+    zip.file("ppt/slideMasters/slideMaster1.xml", slideMaster1);
+    zip.file("ppt/slideMasters/_rels/slideMaster1.xml.rels", slideMaster1Rels);
+    zip.file("ppt/slideLayouts/slideLayout1.xml", slideLayout1);
+    zip.file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", slideLayout1Rels);
+    zip.file("ppt/theme/theme1.xml", theme1);
+    return zip.generateAsync({ type: "nodebuffer" });
+  }
+
+  // Slide-level placeholder shapes with no run text. PowerPoint hides these
+  // (the "Click to add title" prompt is layout-side and never copied here);
+  // we expect the renderer to drop them too.
+  const emptyPlaceholderSlide = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr>
+        <a:xfrm>
+          <a:off x="0" y="0"/>
+          <a:ext cx="0" cy="0"/>
+          <a:chOff x="0" y="0"/>
+          <a:chExt cx="0" cy="0"/>
+        </a:xfrm>
+      </p:grpSpPr>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="2" name="Empty Title Placeholder"/>
+          <p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
+          <p:nvPr><p:ph type="title"/></p:nvPr>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="457200" y="274638"/>
+            <a:ext cx="8229600" cy="1143000"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+          <a:solidFill><a:srgbClr val="00FF00"/></a:solidFill>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:lstStyle/>
+          <a:p><a:endParaRPr lang="en-US"/></a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="3" name="Empty Body Placeholder"/>
+          <p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
+          <p:nvPr><p:ph type="body" idx="1"/></p:nvPr>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="457200" y="1600200"/>
+            <a:ext cx="8229600" cy="3200400"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+          <a:solidFill><a:srgbClr val="00FF00"/></a:solidFill>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:lstStyle/>
+          <a:p/>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="4" name="Decorative Shape"/>
+          <p:cNvSpPr/>
+          <p:nvPr/>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm>
+            <a:off x="0" y="0"/>
+            <a:ext cx="914400" cy="457200"/>
+          </a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+          <a:solidFill><a:srgbClr val="FF00FF"/></a:solidFill>
+        </p:spPr>
+      </p:sp>
+    </p:spTree>
+  </p:cSld>
+</p:sld>`;
+
+  it("does not render empty placeholder shapes on the slide itself", async () => {
+    const pptx = await createPptxWithSlidePlaceholders(emptyPlaceholderSlide);
+    const results = await convertPptxToSvg(pptx);
+    const svg = results[0].svg;
+
+    // Decorative (non-placeholder) shape with magenta fill should remain.
+    expect(svg).toContain("#FF00FF");
+
+    // Empty placeholders' green fill must NOT be rendered.
+    expect(svg).not.toContain("#00FF00");
+
+    // Only the decorative shape should produce a translate group.
+    const groupCount = (svg.match(/<g transform="translate/g) || []).length;
+    expect(groupCount).toBe(1);
+  });
+
+  it("keeps slide placeholders that contain run text", async () => {
+    const filledSlide = emptyPlaceholderSlide.replace(
+      `<a:p><a:endParaRPr lang="en-US"/></a:p>`,
+      `<a:p><a:r><a:rPr lang="en-US" sz="3600"/><a:t>FILLED_TITLE</a:t></a:r></a:p>`,
+    );
+
+    const pptx = await createPptxWithSlidePlaceholders(filledSlide);
+    const results = await convertPptxToSvg(pptx);
+    const svg = results[0].svg;
+
+    // Filled title placeholder is kept (green fill renders).
+    expect(svg).toContain("#00FF00");
+    // Decorative shape still rendered.
+    expect(svg).toContain("#FF00FF");
+
+    // Filled title + still-empty body (filtered) + decorative = 2 groups.
+    const groupCount = (svg.match(/<g transform="translate/g) || []).length;
+    expect(groupCount).toBe(2);
+  });
+});
+
 describe("presentation.noSlides warning", () => {
   async function createEmptyPptx(): Promise<Buffer> {
     const zip = new JSZip();
