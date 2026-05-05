@@ -6827,6 +6827,117 @@ async function createPlaceholderGeometryInheritanceFixture(): Promise<void> {
   savePptx(buffer, "placeholder-geometry-inheritance.pptx");
 }
 
+// --- Empty slide placeholders ---
+// テンプレート PPTX では、ユーザーがテキストを入力しなかった placeholder が
+// 空のまま slide に残る。PowerPoint はこれを完全に非表示にするので
+// pptx-glimpse も同じ挙動になっていることを確認する。
+async function createPlaceholderEmptyOnSlideFixture(): Promise<void> {
+  // Layout 側はジオメトリを持つ普通の placeholder 定義（slide 側で継承される）。
+  const layoutXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sldLayout xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}" type="obj">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr/>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="2" name="Title 1"/>
+          <p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
+          <p:nvPr><p:ph type="title"/></p:nvPr>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm><a:off x="685800" y="457200"/><a:ext cx="7772400" cy="1143000"/></a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr anchor="ctr"/>
+          <a:lstStyle/>
+          <a:p><a:endParaRPr lang="en-US"/></a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="3" name="Body 1"/>
+          <p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
+          <p:nvPr><p:ph type="body" idx="1"/></p:nvPr>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:xfrm><a:off x="685800" y="1828800"/><a:ext cx="7772400" cy="3200400"/></a:xfrm>
+          <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr anchor="t"/>
+          <a:lstStyle/>
+          <a:p><a:endParaRPr lang="en-US"/></a:p>
+        </p:txBody>
+      </p:sp>
+    </p:spTree>
+  </p:cSld>
+</p:sldLayout>`;
+
+  // Slide 1: title はテキスト入力済み、body は空のまま（=非表示になるべき）。
+  // 加えて装飾用の非 placeholder 図形を 1 つ置いて、これは描画されることを確認する。
+  const slide1Xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}">
+  <p:cSld>
+    <p:spTree>
+      <p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr>
+        <a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm>
+      </p:grpSpPr>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="2" name="Title 1"/>
+          <p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
+          <p:nvPr><p:ph type="title"/></p:nvPr>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:solidFill><a:srgbClr val="C8E6C9"/></a:solidFill>
+          <a:ln w="25400"><a:solidFill><a:srgbClr val="2E7D32"/></a:solidFill></a:ln>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:lstStyle/>
+          <a:p><a:r><a:rPr lang="en-US" sz="3200" b="1"><a:solidFill><a:srgbClr val="1B5E20"/></a:solidFill></a:rPr><a:t>Filled Title</a:t></a:r></a:p>
+        </p:txBody>
+      </p:sp>
+      <p:sp>
+        <p:nvSpPr>
+          <p:cNvPr id="3" name="Body 1"/>
+          <p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>
+          <p:nvPr><p:ph type="body" idx="1"/></p:nvPr>
+        </p:nvSpPr>
+        <p:spPr>
+          <a:solidFill><a:srgbClr val="FFCDD2"/></a:solidFill>
+          <a:ln w="25400"><a:solidFill><a:srgbClr val="C62828"/></a:solidFill></a:ln>
+        </p:spPr>
+        <p:txBody>
+          <a:bodyPr/>
+          <a:lstStyle/>
+          <a:p><a:endParaRPr lang="en-US"/></a:p>
+        </p:txBody>
+      </p:sp>
+      ${shapeXml(4, "Decorative", {
+        preset: "ellipse",
+        x: 6858000,
+        y: 4114800,
+        cx: 1828800,
+        cy: 914400,
+        fillXml: solidFillXml("FFC107"),
+        outlineXml: outlineXml(12700, "FF6F00"),
+      })}
+    </p:spTree>
+  </p:cSld>
+</p:sld>`;
+
+  const rels = slideRelsXml();
+  const buffer = await buildPptx({
+    slides: [{ xml: slide1Xml, rels }],
+    slideLayoutXml: layoutXml,
+  });
+  savePptx(buffer, "placeholder-empty-on-slide.pptx");
+}
+
 const FIXTURE_CREATORS: Record<string, () => Promise<void>> = {
   "shapes.pptx": createShapesFixture,
   "fill-and-lines.pptx": createFillAndLinesFixture,
@@ -6874,6 +6985,7 @@ const FIXTURE_CREATORS: Record<string, () => Promise<void>> = {
   "placeholder-inheritance-extended.pptx": createPlaceholderInheritanceExtendedFixture,
   "table-style-border.pptx": createTableStyleBorderFixture,
   "placeholder-geometry-inheritance.pptx": createPlaceholderGeometryInheritanceFixture,
+  "placeholder-empty-on-slide.pptx": createPlaceholderEmptyOnSlideFixture,
   "interleaved-bullet-ppr.pptx": createInterleavedBulletPprFixture,
 };
 

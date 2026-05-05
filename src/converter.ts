@@ -5,7 +5,7 @@ import { createOpentypeSetupFromSystem } from "./font/opentype-helpers.js";
 import { resetScriptFonts, setScriptFonts } from "./font/script-font-context.js";
 import { resetTextMeasurer, setTextMeasurer } from "./font/text-measurer.js";
 import { resetTextPathFontResolver, setTextPathFontResolver } from "./font/text-path-context.js";
-import type { SlideElement } from "./model/shape.js";
+import type { ShapeElement, SlideElement } from "./model/shape.js";
 import { clearXmlCache, enableXmlCache } from "./parser/xml-parser.js";
 import { svgToPng } from "./png/png-converter.js";
 import { parsePptxData, parseSlideWithLayout } from "./pptx-data-parser.js";
@@ -127,14 +127,29 @@ function mergeElements(
   // Placeholder shapes in master and layout are templates (position/style definitions).
   // Their text content should never appear on actual slides.
   // Only non-placeholder shapes (decorative elements, logos, etc.) are shown.
-  const filterPlaceholders = (elements: SlideElement[]) =>
+  const filterTemplatePlaceholders = (elements: SlideElement[]) =>
     elements.filter((el) => {
       if (el.type !== "shape") return true;
       return !el.placeholderType;
     });
 
-  const filteredMaster = filterPlaceholders(masterElements);
-  const filteredLayout = filterPlaceholders(layoutElements);
+  // Placeholder shapes on the slide itself are templates that the user has not
+  // filled in when their TextBody contains no run text. PowerPoint hides them
+  // entirely (the "Click to add title" prompt lives in the layout and is never
+  // copied into the slide), so we drop them too.
+  const filterEmptySlidePlaceholders = (elements: SlideElement[]) =>
+    elements.filter((el) => !(el.type === "shape" && isEmptyPlaceholder(el)));
 
-  return [...filteredMaster, ...filteredLayout, ...slideElements];
+  const filteredMaster = filterTemplatePlaceholders(masterElements);
+  const filteredLayout = filterTemplatePlaceholders(layoutElements);
+  const filteredSlide = filterEmptySlidePlaceholders(slideElements);
+
+  return [...filteredMaster, ...filteredLayout, ...filteredSlide];
+}
+
+function isEmptyPlaceholder(shape: ShapeElement): boolean {
+  if (!shape.placeholderType) return false;
+  const paragraphs = shape.textBody?.paragraphs;
+  if (!paragraphs || paragraphs.length === 0) return true;
+  return !paragraphs.some((p) => p.runs.some((r) => r.text.length > 0));
 }
