@@ -1,8 +1,22 @@
 import { readFileSync } from "fs";
 import { join } from "path";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
+
+// macOS 上では `/System/Library/Fonts` 等から数百個のフォントを parse すると
+// worker メモリが膨れ上がり OOM する。ここでは構造ベースのアサーション
+// (`<text|<path>` のいずれかが出ること、`<image>`/`<rect>` が出ること) のみを
+// 検証しているので、`DefaultTextMeasurer` フォールバックで十分。
+vi.mock("../src/font/system-font-loader.js", () => ({
+  collectFontFilePaths: vi.fn(() => []),
+  getSystemFontDirs: vi.fn(() => []),
+}));
 
 import { convertPptxToPng, convertPptxToSvg } from "../src/converter.js";
+import { clearFontCache } from "../src/font/opentype-helpers.js";
+
+beforeAll(() => {
+  clearFontCache();
+});
 
 const FIXTURE_DIR = join(import.meta.dirname, "..", "shared-fixtures");
 
@@ -84,7 +98,7 @@ describe("Real PPTX E2E smoke tests", () => {
 
       // カード・ボタン等の角丸矩形やアイコン用の楕円
       expect(slide).toContain("<rect");
-      expect(slide).toContain("<path");
+      expect(slide).toContain("<ellipse");
     });
 
     it("convertPptxToPng produces valid PNG", async () => {
