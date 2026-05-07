@@ -1,7 +1,17 @@
 import JSZip from "jszip";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
+// システムフォントスキャンを抑止する。macOS 上では `/System/Library/Fonts` 等から
+// 数百個のフォントが読み込まれ、parse 結果が worker メモリに蓄積して OOM を引き起こす。
+// converter のテストはフォントメトリクスに依存しない構造検証 (slide 数 / SVG 構造 / 塗り色)
+// が中心なので、`DefaultTextMeasurer` フォールバックで十分。
+vi.mock("./font/system-font-loader.js", () => ({
+  collectFontFilePaths: vi.fn(() => []),
+  getSystemFontDirs: vi.fn(() => []),
+}));
+
 import { convertPptxToPng, convertPptxToSvg } from "./converter.js";
+import { clearFontCache } from "./font/opentype-helpers.js";
 
 const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -256,6 +266,8 @@ async function createTestPptx(): Promise<Buffer> {
 let testPptx: Buffer;
 
 beforeAll(async () => {
+  // 同一 worker 内で先に動いた他テストが残したフォントキャッシュを破棄する。
+  clearFontCache();
   testPptx = await createTestPptx();
 });
 
