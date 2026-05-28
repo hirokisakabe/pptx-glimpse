@@ -27,6 +27,8 @@ export interface ConvertOptions {
   fontDirs?: string[];
   /** PPTX フォント名 → OSS 代替フォントのカスタムマッピング。デフォルトマッピングにマージされる */
   fontMapping?: FontMapping;
+  /** true のとき OS のシステムフォントをスキャンせず fontDirs のみを使用する */
+  skipSystemFonts?: boolean;
 }
 
 export interface SlideSvg {
@@ -45,7 +47,11 @@ export async function convertPptxToSvg(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
 ): Promise<SlideSvg[]> {
-  const setup = await createOpentypeSetupFromSystem(options?.fontDirs, options?.fontMapping);
+  const setup = await createOpentypeSetupFromSystem(
+    options?.fontDirs,
+    options?.fontMapping,
+    options?.skipSystemFonts,
+  );
   if (setup) {
     setTextMeasurer(setup.measurer);
     setTextPathFontResolver(setup.fontResolver);

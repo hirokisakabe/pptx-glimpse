@@ -25,6 +25,7 @@ const CJK_TTC_PATTERNS = [
 
 let cachedPaths: string[] | null = null;
 let cachedAdditionalDirs: string[] | null = null;
+let cachedSkipSystemFonts: boolean | null = null;
 
 function getSystemFontDirs(): string[] {
   const os = platform();
@@ -68,18 +69,21 @@ function walk(dir: string, result: string[]): void {
  * OS のシステムフォントディレクトリ + 追加ディレクトリから
  * .ttf / .otf ファイルパスを収集する。
  *
+ * skipSystemFonts が true の場合、システムフォントディレクトリをスキャンせず
+ * additionalDirs のみを対象とする。
+ *
  * 結果はモジュールレベルでキャッシュされ、同一引数での再呼び出しは即座に返る。
  */
-export function collectFontFilePaths(additionalDirs?: string[]): string[] {
+export function collectFontFilePaths(additionalDirs?: string[], skipSystemFonts = false): string[] {
   const dirs = additionalDirs ?? [];
   const dirsKey = dirs.join("\0");
   const cachedKey = cachedAdditionalDirs?.join("\0") ?? null;
 
-  if (cachedPaths !== null && dirsKey === cachedKey) {
+  if (cachedPaths !== null && dirsKey === cachedKey && cachedSkipSystemFonts === skipSystemFonts) {
     return cachedPaths;
   }
 
-  const allDirs = [...getSystemFontDirs(), ...dirs];
+  const allDirs = skipSystemFonts ? dirs : [...getSystemFontDirs(), ...dirs];
   const result: string[] = [];
   for (const dir of allDirs) {
     walk(dir, result);
@@ -87,5 +91,6 @@ export function collectFontFilePaths(additionalDirs?: string[]): string[] {
 
   cachedPaths = result;
   cachedAdditionalDirs = dirs;
+  cachedSkipSystemFonts = skipSystemFonts;
   return result;
 }

@@ -331,4 +331,25 @@ describe("createOpentypeSetupFromSystem キャッシュ", () => {
     await createOpentypeSetupFromSystem();
     expect(spy).toHaveBeenCalledTimes(1);
   });
+
+  it("skipSystemFonts が異なる場合はキャッシュを無効化する", async () => {
+    await setupTestFont();
+    await mockCollectFontFilePaths();
+
+    const setup1 = await createOpentypeSetupFromSystem(undefined, undefined, false);
+    const setup2 = await createOpentypeSetupFromSystem(undefined, undefined, true);
+    expect(setup1).not.toBeNull();
+    expect(setup2).not.toBeNull();
+    // skipSystemFonts が異なるのでキャッシュキーが変わり別オブジェクト
+    expect(setup1).not.toBe(setup2);
+  });
+
+  it("skipSystemFonts が collectFontFilePaths に正しく伝播する", async () => {
+    await setupTestFont();
+    const systemFontLoader = await import("./system-font-loader.js");
+    const spy = vi.spyOn(systemFontLoader, "collectFontFilePaths").mockReturnValue([testFontPath!]);
+
+    await createOpentypeSetupFromSystem(undefined, undefined, true);
+    expect(spy).toHaveBeenCalledWith(undefined, true);
+  });
 });

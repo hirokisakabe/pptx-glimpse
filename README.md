@@ -81,6 +81,7 @@ const results = await convertPptxToPng(pptx, {
   height: 1080, // Output height in pixels (width takes priority if both set)
   logLevel: "warn", // Warning log level: "off" | "warn" | "debug"
   fontDirs: ["/custom/fonts"], // Additional font directories to search
+  skipSystemFonts: true, // Skip OS system font directories; use fontDirs only
   fontMapping: {
     "Custom Corp Font": "Noto Sans", // Custom font name mapping
   },
@@ -154,7 +155,7 @@ Default system font directories:
 | macOS   | `/System/Library/Fonts`, `/Library/Fonts`, `~/Library/Fonts` |
 | Windows | `C:\Windows\Fonts`                                           |
 
-Use the `fontDirs` option to add custom font directories.
+Use the `fontDirs` option to add custom font directories. To skip system font scanning entirely and use only `fontDirs` (useful in containers, serverless environments, or when you want to bundle specific fonts to reduce startup time), set `skipSystemFonts: true`.
 
 ### Font Mapping
 
