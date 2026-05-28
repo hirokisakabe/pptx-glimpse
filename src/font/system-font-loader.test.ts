@@ -1,18 +1,27 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { collectFontFilePaths } from "./system-font-loader.js";
+
+const tempDirs: string[] = [];
 
 function makeTempFontDir(): { dir: string; fontPath: string } {
   const dir = join(tmpdir(), `pptx-glimpse-loader-test-${Date.now()}-${Math.random()}`);
   mkdirSync(dir, { recursive: true });
+  tempDirs.push(dir);
   const fontPath = join(dir, "bundled.ttf");
   writeFileSync(fontPath, "");
   return { dir, fontPath };
 }
+
+afterEach(() => {
+  for (const dir of tempDirs.splice(0)) {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
 
 describe("collectFontFilePaths skipSystemFonts", () => {
   it("skipSystemFonts=true のとき additionalDirs のファイルのみ返す", () => {
@@ -23,8 +32,6 @@ describe("collectFontFilePaths skipSystemFonts", () => {
   });
 
   it("skipSystemFonts=true かつ fontDirs 未指定のとき空配列を返す", () => {
-    // ユニークキーにするため空配列でも別インスタンス的に扱われる
-    // (キャッシュは dirsKey+skipSystemFonts で管理されるため問題なし)
     const result = collectFontFilePaths([], true);
     expect(result).toEqual([]);
   });
@@ -38,7 +45,6 @@ describe("collectFontFilePaths skipSystemFonts", () => {
   it("skipSystemFonts=false は skipSystemFonts=true と同数以上のファイルを返す", () => {
     const { dir } = makeTempFontDir();
     const skipSystem = collectFontFilePaths([dir], true);
-    // 別の dir を使わないと skipSystem のキャッシュが当たってしまうため
     // 同じ dir で false を呼ぶ (dirsKey は同じだが skipSystemFonts が異なるためキャッシュミス)
     const withSystem = collectFontFilePaths([dir], false);
     expect(withSystem.length).toBeGreaterThanOrEqual(skipSystem.length);
