@@ -218,12 +218,16 @@ function collectFontNames(font: OpentypeFontWithNames): Set<string> {
 /**
  * キャッシュキーを生成する。fontDirs と fontMapping の組み合わせで一意に識別する。
  */
-function buildCacheKey(additionalFontDirs?: string[], fontMapping?: FontMapping): string {
+function buildCacheKey(
+  additionalFontDirs?: string[],
+  fontMapping?: FontMapping,
+  skipSystemFonts = false,
+): string {
   const dirsKey = additionalFontDirs ? [...additionalFontDirs].sort().join("\0") : "";
   const mappingKey = fontMapping
     ? JSON.stringify(fontMapping, Object.keys(fontMapping).sort())
     : "";
-  return `${dirsKey}\n${mappingKey}`;
+  return `${dirsKey}\n${mappingKey}\n${skipSystemFonts}`;
 }
 
 /** パース済み Font オブジェクトのキャッシュ */
@@ -253,8 +257,9 @@ export function clearFontCache(): void {
 export async function createOpentypeSetupFromSystem(
   additionalFontDirs?: string[],
   fontMapping?: FontMapping,
+  skipSystemFonts = false,
 ): Promise<OpentypeSetup | null> {
-  const key = buildCacheKey(additionalFontDirs, fontMapping);
+  const key = buildCacheKey(additionalFontDirs, fontMapping, skipSystemFonts);
   if (cachedSetup && cachedSetupKey === key) {
     return cachedSetup;
   }
@@ -262,7 +267,7 @@ export async function createOpentypeSetupFromSystem(
   const opentype = await tryLoadOpentype();
   if (!opentype) return null;
 
-  const fontFilePaths = collectFontFilePaths(additionalFontDirs);
+  const fontFilePaths = collectFontFilePaths(additionalFontDirs, skipSystemFonts);
   if (fontFilePaths.length === 0) return null;
 
   const mapping = createFontMapping(fontMapping);
