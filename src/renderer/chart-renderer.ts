@@ -14,6 +14,8 @@ const DEFAULT_SERIES_COLORS: ResolvedColor[] = [
   { hex: "#70AD47", alpha: 1 },
 ];
 
+const LEGEND_SIDE_WIDTH = 100;
+
 export function renderChart(element: ChartElement): RenderResult {
   const { transform, chart } = element;
   const w = emuToPixels(transform.extentWidth);
@@ -36,6 +38,8 @@ export function renderChart(element: ChartElement): RenderResult {
   if (chart.legend) {
     if (chart.legend.position === "b") margin.bottom = 50;
     else if (chart.legend.position === "t") margin.top += 20;
+    else if (chart.legend.position === "r") margin.right = LEGEND_SIDE_WIDTH;
+    else if (chart.legend.position === "l") margin.left += LEGEND_SIDE_WIDTH;
   }
 
   const plotX = margin.left;
@@ -969,19 +973,37 @@ function renderLegend(chart: ChartData, chartW: number, chartH: number, position
 
   if (entries.length === 0) return "";
 
-  const entryWidth = 80;
-  const totalWidth = entries.length * entryWidth;
-  const startX = Math.max((chartW - totalWidth) / 2, 5);
-  const legendY = position === "t" ? 25 : chartH - 15;
+  const ENTRY_HEIGHT = 20;
 
-  for (let i = 0; i < entries.length; i++) {
-    const ex = startX + i * entryWidth;
-    parts.push(
-      `<rect x="${round(ex)}" y="${round(legendY - 6)}" width="12" height="12" ${fillAttr(entries[i].color)}/>`,
-    );
-    parts.push(
-      `<text x="${round(ex + 16)}" y="${round(legendY + 4)}" font-size="10" fill="#595959">${escapeXml(entries[i].label)}</text>`,
-    );
+  if (position === "r" || position === "l") {
+    const totalH = entries.length * ENTRY_HEIGHT;
+    const startY = Math.max((chartH - totalH) / 2, 5);
+    const legendX = position === "r" ? chartW - LEGEND_SIDE_WIDTH + 5 : 5;
+
+    for (let i = 0; i < entries.length; i++) {
+      const ey = startY + i * ENTRY_HEIGHT;
+      parts.push(
+        `<rect x="${round(legendX)}" y="${round(ey)}" width="12" height="12" ${fillAttr(entries[i].color)}/>`,
+      );
+      parts.push(
+        `<text x="${round(legendX + 16)}" y="${round(ey + 10)}" font-size="10" fill="#595959">${escapeXml(entries[i].label)}</text>`,
+      );
+    }
+  } else {
+    const entryWidth = 80;
+    const totalWidth = entries.length * entryWidth;
+    const startX = Math.max((chartW - totalWidth) / 2, 5);
+    const legendY = position === "t" ? 25 : chartH - 15;
+
+    for (let i = 0; i < entries.length; i++) {
+      const ex = startX + i * entryWidth;
+      parts.push(
+        `<rect x="${round(ex)}" y="${round(legendY - 6)}" width="12" height="12" ${fillAttr(entries[i].color)}/>`,
+      );
+      parts.push(
+        `<text x="${round(ex + 16)}" y="${round(legendY + 4)}" font-size="10" fill="#595959">${escapeXml(entries[i].label)}</text>`,
+      );
+    }
   }
 
   return parts.join("");

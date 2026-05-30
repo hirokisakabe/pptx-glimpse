@@ -253,6 +253,6 @@ function parseChartTitle(titleNode: XmlNode): string | null {
 function parseLegend(legendNode: XmlNode): ChartLegend | null {
   if (!legendNode) return null;
   const legendPos = legendNode.legendPos as XmlNode | undefined;
-  const pos = ((legendPos?.["@_val"] as string | undefined) ?? "b") as ChartLegend["position"];
+  const pos = ((legendPos?.["@_val"] as string | undefined) ?? "r") as ChartLegend["position"];
   return { position: pos };
 }

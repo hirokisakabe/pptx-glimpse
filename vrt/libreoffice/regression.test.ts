@@ -35,6 +35,7 @@ const LO_VRT_CASES = [
   { name: "math-other", fixture: "math-other.pptx", tolerance: 0.1 },
   { name: "image", fixture: "image.pptx" },
   { name: "charts", fixture: "charts.pptx", tolerance: 0.15 },
+  { name: "chart-legend-position", fixture: "chart-legend-position.pptx", tolerance: 0.15 },
   { name: "connectors", fixture: "connectors.pptx" },
   { name: "custom-geometry", fixture: "custom-geometry.pptx" },
   { name: "slide-size-4-3", fixture: "slide-size-4-3.pptx" },
