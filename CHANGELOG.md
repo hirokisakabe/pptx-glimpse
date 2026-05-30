@@ -1,5 +1,11 @@
 # pptx-glimpse
 
+## 1.0.0
+
+### Major Changes
+
+- f10cf12: Node 20 のサポートを廃止し、最小要件を Node.js >= 22 に引き上げた。あわせて pnpm を 10 系から 11 系（11.5.0）にアップグレードした。
+
 ## 0.11.2
 
 ### Patch Changes
