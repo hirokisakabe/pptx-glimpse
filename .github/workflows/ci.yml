@@ -12,26 +12,28 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Knip
-        run: npm run knip
+        run: pnpm run knip
 
       - name: Lint
-        run: npm run lint
+        run: pnpm run lint
 
       - name: Format check
-        run: npm run format:check
+        run: pnpm run format:check
 
       - name: Type check
-        run: npm run typecheck
+        run: pnpm run typecheck
 
   test:
     runs-on: ubuntu-latest
@@ -43,17 +45,19 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: pnpm/action-setup@v4
+
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Test with coverage
-        run: npx vitest run --coverage
+        run: pnpm run test:coverage
 
       - name: Upload coverage report
         if: matrix.node-version == 22
@@ -93,7 +97,7 @@ jobs:
           json-summary-path: coverage/coverage-summary.json
 
       - name: Build
-        run: npm run build
+        run: pnpm run build
 
       - name: Verify package (CJS/ESM/TypeScript)
         run: bash scripts/test-package.sh
@@ -120,7 +124,7 @@ jobs:
             -v "${{ github.workspace }}":/workspace \
             ghcr.io/hirokisakabe/pptx-glimpse-snapshot-vrt:latest \
             bash /workspace/vrt/snapshot/docker-run.sh \
-            bash -c "npm run vrt:snapshot:fixtures && npx vitest run --config vitest.vrt.config.ts vrt/snapshot/regression.test.ts"
+            bash -c "pnpm run vrt:snapshot:fixtures && npx vitest run --config vitest.vrt.config.ts vrt/snapshot/regression.test.ts"
 
       - name: Upload diff images on failure
         if: failure()
@@ -135,14 +139,16 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: pnpm/action-setup@v4
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
 
       - name: Pull or build Docker image
         run: |

@@ -16,45 +16,39 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - uses: pnpm/action-setup@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
+          cache: pnpm
           registry-url: https://registry.npmjs.org
 
-      # Workaround: Node 22.22.2 のバンドル npm にモジュール欠損 (promise-retry) があり
-      # 直接 npm install -g が失敗するため、npx 経由で正常な npm を取得してインストールする。
-      # Node/npm の修正版がリリースされたらこのステップを削除して良い。
-      # https://github.com/npm/cli/issues/9151
-      # https://github.com/nodejs/node/issues/62425
-      - name: Upgrade npm for Trusted Publishing
-        run: npx -y npm@11 install -g npm@11
-
-      - run: npm ci
-      - run: npm run build
-      - run: npx vitest run --exclude 'vrt/**'
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run build
+      - run: pnpm exec vitest run --exclude 'vrt/**'
 
       - name: Create Release PR or Publish
         id: changesets
         uses: changesets/action@v1
         with:
-          publish: npx changeset publish
-          version: npx changeset version
+          publish: pnpm exec changeset publish
+          version: pnpm exec changeset version
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_CONFIG_PROVENANCE: true
 
-      - name: Sync package-lock.json on Release PR branch
+      - name: Sync pnpm-lock.yaml on Release PR branch
         if: steps.changesets.outputs.pullRequestNumber
         run: |
           git fetch origin changeset-release/main
           git checkout changeset-release/main
-          npm install --package-lock-only
-          if ! git diff --quiet -- package-lock.json; then
+          pnpm install --no-frozen-lockfile
+          if ! git diff --quiet -- pnpm-lock.yaml; then
             git config user.name "github-actions[bot]"
             git config user.email "github-actions[bot]@users.noreply.github.com"
-            git add package-lock.json
-            git commit -m "chore: sync package-lock.json"
+            git add pnpm-lock.yaml
+            git commit -m "chore: sync pnpm-lock.yaml"
             git push origin changeset-release/main
           fi
         env:
