@@ -115,6 +115,11 @@ describe("getPresetGeometrySvg", () => {
     expect(svg).toContain("<polygon");
   });
 
+  it("generates line from top-left to bottom-right", () => {
+    const svg = getPresetGeometrySvg("line", 200, 100, {});
+    expect(svg).toBe('<line x1="0" y1="0" x2="200" y2="100"/>');
+  });
+
   // --- Additional arrows ---
 
   it.each(["leftRightArrow", "upDownArrow"])("generates %s", (shape) => {

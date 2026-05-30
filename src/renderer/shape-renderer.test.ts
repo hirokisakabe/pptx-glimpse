@@ -142,7 +142,8 @@ describe("renderConnector", () => {
     const result = renderConnector(makeConnector());
 
     expect(result.content).toContain('<g transform="translate(96, 96)">');
-    expect(result.content).toContain('<line x1="0" y1="0" x2="192" y2="96"');
+    expect(result.content).toContain("<line ");
+    expect(result.content).toContain('x1="0" y1="0" x2="192" y2="96"');
     expect(result.content).toContain('stroke="#000000"');
     expect(result.content).toContain('fill="none"');
     expect(result.content).toContain("</g>");
