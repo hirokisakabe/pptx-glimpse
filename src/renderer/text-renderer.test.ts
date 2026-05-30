@@ -1100,6 +1100,7 @@ function createMockFont(name: string): OpentypeFullFont {
     getPath: (text: string, x: number, y: number, _fontSize: number) => ({
       toPathData: () => `M${x.toFixed(1)} ${y.toFixed(1)}L${name} ${text.length}`,
     }),
+    getAdvanceWidth: (text: string, fontSize: number) => text.length * fontSize * 0.6,
   };
 }
 
@@ -1426,6 +1427,53 @@ describe("renderTextBody (path mode)", () => {
     expect(result).toContain("<text");
     expect(result).toContain("<tspan");
     expect(result).not.toContain("<path");
+  });
+
+  it("path モードの中央揃えで getAdvanceWidth() に基づいた x 位置が使われる", () => {
+    // 幅がデフォルトモック (0.6倍) と異なる font (1.0倍) を使って
+    // measureLineWidth が getAdvanceWidth() に切り替わっていることを確認する
+    const wideFont: OpentypeFullFont = {
+      unitsPerEm: 1000,
+      ascender: 800,
+      descender: -200,
+      getPath: (_text: string, x: number, y: number, _fontSize: number) => ({
+        toPathData: () => `M${x.toFixed(2)} ${y.toFixed(2)}`,
+      }),
+      getAdvanceWidth: (text: string, fontSize: number) => text.length * fontSize,
+    };
+    const fonts = new Map([["WideFont", wideFont]]);
+    setTextPathFontResolver(new DefaultTextPathFontResolver(fonts, wideFont));
+
+    const textBody = makeTextBody(["Hi"], { alignment: "ctr", fontSize: 18, wrap: "none" });
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+
+    // lineWidth = getAdvanceWidth("Hi", 24px) = 2 * 24 = 48px
+    // marginLeftPx = 9.6px, effectiveTextWidth = 940.8px
+    // lineStartX = 9.6 + (940.8 - 48) / 2 = 456.0px
+    expect(result).toContain("M456.00");
+    expect(result).toContain("<path");
+  });
+
+  it("path モードの右揃えで getAdvanceWidth() に基づいた x 位置が使われる", () => {
+    const wideFont: OpentypeFullFont = {
+      unitsPerEm: 1000,
+      ascender: 800,
+      descender: -200,
+      getPath: (_text: string, x: number, y: number, _fontSize: number) => ({
+        toPathData: () => `M${x.toFixed(2)} ${y.toFixed(2)}`,
+      }),
+      getAdvanceWidth: (text: string, fontSize: number) => text.length * fontSize,
+    };
+    const fonts = new Map([["WideFont", wideFont]]);
+    setTextPathFontResolver(new DefaultTextPathFontResolver(fonts, wideFont));
+
+    const textBody = makeTextBody(["Hi"], { alignment: "r", fontSize: 18, wrap: "none" });
+    const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
+
+    // lineWidth = 2 * 24 = 48px, marginRightPx = 9.6px
+    // lineStartX = 960 - 9.6 - 48 = 902.4px
+    expect(result).toContain("M902.40");
+    expect(result).toContain("<path");
   });
 
   it("endParaRunProperties の fontSize が空段落の高さ計算に使用される", () => {
