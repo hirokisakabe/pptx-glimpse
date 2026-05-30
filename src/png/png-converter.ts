@@ -31,6 +31,8 @@ export async function initResvgWasm(): Promise<void> {
 interface PngConvertOptions {
   width?: number;
   height?: number;
+  /** SVG <text> 要素のレンダリングに使用するフォントバッファのリスト */
+  fontBuffers?: Uint8Array[];
 }
 
 export async function svgToPng(
@@ -45,6 +47,11 @@ export async function svgToPng(
     resvgOptions.fitTo = { mode: "width", value: options.width };
   } else if (options?.height) {
     resvgOptions.fitTo = { mode: "height", value: options.height };
+  }
+
+  const fontBuffers = options?.fontBuffers;
+  if (fontBuffers && fontBuffers.length > 0) {
+    resvgOptions.font = { fontBuffers };
   }
 
   const resvg = new Resvg(svgString, resvgOptions);

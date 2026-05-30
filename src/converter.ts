@@ -1,8 +1,11 @@
+import { readFileSync, statSync } from "node:fs";
+
 import type { FontMapping } from "./font/font-mapping.js";
 import { createFontMapping } from "./font/font-mapping.js";
 import { resetFontMapping, setFontMapping } from "./font/font-mapping-context.js";
 import { createOpentypeSetupFromSystem } from "./font/opentype-helpers.js";
 import { resetScriptFonts, setScriptFonts } from "./font/script-font-context.js";
+import { collectFontFilePaths } from "./font/system-font-loader.js";
 import { resetTextMeasurer, setTextMeasurer } from "./font/text-measurer.js";
 import { resetTextPathFontResolver, setTextPathFontResolver } from "./font/text-path-context.js";
 import type { ShapeElement, SlideElement } from "./model/shape.js";
@@ -102,6 +105,62 @@ export async function convertPptxToSvg(
   }
 }
 
+/**
+ * resvg に渡すフォントバッファのキャッシュ。
+ * collectFontFilePaths と同じキャッシュキーで管理する。
+ */
+let cachedFontBuffers: Uint8Array[] | null = null;
+let cachedFontBuffersKey: string | null = null;
+
+/**
+ * TTF/OTF フォントファイルを読み込んでバッファとして返す。
+ * resvg-wasm は fontFiles (ファイルパス) を解釈できないため、
+ * fontBuffers (生バイト) として渡す必要がある。
+ * 合計サイズが MAX_TOTAL_FONT_BUFFER_BYTES を超えた時点で読み込みを打ち切る。
+ */
+const MAX_TOTAL_FONT_BUFFER_BYTES = 100 * 1024 * 1024; // 100MB
+
+function loadFontBuffers(fontDirs?: string[], skipSystemFonts?: boolean): Uint8Array[] {
+  const key = `${(fontDirs ?? []).join("\0")}\n${skipSystemFonts ?? false}`;
+  if (cachedFontBuffers !== null && cachedFontBuffersKey === key) {
+    return cachedFontBuffers;
+  }
+
+  const allPaths = collectFontFilePaths(fontDirs, skipSystemFonts);
+  // TTC は resvg-wasm では不安定なため TTF/OTF のみを対象とする
+  const ttfOtfPaths = allPaths.filter((p) => {
+    const lower = p.toLowerCase();
+    return lower.endsWith(".ttf") || lower.endsWith(".otf");
+  });
+
+  // ファイルサイズ昇順に並べ、小さいフォントから優先的に読み込む
+  const pathsWithSize: { path: string; size: number }[] = [];
+  for (const p of ttfOtfPaths) {
+    try {
+      pathsWithSize.push({ path: p, size: statSync(p).size });
+    } catch {
+      // 読み取れないファイルはスキップ
+    }
+  }
+  pathsWithSize.sort((a, b) => a.size - b.size);
+
+  const buffers: Uint8Array[] = [];
+  let totalSize = 0;
+  for (const { path, size } of pathsWithSize) {
+    if (totalSize + size > MAX_TOTAL_FONT_BUFFER_BYTES) break;
+    try {
+      buffers.push(new Uint8Array(readFileSync(path)));
+      totalSize += size;
+    } catch {
+      // 読み取り失敗はスキップ
+    }
+  }
+
+  cachedFontBuffers = buffers;
+  cachedFontBuffersKey = key;
+  return buffers;
+}
+
 export async function convertPptxToPng(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
@@ -111,9 +170,12 @@ export async function convertPptxToPng(
   const width = options?.width ?? DEFAULT_OUTPUT_WIDTH;
   const height = options?.height;
 
+  // resvg に渡すフォントバッファを収集する（チャートの <text> 要素を描画するため）
+  const fontBuffers = loadFontBuffers(options?.fontDirs, options?.skipSystemFonts);
+
   const results: SlideImage[] = [];
   for (const { slideNumber, svg } of svgResults) {
-    const pngResult = await svgToPng(svg, { width, height });
+    const pngResult = await svgToPng(svg, { width, height, fontBuffers });
     results.push({
       slideNumber,
       png: pngResult.png,
