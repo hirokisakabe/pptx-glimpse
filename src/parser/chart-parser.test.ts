@@ -151,6 +151,15 @@ describe("parseChart", () => {
     expect(result!.legend).toEqual({ position: "t" });
   });
 
+  it("defaults legend position to r when legendPos element has no val attribute", () => {
+    const xml = barChartXml().replace(
+      /<\/c:chart>/,
+      `<c:legend><c:legendPos/></c:legend></c:chart>`,
+    );
+    const result = parseChart(xml, createColorResolver());
+    expect(result!.legend).toEqual({ position: "r" });
+  });
+
   it("returns null legend when not present", () => {
     const result = parseChart(barChartXml(), createColorResolver());
     expect(result!.legend).toBeNull();
