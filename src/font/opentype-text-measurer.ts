@@ -49,15 +49,23 @@ export class OpentypeTextMeasurer implements TextMeasurer {
       return defaultMeasureTextWidth(text, fontSizePt, bold, fontFamily, fontFamilyEa);
     }
     const fontSizePx = fontSizePt * PX_PER_PT;
+    // CJK 文字は東アジアフォントを優先、ラテン文字はラテンフォントを優先
+    const latinFontResolved = latinFont ?? fallbackFont;
+    const eaFontResolved = eaFont ?? fallbackFont;
+
+    const chars = [...text];
+    const codePoints = chars.map((c) => c.codePointAt(0)!);
+    const latinGlyphs = latinFontResolved.stringToGlyphs(text);
+    const eaGlyphs =
+      eaFontResolved !== latinFontResolved ? eaFontResolved.stringToGlyphs(text) : latinGlyphs;
+
     let totalWidth = 0;
-    for (const char of text) {
-      const codePoint = char.codePointAt(0)!;
-      const isEa = isCjkCodePoint(codePoint);
-      // CJK 文字は東アジアフォントを優先、ラテン文字はラテンフォントを優先
-      const font = isEa ? (eaFont ?? fallbackFont) : (latinFont ?? fallbackFont);
+    for (let i = 0; i < chars.length; i++) {
+      const isEa = isCjkCodePoint(codePoints[i]);
+      const font = isEa ? eaFontResolved : latinFontResolved;
       const scale = fontSizePx / font.unitsPerEm;
-      const glyphs = font.stringToGlyphs(char);
-      let charWidth = (glyphs[0]?.advanceWidth ?? font.unitsPerEm * 0.6) * scale;
+      const glyph = isEa ? eaGlyphs[i] : latinGlyphs[i];
+      let charWidth = (glyph?.advanceWidth ?? font.unitsPerEm * 0.6) * scale;
       if (bold && !isEa) {
         charWidth *= BOLD_FACTOR;
       }
