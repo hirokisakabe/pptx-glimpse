@@ -907,15 +907,30 @@ function computePathLineX(
 
 /**
  * 行内の全セグメントの幅合計を計測する。
+ * fontResolver が与えられた場合は font.getAdvanceWidth() で正確な幅を使用する。
  */
 function measureLineWidth(
   segments: { text: string; properties: RunProperties }[],
   defaultFontSize: number,
   fontScale: number,
+  fontResolver?: TextPathFontResolver | null,
 ): number {
   let totalWidth = 0;
+  const jpanFallback = fontResolver ? getJpanFallbackFont() : null;
   for (const seg of segments) {
     const fontSize = (seg.properties.fontSize ?? defaultFontSize) * fontScale;
+    if (fontResolver) {
+      const fontSizePx = fontSize * PX_PER_PT;
+      const font = fontResolver.resolveFont(
+        seg.properties.fontFamily,
+        seg.properties.fontFamilyEa,
+        jpanFallback,
+      );
+      if (font) {
+        totalWidth += font.getAdvanceWidth(seg.text, fontSizePx);
+        continue;
+      }
+    }
     totalWidth += getTextMeasurer().measureTextWidth(
       seg.text,
       fontSize,
@@ -1013,16 +1028,15 @@ function renderSegmentAsPath(
     if (segText.length === 0) return;
 
     const font = fontResolver.resolveFont(fontFamily, fontFamilyEa, jpanFallback);
-    // 幅測定には常に原始の props.fontFamily/fontFamilyEa を使う。
-    // スクリプト分割時に fontFamily/fontFamilyEa が入れ替えられるが、
-    // measureTextWidth は文字ごとに適切なフォントを選択するため原始の順序が必要。
-    const segWidth = getTextMeasurer().measureTextWidth(
-      segText,
-      fontSize,
-      props.bold,
-      props.fontFamily,
-      props.fontFamilyEa,
-    );
+    const segWidth = font
+      ? font.getAdvanceWidth(segText, fontSizePx)
+      : getTextMeasurer().measureTextWidth(
+          segText,
+          fontSize,
+          props.bold,
+          props.fontFamily,
+          props.fontFamilyEa,
+        );
 
     if (font) {
       const path = font.getPath(segText, x + totalWidth, effectiveY, fontSizePx);
@@ -1058,13 +1072,15 @@ function renderSegmentAsPath(
     const fillAttrs = buildPathFillAttrs(props);
 
     for (const char of segText) {
-      const charWidth = getTextMeasurer().measureTextWidth(
-        char,
-        fontSize,
-        props.bold,
-        props.fontFamily,
-        props.fontFamilyEa,
-      );
+      const charWidth = font
+        ? font.getAdvanceWidth(char, fontSizePx)
+        : getTextMeasurer().measureTextWidth(
+            char,
+            fontSize,
+            props.bold,
+            props.fontFamily,
+            props.fontFamilyEa,
+          );
 
       if (font) {
         const charX = x + totalWidth;
@@ -1297,7 +1313,7 @@ function renderTextBodyAsPath(
         }
 
         // 行の幅を計測して alignment 用の x 位置を計算
-        const lineWidth = measureLineWidth(line.segments, defaultFontSize, fontScale);
+        const lineWidth = measureLineWidth(line.segments, defaultFontSize, fontScale, fontResolver);
         const lineStartX = computePathLineX(
           para.properties.alignment,
           textStartX,
@@ -1358,7 +1374,7 @@ function renderTextBodyAsPath(
       const runsAsSegments = para.runs
         .filter((r) => r.text.length > 0)
         .map((r) => ({ text: r.text, properties: r.properties }));
-      const lineWidth = measureLineWidth(runsAsSegments, defaultFontSize, fontScale);
+      const lineWidth = measureLineWidth(runsAsSegments, defaultFontSize, fontScale, fontResolver);
       const lineStartX = computePathLineX(
         para.properties.alignment,
         textStartX,

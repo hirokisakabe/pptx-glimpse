@@ -16,6 +16,7 @@ export interface OpentypeFullFont {
   ascender: number;
   descender: number;
   getPath(text: string, x: number, y: number, fontSize: number): OpentypePath;
+  getAdvanceWidth(text: string, fontSize: number): number;
 }
 
 export interface TextPathFontResolver {

@@ -1100,6 +1100,7 @@ function createMockFont(name: string): OpentypeFullFont {
     getPath: (text: string, x: number, y: number, _fontSize: number) => ({
       toPathData: () => `M${x.toFixed(1)} ${y.toFixed(1)}L${name} ${text.length}`,
     }),
+    getAdvanceWidth: (text: string, fontSize: number) => text.length * fontSize * 0.6,
   };
 }
 
