@@ -87,13 +87,19 @@ export class OpentypeTextMeasurer implements TextMeasurer {
 
   private resolveBoldFont(name: string | null | undefined): OpentypeFont | null {
     if (!name) return null;
-    for (const boldName of [`${name} Bold`, `${name}-Bold`]) {
-      const direct = this.fonts.get(boldName);
-      if (direct) return direct;
-      const mapped = getCurrentMappedFont(boldName);
-      if (mapped) {
-        const mappedFont = this.fonts.get(mapped);
-        if (mappedFont) return mappedFont;
+    // 元の名前とフォントマッピング後の OSS 代替名の両方で Bold バリアントを探す
+    const bases = [name];
+    const mappedBase = getCurrentMappedFont(name);
+    if (mappedBase && mappedBase !== name) bases.push(mappedBase);
+    for (const base of bases) {
+      for (const boldName of [`${base} Bold`, `${base}-Bold`]) {
+        const direct = this.fonts.get(boldName);
+        if (direct) return direct;
+        const mapped = getCurrentMappedFont(boldName);
+        if (mapped) {
+          const mappedFont = this.fonts.get(mapped);
+          if (mappedFont) return mappedFont;
+        }
       }
     }
     return null;

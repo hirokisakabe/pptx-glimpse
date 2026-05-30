@@ -277,6 +277,37 @@ describe("OpentypeTextMeasurer CJK フォールバック", () => {
   });
 });
 
+describe("OpentypeTextMeasurer ボールド体フォントのマッピング解決", () => {
+  afterEach(() => {
+    resetFontMapping();
+  });
+
+  it("フォントマッピング経由で OSS ボールド体フォントを解決する", () => {
+    const regularFont = createMockFont({
+      unitsPerEm: 1000,
+      ascender: 800,
+      descender: -200,
+      glyphWidths: { A: 600 },
+    });
+    const boldFont = createMockFont({
+      unitsPerEm: 1000,
+      ascender: 800,
+      descender: -200,
+      glyphWidths: { A: 750 },
+    });
+    const fonts = new Map<string, OpentypeFont>([
+      ["Carlito", regularFont],
+      ["Carlito Bold", boldFont],
+    ]);
+    setFontMapping({ Calibri: "Carlito" });
+    const measurer = new OpentypeTextMeasurer(fonts);
+    const pxPerPt = 96 / 72;
+    const boldWidth = measurer.measureTextWidth("A", 18, true, "Calibri");
+    const expectedBoldWidth = (750 / 1000) * 18 * pxPerPt;
+    expect(boldWidth).toBeCloseTo(expectedBoldWidth, 1);
+  });
+});
+
 describe("OpentypeTextMeasurer font.notFound 警告", () => {
   afterEach(() => {
     resetFontMapping();
