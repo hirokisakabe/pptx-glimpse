@@ -3,7 +3,7 @@
 [![npm](https://img.shields.io/npm/v/pptx-glimpse)](https://www.npmjs.com/package/pptx-glimpse)
 [![CI](https://github.com/hirokisakabe/pptx-glimpse/actions/workflows/ci.yml/badge.svg)](https://github.com/hirokisakabe/pptx-glimpse/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D20-brightgreen)](https://nodejs.org/)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen)](https://nodejs.org/)
 
 No LibreOffice required — just `npm install`.
 
@@ -43,7 +43,7 @@ rather than pixel-perfect rendering of every PowerPoint feature.
 
 ## Requirements
 
-- **Node.js >= 20**
+- **Node.js >= 22**
 
 ## Installation
 
