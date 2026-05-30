@@ -1,5 +1,12 @@
 # pptx-glimpse
 
+## 0.11.1
+
+### Patch Changes
+
+- 237b32d: パスレンダリング時の幅計算を `font.getAdvanceWidth()` に切り替えた。`OpentypeFullFont` インターフェースに `getAdvanceWidth(text, fontSize)` メソッドを追加し、`renderSegmentAsPath` および `measureLineWidth` でフォントが解決できる場合は `getAdvanceWidth()` を使用するよう変更。これによりパス描画位置と幅測定の一貫性が向上する。
+- 95c262a: OOXML Strict 形式のSmartArt（Diagram）URIに対応。Transitional URI（`http://schemas.openxmlformats.org/drawingml/2006/diagram`）のみを直接比較していた判定を、Strict URI（`http://purl.oclc.org/ooxml/drawingml/diagram`）にも対応した allowlist 判定に変更。
+
 ## 0.11.0
 
 ### Minor Changes
