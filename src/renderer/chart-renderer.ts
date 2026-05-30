@@ -14,6 +14,8 @@ const DEFAULT_SERIES_COLORS: ResolvedColor[] = [
   { hex: "#70AD47", alpha: 1 },
 ];
 
+const LEGEND_SIDE_WIDTH = 100;
+
 export function renderChart(element: ChartElement): RenderResult {
   const { transform, chart } = element;
   const w = emuToPixels(transform.extentWidth);
@@ -32,8 +34,6 @@ export function renderChart(element: ChartElement): RenderResult {
     parts.push(renderChartTitle(chart.title, w));
     margin.top = 40;
   }
-
-  const LEGEND_SIDE_WIDTH = 100;
 
   if (chart.legend) {
     if (chart.legend.position === "b") margin.bottom = 50;
@@ -973,13 +973,12 @@ function renderLegend(chart: ChartData, chartW: number, chartH: number, position
 
   if (entries.length === 0) return "";
 
-  const SIDE_WIDTH = 100;
   const ENTRY_HEIGHT = 20;
 
   if (position === "r" || position === "l") {
     const totalH = entries.length * ENTRY_HEIGHT;
     const startY = Math.max((chartH - totalH) / 2, 5);
-    const legendX = position === "r" ? chartW - SIDE_WIDTH + 5 : 5;
+    const legendX = position === "r" ? chartW - LEGEND_SIDE_WIDTH + 5 : 5;
 
     for (let i = 0; i < entries.length; i++) {
       const ey = startY + i * ENTRY_HEIGHT;

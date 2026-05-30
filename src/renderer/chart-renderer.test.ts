@@ -384,14 +384,14 @@ describe("renderChart", () => {
       expect(result.content).toContain("Alpha");
       expect(result.content).toContain("Beta");
 
-      // Bars must not extend all the way to the right edge (right margin reserved for legend)
-      // Chart width in pixels: 4572000 EMU / 914400 * 96 ≈ 480px; right margin should be 100px
-      // Plot right edge = chartW - 100 = 380; bars should end before that, not at chartW (480)
-      const chartW = Math.round((4572000 / 914400) * 96);
-      expect(result.content).not.toContain(`x2="${chartW}"`);
+      // Chart: 4572000 EMU → 480px; margin.right=100 → plotW=330, x-axis x2=380
+      // x-axis line x2 must be 380 (plot right edge), not 480 (chart right edge)
+      expect(result.content).toContain('x2="380"');
+      // Legend rect starts at chartW - 100 + 5 = 385
+      expect(result.content).toContain('x="385"');
     });
 
-    it("renders left legend vertically on left side", () => {
+    it("renders left legend vertically on left side and shifts plot area right", () => {
       const element = createChartElement({
         chartType: "line",
         series: [{ name: "Gamma", values: [5, 10], color: { hex: "#A5A5A5", alpha: 1 } }],
@@ -401,6 +401,11 @@ describe("renderChart", () => {
 
       const result = renderChart(element);
       expect(result.content).toContain("Gamma");
+
+      // margin.left = 50 + 100 = 150; x-axis x1 must be 150 (plot left edge)
+      expect(result.content).toContain('x1="150"');
+      // Legend rect starts at x=5
+      expect(result.content).toContain('x="5"');
     });
   });
 
