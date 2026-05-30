@@ -53,18 +53,25 @@ export class OpentypeTextMeasurer implements TextMeasurer {
     const latinFontResolved = latinFont ?? fallbackFont;
     const eaFontResolved = eaFont ?? fallbackFont;
 
-    const chars = [...text];
-    const codePoints = chars.map((c) => c.codePointAt(0)!);
-    const latinGlyphs = latinFontResolved.stringToGlyphs(text);
-    const eaGlyphs =
-      eaFontResolved !== latinFontResolved ? eaFontResolved.stringToGlyphs(text) : latinGlyphs;
+    // ユニーク文字ごとにキャッシュして stringToGlyphs 呼び出しを削減
+    // full-text 一括呼び出しは GSUB リガチャでグリフ数が変わるため使用不可
+    const latinGlyphCache = new Map<string, OpentypeGlyph | undefined>();
+    const eaGlyphCache =
+      eaFontResolved !== latinFontResolved
+        ? new Map<string, OpentypeGlyph | undefined>()
+        : latinGlyphCache;
 
     let totalWidth = 0;
-    for (let i = 0; i < chars.length; i++) {
-      const isEa = isCjkCodePoint(codePoints[i]);
+    for (const char of text) {
+      const codePoint = char.codePointAt(0)!;
+      const isEa = isCjkCodePoint(codePoint);
       const font = isEa ? eaFontResolved : latinFontResolved;
+      const cache = isEa ? eaGlyphCache : latinGlyphCache;
+      if (!cache.has(char)) {
+        cache.set(char, font.stringToGlyphs(char)[0]);
+      }
       const scale = fontSizePx / font.unitsPerEm;
-      const glyph = isEa ? eaGlyphs[i] : latinGlyphs[i];
+      const glyph = cache.get(char);
       let charWidth = (glyph?.advanceWidth ?? font.unitsPerEm * 0.6) * scale;
       if (bold && !isEa) {
         charWidth *= BOLD_FACTOR;
