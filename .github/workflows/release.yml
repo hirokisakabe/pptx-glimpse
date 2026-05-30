@@ -28,6 +28,13 @@ jobs:
       - run: pnpm run build
       - run: pnpm exec vitest run --exclude 'vrt/**'
 
+      # Workaround: Node 22 にバンドルされた npm@10 は OIDC Trusted Publishing に未対応のため npm@11 へアップグレード。
+      # npm install -g が Node 22 の npm バグで失敗するため npx 経由で取得してインストールする。
+      # https://github.com/npm/cli/issues/9151
+      # https://github.com/nodejs/node/issues/62425
+      - name: Upgrade npm for Trusted Publishing
+        run: npx -y npm@11 install -g npm@11
+
       - name: Create Release PR or Publish
         id: changesets
         uses: changesets/action@v1
