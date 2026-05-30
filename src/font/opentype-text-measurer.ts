@@ -49,21 +49,40 @@ export class OpentypeTextMeasurer implements TextMeasurer {
       return defaultMeasureTextWidth(text, fontSizePt, bold, fontFamily, fontFamilyEa);
     }
     const fontSizePx = fontSizePt * PX_PER_PT;
+    // CJK 文字は東アジアフォントを優先、ラテン文字はラテンフォントを優先
+    const latinFontResolved = latinFont ?? fallbackFont;
+    const eaFontResolved = eaFont ?? fallbackFont;
     const boldLatinFont = bold ? this.resolveBoldFont(fontFamily) : null;
+
+    // ユニーク文字ごとにキャッシュして stringToGlyphs 呼び出しを削減
+    // full-text 一括呼び出しは GSUB リガチャでグリフ数が変わるため使用不可
+    const latinGlyphCache = new Map<string, OpentypeGlyph | undefined>();
+    const eaGlyphCache =
+      eaFontResolved !== latinFontResolved
+        ? new Map<string, OpentypeGlyph | undefined>()
+        : latinGlyphCache;
+    const boldGlyphCache = new Map<string, OpentypeGlyph | undefined>();
+
     let totalWidth = 0;
     for (const char of text) {
       const codePoint = char.codePointAt(0)!;
       const isEa = isCjkCodePoint(codePoint);
-      // CJK 文字は東アジアフォントを優先、ラテン文字はラテンフォントを優先
-      const font = isEa ? (eaFont ?? fallbackFont) : (latinFont ?? fallbackFont);
+      const font = isEa ? eaFontResolved : latinFontResolved;
+      const cache = isEa ? eaGlyphCache : latinGlyphCache;
+      if (!cache.has(char)) {
+        cache.set(char, font.stringToGlyphs(char)[0]);
+      }
       const scale = fontSizePx / font.unitsPerEm;
-      const glyphs = font.stringToGlyphs(char);
-      let charWidth = (glyphs[0]?.advanceWidth ?? font.unitsPerEm * 0.6) * scale;
+      const glyph = cache.get(char);
+      let charWidth = (glyph?.advanceWidth ?? font.unitsPerEm * 0.6) * scale;
       if (bold && !isEa) {
         if (boldLatinFont) {
+          if (!boldGlyphCache.has(char)) {
+            boldGlyphCache.set(char, boldLatinFont.stringToGlyphs(char)[0]);
+          }
+          const boldGlyph = boldGlyphCache.get(char);
           const boldScale = fontSizePx / boldLatinFont.unitsPerEm;
-          const boldGlyphs = boldLatinFont.stringToGlyphs(char);
-          charWidth = (boldGlyphs[0]?.advanceWidth ?? boldLatinFont.unitsPerEm * 0.6) * boldScale;
+          charWidth = (boldGlyph?.advanceWidth ?? boldLatinFont.unitsPerEm * 0.6) * boldScale;
         } else {
           charWidth *= BOLD_FACTOR;
         }
