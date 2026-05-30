@@ -1877,6 +1877,38 @@ def create_hyperlinks():
     print("  Created: hyperlinks.pptx")
 
 
+def create_chart_legend_position():
+    """凡例位置 r (右) の棒グラフ — pptxgenjs のデフォルト位置を検証する"""
+    from pptx.chart.data import CategoryChartData
+    from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
+
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    chart_data = CategoryChartData()
+    chart_data.categories = ["Q1", "Q2", "Q3", "Q4"]
+    chart_data.add_series("Series A", (20, 35, 28, 42))
+    chart_data.add_series("Series B", (15, 25, 18, 30))
+    chart_data.add_series("Series C", (10, 18, 22, 15))
+    chart_shape = slide.shapes.add_chart(
+        XL_CHART_TYPE.COLUMN_CLUSTERED,
+        Inches(1.0), Inches(0.8), Inches(8.0), Inches(5.5),
+        chart_data,
+    )
+    chart = chart_shape.chart
+    chart.has_legend = True
+    chart.legend.position = XL_LEGEND_POSITION.RIGHT
+    chart.legend.include_in_layout = False
+
+    txBox = slide.shapes.add_textbox(Inches(0.1), Inches(0.1), Inches(9.8), Inches(0.5))
+    tf = txBox.text_frame
+    tf.text = "Legend position: right (r)"
+    tf.paragraphs[0].runs[0].font.size = Pt(18)
+
+    prs.save(os.path.join(OUTPUT_DIR, "chart-legend-position.pptx"))
+    print("  Created: chart-legend-position.pptx")
+
+
 def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     print("Generating LibreOffice VRT fixtures...")
@@ -1897,6 +1929,7 @@ def main():
     create_math_other()
     create_image()
     create_charts()
+    create_chart_legend_position()
     create_connectors()
     create_custom_geometry()
     create_slide_size_4_3()
