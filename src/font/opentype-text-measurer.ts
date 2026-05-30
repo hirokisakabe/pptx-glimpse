@@ -49,6 +49,7 @@ export class OpentypeTextMeasurer implements TextMeasurer {
       return defaultMeasureTextWidth(text, fontSizePt, bold, fontFamily, fontFamilyEa);
     }
     const fontSizePx = fontSizePt * PX_PER_PT;
+    const boldLatinFont = bold ? this.resolveBoldFont(fontFamily) : null;
     let totalWidth = 0;
     for (const char of text) {
       const codePoint = char.codePointAt(0)!;
@@ -59,7 +60,13 @@ export class OpentypeTextMeasurer implements TextMeasurer {
       const glyphs = font.stringToGlyphs(char);
       let charWidth = (glyphs[0]?.advanceWidth ?? font.unitsPerEm * 0.6) * scale;
       if (bold && !isEa) {
-        charWidth *= BOLD_FACTOR;
+        if (boldLatinFont) {
+          const boldScale = fontSizePx / boldLatinFont.unitsPerEm;
+          const boldGlyphs = boldLatinFont.stringToGlyphs(char);
+          charWidth = (boldGlyphs[0]?.advanceWidth ?? boldLatinFont.unitsPerEm * 0.6) * boldScale;
+        } else {
+          charWidth *= BOLD_FACTOR;
+        }
       }
       totalWidth += charWidth;
     }
@@ -76,6 +83,20 @@ export class OpentypeTextMeasurer implements TextMeasurer {
     const font = this.resolveFont(fontFamily) ?? this.resolveFont(fontFamilyEa) ?? this.defaultFont;
     if (!font) return 1.0;
     return font.ascender / font.unitsPerEm;
+  }
+
+  private resolveBoldFont(name: string | null | undefined): OpentypeFont | null {
+    if (!name) return null;
+    for (const boldName of [`${name} Bold`, `${name}-Bold`]) {
+      const direct = this.fonts.get(boldName);
+      if (direct) return direct;
+      const mapped = getCurrentMappedFont(boldName);
+      if (mapped) {
+        const mappedFont = this.fonts.get(mapped);
+        if (mappedFont) return mappedFont;
+      }
+    }
+    return null;
   }
 
   private resolveFont(name: string | null | undefined): OpentypeFont | null {
