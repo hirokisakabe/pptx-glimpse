@@ -115,4 +115,121 @@ describe("Real PPTX E2E smoke tests", () => {
       expect(results[0].height).toBeGreaterThan(0);
     });
   });
+
+  describe("real-financial-report.pptx (financial report with charts)", () => {
+    it("convertPptxToSvg completes without error for all 4 slides", async () => {
+      const input = readFileSync(join(FIXTURE_DIR, "real-financial-report.pptx"));
+      const results = await convertPptxToSvg(input);
+
+      expect(results).toHaveLength(4);
+      for (const result of results) {
+        expect(result.svg).toContain("<svg");
+        expect(result.svg).toContain("</svg>");
+      }
+    });
+
+    it("slides contain text elements", async () => {
+      const input = readFileSync(join(FIXTURE_DIR, "real-financial-report.pptx"));
+      const results = await convertPptxToSvg(input);
+
+      for (const result of results) {
+        expect(result.svg).toMatch(/<text|<path/);
+      }
+    });
+
+    it("chart slides contain rendered chart elements", async () => {
+      const input = readFileSync(join(FIXTURE_DIR, "real-financial-report.pptx"));
+      const results = await convertPptxToSvg(input);
+
+      // チャートはスライド2以降に含まれる（graphicFrame → <rect> / <path> で描画）
+      const chartSlides = results.slice(1);
+      for (const result of chartSlides) {
+        expect(result.svg).toMatch(/<rect|<path/);
+      }
+    });
+
+    it("convertPptxToPng produces valid PNG for all slides", async () => {
+      const input = readFileSync(join(FIXTURE_DIR, "real-financial-report.pptx"));
+      const results = await convertPptxToPng(input);
+
+      expect(results).toHaveLength(4);
+      for (const result of results) {
+        expect(result.png[0]).toBe(0x89);
+        expect(result.png[1]).toBe(0x50);
+        expect(result.png[2]).toBe(0x4e);
+        expect(result.png[3]).toBe(0x47);
+        expect(result.width).toBeGreaterThan(0);
+        expect(result.height).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  describe("sample.pptx (md-pptx generated, Japanese text)", () => {
+    it("convertPptxToSvg completes without error for all 6 slides", async () => {
+      const input = readFileSync(join(FIXTURE_DIR, "sample.pptx"));
+      const results = await convertPptxToSvg(input);
+
+      expect(results).toHaveLength(6);
+      for (const result of results) {
+        expect(result.svg).toContain("<svg");
+        expect(result.svg).toContain("</svg>");
+      }
+    });
+
+    it("slides contain text elements including Japanese", async () => {
+      const input = readFileSync(join(FIXTURE_DIR, "sample.pptx"));
+      const results = await convertPptxToSvg(input);
+
+      for (const result of results) {
+        expect(result.svg).toMatch(/<text|<path/);
+      }
+    });
+
+    it("convertPptxToPng produces valid PNG for all slides", async () => {
+      const input = readFileSync(join(FIXTURE_DIR, "sample.pptx"));
+      const results = await convertPptxToPng(input);
+
+      expect(results).toHaveLength(6);
+      for (const result of results) {
+        expect(result.png[0]).toBe(0x89);
+        expect(result.png[1]).toBe(0x50);
+        expect(result.png[2]).toBe(0x4e);
+        expect(result.png[3]).toBe(0x47);
+        expect(result.width).toBeGreaterThan(0);
+        expect(result.height).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  describe("sample-issue-387.pptx (inline text formatting)", () => {
+    it("convertPptxToSvg completes without error", async () => {
+      const input = readFileSync(join(FIXTURE_DIR, "sample-issue-387.pptx"));
+      const results = await convertPptxToSvg(input);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].svg).toContain("<svg");
+      expect(results[0].svg).toContain("</svg>");
+    });
+
+    it("slide contains text elements", async () => {
+      const input = readFileSync(join(FIXTURE_DIR, "sample-issue-387.pptx"));
+      const results = await convertPptxToSvg(input);
+      const slide = results[0].svg;
+
+      expect(slide).toMatch(/<text|<path/);
+    });
+
+    it("convertPptxToPng produces valid PNG", async () => {
+      const input = readFileSync(join(FIXTURE_DIR, "sample-issue-387.pptx"));
+      const results = await convertPptxToPng(input);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].png[0]).toBe(0x89);
+      expect(results[0].png[1]).toBe(0x50);
+      expect(results[0].png[2]).toBe(0x4e);
+      expect(results[0].png[3]).toBe(0x47);
+      expect(results[0].width).toBeGreaterThan(0);
+      expect(results[0].height).toBeGreaterThan(0);
+    });
+  });
 });
