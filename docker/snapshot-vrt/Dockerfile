@@ -19,6 +19,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get autoremove -y \
     && rm -rf /var/lib/apt/lists/*
 
-RUN corepack enable && corepack prepare pnpm@11.5.0 --activate
+RUN corepack enable && corepack prepare pnpm@10.34.1 --activate
 
 WORKDIR /workspace
