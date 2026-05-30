@@ -2258,7 +2258,7 @@ describe("placeholder geometry inheritance", () => {
 });
 
 describe("OOXML Strict compatibility", () => {
-  it("recognizes SmartArt with Strict diagram URI without triggering unsupported warning", () => {
+  it("routes Strict diagram URI to SmartArt path (not unsupported warning)", () => {
     initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -2288,12 +2288,14 @@ describe("OOXML Strict compatibility", () => {
     expect(warnSpy).not.toHaveBeenCalledWith(
       expect.stringContaining("unsupported graphicFrame content"),
     );
+    // SmartArt path が実行され、archive 空のため skipped になることを確認
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("graphicFrame.skipped"));
 
     warnSpy.mockRestore();
     initWarningLogger("off");
   });
 
-  it("still recognizes SmartArt with Transitional diagram URI", () => {
+  it("routes Transitional diagram URI to SmartArt path (not unsupported warning)", () => {
     initWarningLogger("debug");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -2323,6 +2325,7 @@ describe("OOXML Strict compatibility", () => {
     expect(warnSpy).not.toHaveBeenCalledWith(
       expect.stringContaining("unsupported graphicFrame content"),
     );
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("graphicFrame.skipped"));
 
     warnSpy.mockRestore();
     initWarningLogger("off");
