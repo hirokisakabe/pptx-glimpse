@@ -116,7 +116,7 @@ const presetGeometries: Record<string, GeometryGenerator> = {
     return `<polygon points="${bodyLeft},0 ${bodyRight},0 ${bodyRight},${shaftEnd} ${w},${shaftEnd} ${w / 2},${h} 0,${shaftEnd} ${bodyLeft},${shaftEnd}"/>`;
   },
 
-  line: () => "",
+  line: (w, h) => `<line x1="0" y1="0" x2="${w}" y2="${h}"/>`,
 
   // =====================
   // Connector shapes
