@@ -57,6 +57,11 @@ import { parseXml, parseXmlOrdered } from "./xml-parser.js";
 
 const SHAPE_TAGS = new Set(["sp", "pic", "cxnSp", "grpSp", "graphicFrame"]);
 
+const SMARTART_DIAGRAM_URIS = new Set([
+  "http://schemas.openxmlformats.org/drawingml/2006/diagram",
+  "http://purl.oclc.org/ooxml/drawingml/diagram",
+]);
+
 // preserveOrder パース結果を path で辿り、指定ノードの子配列を返す。
 export function navigateOrdered(
   ordered: XmlOrderedNode[],
@@ -810,8 +815,8 @@ function parseGraphicFrame(
     return { type: "table", transform, table: tableData };
   }
 
-  // SmartArt (Diagram)
-  if (graphicData["@_uri"] === "http://schemas.openxmlformats.org/drawingml/2006/diagram") {
+  // SmartArt (Diagram) — Transitional and Strict URIs
+  if (SMARTART_DIAGRAM_URIS.has(graphicData["@_uri"] as string)) {
     return parseSmartArt(
       graphicData,
       transform,
