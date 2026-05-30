@@ -59,7 +59,7 @@ export class LazyXmlMap {
     if (!this.entryIndex.has(path)) return undefined;
 
     const cached = this.cache.get(path);
-    if (cached) return cached;
+    if (cached !== undefined) return cached;
 
     const result = unzipSync(this.rawInput, {
       filter: (file) => file.name === path,

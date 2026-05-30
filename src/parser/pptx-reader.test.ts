@@ -89,6 +89,7 @@ describe("LazyXmlMap", () => {
 
     const first = xmlMap.get("ppt/presentation.xml");
     const second = xmlMap.get("ppt/presentation.xml");
+    // Cached string is the same object reference (not re-decoded)
     expect(first).toBe(second);
   });
 });
