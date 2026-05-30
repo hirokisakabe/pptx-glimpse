@@ -1407,8 +1407,12 @@ function extractMathText(node: XmlNode): string {
     if (key === "t") {
       if (typeof value === "object" && value !== null) {
         text += ((value as XmlNode)["#text"] as string) ?? "";
-      } else if (value !== undefined && value !== null) {
-        text += String(value as string | number);
+      } else if (
+        typeof value === "string" ||
+        typeof value === "number" ||
+        typeof value === "boolean"
+      ) {
+        text += String(value);
       }
     } else if (typeof value === "object" && value !== null) {
       const items = Array.isArray(value) ? value : [value];
@@ -1427,7 +1431,9 @@ function extractTextContent(node: XmlNode): string {
   if (typeof text === "object") {
     return ((text as XmlNode)["#text"] as string) ?? "";
   }
-  return text !== undefined && text !== null ? String(text as string | number) : "";
+  return typeof text === "string" || typeof text === "number" || typeof text === "boolean"
+    ? String(text)
+    : "";
 }
 
 function parseParagraph(
@@ -1685,7 +1691,7 @@ function parseRunProperties(
   // Default hyperlink style: theme hlink color + underline
   if (hyperlink) {
     if (!color) {
-      color = colorResolver.resolve({ schemeClr: { "@_val": "hlink" } } as XmlNode);
+      color = colorResolver.resolve({ schemeClr: { "@_val": "hlink" } });
     }
     if (!hasExplicitUnderline && !underline) {
       underline = true;
