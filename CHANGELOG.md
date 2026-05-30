@@ -1,5 +1,12 @@
 # pptx-glimpse
 
+## 0.11.2
+
+### Patch Changes
+
+- 854492d: bold テキストの幅計算でボールド体フォント（`"${fontFamily} Bold"` / `"${fontFamily}-Bold"` の命名規則）がフォントマップに登録されている場合、固定係数 `BOLD_FACTOR (1.05)` ではなく実グリフの `advanceWidth` を使用するよう改善しました。フォントマッピング（例: `Calibri → Carlito`）経由での Bold 解決にも対応します。ボールド体フォントが未登録の場合は従来の `BOLD_FACTOR` フォールバックが引き続き動作します。
+- 9ff8310: fix: `prstGeom prst="line"` を持つ sp 要素の線が描画されない問題を修正
+
 ## 0.11.1
 
 ### Patch Changes
