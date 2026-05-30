@@ -810,8 +810,8 @@ function parseGraphicFrame(
     return { type: "table", transform, table: tableData };
   }
 
-  // SmartArt (Diagram)
-  if (graphicData["@_uri"] === "http://schemas.openxmlformats.org/drawingml/2006/diagram") {
+  // SmartArt (Diagram) — Transitional: .../drawingml/2006/diagram, Strict: .../ooxml/drawingml/diagram
+  if ((graphicData["@_uri"] as string | undefined)?.includes("diagram")) {
     return parseSmartArt(
       graphicData,
       transform,

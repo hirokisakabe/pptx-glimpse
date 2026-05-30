@@ -2256,3 +2256,75 @@ describe("placeholder geometry inheritance", () => {
     expect(shape.transform.extentWidth).toBe(7000);
   });
 });
+
+describe("OOXML Strict compatibility", () => {
+  it("recognizes SmartArt with Strict diagram URI without triggering unsupported warning", () => {
+    initWarningLogger("debug");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:graphicFrame>
+          <p:xfrm>
+            <a:off x="100" y="200"/>
+            <a:ext cx="300" cy="400"/>
+          </p:xfrm>
+          <a:graphic>
+            <a:graphicData uri="http://purl.oclc.org/ooxml/drawingml/diagram"/>
+          </a:graphic>
+        </p:graphicFrame>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+    parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("unsupported graphicFrame content"),
+    );
+
+    warnSpy.mockRestore();
+    initWarningLogger("off");
+  });
+
+  it("still recognizes SmartArt with Transitional diagram URI", () => {
+    initWarningLogger("debug");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const xml = `
+      <p:spTree xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+                 xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <p:graphicFrame>
+          <p:xfrm>
+            <a:off x="100" y="200"/>
+            <a:ext cx="300" cy="400"/>
+          </p:xfrm>
+          <a:graphic>
+            <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/diagram"/>
+          </a:graphic>
+        </p:graphicFrame>
+      </p:spTree>
+    `;
+    const parsed = parseXml(xml);
+    parseShapeTree(
+      parsed.spTree as XmlNode | undefined,
+      new Map(),
+      "ppt/slides/slide1.xml",
+      createEmptyArchive(),
+      createColorResolver(),
+    );
+
+    expect(warnSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("unsupported graphicFrame content"),
+    );
+
+    warnSpy.mockRestore();
+    initWarningLogger("off");
+  });
+});
