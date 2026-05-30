@@ -50,6 +50,80 @@ describe("OpentypeTextMeasurer", () => {
     expect(boldWidth).toBeCloseTo(normalWidth * 1.05, 1);
   });
 
+  it("ボールド体フォント (${fontFamily} Bold) が存在する場合は実グリフ幅を使用する", () => {
+    const regularFont = createMockFont({
+      unitsPerEm: 1000,
+      ascender: 800,
+      descender: -200,
+      glyphWidths: { A: 600 },
+    });
+    const boldFont = createMockFont({
+      unitsPerEm: 1000,
+      ascender: 800,
+      descender: -200,
+      glyphWidths: { A: 720 },
+    });
+    const fonts = new Map<string, OpentypeFont>([
+      ["TestFont", regularFont],
+      ["TestFont Bold", boldFont],
+    ]);
+    const measurer = new OpentypeTextMeasurer(fonts);
+    const pxPerPt = 96 / 72;
+    const boldWidth = measurer.measureTextWidth("A", 18, true, "TestFont");
+    const expectedBoldWidth = (720 / 1000) * 18 * pxPerPt;
+    expect(boldWidth).toBeCloseTo(expectedBoldWidth, 1);
+    // BOLD_FACTOR を適用した場合の幅とは異なることを確認
+    const expectedWithFactor = (600 / 1000) * 18 * pxPerPt * 1.05;
+    expect(boldWidth).not.toBeCloseTo(expectedWithFactor, 1);
+  });
+
+  it("ボールド体フォント (${fontFamily}-Bold) が存在する場合は実グリフ幅を使用する", () => {
+    const regularFont = createMockFont({
+      unitsPerEm: 1000,
+      ascender: 800,
+      descender: -200,
+      glyphWidths: { A: 600 },
+    });
+    const boldFont = createMockFont({
+      unitsPerEm: 1000,
+      ascender: 800,
+      descender: -200,
+      glyphWidths: { A: 720 },
+    });
+    const fonts = new Map<string, OpentypeFont>([
+      ["TestFont", regularFont],
+      ["TestFont-Bold", boldFont],
+    ]);
+    const measurer = new OpentypeTextMeasurer(fonts);
+    const pxPerPt = 96 / 72;
+    const boldWidth = measurer.measureTextWidth("A", 18, true, "TestFont");
+    const expectedBoldWidth = (720 / 1000) * 18 * pxPerPt;
+    expect(boldWidth).toBeCloseTo(expectedBoldWidth, 1);
+  });
+
+  it("ボールド体フォントが存在しても CJK 文字には適用しない", () => {
+    const regularFont = createMockFont({
+      unitsPerEm: 1000,
+      ascender: 800,
+      descender: -200,
+      glyphWidths: { 漢: 1000 },
+    });
+    const boldFont = createMockFont({
+      unitsPerEm: 1000,
+      ascender: 800,
+      descender: -200,
+      glyphWidths: { 漢: 1200 },
+    });
+    const fonts = new Map<string, OpentypeFont>([
+      ["TestFont", regularFont],
+      ["TestFont Bold", boldFont],
+    ]);
+    const measurer = new OpentypeTextMeasurer(fonts);
+    const normalWidth = measurer.measureTextWidth("漢", 18, false, "TestFont");
+    const boldWidth = measurer.measureTextWidth("漢", 18, true, "TestFont");
+    expect(boldWidth).toBeCloseTo(normalWidth, 5);
+  });
+
   it("太字でも CJK 文字には BOLD_FACTOR を適用しない", () => {
     const font = createMockFont({
       unitsPerEm: 1000,
@@ -200,6 +274,37 @@ describe("OpentypeTextMeasurer CJK フォールバック", () => {
     const width = measurer.measureTextWidth("A", 18, false, "Meiryo");
     const expected = (600 / 1000) * 18 * (96 / 72);
     expect(width).toBeCloseTo(expected, 1);
+  });
+});
+
+describe("OpentypeTextMeasurer ボールド体フォントのマッピング解決", () => {
+  afterEach(() => {
+    resetFontMapping();
+  });
+
+  it("フォントマッピング経由で OSS ボールド体フォントを解決する", () => {
+    const regularFont = createMockFont({
+      unitsPerEm: 1000,
+      ascender: 800,
+      descender: -200,
+      glyphWidths: { A: 600 },
+    });
+    const boldFont = createMockFont({
+      unitsPerEm: 1000,
+      ascender: 800,
+      descender: -200,
+      glyphWidths: { A: 750 },
+    });
+    const fonts = new Map<string, OpentypeFont>([
+      ["Carlito", regularFont],
+      ["Carlito Bold", boldFont],
+    ]);
+    setFontMapping({ Calibri: "Carlito" });
+    const measurer = new OpentypeTextMeasurer(fonts);
+    const pxPerPt = 96 / 72;
+    const boldWidth = measurer.measureTextWidth("A", 18, true, "Calibri");
+    const expectedBoldWidth = (750 / 1000) * 18 * pxPerPt;
+    expect(boldWidth).toBeCloseTo(expectedBoldWidth, 1);
   });
 });
 

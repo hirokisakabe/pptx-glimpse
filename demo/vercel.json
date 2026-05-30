@@ -1,4 +1,4 @@
 {
   "framework": "nextjs",
-  "installCommand": "cd .. && npm ci && npm run build && cd demo && npm install"
+  "installCommand": "cd .. && npx --yes pnpm@10.34.1 install --frozen-lockfile && npx --yes pnpm@10.34.1 run build && cd demo && npm install"
 }

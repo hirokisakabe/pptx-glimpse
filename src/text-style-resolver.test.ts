@@ -675,7 +675,7 @@ describe("applyTextStyleInheritance", () => {
 
   describe("テキストボディなし", () => {
     it("textBody が null のシェイプはスキップされる", () => {
-      const shape = makeShape({ textBody: null } as Partial<ShapeElement>);
+      const shape = makeShape({ textBody: null });
 
       expect(() => {
         applyTextStyleInheritance([shape], makeContext());

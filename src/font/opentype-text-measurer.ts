@@ -52,6 +52,7 @@ export class OpentypeTextMeasurer implements TextMeasurer {
     // CJK 文字は東アジアフォントを優先、ラテン文字はラテンフォントを優先
     const latinFontResolved = latinFont ?? fallbackFont;
     const eaFontResolved = eaFont ?? fallbackFont;
+    const boldLatinFont = bold ? this.resolveBoldFont(fontFamily) : null;
 
     // ユニーク文字ごとにキャッシュして stringToGlyphs 呼び出しを削減
     // full-text 一括呼び出しは GSUB リガチャでグリフ数が変わるため使用不可
@@ -60,6 +61,7 @@ export class OpentypeTextMeasurer implements TextMeasurer {
       eaFontResolved !== latinFontResolved
         ? new Map<string, OpentypeGlyph | undefined>()
         : latinGlyphCache;
+    const boldGlyphCache = new Map<string, OpentypeGlyph | undefined>();
 
     let totalWidth = 0;
     for (const char of text) {
@@ -74,7 +76,16 @@ export class OpentypeTextMeasurer implements TextMeasurer {
       const glyph = cache.get(char);
       let charWidth = (glyph?.advanceWidth ?? font.unitsPerEm * 0.6) * scale;
       if (bold && !isEa) {
-        charWidth *= BOLD_FACTOR;
+        if (boldLatinFont) {
+          if (!boldGlyphCache.has(char)) {
+            boldGlyphCache.set(char, boldLatinFont.stringToGlyphs(char)[0]);
+          }
+          const boldGlyph = boldGlyphCache.get(char);
+          const boldScale = fontSizePx / boldLatinFont.unitsPerEm;
+          charWidth = (boldGlyph?.advanceWidth ?? boldLatinFont.unitsPerEm * 0.6) * boldScale;
+        } else {
+          charWidth *= BOLD_FACTOR;
+        }
       }
       totalWidth += charWidth;
     }
@@ -91,6 +102,26 @@ export class OpentypeTextMeasurer implements TextMeasurer {
     const font = this.resolveFont(fontFamily) ?? this.resolveFont(fontFamilyEa) ?? this.defaultFont;
     if (!font) return 1.0;
     return font.ascender / font.unitsPerEm;
+  }
+
+  private resolveBoldFont(name: string | null | undefined): OpentypeFont | null {
+    if (!name) return null;
+    // 元の名前とフォントマッピング後の OSS 代替名の両方で Bold バリアントを探す
+    const bases = [name];
+    const mappedBase = getCurrentMappedFont(name);
+    if (mappedBase && mappedBase !== name) bases.push(mappedBase);
+    for (const base of bases) {
+      for (const boldName of [`${base} Bold`, `${base}-Bold`]) {
+        const direct = this.fonts.get(boldName);
+        if (direct) return direct;
+        const mapped = getCurrentMappedFont(boldName);
+        if (mapped) {
+          const mappedFont = this.fonts.get(mapped);
+          if (mappedFont) return mappedFont;
+        }
+      }
+    }
+    return null;
   }
 
   private resolveFont(name: string | null | undefined): OpentypeFont | null {
