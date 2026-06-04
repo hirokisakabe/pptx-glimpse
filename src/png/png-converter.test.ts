@@ -6,9 +6,11 @@ const mocks = vi.hoisted(() => {
     width: 960,
     height: 540,
   }));
-  const MockResvg = vi.fn().mockImplementation((_svg: string, _opts?: unknown) => ({
-    render: mockRender,
-  }));
+  const MockResvg = vi.fn().mockImplementation(function (_svg: string, _opts?: unknown) {
+    return {
+      render: mockRender,
+    };
+  });
   return { MockResvg, mockRender };
 });
 
