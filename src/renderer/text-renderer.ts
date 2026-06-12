@@ -212,8 +212,19 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
             getLineSpacing(para, lnSpcReduction),
             paragraphGapPx,
           );
-          const bulletStyles = buildBulletStyleAttrs(para.properties, lineFontSize, fontScale);
-          getFontUsageCollector()?.record([para.properties.bulletFont], bulletText);
+          const firstSeg = line.segments[0];
+          const bulletFontChain = buildBulletFontChain(
+            para.properties,
+            firstSeg?.properties.fontFamily,
+            firstSeg?.properties.fontFamilyEa,
+          );
+          const bulletStyles = buildBulletStyleAttrs(
+            para.properties,
+            lineFontSize,
+            fontScale,
+            bulletFontChain,
+          );
+          getFontUsageCollector()?.record(bulletFontChain, bulletText);
           tspans.push(
             `<tspan x="${bulletX}" dy="${dy}" text-anchor="start" ${bulletStyles}>${escapeXml(bulletText)}</tspan>`,
           );
@@ -261,8 +272,18 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
           getLineSpacing(para, lnSpcReduction),
           paragraphGapPx,
         );
-        const bulletStyles = buildBulletStyleAttrs(para.properties, fontSize, fontScale);
-        getFontUsageCollector()?.record([para.properties.bulletFont], bulletText);
+        const bulletFontChain = buildBulletFontChain(
+          para.properties,
+          firstRun?.properties.fontFamily,
+          firstRun?.properties.fontFamilyEa,
+        );
+        const bulletStyles = buildBulletStyleAttrs(
+          para.properties,
+          fontSize,
+          fontScale,
+          bulletFontChain,
+        );
+        getFontUsageCollector()?.record(bulletFontChain, bulletText);
         tspans.push(
           `<tspan x="${bulletX}" dy="${dy}" text-anchor="start" ${bulletStyles}>${escapeXml(bulletText)}</tspan>`,
         );
@@ -416,10 +437,23 @@ function toAlpha(num: number): string {
   return result;
 }
 
+/**
+ * 箇条書き記号のフォントチェーンを構築する。
+ * bulletFont 未指定時はテキストランのフォントにフォールバックする (パス描画と同じ規則)。
+ */
+function buildBulletFontChain(
+  props: ParagraphProperties,
+  runFontFamily: string | null | undefined,
+  runFontFamilyEa: string | null | undefined,
+): (string | null)[] {
+  return [props.bulletFont, runFontFamily ?? null, runFontFamilyEa ?? null];
+}
+
 function buildBulletStyleAttrs(
   props: ParagraphProperties,
   textFontSizePt: number,
   fontScale: number,
+  bulletFontChain: (string | null)[],
 ): string {
   const styles: string[] = [];
 
@@ -428,8 +462,9 @@ function buildBulletStyleAttrs(
     styles.push(`font-size="${size}pt"`);
   }
 
-  if (props.bulletFont) {
-    styles.push(`font-family="${escapeXml(props.bulletFont)}"`);
+  const fontFamilyValue = buildFontFamilyValue(bulletFontChain);
+  if (fontFamilyValue) {
+    styles.push(`font-family="${fontFamilyValue}"`);
   }
 
   if (props.bulletColor) {

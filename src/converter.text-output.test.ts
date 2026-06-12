@@ -11,8 +11,8 @@ import { clearFontCache } from "./font/opentype-helpers.js";
 /**
  * textOutput オプション (ネイティブ <text> + 埋め込みフォント出力モード) の統合テスト。
  *
- * テスト用フォント (グリフ: A, B, space のみ) を一時ディレクトリに書き出し、
- * fontDirs + skipSystemFonts で環境非依存にフォントを解決させる。
+ * テスト用フォント (EmbedTestFont: A, B, space / BulletTestFont: C, space) を
+ * 一時ディレクトリに書き出し、fontDirs + skipSystemFonts で環境非依存にフォントを解決させる。
  */
 
 const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -49,7 +49,9 @@ const presentationRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?
   <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="theme/theme1.xml"/>
 </Relationships>`;
 
-function buildSlideXml(text: string): string {
+function buildSlideXml(text: string, options?: { pPr?: string; typeface?: string }): string {
+  const typeface = options?.typeface ?? "EmbedTestFont";
+  const pPr = options?.pPr ?? "";
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
   <p:cSld>
@@ -86,9 +88,10 @@ function buildSlideXml(text: string): string {
           <a:bodyPr/>
           <a:lstStyle/>
           <a:p>
+            ${pPr}
             <a:r>
               <a:rPr lang="en-US" sz="1600">
-                <a:latin typeface="EmbedTestFont"/>
+                <a:latin typeface="${typeface}"/>
               </a:rPr>
               <a:t>${text}</a:t>
             </a:r>
@@ -177,13 +180,16 @@ const theme1 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
   </a:themeElements>
 </a:theme>`;
 
-async function createTestPptx(text: string): Promise<Buffer> {
+async function createTestPptx(
+  text: string,
+  slideOptions?: { pPr?: string; typeface?: string },
+): Promise<Buffer> {
   const zip = new JSZip();
   zip.file("[Content_Types].xml", contentTypes);
   zip.file("_rels/.rels", rootRels);
   zip.file("ppt/presentation.xml", presentationXml);
   zip.file("ppt/_rels/presentation.xml.rels", presentationRels);
-  zip.file("ppt/slides/slide1.xml", buildSlideXml(text));
+  zip.file("ppt/slides/slide1.xml", buildSlideXml(text, slideOptions));
   zip.file("ppt/slides/_rels/slide1.xml.rels", slide1Rels);
   zip.file("ppt/slideMasters/slideMaster1.xml", slideMaster1);
   zip.file("ppt/slideMasters/_rels/slideMaster1.xml.rels", slideMaster1Rels);
@@ -201,14 +207,20 @@ interface OpentypeTestModule {
     close(): void;
   };
   Font: new (opts: Record<string, unknown>) => { toArrayBuffer(): ArrayBuffer };
+  parse: (buffer: ArrayBuffer) => { charToGlyph(char: string): { index: number } };
+}
+
+async function loadOpentype(): Promise<OpentypeTestModule> {
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+  const mod: OpentypeTestModule = await import("opentype.js");
+  return mod;
 }
 
 /**
- * グリフ A, B, space のみを持つテスト用 TTF を生成する。
+ * 指定した文字 (+ space) のグリフのみを持つテスト用 TTF を生成する。
  */
-async function createTestFontBuffer(familyName: string): Promise<ArrayBuffer> {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-  const opentype: OpentypeTestModule = await import("opentype.js");
+async function createTestFontBuffer(familyName: string, letters: string[]): Promise<ArrayBuffer> {
+  const opentype = await loadOpentype();
 
   const notdefGlyph = new opentype.Glyph({
     name: ".notdef",
@@ -225,20 +237,6 @@ async function createTestFontBuffer(familyName: string): Promise<ArrayBuffer> {
     return path;
   };
 
-  const glyphA = new opentype.Glyph({
-    name: "A",
-    unicode: 65,
-    advanceWidth: 600,
-    path: makeTrianglePath(),
-  });
-
-  const glyphB = new opentype.Glyph({
-    name: "B",
-    unicode: 66,
-    advanceWidth: 700,
-    path: makeTrianglePath(),
-  });
-
   const spaceGlyph = new opentype.Glyph({
     name: "space",
     unicode: 32,
@@ -246,16 +244,43 @@ async function createTestFontBuffer(familyName: string): Promise<ArrayBuffer> {
     path: new opentype.Path(),
   });
 
+  const letterGlyphs = letters.map(
+    (letter) =>
+      new opentype.Glyph({
+        name: letter,
+        unicode: letter.codePointAt(0)!,
+        advanceWidth: 600,
+        path: makeTrianglePath(),
+      }),
+  );
+
   const font = new opentype.Font({
     familyName,
     styleName: "Regular",
     unitsPerEm: 1000,
     ascender: 800,
     descender: -200,
-    glyphs: [notdefGlyph, spaceGlyph, glyphA, glyphB],
+    glyphs: [notdefGlyph, spaceGlyph, ...letterGlyphs],
   });
 
   return font.toArrayBuffer();
+}
+
+/**
+ * SVG の @font-face から指定ファミリー名の埋め込みフォントを取り出してパースする。
+ */
+async function parseEmbeddedFont(
+  svg: string,
+  familyName: string,
+): Promise<{ charToGlyph(char: string): { index: number } }> {
+  const pattern = new RegExp(
+    `@font-face\\{font-family:"${familyName}";src:url\\(data:font/otf;base64,([^)]+)\\)`,
+  );
+  const match = svg.match(pattern);
+  expect(match).not.toBeNull();
+  const bytes = Buffer.from(match![1], "base64");
+  const opentype = await loadOpentype();
+  return opentype.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
 }
 
 let fontDir: string;
@@ -263,8 +288,14 @@ let fontDir: string;
 beforeAll(async () => {
   clearFontCache();
   fontDir = mkdtempSync(join(tmpdir(), "pptx-glimpse-text-output-"));
-  const fontBuffer = await createTestFontBuffer("EmbedTestFont");
-  writeFileSync(join(fontDir, "EmbedTestFont.ttf"), Buffer.from(fontBuffer));
+  writeFileSync(
+    join(fontDir, "EmbedTestFont.ttf"),
+    Buffer.from(await createTestFontBuffer("EmbedTestFont", ["A", "B"])),
+  );
+  writeFileSync(
+    join(fontDir, "BulletTestFont.ttf"),
+    Buffer.from(await createTestFontBuffer("BulletTestFont", ["C"])),
+  );
 });
 
 afterAll(() => {
@@ -300,6 +331,57 @@ describe('textOutput: "text" (ネイティブ <text> + 埋め込みフォント)
     expect(svg).toContain("<text");
     expect(svg).toContain("XYZ");
     expect(svg).not.toContain("@font-face");
+  });
+
+  it("bulletFont 未指定の箇条書きはテキストランのフォントにフォールバックして埋め込まれる", async () => {
+    // buChar="B" / buFont なし。箇条書き記号 B はランのフォント (EmbedTestFont) で描画・埋め込みされる
+    const pptx = await createTestPptx("A", { pPr: '<a:pPr><a:buChar char="B"/></a:pPr>' });
+    const results = await convertPptxToSvg(pptx, convertOptions({ textOutput: "text" }));
+    const svg = results[0].svg;
+
+    expect(svg).toContain("@font-face");
+    // 箇条書き tspan の font-family にランのフォントが含まれる
+    expect(svg).toMatch(/<tspan[^>]*text-anchor="start"[^>]*font-family="EmbedTestFont/);
+
+    // 埋め込みサブセットに箇条書き記号 B のグリフが含まれる
+    const embedded = await parseEmbeddedFont(svg, "EmbedTestFont");
+    expect(embedded.charToGlyph("B").index).toBeGreaterThan(0);
+    expect(embedded.charToGlyph("A").index).toBeGreaterThan(0);
+  });
+
+  it("buFont 指定の箇条書きは指定フォントで埋め込まれる", async () => {
+    const pptx = await createTestPptx("A", {
+      pPr: '<a:pPr><a:buFont typeface="BulletTestFont"/><a:buChar char="C"/></a:pPr>',
+    });
+    const results = await convertPptxToSvg(pptx, convertOptions({ textOutput: "text" }));
+    const svg = results[0].svg;
+
+    // ラン用と箇条書き用で 2 つの @font-face が埋め込まれる
+    expect(svg).toContain('font-family:"EmbedTestFont"');
+    expect(svg).toContain('font-family:"BulletTestFont"');
+    expect(svg).toMatch(/<tspan[^>]*font-family="BulletTestFont/);
+
+    const bulletFont = await parseEmbeddedFont(svg, "BulletTestFont");
+    expect(bulletFont.charToGlyph("C").index).toBeGreaterThan(0);
+  });
+
+  it("fontMapping で解決されたフォントが PPTX フォント名で埋め込まれる", async () => {
+    const pptx = await createTestPptx("ABA", { typeface: "MappedCorpFont" });
+    const results = await convertPptxToSvg(
+      pptx,
+      convertOptions({
+        textOutput: "text",
+        fontMapping: { MappedCorpFont: "EmbedTestFont" },
+      }),
+    );
+    const svg = results[0].svg;
+
+    // @font-face は tspan が参照する PPTX フォント名で宣言される
+    expect(svg).toContain('font-family:"MappedCorpFont"');
+    expect(svg).toMatch(/<tspan[^>]*font-family="MappedCorpFont/);
+
+    const embedded = await parseEmbeddedFont(svg, "MappedCorpFont");
+    expect(embedded.charToGlyph("A").index).toBeGreaterThan(0);
   });
 });
 
