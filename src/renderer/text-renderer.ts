@@ -1,5 +1,6 @@
 import { getMetricsFallbackFont } from "../data/font-metrics.js";
 import { getCurrentMappedFont } from "../font/font-mapping-context.js";
+import { getFontUsageCollector } from "../font/font-usage-collector.js";
 import { getJpanFallbackFont } from "../font/script-font-context.js";
 import { getTextMeasurer } from "../font/text-measurer.js";
 import type { TextPathFontResolver } from "../font/text-path-context.js";
@@ -212,6 +213,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
             paragraphGapPx,
           );
           const bulletStyles = buildBulletStyleAttrs(para.properties, lineFontSize, fontScale);
+          getFontUsageCollector()?.record([para.properties.bulletFont], bulletText);
           tspans.push(
             `<tspan x="${bulletX}" dy="${dy}" text-anchor="start" ${bulletStyles}>${escapeXml(bulletText)}</tspan>`,
           );
@@ -260,6 +262,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
           paragraphGapPx,
         );
         const bulletStyles = buildBulletStyleAttrs(para.properties, fontSize, fontScale);
+        getFontUsageCollector()?.record([para.properties.bulletFont], bulletText);
         tspans.push(
           `<tspan x="${bulletX}" dy="${dy}" text-anchor="start" ${bulletStyles}>${escapeXml(bulletText)}</tspan>`,
         );
@@ -703,6 +706,7 @@ function renderSegment(
   let tspanContent: string;
   if (!needsScriptSplit(props)) {
     const styles = buildStyleAttrs(props, fontScale);
+    getFontUsageCollector()?.record([props.fontFamily, props.fontFamilyEa], text);
     tspanContent = `<tspan ${prefix}${styles}>${escapeXml(text)}</tspan>`;
   } else {
     const parts = splitByScript(text);
@@ -713,6 +717,7 @@ function renderSegment(
         ? [props.fontFamilyEa, getJpanFallbackFont(), props.fontFamily]
         : [props.fontFamily, props.fontFamilyEa];
       const styles = buildStyleAttrs(props, fontScale, fonts);
+      getFontUsageCollector()?.record(fonts, part.text);
       if (i === 0) {
         result.push(`<tspan ${prefix}${styles}>${escapeXml(part.text)}</tspan>`);
       } else {
