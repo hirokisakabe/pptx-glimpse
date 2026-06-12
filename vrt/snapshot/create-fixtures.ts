@@ -224,6 +224,7 @@ function textBodyXmlHelper(
     anchor?: string;
     wrap?: string;
     lineSpacing?: number;
+    lineSpacingPts?: number;
     normAutofit?: { fontScale: number; lnSpcReduction?: number };
   },
 ): string {
@@ -236,7 +237,11 @@ function textBodyXmlHelper(
   const algn = opts?.align ? ` algn="${opts.align}"` : "";
   const anchor = opts?.anchor ?? "ctr";
   const wrap = opts?.wrap ? ` wrap="${opts.wrap}"` : "";
-  const lnSpc = opts?.lineSpacing ? `<a:lnSpc><a:spcPct val="${opts.lineSpacing}"/></a:lnSpc>` : "";
+  const lnSpc = opts?.lineSpacingPts
+    ? `<a:lnSpc><a:spcPts val="${opts.lineSpacingPts}"/></a:lnSpc>`
+    : opts?.lineSpacing
+      ? `<a:lnSpc><a:spcPct val="${opts.lineSpacing}"/></a:lnSpc>`
+      : "";
   let autofitXml = "";
   if (opts?.normAutofit) {
     const lnSpcR = opts.normAutofit.lnSpcReduction
@@ -746,11 +751,16 @@ async function createTextFixture(): Promise<void> {
       label: "AutoFit Text That Should Shrink Down",
       normAutofit: { fontScale: 50000 },
     },
+    {
+      label: "Fixed Line Spacing 21pt With Text That Wraps Across Lines",
+      lineSpacingPts: 2100,
+    },
   ];
+  const alignRows = Math.ceil(alignTests.length / 3);
   alignTests.forEach((t, i) => {
     const col = i % 3;
     const row = Math.floor(i / 3);
-    const pos = gridPosition(col, row, 3, 2);
+    const pos = gridPosition(col, row, 3, alignRows);
     textShapes2.push(
       shapeXml(id++, `text-${t.label}`, {
         preset: "rect",
@@ -765,6 +775,7 @@ async function createTextFixture(): Promise<void> {
           align: t.align,
           anchor: t.anchor,
           lineSpacing: t.lineSpacing,
+          lineSpacingPts: t.lineSpacingPts,
           normAutofit: t.normAutofit,
         }),
       }),
