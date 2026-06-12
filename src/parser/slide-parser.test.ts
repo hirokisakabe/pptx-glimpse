@@ -1555,6 +1555,57 @@ describe("parseTextBody", () => {
     expect(tabStops[1]).toEqual({ position: 2743200, alignment: "r" });
   });
 
+  it("parses lnSpc spcPts as fixed line spacing", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:pPr>
+            <a:lnSpc><a:spcPts val="2100"/></a:lnSpc>
+          </a:pPr>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Text</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    expect(result!.paragraphs[0].properties.lineSpacing).toEqual({ type: "pts", value: 2100 });
+  });
+
+  it("parses lnSpc spcPct as percentage line spacing", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:pPr>
+            <a:lnSpc><a:spcPct val="150000"/></a:lnSpc>
+          </a:pPr>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Text</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    expect(result!.paragraphs[0].properties.lineSpacing).toEqual({ type: "pct", value: 150000 });
+  });
+
+  it("sets lineSpacing to null when lnSpc is absent", () => {
+    const xml = `
+      <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:bodyPr/>
+        <a:lstStyle/>
+        <a:p>
+          <a:r><a:rPr lang="en-US" sz="1400"/><a:t>Text</a:t></a:r>
+        </a:p>
+      </txBody>`;
+    const parsed = parseXml(xml);
+    const result = parseTextBody(parsed.txBody as XmlNode, createColorResolver());
+    expect(result).not.toBeNull();
+    expect(result!.paragraphs[0].properties.lineSpacing).toBeNull();
+  });
+
   it("parses numCol from bodyPr", () => {
     const xml = `
       <txBody xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">

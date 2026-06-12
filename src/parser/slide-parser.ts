@@ -1452,11 +1452,10 @@ function parseParagraph(
 
   const { bullet, bulletFont, bulletColor, bulletSizePct } = parseBullet(pPr, colorResolver);
   const lnSpc = pPr?.lnSpc as XmlNode | undefined;
-  const lnSpcSpcPct = lnSpc?.spcPct as XmlNode | undefined;
   const tabStops = parseTabStops(pPr);
   const properties = {
     alignment: (pPr?.["@_algn"] as "l" | "ctr" | "r" | "just") ?? lstLevelProps?.alignment ?? null,
-    lineSpacing: lnSpcSpcPct ? Number(lnSpcSpcPct["@_val"]) : null,
+    lineSpacing: lnSpc?.spcPts || lnSpc?.spcPct ? parseSpacing(lnSpc) : null,
     spaceBefore: parseSpacing(pPr?.spcBef as XmlNode | undefined),
     spaceAfter: parseSpacing(pPr?.spcAft as XmlNode | undefined),
     level,
