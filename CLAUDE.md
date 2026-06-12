@@ -129,9 +129,10 @@ npm run test                   # Run tests (including LibreOffice VRT)
 #### Tolerance
 
 - `PIXEL_THRESHOLD = 0.3` (per-pixel color difference tolerance)
-- `MISMATCH_TOLERANCE = 0.05` (allows up to 5% pixel mismatch)
+- Each test case has an explicit `tolerance` set to its measured mismatch rate in CI × 1.2, rounded up to 0.1pt (minimum 0.3%). Measured values are printed as `[lo-vrt]` log lines during test runs — use the CI job logs to recalibrate when LibreOffice or runner fonts change
+- `MISMATCH_TOLERANCE = 0.02` is the fallback for newly added cases before calibration
 
-Since LibreOffice ≠ PowerPoint, differences in font rendering and anti-aliasing are tolerated. The goal is to detect obvious rendering omissions and structural errors.
+Since LibreOffice ≠ PowerPoint, differences in font rendering and anti-aliasing are tolerated. The goal is to detect rendering regressions, omissions, and structural errors.
 
 #### Without Docker
 
