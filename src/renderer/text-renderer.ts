@@ -1,5 +1,6 @@
 import { getMetricsFallbackFont } from "../data/font-metrics.js";
 import { getCurrentMappedFont } from "../font/font-mapping-context.js";
+import { getFontUsageCollector } from "../font/font-usage-collector.js";
 import { getJpanFallbackFont } from "../font/script-font-context.js";
 import { getTextMeasurer } from "../font/text-measurer.js";
 import type { TextPathFontResolver } from "../font/text-path-context.js";
@@ -211,7 +212,19 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
             getLineSpacing(para, lnSpcReduction),
             paragraphGapPx,
           );
-          const bulletStyles = buildBulletStyleAttrs(para.properties, lineFontSize, fontScale);
+          const firstSeg = line.segments[0];
+          const bulletFontChain = buildBulletFontChain(
+            para.properties,
+            firstSeg?.properties.fontFamily,
+            firstSeg?.properties.fontFamilyEa,
+          );
+          const bulletStyles = buildBulletStyleAttrs(
+            para.properties,
+            lineFontSize,
+            fontScale,
+            bulletFontChain,
+          );
+          getFontUsageCollector()?.record(bulletFontChain, bulletText);
           tspans.push(
             `<tspan x="${bulletX}" dy="${dy}" text-anchor="start" ${bulletStyles}>${escapeXml(bulletText)}</tspan>`,
           );
@@ -259,7 +272,18 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
           getLineSpacing(para, lnSpcReduction),
           paragraphGapPx,
         );
-        const bulletStyles = buildBulletStyleAttrs(para.properties, fontSize, fontScale);
+        const bulletFontChain = buildBulletFontChain(
+          para.properties,
+          firstRun?.properties.fontFamily,
+          firstRun?.properties.fontFamilyEa,
+        );
+        const bulletStyles = buildBulletStyleAttrs(
+          para.properties,
+          fontSize,
+          fontScale,
+          bulletFontChain,
+        );
+        getFontUsageCollector()?.record(bulletFontChain, bulletText);
         tspans.push(
           `<tspan x="${bulletX}" dy="${dy}" text-anchor="start" ${bulletStyles}>${escapeXml(bulletText)}</tspan>`,
         );
@@ -413,10 +437,23 @@ function toAlpha(num: number): string {
   return result;
 }
 
+/**
+ * 箇条書き記号のフォントチェーンを構築する。
+ * bulletFont 未指定時はテキストランのフォントにフォールバックする (パス描画と同じ規則)。
+ */
+function buildBulletFontChain(
+  props: ParagraphProperties,
+  runFontFamily: string | null | undefined,
+  runFontFamilyEa: string | null | undefined,
+): (string | null)[] {
+  return [props.bulletFont, runFontFamily ?? null, runFontFamilyEa ?? null];
+}
+
 function buildBulletStyleAttrs(
   props: ParagraphProperties,
   textFontSizePt: number,
   fontScale: number,
+  bulletFontChain: (string | null)[],
 ): string {
   const styles: string[] = [];
 
@@ -425,8 +462,9 @@ function buildBulletStyleAttrs(
     styles.push(`font-size="${size}pt"`);
   }
 
-  if (props.bulletFont) {
-    styles.push(`font-family="${escapeXml(props.bulletFont)}"`);
+  const fontFamilyValue = buildFontFamilyValue(bulletFontChain);
+  if (fontFamilyValue) {
+    styles.push(`font-family="${fontFamilyValue}"`);
   }
 
   if (props.bulletColor) {
@@ -703,6 +741,7 @@ function renderSegment(
   let tspanContent: string;
   if (!needsScriptSplit(props)) {
     const styles = buildStyleAttrs(props, fontScale);
+    getFontUsageCollector()?.record([props.fontFamily, props.fontFamilyEa], text);
     tspanContent = `<tspan ${prefix}${styles}>${escapeXml(text)}</tspan>`;
   } else {
     const parts = splitByScript(text);
@@ -713,6 +752,7 @@ function renderSegment(
         ? [props.fontFamilyEa, getJpanFallbackFont(), props.fontFamily]
         : [props.fontFamily, props.fontFamilyEa];
       const styles = buildStyleAttrs(props, fontScale, fonts);
+      getFontUsageCollector()?.record(fonts, part.text);
       if (i === 0) {
         result.push(`<tspan ${prefix}${styles}>${escapeXml(part.text)}</tspan>`);
       } else {

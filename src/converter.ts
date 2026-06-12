@@ -1,8 +1,14 @@
 import { readFileSync, statSync } from "node:fs";
 
+import { buildFontFaceStyle } from "./font/font-embedder.js";
 import type { FontMapping } from "./font/font-mapping.js";
 import { createFontMapping } from "./font/font-mapping.js";
 import { resetFontMapping, setFontMapping } from "./font/font-mapping-context.js";
+import {
+  FontUsageCollector,
+  resetFontUsageCollector,
+  setFontUsageCollector,
+} from "./font/font-usage-collector.js";
 import { createOpentypeSetupFromSystem } from "./font/opentype-helpers.js";
 import { resetScriptFonts, setScriptFonts } from "./font/script-font-context.js";
 import { collectFontFilePaths } from "./font/system-font-loader.js";
@@ -32,6 +38,15 @@ export interface ConvertOptions {
   fontMapping?: FontMapping;
   /** true のとき OS のシステムフォントをスキャンせず fontDirs のみを使用する */
   skipSystemFonts?: boolean;
+  /**
+   * SVG でのテキスト出力方式。デフォルト: "path"
+   * - "path": グリフをアウトライン化した <path> として出力する。フォント環境に依存しない
+   * - "text": ネイティブ <text> 要素 + サブセット化フォントの @font-face (data URI) 埋め込みで出力する。
+   *   ブラウザでのインライン表示時にネイティブテキスト描画 (ヒンティング等) が効き、テキスト選択も可能になる。
+   *   <img src="...svg"> 参照やサニタイズ環境では期待どおり描画されないことがある。
+   *   convertPptxToPng では無視され、常に "path" で変換される (resvg は @font-face を解釈しないため)
+   */
+  textOutput?: "path" | "text";
 }
 
 export interface SlideSvg {
@@ -50,6 +65,7 @@ export async function convertPptxToSvg(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
 ): Promise<SlideSvg[]> {
+  const textOutput = options?.textOutput ?? "path";
   const setup = await createOpentypeSetupFromSystem(
     options?.fontDirs,
     options?.fontMapping,
@@ -57,7 +73,15 @@ export async function convertPptxToSvg(
   );
   if (setup) {
     setTextMeasurer(setup.measurer);
-    setTextPathFontResolver(setup.fontResolver);
+    // "text" モードではフォントリゾルバーを設定しないことで
+    // renderTextBody が <text>/<tspan> 出力にフォールバックする
+    if (textOutput !== "text") {
+      setTextPathFontResolver(setup.fontResolver);
+    }
+  }
+  const fontUsageCollector = textOutput === "text" ? new FontUsageCollector() : null;
+  if (fontUsageCollector) {
+    setFontUsageCollector(fontUsageCollector);
   }
   setFontMapping(createFontMapping(options?.fontMapping));
   enableXmlCache();
@@ -89,7 +113,14 @@ export async function convertPptxToSvg(
         slide.showMasterSp && layoutShowMasterSp ? masterElements : [];
       slide.elements = mergeElements(effectiveMasterElements, layoutElements, slide.elements);
 
-      const svg = renderSlideToSvg(slide, data.presInfo.slideSize);
+      fontUsageCollector?.reset();
+      let svg = renderSlideToSvg(slide, data.presInfo.slideSize);
+      if (fontUsageCollector && setup) {
+        const style = await buildFontFaceStyle(fontUsageCollector.getUsages(), setup.fontResolver);
+        if (style) {
+          svg = injectIntoSvgDefs(svg, style);
+        }
+      }
       results.push({ slideNumber, svg });
     }
 
@@ -100,9 +131,19 @@ export async function convertPptxToSvg(
     clearXmlCache();
     resetTextMeasurer();
     resetTextPathFontResolver();
+    resetFontUsageCollector();
     resetFontMapping();
     resetScriptFonts();
   }
+}
+
+/**
+ * SVG ルート要素の直後に <defs> でラップしたコンテンツを挿入する。
+ */
+function injectIntoSvgDefs(svg: string, content: string): string {
+  const openTagEnd = svg.indexOf(">");
+  if (openTagEnd === -1) return svg;
+  return `${svg.slice(0, openTagEnd + 1)}<defs>${content}</defs>${svg.slice(openTagEnd + 1)}`;
 }
 
 /**
@@ -165,7 +206,9 @@ export async function convertPptxToPng(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
 ): Promise<SlideImage[]> {
-  const svgResults = await convertPptxToSvg(input, options);
+  // PNG 経路は常にパス出力で変換する。resvg は <style> 内の @font-face を解釈できず、
+  // textOutput: "text" のままでは埋め込みフォントが反映されないため
+  const svgResults = await convertPptxToSvg(input, { ...options, textOutput: "path" });
 
   const width = options?.width ?? DEFAULT_OUTPUT_WIDTH;
   const height = options?.height;
