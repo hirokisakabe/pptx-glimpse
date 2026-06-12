@@ -85,8 +85,17 @@ const results = await convertPptxToPng(pptx, {
   fontMapping: {
     "Custom Corp Font": "Noto Sans", // Custom font name mapping
   },
+  textOutput: "text", // Text output mode: "path" (default) | "text" (SVG only)
 });
 ```
+
+#### Text output mode (`textOutput`)
+
+By default, text is converted to `<path>` outlines, which renders consistently in any environment but bypasses the browser's native text rasterization (hinting, text-specific anti-aliasing), so glyph edges can look jagged when SVGs are displayed inline in a browser.
+
+With `textOutput: "text"`, `convertPptxToSvg` emits native `<text>` elements along with `@font-face` rules that embed subsetted fonts as data URIs. This produces smoother text rendering in browsers, smaller SVGs for CJK-heavy slides, and selectable/copyable text. Characters not covered by the resolved font fall back to the viewer's fonts via the `font-family` chain.
+
+Note: embedded fonts and `<text>` may not render as expected when the SVG is referenced via `<img src="...svg">` or sanitized. `convertPptxToPng` always uses path output regardless of this option.
 
 ### Advanced Usage
 
