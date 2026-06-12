@@ -78,6 +78,13 @@ describeOrSkip("LibreOffice Visual Regression Tests", { timeout: 60000 }, () => 
             resizeRef: true,
           });
 
+          // tolerance 調整用に実測値を常に出力する
+          console.log(
+            `[lo-vrt] ${name} slide${result.slideNumber}: ` +
+              `${(comparison.mismatchPercentage * 100).toFixed(3)}% ` +
+              `(tolerance ${(tolerance * 100).toFixed(1)}%)`,
+          );
+
           expect(
             comparison.passed,
             `${name} slide ${result.slideNumber}: ` +
