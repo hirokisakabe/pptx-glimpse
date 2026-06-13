@@ -1,5 +1,11 @@
 # pptx-glimpse
 
+## 1.1.1
+
+### Patch Changes
+
+- 7ad30bb: fix: lnSpc の spcPts（固定行送り）を解釈し、固定値どおりの行ピッチでレンダリングする
+
 ## 1.1.0
 
 ### Minor Changes
