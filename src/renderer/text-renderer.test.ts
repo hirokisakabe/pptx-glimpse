@@ -659,6 +659,57 @@ describe("行送り (lnSpc)", () => {
     expect(dy200[1]).toBeCloseTo(dy100[1] * 2, 1);
   });
 
+  it("空段落にも spcPts (固定行送り) が適用される", () => {
+    const makeParagraph = (text: string, lineSpacing: SpacingValue | null): Paragraph => ({
+      runs: text
+        ? [
+            {
+              text,
+              properties: {
+                fontSize: 14,
+                fontFamily: null,
+                fontFamilyEa: null,
+                bold: false,
+                italic: false,
+                underline: false,
+                strikethrough: false,
+                color: null,
+                baseline: 0,
+              },
+            },
+          ]
+        : [],
+      properties: defaultParagraphProperties({ lineSpacing }),
+    });
+    const textBody: TextBody = {
+      bodyProperties: {
+        anchor: "t",
+        marginLeft: 91440,
+        marginRight: 91440,
+        marginTop: 45720,
+        marginBottom: 45720,
+        wrap: "square",
+        autoFit: "noAutofit",
+        fontScale: 1,
+        lnSpcReduction: 0,
+        numCol: 1,
+        vert: "horz",
+      },
+      paragraphs: [
+        makeParagraph("First", null),
+        makeParagraph("", { type: "pts", value: 2100 }),
+        makeParagraph("Second", null),
+      ],
+    };
+    const dyValues = extractDyValues(
+      renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
+    );
+
+    // 空段落 (2番目) の行送りが 21pt = 28px 固定になる
+    expect(dyValues).toHaveLength(3);
+    expect(dyValues[1]).toBeCloseTo(28, 1);
+  });
+
   it("lnSpc なしの場合はデフォルト行送りになる (spcPct 100% と一致)", () => {
     const dyDefault = extractDyValues(
       renderTextBody(makeLineSpacingTextBody(null), NARROW_TRANSFORM),

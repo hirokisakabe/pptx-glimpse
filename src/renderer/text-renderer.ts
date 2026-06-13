@@ -171,7 +171,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
       const emptyParaHeightPt = paraFontSizePt > 0 ? paraFontSizePt : defaultNaturalHeightPt;
       const dy = computeDy(
         isFirstLine,
-        emptyParaHeightPt * PX_PER_PT * DEFAULT_LINE_SPACING,
+        getLineHeightPx(para, emptyParaHeightPt, lnSpcReduction),
         paragraphGapPx,
       );
       tspans.push(`<tspan x="${xPos}" dy="${dy}" text-anchor="${anchorValue}"> </tspan>`);
@@ -1312,7 +1312,7 @@ function renderTextBodyAsPath(
     if (para.runs.length === 0 || !para.runs.some((r) => r.text.length > 0)) {
       if (!isFirstLine) {
         const emptyParaHeightPt = paraFontSizePt > 0 ? paraFontSizePt : defaultNaturalHeightPt;
-        currentY += emptyParaHeightPt * PX_PER_PT * DEFAULT_LINE_SPACING + paragraphGapPx;
+        currentY += getLineHeightPx(para, emptyParaHeightPt, lnSpcReduction) + paragraphGapPx;
       }
       isFirstLine = false;
       prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSizePt);
