@@ -169,7 +169,11 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
 
     if (para.runs.length === 0 || !para.runs.some((r) => r.text.length > 0)) {
       const emptyParaHeightPt = paraFontSizePt > 0 ? paraFontSizePt : defaultNaturalHeightPt;
-      const dy = computeDy(isFirstLine, emptyParaHeightPt, DEFAULT_LINE_SPACING, paragraphGapPx);
+      const dy = computeDy(
+        isFirstLine,
+        getLineHeightPx(para, emptyParaHeightPt, lnSpcReduction),
+        paragraphGapPx,
+      );
       tspans.push(`<tspan x="${xPos}" dy="${dy}" text-anchor="${anchorValue}"> </tspan>`);
       isFirstLine = false;
       prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSizePt);
@@ -189,8 +193,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
         if (line.segments.length === 0) {
           const dy = computeDy(
             isFirstLine,
-            defaultNaturalHeightPt,
-            getLineSpacing(para, lnSpcReduction),
+            getLineHeightPx(para, defaultNaturalHeightPt, lnSpcReduction),
             lineGapPx,
           );
           tspans.push(`<tspan x="${xPos}" dy="${dy}" text-anchor="${anchorValue}"> </tspan>`);
@@ -208,8 +211,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
           );
           const dy = computeDy(
             isFirstLine,
-            lineNaturalHeightPt,
-            getLineSpacing(para, lnSpcReduction),
+            getLineHeightPx(para, lineNaturalHeightPt, lnSpcReduction),
             paragraphGapPx,
           );
           const firstSeg = line.segments[0];
@@ -246,8 +248,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
               );
               const dy = computeDy(
                 isFirstLine,
-                lineNaturalHeightPt,
-                getLineSpacing(para, lnSpcReduction),
+                getLineHeightPx(para, lineNaturalHeightPt, lnSpcReduction),
                 lineGapPx,
               );
               const prefix = `x="${xPos}" dy="${dy}" text-anchor="${anchorValue}" `;
@@ -268,8 +269,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
         const naturalHeightPt = computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
         const dy = computeDy(
           isFirstLine,
-          naturalHeightPt,
-          getLineSpacing(para, lnSpcReduction),
+          getLineHeightPx(para, naturalHeightPt, lnSpcReduction),
           paragraphGapPx,
         );
         const bulletFontChain = buildBulletFontChain(
@@ -302,8 +302,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
             const naturalHeightPt = computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
             const dy = computeDy(
               isFirstLine,
-              naturalHeightPt,
-              getLineSpacing(para, lnSpcReduction),
+              getLineHeightPx(para, naturalHeightPt, lnSpcReduction),
               paragraphGapPx,
             );
             const prefix = `x="${xPos}" dy="${dy}" text-anchor="${anchorValue}" `;
@@ -498,15 +497,23 @@ function getAlignmentInfo(
   }
 }
 
-function getLineSpacing(para: Paragraph, lnSpcReduction: number = 0): number {
-  let spacing: number;
-  if (para.properties.lineSpacing !== null) {
-    const factor = para.properties.lineSpacing / 100000;
-    spacing = Math.max(0.5, factor);
-  } else {
-    spacing = DEFAULT_LINE_SPACING;
+/**
+ * 段落の 1 行分の高さ (px) を返す。
+ * lnSpc が spcPts（固定行送り）ならフォントサイズ非依存の固定値、
+ * spcPct（倍率）/ 未指定なら naturalHeightPt × 倍率で計算する。
+ */
+function getLineHeightPx(
+  para: Paragraph,
+  naturalHeightPt: number,
+  lnSpcReduction: number = 0,
+): number {
+  const lineSpacing = para.properties.lineSpacing;
+  if (lineSpacing?.type === "pts") {
+    return (lineSpacing.value / 100) * PX_PER_PT * (1 - lnSpcReduction);
   }
-  return spacing * (1 - lnSpcReduction);
+  const factor =
+    lineSpacing !== null ? Math.max(0.5, lineSpacing.value / 100000) : DEFAULT_LINE_SPACING;
+  return naturalHeightPt * PX_PER_PT * factor * (1 - lnSpcReduction);
 }
 
 function resolveSpacingPx(spacing: SpacingValue, fontSizePt: number): number {
@@ -529,18 +536,10 @@ function getParagraphFontSize(para: Paragraph, defaultFontSize: number): number 
   return defaultFontSize;
 }
 
-function computeDy(
-  isFirstLine: boolean,
-  fontSizePt: number,
-  lineSpacingFactor: number,
-  paragraphGapPx: number,
-): string {
+function computeDy(isFirstLine: boolean, lineHeightPx: number, paragraphGapPx: number): string {
   if (isFirstLine) return "0";
 
-  const lineHeight = fontSizePt * PX_PER_PT * lineSpacingFactor;
-  const dy = lineHeight + paragraphGapPx;
-
-  return dy.toFixed(2);
+  return (lineHeightPx + paragraphGapPx).toFixed(2);
 }
 
 function getLineFontSize(
@@ -885,16 +884,16 @@ function estimateTextHeight(
 
   for (let pIdx = 0; pIdx < paragraphs.length; pIdx++) {
     const para = paragraphs[pIdx];
-    const lineSpacing = getLineSpacing(para, lnSpcReduction);
     const isEmpty = !para.runs.some((r) => r.text.length > 0);
     const naturalHeightPt =
       isEmpty && para.endParaRunProperties?.fontSize
         ? para.endParaRunProperties.fontSize * fontScale * defaultRatio
         : computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
-    const lineHeight =
-      (naturalHeightPt > 0 ? naturalHeightPt : defaultFontSize * fontScale * defaultRatio) *
-      PX_PER_PT *
-      lineSpacing;
+    const lineHeight = getLineHeightPx(
+      para,
+      naturalHeightPt > 0 ? naturalHeightPt : defaultFontSize * fontScale * defaultRatio,
+      lnSpcReduction,
+    );
 
     let lineCount: number;
     if (shouldWrap && para.runs.length > 0 && para.runs.some((r) => r.text.length > 0)) {
@@ -1313,7 +1312,7 @@ function renderTextBodyAsPath(
     if (para.runs.length === 0 || !para.runs.some((r) => r.text.length > 0)) {
       if (!isFirstLine) {
         const emptyParaHeightPt = paraFontSizePt > 0 ? paraFontSizePt : defaultNaturalHeightPt;
-        currentY += emptyParaHeightPt * PX_PER_PT * DEFAULT_LINE_SPACING + paragraphGapPx;
+        currentY += getLineHeightPx(para, emptyParaHeightPt, lnSpcReduction) + paragraphGapPx;
       }
       isFirstLine = false;
       prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSizePt);
@@ -1334,8 +1333,7 @@ function renderTextBodyAsPath(
 
         if (line.segments.length === 0) {
           if (!isFirstLine) {
-            currentY +=
-              defaultNaturalHeightPt * PX_PER_PT * getLineSpacing(para, lnSpcReduction) + lineGapPx;
+            currentY += getLineHeightPx(para, defaultNaturalHeightPt, lnSpcReduction) + lineGapPx;
           }
           isFirstLine = false;
           continue;
@@ -1348,8 +1346,7 @@ function renderTextBodyAsPath(
           fontScale,
         );
         if (!isFirstLine) {
-          currentY +=
-            lineNaturalHeightPt * PX_PER_PT * getLineSpacing(para, lnSpcReduction) + lineGapPx;
+          currentY += getLineHeightPx(para, lineNaturalHeightPt, lnSpcReduction) + lineGapPx;
         }
 
         // 行の幅を計測して alignment 用の x 位置を計算
@@ -1406,8 +1403,7 @@ function renderTextBodyAsPath(
       // wrap="none": 折り返しなし
       const naturalHeightPt = computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
       if (!isFirstLine) {
-        currentY +=
-          naturalHeightPt * PX_PER_PT * getLineSpacing(para, lnSpcReduction) + paragraphGapPx;
+        currentY += getLineHeightPx(para, naturalHeightPt, lnSpcReduction) + paragraphGapPx;
       }
 
       // 行の幅を計測

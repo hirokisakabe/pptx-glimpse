@@ -584,6 +584,145 @@ describe("段落間隔 (spaceBefore / spaceAfter)", () => {
   });
 });
 
+describe("行送り (lnSpc)", () => {
+  function makeLineSpacingTextBody(
+    lineSpacing: SpacingValue | null,
+    fontSize: number = 14,
+  ): TextBody {
+    return {
+      bodyProperties: {
+        anchor: "t",
+        marginLeft: 91440,
+        marginRight: 91440,
+        marginTop: 45720,
+        marginBottom: 45720,
+        wrap: "square",
+        autoFit: "noAutofit",
+        fontScale: 1,
+        lnSpcReduction: 0,
+        numCol: 1,
+        vert: "horz",
+      },
+      paragraphs: [
+        {
+          runs: [
+            {
+              text: "The quick brown fox jumps over the lazy dog and continues with more words",
+              properties: {
+                fontSize,
+                fontFamily: null,
+                fontFamilyEa: null,
+                bold: false,
+                italic: false,
+                underline: false,
+                strikethrough: false,
+                color: null,
+                baseline: 0,
+              },
+            },
+          ],
+          properties: defaultParagraphProperties({ lineSpacing }),
+        },
+      ],
+    };
+  }
+
+  function extractDyValues(svg: string): number[] {
+    const matches = svg.matchAll(/dy="([^"]+)"/g);
+    return [...matches].map((m) => parseFloat(m[1]));
+  }
+
+  // 2行以上に折り返す狭いテキストボックス (~209px width)
+  const NARROW_TRANSFORM = makeTransform(2000000, 2000000);
+
+  it("spcPts (固定行送り) では baseline 間隔がフォントサイズ非依存の固定値になる", () => {
+    // 21pt 固定 = 28px @96dpi
+    const textBody = makeLineSpacingTextBody({ type: "pts", value: 2100 });
+    const dyValues = extractDyValues(renderTextBody(textBody, NARROW_TRANSFORM));
+
+    expect(dyValues.length).toBeGreaterThan(1);
+    for (const dy of dyValues.slice(1)) {
+      expect(dy).toBeCloseTo(28, 1);
+    }
+  });
+
+  it("spcPct (倍率) では行送りがフォントサイズに比例する", () => {
+    const dy100 = extractDyValues(
+      renderTextBody(makeLineSpacingTextBody({ type: "pct", value: 100000 }), NARROW_TRANSFORM),
+    );
+    const dy200 = extractDyValues(
+      renderTextBody(makeLineSpacingTextBody({ type: "pct", value: 200000 }), NARROW_TRANSFORM),
+    );
+
+    expect(dy100.length).toBeGreaterThan(1);
+    expect(dy200.length).toBeGreaterThan(1);
+    expect(dy200[1]).toBeCloseTo(dy100[1] * 2, 1);
+  });
+
+  it("空段落にも spcPts (固定行送り) が適用される", () => {
+    const makeParagraph = (text: string, lineSpacing: SpacingValue | null): Paragraph => ({
+      runs: text
+        ? [
+            {
+              text,
+              properties: {
+                fontSize: 14,
+                fontFamily: null,
+                fontFamilyEa: null,
+                bold: false,
+                italic: false,
+                underline: false,
+                strikethrough: false,
+                color: null,
+                baseline: 0,
+              },
+            },
+          ]
+        : [],
+      properties: defaultParagraphProperties({ lineSpacing }),
+    });
+    const textBody: TextBody = {
+      bodyProperties: {
+        anchor: "t",
+        marginLeft: 91440,
+        marginRight: 91440,
+        marginTop: 45720,
+        marginBottom: 45720,
+        wrap: "square",
+        autoFit: "noAutofit",
+        fontScale: 1,
+        lnSpcReduction: 0,
+        numCol: 1,
+        vert: "horz",
+      },
+      paragraphs: [
+        makeParagraph("First", null),
+        makeParagraph("", { type: "pts", value: 2100 }),
+        makeParagraph("Second", null),
+      ],
+    };
+    const dyValues = extractDyValues(
+      renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
+    );
+
+    // 空段落 (2番目) の行送りが 21pt = 28px 固定になる
+    expect(dyValues).toHaveLength(3);
+    expect(dyValues[1]).toBeCloseTo(28, 1);
+  });
+
+  it("lnSpc なしの場合はデフォルト行送りになる (spcPct 100% と一致)", () => {
+    const dyDefault = extractDyValues(
+      renderTextBody(makeLineSpacingTextBody(null), NARROW_TRANSFORM),
+    );
+    const dy100 = extractDyValues(
+      renderTextBody(makeLineSpacingTextBody({ type: "pct", value: 100000 }), NARROW_TRANSFORM),
+    );
+
+    expect(dyDefault.length).toBeGreaterThan(1);
+    expect(dyDefault[1]).toBeCloseTo(dy100[1], 1);
+  });
+});
+
 describe("箇条書き記号レンダリング", () => {
   it("buChar の箇条書き記号が SVG に含まれる", () => {
     const textBody = makeBulletTextBody([
