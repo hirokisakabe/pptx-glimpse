@@ -4,7 +4,7 @@
  * 使い方:
  *   1. scripts/fonts/ に対象フォントの .ttf を配置
  *   2. npx tsx scripts/extract-font-metrics.ts
- *   3. 出力された TypeScript コードを src/data/font-metrics.ts に貼り付け
+ *   3. 出力された TypeScript コードを packages/pptx-glimpse-renderer/src/data/font-metrics.ts に貼り付け
  */
 import path from "node:path";
 import { fileURLToPath } from "node:url";

@@ -12,7 +12,7 @@ Input: `Buffer | Uint8Array`, Output: SVG string or PNG Buffer.
 ```bash
 npm run build          # Build with tsup (CJS + ESM + .d.ts)
 npm run test           # Run all tests with vitest
-npm run test -- src/utils/emu.test.ts  # Run a single test file
+npm run test -- packages/pptx-glimpse-renderer/src/utils/emu.test.ts  # Run a single test file
 npm run test:watch     # Watch mode for tests
 npm run lint           # ESLint check
 npm run lint:fix       # ESLint auto-fix
@@ -21,7 +21,7 @@ npm run format:check   # Prettier check
 npm run typecheck      # Type check with tsc --noEmit
 npm run render         # Test rendering with tsx scripts/test-render.ts
 npm run inspect        # Inspect PPTX internal XML (e.g., npm run inspect -- file.pptx slide1)
-npm run dev -- file.pptx  # Live preview dev server (auto-reload on src/ changes)
+npm run dev -- file.pptx  # Live preview dev server (auto-reload on packages/*/src/ changes)
 ```
 
 CI consists of 4 jobs:
@@ -35,22 +35,37 @@ CI consists of 4 jobs:
 
 Data flow: **PPTX binary → Parser (ZIP extraction + XML parsing) → Intermediate model → Renderer (SVG generation) → PNG conversion (optional)**
 
-- `src/parser/` — Builds intermediate model from PPTX via ZIP extraction (`fflate`) and XML parsing (`fast-xml-parser`)
-- `src/model/` — TypeScript interfaces for the intermediate model (Slide, Shape, Fill, Text, Theme, Table, Chart, Image, Line, Effect, Presentation, etc.)
-- `src/renderer/` — Generates SVG strings from the intermediate model. Includes preset shape definitions in `geometry/`, plus dedicated renderers for tables, charts, and images
-- `src/color/` — Theme color resolution (schemeClr → colorMap → colorScheme) and color transformations (lumMod/tint/shade)
-- `src/font/` — Font loading (system font scanning), font mapping (proprietary → OSS alternatives), text measurement and text-to-SVG-path conversion via `opentype.js`
-- `src/png/` — SVG → PNG conversion using `@resvg/resvg-wasm`
-- `src/data/` — Font metrics data (fallback character width information)
-- `src/utils/` — EMU ↔ pixel conversion (1 inch = 914400 EMU, 96 DPI) and text wrapping
+ソースは pnpm workspaces (`packages/*`) で分割されている。`pptx-glimpse` パッケージは `pptx-glimpse-renderer` を workspace 依存として参照する。
 
-Entry point: `src/index.ts` exports `convertPptxToSvg`, `convertPptxToPng`, warning utilities (`getWarningSummary`, `getWarningEntries`), font utilities (`collectUsedFonts`, `DEFAULT_FONT_MAPPING`, `createFontMapping`, `getMappedFont`), and related types.
+`packages/pptx-glimpse/src/` — 公開パッケージ `pptx-glimpse` の実装（パーサー + 公開 API）
+
+- `parser/` — Builds intermediate model from PPTX via ZIP extraction (`fflate`) and XML parsing (`fast-xml-parser`)
+- `color/` — Theme color resolution (schemeClr → colorMap → colorScheme) and color transformations (lumMod/tint/shade)
+- `font/font-collector.ts` — PPTX から使用フォント名を収集する公開 API (`collectUsedFonts`)
+- `converter.ts` — `convertPptxToSvg` / `convertPptxToPng` の実装
+- `pptx-data-parser.ts`, `text-style-resolver.ts` — パーサー共通ヘルパー
+- `index.ts` — 公開エントリポイント
+
+`packages/pptx-glimpse-renderer/src/` — 内部 renderer パッケージ（private; 親 issue #340 決定）
+
+- `renderer/` — Generates SVG strings from the intermediate model. Includes preset shape definitions in `geometry/`, plus dedicated renderers for tables, charts, and images
+- `model/` — TypeScript interfaces for the intermediate model (Slide, Shape, Fill, Text, Theme, Table, Chart, Image, Line, Effect, Presentation, etc.)
+- `font/` — Font loading (system font scanning), font mapping (proprietary → OSS alternatives), text measurement and text-to-SVG-path conversion via `opentype.js`
+- `png/` — SVG → PNG conversion using `@resvg/resvg-wasm`
+- `data/` — Font metrics data (fallback character width information)
+- `utils/` — EMU ↔ pixel conversion (1 inch = 914400 EMU, 96 DPI) and text wrapping
+- `warning-logger.ts` — 共有警告ロガー
+- `index.ts` — pptx-glimpse が import する barrel re-export
+
+Entry point: `packages/pptx-glimpse/src/index.ts` exports `convertPptxToSvg`, `convertPptxToPng`, warning utilities (`getWarningSummary`, `getWarningEntries`), font utilities (`collectUsedFonts`, `DEFAULT_FONT_MAPPING`, `createFontMapping`, `getMappedFont`), and related types.
+
+ルートの `tsup.config.ts` が `packages/pptx-glimpse/src/index.ts` を bundle して `dist/` を生成し、`pptx-glimpse` パッケージとして publish する（renderer は `noExternal` で bundle 内に取り込む）。publish 経路の monorepo 対応 (`packages/pptx-glimpse` を直接 publish する形への移行) は #340 子4 で実施予定。
 
 ## Technical Constraints
 
 - **SVG uses inline attributes only** — No CSS classes. resvg and librsvg do not correctly interpret CSS
 - **`isArray` configuration in fast-xml-parser is required** — Tags such as `sp`, `pic`, `p`, `r` must be returned as arrays even for single elements (`ARRAY_TAGS` in `xml-parser.ts`)
-- **EMU units & branded types** — PPTX internal coordinates use EMU (English Metric Units). Convert with `emuToPixels()`. A 16:9 slide is 9144000×5143500 EMU = 960×540 px. Model fields use branded types (`Emu`, `Pt`, `HundredthPt` in `src/utils/unit-types.ts`) to prevent unit confusion at compile time. Use `asEmu()`, `asPt()`, `asHundredthPt()` to create branded values from raw numbers
+- **EMU units & branded types** — PPTX internal coordinates use EMU (English Metric Units). Convert with `emuToPixels()`. A 16:9 slide is 9144000×5143500 EMU = 960×540 px. Model fields use branded types (`Emu`, `Pt`, `HundredthPt` in `packages/pptx-glimpse-renderer/src/utils/unit-types.ts`) to prevent unit confusion at compile time. Use `asEmu()`, `asPt()`, `asHundredthPt()` to create branded values from raw numbers
 - **Background fallback** — Backgrounds are resolved in order: slide → slide layout → slide master
 
 ## VRT (Visual Regression Testing)
@@ -160,4 +175,4 @@ Changes that do NOT require a changeset: docs-only updates, CI config, test-only
 - Prettier: double quotes, semicolons, trailing commas, printWidth 100
 - ESLint: unused variables with `_` prefix are allowed
 - ESM (`"type": "module"`) — imports require `.js` extension
-- Tests are colocated with source files (`src/parser/slide-parser.test.ts`, etc.)
+- Tests are colocated with source files (`packages/pptx-glimpse/src/parser/slide-parser.test.ts`, etc.)
