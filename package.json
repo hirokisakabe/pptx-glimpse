@@ -14,7 +14,7 @@
     }
   },
   "scripts": {
-    "build": "tsup",
+    "build": "pnpm --filter pptx-glimpse-renderer build && tsup",
     "bench": "vitest bench",
     "lint": "eslint packages/*/src/ vrt/ scripts/ bench/ e2e/",
     "lint:fix": "eslint packages/*/src/ vrt/ scripts/ bench/ e2e/ --fix",
