@@ -1,0 +1,24 @@
+{
+  "name": "pptx-glimpse-skeleton",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Skeleton package; source code will move here in a follow-up issue and the name will be renamed to pptx-glimpse at that time.",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}

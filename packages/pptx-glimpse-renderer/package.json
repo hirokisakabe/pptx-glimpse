@@ -1,0 +1,24 @@
+{
+  "name": "pptx-glimpse-renderer",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Renderer package skeleton (private: managed as an internal package per parent issue #340 decision).",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}
