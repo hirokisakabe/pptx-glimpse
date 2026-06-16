@@ -6,7 +6,13 @@ import prettier from "eslint-config-prettier";
 
 export default tseslint.config(
   {
-    files: ["src/**/*.ts", "vrt/**/*.ts", "scripts/**/*.ts", "bench/**/*.ts", "e2e/**/*.ts"],
+    files: [
+      "packages/*/src/**/*.ts",
+      "vrt/**/*.ts",
+      "scripts/**/*.ts",
+      "bench/**/*.ts",
+      "e2e/**/*.ts",
+    ],
     extends: tseslint.configs.recommendedTypeChecked,
     plugins: {
       "simple-import-sort": simpleImportSort,
