@@ -6,13 +6,13 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 // worker メモリが膨れ上がり OOM する。ここでは構造ベースのアサーション
 // (`<text|<path>` のいずれかが出ること、`<image>`/`<rect>` が出ること) のみを
 // 検証しているので、`DefaultTextMeasurer` フォールバックで十分。
-vi.mock("../src/font/system-font-loader.js", () => ({
+vi.mock("../packages/pptx-glimpse-renderer/src/font/system-font-loader.js", () => ({
   collectFontFilePaths: vi.fn(() => []),
   getSystemFontDirs: vi.fn(() => []),
 }));
 
-import { convertPptxToPng, convertPptxToSvg } from "../src/converter.js";
-import { clearFontCache } from "../src/font/opentype-helpers.js";
+import { convertPptxToPng, convertPptxToSvg } from "../packages/pptx-glimpse/src/converter.js";
+import { clearFontCache } from "../packages/pptx-glimpse-renderer/src/font/opentype-helpers.js";
 
 beforeAll(() => {
   clearFontCache();

@@ -1,9 +1,9 @@
 import { defineConfig } from "tsup";
 
 export default defineConfig({
-  entry: ["src/index.ts"],
+  entry: { index: "packages/pptx-glimpse/src/index.ts" },
   format: ["cjs", "esm"],
-  dts: true,
+  dts: { resolve: ["pptx-glimpse-renderer"] },
   clean: true,
   noExternal: ["pptx-glimpse-renderer"],
 });

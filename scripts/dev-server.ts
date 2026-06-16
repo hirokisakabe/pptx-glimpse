@@ -7,7 +7,10 @@ import { type WebSocket, WebSocketServer } from "ws";
 
 const DEFAULT_PORT = 3000;
 const DEBOUNCE_MS = 300;
-const WATCH_DIR = resolve("src");
+const WATCH_DIRS = [
+  resolve("packages/pptx-glimpse/src"),
+  resolve("packages/pptx-glimpse-renderer/src"),
+];
 const RENDER_TIMEOUT_MS = 30_000;
 const MAX_BUFFER = 50 * 1024 * 1024;
 
@@ -45,7 +48,7 @@ function broadcast(wss: WebSocketServer, data: unknown): void {
 function watchSourceFiles(onChange: () => void): void {
   let timeout: ReturnType<typeof setTimeout> | null = null;
 
-  watch(WATCH_DIR, { recursive: true }, (_event, filename) => {
+  const handler = (_event: string, filename: string | null) => {
     if (!filename || !filename.endsWith(".ts")) return;
     if (filename.endsWith(".test.ts")) return;
 
@@ -56,7 +59,10 @@ function watchSourceFiles(onChange: () => void): void {
       timeout = null;
       onChange();
     }, DEBOUNCE_MS);
-  });
+  };
+  for (const dir of WATCH_DIRS) {
+    watch(dir, { recursive: true }, handler);
+  }
 }
 
 // --- HTML template ---
@@ -297,7 +303,7 @@ async function main(): Promise<void> {
 
   server.listen(port, () => {
     console.log(`Dev server running at http://localhost:${String(port)}`);
-    console.log(`Watching: ${WATCH_DIR}`);
+    console.log(`Watching: ${WATCH_DIRS.join(", ")}`);
   });
 
   let rendering = false;

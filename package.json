@@ -14,12 +14,12 @@
     }
   },
   "scripts": {
-    "build": "tsup src/index.ts --format cjs,esm --dts",
+    "build": "pnpm --filter pptx-glimpse-renderer build && tsup",
     "bench": "vitest bench",
-    "lint": "eslint src/ vrt/ scripts/ bench/ e2e/",
-    "lint:fix": "eslint src/ vrt/ scripts/ bench/ e2e/ --fix",
-    "format": "prettier --write 'src/**/*.ts' 'vrt/**/*.ts' 'scripts/**/*.ts' 'bench/**/*.ts' 'e2e/**/*.ts'",
-    "format:check": "prettier --check 'src/**/*.ts' 'vrt/**/*.ts' 'scripts/**/*.ts' 'bench/**/*.ts' 'e2e/**/*.ts'",
+    "lint": "eslint packages/*/src/ vrt/ scripts/ bench/ e2e/",
+    "lint:fix": "eslint packages/*/src/ vrt/ scripts/ bench/ e2e/ --fix",
+    "format": "prettier --write 'packages/*/src/**/*.ts' 'vrt/**/*.ts' 'scripts/**/*.ts' 'bench/**/*.ts' 'e2e/**/*.ts'",
+    "format:check": "prettier --check 'packages/*/src/**/*.ts' 'vrt/**/*.ts' 'scripts/**/*.ts' 'bench/**/*.ts' 'e2e/**/*.ts'",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:watch": "vitest",
