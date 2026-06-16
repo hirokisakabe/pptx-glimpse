@@ -2,7 +2,7 @@
   "name": "pptx-glimpse-skeleton",
   "version": "0.0.0",
   "private": true,
-  "description": "Skeleton package; source code will move here in a follow-up issue and the name will be renamed to pptx-glimpse at that time.",
+  "description": "Main pptx-glimpse package (parser + public API). Will replace the root-level pptx-glimpse package in a follow-up issue.",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -14,11 +14,19 @@
       "require": "./dist/index.cjs"
     }
   },
+  "scripts": {
+    "build": "tsup"
+  },
   "files": [
     "dist"
   ],
   "engines": {
     "node": ">=22"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "fast-xml-parser": "^5.7.3",
+    "fflate": "^0.8.2",
+    "pptx-glimpse-renderer": "workspace:*"
+  }
 }
