@@ -35,7 +35,7 @@ CI consists of 4 jobs:
 
 Data flow: **PPTX binary → Parser (ZIP extraction + XML parsing) → Intermediate model → Renderer (SVG generation) → PNG conversion (optional)**
 
-ソースは pnpm workspaces (`packages/*`) で分割されている。`pptx-glimpse` パッケージは `pptx-glimpse-renderer` を workspace 依存として参照する。
+ソースは pnpm workspaces (`.` + `packages/*`) で分割されている。`packages/*` 配下に renderer / cli の skeleton と `pptx-glimpse` の実装ソースが置かれており、`.` (ルート) は引き続き npm publish 対象の `pptx-glimpse` パッケージとして workspace に含めている (Changesets に root を認識させるための明示指定)。`pptx-glimpse` パッケージは `pptx-glimpse-renderer` を workspace 依存として参照する。
 
 `packages/pptx-glimpse/src/` — 公開パッケージ `pptx-glimpse` の実装（パーサー + 公開 API）
 

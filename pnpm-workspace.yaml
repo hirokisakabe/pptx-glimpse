@@ -1,4 +1,8 @@
+# "." はルートの publishable package `pptx-glimpse` を Changesets (@manypkg/get-packages) が
+# workspace member として認識するために必要。これが無いと `changeset status / version / publish`
+# が root を無視し no-op になる。root publish 経路を維持しているうちは外さないこと。
 packages:
+  - "."
   - "packages/*"
 
 allowBuilds:
