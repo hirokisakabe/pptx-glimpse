@@ -35,13 +35,21 @@ export interface RawSidecar {
 
 /**
  * 未編集の package part をそのまま書き戻すための raw fallback。bytes (binary
- * asset) もしくは XML tree のいずれかで保持する。
+ * asset) もしくは XML tree の **いずれか一方** で保持する判別共用体。両持ち /
+ * 両欠の不正状態を型で排除する。
  */
-export interface RawPackagePart {
-  readonly partPath: PartPath;
-  readonly contentType: string;
-  /** binary part (画像・埋め込みワークブック等) の元バイト列。 */
-  readonly bytes?: Uint8Array;
-  /** XML part を tree として保持する場合の root ノード。 */
-  readonly xml?: RawOoxmlNode;
-}
+export type RawPackagePart =
+  | {
+      readonly kind: "binary";
+      readonly partPath: PartPath;
+      readonly contentType: string;
+      /** binary part (画像・埋め込みワークブック等) の元バイト列。 */
+      readonly bytes: Uint8Array;
+    }
+  | {
+      readonly kind: "xml";
+      readonly partPath: PartPath;
+      readonly contentType: string;
+      /** XML part を tree として保持する場合の root ノード。 */
+      readonly xml: RawOoxmlNode;
+    };

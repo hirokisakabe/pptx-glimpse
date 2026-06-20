@@ -30,7 +30,8 @@ export interface SourcePresetGeometry {
 
 /**
  * 未解決の source color 参照。`schemeClr` は scheme 名のまま保持し、computed
- * view で `clrMap` / `colorScheme` を経由して具体色へ解決する。
+ * view で `clrMap` / `colorScheme` を経由して具体色へ解決する。`srgbClr` /
+ * `sysClr` は具体値だが、変換 (lumMod 等) は適用前のまま保持する。
  */
 export type SourceColor =
   | {
@@ -41,6 +42,14 @@ export type SourceColor =
   | {
       readonly kind: "scheme";
       readonly scheme: string;
+      readonly transforms?: readonly SourceColorTransform[];
+    }
+  | {
+      readonly kind: "system";
+      /** `a:sysClr@val` (例: `windowText`)。 */
+      readonly value: string;
+      /** `a:sysClr@lastClr` の解決済みフォールバック hex (持つ場合)。 */
+      readonly lastColor?: string;
       readonly transforms?: readonly SourceColorTransform[];
     };
 
@@ -55,6 +64,12 @@ export type SourceFill =
   | { readonly kind: "none" }
   | { readonly kind: "solid"; readonly color: SourceColor }
   | { readonly kind: "raw"; readonly raw: RawSidecar };
+
+/** simple solid line の outline (`a:ln`)。色と幅のみの最小表現。 */
+export interface SourceOutline {
+  readonly width?: Emu;
+  readonly fill?: SourceFill;
+}
 
 /** placeholder 宣言 (`p:ph`)。type / idx を未解決のまま保持する。 */
 export interface SourcePlaceholder {
@@ -102,9 +117,22 @@ export interface SourceParagraph {
   readonly rawSidecars?: readonly RawSidecar[];
 }
 
+/** vertical anchor (`a:bodyPr@anchor`)。 */
+export type SourceVerticalAnchor = "top" | "middle" | "bottom";
+
+/** text body properties (`a:bodyPr`) の最小 subset。inset と vertical anchor。 */
+export interface SourceTextBodyProperties {
+  readonly marginLeft?: Emu;
+  readonly marginRight?: Emu;
+  readonly marginTop?: Emu;
+  readonly marginBottom?: Emu;
+  readonly anchor?: SourceVerticalAnchor;
+}
+
 /** text body (`p:txBody`)。 */
 export interface SourceTextBody {
   readonly paragraphs: readonly SourceParagraph[];
+  readonly properties?: SourceTextBodyProperties;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
 }
@@ -117,10 +145,19 @@ export interface SourceShape {
   readonly transform?: SourceTransform;
   readonly geometry?: SourcePresetGeometry;
   readonly fill?: SourceFill;
+  readonly outline?: SourceOutline;
   readonly textBody?: SourceTextBody;
   readonly placeholder?: SourcePlaceholder;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
+}
+
+/** image の crop (`a:srcRect`)。各辺の inset を OOXML パーセンテージで保持する。 */
+export interface SourceImageCrop {
+  readonly left?: OoxmlPercent;
+  readonly top?: OoxmlPercent;
+  readonly right?: OoxmlPercent;
+  readonly bottom?: OoxmlPercent;
 }
 
 /** image (`p:pic`)。blip は relationship id (`r:embed`) を未解決のまま保持する。 */
@@ -131,6 +168,7 @@ export interface SourceImage {
   readonly transform?: SourceTransform;
   /** `a:blip@r:embed` の relationship id。media part は computed view で解決する。 */
   readonly blipRelationshipId?: RelationshipId;
+  readonly crop?: SourceImageCrop;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
 }

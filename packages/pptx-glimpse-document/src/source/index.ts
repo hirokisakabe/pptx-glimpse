@@ -25,11 +25,15 @@ export type {
 } from "./package-graph.js";
 export type {
   SlideSize,
+  SourceBackground,
+  SourceColorMap,
   SourcePresentation,
   SourceSlide,
   SourceSlideLayout,
   SourceSlideMaster,
   SourceTheme,
+  SourceThemeColorScheme,
+  SourceThemeFontScheme,
 } from "./presentation.js";
 export type { RawOoxmlNode, RawPackagePart, RawSidecar } from "./raw.js";
 export type {
@@ -37,6 +41,8 @@ export type {
   SourceColorTransform,
   SourceFill,
   SourceImage,
+  SourceImageCrop,
+  SourceOutline,
   SourceParagraph,
   SourceParagraphProperties,
   SourcePlaceholder,
@@ -47,8 +53,10 @@ export type {
   SourceShapeNode,
   SourceTextAlign,
   SourceTextBody,
+  SourceTextBodyProperties,
   SourceTextRun,
   SourceTransform,
+  SourceVerticalAnchor,
 } from "./shapes.js";
 export type { Emu, HundredthPt, OoxmlAngle, OoxmlPercent, Pt } from "./units.js";
 export { asEmu, asHundredthPt, asOoxmlAngle, asOoxmlPercent, asPt } from "./units.js";

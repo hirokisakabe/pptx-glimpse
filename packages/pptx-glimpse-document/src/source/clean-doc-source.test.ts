@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 
+// 実際の公開面 (`@pptx-glimpse/document/experimental`) 経由で import し、
+// experimental entry point の re-export ごと検証する。
 import {
   asEmu,
   asOoxmlAngle,
+  asOoxmlPercent,
   asPartPath,
   asPt,
   asRawSidecarId,
@@ -12,7 +15,7 @@ import {
   type SourceImage,
   type SourceShape,
   type SourceTextRun,
-} from "./index.js";
+} from "../experimental.js";
 
 describe("CleanDoc source model types", () => {
   it("can build a minimal CleanDocSource value", () => {
@@ -35,7 +38,12 @@ describe("CleanDoc source model types", () => {
       },
       geometry: { preset: "rect" },
       fill: { kind: "solid", color: { kind: "scheme", scheme: "accent1" } },
+      outline: {
+        width: asEmu(12700),
+        fill: { kind: "solid", color: { kind: "srgb", hex: "000000" } },
+      },
       textBody: {
+        properties: { anchor: "middle", marginLeft: asEmu(91440) },
         paragraphs: [
           {
             properties: { align: "center" },
@@ -61,6 +69,7 @@ describe("CleanDoc source model types", () => {
       kind: "image",
       name: "Picture 1",
       blipRelationshipId: asRelationshipId("rId2"),
+      crop: { left: asOoxmlPercent(10000), top: asOoxmlPercent(0) },
       handle: { partPath: slidePath, relationshipId: asRelationshipId("rId2") },
     };
 
@@ -93,6 +102,7 @@ describe("CleanDoc source model types", () => {
         ],
         rawParts: [
           {
+            kind: "xml",
             partPath: asPartPath("docProps/custom.xml"),
             contentType: "application/xml",
             xml: { name: "Properties" },
@@ -104,17 +114,41 @@ describe("CleanDoc source model types", () => {
         slideSize: { width: asEmu(9144000), height: asEmu(5143500) },
         slidePartPaths: [slidePath],
       },
-      slides: [{ partPath: slidePath, layoutPartPath: layoutPath, shapes: [shape, image] }],
-      slideLayouts: [{ partPath: layoutPath, masterPartPath: masterPath, shapes: [] }],
+      slides: [
+        {
+          partPath: slidePath,
+          layoutPartPath: layoutPath,
+          background: {
+            kind: "fill",
+            fill: { kind: "solid", color: { kind: "scheme", scheme: "bg1" } },
+          },
+          colorMapOverride: { mapping: { bg1: "lt1", tx1: "dk1" } },
+          showMasterShapes: true,
+          shapes: [shape, image],
+        },
+      ],
+      slideLayouts: [
+        { partPath: layoutPath, masterPartPath: masterPath, type: "title", shapes: [] },
+      ],
       slideMasters: [
         {
           partPath: masterPath,
           themePartPath: themePath,
           layoutPartPaths: [layoutPath],
+          colorMap: { mapping: { bg1: "lt1", tx1: "dk1" } },
           shapes: [],
         },
       ],
-      themes: [{ partPath: themePath, name: "Office Theme" }],
+      themes: [
+        {
+          partPath: themePath,
+          name: "Office Theme",
+          colorScheme: {
+            colors: { dk1: { kind: "system", value: "windowText", lastColor: "000000" } },
+          },
+          fontScheme: { majorLatin: "Calibri Light", minorLatin: "Calibri" },
+        },
+      ],
       diagnostics: [
         {
           severity: "warning",
@@ -126,8 +160,10 @@ describe("CleanDoc source model types", () => {
     };
 
     expect(source.slides[0]?.shapes).toHaveLength(2);
+    expect(source.slides[0]?.showMasterShapes).toBe(true);
     expect(source.presentation.slideSize?.width).toBe(9144000);
     expect(source.themes[0]?.partPath).toBe("ppt/theme/theme1.xml");
+    expect(source.themes[0]?.fontScheme?.minorLatin).toBe("Calibri");
     expect(source.packageGraph.media[0]?.bytes).toEqual(new Uint8Array([1, 2, 3]));
   });
 });
