@@ -10,6 +10,11 @@ decision from
 will eventually depend on `@pptx-glimpse/document`, and pptx-glimpse will not
 depend on pom.**
 
+Package names with the `@pptx-glimpse/*` scope describe the intended long-term
+package boundaries. The current repository still contains unscoped packages such
+as `pptx-glimpse` and `pptx-glimpse-renderer`; this RFC uses the scoped names to
+describe the target architecture.
+
 ## Dependency direction
 
 `@pptx-glimpse/document` is the lower-level OOXML / CleanDoc foundation. Higher
@@ -25,7 +30,9 @@ editing workflows, or pom's authoring DSL.
 
 @pptx-glimpse/core
   -> @pptx-glimpse/document
-  -> OOXML package parts / CleanDoc types / writer primitives
+
+@pptx-glimpse/document
+  -> OOXML package parts
 ```
 
 `@pptx-glimpse/document` must not depend on:
