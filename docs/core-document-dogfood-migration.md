@@ -33,7 +33,8 @@ PPTX Buffer | Uint8Array
 
 `parsePptxData` and `parseSlideWithLayout` are currently the effective core
 reader. They unzip the package, parse XML, collect relationships/theme data, and
-produce the renderer model consumed by `pptx-glimpse-renderer`.
+produce the renderer model consumed by the current `pptx-glimpse-renderer`
+package.
 
 The current path already contains computed-view behavior, but it is implicit and
 spread across parser and converter code:
@@ -62,7 +63,7 @@ PPTX Buffer | Uint8Array
   -> CleanDoc source model
   -> createComputedView(source, options)
   -> createRenderView(computed, renderOptions)
-  -> existing pptx-glimpse-renderer model
+  -> existing @pptx-glimpse/renderer model
   -> renderSlideToSvg(slide, slideSize)
   -> svgToPng(svg, options) for PNG output
 ```
@@ -75,8 +76,9 @@ The ownership boundary should be:
 - `@pptx-glimpse/core` owns the public conversion API, slide selection,
   compatibility options, warning behavior, font setup, and the
   CleanDoc-computed-view-to-renderer-model adapter.
-- `pptx-glimpse-renderer` keeps owning SVG/PNG rendering, font measurement,
-  text-to-path behavior, visual fallbacks, and renderer-specific warnings.
+- `@pptx-glimpse/renderer` keeps owning SVG/PNG rendering, font measurement,
+  text-to-path behavior, visual fallbacks, and renderer-specific warnings. It is
+  currently implemented by the unscoped `pptx-glimpse-renderer` package.
 
 `@pptx-glimpse/document` must not import `core`, `editor-core`, the renderer, or
 pom. Core depends on `document`; the renderer consumes the adapter output and
@@ -120,7 +122,7 @@ renderer model, not merge the renderer model into CleanDoc.
 Adapter responsibilities:
 
 - Convert computed slide order, slide size, backgrounds, and effective element
-  trees into `pptx-glimpse-renderer` model objects.
+  trees into `@pptx-glimpse/renderer` model objects.
 - Convert computed theme colors, fills, outlines, effects, table/chart/image
   references, and text properties into the render-ready shapes expected by the
   renderer.

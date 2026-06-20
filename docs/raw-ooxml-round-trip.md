@@ -10,6 +10,12 @@ builds on the package boundary decision in
 layering decision in
 [cleandoc-source-computed-view.md](./cleandoc-source-computed-view.md).
 
+The related core dogfood migration decision is recorded in
+[core-document-dogfood-migration.md](./core-document-dogfood-migration.md). In
+short, public SVG/PNG conversion should eventually route through CleanDoc source
+reading, computed view generation, and a core-owned adapter into the existing
+renderer model.
+
 The goal is to make `@pptx-glimpse/document` reliable for existing PPTX files
 without turning CleanDoc into a byte-level OOXML editor. CleanDoc should expose a
 clean document model for supported semantics, while retaining enough raw source
