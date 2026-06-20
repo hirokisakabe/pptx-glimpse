@@ -13,7 +13,9 @@ depend on pom.**
 Package names with the `@pptx-glimpse/*` scope describe the intended long-term
 package boundaries. The current repository still contains unscoped packages such
 as `pptx-glimpse` and `pptx-glimpse-renderer`; this RFC uses the scoped names to
-describe the target architecture.
+describe the target architecture. In that target architecture, current
+`pptx-glimpse` corresponds to `@pptx-glimpse/core`, and current
+`pptx-glimpse-renderer` corresponds to `@pptx-glimpse/renderer`.
 
 ## Dependency direction
 
@@ -35,12 +37,14 @@ without exposing OOXML's package scattering as the primary authoring surface.
 
 @pptx-glimpse/core
   -> @pptx-glimpse/document
+  -> @pptx-glimpse/renderer
+  (owns orchestration and the CleanDoc-to-render-view adapter)
 
 @pptx-glimpse/document
   -> OOXML package parts
 
 @pptx-glimpse/renderer
-  -> computed render view / adapter output
+  -> computed render view
 ```
 
 `@pptx-glimpse/document` must not depend on:
@@ -107,13 +111,13 @@ application-level packages that depend on `document`.
 
 ## Package roles
 
-| Package                     | Role                                               | Depends on `document`?           | `document` may depend on it? |
-| --------------------------- | -------------------------------------------------- | -------------------------------- | ---------------------------- |
-| `@pptx-glimpse/document`    | CleanDoc, OOXML reader/writer, document validation | n/a                              | n/a                          |
-| `@pptx-glimpse/core`        | Public preview/conversion API and orchestration    | Yes                              | No                           |
-| `@pptx-glimpse/editor-core` | Headless editing commands and state machine        | Yes                              | No                           |
-| `@pptx-glimpse/renderer`    | Render-oriented model and SVG/PNG generation       | Possibly via an adapter consumer | No                           |
-| `@hirokisakabe/pom`         | Authoring DSL and generation workflow              | Yes, eventually                  | No                           |
+| Package                     | Role                                               | Depends on `document`?                        | `document` may depend on it? |
+| --------------------------- | -------------------------------------------------- | --------------------------------------------- | ---------------------------- |
+| `@pptx-glimpse/document`    | CleanDoc, OOXML reader/writer, document validation | n/a                                           | n/a                          |
+| `@pptx-glimpse/core`        | Public preview/conversion API and orchestration    | Yes                                           | No                           |
+| `@pptx-glimpse/editor-core` | Headless editing commands and state machine        | Yes                                           | No                           |
+| `@pptx-glimpse/renderer`    | Render-oriented model and SVG/PNG generation       | No direct dependency; consumes adapter output | No                           |
+| `@hirokisakabe/pom`         | Authoring DSL and generation workflow              | Yes, eventually                               | No                           |
 
 ## Renderer model and CleanDoc
 
