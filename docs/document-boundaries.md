@@ -1,7 +1,7 @@
 # `@pptx-glimpse/document` responsibility boundaries
 
-Status: RFC decision for [#449](https://github.com/hirokisakabe/pptx-glimpse/issues/449)
-Date: 2026-06-20
+- Status: RFC decision for [#449](https://github.com/hirokisakabe/pptx-glimpse/issues/449)
+- Date: 2026-06-20
 
 This note records the package boundary decision that should feed into
 [#445](https://github.com/hirokisakabe/pptx-glimpse/issues/445). It assumes the
@@ -21,6 +21,11 @@ describe the target architecture.
 packages may consume it, but it must not know product-level APIs, preview APIs,
 editing workflows, or pom's authoring DSL.
 
+CleanDoc means the clean intermediate document model discussed in
+[#445](https://github.com/hirokisakabe/pptx-glimpse/issues/445): it keeps the
+semantic structure and round-trip preservation hooks needed for PPTX documents
+without exposing OOXML's package scattering as the primary authoring surface.
+
 ```text
 @hirokisakabe/pom
   -> @pptx-glimpse/document
@@ -33,6 +38,9 @@ editing workflows, or pom's authoring DSL.
 
 @pptx-glimpse/document
   -> OOXML package parts
+
+@pptx-glimpse/renderer
+  -> computed render view / adapter output
 ```
 
 `@pptx-glimpse/document` must not depend on:
@@ -70,7 +78,7 @@ needed to read, write, validate, and preserve that domain model:
 - Source-level values plus the metadata required to recover or preserve OOXML
   constructs that CleanDoc does not model directly.
 - Raw OOXML escape hatch for vendor extensions, uncommon DrawingML constructs,
-  `mc:AlternateContent`, and other lossless-tax cases.
+  `mc:AlternateContent`, and other cases needed to keep round-trips lossless.
 - Validation and diagnostics that are about document correctness, not rendering
   fidelity or UI behavior.
 
