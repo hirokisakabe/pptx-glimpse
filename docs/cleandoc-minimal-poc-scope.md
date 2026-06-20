@@ -11,6 +11,9 @@ decision in
 round-trip policy in [raw-ooxml-round-trip.md](./raw-ooxml-round-trip.md), and
 the core dogfood migration plan in
 [core-document-dogfood-migration.md](./core-document-dogfood-migration.md).
+Issue #453 is the PoC-scope child decision for the broader CleanDoc RFC in
+[#445](https://github.com/hirokisakabe/pptx-glimpse/issues/445), so this note
+ends with a #445-ready conclusion.
 
 The PoC is not a full PPTX implementation. It is the smallest slice that can
 prove the intended architecture end to end:
