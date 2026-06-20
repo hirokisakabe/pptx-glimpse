@@ -1,5 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import { extname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
@@ -27,10 +28,21 @@ const FORBIDDEN_DEPENDENCIES = new Set([
   "pptx-glimpse-renderer",
 ]);
 
-const SOURCE_ROOT = new URL(".", import.meta.url);
+const SOURCE_ROOT = fileURLToPath(new URL(".", import.meta.url));
 const PACKAGE_JSON = new URL("../package.json", import.meta.url);
 
-const IMPORT_PATTERN = /\b(?:import|export)\s+(?:type\s+)?(?:[^'"]*?\s+from\s+)?["']([^"']+)["']/g;
+const IMPORT_PATTERN =
+  /\b(?:import\s*\(\s*["']([^"']+)["']|(?:import|export)\s+(?:type\s+)?(?:[^'"]*?\s+from\s+)?["']([^"']+)["'])/g;
+
+function isForbiddenDependency(specifier: string): boolean {
+  for (const dependency of FORBIDDEN_DEPENDENCIES) {
+    if (specifier === dependency || specifier.startsWith(`${dependency}/`)) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 async function listTypeScriptFiles(dir: string): Promise<string[]> {
   const entries = await readdir(dir, { withFileTypes: true });
@@ -78,15 +90,11 @@ describe("@pptx-glimpse/document package boundary", () => {
       ...packageJson.peerDependencies,
     };
 
-    expect(Object.keys(declaredDependencies)).not.toContainEqual(
-      expect.stringMatching(
-        /^(?:@hirokisakabe\/pom|@pptx-glimpse\/(?:core|editor-core|renderer)|pptx-glimpse(?:-renderer)?)$/,
-      ),
-    );
+    expect(Object.keys(declaredDependencies).filter(isForbiddenDependency)).toEqual([]);
   });
 
   it("does not import higher-level packages from source", async () => {
-    const sourceFiles = await listTypeScriptFiles(SOURCE_ROOT.pathname);
+    const sourceFiles = await listTypeScriptFiles(SOURCE_ROOT);
     const violations: string[] = [];
 
     await Promise.all(
@@ -94,10 +102,10 @@ describe("@pptx-glimpse/document package boundary", () => {
         const source = await readFile(sourceFile, "utf8");
 
         for (const match of source.matchAll(IMPORT_PATTERN)) {
-          const specifier = match[1];
+          const specifier = match[1] ?? match[2];
 
-          if (FORBIDDEN_DEPENDENCIES.has(specifier)) {
-            violations.push(`${relative(SOURCE_ROOT.pathname, sourceFile)} imports ${specifier}`);
+          if (specifier !== undefined && isForbiddenDependency(specifier)) {
+            violations.push(`${relative(SOURCE_ROOT, sourceFile)} imports ${specifier}`);
           }
         }
       }),
