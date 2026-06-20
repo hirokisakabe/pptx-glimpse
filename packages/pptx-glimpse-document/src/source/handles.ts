@@ -17,7 +17,9 @@ declare const RawSidecarIdBrand: unique symbol;
 export type PartPath = string & { readonly [PartPathBrand]: typeof PartPathBrand };
 
 /** relationship id (例: `rId1`)。`_rels/*.rels` 由来。 */
-export type RelationshipId = string & { readonly [RelationshipIdBrand]: typeof RelationshipIdBrand };
+export type RelationshipId = string & {
+  readonly [RelationshipIdBrand]: typeof RelationshipIdBrand;
+};
 
 /** source part 内で要素を一意に指す id (spid / 生成 id 等)。 */
 export type SourceNodeId = string & { readonly [SourceNodeIdBrand]: typeof SourceNodeIdBrand };

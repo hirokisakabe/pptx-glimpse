@@ -88,7 +88,9 @@ describe("CleanDoc source model types", () => {
             ],
           },
         ],
-        media: [{ partPath: mediaPath, contentType: "image/png", bytes: new Uint8Array([1, 2, 3]) }],
+        media: [
+          { partPath: mediaPath, contentType: "image/png", bytes: new Uint8Array([1, 2, 3]) },
+        ],
         rawParts: [
           {
             partPath: asPartPath("docProps/custom.xml"),

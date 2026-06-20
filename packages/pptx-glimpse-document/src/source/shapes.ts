@@ -33,8 +33,16 @@ export interface SourcePresetGeometry {
  * view で `clrMap` / `colorScheme` を経由して具体色へ解決する。
  */
 export type SourceColor =
-  | { readonly kind: "srgb"; readonly hex: string; readonly transforms?: readonly SourceColorTransform[] }
-  | { readonly kind: "scheme"; readonly scheme: string; readonly transforms?: readonly SourceColorTransform[] };
+  | {
+      readonly kind: "srgb";
+      readonly hex: string;
+      readonly transforms?: readonly SourceColorTransform[];
+    }
+  | {
+      readonly kind: "scheme";
+      readonly scheme: string;
+      readonly transforms?: readonly SourceColorTransform[];
+    };
 
 /** lumMod / tint / shade 等の色変換 (値は OOXML パーセンテージ)。 */
 export interface SourceColorTransform {

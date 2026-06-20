@@ -2,15 +2,8 @@
  * CleanDoc source model 型の barrel re-export。
  */
 
-export type {
-  Emu,
-  HundredthPt,
-  OoxmlAngle,
-  OoxmlPercent,
-  Pt,
-} from "./units.js";
-export { asEmu, asHundredthPt, asOoxmlAngle, asOoxmlPercent, asPt } from "./units.js";
-
+export type { CleanDocSource } from "./clean-doc-source.js";
+export type { Diagnostic, DiagnosticSeverity } from "./diagnostics.js";
 export type {
   PartPath,
   RawSidecarId,
@@ -18,17 +11,7 @@ export type {
   SourceHandle,
   SourceNodeId,
 } from "./handles.js";
-export {
-  asPartPath,
-  asRawSidecarId,
-  asRelationshipId,
-  asSourceNodeId,
-} from "./handles.js";
-
-export type { RawOoxmlNode, RawPackagePart, RawSidecar } from "./raw.js";
-
-export type { Diagnostic, DiagnosticSeverity } from "./diagnostics.js";
-
+export { asPartPath, asRawSidecarId, asRelationshipId, asSourceNodeId } from "./handles.js";
 export type {
   ContentTypeDefault,
   ContentTypeOverride,
@@ -40,7 +23,15 @@ export type {
   Relationship,
   RelationshipTargetMode,
 } from "./package-graph.js";
-
+export type {
+  SlideSize,
+  SourcePresentation,
+  SourceSlide,
+  SourceSlideLayout,
+  SourceSlideMaster,
+  SourceTheme,
+} from "./presentation.js";
+export type { RawOoxmlNode, RawPackagePart, RawSidecar } from "./raw.js";
 export type {
   SourceColor,
   SourceColorTransform,
@@ -59,14 +50,5 @@ export type {
   SourceTextRun,
   SourceTransform,
 } from "./shapes.js";
-
-export type {
-  SlideSize,
-  SourcePresentation,
-  SourceSlide,
-  SourceSlideLayout,
-  SourceSlideMaster,
-  SourceTheme,
-} from "./presentation.js";
-
-export type { CleanDocSource } from "./clean-doc-source.js";
+export type { Emu, HundredthPt, OoxmlAngle, OoxmlPercent, Pt } from "./units.js";
+export { asEmu, asHundredthPt, asOoxmlAngle, asOoxmlPercent, asPt } from "./units.js";
