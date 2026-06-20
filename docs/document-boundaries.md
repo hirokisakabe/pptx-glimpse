@@ -27,6 +27,12 @@ short, public SVG/PNG conversion should eventually route through CleanDoc source
 reading, computed view generation, and a core-owned adapter into the existing
 renderer model.
 
+The related minimal implementation PoC scope is recorded in
+[cleandoc-minimal-poc-scope.md](./cleandoc-minimal-poc-scope.md). In short, the
+first slice should prove simple themed slide read, computed render view, current
+renderer adapter parity, no-edit structural round-trip, and one plain text-run
+edit round-trip.
+
 Package names with the `@pptx-glimpse/*` scope describe the intended long-term
 package boundaries. The current repository still contains unscoped packages such
 as `pptx-glimpse` and `pptx-glimpse-renderer`; this RFC uses the scoped names to
