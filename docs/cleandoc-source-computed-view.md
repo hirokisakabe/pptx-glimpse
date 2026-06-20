@@ -10,6 +10,12 @@ the package boundary decision in
 the lower-level OOXML / CleanDoc foundation, and renderer / core / editor-core /
 pom are consumers of it.
 
+The related raw preservation and round-trip decision is recorded in
+[raw-ooxml-round-trip.md](./raw-ooxml-round-trip.md). In short, CleanDoc targets
+structural preservation rather than byte equality, and raw OOXML is kept as
+source-model sidecars or untouched package parts instead of becoming the primary
+editing surface.
+
 ## Decision
 
 Adopt a two-layer CleanDoc design:

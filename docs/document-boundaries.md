@@ -15,6 +15,12 @@ The related source/computed layering decision is recorded in
 CleanDoc is the source model owned by `@pptx-glimpse/document`, and computed
 views are generated projections for renderer, AI reading, and editor consumers.
 
+The related raw preservation and round-trip decision is recorded in
+[raw-ooxml-round-trip.md](./raw-ooxml-round-trip.md). In short,
+`@pptx-glimpse/document` should preserve raw OOXML for untouched or unsupported
+source material, while keeping typed CleanDoc operations as the normal editing
+API.
+
 Package names with the `@pptx-glimpse/*` scope describe the intended long-term
 package boundaries. The current repository still contains unscoped packages such
 as `pptx-glimpse` and `pptx-glimpse-renderer`; this RFC uses the scoped names to
