@@ -37,7 +37,7 @@ Data flow: **PPTX binary → Parser (ZIP extraction + XML parsing) → Intermedi
 
 ソースは pnpm workspaces (`.` + `packages/*`) で分割されている。`packages/*` 配下に renderer / cli の skeleton と `pptx-glimpse` の実装ソースが置かれており、`.` (ルート) は引き続き npm publish 対象の `pptx-glimpse` パッケージとして workspace に含めている (Changesets に root を認識させるための明示指定)。`pptx-glimpse` パッケージは `pptx-glimpse-renderer` を workspace 依存として参照する。
 
-`@pptx-glimpse/document` / CleanDoc / writer / editor-core / pom 連携に関わる issue に着手する前に、責務境界と依存方向の決定記録である `docs/document-boundaries.md` を必ず読むこと。`document` は `core` / `editor-core` / renderer / pom を知らない下位基盤として扱う。
+`@pptx-glimpse/document` / CleanDoc / writer / editor-core / pom 連携に関わる issue に着手する前に、責務境界と依存方向の決定記録である `docs/document-boundaries.md` と、そこからリンクされる派生決定記録を必ず読むこと。`document` は `core` / `editor-core` / renderer / pom を知らない下位基盤として扱う。
 
 `packages/pptx-glimpse/src/` — 公開パッケージ `pptx-glimpse` の実装（パーサー + 公開 API）
 
