@@ -44,6 +44,8 @@ spread across parser and converter code:
   maps.
 - Slide background fallback is applied in slide -> layout -> master order.
 - Placeholder geometry and text styles are merged from layout/master sources.
+- Master decorative elements are included only when both slide `showMasterSp`
+  and layout `showMasterSp` allow them.
 - `converter.ts` merges master, layout, and slide elements for rendering.
 - Template placeholders are filtered before SVG output.
 - `convertPptxToPng` reuses `convertPptxToSvg` and then calls the PNG renderer,
@@ -101,7 +103,7 @@ Recommended sequence during the parallel period:
    but real subset of slides.
 3. Add computed view generation for slide size, slide order, relationships,
    theme resolution, background fallback, placeholder cascade, and text style
-   inheritance.
+   inheritance, including slide and layout `showMasterSp` visibility.
 4. Add a CleanDoc computed view to current renderer model adapter in core.
 5. Run dual-reader comparison tests where both paths parse the same fixtures and
    the adapter output is compared against the current renderer model.
@@ -147,15 +149,16 @@ computed-view fields can be simplified in separate, rendering-focused PRs.
 
 Dogfood should be verified at multiple levels instead of relying on only VRT:
 
-| Level                      | Purpose                                                                     | Suggested checks                                                                                           |
-| -------------------------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| Document reader unit tests | Ensure OOXML parts become CleanDoc source nodes with stable references      | minimal PPTX fixtures, relationship graph assertions, raw sidecar preservation assertions                  |
-| Computed view unit tests   | Ensure document semantics are resolved outside the renderer                 | theme/color map resolution, background fallback, placeholder matching, text style cascade, unit conversion |
-| Adapter tests              | Ensure CleanDoc computed view maps to the current renderer contract         | compare adapter output with selected current parser model snapshots or focused structural assertions       |
-| Core dual-reader tests     | Ensure public conversion can dogfood `document` without changing behavior   | run both paths on shared fixtures and compare selected render model fields                                 |
-| Snapshot VRT               | Catch visual regressions once fixtures are opted into the document path     | existing `vrt/snapshot` cases and shared real PPTX fixtures                                                |
-| LibreOffice VRT            | Compare generated output against external rendering references where useful | existing `vrt/libreoffice` cases after the document path affects rendering                                 |
-| Package verification       | Ensure the published API shape remains compatible                           | existing build, typecheck, package verification, and API import smoke tests                                |
+| Level                      | Purpose                                                                     | Suggested checks                                                                                                                          |
+| -------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Document reader unit tests | Ensure OOXML parts become CleanDoc source nodes with stable references      | minimal PPTX fixtures, relationship graph assertions, raw sidecar preservation assertions                                                 |
+| Computed view unit tests   | Ensure document semantics are resolved outside the renderer                 | theme/color map resolution, background fallback, placeholder matching, text style cascade, unit conversion                                |
+| Adapter tests              | Ensure CleanDoc computed view maps to the current renderer contract         | compare adapter output with selected current parser model snapshots or focused structural assertions, including `showMasterSp` visibility |
+| Core dual-reader tests     | Ensure public conversion can dogfood `document` without changing behavior   | run both paths on shared fixtures and compare selected render model fields, slide selection, warnings, and result shapes                  |
+| Public API behavior tests  | Ensure public conversion options remain compatible                          | verify `slides` filtering, warning/log behavior, `convertPptxToPng` path-text forcing, and returned object shapes                         |
+| Snapshot VRT               | Catch visual regressions once fixtures are opted into the document path     | existing `vrt/snapshot` cases and shared real PPTX fixtures                                                                               |
+| LibreOffice VRT            | Compare generated output against external rendering references where useful | existing `vrt/libreoffice` cases after the document path affects rendering                                                                |
+| Package verification       | Ensure the published API shape remains compatible                           | existing build, typecheck, package verification, and API import smoke tests                                                               |
 
 For early PRs, unit and adapter tests are more important than snapshot churn.
 VRT snapshots should only be updated when the public render output intentionally
@@ -173,16 +176,19 @@ Split the migration into small PRs with explicit compatibility checkpoints:
    layouts, and masters needed by the existing fixtures.
 4. Add `createComputedView(source, options)` for slide size, slide order,
    relationship resolution, theme/color map resolution, background fallback,
-   placeholder cascade, and text style inheritance.
+   placeholder cascade, text style inheritance, and slide/layout `showMasterSp`
+   visibility.
 5. Add the core-owned adapter from computed view to the current renderer model.
 6. Add dual-reader comparison tests for shared fixtures without changing the
    public default path.
-7. Add an internal or experimental option that lets tests render selected
+7. Add public API behavior regression tests for `slides`, warning/log behavior,
+   `convertPptxToPng` text-path forcing, and returned object shapes.
+8. Add an internal or experimental option that lets tests render selected
    fixtures through the document path.
-8. Move selected VRT/shared fixtures to the document path and fix parity gaps.
-9. Make the document path the default for `convertPptxToSvg` and
-   `convertPptxToPng` once parity is stable.
-10. Remove or shrink obsolete parser code after the document path owns the
+9. Move selected VRT/shared fixtures to the document path and fix parity gaps.
+10. Make the document path the default for `convertPptxToSvg` and
+    `convertPptxToPng` once parity is stable.
+11. Remove or shrink obsolete parser code after the document path owns the
     reusable OOXML semantics.
 
 Each PR should keep the published conversion API compatible unless it explicitly
