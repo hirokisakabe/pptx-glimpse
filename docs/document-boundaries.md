@@ -21,6 +21,12 @@ The related raw preservation and round-trip decision is recorded in
 source material, while keeping typed CleanDoc operations as the normal editing
 API.
 
+The related core dogfood migration decision is recorded in
+[core-document-dogfood-migration.md](./core-document-dogfood-migration.md). In
+short, public SVG/PNG conversion should eventually route through CleanDoc source
+reading, computed view generation, and a core-owned adapter into the existing
+renderer model.
+
 Package names with the `@pptx-glimpse/*` scope describe the intended long-term
 package boundaries. The current repository still contains unscoped packages such
 as `pptx-glimpse` and `pptx-glimpse-renderer`; this RFC uses the scoped names to
