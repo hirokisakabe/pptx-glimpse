@@ -16,6 +16,12 @@ structural preservation rather than byte equality, and raw OOXML is kept as
 source-model sidecars or untouched package parts instead of becoming the primary
 editing surface.
 
+The related core dogfood migration decision is recorded in
+[core-document-dogfood-migration.md](./core-document-dogfood-migration.md). In
+short, the public SVG/PNG conversion path should migrate through a computed view
+and a core-owned adapter while keeping the current parser in parallel until
+rendering parity is proven.
+
 ## Decision
 
 Adopt a two-layer CleanDoc design:
