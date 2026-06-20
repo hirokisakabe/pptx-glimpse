@@ -90,6 +90,8 @@ importers:
 
   packages/pptx-glimpse-cli: {}
 
+  packages/pptx-glimpse-document: {}
+
   packages/pptx-glimpse-renderer:
     dependencies:
       '@resvg/resvg-wasm':
