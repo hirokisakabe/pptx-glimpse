@@ -1,5 +1,5 @@
 import { readdir, readFile } from "node:fs/promises";
-import { extname, join, relative } from "node:path";
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
@@ -29,6 +29,7 @@ const FORBIDDEN_DEPENDENCIES = new Set([
 ]);
 
 const SOURCE_ROOT = fileURLToPath(new URL(".", import.meta.url));
+const PACKAGE_ROOT = fileURLToPath(new URL("..", import.meta.url));
 const PACKAGE_JSON = new URL("../package.json", import.meta.url);
 
 const IMPORT_PATTERN =
@@ -42,6 +43,21 @@ function isForbiddenDependency(specifier: string): boolean {
   }
 
   return false;
+}
+
+function isExternalRelativeImport(sourceFile: string, specifier: string): boolean {
+  if (!specifier.startsWith(".")) {
+    return false;
+  }
+
+  const resolvedImportPath = resolve(dirname(sourceFile), specifier);
+  const relativeImportPath = relative(PACKAGE_ROOT, resolvedImportPath);
+
+  return (
+    relativeImportPath.startsWith(`..${sep}`) ||
+    relativeImportPath === ".." ||
+    isAbsolute(relativeImportPath)
+  );
 }
 
 async function listTypeScriptFiles(dir: string): Promise<string[]> {
@@ -104,7 +120,10 @@ describe("@pptx-glimpse/document package boundary", () => {
         for (const match of source.matchAll(IMPORT_PATTERN)) {
           const specifier = match[1] ?? match[2];
 
-          if (specifier !== undefined && isForbiddenDependency(specifier)) {
+          if (
+            specifier !== undefined &&
+            (isForbiddenDependency(specifier) || isExternalRelativeImport(sourceFile, specifier))
+          ) {
             violations.push(`${relative(SOURCE_ROOT, sourceFile)} imports ${specifier}`);
           }
         }
