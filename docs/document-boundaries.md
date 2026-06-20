@@ -10,6 +10,11 @@ decision from
 will eventually depend on `@pptx-glimpse/document`, and pptx-glimpse will not
 depend on pom.**
 
+The related source/computed layering decision is recorded in
+[cleandoc-source-computed-view.md](./cleandoc-source-computed-view.md). In short,
+CleanDoc is the source model owned by `@pptx-glimpse/document`, and computed
+views are generated projections for renderer, AI reading, and editor consumers.
+
 Package names with the `@pptx-glimpse/*` scope describe the intended long-term
 package boundaries. The current repository still contains unscoped packages such
 as `pptx-glimpse` and `pptx-glimpse-renderer`; this RFC uses the scoped names to
