@@ -5,6 +5,7 @@ import {
   asOoxmlPercent,
   asPartPath,
   asPt,
+  asRawSidecarId,
   asRelationshipId,
   createComputedView,
 } from "@pptx-glimpse/document/experimental";
@@ -61,7 +62,7 @@ describe("adaptComputedViewToRendererModel", () => {
       placeholderType: "ctrTitle",
       placeholderIdx: 1,
     });
-    expect(title?.type === "shape" ? title.textBody : undefined).toMatchObject({
+    expect(title.type === "shape" ? title.textBody : undefined).toMatchObject({
       bodyProperties: {
         anchor: "ctr",
         marginLeft: 111,
@@ -107,19 +108,25 @@ describe("adaptComputedViewToRendererModel", () => {
     });
   });
 
-  it("unsupported raw elements are diagnosed instead of leaking into renderer model", () => {
+  it("unsupported raw elements を diagnostic として扱い renderer model に漏らさない", () => {
     const source = buildSource({
       extraSlideShapes: [
         {
           kind: "raw",
-          raw: { id: "raw-1", xml: { name: "p:graphicFrame" } },
+          raw: rawSidecar("raw-1", "p:graphicFrame"),
         },
       ],
     });
 
     const result = adaptComputedViewToRendererModel(createComputedView(source));
 
-    expect(result.slides[0]?.elements.map(getAltText)).not.toContain(undefined);
+    expect(result.slides[0]?.elements).toHaveLength(4);
+    expect(result.slides[0]?.elements.map(getAltText)).toEqual([
+      "Master decoration",
+      "Layout decoration",
+      "Slide title",
+      "Hero image",
+    ]);
     expect(result.diagnostics).toContainEqual(
       expect.objectContaining({
         severity: "warning",
@@ -127,6 +134,49 @@ describe("adaptComputedViewToRendererModel", () => {
         slideNumber: 1,
         sourcePartPath: "ppt/slides/slide1.xml",
       }),
+    );
+  });
+
+  it("fallback が必要な unsupported subset を diagnostic に残す", () => {
+    const source = buildSource({
+      slideBackground: { kind: "raw", raw: rawSidecar("raw-bg", "p:bg") },
+      extraSlideShapes: [
+        shape("Missing transform"),
+        shape("Raw fill shape", {
+          transform: transform(90, 91, 92, 93),
+          fill: { kind: "raw", raw: rawSidecar("raw-fill", "a:gradFill") },
+        }),
+        {
+          kind: "image",
+          name: "Missing media",
+          transform: transform(100, 101, 102, 103),
+          blipRelationshipId: asRelationshipId("rIdMissing"),
+        },
+      ],
+    });
+
+    const result = adaptComputedViewToRendererModel(createComputedView(source));
+
+    expect(result.slides[0]?.background).toBeNull();
+    expect(findElementByAltText(result.slides[0].elements, "Missing transform")).toMatchObject({
+      transform: {
+        offsetX: 0,
+        offsetY: 0,
+        extentWidth: 0,
+        extentHeight: 0,
+      },
+    });
+    expect(findElementByAltText(result.slides[0].elements, "Raw fill shape")).toMatchObject({
+      fill: null,
+    });
+    expect(result.slides[0]?.elements.map(getAltText)).not.toContain("Missing media");
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
+      expect.arrayContaining([
+        "cleandoc-adapter.raw-background-ignored",
+        "cleandoc-adapter.missing-transform",
+        "cleandoc-adapter.raw-fill-ignored",
+        "cleandoc-adapter.unresolved-image-skipped",
+      ]),
     );
   });
 });
@@ -143,6 +193,7 @@ function getAltText(element: SlideElement): string | undefined {
 
 interface BuildSourceOptions {
   readonly extraSlideShapes?: CleanDocSource["slides"][number]["shapes"];
+  readonly slideBackground?: CleanDocSource["slides"][number]["background"];
 }
 
 function buildSource(options: BuildSourceOptions = {}): CleanDocSource {
@@ -184,6 +235,7 @@ function buildSource(options: BuildSourceOptions = {}): CleanDocSource {
       {
         partPath: slidePath,
         layoutPartPath: layoutPath,
+        ...(options.slideBackground !== undefined ? { background: options.slideBackground } : {}),
         shapes: [
           {
             kind: "shape",
@@ -327,5 +379,12 @@ function textBody(
         runs: [{ kind: "textRun", text, properties: runProperties }],
       },
     ],
+  };
+}
+
+function rawSidecar(id: string, name: string) {
+  return {
+    id: asRawSidecarId(id),
+    node: { name },
   };
 }
