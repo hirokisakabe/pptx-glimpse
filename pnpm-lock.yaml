@@ -78,9 +78,6 @@ importers:
 
   packages/pptx-glimpse:
     dependencies:
-      '@pptx-glimpse/document':
-        specifier: workspace:*
-        version: link:../pptx-glimpse-document
       fast-xml-parser:
         specifier: ^5.7.3
         version: 5.8.0

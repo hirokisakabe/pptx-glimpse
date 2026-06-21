@@ -1,19 +1,4 @@
 import type {
-  CleanDocComputedView,
-  ComputedBackground,
-  ComputedColor,
-  ComputedElement,
-  ComputedFill,
-  ComputedImageElement,
-  ComputedOutline,
-  ComputedParagraph,
-  ComputedRunProperties,
-  ComputedShapeElement,
-  ComputedSlide,
-  ComputedSlideSize,
-  ComputedTextBody,
-} from "@pptx-glimpse/document/experimental";
-import type {
   Background,
   BodyProperties,
   Fill,
@@ -32,6 +17,22 @@ import type {
   Transform,
 } from "pptx-glimpse-renderer";
 import { asEmu, asHundredthPt, uint8ArrayToBase64 } from "pptx-glimpse-renderer";
+
+import type {
+  CleanDocComputedView,
+  ComputedBackground,
+  ComputedColor,
+  ComputedElement,
+  ComputedFill,
+  ComputedImageElement,
+  ComputedOutline,
+  ComputedParagraph,
+  ComputedRunProperties,
+  ComputedShapeElement,
+  ComputedSlide,
+  ComputedSlideSize,
+  ComputedTextBody,
+} from "../../pptx-glimpse-document/src/experimental.js";
 
 interface RendererAdapterResult {
   readonly slideSize?: SlideSize;
