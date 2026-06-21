@@ -15,3 +15,7 @@ export * from "./source/index.js";
 // CleanDoc source reader (experimental)。PPTX package を読み、package graph と
 // presentation metadata を含む CleanDoc source を返す。
 export * from "./reader/index.js";
+
+// CleanDoc computed view generator (experimental)。source model を mutation せず、
+// slide/layout/master/theme cascade と relationship を解決した derived view を返す。
+export * from "./computed/index.js";
