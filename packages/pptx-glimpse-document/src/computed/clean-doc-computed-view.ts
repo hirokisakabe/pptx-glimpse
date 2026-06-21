@@ -111,19 +111,19 @@ export type ComputedBackground =
       readonly kind: "fill";
       readonly source: SourceBackground;
       readonly fill: ComputedFill;
-      readonly sourceLayer: "slide" | "layout" | "master";
+      readonly sourceLayer: ComputedElementLayer;
     }
   | {
       readonly kind: "styleReference";
       readonly source: SourceBackground;
       readonly index: number;
       readonly color?: ComputedColor;
-      readonly sourceLayer: "slide" | "layout" | "master";
+      readonly sourceLayer: ComputedElementLayer;
     }
   | {
       readonly kind: "raw";
       readonly source: SourceBackground;
-      readonly sourceLayer: "slide" | "layout" | "master";
+      readonly sourceLayer: ComputedElementLayer;
     };
 
 export type ComputedFill =
@@ -140,6 +140,7 @@ export interface ComputedOutline {
 export interface ComputedColor {
   /** `#rrggbb`。 */
   readonly hex: string;
+  /** 0-1 の正規化 opacity。 */
   readonly alpha: number;
 }
 

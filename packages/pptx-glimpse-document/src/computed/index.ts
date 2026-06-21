@@ -8,6 +8,8 @@ export type {
   ComputedImageElement,
   ComputedOutline,
   ComputedParagraph,
+  ComputedPlaceholderMatch,
+  ComputedRawElement,
   ComputedRelationship,
   ComputedRunProperties,
   ComputedShapeElement,

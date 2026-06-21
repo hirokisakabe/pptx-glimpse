@@ -122,7 +122,17 @@ describe("createComputedView", () => {
 
     // slide1 は showMasterSp=false なので master decoration が落ちる。
     expect(getSlide(computed.slides, 1).showMasterShapes).toBe(false);
+    expect(getSlide(computed.slides, 1).layoutShowMasterShapes).toBe(true);
     expect(elementNames(getSlide(computed.slides, 1).elements)).toEqual([
+      "Layout decoration",
+      "Visible body",
+    ]);
+
+    const withoutVisibilityFilter = createComputedView(buildSource(), {
+      applyMasterVisibility: false,
+    });
+    expect(elementNames(getSlide(withoutVisibilityFilter.slides, 1).elements)).toEqual([
+      "Master decoration",
       "Layout decoration",
       "Visible body",
     ]);
@@ -156,7 +166,7 @@ function findShape(elements: readonly ComputedElement[], name: string): Computed
     (element): element is ComputedShapeElement =>
       element.kind === "shape" && element.sourceNode.name === name,
   );
-  if (shape === undefined || shape.kind !== "shape") throw new Error(`shape '${name}' not found`);
+  if (shape === undefined) throw new Error(`shape '${name}' not found`);
   return shape;
 }
 

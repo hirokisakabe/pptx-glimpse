@@ -28,6 +28,7 @@ import type {
   ComputedImageElement,
   ComputedOutline,
   ComputedParagraph,
+  ComputedPlaceholderMatch,
   ComputedRelationship,
   ComputedRunProperties,
   ComputedShapeElement,
@@ -399,13 +400,7 @@ function mergeRunProperties(
   const merged = { ...inherited, ...local };
   if (Object.keys(merged).length === 0) return undefined;
   const color = merged.color !== undefined ? resolveColor(context, merged.color) : undefined;
-  const withoutColor: Omit<SourceRunProperties, "color"> = {
-    ...(merged.bold !== undefined ? { bold: merged.bold } : {}),
-    ...(merged.italic !== undefined ? { italic: merged.italic } : {}),
-    ...(merged.underline !== undefined ? { underline: merged.underline } : {}),
-    ...(merged.fontSize !== undefined ? { fontSize: merged.fontSize } : {}),
-    ...(merged.typeface !== undefined ? { typeface: merged.typeface } : {}),
-  };
+  const withoutColor = omitColor(merged);
   return {
     ...withoutColor,
     ...(color !== undefined ? { color } : {}),
@@ -415,7 +410,7 @@ function mergeRunProperties(
 function findPlaceholderMatch(
   context: ComputeContext,
   shape: SourceShape,
-): { readonly layout?: SourceShape; readonly master?: SourceShape } | undefined {
+): ComputedPlaceholderMatch | undefined {
   if (shape.placeholder === undefined) return undefined;
   const type = shape.placeholder.type ?? "body";
   const index = shape.placeholder.index;
@@ -554,8 +549,15 @@ function resolveRelationshipTarget(sourcePartPath: string, target: string): stri
 }
 
 function normalizeHex(hex: string): string {
+  // OOXML `srgbClr@val` / `sysClr@lastClr` は 6 桁 RRGGBB 前提。
   const normalized = hex.replace(/^#/, "").toLowerCase();
   return `#${normalized.padStart(6, "0").slice(0, 6)}`;
+}
+
+function omitColor(properties: SourceRunProperties): Omit<SourceRunProperties, "color"> {
+  const withoutColor = { ...properties };
+  delete withoutColor.color;
+  return withoutColor;
 }
 
 function applyLuminance(hex: string, lumMod: number, lumOff: number): string {
