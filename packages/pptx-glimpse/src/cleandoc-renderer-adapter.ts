@@ -1,6 +1,7 @@
 import type {
   CleanDocComputedView,
   ComputedBackground,
+  ComputedColor,
   ComputedElement,
   ComputedFill,
   ComputedImageElement,
@@ -360,7 +361,7 @@ function adaptRunProperties(properties: ComputedRunProperties | undefined): RunP
   };
 }
 
-function adaptColor(color: ResolvedColor): ResolvedColor {
+function adaptColor(color: ComputedColor): ResolvedColor {
   return {
     hex: color.hex,
     alpha: color.alpha,
