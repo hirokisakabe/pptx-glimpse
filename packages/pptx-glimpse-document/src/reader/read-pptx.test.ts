@@ -72,11 +72,19 @@ describe("readPptx — package graph と presentation metadata", () => {
   it("presentation metadata を含む CleanDoc source を返す", () => {
     expect(source.presentation.partPath).toBe("ppt/presentation.xml");
     expect(source.presentation.handle?.partPath).toBe("ppt/presentation.xml");
-    // typed slide/layout/master/theme reading は本 slice の scope 外。
-    expect(source.slides).toEqual([]);
+    // slide は presentation order どおり typed に読まれる (cSld が空なので shapes は空)。
+    expect(source.slides.map((slide) => slide.partPath)).toEqual([
+      "ppt/slides/slide1.xml",
+      "ppt/slides/slide2.xml",
+    ]);
+    expect(source.slides.every((slide) => slide.shapes.length === 0)).toBe(true);
+    // この合成 fixture は slideLayout 関係を持たないため chain は辿れない。
     expect(source.slideLayouts).toEqual([]);
     expect(source.slideMasters).toEqual([]);
     expect(source.themes).toEqual([]);
+    expect(source.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "slide-layout-unresolved" }),
+    );
   });
 
   it("slide count / slide order / slide size を取得できる", () => {
