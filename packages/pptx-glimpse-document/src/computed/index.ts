@@ -1,0 +1,22 @@
+export type {
+  CleanDocComputedView,
+  ComputedBackground,
+  ComputedColor,
+  ComputedElement,
+  ComputedElementLayer,
+  ComputedFill,
+  ComputedImageElement,
+  ComputedOutline,
+  ComputedParagraph,
+  ComputedPlaceholderMatch,
+  ComputedRawElement,
+  ComputedRelationship,
+  ComputedRunProperties,
+  ComputedShapeElement,
+  ComputedSlide,
+  ComputedSlideSize,
+  ComputedTextBody,
+  ComputedTextRun,
+  CreateComputedViewOptions,
+} from "./clean-doc-computed-view.js";
+export { createComputedView } from "./create-computed-view.js";
