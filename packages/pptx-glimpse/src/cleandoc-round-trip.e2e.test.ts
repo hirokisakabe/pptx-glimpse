@@ -107,41 +107,48 @@ describe("CleanDoc PoC end-to-end round-trip", () => {
     expect(rendered.svgs.some(({ svg }) => svg.includes(EDITED_TEXT))).toBe(true);
   });
 
-  it("keeps the public SVG and PNG conversion APIs working for selected fixtures", async () => {
+  it("keeps the public SVG and PNG conversion APIs working for written PPTX output", async () => {
     const input = readFixture("real-basic-theme.pptx");
+    const noEditOutput = writePptx(readPptx(input));
 
-    const svgResults = await convertPptxToSvg(input, {
+    const originalSvgResults = await convertPptxToSvg(input, {
       slides: [1],
       textOutput: "text",
       skipSystemFonts: true,
     });
-    const pngResults = await convertPptxToPng(input, {
+    const roundTrippedSvgResults = await convertPptxToSvg(noEditOutput, {
+      slides: [1],
+      textOutput: "text",
+      skipSystemFonts: true,
+    });
+    const pngResults = await convertPptxToPng(noEditOutput, {
       slides: [1],
       width: 240,
       skipSystemFonts: true,
     });
 
-    expect(svgResults.map((result) => result.slideNumber)).toEqual([1]);
-    expect(svgResults[0].svg).toContain("<svg");
-    expect(svgResults[0].svg).toContain("</svg>");
+    expect(roundTrippedSvgResults).toEqual(originalSvgResults);
     expect(pngResults.map((result) => result.slideNumber)).toEqual([1]);
     expect(pngResults[0]).toMatchObject({ width: 240 });
     expect([...pngResults[0].png.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
-  });
 
-  it("does not require VRT snapshot updates because public rendering remains on the current path", () => {
-    expect({
-      productionDefaultPathChanged: false,
-      snapshotUpdateRequired: false,
-      reason:
-        "These e2e tests exercise the experimental CleanDoc path and public API regressions without changing renderer output.",
-    }).toMatchInlineSnapshot(`
-      {
-        "productionDefaultPathChanged": false,
-        "reason": "These e2e tests exercise the experimental CleanDoc path and public API regressions without changing renderer output.",
-        "snapshotUpdateRequired": false,
-      }
-    `);
+    const editedInput = readFixture("real-product-page.pptx");
+    const editedSource = readPptx(editedInput);
+    const editedOutput = writePptx(
+      replaceTextRunPlainText(editedSource, firstEditableRun(editedSource).run.handle, EDITED_TEXT),
+    );
+    const editedSvgResults = await convertPptxToSvg(editedOutput, {
+      slides: [1],
+      textOutput: "text",
+      skipSystemFonts: true,
+    });
+
+    expect(editedSvgResults.map((result) => result.slideNumber)).toEqual([1]);
+    expect(editedSvgResults[0].svg).toContain(EDITED_TEXT);
+
+    // VRT snapshot updates are unnecessary: this PR does not change production
+    // rendering, and no-edit writer output is asserted to keep public SVG stable
+    // for a selected shared fixture.
   });
 });
 
