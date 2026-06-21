@@ -20,6 +20,7 @@ import { describe, expect, it } from "vitest";
 
 import { createComputedView, readPptx } from "../../pptx-glimpse-document/src/experimental.js";
 import { adaptComputedViewToRendererModel } from "./cleandoc-renderer-adapter.js";
+import { buildEffectiveSlideElements } from "./converter.js";
 import { parsePptxData, parseSlideWithLayout } from "./pptx-data-parser.js";
 
 const CASES = [
@@ -217,15 +218,9 @@ function buildCurrentParserSlides(input: Buffer): PresentationSlides {
     const parsed = parseSlideWithLayout(slideNumber, path, data);
     if (parsed === null) continue;
 
-    const effectiveMasterElements =
-      parsed.slide.showMasterSp && parsed.layoutShowMasterSp ? parsed.masterElements : [];
     slides.push({
       ...parsed.slide,
-      elements: mergeElements(
-        effectiveMasterElements,
-        parsed.layoutElements,
-        parsed.slide.elements,
-      ),
+      elements: buildEffectiveSlideElements(parsed),
     });
   }
 
@@ -241,32 +236,6 @@ function buildDocumentPathSlides(input: Buffer, options: NormalizeOptions): Docu
     presentation: normalizePresentation(adapted, options),
     diagnostics: adapted.diagnostics,
   };
-}
-
-function mergeElements(
-  masterElements: readonly SlideElement[],
-  layoutElements: readonly SlideElement[],
-  slideElements: readonly SlideElement[],
-): SlideElement[] {
-  // Keep this in sync with converter.ts mergeElements. The public converter
-  // intentionally does not expose the intermediate renderer model.
-  const filterTemplatePlaceholders = (elements: readonly SlideElement[]) =>
-    elements.filter((element) => !(element.type === "shape" && element.placeholderType));
-  const filterEmptySlidePlaceholders = (elements: readonly SlideElement[]) =>
-    elements.filter((element) => !(element.type === "shape" && isEmptyPlaceholder(element)));
-
-  return [
-    ...filterTemplatePlaceholders(masterElements),
-    ...filterTemplatePlaceholders(layoutElements),
-    ...filterEmptySlidePlaceholders(slideElements),
-  ];
-}
-
-function isEmptyPlaceholder(shape: ShapeElement): boolean {
-  if (!shape.placeholderType) return false;
-  const paragraphs = shape.textBody?.paragraphs;
-  if (paragraphs === undefined || paragraphs.length === 0) return true;
-  return !paragraphs.some((paragraph) => paragraph.runs.some((run) => run.text.length > 0));
 }
 
 function normalizePresentation(
