@@ -141,7 +141,7 @@ export function parsePptxData(input: Buffer | Uint8Array): ParsedPptxData {
   };
 }
 
-interface ParsedSlide {
+export interface ParsedSlide {
   slide: Slide;
   layoutElements: SlideElement[];
   layoutShowMasterSp: boolean;

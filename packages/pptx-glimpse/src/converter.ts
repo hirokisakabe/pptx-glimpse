@@ -22,6 +22,7 @@ import { DEFAULT_OUTPUT_WIDTH } from "pptx-glimpse-renderer";
 import { flushWarnings, initWarningLogger, warn } from "pptx-glimpse-renderer";
 
 import { clearXmlCache, enableXmlCache } from "./parser/xml-parser.js";
+import type { ParsedSlide } from "./pptx-data-parser.js";
 import { parsePptxData, parseSlideWithLayout } from "./pptx-data-parser.js";
 
 export interface ConvertOptions {
@@ -60,6 +61,12 @@ export interface SlideImage {
   png: Buffer;
   width: number;
   height: number;
+}
+
+export function buildEffectiveSlideElements(parsed: ParsedSlide): SlideElement[] {
+  const effectiveMasterElements =
+    parsed.slide.showMasterSp && parsed.layoutShowMasterSp ? parsed.masterElements : [];
+  return mergeElements(effectiveMasterElements, parsed.layoutElements, parsed.slide.elements);
 }
 
 export async function convertPptxToSvg(
@@ -107,12 +114,9 @@ export async function convertPptxToSvg(
       const parsed = parseSlideWithLayout(slideNumber, path, data);
       if (!parsed) continue;
 
-      const { slide, layoutElements, layoutShowMasterSp, masterElements } = parsed;
-
       // Merge shapes: master (back) → layout → slide (front)
-      const effectiveMasterElements =
-        slide.showMasterSp && layoutShowMasterSp ? masterElements : [];
-      slide.elements = mergeElements(effectiveMasterElements, layoutElements, slide.elements);
+      const { slide } = parsed;
+      slide.elements = buildEffectiveSlideElements(parsed);
 
       fontUsageCollector?.reset();
       let svg = renderSlideToSvg(slide, data.presInfo.slideSize);
