@@ -104,6 +104,74 @@ describe("writePptx — no-edit round-trip", () => {
     );
   });
 
+  it("xml raw package material を serializable な範囲で write できる", () => {
+    const source = readPptx(buildRoundTripFixture());
+    const withXmlRaw = {
+      ...source,
+      packageGraph: {
+        ...source.packageGraph,
+        contentTypes: {
+          ...source.packageGraph.contentTypes,
+          overrides: [
+            ...source.packageGraph.contentTypes.overrides,
+            { partName: "customXml/item1.xml", contentType: "application/xml" },
+          ],
+        },
+        parts: [
+          ...source.packageGraph.parts,
+          { partPath: "customXml/item1.xml", contentType: "application/xml" },
+        ],
+        rawParts: [
+          ...(source.packageGraph.rawParts ?? []),
+          {
+            kind: "xml",
+            partPath: "customXml/item1.xml",
+            contentType: "application/xml",
+            xml: {
+              name: "x:root",
+              attributes: { "xmlns:x": "urn:test", "a:flag": "A&B" },
+              children: [{ name: "x:child", text: "nested < text" }],
+            },
+          },
+        ],
+      },
+    };
+
+    expect(decoder.decode(getEntry(writePptx(withXmlRaw), "customXml/item1.xml"))).toBe(
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n` +
+        `<x:root xmlns:x="urn:test" a:flag="A&amp;B"><x:child>nested &lt; text</x:child></x:root>`,
+    );
+  });
+
+  it("xml raw package material の mixed content は順序保持できないため reject する", () => {
+    const source = readPptx(buildRoundTripFixture());
+    const withMixedContentRaw = {
+      ...source,
+      packageGraph: {
+        ...source.packageGraph,
+        parts: [
+          ...source.packageGraph.parts,
+          { partPath: "customXml/item1.xml", contentType: "application/xml" },
+        ],
+        rawParts: [
+          ...(source.packageGraph.rawParts ?? []),
+          {
+            kind: "xml",
+            partPath: "customXml/item1.xml",
+            contentType: "application/xml",
+            xml: {
+              name: "x:root",
+              text: "pre",
+              children: [{ name: "x:child" }],
+            },
+          },
+        ],
+      },
+    };
+
+    expect(() => writePptx(withMixedContentRaw)).toThrow(/mixed text\/element content/);
+  });
+
   it("byte equality ではなく structural preservation を検証対象にする", () => {
     const input = buildRoundTripFixture();
     const output = writePptx(readPptx(input));

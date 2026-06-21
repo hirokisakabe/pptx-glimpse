@@ -129,6 +129,12 @@ function serializeRawNode(node: RawOoxmlNode): string {
           .join("");
   const text = node.text === undefined ? "" : escapeText(node.text);
   const children = node.children?.map((child) => serializeRawNode(child)).join("") ?? "";
+  if (text !== "" && children !== "") {
+    throw new Error(
+      `writePptx: raw XML part '${node.name}' contains mixed text/element content; ` +
+        "ordered mixed-content serialization is not implemented in the no-edit writer",
+    );
+  }
   if (text === "" && children === "") return `<${node.name}${attributes}/>`;
   return `<${node.name}${attributes}>${text}${children}</${node.name}>`;
 }
