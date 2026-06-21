@@ -112,43 +112,44 @@ describe("CleanDoc PoC end-to-end round-trip", () => {
     const noEditOutput = writePptx(readPptx(input));
 
     const originalSvgResults = await convertPptxToSvg(input, {
-      slides: [1],
       textOutput: "text",
       skipSystemFonts: true,
     });
     const roundTrippedSvgResults = await convertPptxToSvg(noEditOutput, {
-      slides: [1],
       textOutput: "text",
       skipSystemFonts: true,
     });
     const pngResults = await convertPptxToPng(noEditOutput, {
-      slides: [1],
       width: 240,
       skipSystemFonts: true,
     });
 
     expect(roundTrippedSvgResults).toEqual(originalSvgResults);
-    expect(pngResults.map((result) => result.slideNumber)).toEqual([1]);
-    expect(pngResults[0]).toMatchObject({ width: 240 });
-    expect([...pngResults[0].png.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    expect(pngResults.map((result) => result.slideNumber)).toEqual(
+      originalSvgResults.map((result) => result.slideNumber),
+    );
+    for (const pngResult of pngResults) {
+      expect(pngResult).toMatchObject({ width: 240 });
+      expect([...pngResult.png.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    }
 
     const editedInput = readFixture("real-product-page.pptx");
     const editedSource = readPptx(editedInput);
+    const editable = firstEditableRun(editedSource);
     const editedOutput = writePptx(
-      replaceTextRunPlainText(editedSource, firstEditableRun(editedSource).run.handle, EDITED_TEXT),
+      replaceTextRunPlainText(editedSource, editable.run.handle, EDITED_TEXT),
     );
     const editedSvgResults = await convertPptxToSvg(editedOutput, {
-      slides: [1],
+      slides: [editable.slideNumber],
       textOutput: "text",
       skipSystemFonts: true,
     });
 
-    expect(editedSvgResults.map((result) => result.slideNumber)).toEqual([1]);
+    expect(editedSvgResults.map((result) => result.slideNumber)).toEqual([editable.slideNumber]);
     expect(editedSvgResults[0].svg).toContain(EDITED_TEXT);
 
-    // VRT snapshot updates are unnecessary: this PR does not change production
-    // rendering, and no-edit writer output is asserted to keep public SVG stable
-    // for a selected shared fixture.
+    // No-edit writer output is asserted to keep public SVG stable for the
+    // selected shared fixture, so this e2e coverage does not need VRT snapshots.
   });
 });
 
@@ -199,15 +200,18 @@ function selectedPreservedPartPaths(source: CleanDocSource): string[] {
 }
 
 function firstEditableRun(source: CleanDocSource): {
+  readonly slideNumber: number;
   readonly paragraph: SourceParagraph;
   readonly run: EditableTextRun;
 } {
   for (const slide of source.slides) {
+    const slideNumber = source.presentation.slidePartPaths.indexOf(slide.partPath) + 1;
+    if (slideNumber <= 0) continue;
     for (const shape of slide.shapes) {
       if (shape.kind !== "shape") continue;
       for (const paragraph of shape.textBody?.paragraphs ?? []) {
         const run = paragraph.runs.find(isEditableTextRun);
-        if (run?.handle !== undefined) return { paragraph, run };
+        if (run?.handle !== undefined) return { slideNumber, paragraph, run };
       }
     }
   }
