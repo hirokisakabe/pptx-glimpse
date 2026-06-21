@@ -57,6 +57,7 @@ export function parseShapeTree(
   if (!spTree) return [];
 
   const nodes: SourceShapeNode[] = [];
+  let orderingSlot = 0;
   for (const key of Object.keys(spTree)) {
     if (key.startsWith("@_")) continue;
     const local = localName(key);
@@ -68,18 +69,24 @@ export function parseShapeTree(
     for (const item of items) {
       const node = item as XmlNode;
       if (local === "sp") {
-        nodes.push(parseShape(node, partPath, nextId));
+        nodes.push(parseShape(node, partPath, nextId, orderingSlot));
       } else if (local === "pic") {
-        nodes.push(parseImage(node, partPath, nextId));
+        nodes.push(parseImage(node, partPath, nextId, orderingSlot));
       } else {
-        nodes.push(parseRawShapeNode(key, node, partPath, nextId));
+        nodes.push(parseRawShapeNode(key, node, partPath, nextId, orderingSlot));
       }
+      orderingSlot++;
     }
   }
   return nodes;
 }
 
-function parseShape(sp: XmlNode, partPath: PartPath, nextId: () => RawSidecarId): SourceShape {
+function parseShape(
+  sp: XmlNode,
+  partPath: PartPath,
+  nextId: () => RawSidecarId,
+  orderingSlot: number,
+): SourceShape {
   const nvSpPr = getChild(sp, "nvSpPr");
   const cNvPr = getChild(nvSpPr, "cNvPr");
   const nodeId = sourceNodeId(cNvPr);
@@ -91,7 +98,7 @@ function parseShape(sp: XmlNode, partPath: PartPath, nextId: () => RawSidecarId)
   const geometry = parsePresetGeometry(spPr);
   const fill = parseFill(spPr, nextId);
   const outline = parseOutline(spPr, nextId);
-  const textBody = parseTextBody(getChild(sp, "txBody"), partPath, nextId);
+  const textBody = parseTextBody(getChild(sp, "txBody"), partPath, nextId, nodeId, orderingSlot);
 
   const rawSidecars = [
     ...collectUnknownSidecars(sp, KNOWN_SHAPE_CHILDREN, nextId),
@@ -108,12 +115,17 @@ function parseShape(sp: XmlNode, partPath: PartPath, nextId: () => RawSidecarId)
     ...(outline !== undefined ? { outline } : {}),
     ...(textBody !== undefined ? { textBody } : {}),
     ...(placeholder !== undefined ? { placeholder } : {}),
-    handle: { partPath, ...(nodeId !== undefined ? { nodeId } : {}) },
+    handle: { partPath, ...(nodeId !== undefined ? { nodeId } : {}), orderingSlot },
     ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
   };
 }
 
-function parseImage(pic: XmlNode, partPath: PartPath, nextId: () => RawSidecarId): SourceImage {
+function parseImage(
+  pic: XmlNode,
+  partPath: PartPath,
+  nextId: () => RawSidecarId,
+  orderingSlot: number,
+): SourceImage {
   const cNvPr = getChild(getChild(pic, "nvPicPr"), "cNvPr");
   const nodeId = sourceNodeId(cNvPr);
   const name = getAttr(cNvPr, "name");
@@ -145,6 +157,7 @@ function parseImage(pic: XmlNode, partPath: PartPath, nextId: () => RawSidecarId
       partPath,
       ...(nodeId !== undefined ? { nodeId } : {}),
       ...(embed !== undefined ? { relationshipId: asRelationshipId(embed) } : {}),
+      orderingSlot,
     },
     ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
   };
@@ -155,13 +168,14 @@ function parseRawShapeNode(
   node: XmlNode,
   partPath: PartPath,
   nextId: () => RawSidecarId,
+  orderingSlot: number,
 ): SourceRawShapeNode {
   const nodeId = sourceNodeId(getChild(getChild(node, "nvSpPr"), "cNvPr"));
   return {
     kind: "raw",
     ...(nodeId !== undefined ? { nodeId } : {}),
     raw: makeSidecar(key, node, nextId),
-    handle: { partPath, ...(nodeId !== undefined ? { nodeId } : {}) },
+    handle: { partPath, ...(nodeId !== undefined ? { nodeId } : {}), orderingSlot },
   };
 }
 

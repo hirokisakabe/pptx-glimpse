@@ -2,8 +2,9 @@
  * CleanDoc source model 型の barrel re-export。
  */
 
-export type { CleanDocSource } from "./clean-doc-source.js";
+export type { CleanDocEdit, CleanDocSource, CleanDocTextRunEdit } from "./clean-doc-source.js";
 export type { Diagnostic, DiagnosticSeverity } from "./diagnostics.js";
+export { findTextRunBySourceHandle, replaceTextRunPlainText } from "./editing.js";
 export type {
   PartPath,
   RawSidecarId,

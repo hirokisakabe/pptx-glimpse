@@ -6,6 +6,11 @@ import { describe, expect, it } from "vitest";
 
 // 実際の公開面 (`@pptx-glimpse/document/experimental`) 経由で import する。
 import { readPptx, writePptx } from "../experimental.js";
+import {
+  findTextRunBySourceHandle,
+  replaceTextRunPlainText,
+  type SourceShape,
+} from "../experimental.js";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -56,6 +61,49 @@ function buildRoundTripFixture(): Uint8Array {
     ),
     "ppt/media/image1.png": new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]),
     "docProps/custom.xml": xml(`<Properties><custom value="preserve-me"/></Properties>`),
+  });
+}
+
+function buildTextEditFixture(): Uint8Array {
+  return zipSync({
+    "[Content_Types].xml": xml(
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Default Extension="png" ContentType="image/png"/>` +
+        `<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>` +
+        `<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+        `</Types>`,
+    ),
+    "_rels/.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/presentation.xml": xml(
+      `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:sldIdLst><p:sldId id="256" r:id="rIdSlide1"/></p:sldIdLst>` +
+        `<p:sldSz cx="9144000" cy="5143500"/>` +
+        `</p:presentation>`,
+    ),
+    "ppt/_rels/presentation.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdSlide1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/slides/slide1.xml": xml(
+      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:cSld><p:spTree>` +
+        `<p:sp><p:nvSpPr><p:cNvPr id="10" name="Title"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+        `<p:spPr><a:xfrm><a:off x="100" y="200"/><a:ext cx="300" cy="400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>` +
+        `<p:txBody><a:bodyPr anchor="ctr"/><a:lstStyle/>` +
+        `<a:p><a:pPr algn="ctr"/><a:r><a:rPr b="1" i="1" sz="2400"><a:latin typeface="Aptos"/><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill><a:ea typeface="Noto Sans JP"/></a:rPr><a:t>Original</a:t></a:r></a:p>` +
+        `</p:txBody></p:sp>` +
+        `</p:spTree></p:cSld>` +
+        `</p:sld>`,
+    ),
+    "docProps/custom.xml": xml(`<Properties><custom value="preserve-me"/></Properties>`),
+    "ppt/media/image1.png": new Uint8Array([0x89, 0x50, 0x4e, 0x47, 9, 8, 7]),
   });
 }
 
@@ -217,3 +265,69 @@ describe("writePptx — no-edit round-trip", () => {
     expect(() => writePptx(withoutRawSlide)).toThrow(/no preserved package material/);
   });
 });
+
+describe("writePptx — one plain text-run edit", () => {
+  it("existing text run を stable source handle で特定できる", () => {
+    const source = readPptx(buildTextEditFixture());
+    const run = firstRun(source);
+
+    expect(run.handle).toMatchObject({
+      partPath: "ppt/slides/slide1.xml",
+      nodeId: "text:shape:10:p:0:r:0",
+      orderingSlot: 0,
+    });
+    expect(findTextRunBySourceHandle(source, run.handle!)).toBe(run);
+  });
+
+  it("plain text 置換を CleanDoc source に適用し、write 後の PPTX に反映する", () => {
+    const input = buildTextEditFixture();
+    const source = readPptx(input);
+    const run = firstRun(source);
+
+    const edited = replaceTextRunPlainText(source, run.handle!, "Edited text");
+    const reread = readPptx(writePptx(edited));
+    const editedRun = firstRun(reread);
+
+    expect(run.text).toBe("Original");
+    expect(firstRun(edited).text).toBe("Edited text");
+    expect(editedRun.text).toBe("Edited text");
+  });
+
+  it("run / paragraph formatting と unrelated package material を preserving する", () => {
+    const input = buildTextEditFixture();
+    const source = readPptx(input);
+    const edited = replaceTextRunPlainText(source, firstRun(source).handle!, "Edited text");
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+    const run = firstRun(reread);
+    const paragraph = firstParagraph(reread);
+
+    expect(paragraph.properties).toEqual({ align: "center" });
+    expect(run.properties).toMatchObject({
+      bold: true,
+      italic: true,
+      fontSize: 24,
+      typeface: "Aptos",
+      color: { kind: "srgb", hex: "FF0000" },
+    });
+    expect(run.rawSidecars?.map((sidecar) => sidecar.node.name)).toContain("a:ea");
+    expect(getEntry(output, "docProps/custom.xml")).toEqual(getEntry(input, "docProps/custom.xml"));
+    expect(getEntry(output, "ppt/media/image1.png")).toEqual(
+      getEntry(input, "ppt/media/image1.png"),
+    );
+  });
+});
+
+function firstShape(source: ReturnType<typeof readPptx>): SourceShape {
+  const shape = source.slides[0].shapes[0];
+  if (shape?.kind !== "shape") throw new Error("first shape is not a shape");
+  return shape;
+}
+
+function firstParagraph(source: ReturnType<typeof readPptx>) {
+  return firstShape(source).textBody!.paragraphs[0];
+}
+
+function firstRun(source: ReturnType<typeof readPptx>) {
+  return firstParagraph(source).runs[0];
+}

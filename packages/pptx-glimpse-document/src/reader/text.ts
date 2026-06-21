@@ -10,6 +10,7 @@
 import type {
   PartPath,
   RawSidecarId,
+  SourceNodeId,
   SourceParagraph,
   SourceParagraphProperties,
   SourceRunProperties,
@@ -19,7 +20,7 @@ import type {
   SourceTextRun,
   SourceVerticalAnchor,
 } from "../source/index.js";
-import { asEmu, asHundredthPt, asPt } from "../source/index.js";
+import { asEmu, asHundredthPt, asPt, asSourceNodeId } from "../source/index.js";
 import { parseColorElement } from "./drawing.js";
 import { isTrue, numericAttr } from "./drawing.js";
 import { collectUnknownSidecars } from "./raw-node.js";
@@ -48,11 +49,15 @@ export function parseTextBody(
   txBody: XmlNode | undefined,
   partPath: PartPath,
   nextId: () => RawSidecarId,
+  ownerNodeId: SourceNodeId | undefined,
+  ownerOrderingSlot: number,
 ): SourceTextBody | undefined {
   if (!txBody) return undefined;
 
   const properties = parseBodyProperties(getChild(txBody, "bodyPr"));
-  const paragraphs = getChildArray(txBody, "p").map((p) => parseParagraph(p, partPath, nextId));
+  const paragraphs = getChildArray(txBody, "p").map((p, paragraphIndex) =>
+    parseParagraph(p, partPath, nextId, ownerNodeId, ownerOrderingSlot, paragraphIndex),
+  );
   const rawSidecars = collectUnknownSidecars(txBody, KNOWN_TXBODY_CHILDREN, nextId);
 
   return {
@@ -87,15 +92,24 @@ function parseParagraph(
   p: XmlNode,
   partPath: PartPath,
   nextId: () => RawSidecarId,
+  ownerNodeId: SourceNodeId | undefined,
+  ownerOrderingSlot: number,
+  paragraphIndex: number,
 ): SourceParagraph {
   const properties = parseParagraphProperties(getChild(p, "pPr"));
-  const runs = getChildArray(p, "r").map((r) => parseRun(r, partPath, nextId));
+  const runs = getChildArray(p, "r").map((r, runIndex) =>
+    parseRun(r, partPath, nextId, ownerNodeId, ownerOrderingSlot, paragraphIndex, runIndex),
+  );
   const rawSidecars = collectUnknownSidecars(p, KNOWN_PARAGRAPH_CHILDREN, nextId);
 
   return {
     runs,
     ...(properties !== undefined ? { properties } : {}),
-    handle: { partPath },
+    handle: {
+      partPath,
+      nodeId: textNodeId("paragraph", ownerNodeId, ownerOrderingSlot, paragraphIndex),
+      orderingSlot: paragraphIndex,
+    },
     ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
   };
 }
@@ -116,7 +130,15 @@ function parseParagraphProperties(pPr: XmlNode | undefined): SourceParagraphProp
   return Object.keys(properties).length > 0 ? properties : undefined;
 }
 
-function parseRun(r: XmlNode, partPath: PartPath, nextId: () => RawSidecarId): SourceTextRun {
+function parseRun(
+  r: XmlNode,
+  partPath: PartPath,
+  nextId: () => RawSidecarId,
+  ownerNodeId: SourceNodeId | undefined,
+  ownerOrderingSlot: number,
+  paragraphIndex: number,
+  runIndex: number,
+): SourceTextRun {
   const properties = parseRunProperties(getChild(r, "rPr"));
   const rawSidecars = collectRunSidecars(r, nextId);
 
@@ -124,7 +146,11 @@ function parseRun(r: XmlNode, partPath: PartPath, nextId: () => RawSidecarId): S
     kind: "textRun",
     text: getChildText(r, "t") ?? "",
     ...(properties !== undefined ? { properties } : {}),
-    handle: { partPath },
+    handle: {
+      partPath,
+      nodeId: textNodeId("run", ownerNodeId, ownerOrderingSlot, paragraphIndex, runIndex),
+      orderingSlot: runIndex,
+    },
     ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
   };
 }
@@ -166,4 +192,17 @@ function collectRunSidecars(
 
 function emu(value: number) {
   return asEmu(value);
+}
+
+function textNodeId(
+  kind: "paragraph" | "run",
+  ownerNodeId: SourceNodeId | undefined,
+  ownerOrderingSlot: number,
+  paragraphIndex: number,
+  runIndex?: number,
+): SourceNodeId {
+  const owner =
+    ownerNodeId !== undefined ? `shape:${ownerNodeId}` : `shapeSlot:${ownerOrderingSlot}`;
+  const suffix = kind === "paragraph" ? `p:${paragraphIndex}` : `p:${paragraphIndex}:r:${runIndex}`;
+  return asSourceNodeId(`text:${owner}:${suffix}`);
 }

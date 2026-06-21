@@ -9,6 +9,7 @@
  */
 
 import type { Diagnostic } from "./diagnostics.js";
+import type { SourceHandle } from "./handles.js";
 import type { PackageGraph } from "./package-graph.js";
 import type {
   SourcePresentation,
@@ -28,4 +29,14 @@ export interface CleanDocSource {
   readonly themes: readonly SourceTheme[];
   /** document 正しさに関する診断。 */
   readonly diagnostics: readonly Diagnostic[];
+  /** typed CleanDoc operation と dirty scope。writer はここから最小更新範囲を判断する。 */
+  readonly edits?: readonly CleanDocEdit[];
+}
+
+export type CleanDocEdit = CleanDocTextRunEdit;
+
+export interface CleanDocTextRunEdit {
+  readonly kind: "replaceTextRunPlainText";
+  readonly handle: SourceHandle;
+  readonly text: string;
 }
