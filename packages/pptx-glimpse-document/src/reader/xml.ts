@@ -20,7 +20,10 @@ const parser = new XMLParser({
   parseAttributeValue: false,
   // prefix を保持する。理由はファイル冒頭コメント参照。
   removeNSPrefix: false,
-  trimValues: true,
+  // text run (`a:t`) の先頭・末尾の有意な空白を保持するため trim しない。
+  // PPTX part は minify されており、tag 間の indentation 由来の空白テキストは
+  // 発生しないため、これによる spurious text node 混入は起きない。
+  trimValues: false,
 });
 
 /** XML 文字列をパースして root オブジェクトを返す。 */
@@ -29,7 +32,7 @@ export function parseXml(xml: string): XmlNode {
 }
 
 /** `a:foo` のような qualified name から local part (`foo`) を取り出す。 */
-function localName(key: string): string {
+export function localName(key: string): string {
   const colon = key.indexOf(":");
   return colon === -1 ? key : key.slice(colon + 1);
 }
@@ -50,6 +53,20 @@ export function getChild(node: XmlNode | undefined, name: string): XmlNode | und
     }
   }
   return undefined;
+}
+
+/**
+ * 子要素が存在するかを local name で判定する。空要素 (`<a:noFill/>`) は値が
+ * 空文字列となり falsy なため、`getChild` の戻り値では存在判定できない。存在
+ * 自体に意味のある marker 要素の検出にはこちらを使う。
+ */
+export function hasChild(node: XmlNode | undefined, name: string): boolean {
+  if (!node) return false;
+  for (const key of Object.keys(node)) {
+    if (key.startsWith("@_")) continue;
+    if (localName(key) === name) return true;
+  }
+  return false;
 }
 
 /** 子要素を local name で取得し、常に配列として返す。 */
@@ -92,6 +109,42 @@ export function getNamespacedAttr(
     }
   }
   return undefined;
+}
+
+/**
+ * 子要素の text content を local name で取得する。`<a:t>foo</a:t>` のような
+ * テキストノード、属性付き要素の `#text`、空要素のいずれにも対応する。
+ */
+export function getChildText(node: XmlNode | undefined, name: string): string | undefined {
+  if (!node) return undefined;
+  for (const key of Object.keys(node)) {
+    if (key.startsWith("@_")) continue;
+    if (localName(key) !== name) continue;
+    const value = node[key];
+    const item: unknown = Array.isArray(value) ? value[0] : value;
+    if (typeof item === "string") return item;
+    if (typeof item === "number" || typeof item === "boolean") return String(item);
+    if (item && typeof item === "object") {
+      return scalarToString((item as XmlNode)["#text"]);
+    }
+    return undefined;
+  }
+  return undefined;
+}
+
+/**
+ * 要素の全属性を `{ name: value }` の record として返す (`@_` prefix は除去)。
+ * `p:clrMap` の logical-name マッピングのように属性集合を丸ごと保持する際に使う。
+ */
+export function getAttrs(node: XmlNode | undefined): Record<string, string> {
+  const result: Record<string, string> = {};
+  if (!node) return result;
+  for (const key of Object.keys(node)) {
+    if (!key.startsWith("@_")) continue;
+    const value = scalarToString(node[key]);
+    if (value !== undefined) result[key.slice(2)] = value;
+  }
+  return result;
 }
 
 /** 属性値 (string/number/boolean) を文字列化する。object 等は undefined。 */

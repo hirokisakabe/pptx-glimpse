@@ -3,16 +3,16 @@
  *
  * PPTX ZIP package を読み、package graph (content types / relationships /
  * media) と presentation metadata (slide size / slide order) を CleanDoc source
- * として返す。未編集・未対応の part は raw package material として保持し、
- * structural round-trip の土台にする (`docs/raw-ooxml-round-trip.md`)。
+ * として返す。さらに presentation order の各 slide から layout → master → theme
+ * の chain を辿り、simple shape / text / image を typed source node として読む。
+ * 未編集・未対応の part / 子要素は raw package material / raw sidecar として
+ * 保持し、structural round-trip の土台にする (`docs/raw-ooxml-round-trip.md`)。
  *
- * 本 slice の scope 外 (後続 issue):
- * - shape / text / image source node の typed parsing → slide/layout/master/
- *   theme part は raw として保持しつつ、typed 配列は空のままにする。
- * - computed view 生成 / writer 出力。
+ * typed node を持つ slide/layout/master/theme part も、未編集 part の忠実な
+ * 書き戻しのために `packageGraph.rawParts` 経由で元バイト列を併せて保持する
+ * (typed model は編集・computed view 用、raw part は round-trip 用の二重表現)。
  *
- * そのため `slides` / `slideLayouts` / `slideMasters` / `themes` は空配列を返し、
- * これらの part は `packageGraph.rawParts` 経由で round-trip 可能な形で保持する。
+ * 本 slice の scope 外 (後続 issue): computed view 生成 / writer 出力。
  */
 
 import { unzipSync } from "fflate";
@@ -31,8 +31,14 @@ import type {
   RelationshipTargetMode,
   SlideSize,
   SourcePresentation,
+  SourceSlide,
+  SourceSlideLayout,
+  SourceSlideMaster,
+  SourceTheme,
 } from "../source/index.js";
 import { asEmu, asPartPath, asRelationshipId } from "../source/index.js";
+import { createSidecarIdFactory } from "./raw-node.js";
+import { parseSlide, parseSlideLayout, parseSlideMaster, parseTheme } from "./slide-parts.js";
 import {
   getAttr,
   getChild,
@@ -52,6 +58,11 @@ const PACKAGE_ROOT_PART = "";
 const OFFICE_DOCUMENT_REL_TYPE =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
 const SLIDE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
+const SLIDE_LAYOUT_REL_TYPE =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout";
+const SLIDE_MASTER_REL_TYPE =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster";
+const THEME_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme";
 const PRESENTATION_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml";
 
@@ -100,6 +111,8 @@ export function readPptx(input: ReadPptxInput): CleanDocSource {
     diagnostics,
   );
 
+  const hierarchy = readSlideHierarchy(entries, relationships, presentation, diagnostics);
+
   return {
     packageGraph: {
       contentTypes,
@@ -109,13 +122,167 @@ export function readPptx(input: ReadPptxInput): CleanDocSource {
       rawParts,
     },
     presentation,
-    // typed slide/layout/master/theme reading は後続 slice。冒頭コメント参照。
-    slides: [],
-    slideLayouts: [],
-    slideMasters: [],
-    themes: [],
+    slides: hierarchy.slides,
+    slideLayouts: hierarchy.slideLayouts,
+    slideMasters: hierarchy.slideMasters,
+    themes: hierarchy.themes,
     diagnostics,
   };
+}
+
+interface SlideHierarchy {
+  readonly slides: readonly SourceSlide[];
+  readonly slideLayouts: readonly SourceSlideLayout[];
+  readonly slideMasters: readonly SourceSlideMaster[];
+  readonly themes: readonly SourceTheme[];
+}
+
+/**
+ * presentation order の各 slide から layout → master → theme を辿り、到達可能な
+ * part を typed source node として読む。layout / master / theme は重複排除しつつ
+ * 発見順に収集する。
+ */
+function readSlideHierarchy(
+  entries: Map<string, Uint8Array>,
+  relationships: readonly PartRelationships[],
+  presentation: SourcePresentation,
+  diagnostics: Diagnostic[],
+): SlideHierarchy {
+  const slides: SourceSlide[] = [];
+  const layoutPaths = new OrderedPathSet();
+
+  for (const slidePath of presentation.slidePartPaths) {
+    const root = parsePartRoot(entries, slidePath, "sld", diagnostics);
+    if (root === undefined) continue;
+    const layoutPath = resolveSingleRel(relationships, slidePath, SLIDE_LAYOUT_REL_TYPE);
+    if (layoutPath === undefined) {
+      diagnostics.push({
+        severity: "warning",
+        code: "slide-layout-unresolved",
+        message: `slide '${slidePath}' has no resolvable slideLayout relationship`,
+        handle: { partPath: slidePath },
+      });
+    } else {
+      layoutPaths.add(layoutPath);
+    }
+    slides.push(
+      parseSlide(root, slidePath, layoutPath ?? asPartPath(""), createSidecarIdFactory(slidePath)),
+    );
+  }
+
+  const slideLayouts: SourceSlideLayout[] = [];
+  const masterPaths = new OrderedPathSet();
+  for (const layoutPath of layoutPaths.values()) {
+    const root = parsePartRoot(entries, layoutPath, "sldLayout", diagnostics);
+    if (root === undefined) continue;
+    const masterPath = resolveSingleRel(relationships, layoutPath, SLIDE_MASTER_REL_TYPE);
+    if (masterPath !== undefined) masterPaths.add(masterPath);
+    slideLayouts.push(
+      parseSlideLayout(
+        root,
+        layoutPath,
+        masterPath ?? asPartPath(""),
+        createSidecarIdFactory(layoutPath),
+      ),
+    );
+  }
+
+  const slideMasters: SourceSlideMaster[] = [];
+  const themePaths = new OrderedPathSet();
+  for (const masterPath of masterPaths.values()) {
+    const root = parsePartRoot(entries, masterPath, "sldMaster", diagnostics);
+    if (root === undefined) continue;
+    const themePath = resolveSingleRel(relationships, masterPath, THEME_REL_TYPE);
+    if (themePath !== undefined) themePaths.add(themePath);
+    const masterLayoutPaths = resolveAllRels(relationships, masterPath, SLIDE_LAYOUT_REL_TYPE);
+    slideMasters.push(
+      parseSlideMaster(
+        root,
+        masterPath,
+        themePath,
+        masterLayoutPaths,
+        createSidecarIdFactory(masterPath),
+      ),
+    );
+  }
+
+  const themes: SourceTheme[] = [];
+  for (const themePath of themePaths.values()) {
+    const root = parsePartRoot(entries, themePath, "theme", diagnostics);
+    if (root === undefined) continue;
+    themes.push(parseTheme(root, themePath));
+  }
+
+  return { slides, slideLayouts, slideMasters, themes };
+}
+
+/** part のバイト列をパースして指定 local name の root 要素を返す。 */
+function parsePartRoot(
+  entries: Map<string, Uint8Array>,
+  partPath: PartPath,
+  rootLocalName: string,
+  diagnostics: Diagnostic[],
+): XmlNode | undefined {
+  const bytes = entries.get(partPath);
+  if (!bytes) {
+    diagnostics.push({
+      severity: "warning",
+      code: "part-missing",
+      message: `part '${partPath}' referenced by the package graph is missing`,
+      handle: { partPath },
+    });
+    return undefined;
+  }
+  const root = getChild(parseXml(textDecoder.decode(bytes)), rootLocalName);
+  if (root === undefined) {
+    diagnostics.push({
+      severity: "warning",
+      code: "part-root-unexpected",
+      message: `part '${partPath}' does not have the expected <${rootLocalName}> root`,
+      handle: { partPath },
+    });
+  }
+  return root;
+}
+
+/** 指定 source part の relationship のうち、内部 (非 External) の最初の一致を解決する。 */
+function resolveSingleRel(
+  relationships: readonly PartRelationships[],
+  sourcePart: PartPath,
+  relType: string,
+): PartPath | undefined {
+  const rels = relationships.find((rel) => rel.sourcePartPath === sourcePart)?.relationships;
+  const match = rels?.find((rel) => rel.type === relType && rel.targetMode !== "External");
+  if (match === undefined) return undefined;
+  return asPartPath(resolveTarget(sourcePart, match.target));
+}
+
+/** 指定 source part の relationship のうち、内部の該当 type をすべて解決する。 */
+function resolveAllRels(
+  relationships: readonly PartRelationships[],
+  sourcePart: PartPath,
+  relType: string,
+): PartPath[] {
+  const rels = relationships.find((rel) => rel.sourcePartPath === sourcePart)?.relationships ?? [];
+  return rels
+    .filter((rel) => rel.type === relType && rel.targetMode !== "External")
+    .map((rel) => asPartPath(resolveTarget(sourcePart, rel.target)));
+}
+
+/** 挿入順を保ちつつ part path を重複排除する小さな集合。 */
+class OrderedPathSet {
+  private readonly seen = new Set<string>();
+  private readonly order: PartPath[] = [];
+
+  add(path: PartPath): void {
+    if (this.seen.has(path)) return;
+    this.seen.add(path);
+    this.order.push(path);
+  }
+
+  values(): readonly PartPath[] {
+    return this.order;
+  }
 }
 
 /** ZIP を展開し、ディレクトリエントリを除いた part path → bytes の Map を返す。 */
