@@ -68,6 +68,20 @@ describe("createComputedView", () => {
         color: { hex: "#99b3cc", alpha: 0.5 },
       }),
     );
+
+    const transformed = findShape(slide.elements, "Transformed colors");
+    expect(transformed.fill).toEqual(
+      expect.objectContaining({
+        kind: "solid",
+        color: { hex: "#ff8080", alpha: 1 },
+      }),
+    );
+    expect(transformed.outline?.fill).toEqual(
+      expect.objectContaining({
+        kind: "solid",
+        color: { hex: "#404040", alpha: 1 },
+      }),
+    );
   });
 
   it("placeholder matching と basic text style inheritance を解決する", () => {
@@ -103,6 +117,7 @@ describe("createComputedView", () => {
       "Layout decoration",
       "Slide title",
       "Hero image",
+      "Transformed colors",
     ]);
 
     // slide1 は showMasterSp=false なので master decoration が落ちる。
@@ -236,6 +251,30 @@ function buildSource(): CleanDocSource {
             transform: transform(50, 60, 70, 80),
             blipRelationshipId: asRelationshipId("rIdImage"),
           },
+          shape("Transformed colors", {
+            transform: transform(11, 12, 13, 14),
+            fill: {
+              kind: "solid",
+              color: {
+                kind: "srgb",
+                hex: "FF0000",
+                transforms: [
+                  { kind: "lumMod", value: asOoxmlPercent(50000) },
+                  { kind: "lumOff", value: asOoxmlPercent(50000) },
+                ],
+              },
+            },
+            outline: {
+              fill: {
+                kind: "solid",
+                color: {
+                  kind: "srgb",
+                  hex: "808080",
+                  transforms: [{ kind: "shade", value: asOoxmlPercent(50000) }],
+                },
+              },
+            },
+          }),
         ],
       },
     ],

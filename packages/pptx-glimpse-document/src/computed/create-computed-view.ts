@@ -230,14 +230,13 @@ function computeBackground(
     };
   }
   if (background.kind === "styleReference") {
+    const color = resolveColor(context, background.color);
     return {
       background: {
         kind: "styleReference",
         source: background,
         index: background.index,
-        ...(resolveColor(context, background.color) !== undefined
-          ? { color: resolveColor(context, background.color) }
-          : {}),
+        ...(color !== undefined ? { color } : {}),
         sourceLayer,
       },
     };
@@ -374,12 +373,13 @@ function computeParagraph(
   const inheritedRun = inherited?.runs[0];
   return {
     ...(properties !== undefined ? { properties } : {}),
-    runs: paragraph.runs.map((run) => ({
-      text: run.text,
-      ...(mergeRunProperties(context, inheritedRun?.properties, run.properties) !== undefined
-        ? { properties: mergeRunProperties(context, inheritedRun?.properties, run.properties) }
-        : {}),
-    })),
+    runs: paragraph.runs.map((run) => {
+      const runProperties = mergeRunProperties(context, inheritedRun?.properties, run.properties);
+      return {
+        text: run.text,
+        ...(runProperties !== undefined ? { properties: runProperties } : {}),
+      };
+    }),
   };
 }
 
