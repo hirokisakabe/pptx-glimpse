@@ -1,0 +1,188 @@
+/**
+ * Simple shape / text run / image の source node 型。
+ *
+ * PoC scope の最小 subset (simple shapes / text / images) のみを typed に表す。
+ * theme color や relationship は source では未解決の参照のまま保持し
+ * (`docs/cleandoc-source-computed-view.md`)、cascade 解決は computed view の
+ * 責務とする。未対応ノードは raw escape hatch で保存する。
+ */
+
+import type { RelationshipId, SourceHandle, SourceNodeId } from "./handles.js";
+import type { RawSidecar } from "./raw.js";
+import type { Emu, HundredthPt, OoxmlAngle, OoxmlPercent, Pt } from "./units.js";
+
+/** `a:xfrm` 由来の source transform。座標・サイズは EMU のまま保持する。 */
+export interface SourceTransform {
+  readonly offsetX: Emu;
+  readonly offsetY: Emu;
+  readonly width: Emu;
+  readonly height: Emu;
+  readonly rotation?: OoxmlAngle;
+  readonly flipHorizontal?: boolean;
+  readonly flipVertical?: boolean;
+}
+
+/** preset geometry (`a:prstGeom`) の source 参照。preset 名のみ保持する。 */
+export interface SourcePresetGeometry {
+  /** preset 名 (例: `rect`, `roundRect`)。 */
+  readonly preset: string;
+}
+
+/**
+ * 未解決の source color 参照。`schemeClr` は scheme 名のまま保持し、computed
+ * view で `clrMap` / `colorScheme` を経由して具体色へ解決する。`srgbClr` /
+ * `sysClr` は具体値だが、変換 (lumMod 等) は適用前のまま保持する。
+ */
+export type SourceColor =
+  | {
+      readonly kind: "srgb";
+      readonly hex: string;
+      readonly transforms?: readonly SourceColorTransform[];
+    }
+  | {
+      readonly kind: "scheme";
+      readonly scheme: string;
+      readonly transforms?: readonly SourceColorTransform[];
+    }
+  | {
+      readonly kind: "system";
+      /** `a:sysClr@val` (例: `windowText`)。 */
+      readonly value: string;
+      /** `a:sysClr@lastClr` の解決済みフォールバック hex (持つ場合)。 */
+      readonly lastColor?: string;
+      readonly transforms?: readonly SourceColorTransform[];
+    };
+
+/** lumMod / tint / shade 等の色変換 (値は OOXML パーセンテージ)。 */
+export interface SourceColorTransform {
+  readonly kind: "lumMod" | "lumOff" | "tint" | "shade" | "alpha";
+  readonly value: OoxmlPercent;
+}
+
+/** shape の fill (source レベル、最小)。未対応 fill は raw で保存する。 */
+export type SourceFill =
+  | { readonly kind: "none" }
+  | { readonly kind: "solid"; readonly color: SourceColor }
+  | { readonly kind: "raw"; readonly raw: RawSidecar };
+
+/** simple solid line の outline (`a:ln`)。色と幅のみの最小表現。 */
+export interface SourceOutline {
+  readonly width?: Emu;
+  readonly fill?: SourceFill;
+}
+
+/** placeholder 宣言 (`p:ph`)。type / idx を未解決のまま保持する。 */
+export interface SourcePlaceholder {
+  readonly type?: string;
+  readonly index?: number;
+}
+
+/** text run (`a:r`) の run プロパティ (`a:rPr`) の最小 subset。 */
+export interface SourceRunProperties {
+  readonly bold?: boolean;
+  readonly italic?: boolean;
+  readonly underline?: boolean;
+  /** フォントサイズ。OOXML-domain では pt で保持する。 */
+  readonly fontSize?: Pt;
+  /** latin typeface 名 (theme token も含めて未解決のまま保持)。 */
+  readonly typeface?: string;
+  readonly color?: SourceColor;
+}
+
+/** text run (`a:r`)。 */
+export interface SourceTextRun {
+  readonly kind: "textRun";
+  readonly text: string;
+  readonly properties?: SourceRunProperties;
+  readonly handle?: SourceHandle;
+  readonly rawSidecars?: readonly RawSidecar[];
+}
+
+export type SourceTextAlign = "left" | "center" | "right" | "justify";
+
+/** paragraph (`a:p`) の段落プロパティ (`a:pPr`) の最小 subset。 */
+export interface SourceParagraphProperties {
+  readonly align?: SourceTextAlign;
+  /** インデントレベル (`a:pPr@lvl`)。 */
+  readonly level?: number;
+  /** 行間 (`a:spcPts`)。 */
+  readonly lineSpacingPts?: HundredthPt;
+}
+
+/** paragraph (`a:p`)。 */
+export interface SourceParagraph {
+  readonly runs: readonly SourceTextRun[];
+  readonly properties?: SourceParagraphProperties;
+  readonly handle?: SourceHandle;
+  readonly rawSidecars?: readonly RawSidecar[];
+}
+
+/** vertical anchor (`a:bodyPr@anchor`)。 */
+export type SourceVerticalAnchor = "top" | "middle" | "bottom";
+
+/** text body properties (`a:bodyPr`) の最小 subset。inset と vertical anchor。 */
+export interface SourceTextBodyProperties {
+  readonly marginLeft?: Emu;
+  readonly marginRight?: Emu;
+  readonly marginTop?: Emu;
+  readonly marginBottom?: Emu;
+  readonly anchor?: SourceVerticalAnchor;
+}
+
+/** text body (`p:txBody`)。 */
+export interface SourceTextBody {
+  readonly paragraphs: readonly SourceParagraph[];
+  readonly properties?: SourceTextBodyProperties;
+  readonly handle?: SourceHandle;
+  readonly rawSidecars?: readonly RawSidecar[];
+}
+
+/** simple shape (`p:sp`)。 */
+export interface SourceShape {
+  readonly kind: "shape";
+  readonly nodeId?: SourceNodeId;
+  readonly name?: string;
+  readonly transform?: SourceTransform;
+  readonly geometry?: SourcePresetGeometry;
+  readonly fill?: SourceFill;
+  readonly outline?: SourceOutline;
+  readonly textBody?: SourceTextBody;
+  readonly placeholder?: SourcePlaceholder;
+  readonly handle?: SourceHandle;
+  readonly rawSidecars?: readonly RawSidecar[];
+}
+
+/** image の crop (`a:srcRect`)。各辺の inset を OOXML パーセンテージで保持する。 */
+export interface SourceImageCrop {
+  readonly left?: OoxmlPercent;
+  readonly top?: OoxmlPercent;
+  readonly right?: OoxmlPercent;
+  readonly bottom?: OoxmlPercent;
+}
+
+/** image (`p:pic`)。blip は relationship id (`r:embed`) を未解決のまま保持する。 */
+export interface SourceImage {
+  readonly kind: "image";
+  readonly nodeId?: SourceNodeId;
+  readonly name?: string;
+  readonly transform?: SourceTransform;
+  /** `a:blip@r:embed` の relationship id。media part は computed view で解決する。 */
+  readonly blipRelationshipId?: RelationshipId;
+  readonly crop?: SourceImageCrop;
+  readonly handle?: SourceHandle;
+  readonly rawSidecars?: readonly RawSidecar[];
+}
+
+/**
+ * typed に表現しない shape tree ノードの raw escape hatch。未対応の図形・
+ * グループ・コネクタ等を round-trip のために保存する。
+ */
+export interface SourceRawShapeNode {
+  readonly kind: "raw";
+  readonly nodeId?: SourceNodeId;
+  readonly raw: RawSidecar;
+  readonly handle?: SourceHandle;
+}
+
+/** shape tree の source node 共用体。 */
+export type SourceShapeNode = SourceShape | SourceImage | SourceRawShapeNode;
