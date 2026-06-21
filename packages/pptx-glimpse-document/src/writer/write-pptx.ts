@@ -3,9 +3,9 @@
  *
  * この writer は structural round-trip を目的に、reader が保持した raw package
  * material / media bytes / package bookkeeping を PPTX ZIP として再構成する。
- * one plain text-run edit では dirty slide XML part 内の対象 `a:t` だけを
- * stable source handle で差し替える。汎用的な edited writer behavior や
- * node-level XML splicing は後続 slice の責務。
+ * one plain text-run edit では dirty slide XML part を再シリアライズし、対象
+ * run の `a:t` 値だけを stable source handle で差し替える。汎用的な edited
+ * writer behavior や node-level XML splicing は後続 slice の責務。
  */
 
 import { XMLBuilder } from "fast-xml-parser";
@@ -172,7 +172,32 @@ function locateShape(spTree: XmlNode | undefined, locator: TextRunLocator): XmlN
         getAttr(getChild(getChild(shape, "nvSpPr"), "cNvPr"), "id") === locator.shapeNodeId,
     );
   }
-  return locator.shapeOrderingSlot !== undefined ? shapes[locator.shapeOrderingSlot] : undefined;
+  if (locator.shapeOrderingSlot === undefined) return undefined;
+  return getShapeByOrderingSlot(spTree, locator.shapeOrderingSlot);
+}
+
+function getShapeByOrderingSlot(
+  spTree: XmlNode | undefined,
+  orderingSlot: number,
+): XmlNode | undefined {
+  if (!spTree) return undefined;
+
+  let currentSlot = 0;
+  for (const key of Object.keys(spTree)) {
+    if (key.startsWith("@_")) continue;
+    const local = localName(key);
+    if (local === "nvGrpSpPr" || local === "grpSpPr") continue;
+
+    const value = spTree[key];
+    const items = Array.isArray(value) ? value : [value];
+    for (const item of items) {
+      if (currentSlot === orderingSlot) {
+        return local === "sp" ? (item as XmlNode) : undefined;
+      }
+      currentSlot++;
+    }
+  }
+  return undefined;
 }
 
 function getChild(node: XmlNode | undefined, name: string): XmlNode | undefined {
@@ -230,6 +255,7 @@ function textElementValue(existing: unknown, text: string): unknown {
   if (typeof existing === "object" && existing !== null && !Array.isArray(existing)) {
     const next: XmlNode = { ...(existing as XmlNode), "#text": text };
     if (textRequiresPreserve(text)) next["@_xml:space"] = "preserve";
+    else delete next["@_xml:space"];
     return next;
   }
   return textRequiresPreserve(text) ? { "@_xml:space": "preserve", "#text": text } : text;

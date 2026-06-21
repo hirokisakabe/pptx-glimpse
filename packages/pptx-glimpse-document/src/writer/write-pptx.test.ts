@@ -65,6 +65,25 @@ function buildRoundTripFixture(): Uint8Array {
 }
 
 function buildTextEditFixture(): Uint8Array {
+  return buildTextEditFixtureFromSlide(
+    `<p:sp><p:nvSpPr><p:cNvPr id="10" name="Title"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+      `<p:spPr><a:xfrm><a:off x="100" y="200"/><a:ext cx="300" cy="400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>` +
+      `<p:txBody><a:bodyPr anchor="ctr"/><a:lstStyle/>` +
+      `<a:p><a:pPr algn="ctr"/><a:r><a:rPr b="1" i="1" sz="2400"><a:latin typeface="Aptos"/><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill><a:ea typeface="Noto Sans JP"/></a:rPr><a:t>Original</a:t></a:r><a:r><a:t xml:space="preserve"> Keep </a:t></a:r></a:p>` +
+      `</p:txBody></p:sp>`,
+  );
+}
+
+function buildSlotHandleTextEditFixture(): Uint8Array {
+  return buildTextEditFixtureFromSlide(
+    `<p:pic><p:nvPicPr><p:cNvPr id="20" name="Picture"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill/><p:spPr/></p:pic>` +
+      `<p:sp><p:nvSpPr><p:cNvPr name="No Id Shape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+      `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+      `<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Original</a:t></a:r></a:p></p:txBody></p:sp>`,
+  );
+}
+
+function buildTextEditFixtureFromSlide(slideSpTree: string): Uint8Array {
   return zipSync({
     "[Content_Types].xml": xml(
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -93,13 +112,7 @@ function buildTextEditFixture(): Uint8Array {
     ),
     "ppt/slides/slide1.xml": xml(
       `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
-        `<p:cSld><p:spTree>` +
-        `<p:sp><p:nvSpPr><p:cNvPr id="10" name="Title"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
-        `<p:spPr><a:xfrm><a:off x="100" y="200"/><a:ext cx="300" cy="400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>` +
-        `<p:txBody><a:bodyPr anchor="ctr"/><a:lstStyle/>` +
-        `<a:p><a:pPr algn="ctr"/><a:r><a:rPr b="1" i="1" sz="2400"><a:latin typeface="Aptos"/><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill><a:ea typeface="Noto Sans JP"/></a:rPr><a:t>Original</a:t></a:r></a:p>` +
-        `</p:txBody></p:sp>` +
-        `</p:spTree></p:cSld>` +
+        `<p:cSld><p:spTree>${slideSpTree}</p:spTree></p:cSld>` +
         `</p:sld>`,
     ),
     "docProps/custom.xml": xml(`<Properties><custom value="preserve-me"/></Properties>`),
@@ -291,6 +304,7 @@ describe("writePptx — one plain text-run edit", () => {
     expect(run.text).toBe("Original");
     expect(firstRun(edited).text).toBe("Edited text");
     expect(editedRun.text).toBe("Edited text");
+    expect(firstParagraph(reread).runs[1].text).toBe(" Keep ");
   });
 
   it("run / paragraph formatting と unrelated package material を preserving する", () => {
@@ -316,11 +330,25 @@ describe("writePptx — one plain text-run edit", () => {
       getEntry(input, "ppt/media/image1.png"),
     );
   });
+
+  it("shape id が無い run も shapeSlot handle で dirty slide XML に反映できる", () => {
+    const source = readPptx(buildSlotHandleTextEditFixture());
+    const run = firstRun(source);
+
+    expect(run.handle).toMatchObject({
+      partPath: "ppt/slides/slide1.xml",
+      nodeId: "text:shapeSlot:1:p:0:r:0",
+      orderingSlot: 0,
+    });
+
+    const edited = replaceTextRunPlainText(source, run.handle!, "Edited via slot");
+    expect(firstRun(readPptx(writePptx(edited))).text).toBe("Edited via slot");
+  });
 });
 
 function firstShape(source: ReturnType<typeof readPptx>): SourceShape {
-  const shape = source.slides[0].shapes[0];
-  if (shape?.kind !== "shape") throw new Error("first shape is not a shape");
+  const shape = source.slides[0].shapes.find((node): node is SourceShape => node.kind === "shape");
+  if (shape === undefined) throw new Error("shape not found");
   return shape;
 }
 
