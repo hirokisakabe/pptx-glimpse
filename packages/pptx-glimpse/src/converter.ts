@@ -236,6 +236,8 @@ function mergeElements(
   layoutElements: SlideElement[],
   slideElements: SlideElement[],
 ): SlideElement[] {
+  // Keep packages/pptx-glimpse/src/dual-reader-structural-comparison.test.ts
+  // in sync when this effective render element merge behavior changes.
   // Placeholder shapes in master and layout are templates (position/style definitions).
   // Their text content should never appear on actual slides.
   // Only non-placeholder shapes (decorative elements, logos, etc.) are shown.

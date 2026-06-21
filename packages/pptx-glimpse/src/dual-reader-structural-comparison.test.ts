@@ -24,6 +24,8 @@ import { parsePptxData, parseSlideWithLayout } from "./pptx-data-parser.js";
 
 const CASES = [
   { fixtureName: "real-product-page.pptx", includeRunProperties: true },
+  // real-basic-theme uses inherited placeholder/theme text styles that the
+  // document path does not expose yet. Flip this to true when that support lands.
   { fixtureName: "real-basic-theme.pptx", includeRunProperties: false },
 ] as const;
 
@@ -81,9 +83,12 @@ describe("dual-reader structural comparison", () => {
       const current = normalizePresentation(buildCurrentParserSlides(input), options);
       const document = buildDocumentPathSlides(input, options);
 
-      expect(new Set(document.diagnostics.map((diagnostic) => diagnostic.code))).toEqual(
-        new Set(document.diagnostics.length > 0 ? ["cleandoc-adapter.raw-element-skipped"] : []),
-      );
+      for (const diagnostic of document.diagnostics) {
+        expect(diagnostic).toMatchObject({
+          severity: "warning",
+          code: "cleandoc-adapter.raw-element-skipped",
+        });
+      }
       expect(document.presentation).toEqual(current);
     },
   );
@@ -134,7 +139,7 @@ interface ComparableImage {
   readonly type: "image";
   readonly transform: ComparableTransform;
   readonly mimeType: string;
-  readonly imageDataLength: number;
+  readonly imageData: string;
   readonly srcRect: ImageElement["srcRect"];
 }
 
@@ -243,6 +248,8 @@ function mergeElements(
   layoutElements: readonly SlideElement[],
   slideElements: readonly SlideElement[],
 ): SlideElement[] {
+  // Keep this in sync with converter.ts mergeElements. The public converter
+  // intentionally does not expose the intermediate renderer model.
   const filterTemplatePlaceholders = (elements: readonly SlideElement[]) =>
     elements.filter((element) => !(element.type === "shape" && element.placeholderType));
   const filterEmptySlidePlaceholders = (elements: readonly SlideElement[]) =>
@@ -317,7 +324,7 @@ function normalizeImage(image: ImageElement): ComparableImage {
     type: "image",
     transform: normalizeTransform(image.transform),
     mimeType: image.mimeType,
-    imageDataLength: image.imageData.length,
+    imageData: image.imageData,
     srcRect: image.srcRect,
   };
 }
