@@ -174,6 +174,57 @@ describe("readPptx — package graph と presentation metadata", () => {
     });
     expect(() => readPptx(bogus)).toThrow(/presentation part not found/);
   });
+
+  it("officeDocument relationship が presentation 以外を指す場合はエラーを投げる", () => {
+    const bogus = zipSync({
+      "[Content_Types].xml": xml(
+        `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+          `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+          `<Default Extension="xml" ContentType="application/xml"/>` +
+          `</Types>`,
+      ),
+      "_rels/.rels": xml(
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+          // officeDocument が誤って別 XML part を指している。
+          `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="docProps/app.xml"/>` +
+          `</Relationships>`,
+      ),
+      "docProps/app.xml": xml(`<Properties/>`),
+    });
+    expect(() => readPptx(bogus)).toThrow(/not a presentation part/);
+  });
+
+  it("p:sldId が slide 以外の relationship を指す場合は除外し diagnostic を残す", () => {
+    const bogus = zipSync({
+      "[Content_Types].xml": xml(
+        `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+          `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+          `<Default Extension="xml" ContentType="application/xml"/>` +
+          `</Types>`,
+      ),
+      "_rels/.rels": xml(
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+          `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>` +
+          `</Relationships>`,
+      ),
+      "ppt/presentation.xml": xml(
+        `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+          `<p:sldIdLst><p:sldId id="256" r:id="rIdBogus"/></p:sldIdLst>` +
+          `</p:presentation>`,
+      ),
+      "ppt/_rels/presentation.xml.rels": xml(
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+          // slide ではなく notesMaster を指す relationship。
+          `<Relationship Id="rIdBogus" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="notesMasters/notesMaster1.xml"/>` +
+          `</Relationships>`,
+      ),
+    });
+    const result = readPptx(bogus);
+    expect(result.presentation.slidePartPaths).toEqual([]);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({ code: "slide-relationship-invalid" }),
+    );
+  });
 });
 
 describe("readPptx — real fixture smoke test", () => {

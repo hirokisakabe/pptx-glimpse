@@ -51,6 +51,7 @@ const PACKAGE_ROOT_PART = "";
 
 const OFFICE_DOCUMENT_REL_TYPE =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument";
+const SLIDE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
 const PRESENTATION_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml";
 
@@ -206,6 +207,13 @@ function readPresentation(
 
   const presentationPartPath = asPartPath(presentationPath);
   const root = getChild(parseXml(textDecoder.decode(bytes)), "presentation");
+  if (root === undefined) {
+    // 解決した part が `<p:presentation>` でない (relationship / content type が
+    // 別 part を指している等) 場合に、壊れた package を「読めた」ように見せない。
+    throw new Error(
+      `readPptx: part '${presentationPath}' is not a presentation part (missing p:presentation root)`,
+    );
+  }
 
   const slideSize = readSlideSize(root);
   const presentationRels = relationships.find(
@@ -217,17 +225,29 @@ function readPresentation(
   for (const sldId of getChildArray(sldIdLst, "sldId")) {
     const relId = getNamespacedAttr(sldId, "id");
     if (relId === undefined) continue;
-    const target = presentationRels?.find((rel) => rel.id === relId)?.target;
-    if (target === undefined) {
+    const handle = { partPath: presentationPartPath, relationshipId: asRelationshipId(relId) };
+    const relationship = presentationRels?.find((rel) => rel.id === relId);
+    if (relationship === undefined) {
       diagnostics.push({
         severity: "warning",
         code: "slide-relationship-unresolved",
         message: `slide relationship '${relId}' referenced by presentation could not be resolved`,
-        handle: { partPath: presentationPartPath, relationshipId: asRelationshipId(relId) },
+        handle,
       });
       continue;
     }
-    slidePartPaths.push(asPartPath(resolveTarget(presentationPath, target)));
+    // sldId が指す relationship は slide 内部参照のはず。type / targetMode が
+    // 一致しないものを slidePartPaths に混ぜると契約が壊れるため除外する。
+    if (relationship.type !== SLIDE_REL_TYPE || relationship.targetMode === "External") {
+      diagnostics.push({
+        severity: "warning",
+        code: "slide-relationship-invalid",
+        message: `relationship '${relId}' referenced by p:sldId is not an internal slide relationship`,
+        handle,
+      });
+      continue;
+    }
+    slidePartPaths.push(asPartPath(resolveTarget(presentationPath, relationship.target)));
   }
 
   return {
@@ -260,7 +280,9 @@ function locatePresentationPart(
   const rootRels = relationships.find(
     (rel) => rel.sourcePartPath === PACKAGE_ROOT_PART,
   )?.relationships;
-  const officeDocumentRel = rootRels?.find((rel) => rel.type === OFFICE_DOCUMENT_REL_TYPE);
+  const officeDocumentRel = rootRels?.find(
+    (rel) => rel.type === OFFICE_DOCUMENT_REL_TYPE && rel.targetMode !== "External",
+  );
   if (officeDocumentRel !== undefined) {
     return resolveTarget(PACKAGE_ROOT_PART, officeDocumentRel.target);
   }
