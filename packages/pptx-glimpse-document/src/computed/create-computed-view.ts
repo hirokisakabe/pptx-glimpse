@@ -1,6 +1,7 @@
 import type {
   CleanDocSource,
   PartPath,
+  SourceCellBorders,
   SourceColor,
   SourceColorMap,
   SourceFill,
@@ -14,13 +15,16 @@ import type {
   SourceSlide,
   SourceSlideLayout,
   SourceSlideMaster,
+  SourceTable,
+  SourceTableCell,
   SourceTextBody,
   SourceTheme,
 } from "../source/index.js";
-import { asPartPath } from "../source/index.js";
+import { asEmu, asPartPath } from "../source/index.js";
 import type {
   CleanDocComputedView,
   ComputedBackground,
+  ComputedCellBorders,
   ComputedColor,
   ComputedElement,
   ComputedElementLayer,
@@ -33,6 +37,9 @@ import type {
   ComputedRunProperties,
   ComputedShapeElement,
   ComputedSlide,
+  ComputedTableCell,
+  ComputedTableElement,
+  ComputedTableRow,
   ComputedTextBody,
   CreateComputedViewOptions,
 } from "./clean-doc-computed-view.js";
@@ -68,6 +75,28 @@ const FALLBACK_SCHEME_COLORS: Readonly<Record<string, string>> = {
 };
 
 const IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+
+// Current parser path treats any tableStyleId as black 1pt cell borders when
+// a cell has no inline border definition. Keep this compatibility approximation
+// until tableStyles.xml is modeled explicitly.
+const DEFAULT_TABLE_STYLE_BORDERS: SourceCellBorders = {
+  top: {
+    width: asEmu(12700),
+    fill: { kind: "solid", color: { kind: "srgb", hex: "000000" } },
+  },
+  bottom: {
+    width: asEmu(12700),
+    fill: { kind: "solid", color: { kind: "srgb", hex: "000000" } },
+  },
+  left: {
+    width: asEmu(12700),
+    fill: { kind: "solid", color: { kind: "srgb", hex: "000000" } },
+  },
+  right: {
+    width: asEmu(12700),
+    fill: { kind: "solid", color: { kind: "srgb", hex: "000000" } },
+  },
+};
 
 export function createComputedView(
   source: CleanDocSource,
@@ -274,6 +303,7 @@ function computeElement(
 ): ComputedElement {
   if (element.kind === "shape") return computeShapeElement(context, element, layer, partPath);
   if (element.kind === "image") return computeImageElement(context, element, layer, partPath);
+  if (element.kind === "table") return computeTableElement(context, element, layer, partPath);
   return { kind: "raw", sourceLayer: layer, sourcePartPath: partPath, sourceNode: element };
 }
 
@@ -327,6 +357,73 @@ function computeImageElement(
     ...(relationship !== undefined ? { relationship } : {}),
     ...(relationship?.media !== undefined ? { media: relationship.media } : {}),
   };
+}
+
+function computeTableElement(
+  context: ComputeContext,
+  table: SourceTable,
+  layer: ComputedElementLayer,
+  partPath: PartPath,
+): ComputedTableElement {
+  return {
+    kind: "table",
+    sourceLayer: layer,
+    sourcePartPath: partPath,
+    sourceNode: table,
+    ...(table.transform !== undefined ? { transform: table.transform } : {}),
+    table: {
+      columns: table.table.columns.map((column) => ({ ...column })),
+      rows: table.table.rows.map((row) => computeTableRow(context, table, row)),
+    },
+  };
+}
+
+function computeTableRow(
+  context: ComputeContext,
+  table: SourceTable,
+  row: SourceTable["table"]["rows"][number],
+): ComputedTableRow {
+  return {
+    source: row,
+    height: row.height,
+    cells: row.cells.map((cell) => computeTableCell(context, table, cell)),
+  };
+}
+
+function computeTableCell(
+  context: ComputeContext,
+  table: SourceTable,
+  cell: SourceTableCell,
+): ComputedTableCell {
+  const borders =
+    cell.borders !== undefined
+      ? computeCellBorders(context, cell.borders)
+      : table.table.tableStyleId !== undefined
+        ? computeCellBorders(context, DEFAULT_TABLE_STYLE_BORDERS)
+        : undefined;
+  return {
+    source: cell,
+    ...(cell.textBody !== undefined ? { textBody: computeTextBody(context, cell.textBody) } : {}),
+    ...(cell.fill !== undefined ? { fill: computeFill(context, cell.fill) } : {}),
+    ...(borders !== undefined ? { borders } : {}),
+    gridSpan: cell.gridSpan,
+    rowSpan: cell.rowSpan,
+    hMerge: cell.hMerge,
+    vMerge: cell.vMerge,
+  };
+}
+
+function computeCellBorders(
+  context: ComputeContext,
+  borders: SourceCellBorders,
+): ComputedCellBorders | undefined {
+  const computed: ComputedCellBorders = {
+    ...(borders.top !== undefined ? { top: computeOutline(context, borders.top) } : {}),
+    ...(borders.bottom !== undefined ? { bottom: computeOutline(context, borders.bottom) } : {}),
+    ...(borders.left !== undefined ? { left: computeOutline(context, borders.left) } : {}),
+    ...(borders.right !== undefined ? { right: computeOutline(context, borders.right) } : {}),
+  };
+  return Object.keys(computed).length > 0 ? computed : undefined;
 }
 
 function computeFill(context: ComputeContext, fill: SourceFill): ComputedFill {

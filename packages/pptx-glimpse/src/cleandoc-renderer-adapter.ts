@@ -12,6 +12,8 @@ import type {
   Slide,
   SlideElement,
   SlideSize,
+  TableCell,
+  TableElement,
   TextBody,
   TextRun,
   Transform,
@@ -31,6 +33,7 @@ import type {
   ComputedShapeElement,
   ComputedSlide,
   ComputedSlideSize,
+  ComputedTableElement,
   ComputedTextBody,
 } from "../../pptx-glimpse-document/src/experimental.js";
 
@@ -130,6 +133,7 @@ function adaptElement(
     const image = adaptImage(element, slide, diagnostics);
     return image === undefined ? [] : [image];
   }
+  if (element.kind === "table") return [adaptTable(element, slide, diagnostics)];
 
   diagnostics.push({
     severity: "warning",
@@ -139,6 +143,42 @@ function adaptElement(
     sourcePartPath: element.sourcePartPath,
   });
   return [];
+}
+
+function adaptTable(
+  table: ComputedTableElement,
+  slide: ComputedSlide,
+  diagnostics: DiagnosticSink,
+): TableElement {
+  return {
+    type: "table",
+    transform: adaptTransform(table.transform, slide, diagnostics, table.sourcePartPath),
+    table: {
+      columns: table.table.columns.map((column) => ({ width: toRendererEmu(column.width) })),
+      rows: table.table.rows.map((row) => ({
+        height: toRendererEmu(row.height),
+        cells: row.cells.map((cell): TableCell => {
+          return {
+            textBody: cell.textBody !== undefined ? adaptTextBody(cell.textBody) : null,
+            fill: cell.fill !== undefined ? adaptFill(cell.fill, slide, diagnostics) : null,
+            borders:
+              cell.borders !== undefined
+                ? {
+                    top: adaptTableBorder(cell.borders.top, slide, diagnostics),
+                    bottom: adaptTableBorder(cell.borders.bottom, slide, diagnostics),
+                    left: adaptTableBorder(cell.borders.left, slide, diagnostics),
+                    right: adaptTableBorder(cell.borders.right, slide, diagnostics),
+                  }
+                : null,
+            gridSpan: cell.gridSpan,
+            rowSpan: cell.rowSpan,
+            hMerge: cell.hMerge,
+            vMerge: cell.vMerge,
+          };
+        }),
+      })),
+    },
+  };
 }
 
 function adaptShape(
@@ -270,6 +310,20 @@ function adaptOutline(
     dashStyle: "solid",
     headEnd: null,
     tailEnd: null,
+  };
+}
+
+function adaptTableBorder(
+  outline: ComputedOutline | undefined,
+  slide: ComputedSlide,
+  diagnostics: DiagnosticSink,
+): Outline | null {
+  if (outline === undefined) return null;
+  const border = adaptOutline(outline, slide, diagnostics);
+  if (border === null) return null;
+  return {
+    ...border,
+    fill: border.fill ?? { type: "solid", color: { hex: "#000000", alpha: 1 } },
   };
 }
 

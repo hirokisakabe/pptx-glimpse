@@ -173,6 +173,49 @@ export interface SourceImage {
   readonly rawSidecars?: readonly RawSidecar[];
 }
 
+export interface SourceTable {
+  readonly kind: "table";
+  readonly nodeId?: SourceNodeId;
+  readonly name?: string;
+  readonly transform?: SourceTransform;
+  readonly table: SourceTableData;
+  readonly handle?: SourceHandle;
+  readonly rawSidecars?: readonly RawSidecar[];
+}
+
+export interface SourceTableData {
+  readonly columns: readonly SourceTableColumn[];
+  readonly rows: readonly SourceTableRow[];
+  readonly tableStyleId?: string;
+}
+
+export interface SourceTableColumn {
+  readonly width: Emu;
+}
+
+export interface SourceTableRow {
+  readonly height: Emu;
+  readonly cells: readonly SourceTableCell[];
+}
+
+export interface SourceTableCell {
+  readonly textBody?: SourceTextBody;
+  readonly fill?: SourceFill;
+  readonly borders?: SourceCellBorders;
+  readonly gridSpan: number;
+  readonly rowSpan: number;
+  readonly hMerge: boolean;
+  readonly vMerge: boolean;
+  readonly rawSidecars?: readonly RawSidecar[];
+}
+
+export interface SourceCellBorders {
+  readonly top?: SourceOutline;
+  readonly bottom?: SourceOutline;
+  readonly left?: SourceOutline;
+  readonly right?: SourceOutline;
+}
+
 /**
  * typed に表現しない shape tree ノードの raw escape hatch。未対応の図形・
  * グループ・コネクタ等を round-trip のために保存する。
@@ -185,4 +228,4 @@ export interface SourceRawShapeNode {
 }
 
 /** shape tree の source node 共用体。 */
-export type SourceShapeNode = SourceShape | SourceImage | SourceRawShapeNode;
+export type SourceShapeNode = SourceShape | SourceImage | SourceTable | SourceRawShapeNode;

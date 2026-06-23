@@ -38,6 +38,7 @@ export type {
 } from "./presentation.js";
 export type { RawOoxmlNode, RawPackagePart, RawSidecar } from "./raw.js";
 export type {
+  SourceCellBorders,
   SourceColor,
   SourceColorTransform,
   SourceFill,
@@ -52,6 +53,11 @@ export type {
   SourceRunProperties,
   SourceShape,
   SourceShapeNode,
+  SourceTable,
+  SourceTableCell,
+  SourceTableColumn,
+  SourceTableData,
+  SourceTableRow,
   SourceTextAlign,
   SourceTextBody,
   SourceTextBodyProperties,

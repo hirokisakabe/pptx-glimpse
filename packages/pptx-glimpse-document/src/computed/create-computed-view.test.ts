@@ -5,8 +5,10 @@ import type {
   ComputedElement,
   ComputedShapeElement,
   ComputedSlide,
+  ComputedTableElement,
   SourceRunProperties,
   SourceShape,
+  SourceTable,
   SourceTextBody,
 } from "../experimental.js";
 import {
@@ -109,6 +111,58 @@ describe("createComputedView", () => {
     });
   });
 
+  it("table の cell fill / text color / style default border を解決する", () => {
+    const computed = createComputedView(buildSource());
+    const table = findTable(getSlide(computed.slides, 0).elements, "Metrics table");
+    const [cell] = table.table.rows[0].cells;
+
+    expect(table.transform).toEqual({
+      offsetX: 200,
+      offsetY: 210,
+      width: 220,
+      height: 230,
+    });
+    expect(table.table.columns).toEqual([{ width: 500 }, { width: 600 }]);
+    expect(cell).toMatchObject({
+      gridSpan: 2,
+      rowSpan: 1,
+      hMerge: false,
+      vMerge: false,
+      fill: {
+        kind: "solid",
+        color: { hex: "#336699", alpha: 1 },
+      },
+    });
+    expect(cell.textBody?.paragraphs[0].runs[0]).toEqual({
+      text: "Q1",
+      properties: {
+        fontSize: 12,
+        color: { hex: "#336699", alpha: 1 },
+      },
+    });
+    expect(cell.borders?.top).toMatchObject({
+      width: 12700,
+      fill: {
+        kind: "solid",
+        color: { hex: "#000000", alpha: 1 },
+      },
+    });
+  });
+
+  it("inline table borders が table style default border より優先される", () => {
+    const table = findTable(
+      getSlide(createComputedView(buildSource()).slides, 0).elements,
+      "Inline table",
+    );
+    const [cell] = table.table.rows[0].cells;
+
+    expect(cell.borders?.left).toMatchObject({
+      width: 999,
+      fill: { kind: "solid", color: { hex: "#ff0000", alpha: 1 } },
+    });
+    expect(cell.borders?.top).toBeUndefined();
+  });
+
   it("showMasterSp visibility と effective element ordering を解決する", () => {
     const computed = createComputedView(buildSource());
 
@@ -118,6 +172,8 @@ describe("createComputedView", () => {
       "Slide title",
       "Hero image",
       "Transformed colors",
+      "Metrics table",
+      "Inline table",
     ]);
 
     // slide1 は showMasterSp=false なので master decoration が落ちる。
@@ -168,6 +224,15 @@ function findShape(elements: readonly ComputedElement[], name: string): Computed
   );
   if (shape === undefined) throw new Error(`shape '${name}' not found`);
   return shape;
+}
+
+function findTable(elements: readonly ComputedElement[], name: string): ComputedTableElement {
+  const table = elements.find(
+    (element): element is ComputedTableElement =>
+      element.kind === "table" && element.sourceNode.name === name,
+  );
+  if (table === undefined) throw new Error(`table '${name}' not found`);
+  return table;
 }
 
 function elementNames(elements: readonly ComputedElement[]): (string | undefined)[] {
@@ -285,6 +350,56 @@ function buildSource(): CleanDocSource {
               },
             },
           }),
+          table("Metrics table", {
+            transform: transform(200, 210, 220, 230),
+            table: {
+              tableStyleId: "{style}",
+              columns: [{ width: asEmu(500) }, { width: asEmu(600) }],
+              rows: [
+                {
+                  height: asEmu(700),
+                  cells: [
+                    {
+                      textBody: textBody("Q1", {
+                        fontSize: asPt(12),
+                        color: { kind: "scheme", scheme: "accent1" },
+                      }),
+                      fill: { kind: "solid", color: { kind: "scheme", scheme: "accent1" } },
+                      gridSpan: 2,
+                      rowSpan: 1,
+                      hMerge: false,
+                      vMerge: false,
+                    },
+                  ],
+                },
+              ],
+            },
+          }),
+          table("Inline table", {
+            table: {
+              tableStyleId: "{style}",
+              columns: [{ width: asEmu(100) }],
+              rows: [
+                {
+                  height: asEmu(100),
+                  cells: [
+                    {
+                      borders: {
+                        left: {
+                          width: asEmu(999),
+                          fill: { kind: "solid", color: { kind: "srgb", hex: "FF0000" } },
+                        },
+                      },
+                      gridSpan: 1,
+                      rowSpan: 1,
+                      hMerge: false,
+                      vMerge: false,
+                    },
+                  ],
+                },
+              ],
+            },
+          }),
         ],
       },
     ],
@@ -338,6 +453,14 @@ function transform(offsetX: number, offsetY: number, width: number, height: numb
 function shape(name: string, overrides: Partial<SourceShape> = {}): SourceShape {
   return {
     kind: "shape",
+    name,
+    ...overrides,
+  };
+}
+
+function table(name: string, overrides: Omit<SourceTable, "kind" | "name">): SourceTable {
+  return {
+    kind: "table",
     name,
     ...overrides,
   };

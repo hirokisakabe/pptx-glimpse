@@ -16,6 +16,7 @@
 import type {
   PartPath,
   RawSidecarId,
+  SourceCellBorders,
   SourceImage,
   SourceImageCrop,
   SourceNodeId,
@@ -23,16 +24,56 @@ import type {
   SourceRawShapeNode,
   SourceShape,
   SourceShapeNode,
+  SourceTable,
+  SourceTableCell,
+  SourceTableColumn,
+  SourceTableRow,
 } from "../source/index.js";
-import { asOoxmlPercent, asRelationshipId, asSourceNodeId } from "../source/index.js";
-import { numericAttr, parseFill, parseOutline, parseTransform } from "./drawing.js";
+import { asEmu, asOoxmlPercent, asRelationshipId, asSourceNodeId } from "../source/index.js";
+import {
+  isTrue,
+  numericAttr,
+  parseFill,
+  parseLine,
+  parseOutline,
+  parseTransform,
+} from "./drawing.js";
 import { collectUnknownSidecars, makeSidecar } from "./raw-node.js";
 import { parseTextBody } from "./text.js";
-import { getAttr, getChild, getNamespacedAttr, localName, type XmlNode } from "./xml.js";
+import {
+  getAttr,
+  getChild,
+  getChildArray,
+  getChildText,
+  getNamespacedAttr,
+  localName,
+  type XmlNode,
+} from "./xml.js";
 
 const KNOWN_SHAPE_CHILDREN: ReadonlySet<string> = new Set(["nvSpPr", "spPr", "txBody"]);
 const KNOWN_PICTURE_CHILDREN: ReadonlySet<string> = new Set(["nvPicPr", "blipFill", "spPr"]);
 const KNOWN_BLIP_FILL_CHILDREN: ReadonlySet<string> = new Set(["blip", "srcRect"]);
+const KNOWN_GRAPHIC_FRAME_CHILDREN: ReadonlySet<string> = new Set([
+  "nvGraphicFramePr",
+  "xfrm",
+  "graphic",
+]);
+const KNOWN_GRAPHIC_CHILDREN: ReadonlySet<string> = new Set(["graphicData"]);
+const KNOWN_GRAPHIC_DATA_CHILDREN: ReadonlySet<string> = new Set(["tbl"]);
+const KNOWN_TABLE_CHILDREN: ReadonlySet<string> = new Set(["tblPr", "tblGrid", "tr"]);
+const KNOWN_TABLE_CELL_CHILDREN: ReadonlySet<string> = new Set(["txBody", "tcPr"]);
+const KNOWN_TABLE_CELL_PROPERTIES_CHILDREN: ReadonlySet<string> = new Set([
+  "lnL",
+  "lnR",
+  "lnT",
+  "lnB",
+  "solidFill",
+  "noFill",
+  "gradFill",
+  "blipFill",
+  "pattFill",
+  "grpFill",
+]);
 // `a:spPr` のうち typed に解釈する子。これ以外 (custGeom / effectLst / scene3d /
 // extLst 等) は raw sidecar として保持する。fill 系は parseFill が typed/raw を
 // 判別するため known 扱いにして二重計上を防ぐ。
@@ -60,6 +101,7 @@ export function parseShapeTree(
   let orderingSlot = 0;
   for (const key of Object.keys(spTree)) {
     if (key.startsWith("@_")) continue;
+    if (key === "#text") continue;
     const local = localName(key);
     // group 自身の非可視プロパティはノードではないため除外する。
     if (local === "nvGrpSpPr" || local === "grpSpPr") continue;
@@ -72,6 +114,8 @@ export function parseShapeTree(
         nodes.push(parseShape(node, partPath, nextId, orderingSlot));
       } else if (local === "pic") {
         nodes.push(parseImage(node, partPath, nextId, orderingSlot));
+      } else if (local === "graphicFrame") {
+        nodes.push(parseGraphicFrame(node, partPath, nextId, orderingSlot));
       } else {
         nodes.push(parseRawShapeNode(key, node, partPath, nextId, orderingSlot));
       }
@@ -163,6 +207,144 @@ function parseImage(
   };
 }
 
+function parseGraphicFrame(
+  graphicFrame: XmlNode,
+  partPath: PartPath,
+  nextId: () => RawSidecarId,
+  orderingSlot: number,
+): SourceShapeNode {
+  const graphic = getChild(graphicFrame, "graphic");
+  const graphicData = getChild(graphic, "graphicData");
+  const table = getChild(graphicData, "tbl");
+  if (table === undefined) {
+    return parseRawShapeNode("p:graphicFrame", graphicFrame, partPath, nextId, orderingSlot);
+  }
+
+  const parsedTable = parseTable(table, graphicFrame, partPath, nextId, orderingSlot);
+  if (parsedTable === undefined) {
+    return parseRawShapeNode("p:graphicFrame", graphicFrame, partPath, nextId, orderingSlot);
+  }
+  return parsedTable;
+}
+
+function parseTable(
+  tbl: XmlNode,
+  graphicFrame: XmlNode,
+  partPath: PartPath,
+  nextId: () => RawSidecarId,
+  orderingSlot: number,
+): SourceTable | undefined {
+  const columns = parseTableColumns(getChild(tbl, "tblGrid"));
+  if (columns.length === 0) return undefined;
+
+  const nvGraphicFramePr = getChild(graphicFrame, "nvGraphicFramePr");
+  const cNvPr = getChild(nvGraphicFramePr, "cNvPr");
+  const nodeId = sourceNodeId(cNvPr);
+  const name = getAttr(cNvPr, "name");
+  const tblPr = getChild(tbl, "tblPr");
+  const tableStyleId = getChildText(tblPr, "tableStyleId");
+  const graphic = getChild(graphicFrame, "graphic");
+  const graphicData = getChild(graphic, "graphicData");
+  const transform = parseTransform(graphicFrame);
+
+  const rows = parseTableRows(tbl, partPath, nextId, nodeId, orderingSlot);
+  const rawSidecars = [
+    ...collectUnknownSidecars(graphicFrame, KNOWN_GRAPHIC_FRAME_CHILDREN, nextId),
+    ...collectUnknownSidecars(graphic, KNOWN_GRAPHIC_CHILDREN, nextId),
+    ...collectUnknownSidecars(graphicData, KNOWN_GRAPHIC_DATA_CHILDREN, nextId),
+    ...collectUnknownSidecars(tbl, KNOWN_TABLE_CHILDREN, nextId),
+  ];
+
+  return {
+    kind: "table",
+    ...(nodeId !== undefined ? { nodeId } : {}),
+    ...(name !== undefined ? { name } : {}),
+    ...(transform !== undefined ? { transform } : {}),
+    table: {
+      columns,
+      rows,
+      ...(tableStyleId !== undefined ? { tableStyleId } : {}),
+    },
+    handle: { partPath, ...(nodeId !== undefined ? { nodeId } : {}), orderingSlot },
+    ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
+  };
+}
+
+function parseTableColumns(tblGrid: XmlNode | undefined): SourceTableColumn[] {
+  return getChildArray(tblGrid, "gridCol").map((col) => ({ width: emuAttr(col, "w") }));
+}
+
+function parseTableRows(
+  tbl: XmlNode,
+  partPath: PartPath,
+  nextId: () => RawSidecarId,
+  tableNodeId: SourceNodeId | undefined,
+  tableOrderingSlot: number,
+): SourceTableRow[] {
+  return getChildArray(tbl, "tr").map((tr, rowIndex) => ({
+    height: emuAttr(tr, "h"),
+    cells: getChildArray(tr, "tc").map((tc, cellIndex) =>
+      parseTableCell(tc, partPath, nextId, tableNodeId, tableOrderingSlot, rowIndex, cellIndex),
+    ),
+  }));
+}
+
+function parseTableCell(
+  tc: XmlNode,
+  partPath: PartPath,
+  nextId: () => RawSidecarId,
+  tableNodeId: SourceNodeId | undefined,
+  tableOrderingSlot: number,
+  rowIndex: number,
+  cellIndex: number,
+): SourceTableCell {
+  const tcPr = getChild(tc, "tcPr");
+  const textOrderingSlot = tableOrderingSlot * 1_000_000_000 + rowIndex * 1_000_000 + cellIndex;
+  const textBody = parseTextBody(
+    getChild(tc, "txBody"),
+    partPath,
+    nextId,
+    tableNodeId,
+    textOrderingSlot,
+  );
+  const fill = parseFill(tcPr, nextId);
+  const borders = parseCellBorders(tcPr, nextId);
+  const rawSidecars = [
+    ...collectUnknownSidecars(tc, KNOWN_TABLE_CELL_CHILDREN, nextId),
+    ...collectUnknownSidecars(tcPr, KNOWN_TABLE_CELL_PROPERTIES_CHILDREN, nextId),
+  ];
+
+  return {
+    ...(textBody !== undefined ? { textBody } : {}),
+    ...(fill !== undefined ? { fill } : {}),
+    ...(borders !== undefined ? { borders } : {}),
+    gridSpan: numericAttr(tc, "gridSpan") ?? 1,
+    rowSpan: numericAttr(tc, "rowSpan") ?? 1,
+    hMerge: isTrue(getAttr(tc, "hMerge") ?? getAttr(tcPr, "hMerge")),
+    vMerge: isTrue(getAttr(tc, "vMerge") ?? getAttr(tcPr, "vMerge")),
+    ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
+  };
+}
+
+function parseCellBorders(
+  tcPr: XmlNode | undefined,
+  nextId: () => RawSidecarId,
+): SourceCellBorders | undefined {
+  const left = parseLine(getChild(tcPr, "lnL"), nextId);
+  const right = parseLine(getChild(tcPr, "lnR"), nextId);
+  const top = parseLine(getChild(tcPr, "lnT"), nextId);
+  const bottom = parseLine(getChild(tcPr, "lnB"), nextId);
+  if (left === undefined && right === undefined && top === undefined && bottom === undefined) {
+    return undefined;
+  }
+  return {
+    ...(top !== undefined ? { top } : {}),
+    ...(bottom !== undefined ? { bottom } : {}),
+    ...(left !== undefined ? { left } : {}),
+    ...(right !== undefined ? { right } : {}),
+  };
+}
+
 function parseRawShapeNode(
   key: string,
   node: XmlNode,
@@ -215,6 +397,10 @@ function parseCrop(srcRect: XmlNode | undefined): SourceImageCrop | undefined {
 function sourceNodeId(cNvPr: XmlNode | undefined): SourceNodeId | undefined {
   const id = getAttr(cNvPr, "id");
   return id !== undefined ? asSourceNodeId(id) : undefined;
+}
+
+function emuAttr(node: XmlNode | undefined, attrName: string) {
+  return asEmu(numericAttr(node, attrName) ?? 0);
 }
 
 const EMPTY_KNOWN: ReadonlySet<string> = new Set();
