@@ -3,14 +3,14 @@ import { dirname } from "path";
 import pixelmatch from "pixelmatch";
 import sharp from "sharp";
 
-export interface CompareResult {
+interface CompareResult {
   totalPixels: number;
   mismatchedPixels: number;
   mismatchPercentage: number;
   passed: boolean;
 }
 
-export interface CompareOptions {
+interface CompareOptions {
   pixelThreshold: number;
   mismatchTolerance: number;
   /** 参照画像を actual のサイズにリサイズして比較する (LibreOffice VRT 用) */
