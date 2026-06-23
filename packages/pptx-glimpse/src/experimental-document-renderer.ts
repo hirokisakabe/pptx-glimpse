@@ -23,21 +23,33 @@ import {
   warn,
 } from "pptx-glimpse-renderer";
 
-import { createComputedView, readPptx } from "../../pptx-glimpse-document/src/experimental.js";
+import {
+  type CleanDocComputedView,
+  createComputedView,
+  readPptx,
+} from "../../pptx-glimpse-document/src/experimental.js";
 import {
   adaptComputedViewToRendererModel,
   type RendererAdapterDiagnostic,
 } from "./cleandoc-renderer-adapter.js";
 import type { ConvertOptions, SlideImage, SlideSvg } from "./converter.js";
 
+export type DocumentRenderDiagnostic = RendererAdapterDiagnostic | DocumentRenderPathDiagnostic;
+
+export interface DocumentRenderPathDiagnostic {
+  readonly severity: "warning";
+  readonly code: "document-render.cjk-font-context-unsupported";
+  readonly message: string;
+}
+
 export interface DocumentPathSvgResult {
   readonly slides: readonly SlideSvg[];
-  readonly diagnostics: readonly RendererAdapterDiagnostic[];
+  readonly diagnostics: readonly DocumentRenderDiagnostic[];
 }
 
 export interface DocumentPathPngResult {
   readonly slides: readonly SlideImage[];
-  readonly diagnostics: readonly RendererAdapterDiagnostic[];
+  readonly diagnostics: readonly DocumentRenderDiagnostic[];
 }
 
 /**
@@ -77,6 +89,7 @@ export async function convertPptxToSvgViaDocumentPath(
 
     const computed = createComputedView(source, { slides: options?.slides });
     const adapted = adaptComputedViewToRendererModel(computed);
+    const diagnostics = [...collectDocumentRenderDiagnostics(computed), ...adapted.diagnostics];
     const slideSize = adapted.slideSize;
     if (slideSize === undefined && adapted.slides.length > 0) {
       throw new Error("Document render path requires a computed slide size");
@@ -97,7 +110,7 @@ export async function convertPptxToSvgViaDocumentPath(
     }
 
     flushWarnings();
-    return { slides, diagnostics: adapted.diagnostics };
+    return { slides, diagnostics };
   } finally {
     resetTextMeasurer();
     resetTextPathFontResolver();
@@ -136,6 +149,34 @@ export async function convertPptxToPngViaDocumentPath(
 
   return { slides, diagnostics: svgResult.diagnostics };
 }
+
+function collectDocumentRenderDiagnostics(
+  computed: CleanDocComputedView,
+): DocumentRenderPathDiagnostic[] {
+  if (!containsCjkText(computed)) return [];
+  return [
+    {
+      severity: "warning",
+      code: "document-render.cjk-font-context-unsupported",
+      message:
+        "CleanDoc document render path does not yet expose East Asian or complex-script theme fonts; CJK text may not match the public converter output.",
+    },
+  ];
+}
+
+function containsCjkText(computed: CleanDocComputedView): boolean {
+  return computed.slides.some((slide) =>
+    slide.elements.some(
+      (element) =>
+        element.kind === "shape" &&
+        element.textBody?.paragraphs.some((paragraph) =>
+          paragraph.runs.some((run) => cjkTextPattern.test(run.text)),
+        ) === true,
+    ),
+  );
+}
+
+const cjkTextPattern = /[\u3040-\u30ff\u3400-\u9fff\uff00-\uffef]/;
 
 function injectIntoSvgDefs(svg: string, content: string): string {
   const openTagEnd = svg.indexOf(">");

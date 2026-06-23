@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
+import * as documentExperimental from "../../pptx-glimpse-document/src/experimental.js";
+import * as adapterModule from "./cleandoc-renderer-adapter.js";
 import { convertPptxToSvg } from "./converter.js";
 import {
   convertPptxToPngViaDocumentPath,
@@ -24,9 +26,14 @@ const DOCUMENT_RENDER_UNSUPPORTED_SUBSET = [
   "raw background and fill variants outside the CleanDoc adapter subset",
   "unresolved images without a package media payload",
   "elements missing computed transforms",
+  "East Asian / complex-script theme font context for CJK text",
 ] as const;
 
 describe("experimental document render path", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("documents the intentionally focused dogfood scope", () => {
     expect(DOCUMENT_RENDER_TEST_SCOPE).toMatchInlineSnapshot(`
       [
@@ -43,6 +50,7 @@ describe("experimental document render path", () => {
         "raw background and fill variants outside the CleanDoc adapter subset",
         "unresolved images without a package media payload",
         "elements missing computed transforms",
+        "East Asian / complex-script theme font context for CJK text",
       ]
     `);
   });
@@ -72,9 +80,9 @@ describe("experimental document render path", () => {
     });
 
     expect(result.diagnostics.length).toBeGreaterThan(0);
-    expect(uniqueDiagnosticCodes(result.diagnostics)).toEqual([
+    expect(uniqueDiagnosticCodes(result.diagnostics)).toContain(
       "cleandoc-adapter.raw-element-skipped",
-    ]);
+    );
   });
 
   it("connects the document SVG path to the existing PNG conversion", async () => {
@@ -92,19 +100,16 @@ describe("experimental document render path", () => {
     }
     expect([...pngSlide.png.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
     expect(result.diagnostics.length).toBeGreaterThan(0);
-    expect(uniqueDiagnosticCodes(result.diagnostics)).toEqual([
+    expect(uniqueDiagnosticCodes(result.diagnostics)).toContain(
       "cleandoc-adapter.raw-element-skipped",
-    ]);
+    );
   });
 
   it("keeps the public SVG converter on its existing default path", async () => {
+    const readPptxSpy = vi.spyOn(documentExperimental, "readPptx");
+    const adapterSpy = vi.spyOn(adapterModule, "adaptComputedViewToRendererModel");
     const input = readFixture("real-basic-theme.pptx");
     const publicDefault = await convertPptxToSvg(input, {
-      slides: [1],
-      textOutput: "text",
-      skipSystemFonts: true,
-    });
-    const documentPath = await convertPptxToSvgViaDocumentPath(input, {
       slides: [1],
       textOutput: "text",
       skipSystemFonts: true,
@@ -112,8 +117,8 @@ describe("experimental document render path", () => {
 
     expect(publicDefault.map((slide) => slide.slideNumber)).toEqual([1]);
     expect(publicDefault[0]?.svg).toContain("<svg");
-    expect(documentPath.slides.map((slide) => slide.slideNumber)).toEqual([1]);
-    expect(documentPath.diagnostics.length).toBeGreaterThan(0);
+    expect(readPptxSpy).not.toHaveBeenCalled();
+    expect(adapterSpy).not.toHaveBeenCalled();
   });
 });
 
@@ -130,7 +135,14 @@ function uniqueDiagnosticCodes(
 function expectUnsupportedDiagnosticsToStayInScope(
   diagnostics: readonly { readonly code: string }[],
 ): void {
-  expect(uniqueDiagnosticCodes(diagnostics)).toEqual(
-    diagnostics.length === 0 ? [] : ["cleandoc-adapter.raw-element-skipped"],
+  expect(uniqueDiagnosticCodes(diagnostics).every(isExpectedDocumentRenderDiagnosticCode)).toBe(
+    true,
+  );
+}
+
+function isExpectedDocumentRenderDiagnosticCode(code: string): boolean {
+  return (
+    code === "cleandoc-adapter.raw-element-skipped" ||
+    code === "document-render.cjk-font-context-unsupported"
   );
 }
