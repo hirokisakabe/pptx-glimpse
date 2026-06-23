@@ -39,7 +39,7 @@ Data flow: **PPTX binary → Parser (ZIP extraction + XML parsing) → Intermedi
 
 `@pptx-glimpse/document` / CleanDoc / writer / editor-core / pom 連携に関わる issue に着手する前に、責務境界と依存方向の決定記録である `docs/document-boundaries.md` と、そこからリンクされる派生決定記録を必ず読むこと。`document` は `core` / `editor-core` / renderer / pom を知らない下位基盤として扱う。
 
-`packages/pptx-glimpse-document/src/` — experimental `@pptx-glimpse/document` パッケージの skeleton。CleanDoc / OOXML document foundation の下位基盤として追加されており、現時点では public conversion path からは参照しない。`@pptx-glimpse/document/experimental` は後続の source model / reader / writer 実装を積むための experimental entry point。
+`packages/pptx-glimpse-document/src/` — experimental `@pptx-glimpse/document` パッケージの skeleton。CleanDoc / OOXML document foundation の下位基盤として追加されており、public SVG / PNG conversion path の default から参照される。`@pptx-glimpse/document/experimental` は後続の source model / reader / writer 実装を積むための experimental entry point。
 
 `packages/pptx-glimpse/src/` — 公開パッケージ `pptx-glimpse` の実装（パーサー + 公開 API）
 

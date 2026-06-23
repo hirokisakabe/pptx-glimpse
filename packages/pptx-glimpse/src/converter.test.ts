@@ -836,7 +836,7 @@ describe("slide placeholder text filtering", () => {
     expect(svg.toLowerCase()).toContain("#ff00ff");
 
     // Empty placeholders' green fill must NOT be rendered.
-    expect(svg).not.toContain("#00FF00");
+    expect(svg.toLowerCase()).not.toContain("#00ff00");
 
     // Only the decorative shape should produce a translate group.
     const groupCount = countTranslatedGroups(svg);
