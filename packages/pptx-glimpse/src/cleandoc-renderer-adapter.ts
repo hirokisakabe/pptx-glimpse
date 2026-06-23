@@ -40,7 +40,7 @@ interface RendererAdapterResult {
   readonly diagnostics: readonly RendererAdapterDiagnostic[];
 }
 
-interface RendererAdapterDiagnostic {
+export interface RendererAdapterDiagnostic {
   readonly severity: "warning";
   readonly code:
     | "cleandoc-adapter.missing-transform"
