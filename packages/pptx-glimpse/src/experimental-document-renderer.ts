@@ -34,20 +34,20 @@ import {
 } from "./cleandoc-renderer-adapter.js";
 import type { ConvertOptions, SlideImage, SlideSvg } from "./converter.js";
 
-export type DocumentRenderDiagnostic = RendererAdapterDiagnostic | DocumentRenderPathDiagnostic;
+type DocumentRenderDiagnostic = RendererAdapterDiagnostic | DocumentRenderPathDiagnostic;
 
-export interface DocumentRenderPathDiagnostic {
+interface DocumentRenderPathDiagnostic {
   readonly severity: "warning";
   readonly code: "document-render.cjk-font-context-unsupported";
   readonly message: string;
 }
 
-export interface DocumentPathSvgResult {
+interface DocumentPathSvgResult {
   readonly slides: readonly SlideSvg[];
   readonly diagnostics: readonly DocumentRenderDiagnostic[];
 }
 
-export interface DocumentPathPngResult {
+interface DocumentPathPngResult {
   readonly slides: readonly SlideImage[];
   readonly diagnostics: readonly DocumentRenderDiagnostic[];
 }
