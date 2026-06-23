@@ -266,6 +266,25 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(outerShdw?.children?.[0].name).toBe("a:srgbClr");
     expect(outerShdw?.children?.[0].attributes?.val).toBe("000000");
   });
+
+  it("basic bullet paragraph properties を読む", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<p:sp><p:nvSpPr><p:cNvPr id="13" name="Bullets"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:txBody><a:bodyPr/><a:lstStyle/>` +
+          `<a:p><a:pPr><a:buFont typeface="BulletTestFont"/><a:buChar char="•"/></a:pPr><a:r><a:t>Char bullet</a:t></a:r></a:p>` +
+          `<a:p><a:pPr><a:buNone/></a:pPr><a:r><a:t>No bullet</a:t></a:r></a:p>` +
+          `</p:txBody></p:sp>`,
+      ),
+    );
+
+    const shape = source.slides[0].shapes[0] as SourceShape;
+    expect(shape.textBody?.paragraphs[0].properties).toMatchObject({
+      bullet: { type: "char", char: "•" },
+      bulletFont: "BulletTestFont",
+    });
+    expect(shape.textBody?.paragraphs[1].properties).toEqual({ bullet: { type: "none" } });
+  });
 });
 
 function firstShape(source: ReturnType<typeof readPptx>, name: string): SourceShape {

@@ -137,8 +137,9 @@ function parseParagraphProperties(pPr: XmlNode | undefined): SourceParagraphProp
 function parseBullet(pPr: XmlNode): SourceParagraphProperties["bullet"] {
   if (getChild(pPr, "buNone") !== undefined) return { type: "none" };
 
+  // Numbered bullets (`a:buAutoNum`) stay outside the current basic bullet subset.
   const char = getAttr(getChild(pPr, "buChar"), "char");
-  if (char !== undefined) return { type: "char", char };
+  if (char) return { type: "char", char };
 
   return undefined;
 }
