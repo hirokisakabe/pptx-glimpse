@@ -27,7 +27,16 @@ export async function compareImages(
     throw new Error(`Reference snapshot not found: ${referencePath}`);
   }
 
-  const refPng = readFileSync(referencePath);
+  return compareImageBuffers(actualPng, readFileSync(referencePath), diffPath, options);
+}
+
+export async function compareImageBuffers(
+  actualPng: Uint8Array | Buffer,
+  referencePng: Uint8Array | Buffer,
+  diffPath: string,
+  options: CompareOptions,
+): Promise<CompareResult> {
+  const refPng = Buffer.from(referencePng);
 
   const actualMeta = await sharp(actualPng).metadata();
   const width = actualMeta.width ?? 0;
