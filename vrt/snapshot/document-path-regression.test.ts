@@ -12,6 +12,7 @@ import {
   DOCUMENT_PATH_VRT_RENDER_WIDTH,
   DOCUMENT_PATH_VRT_SHARED_CASES,
   DOCUMENT_PATH_VRT_SNAPSHOT_POLICY,
+  type DocumentPathVrtFixtureGroup,
 } from "./document-path-cases.js";
 import { SHARED_FIXTURE_CASES, VRT_CASES } from "./vrt-cases.js";
 
@@ -32,9 +33,11 @@ describe("Document path Visual Regression Tests", { timeout: 60000 }, () => {
       ({ fixture }) => fixture,
     ).sort();
     const generatedFixtureNames = VRT_CASES.map(({ fixture }) => fixture).sort();
+    const scopedCaseNames = DOCUMENT_PATH_VRT_CASES.map(({ name }) => name).sort();
 
     expect(scopedSharedFixtureNames).toEqual([...new Set(scopedSharedFixtureNames)]);
     expect(scopedGeneratedFixtureNames).toEqual([...new Set(scopedGeneratedFixtureNames)]);
+    expect(scopedCaseNames).toEqual([...new Set(scopedCaseNames)]);
     expect(scopedSharedFixtureNames).toEqual(sharedFixtureNames);
     expect(scopedGeneratedFixtureNames).toEqual(generatedFixtureNames);
     expect(DOCUMENT_PATH_VRT_SNAPSHOT_POLICY).toMatchInlineSnapshot(
@@ -76,6 +79,14 @@ describe("Document path Visual Regression Tests", { timeout: 60000 }, () => {
         const currentResults = await convertPptxToPng(input, options);
         const documentResults = await convertPptxToPngViaDocumentPath(input, options);
 
+        expect(
+          currentResults.length,
+          `${testCase.name}: current parser rendered no slides`,
+        ).toBeGreaterThan(0);
+        expect(
+          documentResults.slides.length,
+          `${testCase.name}: document path slide count should match current parser`,
+        ).toBe(currentResults.length);
         expect(documentResults.slides.map((slide) => slide.slideNumber)).toEqual(
           currentResults.map((slide) => slide.slideNumber),
         );
@@ -132,7 +143,7 @@ function uniqueSortedCodes(diagnostics: readonly { readonly code: string }[]): s
   return [...new Set(diagnostics.map((diagnostic) => diagnostic.code))].sort();
 }
 
-function fixtureDir(group: "shared" | "generated"): string {
+function fixtureDir(group: DocumentPathVrtFixtureGroup): string {
   return group === "shared" ? SHARED_FIXTURE_DIR : GENERATED_FIXTURE_DIR;
 }
 

@@ -1,6 +1,9 @@
 /**
  * Document path VRT は public snapshot を更新せず、current parser path の PNG を
  * 参照画像としてその場で比較する full parity harness。
+ *
+ * mismatchTolerance は #489 時点の実測 gap を blocker issue 単位で固定した上限。
+ * blocker 解消 PR では対象ケースを再測定し、可能なら 0 まで締める。
  */
 
 export const DOCUMENT_PATH_VRT_RENDER_WIDTH = 320;
@@ -17,7 +20,7 @@ export const DOCUMENT_PATH_VRT_BLOCKER_ISSUES = {
   textAndFonts: 496,
 } as const;
 
-type DocumentPathVrtFixtureGroup = "shared" | "generated";
+export type DocumentPathVrtFixtureGroup = "shared" | "generated";
 
 type DocumentPathVrtDiagnosticCode =
   | "cleandoc-adapter.raw-element-skipped"
