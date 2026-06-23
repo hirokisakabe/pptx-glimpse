@@ -100,6 +100,10 @@ export interface SourceTextRun {
 
 export type SourceTextAlign = "left" | "center" | "right" | "justify";
 
+export type SourceBullet =
+  | { readonly type: "none" }
+  | { readonly type: "char"; readonly char: string };
+
 /** paragraph (`a:p`) の段落プロパティ (`a:pPr`) の最小 subset。 */
 export interface SourceParagraphProperties {
   readonly align?: SourceTextAlign;
@@ -107,6 +111,10 @@ export interface SourceParagraphProperties {
   readonly level?: number;
   /** 行間 (`a:spcPts`)。 */
   readonly lineSpacingPts?: HundredthPt;
+  /** 箇条書き (`a:buNone` / `a:buChar`)。 */
+  readonly bullet?: SourceBullet;
+  /** 箇条書きフォント (`a:buFont@typeface`)。 */
+  readonly bulletFont?: string;
 }
 
 /** paragraph (`a:p`)。 */

@@ -326,14 +326,21 @@ function adaptParagraphProperties(
     spaceBefore: { type: "pts", value: asHundredthPt(0) },
     spaceAfter: { type: "pts", value: asHundredthPt(0) },
     level: properties?.level ?? 0,
-    bullet: null,
-    bulletFont: null,
+    bullet: adaptBullet(properties?.bullet),
+    bulletFont: properties?.bulletFont ?? null,
     bulletColor: null,
     bulletSizePct: null,
     marginLeft: null,
     indent: null,
     tabStops: [],
   };
+}
+
+function adaptBullet(
+  bullet: NonNullable<ComputedParagraph["properties"]>["bullet"] | undefined,
+): ParagraphProperties["bullet"] {
+  if (bullet === undefined) return null;
+  return bullet;
 }
 
 function adaptAlignment(

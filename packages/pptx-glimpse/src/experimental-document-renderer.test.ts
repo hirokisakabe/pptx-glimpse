@@ -105,7 +105,7 @@ describe("experimental document render path", () => {
     );
   });
 
-  it("keeps the public SVG converter on its existing default path", async () => {
+  it("routes the public SVG converter through the document path by default", async () => {
     const readPptxSpy = vi.spyOn(documentExperimental, "readPptx");
     const adapterSpy = vi.spyOn(adapterModule, "adaptComputedViewToRendererModel");
     const input = readFixture("real-basic-theme.pptx");
@@ -117,8 +117,24 @@ describe("experimental document render path", () => {
 
     expect(publicDefault.map((slide) => slide.slideNumber)).toEqual([1]);
     expect(publicDefault[0]?.svg).toContain("<svg");
-    expect(readPptxSpy).not.toHaveBeenCalled();
-    expect(adapterSpy).not.toHaveBeenCalled();
+    expect(Object.keys(publicDefault[0] ?? {}).sort()).toEqual(["slideNumber", "svg"]);
+    expect(readPptxSpy).toHaveBeenCalledOnce();
+    expect(adapterSpy).toHaveBeenCalledOnce();
+  });
+
+  it("routes document path diagnostics through the existing warning logger", async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await convertPptxToSvg(readFixture("real-basic-theme.pptx"), {
+      slides: [1],
+      textOutput: "text",
+      skipSystemFonts: true,
+      logLevel: "warn",
+    });
+
+    const calls = warnSpy.mock.calls.map((call) => String(call[0]));
+    expect(calls.some((message) => message.includes("cleandoc-adapter.raw-element-skipped"))).toBe(
+      true,
+    );
   });
 });
 

@@ -53,8 +53,7 @@ interface DocumentPathPngResult {
 }
 
 /**
- * Internal / experimental render orchestration for dogfooding the CleanDoc
- * document path. This intentionally does not replace the public converter path.
+ * Render orchestration for dogfooding the CleanDoc document path.
  */
 export async function convertPptxToSvgViaDocumentPath(
   input: Buffer | Uint8Array,
@@ -90,6 +89,7 @@ export async function convertPptxToSvgViaDocumentPath(
     const computed = createComputedView(source, { slides: options?.slides });
     const adapted = adaptComputedViewToRendererModel(computed);
     const diagnostics = [...collectDocumentRenderDiagnostics(computed), ...adapted.diagnostics];
+    emitDocumentRenderDiagnostics(diagnostics);
     const slideSize = adapted.slideSize;
     if (slideSize === undefined && adapted.slides.length > 0) {
       throw new Error("Document render path requires a computed slide size");
@@ -162,6 +162,18 @@ function collectDocumentRenderDiagnostics(
         "CleanDoc document render path does not yet expose East Asian or complex-script theme fonts; CJK text may not match the public converter output.",
     },
   ];
+}
+
+function emitDocumentRenderDiagnostics(diagnostics: readonly DocumentRenderDiagnostic[]): void {
+  for (const diagnostic of diagnostics) {
+    warn(diagnostic.code, diagnostic.message, getDiagnosticContext(diagnostic));
+  }
+}
+
+function getDiagnosticContext(diagnostic: DocumentRenderDiagnostic): string | undefined {
+  if (!("slideNumber" in diagnostic) || diagnostic.slideNumber === undefined) return undefined;
+  if (diagnostic.sourcePartPath === undefined) return `Slide ${diagnostic.slideNumber}`;
+  return `Slide ${diagnostic.slideNumber}, ${diagnostic.sourcePartPath}`;
 }
 
 function containsCjkText(computed: CleanDocComputedView): boolean {

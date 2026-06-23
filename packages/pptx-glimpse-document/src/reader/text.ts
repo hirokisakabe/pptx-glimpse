@@ -2,9 +2,9 @@
  * `p:txBody` を CleanDoc source の text body / paragraph / run へ読み取る。
  *
  * PoC scope は plain run text と basic run properties (太字 / 斜体 / 下線 /
- * フォントサイズ / typeface / solid color) のみを typed に表す
- * (`docs/cleandoc-minimal-poc-scope.md`)。bullet / field / line break 等の
- * 未対応ノードは raw sidecar として保持する。
+ * フォントサイズ / typeface / solid color / basic bullet) を typed に表す
+ * (`docs/cleandoc-minimal-poc-scope.md`)。field / line break 等の未対応ノードは
+ * raw sidecar として保持する。
  */
 
 import type {
@@ -121,13 +121,26 @@ function parseParagraphProperties(pPr: XmlNode | undefined): SourceParagraphProp
   const align = alignToken !== undefined ? ALIGN_MAP[alignToken] : undefined;
   const level = numericAttr(pPr, "lvl");
   const lineSpacingPts = numericAttr(getChild(getChild(pPr, "lnSpc"), "spcPts"), "val");
+  const bullet = parseBullet(pPr);
+  const bulletFont = getAttr(getChild(pPr, "buFont"), "typeface");
 
   const properties: SourceParagraphProperties = {
     ...(align !== undefined ? { align } : {}),
     ...(level !== undefined ? { level } : {}),
     ...(lineSpacingPts !== undefined ? { lineSpacingPts: asHundredthPt(lineSpacingPts) } : {}),
+    ...(bullet !== undefined ? { bullet } : {}),
+    ...(bulletFont !== undefined ? { bulletFont } : {}),
   };
   return Object.keys(properties).length > 0 ? properties : undefined;
+}
+
+function parseBullet(pPr: XmlNode): SourceParagraphProperties["bullet"] {
+  if (getChild(pPr, "buNone") !== undefined) return { type: "none" };
+
+  const char = getAttr(getChild(pPr, "buChar"), "char");
+  if (char !== undefined) return { type: "char", char };
+
+  return undefined;
 }
 
 function parseRun(
