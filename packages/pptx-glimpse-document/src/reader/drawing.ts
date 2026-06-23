@@ -105,6 +105,14 @@ export function parseOutline(
   nextId: () => RawSidecarId,
 ): SourceOutline | undefined {
   const ln = getChild(spPr, "ln");
+  return parseLine(ln, nextId);
+}
+
+/** `a:ln` / `a:lnL` / `a:lnR` 等の line node を読む。 */
+export function parseLine(
+  ln: XmlNode | undefined,
+  nextId: () => RawSidecarId,
+): SourceOutline | undefined {
   if (!ln) return undefined;
 
   const width = numericAttr(ln, "w");

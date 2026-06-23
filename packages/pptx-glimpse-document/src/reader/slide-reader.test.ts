@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 
-import type { SourceImage, SourceRawShapeNode, SourceShape } from "../experimental.js";
+import type { SourceImage, SourceShape, SourceTable } from "../experimental.js";
 // 実際の公開面 (`@pptx-glimpse/document/experimental`) 経由で import する。
 import { readPptx } from "../experimental.js";
 
@@ -117,10 +117,11 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
     expect(media && media.bytes.length).toBeGreaterThan(0);
   });
 
-  it("未対応の shape tree node (graphicFrame) を raw shape node として保持する", () => {
+  it("table graphicFrame を typed table node として保持する", () => {
     const slide2 = basic.slides.find((s) => s.partPath === "ppt/slides/slide2.xml");
-    const raw = slide2!.shapes.find((s): s is SourceRawShapeNode => s.kind === "raw");
-    expect(raw?.raw.node.name).toBe("p:graphicFrame");
+    const table = slide2!.shapes.find((s): s is SourceTable => s.kind === "table");
+    expect(table?.table.columns.length).toBeGreaterThan(0);
+    expect(table?.table.rows.length).toBeGreaterThan(0);
   });
 
   it("typed shape 内の未対応子要素を raw sidecar として保持する", () => {
@@ -265,6 +266,65 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(outerShdw?.attributes?.blurRad).toBe("40000");
     expect(outerShdw?.children?.[0].name).toBe("a:srgbClr");
     expect(outerShdw?.children?.[0].attributes?.val).toBe("000000");
+  });
+
+  it("graphicFrame table を typed source node として読む", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<p:graphicFrame>` +
+          `<p:nvGraphicFramePr><p:cNvPr id="20" name="Sales table"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr>` +
+          `<p:xfrm><a:off x="1000" y="2000"/><a:ext cx="3000" cy="4000"/></p:xfrm>` +
+          `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table">` +
+          `<a:tbl>` +
+          `<a:tblPr><a:tableStyleId>{style}</a:tableStyleId></a:tblPr>` +
+          `<a:tblGrid><a:gridCol w="111"/><a:gridCol w="222"/></a:tblGrid>` +
+          `<a:tr h="333">` +
+          `<a:tc gridSpan="2">` +
+          `<a:txBody><a:bodyPr/><a:p><a:r><a:rPr sz="1200"><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:rPr><a:t>A</a:t></a:r></a:p></a:txBody>` +
+          `<a:tcPr hMerge="1"><a:lnL w="12700"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:lnL><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></a:tcPr>` +
+          `</a:tc>` +
+          `</a:tr>` +
+          `</a:tbl>` +
+          `</a:graphicData></a:graphic>` +
+          `</p:graphicFrame>`,
+      ),
+    );
+
+    const table = source.slides[0].shapes[0] as SourceTable;
+    expect(table.kind).toBe("table");
+    expect(table.nodeId).toBe("20");
+    expect(table.name).toBe("Sales table");
+    expect(table.transform).toEqual({
+      offsetX: 1000,
+      offsetY: 2000,
+      width: 3000,
+      height: 4000,
+    });
+    expect(table.table.tableStyleId).toBe("{style}");
+    expect(table.table.columns).toEqual([{ width: 111 }, { width: 222 }]);
+    expect(table.table.rows[0]).toMatchObject({
+      height: 333,
+      cells: [
+        {
+          gridSpan: 2,
+          rowSpan: 1,
+          hMerge: true,
+          vMerge: false,
+          fill: { kind: "solid", color: { kind: "srgb", hex: "00FF00" } },
+        },
+      ],
+    });
+    expect(table.table.rows[0].cells[0].textBody?.paragraphs[0].runs[0]).toMatchObject({
+      text: "A",
+      properties: {
+        fontSize: 12,
+        color: { kind: "scheme", scheme: "accent1" },
+      },
+    });
+    expect(table.table.rows[0].cells[0].borders?.left).toEqual({
+      width: 12700,
+      fill: { kind: "solid", color: { kind: "srgb", hex: "FF0000" } },
+    });
   });
 });
 

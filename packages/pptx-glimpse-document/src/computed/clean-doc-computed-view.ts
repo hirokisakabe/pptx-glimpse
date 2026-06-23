@@ -13,6 +13,7 @@ import type {
   Relationship,
   RelationshipId,
   SourceBackground,
+  SourceCellBorders,
   SourceFill,
   SourceImage,
   SourceOutline,
@@ -21,6 +22,10 @@ import type {
   SourceRunProperties,
   SourceShape,
   SourceShapeNode,
+  SourceTable,
+  SourceTableCell,
+  SourceTableColumn,
+  SourceTableRow,
   SourceTextBodyProperties,
   SourceTransform,
 } from "../source/index.js";
@@ -67,7 +72,11 @@ export interface ComputedRelationship {
   readonly media?: MediaPart;
 }
 
-export type ComputedElement = ComputedShapeElement | ComputedImageElement | ComputedRawElement;
+export type ComputedElement =
+  | ComputedShapeElement
+  | ComputedImageElement
+  | ComputedTableElement
+  | ComputedRawElement;
 
 export type ComputedElementLayer = "master" | "layout" | "slide";
 
@@ -95,6 +104,39 @@ export interface ComputedImageElement extends ComputedElementBase {
   readonly relationship?: ComputedRelationship;
   readonly media?: MediaPart;
 }
+
+export interface ComputedTableElement extends ComputedElementBase {
+  readonly kind: "table";
+  readonly sourceNode: SourceTable;
+  readonly transform?: SourceTransform;
+  readonly table: ComputedTableData;
+}
+
+export interface ComputedTableData {
+  readonly columns: readonly SourceTableColumn[];
+  readonly rows: readonly ComputedTableRow[];
+}
+
+export interface ComputedTableRow {
+  readonly source: SourceTableRow;
+  readonly height: SourceTableRow["height"];
+  readonly cells: readonly ComputedTableCell[];
+}
+
+export interface ComputedTableCell {
+  readonly source: SourceTableCell;
+  readonly textBody?: ComputedTextBody;
+  readonly fill?: ComputedFill;
+  readonly borders?: ComputedCellBorders;
+  readonly gridSpan: number;
+  readonly rowSpan: number;
+  readonly hMerge: boolean;
+  readonly vMerge: boolean;
+}
+
+export type ComputedCellBorders = {
+  readonly [K in keyof SourceCellBorders]?: ComputedOutline;
+};
 
 export interface ComputedRawElement extends ComputedElementBase {
   readonly kind: "raw";

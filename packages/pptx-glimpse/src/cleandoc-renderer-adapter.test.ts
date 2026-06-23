@@ -1,7 +1,11 @@
 import type { SlideElement } from "pptx-glimpse-renderer";
 import { describe, expect, it } from "vitest";
 
-import type { CleanDocSource, SourceShape } from "../../pptx-glimpse-document/src/experimental.js";
+import type {
+  CleanDocSource,
+  SourceShape,
+  SourceTable,
+} from "../../pptx-glimpse-document/src/experimental.js";
 import {
   asEmu,
   asOoxmlAngle,
@@ -106,6 +110,130 @@ describe("adaptComputedViewToRendererModel", () => {
       mimeType: "image/png",
       srcRect: { left: 0.1, top: 0, right: 0.2, bottom: 0 },
     });
+  });
+
+  it("table を renderer model に変換する", () => {
+    const result = adaptComputedViewToRendererModel(
+      createComputedView(
+        buildSource({
+          extraSlideShapes: [
+            table("Metrics table", {
+              transform: transform(200, 210, 220, 230),
+              table: {
+                tableStyleId: "{style}",
+                columns: [{ width: asEmu(500) }, { width: asEmu(600) }],
+                rows: [
+                  {
+                    height: asEmu(700),
+                    cells: [
+                      {
+                        textBody: textBody("Q1", {
+                          fontSize: asPt(12),
+                          color: { kind: "scheme", scheme: "accent1" },
+                        }),
+                        fill: { kind: "solid", color: { kind: "scheme", scheme: "accent1" } },
+                        gridSpan: 2,
+                        rowSpan: 1,
+                        hMerge: false,
+                        vMerge: false,
+                      },
+                    ],
+                  },
+                ],
+              },
+            }),
+            table("Inline table", {
+              transform: transform(300, 310, 320, 330),
+              table: {
+                tableStyleId: "{style}",
+                columns: [{ width: asEmu(100) }],
+                rows: [
+                  {
+                    height: asEmu(100),
+                    cells: [
+                      {
+                        borders: {
+                          left: {
+                            width: asEmu(999),
+                            fill: { kind: "solid", color: { kind: "srgb", hex: "FF0000" } },
+                          },
+                        },
+                        gridSpan: 1,
+                        rowSpan: 1,
+                        hMerge: false,
+                        vMerge: false,
+                      },
+                    ],
+                  },
+                ],
+              },
+            }),
+          ],
+        }),
+      ),
+    );
+
+    const [metrics, inline] = result.slides[0].elements.filter(
+      (element): element is Extract<SlideElement, { type: "table" }> => element.type === "table",
+    );
+    expect(metrics).toMatchObject({
+      type: "table",
+      transform: {
+        offsetX: 200,
+        offsetY: 210,
+        extentWidth: 220,
+        extentHeight: 230,
+      },
+      table: {
+        columns: [{ width: 500 }, { width: 600 }],
+        rows: [
+          {
+            height: 700,
+            cells: [
+              {
+                textBody: {
+                  paragraphs: [
+                    {
+                      runs: [
+                        {
+                          text: "Q1",
+                          properties: {
+                            fontSize: 12,
+                            color: { hex: "#336699", alpha: 1 },
+                          },
+                        },
+                      ],
+                    },
+                  ],
+                },
+                fill: { type: "solid", color: { hex: "#336699", alpha: 1 } },
+                borders: {
+                  top: {
+                    width: 12700,
+                    fill: { type: "solid", color: { hex: "#000000", alpha: 1 } },
+                  },
+                },
+                gridSpan: 2,
+              },
+            ],
+          },
+        ],
+      },
+    });
+
+    expect(inline?.table.rows[0].cells[0].borders).toEqual({
+      top: null,
+      bottom: null,
+      left: {
+        width: 999,
+        fill: { type: "solid", color: { hex: "#ff0000", alpha: 1 } },
+        dashStyle: "solid",
+        headEnd: null,
+        tailEnd: null,
+      },
+      right: null,
+    });
+    expect(result.diagnostics).toEqual([]);
   });
 
   it("unsupported raw elements を diagnostic として扱い renderer model に漏らさない", () => {
@@ -350,6 +478,14 @@ function transform(
 function shape(name: string, overrides: Partial<SourceShape> = {}): SourceShape {
   return {
     kind: "shape",
+    name,
+    ...overrides,
+  };
+}
+
+function table(name: string, overrides: Omit<SourceTable, "kind" | "name">): SourceTable {
+  return {
+    kind: "table",
     name,
     ...overrides,
   };

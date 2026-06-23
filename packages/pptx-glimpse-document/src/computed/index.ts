@@ -1,6 +1,7 @@
 export type {
   CleanDocComputedView,
   ComputedBackground,
+  ComputedCellBorders,
   ComputedColor,
   ComputedElement,
   ComputedElementLayer,
@@ -15,6 +16,10 @@ export type {
   ComputedShapeElement,
   ComputedSlide,
   ComputedSlideSize,
+  ComputedTableCell,
+  ComputedTableData,
+  ComputedTableElement,
+  ComputedTableRow,
   ComputedTextBody,
   ComputedTextRun,
   CreateComputedViewOptions,
