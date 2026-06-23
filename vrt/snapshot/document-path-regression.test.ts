@@ -6,111 +6,90 @@ import { convertPptxToPng } from "../../packages/pptx-glimpse/src/converter.js";
 import { convertPptxToPngViaDocumentPath } from "../../packages/pptx-glimpse/src/experimental-document-renderer.js";
 import { compareImageBuffers } from "../compare-utils.js";
 import {
-  DOCUMENT_PATH_VRT_EXCLUDED_CASES,
-  DOCUMENT_PATH_VRT_OPT_IN_CASES,
+  DOCUMENT_PATH_VRT_BLOCKER_ISSUES,
+  DOCUMENT_PATH_VRT_CASES,
+  DOCUMENT_PATH_VRT_GENERATED_CASES,
   DOCUMENT_PATH_VRT_RENDER_WIDTH,
+  DOCUMENT_PATH_VRT_SHARED_CASES,
   DOCUMENT_PATH_VRT_SNAPSHOT_POLICY,
+  type DocumentPathVrtFixtureGroup,
 } from "./document-path-cases.js";
-import { SHARED_FIXTURE_CASES } from "./vrt-cases.js";
+import { SHARED_FIXTURE_CASES, VRT_CASES } from "./vrt-cases.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SHARED_FIXTURE_DIR = join(__dirname, "..", "..", "shared-fixtures");
+const GENERATED_FIXTURE_DIR = join(__dirname, "fixtures");
 const DIFF_DIR = join(__dirname, "diffs");
 
 const PIXEL_THRESHOLD = 0;
 
 describe("Document path Visual Regression Tests", { timeout: 60000 }, () => {
-  it("documents opt-in cases, excluded cases, and snapshot policy", () => {
-    const scopedSharedFixtureNames = [
-      ...DOCUMENT_PATH_VRT_OPT_IN_CASES,
-      ...DOCUMENT_PATH_VRT_EXCLUDED_CASES.filter(({ fixture }) => !fixture.includes("*")),
-    ]
-      .map(({ fixture }) => fixture)
-      .sort();
+  it("covers the full shared fixture and generated VRT sets", () => {
+    const scopedSharedFixtureNames = DOCUMENT_PATH_VRT_SHARED_CASES.map(
+      ({ fixture }) => fixture,
+    ).sort();
     const sharedFixtureNames = SHARED_FIXTURE_CASES.map(({ fixture }) => fixture).sort();
+    const scopedGeneratedFixtureNames = DOCUMENT_PATH_VRT_GENERATED_CASES.map(
+      ({ fixture }) => fixture,
+    ).sort();
+    const generatedFixtureNames = VRT_CASES.map(({ fixture }) => fixture).sort();
+    const scopedCaseNames = DOCUMENT_PATH_VRT_CASES.map(({ name }) => name).sort();
 
     expect(scopedSharedFixtureNames).toEqual([...new Set(scopedSharedFixtureNames)]);
+    expect(scopedGeneratedFixtureNames).toEqual([...new Set(scopedGeneratedFixtureNames)]);
+    expect(scopedCaseNames).toEqual([...new Set(scopedCaseNames)]);
     expect(scopedSharedFixtureNames).toEqual(sharedFixtureNames);
+    expect(scopedGeneratedFixtureNames).toEqual(generatedFixtureNames);
     expect(DOCUMENT_PATH_VRT_SNAPSHOT_POLICY).toMatchInlineSnapshot(
       `"No committed snapshot update is required: document path VRT compares against the current parser path in-memory until the public default path changes."`,
     );
-    expect(
-      DOCUMENT_PATH_VRT_OPT_IN_CASES.map(({ name, fixture, slides, tolerance, reason }) => ({
-        name,
-        fixture,
-        slides,
-        tolerance,
-        reason,
-      })),
-    ).toMatchInlineSnapshot(`
-      [
-        {
-          "fixture": "real-basic-theme.pptx",
-          "name": "real-basic-theme",
-          "reason": "Shared fixture already covered by focused document render tests; slide 1 stays within the current CleanDoc shape/text subset.",
-          "slides": [
-            1,
-          ],
-          "tolerance": 0.001,
-        },
-        {
-          "fixture": "real-product-page.pptx",
-          "name": "real-product-page",
-          "reason": "Shared fixture exercises shape/text rendering and intentionally records the current visual parity gap before default-path migration.",
-          "slides": [
-            1,
-          ],
-          "tolerance": 0.04,
-        },
-      ]
-    `);
-    expect(DOCUMENT_PATH_VRT_EXCLUDED_CASES).toMatchInlineSnapshot(`
-      [
-        {
-          "fixture": "real-financial-report.pptx",
-          "name": "real-financial-report",
-          "reason": "Deferred because the fixture is broader than the initial selected shared fixture slice and would mix document path dogfood with unrelated parity gaps.",
-        },
-        {
-          "fixture": "sample.pptx",
-          "name": "sample",
-          "reason": "Deferred until the selected real app fixtures have stable document path parity metrics.",
-        },
-        {
-          "fixture": "sample-issue-387.pptx",
-          "name": "sample-issue-387",
-          "reason": "Deferred because issue-specific regression fixtures should only opt in after their document path support scope is explicitly reviewed.",
-        },
-        {
-          "fixture": "vrt/snapshot/fixtures/*.pptx",
-          "name": "generated snapshot VRT cases",
-          "reason": "Deferred because generated cases cover many unsupported tables, charts, groups, effects, and advanced text features outside this issue's selected fixture scope.",
-        },
-      ]
-    `);
   });
 
-  for (const testCase of DOCUMENT_PATH_VRT_OPT_IN_CASES) {
+  it("keeps every non-zero or diagnostic-emitting gap linked to a blocker issue", () => {
+    const blockerIssueNumbers = new Set(Object.values(DOCUMENT_PATH_VRT_BLOCKER_ISSUES));
+
+    for (const testCase of DOCUMENT_PATH_VRT_CASES) {
+      for (const issue of testCase.blockerIssues) {
+        expect(blockerIssueNumbers.has(issue), `${testCase.name}: unknown blocker #${issue}`).toBe(
+          true,
+        );
+      }
+      if (testCase.mismatchTolerance > 0 || testCase.expectedDiagnosticCodes.length > 0) {
+        expect(
+          testCase.blockerIssues.length,
+          `${testCase.name}: expected blocker issue for residual gap`,
+        ).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  for (const testCase of DOCUMENT_PATH_VRT_CASES) {
     describe(testCase.name, () => {
       it("tracks current parser vs document path PNG parity", async () => {
-        const fixturePath = join(SHARED_FIXTURE_DIR, testCase.fixture);
+        const fixturePath = join(fixtureDir(testCase.group), testCase.fixture);
         if (!existsSync(fixturePath)) {
-          throw new Error(`Shared fixture not found: ${fixturePath}.`);
+          throw new Error(`VRT fixture not found: ${fixturePath}.`);
         }
 
         const input = readFileSync(fixturePath);
         const options = {
-          slides: [...testCase.slides],
           width: DOCUMENT_PATH_VRT_RENDER_WIDTH,
           skipSystemFonts: true,
         };
         const currentResults = await convertPptxToPng(input, options);
         const documentResults = await convertPptxToPngViaDocumentPath(input, options);
 
-        expect(currentResults.map((slide) => slide.slideNumber)).toEqual([...testCase.slides]);
-        expect(documentResults.slides.map((slide) => slide.slideNumber)).toEqual([
-          ...testCase.slides,
-        ]);
+        expect(
+          currentResults.length,
+          `${testCase.name}: current parser rendered no slides`,
+        ).toBeGreaterThan(0);
+        expect(
+          documentResults.slides.length,
+          `${testCase.name}: document path slide count should match current parser`,
+        ).toBe(currentResults.length);
+        expect(documentResults.slides.map((slide) => slide.slideNumber)).toEqual(
+          currentResults.map((slide) => slide.slideNumber),
+        );
         expect(uniqueSortedCodes(documentResults.diagnostics)).toEqual(
           [...testCase.expectedDiagnosticCodes].sort(),
         );
@@ -135,14 +114,15 @@ describe("Document path Visual Regression Tests", { timeout: 60000 }, () => {
             diffPath,
             {
               pixelThreshold: PIXEL_THRESHOLD,
-              mismatchTolerance: testCase.tolerance,
+              mismatchTolerance: testCase.mismatchTolerance,
             },
           );
 
           console.log(
             `[document-path-vrt] ${testCase.name} slide${documentResult.slideNumber}: ` +
               `${(comparison.mismatchPercentage * 100).toFixed(3)}% ` +
-              `(tolerance ${(testCase.tolerance * 100).toFixed(1)}%)`,
+              `(tolerance ${(testCase.mismatchTolerance * 100).toFixed(1)}%)` +
+              blockerSuffix(testCase.blockerIssues),
           );
 
           expect(
@@ -150,7 +130,8 @@ describe("Document path Visual Regression Tests", { timeout: 60000 }, () => {
             `${testCase.name} slide ${documentResult.slideNumber}: ` +
               `${(comparison.mismatchPercentage * 100).toFixed(2)}% pixels differ ` +
               `(${comparison.mismatchedPixels}/${comparison.totalPixels}). ` +
-              `Tolerance: ${testCase.tolerance * 100}%`,
+              `Tolerance: ${testCase.mismatchTolerance * 100}%. ` +
+              `Blockers: ${formatBlockers(testCase.blockerIssues)}`,
           ).toBe(true);
         }
       });
@@ -160,4 +141,17 @@ describe("Document path Visual Regression Tests", { timeout: 60000 }, () => {
 
 function uniqueSortedCodes(diagnostics: readonly { readonly code: string }[]): string[] {
   return [...new Set(diagnostics.map((diagnostic) => diagnostic.code))].sort();
+}
+
+function fixtureDir(group: DocumentPathVrtFixtureGroup): string {
+  return group === "shared" ? SHARED_FIXTURE_DIR : GENERATED_FIXTURE_DIR;
+}
+
+function blockerSuffix(blockerIssues: readonly number[]): string {
+  if (blockerIssues.length === 0) return "";
+  return `; blockers ${formatBlockers(blockerIssues)}`;
+}
+
+function formatBlockers(blockerIssues: readonly number[]): string {
+  return blockerIssues.length === 0 ? "none" : blockerIssues.map((issue) => `#${issue}`).join(", ");
 }
