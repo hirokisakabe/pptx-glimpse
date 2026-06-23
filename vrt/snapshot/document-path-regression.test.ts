@@ -11,6 +11,7 @@ import {
   DOCUMENT_PATH_VRT_RENDER_WIDTH,
   DOCUMENT_PATH_VRT_SNAPSHOT_POLICY,
 } from "./document-path-cases.js";
+import { SHARED_FIXTURE_CASES } from "./vrt-cases.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SHARED_FIXTURE_DIR = join(__dirname, "..", "..", "shared-fixtures");
@@ -20,6 +21,16 @@ const PIXEL_THRESHOLD = 0;
 
 describe("Document path Visual Regression Tests", { timeout: 60000 }, () => {
   it("documents opt-in cases, excluded cases, and snapshot policy", () => {
+    const scopedSharedFixtureNames = [
+      ...DOCUMENT_PATH_VRT_OPT_IN_CASES,
+      ...DOCUMENT_PATH_VRT_EXCLUDED_CASES.filter(({ fixture }) => !fixture.includes("*")),
+    ]
+      .map(({ fixture }) => fixture)
+      .sort();
+    const sharedFixtureNames = SHARED_FIXTURE_CASES.map(({ fixture }) => fixture).sort();
+
+    expect(scopedSharedFixtureNames).toEqual([...new Set(scopedSharedFixtureNames)]);
+    expect(scopedSharedFixtureNames).toEqual(sharedFixtureNames);
     expect(DOCUMENT_PATH_VRT_SNAPSHOT_POLICY).toMatchInlineSnapshot(
       `"No committed snapshot update is required: document path VRT compares against the current parser path in-memory until the public default path changes."`,
     );
@@ -45,7 +56,7 @@ describe("Document path Visual Regression Tests", { timeout: 60000 }, () => {
         {
           "fixture": "real-product-page.pptx",
           "name": "real-product-page",
-          "reason": "Shared fixture exercises the image/text render path and intentionally records the current visual parity gap before default-path migration.",
+          "reason": "Shared fixture exercises shape/text rendering and intentionally records the current visual parity gap before default-path migration.",
           "slides": [
             1,
           ],

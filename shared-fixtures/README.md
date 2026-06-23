@@ -39,7 +39,7 @@
 2. `e2e/smoke.test.ts` にスモークテストを追加する
 3. `vrt/snapshot/vrt-cases.ts` の `SHARED_FIXTURE_CASES` にエントリを追加する
 4. `npm run vrt:snapshot:update` でスナップショットを生成する
-5. document path parity VRT の対象にする場合は、`vrt/snapshot/document-path-cases.ts` に opt-in 理由と許容差分を追加する
+5. document path parity VRT では、`vrt/snapshot/document-path-cases.ts` の opt-in または excluded のどちらかに分類する。opt-in する場合は `slides` / `tolerance` / `reason` / `expectedDiagnosticCodes` を設定する
 
 ファイルサイズはリポジトリサイズへの影響を抑えるため **1ファイルあたり 500KB 以下** を目安とする。
 ライセンス上問題のない PPTX のみ追加すること（自作または OSSテンプレート）。

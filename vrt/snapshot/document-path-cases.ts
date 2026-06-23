@@ -27,7 +27,7 @@ export const DOCUMENT_PATH_VRT_OPT_IN_CASES = [
     slides: [1],
     tolerance: 0.04,
     reason:
-      "Shared fixture exercises the image/text render path and intentionally records the current visual parity gap before default-path migration.",
+      "Shared fixture exercises shape/text rendering and intentionally records the current visual parity gap before default-path migration.",
     expectedDiagnosticCodes: [],
   },
 ] as const;
