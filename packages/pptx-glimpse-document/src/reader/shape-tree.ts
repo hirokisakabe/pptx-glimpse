@@ -299,7 +299,7 @@ function parseTableCell(
   cellIndex: number,
 ): SourceTableCell {
   const tcPr = getChild(tc, "tcPr");
-  const textOrderingSlot = tableOrderingSlot * 10000 + rowIndex * 100 + cellIndex;
+  const textOrderingSlot = tableOrderingSlot * 1_000_000_000 + rowIndex * 1_000_000 + cellIndex;
   const textBody = parseTextBody(
     getChild(tc, "txBody"),
     partPath,
@@ -320,8 +320,8 @@ function parseTableCell(
     ...(borders !== undefined ? { borders } : {}),
     gridSpan: numericAttr(tc, "gridSpan") ?? 1,
     rowSpan: numericAttr(tc, "rowSpan") ?? 1,
-    hMerge: isTrue(getAttr(tcPr, "hMerge")),
-    vMerge: isTrue(getAttr(tcPr, "vMerge")),
+    hMerge: isTrue(getAttr(tc, "hMerge") ?? getAttr(tcPr, "hMerge")),
+    vMerge: isTrue(getAttr(tc, "vMerge") ?? getAttr(tcPr, "vMerge")),
     ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
   };
 }

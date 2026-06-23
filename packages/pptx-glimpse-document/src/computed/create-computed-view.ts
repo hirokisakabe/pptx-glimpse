@@ -76,6 +76,9 @@ const FALLBACK_SCHEME_COLORS: Readonly<Record<string, string>> = {
 
 const IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
 
+// Current parser path treats any tableStyleId as black 1pt cell borders when
+// a cell has no inline border definition. Keep this compatibility approximation
+// until tableStyles.xml is modeled explicitly.
 const DEFAULT_TABLE_STYLE_BORDERS: SourceCellBorders = {
   top: {
     width: asEmu(12700),

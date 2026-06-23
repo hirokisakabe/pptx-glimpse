@@ -279,9 +279,13 @@ describe("readPptx — typed shape detail (synthetic)", () => {
           `<a:tblPr><a:tableStyleId>{style}</a:tableStyleId></a:tblPr>` +
           `<a:tblGrid><a:gridCol w="111"/><a:gridCol w="222"/></a:tblGrid>` +
           `<a:tr h="333">` +
-          `<a:tc gridSpan="2">` +
+          `<a:tc gridSpan="2" rowSpan="2">` +
           `<a:txBody><a:bodyPr/><a:p><a:r><a:rPr sz="1200"><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:rPr><a:t>A</a:t></a:r></a:p></a:txBody>` +
-          `<a:tcPr hMerge="1"><a:lnL w="12700"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:lnL><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></a:tcPr>` +
+          `<a:tcPr><a:lnL w="12700"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:lnL><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></a:tcPr>` +
+          `</a:tc>` +
+          `<a:tc hMerge="1" vMerge="1">` +
+          `<a:txBody><a:bodyPr/><a:p><a:r><a:t></a:t></a:r></a:p></a:txBody>` +
+          `<a:tcPr/>` +
           `</a:tc>` +
           `</a:tr>` +
           `</a:tbl>` +
@@ -302,17 +306,19 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     });
     expect(table.table.tableStyleId).toBe("{style}");
     expect(table.table.columns).toEqual([{ width: 111 }, { width: 222 }]);
-    expect(table.table.rows[0]).toMatchObject({
-      height: 333,
-      cells: [
-        {
-          gridSpan: 2,
-          rowSpan: 1,
-          hMerge: true,
-          vMerge: false,
-          fill: { kind: "solid", color: { kind: "srgb", hex: "00FF00" } },
-        },
-      ],
+    expect(table.table.rows[0].height).toBe(333);
+    expect(table.table.rows[0].cells[0]).toMatchObject({
+      gridSpan: 2,
+      rowSpan: 2,
+      hMerge: false,
+      vMerge: false,
+      fill: { kind: "solid", color: { kind: "srgb", hex: "00FF00" } },
+    });
+    expect(table.table.rows[0].cells[1]).toMatchObject({
+      gridSpan: 1,
+      rowSpan: 1,
+      hMerge: true,
+      vMerge: true,
     });
     expect(table.table.rows[0].cells[0].textBody?.paragraphs[0].runs[0]).toMatchObject({
       text: "A",
