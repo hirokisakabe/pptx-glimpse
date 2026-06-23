@@ -3,14 +3,14 @@ import { dirname } from "path";
 import pixelmatch from "pixelmatch";
 import sharp from "sharp";
 
-interface CompareResult {
+export interface CompareResult {
   totalPixels: number;
   mismatchedPixels: number;
   mismatchPercentage: number;
   passed: boolean;
 }
 
-interface CompareOptions {
+export interface CompareOptions {
   pixelThreshold: number;
   mismatchTolerance: number;
   /** 参照画像を actual のサイズにリサイズして比較する (LibreOffice VRT 用) */
@@ -27,7 +27,16 @@ export async function compareImages(
     throw new Error(`Reference snapshot not found: ${referencePath}`);
   }
 
-  const refPng = readFileSync(referencePath);
+  return compareImageBuffers(actualPng, readFileSync(referencePath), diffPath, options);
+}
+
+export async function compareImageBuffers(
+  actualPng: Uint8Array | Buffer,
+  referencePng: Uint8Array | Buffer,
+  diffPath: string,
+  options: CompareOptions,
+): Promise<CompareResult> {
+  const refPng = Buffer.from(referencePng);
 
   const actualMeta = await sharp(actualPng).metadata();
   const width = actualMeta.width ?? 0;
