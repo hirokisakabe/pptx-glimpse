@@ -46,6 +46,28 @@ describe("createComputedView", () => {
     expect(image?.media?.bytes).toEqual(new Uint8Array([1, 2, 3]));
   });
 
+  it("chart / SmartArt の relationship と source XML part を解決する", () => {
+    const source = buildSourceWithChartAndSmartArt();
+    const slide = getSlide(createComputedView(source).slides, 0);
+    const chart = slide.elements.find((element) => element.kind === "chart");
+    const smartArt = slide.elements.find((element) => element.kind === "smartArt");
+
+    expect(chart?.kind).toBe("chart");
+    if (chart?.kind !== "chart") throw new Error("chart element not found");
+    expect(chart.relationship?.id).toBe("rIdChart");
+    expect(chart.relationship?.targetPartPath).toBe("ppt/charts/chart1.xml");
+    expect(chart.chartXml).toContain("<c:barChart");
+
+    expect(smartArt?.kind).toBe("smartArt");
+    if (smartArt?.kind !== "smartArt") throw new Error("SmartArt element not found");
+    expect(smartArt.dataRelationship?.id).toBe("rIdDiagramData");
+    expect(smartArt.dataRelationship?.targetPartPath).toBe("ppt/diagrams/data1.xml");
+    expect(smartArt.drawingRelationship?.targetPartPath).toBe("ppt/diagrams/drawing1.xml");
+    expect(smartArt.drawingPartPath).toBe("ppt/diagrams/drawing1.xml");
+    expect(smartArt.drawingXml).toContain("<dsp:drawing");
+    expect(smartArt.drawingRelationships).toHaveLength(0);
+  });
+
   it("theme color resolution と background fallback を解決する", () => {
     const computed = createComputedView(buildSource());
     const slide = getSlide(computed.slides, 0);
@@ -438,6 +460,89 @@ function buildSource(): CleanDocSource {
       },
     ],
     diagnostics: [],
+  };
+}
+
+function buildSourceWithChartAndSmartArt(): CleanDocSource {
+  const source = buildSource();
+  const slidePath = asPartPath("ppt/slides/slide2.xml");
+  const dataPath = asPartPath("ppt/diagrams/data1.xml");
+  return {
+    ...source,
+    packageGraph: {
+      ...source.packageGraph,
+      relationships: [
+        ...source.packageGraph.relationships.map((entry) =>
+          entry.sourcePartPath === slidePath
+            ? {
+                ...entry,
+                relationships: [
+                  ...entry.relationships,
+                  {
+                    id: asRelationshipId("rIdChart"),
+                    type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart",
+                    target: "../charts/chart1.xml",
+                  },
+                  {
+                    id: asRelationshipId("rIdDiagramData"),
+                    type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData",
+                    target: "../diagrams/data1.xml",
+                  },
+                ],
+              }
+            : entry,
+        ),
+        {
+          sourcePartPath: dataPath,
+          relationships: [
+            {
+              id: asRelationshipId("rIdDiagramDrawing"),
+              type: "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing",
+              target: "drawing1.xml",
+            },
+          ],
+        },
+      ],
+      rawParts: [
+        rawXmlPart(
+          "ppt/charts/chart1.xml",
+          `<c:chartSpace><c:chart><c:plotArea><c:barChart/></c:plotArea></c:chart></c:chartSpace>`,
+        ),
+        rawXmlPart("ppt/diagrams/data1.xml", `<dgm:dataModel/>`),
+        rawXmlPart("ppt/diagrams/drawing1.xml", `<dsp:drawing><dsp:spTree/></dsp:drawing>`),
+      ],
+    },
+    slides: source.slides.map((slide) =>
+      slide.partPath === slidePath
+        ? {
+            ...slide,
+            shapes: [
+              ...slide.shapes,
+              {
+                kind: "chart",
+                name: "Revenue chart",
+                transform: transform(300, 310, 320, 330),
+                chartRelationshipId: asRelationshipId("rIdChart"),
+              },
+              {
+                kind: "smartArt",
+                name: "Process",
+                transform: transform(400, 410, 420, 430),
+                dataRelationshipId: asRelationshipId("rIdDiagramData"),
+              },
+            ],
+          }
+        : slide,
+    ),
+  };
+}
+
+function rawXmlPart(partPath: string, xml: string) {
+  return {
+    kind: "binary" as const,
+    partPath: asPartPath(partPath),
+    contentType: "application/xml",
+    bytes: new TextEncoder().encode(xml),
   };
 }
 

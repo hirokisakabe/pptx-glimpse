@@ -216,6 +216,28 @@ export interface SourceCellBorders {
   readonly right?: SourceOutline;
 }
 
+export interface SourceChart {
+  readonly kind: "chart";
+  readonly nodeId?: SourceNodeId;
+  readonly name?: string;
+  readonly transform?: SourceTransform;
+  /** `c:chart@r:id` の relationship id。chart part は computed view で解決する。 */
+  readonly chartRelationshipId?: RelationshipId;
+  readonly handle?: SourceHandle;
+  readonly rawSidecars?: readonly RawSidecar[];
+}
+
+export interface SourceSmartArt {
+  readonly kind: "smartArt";
+  readonly nodeId?: SourceNodeId;
+  readonly name?: string;
+  readonly transform?: SourceTransform;
+  /** `dgm:relIds@r:dm` の relationship id。diagram data/drawing part は computed view で解決する。 */
+  readonly dataRelationshipId?: RelationshipId;
+  readonly handle?: SourceHandle;
+  readonly rawSidecars?: readonly RawSidecar[];
+}
+
 /**
  * typed に表現しない shape tree ノードの raw escape hatch。未対応の図形・
  * グループ・コネクタ等を round-trip のために保存する。
@@ -228,4 +250,10 @@ export interface SourceRawShapeNode {
 }
 
 /** shape tree の source node 共用体。 */
-export type SourceShapeNode = SourceShape | SourceImage | SourceTable | SourceRawShapeNode;
+export type SourceShapeNode =
+  | SourceShape
+  | SourceImage
+  | SourceTable
+  | SourceChart
+  | SourceSmartArt
+  | SourceRawShapeNode;

@@ -39,6 +39,7 @@ export type {
 export type { RawOoxmlNode, RawPackagePart, RawSidecar } from "./raw.js";
 export type {
   SourceCellBorders,
+  SourceChart,
   SourceColor,
   SourceColorTransform,
   SourceFill,
@@ -53,6 +54,7 @@ export type {
   SourceRunProperties,
   SourceShape,
   SourceShapeNode,
+  SourceSmartArt,
   SourceTable,
   SourceTableCell,
   SourceTableColumn,

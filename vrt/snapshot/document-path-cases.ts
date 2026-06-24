@@ -89,13 +89,7 @@ export const DOCUMENT_PATH_VRT_GENERATED_CASES = [
     [B.shapeTreeAndGeometry],
     ["cleandoc-adapter.raw-element-skipped"],
   ),
-  generated(
-    "charts",
-    "charts.pptx",
-    0.64,
-    [B.chartsAndSmartArt],
-    ["cleandoc-adapter.raw-element-skipped"],
-  ),
+  generated("charts", "charts.pptx", 0, [], []),
   generated(
     "connectors",
     "connectors.pptx",
@@ -149,13 +143,7 @@ export const DOCUMENT_PATH_VRT_GENERATED_CASES = [
     [B.shapeTreeAndGeometry, B.fillsAndBackgrounds],
     ["cleandoc-adapter.raw-fill-ignored"],
   ),
-  generated(
-    "smartart",
-    "smartart.pptx",
-    0.51,
-    [B.chartsAndSmartArt],
-    ["cleandoc-adapter.raw-element-skipped"],
-  ),
+  generated("smartart", "smartart.pptx", 0, [], []),
   generated("theme-fonts", "theme-fonts.pptx", 0, [B.shapeTreeAndGeometry], []),
   generated(
     "text-style-inheritance",
@@ -206,13 +194,7 @@ export const DOCUMENT_PATH_VRT_GENERATED_CASES = [
     [B.shapeTreeAndGeometry],
     [],
   ),
-  generated(
-    "charts-3d-fallback",
-    "charts-3d-fallback.pptx",
-    0.54,
-    [B.chartsAndSmartArt],
-    ["cleandoc-adapter.raw-element-skipped"],
-  ),
+  generated("charts-3d-fallback", "charts-3d-fallback.pptx", 0, [], []),
   generated("color-transforms", "color-transforms.pptx", 0, [B.shapeTreeAndGeometry], []),
   generated("table-complex-merge", "table-complex-merge.pptx", 0, [], []),
   generated(

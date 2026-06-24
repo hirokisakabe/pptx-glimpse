@@ -236,6 +236,49 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it("chart と SmartArt fallback を renderer model に変換する", () => {
+    const result = adaptComputedViewToRendererModel(
+      createComputedView(buildSourceWithChartAndSmartArt()),
+    );
+    const chart = result.slides[0].elements.find((element) => element.type === "chart");
+    const smartArt = result.slides[0].elements.find(
+      (element): element is Extract<SlideElement, { type: "group" }> =>
+        element.type === "group" && element.altText === "Process",
+    );
+
+    expect(chart).toMatchObject({
+      type: "chart",
+      transform: {
+        offsetX: 300,
+        offsetY: 310,
+        extentWidth: 320,
+        extentHeight: 330,
+      },
+      chart: {
+        chartType: "bar",
+        categories: ["Q1", "Q2"],
+        series: [{ name: "Sales", values: [4, 7] }],
+      },
+    });
+    expect(smartArt).toMatchObject({
+      type: "group",
+      transform: {
+        offsetX: 400,
+        offsetY: 410,
+        extentWidth: 420,
+        extentHeight: 430,
+      },
+      childTransform: {
+        offsetX: 0,
+        offsetY: 0,
+        extentWidth: 420,
+        extentHeight: 430,
+      },
+    });
+    expect(smartArt?.children.map((element) => element.type)).toEqual(["shape"]);
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it("unsupported raw elements を diagnostic として扱い renderer model に漏らさない", () => {
     const source = buildSource({
       extraSlideShapes: [
@@ -455,6 +498,107 @@ function buildSource(options: BuildSourceOptions = {}): CleanDocSource {
       },
     ],
     diagnostics: [],
+  };
+}
+
+function buildSourceWithChartAndSmartArt(): CleanDocSource {
+  const source = buildSource({
+    extraSlideShapes: [
+      {
+        kind: "chart",
+        name: "Revenue chart",
+        transform: transform(300, 310, 320, 330),
+        chartRelationshipId: asRelationshipId("rIdChart"),
+      },
+      {
+        kind: "smartArt",
+        name: "Process",
+        transform: transform(400, 410, 420, 430),
+        dataRelationshipId: asRelationshipId("rIdDiagramData"),
+      },
+    ],
+  });
+  const slidePath = asPartPath("ppt/slides/slide1.xml");
+  const dataPath = asPartPath("ppt/diagrams/data1.xml");
+
+  return {
+    ...source,
+    packageGraph: {
+      ...source.packageGraph,
+      relationships: [
+        ...source.packageGraph.relationships.map((entry) =>
+          entry.sourcePartPath === slidePath
+            ? {
+                ...entry,
+                relationships: [
+                  ...entry.relationships,
+                  {
+                    id: asRelationshipId("rIdChart"),
+                    type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart",
+                    target: "../charts/chart1.xml",
+                  },
+                  {
+                    id: asRelationshipId("rIdDiagramData"),
+                    type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData",
+                    target: "../diagrams/data1.xml",
+                  },
+                ],
+              }
+            : entry,
+        ),
+        {
+          sourcePartPath: dataPath,
+          relationships: [
+            {
+              id: asRelationshipId("rIdDiagramDrawing"),
+              type: "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing",
+              target: "drawing1.xml",
+            },
+          ],
+        },
+      ],
+      rawParts: [
+        rawXmlPart("ppt/charts/chart1.xml", chartXml()),
+        rawXmlPart("ppt/diagrams/data1.xml", `<dgm:dataModel/>`),
+        rawXmlPart("ppt/diagrams/drawing1.xml", smartArtDrawingXml()),
+      ],
+    },
+  };
+}
+
+function chartXml(): string {
+  return `<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+  <c:chart><c:plotArea><c:barChart>
+    <c:ser>
+      <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>Sales</c:v></c:pt></c:strCache></c:strRef></c:tx>
+      <c:cat><c:strRef><c:strCache><c:pt idx="0"><c:v>Q1</c:v></c:pt><c:pt idx="1"><c:v>Q2</c:v></c:pt></c:strCache></c:strRef></c:cat>
+      <c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>4</c:v></c:pt><c:pt idx="1"><c:v>7</c:v></c:pt></c:numCache></c:numRef></c:val>
+    </c:ser>
+  </c:barChart></c:plotArea></c:chart>
+</c:chartSpace>`;
+}
+
+function smartArtDrawingXml(): string {
+  return `<dsp:drawing xmlns:dsp="http://schemas.microsoft.com/office/drawing/2008/diagram"
+    xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+    xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <dsp:spTree>
+    <dsp:grpSpPr><a:xfrm><a:chOff x="0" y="0"/><a:chExt cx="420" cy="430"/></a:xfrm></dsp:grpSpPr>
+    <p:sp>
+      <p:nvSpPr><p:cNvPr id="1" name="Step"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+      <p:spPr><a:xfrm><a:off x="10" y="20"/><a:ext cx="30" cy="40"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>
+      <p:txBody><a:bodyPr/><a:p><a:r><a:t>Step</a:t></a:r></a:p></p:txBody>
+    </p:sp>
+  </dsp:spTree>
+</dsp:drawing>`;
+}
+
+function rawXmlPart(partPath: string, xml: string) {
+  return {
+    kind: "binary" as const,
+    partPath: asPartPath(partPath),
+    contentType: "application/xml",
+    bytes: new TextEncoder().encode(xml),
   };
 }
 

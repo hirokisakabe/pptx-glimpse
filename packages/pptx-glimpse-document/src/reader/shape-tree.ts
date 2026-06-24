@@ -17,6 +17,7 @@ import type {
   PartPath,
   RawSidecarId,
   SourceCellBorders,
+  SourceChart,
   SourceImage,
   SourceImageCrop,
   SourceNodeId,
@@ -24,6 +25,7 @@ import type {
   SourceRawShapeNode,
   SourceShape,
   SourceShapeNode,
+  SourceSmartArt,
   SourceTable,
   SourceTableCell,
   SourceTableColumn,
@@ -89,6 +91,12 @@ const KNOWN_SP_PR_CHILDREN: ReadonlySet<string> = new Set([
   "ln",
 ]);
 
+const CHART_GRAPHIC_DATA_URI = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+const SMARTART_DIAGRAM_URIS = new Set([
+  "http://schemas.openxmlformats.org/drawingml/2006/diagram",
+  "http://purl.oclc.org/ooxml/drawingml/diagram",
+]);
+
 /** `p:spTree` を読み、shape node 列を返す。 */
 export function parseShapeTree(
   spTree: XmlNode | undefined,
@@ -116,6 +124,9 @@ export function parseShapeTree(
         nodes.push(parseImage(node, partPath, nextId, orderingSlot));
       } else if (local === "graphicFrame") {
         nodes.push(parseGraphicFrame(node, partPath, nextId, orderingSlot));
+      } else if (local === "AlternateContent") {
+        const parsed = parseAlternateContent(node, partPath, nextId, orderingSlot);
+        nodes.push(...parsed);
       } else {
         nodes.push(parseRawShapeNode(key, node, partPath, nextId, orderingSlot));
       }
@@ -215,6 +226,16 @@ function parseGraphicFrame(
 ): SourceShapeNode {
   const graphic = getChild(graphicFrame, "graphic");
   const graphicData = getChild(graphic, "graphicData");
+  const uri = getAttr(graphicData, "uri");
+  if (uri === CHART_GRAPHIC_DATA_URI) {
+    const parsedChart = parseChartGraphicFrame(graphicFrame, partPath, nextId, orderingSlot);
+    if (parsedChart !== undefined) return parsedChart;
+  }
+  if (uri !== undefined && SMARTART_DIAGRAM_URIS.has(uri)) {
+    const parsedSmartArt = parseSmartArtGraphicFrame(graphicFrame, partPath, nextId, orderingSlot);
+    if (parsedSmartArt !== undefined) return parsedSmartArt;
+  }
+
   const table = getChild(graphicData, "tbl");
   if (table === undefined) {
     return parseRawShapeNode("p:graphicFrame", graphicFrame, partPath, nextId, orderingSlot);
@@ -225,6 +246,127 @@ function parseGraphicFrame(
     return parseRawShapeNode("p:graphicFrame", graphicFrame, partPath, nextId, orderingSlot);
   }
   return parsedTable;
+}
+
+function parseAlternateContent(
+  alternateContent: XmlNode,
+  partPath: PartPath,
+  nextId: () => RawSidecarId,
+  orderingSlot: number,
+): SourceShapeNode[] {
+  const branches = [
+    ...getChildArray(alternateContent, "Choice"),
+    ...getChildArray(alternateContent, "Fallback"),
+  ];
+  for (const branch of branches) {
+    const parsed = parseAlternateContentBranch(branch, partPath, nextId, orderingSlot);
+    if (parsed.length > 0) return parsed;
+  }
+  return [
+    parseRawShapeNode("mc:AlternateContent", alternateContent, partPath, nextId, orderingSlot),
+  ];
+}
+
+function parseAlternateContentBranch(
+  branch: XmlNode,
+  partPath: PartPath,
+  nextId: () => RawSidecarId,
+  orderingSlot: number,
+): SourceShapeNode[] {
+  const nodes: SourceShapeNode[] = [];
+  for (const key of Object.keys(branch)) {
+    if (key.startsWith("@_") || key === "#text") continue;
+    const local = localName(key);
+    const value = branch[key];
+    const items = Array.isArray(value) ? value : [value];
+    for (const item of items) {
+      const node = item as XmlNode;
+      if (local === "sp") nodes.push(parseShape(node, partPath, nextId, orderingSlot));
+      else if (local === "pic") nodes.push(parseImage(node, partPath, nextId, orderingSlot));
+      else if (local === "graphicFrame") {
+        nodes.push(parseGraphicFrame(node, partPath, nextId, orderingSlot));
+      }
+    }
+  }
+  return nodes;
+}
+
+function parseChartGraphicFrame(
+  graphicFrame: XmlNode,
+  partPath: PartPath,
+  nextId: () => RawSidecarId,
+  orderingSlot: number,
+): SourceChart | undefined {
+  const graphic = getChild(graphicFrame, "graphic");
+  const graphicData = getChild(graphic, "graphicData");
+  const chart = getChild(graphicData, "chart");
+  const rId = getNamespacedAttr(chart, "id") ?? getAttr(chart, "id");
+  if (rId === undefined) return undefined;
+
+  const nvGraphicFramePr = getChild(graphicFrame, "nvGraphicFramePr");
+  const cNvPr = getChild(nvGraphicFramePr, "cNvPr");
+  const nodeId = sourceNodeId(cNvPr);
+  const name = getAttr(cNvPr, "name");
+  const transform = parseTransform(graphicFrame);
+  const rawSidecars = [
+    ...collectUnknownSidecars(graphicFrame, KNOWN_GRAPHIC_FRAME_CHILDREN, nextId),
+    ...collectUnknownSidecars(graphic, KNOWN_GRAPHIC_CHILDREN, nextId),
+    ...collectUnknownSidecars(graphicData, new Set(["chart"]), nextId),
+  ];
+
+  return {
+    kind: "chart",
+    ...(nodeId !== undefined ? { nodeId } : {}),
+    ...(name !== undefined ? { name } : {}),
+    ...(transform !== undefined ? { transform } : {}),
+    chartRelationshipId: asRelationshipId(rId),
+    handle: {
+      partPath,
+      ...(nodeId !== undefined ? { nodeId } : {}),
+      relationshipId: asRelationshipId(rId),
+      orderingSlot,
+    },
+    ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
+  };
+}
+
+function parseSmartArtGraphicFrame(
+  graphicFrame: XmlNode,
+  partPath: PartPath,
+  nextId: () => RawSidecarId,
+  orderingSlot: number,
+): SourceSmartArt | undefined {
+  const graphic = getChild(graphicFrame, "graphic");
+  const graphicData = getChild(graphic, "graphicData");
+  const relIds = getChild(graphicData, "relIds");
+  const dmRId = getNamespacedAttr(relIds, "dm") ?? getAttr(relIds, "dm");
+  if (dmRId === undefined) return undefined;
+
+  const nvGraphicFramePr = getChild(graphicFrame, "nvGraphicFramePr");
+  const cNvPr = getChild(nvGraphicFramePr, "cNvPr");
+  const nodeId = sourceNodeId(cNvPr);
+  const name = getAttr(cNvPr, "name");
+  const transform = parseTransform(graphicFrame);
+  const rawSidecars = [
+    ...collectUnknownSidecars(graphicFrame, KNOWN_GRAPHIC_FRAME_CHILDREN, nextId),
+    ...collectUnknownSidecars(graphic, KNOWN_GRAPHIC_CHILDREN, nextId),
+    ...collectUnknownSidecars(graphicData, new Set(["relIds"]), nextId),
+  ];
+
+  return {
+    kind: "smartArt",
+    ...(nodeId !== undefined ? { nodeId } : {}),
+    ...(name !== undefined ? { name } : {}),
+    ...(transform !== undefined ? { transform } : {}),
+    dataRelationshipId: asRelationshipId(dmRId),
+    handle: {
+      partPath,
+      ...(nodeId !== undefined ? { nodeId } : {}),
+      relationshipId: asRelationshipId(dmRId),
+      orderingSlot,
+    },
+    ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
+  };
 }
 
 function parseTable(

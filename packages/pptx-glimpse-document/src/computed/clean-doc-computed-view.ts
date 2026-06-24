@@ -14,6 +14,7 @@ import type {
   RelationshipId,
   SourceBackground,
   SourceCellBorders,
+  SourceChart,
   SourceFill,
   SourceImage,
   SourceOutline,
@@ -22,6 +23,7 @@ import type {
   SourceRunProperties,
   SourceShape,
   SourceShapeNode,
+  SourceSmartArt,
   SourceTable,
   SourceTableCell,
   SourceTableColumn,
@@ -56,6 +58,7 @@ export interface ComputedSlide {
   readonly slideSize?: ComputedSlideSize;
   readonly relationships: readonly ComputedRelationship[];
   readonly colorMap: Readonly<Record<string, string>>;
+  readonly colorScheme: Readonly<Record<string, string>>;
   readonly background?: ComputedBackground;
   readonly showMasterShapes: boolean;
   readonly layoutShowMasterShapes: boolean;
@@ -76,6 +79,8 @@ export type ComputedElement =
   | ComputedShapeElement
   | ComputedImageElement
   | ComputedTableElement
+  | ComputedChartElement
+  | ComputedSmartArtElement
   | ComputedRawElement;
 
 export type ComputedElementLayer = "master" | "layout" | "slide";
@@ -110,6 +115,25 @@ export interface ComputedTableElement extends ComputedElementBase {
   readonly sourceNode: SourceTable;
   readonly transform?: SourceTransform;
   readonly table: ComputedTableData;
+}
+
+export interface ComputedChartElement extends ComputedElementBase {
+  readonly kind: "chart";
+  readonly sourceNode: SourceChart;
+  readonly transform?: SourceTransform;
+  readonly relationship?: ComputedRelationship;
+  readonly chartXml?: string;
+}
+
+export interface ComputedSmartArtElement extends ComputedElementBase {
+  readonly kind: "smartArt";
+  readonly sourceNode: SourceSmartArt;
+  readonly transform?: SourceTransform;
+  readonly dataRelationship?: ComputedRelationship;
+  readonly drawingRelationship?: ComputedRelationship;
+  readonly drawingPartPath?: PartPath;
+  readonly drawingXml?: string;
+  readonly drawingRelationships: readonly ComputedRelationship[];
 }
 
 export interface ComputedTableData {

@@ -4,7 +4,13 @@ import { fileURLToPath } from "node:url";
 import { zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 
-import type { SourceImage, SourceShape, SourceTable } from "../experimental.js";
+import type {
+  SourceChart,
+  SourceImage,
+  SourceShape,
+  SourceSmartArt,
+  SourceTable,
+} from "../experimental.js";
 // 実際の公開面 (`@pptx-glimpse/document/experimental`) 経由で import する。
 import { readPptx } from "../experimental.js";
 
@@ -330,6 +336,47 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(table.table.rows[0].cells[0].borders?.left).toEqual({
       width: 12700,
       fill: { kind: "solid", color: { kind: "srgb", hex: "FF0000" } },
+    });
+  });
+
+  it("graphicFrame chart と AlternateContent 内 SmartArt を typed source node として読む", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<p:graphicFrame>` +
+          `<p:nvGraphicFramePr><p:cNvPr id="30" name="Revenue chart"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr>` +
+          `<p:xfrm><a:off x="100" y="200"/><a:ext cx="300" cy="400"/></p:xfrm>` +
+          `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">` +
+          `<c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" r:id="rIdChart"/>` +
+          `</a:graphicData></a:graphic>` +
+          `</p:graphicFrame>` +
+          `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">` +
+          `<mc:Choice Requires="dgm">` +
+          `<p:graphicFrame>` +
+          `<p:nvGraphicFramePr><p:cNvPr id="31" name="Process"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr>` +
+          `<p:xfrm><a:off x="500" y="600"/><a:ext cx="700" cy="800"/></p:xfrm>` +
+          `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/diagram">` +
+          `<dgm:relIds xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram" r:dm="rIdDiagramData"/>` +
+          `</a:graphicData></a:graphic>` +
+          `</p:graphicFrame>` +
+          `</mc:Choice>` +
+          `</mc:AlternateContent>`,
+      ),
+    );
+
+    const [chart, smartArt] = source.slides[0].shapes as [SourceChart, SourceSmartArt];
+    expect(chart).toMatchObject({
+      kind: "chart",
+      nodeId: "30",
+      name: "Revenue chart",
+      chartRelationshipId: "rIdChart",
+      transform: { offsetX: 100, offsetY: 200, width: 300, height: 400 },
+    });
+    expect(smartArt).toMatchObject({
+      kind: "smartArt",
+      nodeId: "31",
+      name: "Process",
+      dataRelationshipId: "rIdDiagramData",
+      transform: { offsetX: 500, offsetY: 600, width: 700, height: 800 },
     });
   });
 });
