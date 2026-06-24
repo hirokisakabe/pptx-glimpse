@@ -134,6 +134,7 @@ export interface ComputedSmartArtElement extends ComputedElementBase {
   readonly drawingPartPath?: PartPath;
   readonly drawingXml?: string;
   readonly drawingRelationships: readonly ComputedRelationship[];
+  readonly media: readonly MediaPart[];
 }
 
 export interface ComputedTableData {

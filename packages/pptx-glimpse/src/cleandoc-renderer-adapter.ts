@@ -281,7 +281,9 @@ function adaptSmartArt(
       get: (path: string) => (path === smartArt.drawingPartPath ? smartArt.drawingXml : undefined),
       has: (path: string) => path === smartArt.drawingPartPath,
     },
-    media: { get: () => undefined },
+    media: {
+      get: (path: string) => smartArt.media.find((media) => media.partPath === path)?.bytes,
+    },
   };
   const orderedParsed = parseXmlOrdered(smartArt.drawingXml);
   const orderedSpTree = navigateOrdered(orderedParsed, ["drawing", "spTree"]);

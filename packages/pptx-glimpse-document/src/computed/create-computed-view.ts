@@ -83,6 +83,10 @@ const DIAGRAM_DATA_REL_TYPES: ReadonlySet<string> = new Set([
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData",
   "http://purl.oclc.org/ooxml/officeDocument/relationships/diagramData",
 ]);
+const DIAGRAM_DRAWING_REL_TYPES: ReadonlySet<string> = new Set([
+  "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing",
+  "http://purl.oclc.org/ooxml/officeDocument/relationships/diagramDrawing",
+]);
 
 const textDecoder = new TextDecoder();
 
@@ -440,9 +444,9 @@ function computeSmartArtElement(
     dataRelationship?.targetPartPath !== undefined
       ? resolveRelationships(context.source, dataRelationship.targetPartPath)
       : [];
-  const drawingRelationship =
-    dataRelationships.find((rel) => rel.type.includes("diagramDrawing")) ??
-    context.relationships.find((rel) => rel.type.includes("diagramDrawing"));
+  const drawingRelationship = dataRelationships.find((rel) =>
+    DIAGRAM_DRAWING_REL_TYPES.has(rel.type),
+  );
   const drawingPartPath = drawingRelationship?.targetPartPath;
   const drawingXml =
     drawingPartPath !== undefined ? readRawPackageText(context.source, drawingPartPath) : undefined;
@@ -459,6 +463,7 @@ function computeSmartArtElement(
     ...(drawingXml !== undefined ? { drawingXml } : {}),
     drawingRelationships:
       drawingPartPath !== undefined ? resolveRelationships(context.source, drawingPartPath) : [],
+    media: context.source.packageGraph.media,
   };
 }
 

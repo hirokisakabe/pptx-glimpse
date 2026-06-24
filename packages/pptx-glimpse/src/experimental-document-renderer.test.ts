@@ -22,7 +22,7 @@ const DOCUMENT_RENDER_TEST_SCOPE = [
 ] as const;
 
 const DOCUMENT_RENDER_UNSUPPORTED_SUBSET = [
-  "raw shape-tree nodes such as tables, charts, groups, and unsupported graphicFrame content",
+  "raw shape-tree nodes such as groups and unsupported graphicFrame content",
   "raw background and fill variants outside the CleanDoc adapter subset",
   "unresolved images without a package media payload",
   "elements missing computed transforms",
@@ -46,7 +46,7 @@ describe("experimental document render path", () => {
     `);
     expect(DOCUMENT_RENDER_UNSUPPORTED_SUBSET).toMatchInlineSnapshot(`
       [
-        "raw shape-tree nodes such as tables, charts, groups, and unsupported graphicFrame content",
+        "raw shape-tree nodes such as groups and unsupported graphicFrame content",
         "raw background and fill variants outside the CleanDoc adapter subset",
         "unresolved images without a package media payload",
         "elements missing computed transforms",

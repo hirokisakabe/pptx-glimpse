@@ -384,7 +384,9 @@ describe("readPptx — typed shape detail (synthetic)", () => {
       transform: { offsetX: 500, offsetY: 600, width: 700, height: 800 },
     });
     expect(chart.rawSidecars?.map((sidecar) => sidecar.node.name)).toContain("c:chart");
-    expect(smartArt.rawSidecars?.map((sidecar) => sidecar.node.name)).toContain("dgm:relIds");
+    expect(smartArt.rawSidecars?.map((sidecar) => sidecar.node.name)).toEqual(
+      expect.arrayContaining(["dgm:relIds", "mc:AlternateContent"]),
+    );
     expect(connector).toMatchObject({ kind: "raw", raw: { node: { name: "p:cxnSp" } } });
   });
 });
