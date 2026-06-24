@@ -1,5 +1,12 @@
 import type { SourceCustomGeometryPath } from "../source/index.js";
-import { getAttr, getChild, getChildArray, type XmlNode } from "./xml.js";
+import {
+  getAttr,
+  getChild,
+  getChildArray,
+  localName,
+  type XmlNode,
+  type XmlOrderedNode,
+} from "./xml.js";
 
 interface GuideDefinition {
   readonly name: string;
@@ -8,6 +15,7 @@ interface GuideDefinition {
 
 export function parseCustomGeometry(
   custGeom: XmlNode | undefined,
+  orderedCustGeom?: readonly XmlOrderedNode[],
 ): SourceCustomGeometryPath[] | undefined {
   const pathLst = getChild(custGeom, "pathLst");
   const paths = getChildArray(pathLst, "path");
@@ -15,15 +23,19 @@ export function parseCustomGeometry(
 
   const avGuides = parseGuideList(getChild(custGeom, "avLst"));
   const guides = parseGuideList(getChild(custGeom, "gdLst"));
+  const orderedPaths = orderedChildEntries(
+    orderedChildChildren(orderedCustGeom, "pathLst"),
+    "path",
+  );
   const result: SourceCustomGeometryPath[] = [];
 
-  for (const path of paths) {
+  for (const [index, path] of paths.entries()) {
     const width = numericAttr(path, "w") ?? 0;
     const height = numericAttr(path, "h") ?? 0;
     if (width === 0 && height === 0) continue;
 
     const variables = evaluateGuides(avGuides, guides, width, height);
-    const commands = buildPathCommands(path, variables);
+    const commands = buildPathCommands(path, variables, orderedNodeChildren(orderedPaths[index]));
     if (commands !== undefined) result.push({ width, height, commands });
   }
 
@@ -39,21 +51,19 @@ function parseGuideList(parent: XmlNode | undefined): GuideDefinition[] {
     .filter((guide) => guide.name !== "" && guide.formula !== "");
 }
 
-function buildPathCommands(path: XmlNode, variables: Record<string, number>): string | undefined {
+function buildPathCommands(
+  path: XmlNode,
+  variables: Record<string, number>,
+  orderedCommands?: readonly XmlOrderedNode[],
+): string | undefined {
   const parts: string[] = [];
   let currentX = 0;
   let currentY = 0;
   let startX = 0;
   let startY = 0;
 
-  for (const key of Object.keys(path)) {
-    if (key.startsWith("@_")) continue;
-    const local = key.includes(":") ? key.slice(key.indexOf(":") + 1) : key;
-    const value = path[key];
-    const items = Array.isArray(value) ? value : [value];
-
-    for (const item of items) {
-      const node = item as XmlNode;
+  for (const { local, nodes } of pathCommandNodes(path, orderedCommands)) {
+    for (const node of nodes) {
       if (local === "moveTo") {
         const point = firstPoint(node, variables);
         if (point !== undefined) {
@@ -100,6 +110,30 @@ function buildPathCommands(path: XmlNode, variables: Record<string, number>): st
   }
 
   return parts.length > 0 ? parts.join(" ") : undefined;
+}
+
+function pathCommandNodes(
+  path: XmlNode,
+  orderedCommands: readonly XmlOrderedNode[] | undefined,
+): Array<{ readonly local: string; readonly nodes: readonly XmlNode[] }> {
+  if (orderedCommands === undefined) {
+    return Object.keys(path)
+      .filter((key) => !key.startsWith("@_"))
+      .map((key) => ({ local: localName(key), nodes: getChildArray(path, localName(key)) }));
+  }
+
+  const counters: Record<string, number> = {};
+  const result: Array<{ readonly local: string; readonly nodes: readonly XmlNode[] }> = [];
+  for (const command of orderedCommands) {
+    const key = orderedNodeKey(command);
+    if (key === undefined) continue;
+    const local = localName(key);
+    const index = counters[local] ?? 0;
+    counters[local] = index + 1;
+    const node = getChildArray(path, local)[index];
+    if (node !== undefined) result.push({ local, nodes: [node] });
+  }
+  return result;
 }
 
 function firstPoint(
@@ -206,6 +240,29 @@ function evaluateFormula(formula: string, variables: Record<string, number>): nu
   if (op === "min") return Math.min(resolve(tokens[1]), resolve(tokens[2]));
   if (op === "max") return Math.max(resolve(tokens[1]), resolve(tokens[2]));
   if (op === "abs") return Math.abs(resolve(tokens[1]));
+  if (op === "sqrt") return Math.round(Math.sqrt(resolve(tokens[1])));
+  if (op === "sin") return Math.round(resolve(tokens[1]) * Math.sin(toRadians(resolve(tokens[2]))));
+  if (op === "cos") return Math.round(resolve(tokens[1]) * Math.cos(toRadians(resolve(tokens[2]))));
+  if (op === "tan") return Math.round(resolve(tokens[1]) * Math.tan(toRadians(resolve(tokens[2]))));
+  if (op === "at2")
+    return Math.round(Math.atan2(resolve(tokens[2]), resolve(tokens[1])) * (180 / Math.PI) * 60000);
+  if (op === "mod") {
+    const a = resolve(tokens[1]);
+    const b = resolve(tokens[2]);
+    const c = resolve(tokens[3]);
+    return Math.round(Math.sqrt(a * a + b * b + c * c));
+  }
+  if (op === "cat2") {
+    return Math.round(
+      resolve(tokens[1]) * Math.cos(Math.atan2(resolve(tokens[3]), resolve(tokens[2]))),
+    );
+  }
+  if (op === "sat2") {
+    return Math.round(
+      resolve(tokens[1]) * Math.sin(Math.atan2(resolve(tokens[3]), resolve(tokens[2]))),
+    );
+  }
+  if (op === "?:") return resolve(tokens[1]) > 0 ? resolve(tokens[2]) : resolve(tokens[3]);
   return 0;
 }
 
@@ -223,4 +280,39 @@ function numericAttr(node: XmlNode | undefined, name: string): number | undefine
 
 function round(value: number): number {
   return Math.round(value * 1000) / 1000;
+}
+
+function toRadians(ooxmlAngle: number): number {
+  return (ooxmlAngle / 60000) * (Math.PI / 180);
+}
+
+function orderedChildChildren(
+  parent: readonly XmlOrderedNode[] | undefined,
+  childLocalName: string,
+): readonly XmlOrderedNode[] | undefined {
+  const child = orderedChildEntries(parent, childLocalName)[0];
+  return orderedNodeChildren(child);
+}
+
+function orderedChildEntries(
+  parent: readonly XmlOrderedNode[] | undefined,
+  childLocalName: string,
+): readonly XmlOrderedNode[] {
+  if (parent === undefined) return [];
+  return parent.filter((child) => {
+    const key = orderedNodeKey(child);
+    return key !== undefined && localName(key) === childLocalName;
+  });
+}
+
+function orderedNodeChildren(
+  node: XmlOrderedNode | undefined,
+): readonly XmlOrderedNode[] | undefined {
+  const key = node !== undefined ? orderedNodeKey(node) : undefined;
+  const value = key !== undefined ? node?.[key] : undefined;
+  return Array.isArray(value) ? (value as readonly XmlOrderedNode[]) : undefined;
+}
+
+function orderedNodeKey(node: XmlOrderedNode): string | undefined {
+  return Object.keys(node).find((key) => key !== ":@");
 }

@@ -213,7 +213,7 @@ export function isTrue(value: string | undefined): boolean {
 function parseDashStyle(prstDash: XmlNode | undefined): SourceDashStyle | undefined {
   const value = getAttr(prstDash, "val");
   if (value === undefined) return undefined;
-  return value as SourceDashStyle;
+  return DASH_STYLES.has(value) ? (value as SourceDashStyle) : undefined;
 }
 
 function parseCustomDash(ln: XmlNode): number[] | undefined {
@@ -247,9 +247,33 @@ function parseArrowEndpoint(node: XmlNode | undefined): SourceArrowEndpoint | un
   if (!node) return undefined;
   const type = (getAttr(node, "type") ?? "none") as SourceArrowType | "none";
   if (type === "none") return undefined;
+  if (!ARROW_TYPES.has(type)) return undefined;
+  const width = getAttr(node, "w") ?? "med";
+  const length = getAttr(node, "len") ?? "med";
   return {
     type,
-    width: (getAttr(node, "w") ?? "med") as SourceArrowSize,
-    length: (getAttr(node, "len") ?? "med") as SourceArrowSize,
+    width: ARROW_SIZES.has(width) ? (width as SourceArrowSize) : "med",
+    length: ARROW_SIZES.has(length) ? (length as SourceArrowSize) : "med",
   };
 }
+
+const DASH_STYLES: ReadonlySet<string> = new Set([
+  "solid",
+  "dash",
+  "dot",
+  "dashDot",
+  "lgDash",
+  "lgDashDot",
+  "sysDash",
+  "sysDot",
+]);
+
+const ARROW_TYPES: ReadonlySet<string> = new Set([
+  "triangle",
+  "stealth",
+  "diamond",
+  "oval",
+  "arrow",
+]);
+
+const ARROW_SIZES: ReadonlySet<string> = new Set(["sm", "med", "lg"]);

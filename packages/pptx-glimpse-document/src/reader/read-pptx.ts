@@ -155,7 +155,7 @@ function readSlideHierarchy(
   const layoutPaths = new OrderedPathSet();
 
   for (const slidePath of presentation.slidePartPaths) {
-    const part = parsePartRoot(entries, slidePath, "sld", diagnostics);
+    const part = parsePartRoot(entries, slidePath, "sld", diagnostics, true);
     if (part === undefined) continue;
     const layoutPath = resolveSingleRel(relationships, slidePath, SLIDE_LAYOUT_REL_TYPE);
     if (layoutPath === undefined) {
@@ -182,7 +182,7 @@ function readSlideHierarchy(
   const slideLayouts: SourceSlideLayout[] = [];
   const masterPaths = new OrderedPathSet();
   for (const layoutPath of layoutPaths.values()) {
-    const part = parsePartRoot(entries, layoutPath, "sldLayout", diagnostics);
+    const part = parsePartRoot(entries, layoutPath, "sldLayout", diagnostics, true);
     if (part === undefined) continue;
     const masterPath = resolveSingleRel(relationships, layoutPath, SLIDE_MASTER_REL_TYPE);
     if (masterPath !== undefined) masterPaths.add(masterPath);
@@ -200,7 +200,7 @@ function readSlideHierarchy(
   const slideMasters: SourceSlideMaster[] = [];
   const themePaths = new OrderedPathSet();
   for (const masterPath of masterPaths.values()) {
-    const part = parsePartRoot(entries, masterPath, "sldMaster", diagnostics);
+    const part = parsePartRoot(entries, masterPath, "sldMaster", diagnostics, true);
     if (part === undefined) continue;
     const themePath = resolveSingleRel(relationships, masterPath, THEME_REL_TYPE);
     if (themePath !== undefined) themePaths.add(themePath);
@@ -219,7 +219,7 @@ function readSlideHierarchy(
 
   const themes: SourceTheme[] = [];
   for (const themePath of themePaths.values()) {
-    const part = parsePartRoot(entries, themePath, "theme", diagnostics);
+    const part = parsePartRoot(entries, themePath, "theme", diagnostics, false);
     if (part === undefined) continue;
     themes.push(parseTheme(part.root, themePath));
   }
@@ -238,6 +238,7 @@ function parsePartRoot(
   partPath: PartPath,
   rootLocalName: string,
   diagnostics: Diagnostic[],
+  includeOrderedRoot: boolean,
 ): ParsedPartRoot | undefined {
   const bytes = entries.get(partPath);
   if (!bytes) {
@@ -260,7 +261,9 @@ function parsePartRoot(
     });
     return undefined;
   }
-  const orderedRoot = navigateOrdered(parseXmlOrdered(xml), [rootLocalName]) ?? [];
+  const orderedRoot = includeOrderedRoot
+    ? (navigateOrdered(parseXmlOrdered(xml), [rootLocalName]) ?? [])
+    : [];
   return { root, orderedRoot };
 }
 

@@ -210,9 +210,11 @@ function parseShapeTreeNode(
   nextId: () => RawSidecarId,
   orderingSlot: number,
 ): SourceShapeNode {
-  if (local === "sp") return parseShape(node, partPath, nextId, orderingSlot);
+  if (local === "sp") return parseShape(node, partPath, nextId, orderingSlot, orderedNode);
   if (local === "pic") return parseImage(node, partPath, nextId, orderingSlot);
-  if (local === "cxnSp") return parseConnector(node, partPath, nextId, orderingSlot);
+  if (local === "cxnSp") {
+    return parseConnector(node, partPath, nextId, orderingSlot, orderedNode);
+  }
   if (local === "grpSp") {
     const orderedGroupChildren = orderedNode?.[local] as readonly XmlOrderedNode[] | undefined;
     return parseGroup(node, partPath, nextId, orderingSlot, orderedGroupChildren);
@@ -226,6 +228,7 @@ function parseShape(
   partPath: PartPath,
   nextId: () => RawSidecarId,
   orderingSlot: number,
+  orderedNode?: XmlOrderedNode,
 ): SourceShape {
   const nvSpPr = getChild(sp, "nvSpPr");
   const cNvPr = getChild(nvSpPr, "cNvPr");
@@ -235,7 +238,7 @@ function parseShape(
 
   const spPr = getChild(sp, "spPr");
   const transform = parseTransform(spPr);
-  const geometry = parseGeometry(spPr);
+  const geometry = parseGeometry(spPr, orderedNestedChildChildren(orderedNode, "sp", "spPr"));
   const fill = parseFill(spPr, nextId);
   const outline = parseOutline(spPr, nextId);
   const textBody = parseTextBody(getChild(sp, "txBody"), partPath, nextId, nodeId, orderingSlot);
@@ -265,6 +268,7 @@ function parseConnector(
   partPath: PartPath,
   nextId: () => RawSidecarId,
   orderingSlot: number,
+  orderedNode?: XmlOrderedNode,
 ): SourceConnector {
   const nvCxnSpPr = getChild(cxnSp, "nvCxnSpPr");
   const cNvPr = getChild(nvCxnSpPr, "cNvPr");
@@ -272,7 +276,7 @@ function parseConnector(
   const name = getAttr(cNvPr, "name");
   const spPr = getChild(cxnSp, "spPr");
   const transform = parseTransform(spPr);
-  const geometry = parseGeometry(spPr);
+  const geometry = parseGeometry(spPr, orderedNestedChildChildren(orderedNode, "cxnSp", "spPr"));
   const outline = parseOutline(spPr, nextId);
   const rawSidecars = [
     ...collectUnknownSidecars(cxnSp, KNOWN_CONNECTOR_CHILDREN, nextId),
@@ -682,7 +686,10 @@ function parsePlaceholder(ph: XmlNode | undefined): SourcePlaceholder | undefine
   };
 }
 
-function parseGeometry(spPr: XmlNode | undefined): SourceGeometry | undefined {
+function parseGeometry(
+  spPr: XmlNode | undefined,
+  orderedSpPr?: readonly XmlOrderedNode[],
+): SourceGeometry | undefined {
   const prstGeom = getChild(spPr, "prstGeom");
   if (prstGeom) {
     const preset = getAttr(prstGeom, "prst");
@@ -695,7 +702,10 @@ function parseGeometry(spPr: XmlNode | undefined): SourceGeometry | undefined {
       : undefined;
   }
 
-  const customPaths = parseCustomGeometry(getChild(spPr, "custGeom"));
+  const customPaths = parseCustomGeometry(
+    getChild(spPr, "custGeom"),
+    orderedChildChildren(orderedSpPr, "custGeom"),
+  );
   if (customPaths !== undefined) return { kind: "custom", paths: customPaths };
   return undefined;
 }
@@ -705,7 +715,7 @@ function parseAdjustValues(avLst: XmlNode | undefined): Record<string, number> {
   for (const guide of getChildArray(avLst, "gd")) {
     const name = getAttr(guide, "name");
     const formula = getAttr(guide, "fmla");
-    const match = formula?.match(/val\s+(\d+)/);
+    const match = formula?.match(/val\s+(-?\d+)/);
     if (name !== undefined && match !== undefined && match !== null) {
       adjustValues[name] = Number(match[1]);
     }
@@ -758,3 +768,30 @@ function emuAttr(node: XmlNode | undefined, attrName: string) {
 }
 
 const EMPTY_KNOWN: ReadonlySet<string> = new Set();
+
+function orderedChildChildren(
+  parent: readonly XmlOrderedNode[] | undefined,
+  childLocalName: string,
+): readonly XmlOrderedNode[] | undefined {
+  const child = parent?.find((entry) => {
+    const key = Object.keys(entry).find((candidate) => candidate !== ":@");
+    return key !== undefined && localName(key) === childLocalName;
+  });
+  if (child === undefined) return undefined;
+  const key = Object.keys(child).find((candidate) => candidate !== ":@");
+  const value = key !== undefined ? child[key] : undefined;
+  return Array.isArray(value) ? (value as readonly XmlOrderedNode[]) : undefined;
+}
+
+function orderedNestedChildChildren(
+  node: XmlOrderedNode | undefined,
+  parentLocalName: string,
+  childLocalName: string,
+): readonly XmlOrderedNode[] | undefined {
+  if (node === undefined) return undefined;
+  const parentChildren = node[parentLocalName];
+  return orderedChildChildren(
+    Array.isArray(parentChildren) ? (parentChildren as readonly XmlOrderedNode[]) : undefined,
+    childLocalName,
+  );
+}

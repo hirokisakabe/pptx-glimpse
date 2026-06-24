@@ -436,6 +436,16 @@ describe("readPptx — typed shape detail (synthetic)", () => {
           `<p:sp><p:nvSpPr><p:cNvPr id="53" name="Custom third"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
           `<p:spPr><a:xfrm><a:off x="100" y="200"/><a:ext cx="300" cy="400"/></a:xfrm>` +
           `<a:custGeom><a:pathLst><a:path w="1000" h="1000"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="w" y="h"/></a:lnTo></a:path></a:pathLst></a:custGeom>` +
+          `</p:spPr></p:sp>` +
+          `<p:sp><p:nvSpPr><p:cNvPr id="54" name="Ordered custom"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="100" y="200"/><a:ext cx="300" cy="400"/></a:xfrm>` +
+          `<a:custGeom><a:pathLst><a:path w="1000" h="1000">` +
+          `<a:moveTo><a:pt x="0" y="0"/></a:moveTo>` +
+          `<a:lnTo><a:pt x="100" y="0"/></a:lnTo>` +
+          `<a:quadBezTo><a:pt x="200" y="0"/><a:pt x="200" y="100"/></a:quadBezTo>` +
+          `<a:lnTo><a:pt x="0" y="100"/></a:lnTo>` +
+          `<a:close/>` +
+          `</a:path></a:pathLst></a:custGeom>` +
           `</p:spPr></p:sp>`,
       ),
     );
@@ -444,10 +454,12 @@ describe("readPptx — typed shape detail (synthetic)", () => {
       "connector",
       "group",
       "shape",
+      "shape",
     ]);
-    const [connector, group, custom] = source.slides[0].shapes as [
+    const [connector, group, custom, orderedCustom] = source.slides[0].shapes as [
       SourceConnector,
       SourceGroup,
+      SourceShape,
       SourceShape,
     ];
     expect(connector).toMatchObject({
@@ -464,6 +476,10 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(custom.geometry).toMatchObject({
       kind: "custom",
       paths: [{ width: 1000, height: 1000, commands: "M 0 0 L 1000 1000" }],
+    });
+    expect(orderedCustom.geometry).toMatchObject({
+      kind: "custom",
+      paths: [{ width: 1000, height: 1000, commands: "M 0 0 L 100 0 Q 200 0, 200 100 L 0 100 Z" }],
     });
   });
 
