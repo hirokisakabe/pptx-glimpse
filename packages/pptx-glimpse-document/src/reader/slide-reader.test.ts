@@ -355,15 +355,20 @@ describe("readPptx — typed shape detail (synthetic)", () => {
           `<p:nvGraphicFramePr><p:cNvPr id="31" name="Process"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr>` +
           `<p:xfrm><a:off x="500" y="600"/><a:ext cx="700" cy="800"/></p:xfrm>` +
           `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/diagram">` +
-          `<dgm:relIds xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram" r:dm="rIdDiagramData"/>` +
+          `<dgm:relIds xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram" r:dm="rIdDiagramData" r:lo="rIdLayout" r:qs="rIdQuickStyle" r:cs="rIdColorStyle"/>` +
           `</a:graphicData></a:graphic>` +
           `</p:graphicFrame>` +
+          `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="32" name="Connector"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr></p:cxnSp>` +
           `</mc:Choice>` +
           `</mc:AlternateContent>`,
       ),
     );
 
-    const [chart, smartArt] = source.slides[0].shapes as [SourceChart, SourceSmartArt];
+    const [chart, smartArt, connector] = source.slides[0].shapes as [
+      SourceChart,
+      SourceSmartArt,
+      { readonly kind: "raw"; readonly raw: { readonly node: { readonly name: string } } },
+    ];
     expect(chart).toMatchObject({
       kind: "chart",
       nodeId: "30",
@@ -378,6 +383,9 @@ describe("readPptx — typed shape detail (synthetic)", () => {
       dataRelationshipId: "rIdDiagramData",
       transform: { offsetX: 500, offsetY: 600, width: 700, height: 800 },
     });
+    expect(chart.rawSidecars?.map((sidecar) => sidecar.node.name)).toContain("c:chart");
+    expect(smartArt.rawSidecars?.map((sidecar) => sidecar.node.name)).toContain("dgm:relIds");
+    expect(connector).toMatchObject({ kind: "raw", raw: { node: { name: "p:cxnSp" } } });
   });
 });
 

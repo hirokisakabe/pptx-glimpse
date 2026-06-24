@@ -92,7 +92,7 @@ const KNOWN_SP_PR_CHILDREN: ReadonlySet<string> = new Set([
 ]);
 
 const CHART_GRAPHIC_DATA_URI = "http://schemas.openxmlformats.org/drawingml/2006/chart";
-const SMARTART_DIAGRAM_URIS = new Set([
+const SMARTART_DIAGRAM_URIS: ReadonlySet<string> = new Set([
   "http://schemas.openxmlformats.org/drawingml/2006/diagram",
   "http://purl.oclc.org/ooxml/drawingml/diagram",
 ]);
@@ -285,6 +285,8 @@ function parseAlternateContentBranch(
       else if (local === "pic") nodes.push(parseImage(node, partPath, nextId, orderingSlot));
       else if (local === "graphicFrame") {
         nodes.push(parseGraphicFrame(node, partPath, nextId, orderingSlot));
+      } else {
+        nodes.push(parseRawShapeNode(key, node, partPath, nextId, orderingSlot));
       }
     }
   }
@@ -311,7 +313,7 @@ function parseChartGraphicFrame(
   const rawSidecars = [
     ...collectUnknownSidecars(graphicFrame, KNOWN_GRAPHIC_FRAME_CHILDREN, nextId),
     ...collectUnknownSidecars(graphic, KNOWN_GRAPHIC_CHILDREN, nextId),
-    ...collectUnknownSidecars(graphicData, new Set(["chart"]), nextId),
+    ...collectUnknownSidecars(graphicData, EMPTY_KNOWN, nextId),
   ];
 
   return {
@@ -350,7 +352,7 @@ function parseSmartArtGraphicFrame(
   const rawSidecars = [
     ...collectUnknownSidecars(graphicFrame, KNOWN_GRAPHIC_FRAME_CHILDREN, nextId),
     ...collectUnknownSidecars(graphic, KNOWN_GRAPHIC_CHILDREN, nextId),
-    ...collectUnknownSidecars(graphicData, new Set(["relIds"]), nextId),
+    ...collectUnknownSidecars(graphicData, EMPTY_KNOWN, nextId),
   ];
 
   return {

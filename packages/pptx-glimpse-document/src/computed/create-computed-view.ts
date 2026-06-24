@@ -79,6 +79,10 @@ const FALLBACK_SCHEME_COLORS: Readonly<Record<string, string>> = {
 
 const IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
 const CHART_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+const DIAGRAM_DATA_REL_TYPES: ReadonlySet<string> = new Set([
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData",
+  "http://purl.oclc.org/ooxml/officeDocument/relationships/diagramData",
+]);
 
 const textDecoder = new TextDecoder();
 
@@ -430,7 +434,7 @@ function computeSmartArtElement(
   partPath: PartPath,
 ): ComputedSmartArtElement {
   const dataRelationship = context.relationships.find(
-    (rel) => rel.id === smartArt.dataRelationshipId,
+    (rel) => rel.id === smartArt.dataRelationshipId && DIAGRAM_DATA_REL_TYPES.has(rel.type),
   );
   const dataRelationships =
     dataRelationship?.targetPartPath !== undefined
