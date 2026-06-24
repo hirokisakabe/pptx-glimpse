@@ -78,7 +78,10 @@ const FALLBACK_SCHEME_COLORS: Readonly<Record<string, string>> = {
 };
 
 const IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
-const CHART_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
+const CHART_REL_TYPES: ReadonlySet<string> = new Set([
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart",
+  "http://purl.oclc.org/ooxml/officeDocument/relationships/chart",
+]);
 const DIAGRAM_DATA_REL_TYPES: ReadonlySet<string> = new Set([
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData",
   "http://purl.oclc.org/ooxml/officeDocument/relationships/diagramData",
@@ -414,7 +417,7 @@ function computeChartElement(
   partPath: PartPath,
 ): ComputedChartElement {
   const relationship = context.relationships.find(
-    (rel) => rel.id === chart.chartRelationshipId && rel.type === CHART_REL_TYPE,
+    (rel) => rel.id === chart.chartRelationshipId && CHART_REL_TYPES.has(rel.type),
   );
   const chartXml =
     relationship?.targetPartPath !== undefined

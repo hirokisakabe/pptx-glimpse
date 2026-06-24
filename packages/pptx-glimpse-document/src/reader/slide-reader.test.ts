@@ -407,6 +407,29 @@ describe("readPptx — typed shape detail (synthetic)", () => {
       raw: { node: { name: "mc:AlternateContent" } },
     });
   });
+
+  it("AlternateContent の Choice が raw のみなら supported Fallback branch を読む", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">` +
+          `<mc:Choice Requires="ext"><p:cxnSp><p:nvCxnSpPr><p:cNvPr id="41" name="Connector"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr></p:cxnSp></mc:Choice>` +
+          `<mc:Fallback>` +
+          `<p:sp><p:nvSpPr><p:cNvPr id="42" name="Fallback shape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="10" y="20"/><a:ext cx="30" cy="40"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>` +
+          `</p:sp>` +
+          `</mc:Fallback>` +
+          `</mc:AlternateContent>`,
+      ),
+    );
+
+    expect(source.slides[0].shapes).toHaveLength(1);
+    expect(source.slides[0].shapes[0]).toMatchObject({
+      kind: "shape",
+      nodeId: "42",
+      name: "Fallback shape",
+      rawSidecars: [{ node: { name: "mc:AlternateContent" } }],
+    });
+  });
 });
 
 function firstShape(source: ReturnType<typeof readPptx>, name: string): SourceShape {

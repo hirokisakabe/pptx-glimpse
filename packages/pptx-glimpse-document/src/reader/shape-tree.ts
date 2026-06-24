@@ -262,15 +262,7 @@ function parseAlternateContent(
     const parsed = parseAlternateContentBranch(branch, partPath, nextId, orderingSlot);
     if (parsed.length > 0) {
       if (parsed.every((node) => node.kind === "raw")) {
-        return [
-          parseRawShapeNode(
-            "mc:AlternateContent",
-            alternateContent,
-            partPath,
-            nextId,
-            orderingSlot,
-          ),
-        ];
+        continue;
       }
       return parsed.map((node) =>
         attachRawSidecar(node, makeSidecar("mc:AlternateContent", alternateContent, nextId)),

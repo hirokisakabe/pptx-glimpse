@@ -68,6 +68,21 @@ describe("createComputedView", () => {
     expect(smartArt.drawingRelationships).toHaveLength(0);
   });
 
+  it("Strict OOXML の chart relationship type でも chart XML part を解決する", () => {
+    const source = buildSourceWithChartAndSmartArt({
+      chartRelationshipType: "http://purl.oclc.org/ooxml/officeDocument/relationships/chart",
+    });
+    const slide = getSlide(createComputedView(source).slides, 0);
+    const chart = slide.elements.find((element) => element.kind === "chart");
+
+    expect(chart?.kind).toBe("chart");
+    if (chart?.kind !== "chart") throw new Error("chart element not found");
+    expect(chart.relationship?.type).toBe(
+      "http://purl.oclc.org/ooxml/officeDocument/relationships/chart",
+    );
+    expect(chart.chartXml).toContain("<c:barChart");
+  });
+
   it("theme color resolution と background fallback を解決する", () => {
     const computed = createComputedView(buildSource());
     const slide = getSlide(computed.slides, 0);
@@ -463,10 +478,17 @@ function buildSource(): CleanDocSource {
   };
 }
 
-function buildSourceWithChartAndSmartArt(): CleanDocSource {
+function buildSourceWithChartAndSmartArt(
+  options: {
+    readonly chartRelationshipType?: string;
+  } = {},
+): CleanDocSource {
   const source = buildSource();
   const slidePath = asPartPath("ppt/slides/slide2.xml");
   const dataPath = asPartPath("ppt/diagrams/data1.xml");
+  const chartRelationshipType =
+    options.chartRelationshipType ??
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart";
   return {
     ...source,
     packageGraph: {
@@ -480,7 +502,7 @@ function buildSourceWithChartAndSmartArt(): CleanDocSource {
                   ...entry.relationships,
                   {
                     id: asRelationshipId("rIdChart"),
-                    type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart",
+                    type: chartRelationshipType,
                     target: "../charts/chart1.xml",
                   },
                   {
