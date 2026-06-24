@@ -389,6 +389,24 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     );
     expect(connector).toMatchObject({ kind: "raw", raw: { node: { name: "p:cxnSp" } } });
   });
+
+  it("AlternateContent の branch が raw node のみの場合は wrapper を raw source node として保持する", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">` +
+          `<mc:Choice Requires="cxn">` +
+          `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="40" name="Connector"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr></p:cxnSp>` +
+          `</mc:Choice>` +
+          `</mc:AlternateContent>`,
+      ),
+    );
+
+    expect(source.slides[0].shapes).toHaveLength(1);
+    expect(source.slides[0].shapes[0]).toMatchObject({
+      kind: "raw",
+      raw: { node: { name: "mc:AlternateContent" } },
+    });
+  });
 });
 
 function firstShape(source: ReturnType<typeof readPptx>, name: string): SourceShape {
