@@ -1,8 +1,12 @@
 import type {
   Background,
   BodyProperties,
+  ChartElement,
+  ColorMap,
+  ColorScheme,
   Fill,
   Geometry,
+  GroupElement,
   ImageElement,
   Outline,
   Paragraph,
@@ -23,6 +27,7 @@ import { asEmu, asHundredthPt, uint8ArrayToBase64 } from "pptx-glimpse-renderer"
 import type {
   CleanDocComputedView,
   ComputedBackground,
+  ComputedChartElement,
   ComputedColor,
   ComputedElement,
   ComputedFill,
@@ -33,9 +38,15 @@ import type {
   ComputedShapeElement,
   ComputedSlide,
   ComputedSlideSize,
+  ComputedSmartArtElement,
   ComputedTableElement,
   ComputedTextBody,
 } from "../../pptx-glimpse-document/src/experimental.js";
+import { ColorResolver } from "./color/color-resolver.js";
+import { parseChart } from "./parser/chart-parser.js";
+import type { Relationship } from "./parser/relationship-parser.js";
+import { navigateOrdered, parseShapeTree } from "./parser/slide-parser.js";
+import { parseXml, parseXmlOrdered, type XmlNode } from "./parser/xml-parser.js";
 
 interface RendererAdapterResult {
   readonly slideSize?: SlideSize;
@@ -50,6 +61,8 @@ export interface RendererAdapterDiagnostic {
     | "cleandoc-adapter.raw-element-skipped"
     | "cleandoc-adapter.raw-background-ignored"
     | "cleandoc-adapter.raw-fill-ignored"
+    | "cleandoc-adapter.unresolved-chart-skipped"
+    | "cleandoc-adapter.unresolved-smartart-skipped"
     | "cleandoc-adapter.unresolved-image-skipped";
   readonly message: string;
   readonly slideNumber?: number;
@@ -66,6 +79,36 @@ const ZERO_TRANSFORM: Transform = {
   rotation: 0,
   flipH: false,
   flipV: false,
+};
+
+const DEFAULT_COLOR_SCHEME: ColorScheme = {
+  dk1: "#000000",
+  lt1: "#ffffff",
+  dk2: "#44546a",
+  lt2: "#e7e6e6",
+  accent1: "#4472c4",
+  accent2: "#ed7d31",
+  accent3: "#a5a5a5",
+  accent4: "#ffc000",
+  accent5: "#5b9bd5",
+  accent6: "#70ad47",
+  hlink: "#0563c1",
+  folHlink: "#954f72",
+};
+
+const DEFAULT_COLOR_MAP: ColorMap = {
+  bg1: "lt1",
+  tx1: "dk1",
+  bg2: "lt2",
+  tx2: "dk2",
+  accent1: "accent1",
+  accent2: "accent2",
+  accent3: "accent3",
+  accent4: "accent4",
+  accent5: "accent5",
+  accent6: "accent6",
+  hlink: "hlink",
+  folHlink: "folHlink",
 };
 
 export function adaptComputedViewToRendererModel(
@@ -134,6 +177,14 @@ function adaptElement(
     return image === undefined ? [] : [image];
   }
   if (element.kind === "table") return [adaptTable(element, slide, diagnostics)];
+  if (element.kind === "chart") {
+    const chart = adaptChart(element, slide, diagnostics);
+    return chart === undefined ? [] : [chart];
+  }
+  if (element.kind === "smartArt") {
+    const smartArt = adaptSmartArt(element, slide, diagnostics);
+    return smartArt === undefined ? [] : [smartArt];
+  }
 
   diagnostics.push({
     severity: "warning",
@@ -143,6 +194,140 @@ function adaptElement(
     sourcePartPath: element.sourcePartPath,
   });
   return [];
+}
+
+function adaptChart(
+  chart: ComputedChartElement,
+  slide: ComputedSlide,
+  diagnostics: DiagnosticSink,
+): ChartElement | undefined {
+  if (chart.chartXml === undefined) {
+    diagnostics.push({
+      severity: "warning",
+      code: "cleandoc-adapter.unresolved-chart-skipped",
+      message: "CleanDoc chart element has no resolved chart XML.",
+      slideNumber: slide.slideNumber,
+      sourcePartPath: chart.sourcePartPath,
+    });
+    return undefined;
+  }
+
+  const chartData = parseChart(chart.chartXml, createColorResolver(slide));
+  if (chartData === null) {
+    diagnostics.push({
+      severity: "warning",
+      code: "cleandoc-adapter.unresolved-chart-skipped",
+      message: "CleanDoc chart XML could not be parsed into the renderer chart model.",
+      slideNumber: slide.slideNumber,
+      sourcePartPath: chart.sourcePartPath,
+    });
+    return undefined;
+  }
+
+  return {
+    type: "chart",
+    transform: adaptTransform(chart.transform, slide, diagnostics, chart.sourcePartPath),
+    chart: chartData,
+  };
+}
+
+function adaptSmartArt(
+  smartArt: ComputedSmartArtElement,
+  slide: ComputedSlide,
+  diagnostics: DiagnosticSink,
+): GroupElement | undefined {
+  if (smartArt.drawingXml === undefined || smartArt.drawingPartPath === undefined) {
+    diagnostics.push({
+      severity: "warning",
+      code: "cleandoc-adapter.unresolved-smartart-skipped",
+      message: "CleanDoc SmartArt element has no resolved diagram drawing XML.",
+      slideNumber: slide.slideNumber,
+      sourcePartPath: smartArt.sourcePartPath,
+    });
+    return undefined;
+  }
+
+  const parsed = parseXml(smartArt.drawingXml);
+  const drawing = parsed.drawing as XmlNode | undefined;
+  const spTree = drawing?.spTree as XmlNode | undefined;
+  if (spTree === undefined) {
+    diagnostics.push({
+      severity: "warning",
+      code: "cleandoc-adapter.unresolved-smartart-skipped",
+      message: "CleanDoc SmartArt diagram drawing XML has no shape tree.",
+      slideNumber: slide.slideNumber,
+      sourcePartPath: smartArt.sourcePartPath,
+    });
+    return undefined;
+  }
+
+  const rels = new Map<string, Relationship>(
+    smartArt.drawingRelationships.map((rel) => [
+      rel.id,
+      {
+        id: rel.id,
+        type: rel.type,
+        target: rel.source.target,
+        ...(rel.targetMode !== undefined ? { targetMode: rel.targetMode } : {}),
+      },
+    ]),
+  );
+  const archive = {
+    files: {
+      get: (path: string) => (path === smartArt.drawingPartPath ? smartArt.drawingXml : undefined),
+      has: (path: string) => path === smartArt.drawingPartPath,
+    },
+    media: {
+      get: (path: string) => smartArt.media.find((media) => media.partPath === path)?.bytes,
+    },
+  };
+  const orderedParsed = parseXmlOrdered(smartArt.drawingXml);
+  const orderedSpTree = navigateOrdered(orderedParsed, ["drawing", "spTree"]);
+  const children = parseShapeTree(
+    spTree,
+    rels,
+    smartArt.drawingPartPath,
+    archive,
+    createColorResolver(slide),
+    undefined,
+    { rels, archive, basePath: smartArt.drawingPartPath },
+    undefined,
+    orderedSpTree,
+  );
+  if (children.length === 0) return undefined;
+
+  const groupTransform = adaptTransform(
+    smartArt.transform,
+    slide,
+    diagnostics,
+    smartArt.sourcePartPath,
+  );
+  const childTransform = adaptSmartArtChildTransform(spTree, groupTransform);
+
+  return {
+    type: "group",
+    transform: groupTransform,
+    childTransform,
+    children,
+    effects: null,
+    ...(smartArt.sourceNode.name !== undefined ? { altText: smartArt.sourceNode.name } : {}),
+  };
+}
+
+function adaptSmartArtChildTransform(spTree: XmlNode, groupTransform: Transform): Transform {
+  const xfrm = (spTree.grpSpPr as XmlNode | undefined)?.xfrm as XmlNode | undefined;
+  const chOff = xfrm?.chOff as XmlNode | undefined;
+  const chExt = xfrm?.chExt as XmlNode | undefined;
+
+  return {
+    offsetX: asEmu(Number(chOff?.["@_x"] ?? 0)),
+    offsetY: asEmu(Number(chOff?.["@_y"] ?? 0)),
+    extentWidth: asEmu(Number(chExt?.["@_cx"] ?? groupTransform.extentWidth)),
+    extentHeight: asEmu(Number(chExt?.["@_cy"] ?? groupTransform.extentHeight)),
+    rotation: 0,
+    flipH: false,
+    flipV: false,
+  };
 }
 
 function adaptTable(
@@ -421,6 +606,16 @@ function adaptColor(color: ComputedColor): ResolvedColor {
     hex: color.hex,
     alpha: color.alpha,
   };
+}
+
+function createColorResolver(slide: ComputedSlide): ColorResolver {
+  return new ColorResolver(
+    { ...DEFAULT_COLOR_SCHEME, ...slide.colorScheme },
+    {
+      ...DEFAULT_COLOR_MAP,
+      ...slide.colorMap,
+    },
+  );
 }
 
 function ooxmlPercentToRatio(value: number | undefined): number {

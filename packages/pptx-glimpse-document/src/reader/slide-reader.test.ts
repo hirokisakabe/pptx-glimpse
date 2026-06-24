@@ -4,7 +4,13 @@ import { fileURLToPath } from "node:url";
 import { zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 
-import type { SourceImage, SourceShape, SourceTable } from "../experimental.js";
+import type {
+  SourceChart,
+  SourceImage,
+  SourceShape,
+  SourceSmartArt,
+  SourceTable,
+} from "../experimental.js";
 // 実際の公開面 (`@pptx-glimpse/document/experimental`) 経由で import する。
 import { readPptx } from "../experimental.js";
 
@@ -330,6 +336,119 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(table.table.rows[0].cells[0].borders?.left).toEqual({
       width: 12700,
       fill: { kind: "solid", color: { kind: "srgb", hex: "FF0000" } },
+    });
+  });
+
+  it("graphicFrame chart と AlternateContent 内 SmartArt を typed source node として読む", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<p:graphicFrame>` +
+          `<p:nvGraphicFramePr><p:cNvPr id="30" name="Revenue chart"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr>` +
+          `<p:xfrm><a:off x="100" y="200"/><a:ext cx="300" cy="400"/></p:xfrm>` +
+          `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart">` +
+          `<c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" r:id="rIdChart"/>` +
+          `</a:graphicData></a:graphic>` +
+          `</p:graphicFrame>` +
+          `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">` +
+          `<mc:Choice Requires="dgm">` +
+          `<p:graphicFrame>` +
+          `<p:nvGraphicFramePr><p:cNvPr id="31" name="Process"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr>` +
+          `<p:xfrm><a:off x="500" y="600"/><a:ext cx="700" cy="800"/></p:xfrm>` +
+          `<a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/diagram">` +
+          `<dgm:relIds xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram" r:dm="rIdDiagramData" r:lo="rIdLayout" r:qs="rIdQuickStyle" r:cs="rIdColorStyle"/>` +
+          `</a:graphicData></a:graphic>` +
+          `</p:graphicFrame>` +
+          `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="32" name="Connector"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr></p:cxnSp>` +
+          `</mc:Choice>` +
+          `</mc:AlternateContent>`,
+      ),
+    );
+
+    const [chart, smartArt, connector] = source.slides[0].shapes as [
+      SourceChart,
+      SourceSmartArt,
+      { readonly kind: "raw"; readonly raw: { readonly node: { readonly name: string } } },
+    ];
+    expect(chart).toMatchObject({
+      kind: "chart",
+      nodeId: "30",
+      name: "Revenue chart",
+      chartRelationshipId: "rIdChart",
+      transform: { offsetX: 100, offsetY: 200, width: 300, height: 400 },
+    });
+    expect(smartArt).toMatchObject({
+      kind: "smartArt",
+      nodeId: "31",
+      name: "Process",
+      dataRelationshipId: "rIdDiagramData",
+      transform: { offsetX: 500, offsetY: 600, width: 700, height: 800 },
+    });
+    expect(chart.rawSidecars?.map((sidecar) => sidecar.node.name)).toContain("c:chart");
+    expect(smartArt.rawSidecars?.map((sidecar) => sidecar.node.name)).toEqual(
+      expect.arrayContaining(["dgm:relIds", "mc:AlternateContent"]),
+    );
+    expect(connector).toMatchObject({ kind: "raw", raw: { node: { name: "p:cxnSp" } } });
+  });
+
+  it("AlternateContent の branch が raw node のみの場合は wrapper を raw source node として保持する", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">` +
+          `<mc:Choice Requires="cxn">` +
+          `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="40" name="Connector"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr></p:cxnSp>` +
+          `</mc:Choice>` +
+          `</mc:AlternateContent>`,
+      ),
+    );
+
+    expect(source.slides[0].shapes).toHaveLength(1);
+    expect(source.slides[0].shapes[0]).toMatchObject({
+      kind: "raw",
+      raw: { node: { name: "mc:AlternateContent" } },
+    });
+  });
+
+  it("Strict OOXML の chart graphicData URI を chart source node として読む", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<p:graphicFrame>` +
+          `<p:nvGraphicFramePr><p:cNvPr id="41" name="Strict chart"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr>` +
+          `<p:xfrm><a:off x="10" y="20"/><a:ext cx="30" cy="40"/></p:xfrm>` +
+          `<a:graphic><a:graphicData uri="http://purl.oclc.org/ooxml/drawingml/chart">` +
+          `<c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" r:id="rIdStrictChart"/>` +
+          `</a:graphicData></a:graphic>` +
+          `</p:graphicFrame>`,
+      ),
+    );
+
+    expect(source.slides[0].shapes[0]).toMatchObject({
+      kind: "chart",
+      nodeId: "41",
+      name: "Strict chart",
+      chartRelationshipId: "rIdStrictChart",
+    });
+  });
+
+  it("AlternateContent の Choice が raw のみなら supported Fallback branch を読む", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">` +
+          `<mc:Choice Requires="ext"><p:cxnSp><p:nvCxnSpPr><p:cNvPr id="41" name="Connector"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr></p:cxnSp></mc:Choice>` +
+          `<mc:Fallback>` +
+          `<p:sp><p:nvSpPr><p:cNvPr id="42" name="Fallback shape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="10" y="20"/><a:ext cx="30" cy="40"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>` +
+          `</p:sp>` +
+          `</mc:Fallback>` +
+          `</mc:AlternateContent>`,
+      ),
+    );
+
+    expect(source.slides[0].shapes).toHaveLength(1);
+    expect(source.slides[0].shapes[0]).toMatchObject({
+      kind: "shape",
+      nodeId: "42",
+      name: "Fallback shape",
+      rawSidecars: [{ node: { name: "mc:AlternateContent" } }],
     });
   });
 });

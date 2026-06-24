@@ -15,6 +15,7 @@ import type {
   SourceSlide,
   SourceSlideLayout,
   SourceSlideMaster,
+  SourceSmartArt,
   SourceTable,
   SourceTableCell,
   SourceTextBody,
@@ -25,6 +26,7 @@ import type {
   CleanDocComputedView,
   ComputedBackground,
   ComputedCellBorders,
+  ComputedChartElement,
   ComputedColor,
   ComputedElement,
   ComputedElementLayer,
@@ -37,6 +39,7 @@ import type {
   ComputedRunProperties,
   ComputedShapeElement,
   ComputedSlide,
+  ComputedSmartArtElement,
   ComputedTableCell,
   ComputedTableElement,
   ComputedTableRow,
@@ -75,6 +78,20 @@ const FALLBACK_SCHEME_COLORS: Readonly<Record<string, string>> = {
 };
 
 const IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+const CHART_REL_TYPES: ReadonlySet<string> = new Set([
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/chart",
+  "http://purl.oclc.org/ooxml/officeDocument/relationships/chart",
+]);
+const DIAGRAM_DATA_REL_TYPES: ReadonlySet<string> = new Set([
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData",
+  "http://purl.oclc.org/ooxml/officeDocument/relationships/diagramData",
+]);
+const DIAGRAM_DRAWING_REL_TYPES: ReadonlySet<string> = new Set([
+  "http://schemas.microsoft.com/office/2007/relationships/diagramDrawing",
+  "http://purl.oclc.org/ooxml/officeDocument/relationships/diagramDrawing",
+]);
+
+const textDecoder = new TextDecoder();
 
 // Current parser path treats any tableStyleId as black 1pt cell borders when
 // a cell has no inline border definition. Keep this compatibility approximation
@@ -147,6 +164,7 @@ function computeSlide(
   );
   const relationships = resolveRelationships(source, slide.partPath);
   const context: ComputeContext = { source, layout, master, theme, colorMap, relationships };
+  const colorScheme = buildComputedColorScheme(context);
 
   const layoutShowMasterShapes = layout?.showMasterShapes ?? true;
   const showMasterShapes = slide.showMasterShapes ?? true;
@@ -164,6 +182,7 @@ function computeSlide(
       : {}),
     relationships,
     colorMap,
+    colorScheme,
     ...(computeBackground(context, slide, layout, master) ?? {}),
     showMasterShapes,
     layoutShowMasterShapes,
@@ -199,6 +218,15 @@ function buildEffectiveColorMap(
     ...layoutOverride?.mapping,
     ...slideOverride?.mapping,
   };
+}
+
+function buildComputedColorScheme(context: ComputeContext): Readonly<Record<string, string>> {
+  const colors: Record<string, string> = { ...FALLBACK_SCHEME_COLORS };
+  for (const [name, color] of Object.entries(context.theme?.colorScheme?.colors ?? {})) {
+    const resolved = resolveColor(context, color);
+    if (resolved !== undefined) colors[name] = resolved.hex;
+  }
+  return colors;
 }
 
 function resolveRelationships(
@@ -304,6 +332,10 @@ function computeElement(
   if (element.kind === "shape") return computeShapeElement(context, element, layer, partPath);
   if (element.kind === "image") return computeImageElement(context, element, layer, partPath);
   if (element.kind === "table") return computeTableElement(context, element, layer, partPath);
+  if (element.kind === "chart") return computeChartElement(context, element, layer, partPath);
+  if (element.kind === "smartArt") {
+    return computeSmartArtElement(context, element, layer, partPath);
+  }
   return { kind: "raw", sourceLayer: layer, sourcePartPath: partPath, sourceNode: element };
 }
 
@@ -375,6 +407,66 @@ function computeTableElement(
       columns: table.table.columns.map((column) => ({ ...column })),
       rows: table.table.rows.map((row) => computeTableRow(context, table, row)),
     },
+  };
+}
+
+function computeChartElement(
+  context: ComputeContext,
+  chart: Extract<SourceShapeNode, { kind: "chart" }>,
+  layer: ComputedElementLayer,
+  partPath: PartPath,
+): ComputedChartElement {
+  const relationship = context.relationships.find(
+    (rel) => rel.id === chart.chartRelationshipId && CHART_REL_TYPES.has(rel.type),
+  );
+  const chartXml =
+    relationship?.targetPartPath !== undefined
+      ? readRawPackageText(context.source, relationship.targetPartPath)
+      : undefined;
+  return {
+    kind: "chart",
+    sourceLayer: layer,
+    sourcePartPath: partPath,
+    sourceNode: chart,
+    ...(chart.transform !== undefined ? { transform: chart.transform } : {}),
+    ...(relationship !== undefined ? { relationship } : {}),
+    ...(chartXml !== undefined ? { chartXml } : {}),
+  };
+}
+
+function computeSmartArtElement(
+  context: ComputeContext,
+  smartArt: SourceSmartArt,
+  layer: ComputedElementLayer,
+  partPath: PartPath,
+): ComputedSmartArtElement {
+  const dataRelationship = context.relationships.find(
+    (rel) => rel.id === smartArt.dataRelationshipId && DIAGRAM_DATA_REL_TYPES.has(rel.type),
+  );
+  const dataRelationships =
+    dataRelationship?.targetPartPath !== undefined
+      ? resolveRelationships(context.source, dataRelationship.targetPartPath)
+      : [];
+  const drawingRelationship = dataRelationships.find((rel) =>
+    DIAGRAM_DRAWING_REL_TYPES.has(rel.type),
+  );
+  const drawingPartPath = drawingRelationship?.targetPartPath;
+  const drawingXml =
+    drawingPartPath !== undefined ? readRawPackageText(context.source, drawingPartPath) : undefined;
+
+  return {
+    kind: "smartArt",
+    sourceLayer: layer,
+    sourcePartPath: partPath,
+    sourceNode: smartArt,
+    ...(smartArt.transform !== undefined ? { transform: smartArt.transform } : {}),
+    ...(dataRelationship !== undefined ? { dataRelationship } : {}),
+    ...(drawingRelationship !== undefined ? { drawingRelationship } : {}),
+    ...(drawingPartPath !== undefined ? { drawingPartPath } : {}),
+    ...(drawingXml !== undefined ? { drawingXml } : {}),
+    drawingRelationships:
+      drawingPartPath !== undefined ? resolveRelationships(context.source, drawingPartPath) : [],
+    media: context.source.packageGraph.media,
   };
 }
 
@@ -643,6 +735,12 @@ function resolveRelationshipTarget(sourcePartPath: string, target: string): stri
     segments.push(segment);
   }
   return segments.join("/");
+}
+
+function readRawPackageText(source: CleanDocSource, partPath: PartPath): string | undefined {
+  const rawPart = source.packageGraph.rawParts?.find((part) => part.partPath === partPath);
+  if (rawPart?.kind === "binary") return textDecoder.decode(rawPart.bytes);
+  return undefined;
 }
 
 function normalizeHex(hex: string): string {
