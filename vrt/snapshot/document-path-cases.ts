@@ -43,8 +43,8 @@ export const DOCUMENT_PATH_VRT_SHARED_CASES = [
     "real-basic-theme",
     "real-basic-theme.pptx",
     0.02,
-    [B.shapeTreeAndGeometry, B.textAndFonts],
-    ["cleandoc-adapter.raw-element-skipped", "document-render.cjk-font-context-unsupported"],
+    [B.textAndFonts],
+    ["document-render.cjk-font-context-unsupported"],
   ),
   shared("real-product-page", "real-product-page.pptx", 0.04, [B.textAndFonts]),
   shared(
@@ -152,7 +152,7 @@ export const DOCUMENT_PATH_VRT_GENERATED_CASES = [
     "style-reference.pptx",
     0.35,
     [B.shapeTreeAndGeometry, B.fillsAndBackgrounds],
-    ["cleandoc-adapter.raw-element-skipped"],
+    [],
   ),
   generated("blip-effects", "blip-effects.pptx", 0.65, [B.effects], []),
   generated(
