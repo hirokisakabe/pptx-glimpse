@@ -4,6 +4,7 @@ import type {
   ChartElement,
   ColorMap,
   ColorScheme,
+  ConnectorElement,
   Fill,
   Geometry,
   GroupElement,
@@ -29,8 +30,10 @@ import type {
   ComputedBackground,
   ComputedChartElement,
   ComputedColor,
+  ComputedConnectorElement,
   ComputedElement,
   ComputedFill,
+  ComputedGroupElement,
   ComputedImageElement,
   ComputedOutline,
   ComputedParagraph,
@@ -172,6 +175,8 @@ function adaptElement(
   diagnostics: DiagnosticSink,
 ): SlideElement[] {
   if (element.kind === "shape") return [adaptShape(element, slide, diagnostics)];
+  if (element.kind === "connector") return [adaptConnector(element, slide, diagnostics)];
+  if (element.kind === "group") return [adaptGroup(element, slide, diagnostics)];
   if (element.kind === "image") {
     const image = adaptImage(element, slide, diagnostics);
     return image === undefined ? [] : [image];
@@ -194,6 +199,49 @@ function adaptElement(
     sourcePartPath: element.sourcePartPath,
   });
   return [];
+}
+
+function adaptConnector(
+  connector: ComputedConnectorElement,
+  slide: ComputedSlide,
+  diagnostics: DiagnosticSink,
+): ConnectorElement {
+  return {
+    type: "connector",
+    transform: adaptTransform(connector.transform, slide, diagnostics, connector.sourcePartPath),
+    geometry: adaptGeometry(connector.geometry),
+    outline:
+      connector.outline !== undefined ? adaptOutline(connector.outline, slide, diagnostics) : null,
+    effects: null,
+    ...(connector.sourceNode.name !== undefined ? { altText: connector.sourceNode.name } : {}),
+  };
+}
+
+function adaptGroup(
+  group: ComputedGroupElement,
+  slide: ComputedSlide,
+  diagnostics: DiagnosticSink,
+): GroupElement {
+  const transform = adaptTransform(group.transform, slide, diagnostics, group.sourcePartPath);
+  return {
+    type: "group",
+    transform,
+    childTransform:
+      group.childTransform !== undefined
+        ? adaptTransform(group.childTransform, slide, diagnostics, group.sourcePartPath)
+        : {
+            offsetX: asEmu(0),
+            offsetY: asEmu(0),
+            extentWidth: transform.extentWidth,
+            extentHeight: transform.extentHeight,
+            rotation: 0,
+            flipH: false,
+            flipV: false,
+          },
+    children: group.children.flatMap((child) => adaptElement(child, slide, diagnostics)),
+    effects: null,
+    ...(group.sourceNode.name !== undefined ? { altText: group.sourceNode.name } : {}),
+  };
 }
 
 function adaptChart(
@@ -455,10 +503,20 @@ function adaptTransform(
 }
 
 function adaptGeometry(geometry: ComputedShapeElement["geometry"] | undefined): Geometry {
+  if (geometry === undefined) {
+    return {
+      type: "preset",
+      preset: "rect",
+      adjustValues: {},
+    };
+  }
+  if ("paths" in geometry) {
+    return { type: "custom", paths: [...geometry.paths] };
+  }
   return {
     type: "preset",
-    preset: geometry?.preset ?? "rect",
-    adjustValues: {},
+    preset: geometry.preset,
+    adjustValues: geometry.adjustValues ?? {},
   };
 }
 
@@ -492,9 +550,14 @@ function adaptOutline(
   return {
     width: toRendererEmu(outline.width ?? 12700),
     fill: fill?.type === "solid" || fill?.type === "gradient" ? fill : null,
-    dashStyle: "solid",
-    headEnd: null,
-    tailEnd: null,
+    dashStyle: outline.source.dashStyle ?? "solid",
+    ...(outline.source.customDash !== undefined
+      ? { customDash: [...outline.source.customDash] }
+      : {}),
+    ...(outline.source.lineCap !== undefined ? { lineCap: outline.source.lineCap } : {}),
+    ...(outline.source.lineJoin !== undefined ? { lineJoin: outline.source.lineJoin } : {}),
+    headEnd: outline.source.headEnd ?? null,
+    tailEnd: outline.source.tailEnd ?? null,
   };
 }
 

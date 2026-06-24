@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 
 import type {
   CleanDocSource,
+  ComputedConnectorElement,
   ComputedElement,
+  ComputedGroupElement,
   ComputedShapeElement,
   ComputedSlide,
   ComputedTableElement,
@@ -229,6 +231,80 @@ describe("createComputedView", () => {
       "Layout decoration",
       "Visible body",
     ]);
+  });
+
+  it("connector / group / custom geometry を computed element として保持する", () => {
+    const source = buildSource();
+    const slidePath = asPartPath("ppt/slides/slide2.xml");
+    const extended: CleanDocSource = {
+      ...source,
+      slides: source.slides.map((slide) =>
+        slide.partPath === slidePath
+          ? {
+              ...slide,
+              shapes: [
+                ...slide.shapes,
+                {
+                  kind: "connector",
+                  name: "Connector",
+                  transform: transform(500, 510, 520, 530),
+                  geometry: { preset: "bentConnector3", adjustValues: { adj1: 50000 } },
+                  outline: {
+                    width: asEmu(12700),
+                    fill: { kind: "solid", color: { kind: "srgb", hex: "FF0000" } },
+                    dashStyle: "dash",
+                  },
+                },
+                {
+                  kind: "group",
+                  name: "Group",
+                  transform: transform(600, 610, 620, 630),
+                  childTransform: transform(0, 0, 620, 630),
+                  children: [
+                    shape("Custom child", {
+                      transform: transform(1, 2, 3, 4),
+                      geometry: {
+                        kind: "custom",
+                        paths: [{ width: 1000, height: 1000, commands: "M 0 0 L 1000 1000" }],
+                      },
+                    }),
+                  ],
+                },
+              ],
+            }
+          : slide,
+      ),
+    };
+
+    const slide = getSlide(createComputedView(extended).slides, 0);
+    const connector = slide.elements.find(
+      (element): element is ComputedConnectorElement => element.kind === "connector",
+    );
+    const group = slide.elements.find(
+      (element): element is ComputedGroupElement => element.kind === "group",
+    );
+
+    expect(connector).toMatchObject({
+      sourceNode: { name: "Connector" },
+      transform: { offsetX: 500, offsetY: 510, width: 520, height: 530 },
+      geometry: { preset: "bentConnector3", adjustValues: { adj1: 50000 } },
+      outline: {
+        width: 12700,
+        fill: { kind: "solid", color: { hex: "#ff0000", alpha: 1 } },
+      },
+    });
+    expect(group).toMatchObject({
+      sourceNode: { name: "Group" },
+      transform: { offsetX: 600, offsetY: 610, width: 620, height: 630 },
+      childTransform: { offsetX: 0, offsetY: 0, width: 620, height: 630 },
+    });
+    expect(group?.children[0]).toMatchObject({
+      kind: "shape",
+      geometry: {
+        kind: "custom",
+        paths: [{ width: 1000, height: 1000, commands: "M 0 0 L 1000 1000" }],
+      },
+    });
   });
 
   it("source model を in-place mutation しない", () => {

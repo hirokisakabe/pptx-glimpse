@@ -1,16 +1,15 @@
 /**
  * `p:spTree` を CleanDoc source の shape node 列へ読み取る。
  *
- * simple autoshape (`p:sp`) と embedded raster image (`p:pic`) を typed に表し、
- * group / connector / graphicFrame 等の未対応ノードは raw shape node として
- * 保存する (`docs/cleandoc-minimal-poc-scope.md`)。typed node 内でも、未対応の
- * 子要素・属性は raw sidecar として保持する。
+ * simple autoshape (`p:sp`), embedded raster image (`p:pic`), connector
+ * (`p:cxnSp`), and group (`p:grpSp`) を typed に表す。graphicFrame は table /
+ * chart / SmartArt の supported subset を typed 化し、それ以外の未対応ノードは
+ * raw shape node として保存する。typed node 内でも、未対応の子要素・属性は raw
+ * sidecar として保持する。
  *
- * 注意: fast-xml-parser は同名要素のみを配列化するため、子の反復順は
- * 「タグ種別の初出順 × 同名内の文書順」となり、異種タグ間の完全な文書順
- * (z-order) は保証されない。effective element ordering の解決は computed view
- * (#465) の責務であり、PoC 対象 fixture は sp/pic が交互配置されないため
- * 実害はない。
+ * `orderedChildren` が渡された場合は preserve-order XML parse 結果を使い、異種
+ * タグ間の z-order を維持する。未指定時は従来通りタグ種別ごとの順序に fallback
+ * する。
  */
 
 import type {
@@ -18,6 +17,9 @@ import type {
   RawSidecarId,
   SourceCellBorders,
   SourceChart,
+  SourceConnector,
+  SourceGeometry,
+  SourceGroup,
   SourceImage,
   SourceImageCrop,
   SourceNodeId,
@@ -30,8 +32,10 @@ import type {
   SourceTableCell,
   SourceTableColumn,
   SourceTableRow,
+  SourceTransform,
 } from "../source/index.js";
 import { asEmu, asOoxmlPercent, asRelationshipId, asSourceNodeId } from "../source/index.js";
+import { parseCustomGeometry } from "./custom-geometry.js";
 import {
   isTrue,
   numericAttr,
@@ -50,9 +54,12 @@ import {
   getNamespacedAttr,
   localName,
   type XmlNode,
+  type XmlOrderedNode,
 } from "./xml.js";
 
 const KNOWN_SHAPE_CHILDREN: ReadonlySet<string> = new Set(["nvSpPr", "spPr", "txBody"]);
+const KNOWN_CONNECTOR_CHILDREN: ReadonlySet<string> = new Set(["nvCxnSpPr", "spPr", "style"]);
+const KNOWN_GROUP_CHILDREN: ReadonlySet<string> = new Set(["nvGrpSpPr", "grpSpPr"]);
 const KNOWN_PICTURE_CHILDREN: ReadonlySet<string> = new Set(["nvPicPr", "blipFill", "spPr"]);
 const KNOWN_BLIP_FILL_CHILDREN: ReadonlySet<string> = new Set(["blip", "srcRect"]);
 const KNOWN_GRAPHIC_FRAME_CHILDREN: ReadonlySet<string> = new Set([
@@ -91,6 +98,14 @@ const KNOWN_SP_PR_CHILDREN: ReadonlySet<string> = new Set([
   "ln",
 ]);
 
+const SHAPE_TREE_NODE_TAGS: ReadonlySet<string> = new Set([
+  "sp",
+  "pic",
+  "cxnSp",
+  "grpSp",
+  "graphicFrame",
+]);
+
 const CHART_GRAPHIC_DATA_URIS: ReadonlySet<string> = new Set([
   "http://schemas.openxmlformats.org/drawingml/2006/chart",
   "http://purl.oclc.org/ooxml/drawingml/chart",
@@ -105,8 +120,12 @@ export function parseShapeTree(
   spTree: XmlNode | undefined,
   partPath: PartPath,
   nextId: () => RawSidecarId,
+  orderedChildren?: readonly XmlOrderedNode[],
 ): SourceShapeNode[] {
   if (!spTree) return [];
+  if (orderedChildren !== undefined) {
+    return parseShapeTreeOrdered(spTree, partPath, nextId, orderedChildren);
+  }
 
   const nodes: SourceShapeNode[] = [];
   let orderingSlot = 0;
@@ -125,6 +144,10 @@ export function parseShapeTree(
         nodes.push(parseShape(node, partPath, nextId, orderingSlot));
       } else if (local === "pic") {
         nodes.push(parseImage(node, partPath, nextId, orderingSlot));
+      } else if (local === "cxnSp") {
+        nodes.push(parseConnector(node, partPath, nextId, orderingSlot));
+      } else if (local === "grpSp") {
+        nodes.push(parseGroup(node, partPath, nextId, orderingSlot));
       } else if (local === "graphicFrame") {
         nodes.push(parseGraphicFrame(node, partPath, nextId, orderingSlot));
       } else if (local === "AlternateContent") {
@@ -139,11 +162,73 @@ export function parseShapeTree(
   return nodes;
 }
 
+function parseShapeTreeOrdered(
+  spTree: XmlNode,
+  partPath: PartPath,
+  nextId: () => RawSidecarId,
+  orderedChildren: readonly XmlOrderedNode[],
+): SourceShapeNode[] {
+  const nodes: SourceShapeNode[] = [];
+  const tagCounters: Record<string, number> = {};
+  let orderingSlot = 0;
+
+  for (const child of orderedChildren) {
+    const key = Object.keys(child).find((candidate) => candidate !== ":@");
+    if (key === undefined) continue;
+    const local = localName(key);
+
+    if (local === "AlternateContent") {
+      const index = tagCounters[local] ?? 0;
+      tagCounters[local] = index + 1;
+      const alternateContents = getChildArray(spTree, "AlternateContent");
+      const alternateContent = alternateContents[index];
+      if (alternateContent !== undefined) {
+        nodes.push(...parseAlternateContent(alternateContent, partPath, nextId, orderingSlot));
+        orderingSlot++;
+      }
+      continue;
+    }
+
+    if (!SHAPE_TREE_NODE_TAGS.has(local)) continue;
+    const index = tagCounters[local] ?? 0;
+    tagCounters[local] = index + 1;
+    const node = getChildArray(spTree, local)[index];
+    if (node === undefined) continue;
+
+    nodes.push(parseShapeTreeNode(local, node, child, partPath, nextId, orderingSlot));
+    orderingSlot++;
+  }
+
+  return nodes;
+}
+
+function parseShapeTreeNode(
+  local: string,
+  node: XmlNode,
+  orderedNode: XmlOrderedNode | undefined,
+  partPath: PartPath,
+  nextId: () => RawSidecarId,
+  orderingSlot: number,
+): SourceShapeNode {
+  if (local === "sp") return parseShape(node, partPath, nextId, orderingSlot, orderedNode);
+  if (local === "pic") return parseImage(node, partPath, nextId, orderingSlot);
+  if (local === "cxnSp") {
+    return parseConnector(node, partPath, nextId, orderingSlot, orderedNode);
+  }
+  if (local === "grpSp") {
+    const orderedGroupChildren = orderedNode?.[local] as readonly XmlOrderedNode[] | undefined;
+    return parseGroup(node, partPath, nextId, orderingSlot, orderedGroupChildren);
+  }
+  if (local === "graphicFrame") return parseGraphicFrame(node, partPath, nextId, orderingSlot);
+  return parseRawShapeNode(`p:${local}`, node, partPath, nextId, orderingSlot);
+}
+
 function parseShape(
   sp: XmlNode,
   partPath: PartPath,
   nextId: () => RawSidecarId,
   orderingSlot: number,
+  orderedNode?: XmlOrderedNode,
 ): SourceShape {
   const nvSpPr = getChild(sp, "nvSpPr");
   const cNvPr = getChild(nvSpPr, "cNvPr");
@@ -153,7 +238,7 @@ function parseShape(
 
   const spPr = getChild(sp, "spPr");
   const transform = parseTransform(spPr);
-  const geometry = parsePresetGeometry(spPr);
+  const geometry = parseGeometry(spPr, orderedNestedChildChildren(orderedNode, "sp", "spPr"));
   const fill = parseFill(spPr, nextId);
   const outline = parseOutline(spPr, nextId);
   const textBody = parseTextBody(getChild(sp, "txBody"), partPath, nextId, nodeId, orderingSlot);
@@ -173,6 +258,66 @@ function parseShape(
     ...(outline !== undefined ? { outline } : {}),
     ...(textBody !== undefined ? { textBody } : {}),
     ...(placeholder !== undefined ? { placeholder } : {}),
+    handle: { partPath, ...(nodeId !== undefined ? { nodeId } : {}), orderingSlot },
+    ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
+  };
+}
+
+function parseConnector(
+  cxnSp: XmlNode,
+  partPath: PartPath,
+  nextId: () => RawSidecarId,
+  orderingSlot: number,
+  orderedNode?: XmlOrderedNode,
+): SourceConnector {
+  const nvCxnSpPr = getChild(cxnSp, "nvCxnSpPr");
+  const cNvPr = getChild(nvCxnSpPr, "cNvPr");
+  const nodeId = sourceNodeId(cNvPr);
+  const name = getAttr(cNvPr, "name");
+  const spPr = getChild(cxnSp, "spPr");
+  const transform = parseTransform(spPr);
+  const geometry = parseGeometry(spPr, orderedNestedChildChildren(orderedNode, "cxnSp", "spPr"));
+  const outline = parseOutline(spPr, nextId);
+  const rawSidecars = [
+    ...collectUnknownSidecars(cxnSp, KNOWN_CONNECTOR_CHILDREN, nextId),
+    ...collectUnknownSidecars(spPr, KNOWN_SP_PR_CHILDREN, nextId),
+  ];
+
+  return {
+    kind: "connector",
+    ...(nodeId !== undefined ? { nodeId } : {}),
+    ...(name !== undefined ? { name } : {}),
+    ...(transform !== undefined ? { transform } : {}),
+    ...(geometry !== undefined ? { geometry } : {}),
+    ...(outline !== undefined ? { outline } : {}),
+    handle: { partPath, ...(nodeId !== undefined ? { nodeId } : {}), orderingSlot },
+    ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
+  };
+}
+
+function parseGroup(
+  grpSp: XmlNode,
+  partPath: PartPath,
+  nextId: () => RawSidecarId,
+  orderingSlot: number,
+  orderedChildren?: readonly XmlOrderedNode[],
+): SourceGroup {
+  const nvGrpSpPr = getChild(grpSp, "nvGrpSpPr");
+  const cNvPr = getChild(nvGrpSpPr, "cNvPr");
+  const nodeId = sourceNodeId(cNvPr);
+  const name = getAttr(cNvPr, "name");
+  const grpSpPr = getChild(grpSp, "grpSpPr");
+  const transform = parseTransform(grpSpPr);
+  const childTransform = parseChildTransform(grpSpPr, transform);
+  const rawSidecars = collectUnknownSidecars(grpSp, KNOWN_GROUP_CHILDREN, nextId);
+
+  return {
+    kind: "group",
+    ...(nodeId !== undefined ? { nodeId } : {}),
+    ...(name !== undefined ? { name } : {}),
+    ...(transform !== undefined ? { transform } : {}),
+    ...(childTransform !== undefined ? { childTransform } : {}),
+    children: parseShapeTree(grpSp, partPath, nextId, orderedChildren),
     handle: { partPath, ...(nodeId !== undefined ? { nodeId } : {}), orderingSlot },
     ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
   };
@@ -304,7 +449,11 @@ function parseAlternateContentBranch(
       const node = item as XmlNode;
       if (local === "sp") nodes.push(parseShape(node, partPath, nextId, orderingSlot));
       else if (local === "pic") nodes.push(parseImage(node, partPath, nextId, orderingSlot));
-      else if (local === "graphicFrame") {
+      else if (local === "cxnSp") {
+        nodes.push(parseConnector(node, partPath, nextId, orderingSlot));
+      } else if (local === "grpSp") {
+        nodes.push(parseGroup(node, partPath, nextId, orderingSlot));
+      } else if (local === "graphicFrame") {
         nodes.push(parseGraphicFrame(node, partPath, nextId, orderingSlot));
       } else {
         nodes.push(parseRawShapeNode(key, node, partPath, nextId, orderingSlot));
@@ -537,11 +686,61 @@ function parsePlaceholder(ph: XmlNode | undefined): SourcePlaceholder | undefine
   };
 }
 
-function parsePresetGeometry(spPr: XmlNode | undefined) {
+function parseGeometry(
+  spPr: XmlNode | undefined,
+  orderedSpPr?: readonly XmlOrderedNode[],
+): SourceGeometry | undefined {
   const prstGeom = getChild(spPr, "prstGeom");
-  if (!prstGeom) return undefined;
-  const preset = getAttr(prstGeom, "prst");
-  return preset !== undefined ? { preset } : undefined;
+  if (prstGeom) {
+    const preset = getAttr(prstGeom, "prst");
+    const adjustValues = parseAdjustValues(getChild(prstGeom, "avLst"));
+    return preset !== undefined
+      ? {
+          preset,
+          ...(Object.keys(adjustValues).length > 0 ? { adjustValues } : {}),
+        }
+      : undefined;
+  }
+
+  const customPaths = parseCustomGeometry(
+    getChild(spPr, "custGeom"),
+    orderedChildChildren(orderedSpPr, "custGeom"),
+  );
+  if (customPaths !== undefined) return { kind: "custom", paths: customPaths };
+  return undefined;
+}
+
+function parseAdjustValues(avLst: XmlNode | undefined): Record<string, number> {
+  const adjustValues: Record<string, number> = {};
+  for (const guide of getChildArray(avLst, "gd")) {
+    const name = getAttr(guide, "name");
+    const formula = getAttr(guide, "fmla");
+    const match = formula?.match(/val\s+(-?\d+)/);
+    if (name !== undefined && match !== undefined && match !== null) {
+      adjustValues[name] = Number(match[1]);
+    }
+  }
+  return adjustValues;
+}
+
+function parseChildTransform(
+  grpSpPr: XmlNode | undefined,
+  fallback: SourceTransform | undefined,
+): SourceTransform | undefined {
+  const xfrm = getChild(grpSpPr, "xfrm");
+  const childOff = getChild(xfrm, "chOff");
+  const childExt = getChild(xfrm, "chExt");
+  const offsetX = numericAttr(childOff, "x") ?? 0;
+  const offsetY = numericAttr(childOff, "y") ?? 0;
+  const width = numericAttr(childExt, "cx") ?? fallback?.width;
+  const height = numericAttr(childExt, "cy") ?? fallback?.height;
+  if (width === undefined || height === undefined) return undefined;
+  return {
+    offsetX: asEmu(offsetX),
+    offsetY: asEmu(offsetY),
+    width: asEmu(Number(width)),
+    height: asEmu(Number(height)),
+  };
 }
 
 function parseCrop(srcRect: XmlNode | undefined): SourceImageCrop | undefined {
@@ -569,3 +768,30 @@ function emuAttr(node: XmlNode | undefined, attrName: string) {
 }
 
 const EMPTY_KNOWN: ReadonlySet<string> = new Set();
+
+function orderedChildChildren(
+  parent: readonly XmlOrderedNode[] | undefined,
+  childLocalName: string,
+): readonly XmlOrderedNode[] | undefined {
+  const child = parent?.find((entry) => {
+    const key = Object.keys(entry).find((candidate) => candidate !== ":@");
+    return key !== undefined && localName(key) === childLocalName;
+  });
+  if (child === undefined) return undefined;
+  const key = Object.keys(child).find((candidate) => candidate !== ":@");
+  const value = key !== undefined ? child[key] : undefined;
+  return Array.isArray(value) ? (value as readonly XmlOrderedNode[]) : undefined;
+}
+
+function orderedNestedChildChildren(
+  node: XmlOrderedNode | undefined,
+  parentLocalName: string,
+  childLocalName: string,
+): readonly XmlOrderedNode[] | undefined {
+  if (node === undefined) return undefined;
+  const parentChildren = node[parentLocalName];
+  return orderedChildChildren(
+    Array.isArray(parentChildren) ? (parentChildren as readonly XmlOrderedNode[]) : undefined,
+    childLocalName,
+  );
+}

@@ -80,8 +80,9 @@ describe("experimental document render path", () => {
     });
 
     expect(result.diagnostics.length).toBeGreaterThan(0);
+    expectUnsupportedDiagnosticsToStayInScope(result.diagnostics);
     expect(uniqueDiagnosticCodes(result.diagnostics)).toContain(
-      "cleandoc-adapter.raw-element-skipped",
+      "document-render.cjk-font-context-unsupported",
     );
   });
 
@@ -100,8 +101,9 @@ describe("experimental document render path", () => {
     }
     expect([...pngSlide.png.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
     expect(result.diagnostics.length).toBeGreaterThan(0);
+    expectUnsupportedDiagnosticsToStayInScope(result.diagnostics);
     expect(uniqueDiagnosticCodes(result.diagnostics)).toContain(
-      "cleandoc-adapter.raw-element-skipped",
+      "document-render.cjk-font-context-unsupported",
     );
   });
 

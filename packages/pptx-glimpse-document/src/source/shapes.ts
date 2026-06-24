@@ -26,7 +26,21 @@ export interface SourceTransform {
 export interface SourcePresetGeometry {
   /** preset 名 (例: `rect`, `roundRect`)。 */
   readonly preset: string;
+  readonly adjustValues?: Readonly<Record<string, number>>;
 }
+
+export interface SourceCustomGeometryPath {
+  readonly width: number;
+  readonly height: number;
+  readonly commands: string;
+}
+
+export interface SourceCustomGeometry {
+  readonly kind: "custom";
+  readonly paths: readonly SourceCustomGeometryPath[];
+}
+
+export type SourceGeometry = SourcePresetGeometry | SourceCustomGeometry;
 
 /**
  * 未解決の source color 参照。`schemeClr` は scheme 名のまま保持し、computed
@@ -69,7 +83,32 @@ export type SourceFill =
 export interface SourceOutline {
   readonly width?: Emu;
   readonly fill?: SourceFill;
+  readonly dashStyle?: SourceDashStyle;
+  readonly customDash?: readonly number[];
+  readonly lineCap?: SourceLineCap;
+  readonly lineJoin?: SourceLineJoin;
+  readonly headEnd?: SourceArrowEndpoint;
+  readonly tailEnd?: SourceArrowEndpoint;
 }
+
+export type SourceArrowType = "triangle" | "stealth" | "diamond" | "oval" | "arrow";
+export type SourceArrowSize = "sm" | "med" | "lg";
+export interface SourceArrowEndpoint {
+  readonly type: SourceArrowType;
+  readonly width: SourceArrowSize;
+  readonly length: SourceArrowSize;
+}
+export type SourceDashStyle =
+  | "solid"
+  | "dash"
+  | "dot"
+  | "dashDot"
+  | "lgDash"
+  | "lgDashDot"
+  | "sysDash"
+  | "sysDot";
+export type SourceLineCap = "butt" | "round" | "square";
+export type SourceLineJoin = "miter" | "round" | "bevel";
 
 /** placeholder 宣言 (`p:ph`)。type / idx を未解決のまま保持する。 */
 export interface SourcePlaceholder {
@@ -143,11 +182,33 @@ export interface SourceShape {
   readonly nodeId?: SourceNodeId;
   readonly name?: string;
   readonly transform?: SourceTransform;
-  readonly geometry?: SourcePresetGeometry;
+  readonly geometry?: SourceGeometry;
   readonly fill?: SourceFill;
   readonly outline?: SourceOutline;
   readonly textBody?: SourceTextBody;
   readonly placeholder?: SourcePlaceholder;
+  readonly handle?: SourceHandle;
+  readonly rawSidecars?: readonly RawSidecar[];
+}
+
+export interface SourceConnector {
+  readonly kind: "connector";
+  readonly nodeId?: SourceNodeId;
+  readonly name?: string;
+  readonly transform?: SourceTransform;
+  readonly geometry?: SourceGeometry;
+  readonly outline?: SourceOutline;
+  readonly handle?: SourceHandle;
+  readonly rawSidecars?: readonly RawSidecar[];
+}
+
+export interface SourceGroup {
+  readonly kind: "group";
+  readonly nodeId?: SourceNodeId;
+  readonly name?: string;
+  readonly transform?: SourceTransform;
+  readonly childTransform?: SourceTransform;
+  readonly children: readonly SourceShapeNode[];
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
 }
@@ -252,6 +313,8 @@ export interface SourceRawShapeNode {
 /** shape tree の source node 共用体。 */
 export type SourceShapeNode =
   | SourceShape
+  | SourceConnector
+  | SourceGroup
   | SourceImage
   | SourceTable
   | SourceChart
