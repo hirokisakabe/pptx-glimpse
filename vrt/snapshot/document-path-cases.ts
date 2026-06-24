@@ -51,8 +51,8 @@ export const DOCUMENT_PATH_VRT_SHARED_CASES = [
     "real-financial-report",
     "real-financial-report.pptx",
     0.16,
-    [B.tables, B.chartsAndSmartArt, B.shapeTreeAndGeometry, B.textAndFonts],
-    ["cleandoc-adapter.raw-element-skipped", "document-render.cjk-font-context-unsupported"],
+    [B.tables, B.shapeTreeAndGeometry, B.textAndFonts],
+    ["document-render.cjk-font-context-unsupported"],
   ),
   shared(
     "sample",
