@@ -91,7 +91,10 @@ const KNOWN_SP_PR_CHILDREN: ReadonlySet<string> = new Set([
   "ln",
 ]);
 
-const CHART_GRAPHIC_DATA_URI = "http://schemas.openxmlformats.org/drawingml/2006/chart";
+const CHART_GRAPHIC_DATA_URIS: ReadonlySet<string> = new Set([
+  "http://schemas.openxmlformats.org/drawingml/2006/chart",
+  "http://purl.oclc.org/ooxml/drawingml/chart",
+]);
 const SMARTART_DIAGRAM_URIS: ReadonlySet<string> = new Set([
   "http://schemas.openxmlformats.org/drawingml/2006/diagram",
   "http://purl.oclc.org/ooxml/drawingml/diagram",
@@ -227,7 +230,7 @@ function parseGraphicFrame(
   const graphic = getChild(graphicFrame, "graphic");
   const graphicData = getChild(graphic, "graphicData");
   const uri = getAttr(graphicData, "uri");
-  if (uri === CHART_GRAPHIC_DATA_URI) {
+  if (uri !== undefined && CHART_GRAPHIC_DATA_URIS.has(uri)) {
     const parsedChart = parseChartGraphicFrame(graphicFrame, partPath, nextId, orderingSlot);
     if (parsedChart !== undefined) return parsedChart;
   }

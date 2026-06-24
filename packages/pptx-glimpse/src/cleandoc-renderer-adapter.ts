@@ -45,11 +45,7 @@ import type {
 import { ColorResolver } from "./color/color-resolver.js";
 import { parseChart } from "./parser/chart-parser.js";
 import type { Relationship } from "./parser/relationship-parser.js";
-import {
-  navigateOrdered,
-  parseShapeTree,
-  parseTransform as parseCoreTransform,
-} from "./parser/slide-parser.js";
+import { navigateOrdered, parseShapeTree } from "./parser/slide-parser.js";
 import { parseXml, parseXmlOrdered, type XmlNode } from "./parser/xml-parser.js";
 
 interface RendererAdapterResult {
@@ -306,13 +302,7 @@ function adaptSmartArt(
     diagnostics,
     smartArt.sourcePartPath,
   );
-  const childTransform = parseCoreTransform(
-    (spTree.grpSpPr as XmlNode | undefined)?.xfrm as XmlNode | undefined,
-  ) ?? {
-    ...ZERO_TRANSFORM,
-    extentWidth: groupTransform.extentWidth,
-    extentHeight: groupTransform.extentHeight,
-  };
+  const childTransform = adaptSmartArtChildTransform(spTree, groupTransform);
 
   return {
     type: "group",
@@ -321,6 +311,22 @@ function adaptSmartArt(
     children,
     effects: null,
     ...(smartArt.sourceNode.name !== undefined ? { altText: smartArt.sourceNode.name } : {}),
+  };
+}
+
+function adaptSmartArtChildTransform(spTree: XmlNode, groupTransform: Transform): Transform {
+  const xfrm = (spTree.grpSpPr as XmlNode | undefined)?.xfrm as XmlNode | undefined;
+  const chOff = xfrm?.chOff as XmlNode | undefined;
+  const chExt = xfrm?.chExt as XmlNode | undefined;
+
+  return {
+    offsetX: asEmu(Number(chOff?.["@_x"] ?? 0)),
+    offsetY: asEmu(Number(chOff?.["@_y"] ?? 0)),
+    extentWidth: asEmu(Number(chExt?.["@_cx"] ?? groupTransform.extentWidth)),
+    extentHeight: asEmu(Number(chExt?.["@_cy"] ?? groupTransform.extentHeight)),
+    rotation: 0,
+    flipH: false,
+    flipV: false,
   };
 }
 

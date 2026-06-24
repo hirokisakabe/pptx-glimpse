@@ -408,6 +408,27 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     });
   });
 
+  it("Strict OOXML の chart graphicData URI を chart source node として読む", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<p:graphicFrame>` +
+          `<p:nvGraphicFramePr><p:cNvPr id="41" name="Strict chart"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr>` +
+          `<p:xfrm><a:off x="10" y="20"/><a:ext cx="30" cy="40"/></p:xfrm>` +
+          `<a:graphic><a:graphicData uri="http://purl.oclc.org/ooxml/drawingml/chart">` +
+          `<c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" r:id="rIdStrictChart"/>` +
+          `</a:graphicData></a:graphic>` +
+          `</p:graphicFrame>`,
+      ),
+    );
+
+    expect(source.slides[0].shapes[0]).toMatchObject({
+      kind: "chart",
+      nodeId: "41",
+      name: "Strict chart",
+      chartRelationshipId: "rIdStrictChart",
+    });
+  });
+
   it("AlternateContent の Choice が raw のみなら supported Fallback branch を読む", () => {
     const source = readPptx(
       buildSyntheticPptx(

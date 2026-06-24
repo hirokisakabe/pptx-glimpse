@@ -269,8 +269,8 @@ describe("adaptComputedViewToRendererModel", () => {
         extentHeight: 430,
       },
       childTransform: {
-        offsetX: 0,
-        offsetY: 0,
+        offsetX: 100,
+        offsetY: 110,
         extentWidth: 420,
         extentHeight: 430,
       },
@@ -583,7 +583,7 @@ function smartArtDrawingXml(): string {
     xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
     xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
   <dsp:spTree>
-    <dsp:grpSpPr><a:xfrm><a:chOff x="0" y="0"/><a:chExt cx="420" cy="430"/></a:xfrm></dsp:grpSpPr>
+    <dsp:grpSpPr><a:xfrm><a:off x="700" y="710"/><a:ext cx="720" cy="730"/><a:chOff x="100" y="110"/><a:chExt cx="420" cy="430"/></a:xfrm></dsp:grpSpPr>
     <p:sp>
       <p:nvSpPr><p:cNvPr id="1" name="Step"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
       <p:spPr><a:xfrm><a:off x="10" y="20"/><a:ext cx="30" cy="40"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>
