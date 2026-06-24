@@ -44,8 +44,11 @@ import {
   getChild,
   getChildArray,
   getNamespacedAttr,
+  navigateOrdered,
   parseXml,
+  parseXmlOrdered,
   type XmlNode,
+  type XmlOrderedNode,
 } from "./xml.js";
 
 /** `readPptx` の入力。`Buffer` は `Uint8Array` のサブクラスとして受け付ける。 */
@@ -152,8 +155,8 @@ function readSlideHierarchy(
   const layoutPaths = new OrderedPathSet();
 
   for (const slidePath of presentation.slidePartPaths) {
-    const root = parsePartRoot(entries, slidePath, "sld", diagnostics);
-    if (root === undefined) continue;
+    const part = parsePartRoot(entries, slidePath, "sld", diagnostics);
+    if (part === undefined) continue;
     const layoutPath = resolveSingleRel(relationships, slidePath, SLIDE_LAYOUT_REL_TYPE);
     if (layoutPath === undefined) {
       diagnostics.push({
@@ -166,23 +169,30 @@ function readSlideHierarchy(
       layoutPaths.add(layoutPath);
     }
     slides.push(
-      parseSlide(root, slidePath, layoutPath ?? asPartPath(""), createSidecarIdFactory(slidePath)),
+      parseSlide(
+        part.root,
+        slidePath,
+        layoutPath ?? asPartPath(""),
+        createSidecarIdFactory(slidePath),
+        navigateOrdered(part.orderedRoot, ["cSld", "spTree"]),
+      ),
     );
   }
 
   const slideLayouts: SourceSlideLayout[] = [];
   const masterPaths = new OrderedPathSet();
   for (const layoutPath of layoutPaths.values()) {
-    const root = parsePartRoot(entries, layoutPath, "sldLayout", diagnostics);
-    if (root === undefined) continue;
+    const part = parsePartRoot(entries, layoutPath, "sldLayout", diagnostics);
+    if (part === undefined) continue;
     const masterPath = resolveSingleRel(relationships, layoutPath, SLIDE_MASTER_REL_TYPE);
     if (masterPath !== undefined) masterPaths.add(masterPath);
     slideLayouts.push(
       parseSlideLayout(
-        root,
+        part.root,
         layoutPath,
         masterPath ?? asPartPath(""),
         createSidecarIdFactory(layoutPath),
+        navigateOrdered(part.orderedRoot, ["cSld", "spTree"]),
       ),
     );
   }
@@ -190,30 +200,36 @@ function readSlideHierarchy(
   const slideMasters: SourceSlideMaster[] = [];
   const themePaths = new OrderedPathSet();
   for (const masterPath of masterPaths.values()) {
-    const root = parsePartRoot(entries, masterPath, "sldMaster", diagnostics);
-    if (root === undefined) continue;
+    const part = parsePartRoot(entries, masterPath, "sldMaster", diagnostics);
+    if (part === undefined) continue;
     const themePath = resolveSingleRel(relationships, masterPath, THEME_REL_TYPE);
     if (themePath !== undefined) themePaths.add(themePath);
     const masterLayoutPaths = resolveAllRels(relationships, masterPath, SLIDE_LAYOUT_REL_TYPE);
     slideMasters.push(
       parseSlideMaster(
-        root,
+        part.root,
         masterPath,
         themePath,
         masterLayoutPaths,
         createSidecarIdFactory(masterPath),
+        navigateOrdered(part.orderedRoot, ["cSld", "spTree"]),
       ),
     );
   }
 
   const themes: SourceTheme[] = [];
   for (const themePath of themePaths.values()) {
-    const root = parsePartRoot(entries, themePath, "theme", diagnostics);
-    if (root === undefined) continue;
-    themes.push(parseTheme(root, themePath));
+    const part = parsePartRoot(entries, themePath, "theme", diagnostics);
+    if (part === undefined) continue;
+    themes.push(parseTheme(part.root, themePath));
   }
 
   return { slides, slideLayouts, slideMasters, themes };
+}
+
+interface ParsedPartRoot {
+  readonly root: XmlNode;
+  readonly orderedRoot: readonly XmlOrderedNode[];
 }
 
 /** part のバイト列をパースして指定 local name の root 要素を返す。 */
@@ -222,7 +238,7 @@ function parsePartRoot(
   partPath: PartPath,
   rootLocalName: string,
   diagnostics: Diagnostic[],
-): XmlNode | undefined {
+): ParsedPartRoot | undefined {
   const bytes = entries.get(partPath);
   if (!bytes) {
     diagnostics.push({
@@ -233,7 +249,8 @@ function parsePartRoot(
     });
     return undefined;
   }
-  const root = getChild(parseXml(textDecoder.decode(bytes)), rootLocalName);
+  const xml = textDecoder.decode(bytes);
+  const root = getChild(parseXml(xml), rootLocalName);
   if (root === undefined) {
     diagnostics.push({
       severity: "warning",
@@ -241,8 +258,10 @@ function parsePartRoot(
       message: `part '${partPath}' does not have the expected <${rootLocalName}> root`,
       handle: { partPath },
     });
+    return undefined;
   }
-  return root;
+  const orderedRoot = navigateOrdered(parseXmlOrdered(xml), [rootLocalName]) ?? [];
+  return { root, orderedRoot };
 }
 
 /** 指定 source part の relationship のうち、内部 (非 External) の最初の一致を解決する。 */

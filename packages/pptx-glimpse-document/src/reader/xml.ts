@@ -13,6 +13,7 @@
 import { XMLParser } from "fast-xml-parser";
 
 export type XmlNode = Record<string, unknown>;
+export type XmlOrderedNode = Record<string, unknown>;
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -26,9 +27,34 @@ const parser = new XMLParser({
   trimValues: false,
 });
 
+const orderedParser = new XMLParser({
+  preserveOrder: true,
+  removeNSPrefix: true,
+  ignoreAttributes: true,
+  trimValues: false,
+});
+
 /** XML 文字列をパースして root オブジェクトを返す。 */
 export function parseXml(xml: string): XmlNode {
   return parser.parse(xml) as XmlNode;
+}
+
+export function parseXmlOrdered(xml: string): XmlOrderedNode[] {
+  return orderedParser.parse(xml) as XmlOrderedNode[];
+}
+
+export function navigateOrdered(
+  ordered: readonly XmlOrderedNode[],
+  path: readonly string[],
+): XmlOrderedNode[] | undefined {
+  let current: readonly XmlOrderedNode[] = ordered;
+  for (const key of path) {
+    const entry = current.find((item) => key in item);
+    const value = entry?.[key];
+    if (!Array.isArray(value)) return undefined;
+    current = value as XmlOrderedNode[];
+  }
+  return [...current];
 }
 
 /** `a:foo` のような qualified name から local part (`foo`) を取り出す。 */

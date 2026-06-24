@@ -236,6 +236,73 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it("connector / group / custom geometry を renderer model に変換する", () => {
+    const result = adaptComputedViewToRendererModel(
+      createComputedView(
+        buildSource({
+          extraSlideShapes: [
+            {
+              kind: "connector",
+              name: "Connector",
+              transform: transform(500, 510, 520, 530),
+              geometry: { preset: "bentConnector3", adjustValues: { adj1: 50000 } },
+              outline: {
+                width: asEmu(25400),
+                fill: { kind: "solid", color: { kind: "srgb", hex: "FF0000" } },
+                dashStyle: "dash",
+                tailEnd: { type: "triangle", width: "med", length: "med" },
+              },
+            },
+            {
+              kind: "group",
+              name: "Group",
+              transform: transform(600, 610, 620, 630),
+              childTransform: transform(0, 0, 620, 630),
+              children: [
+                shape("Custom child", {
+                  transform: transform(1, 2, 3, 4),
+                  geometry: {
+                    kind: "custom",
+                    paths: [{ width: 1000, height: 1000, commands: "M 0 0 L 1000 1000" }],
+                  },
+                }),
+              ],
+            },
+          ],
+        }),
+      ),
+    );
+
+    const connector = findElementByAltText(result.slides[0].elements, "Connector");
+    const group = findElementByAltText(result.slides[0].elements, "Group");
+    expect(connector).toMatchObject({
+      type: "connector",
+      transform: { offsetX: 500, offsetY: 510, extentWidth: 520, extentHeight: 530 },
+      geometry: { type: "preset", preset: "bentConnector3", adjustValues: { adj1: 50000 } },
+      outline: {
+        width: 25400,
+        fill: { type: "solid", color: { hex: "#ff0000", alpha: 1 } },
+        dashStyle: "dash",
+        tailEnd: { type: "triangle", width: "med", length: "med" },
+      },
+    });
+    expect(group).toMatchObject({
+      type: "group",
+      transform: { offsetX: 600, offsetY: 610, extentWidth: 620, extentHeight: 630 },
+      childTransform: { offsetX: 0, offsetY: 0, extentWidth: 620, extentHeight: 630 },
+      children: [
+        {
+          type: "shape",
+          geometry: {
+            type: "custom",
+            paths: [{ width: 1000, height: 1000, commands: "M 0 0 L 1000 1000" }],
+          },
+        },
+      ],
+    });
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it("chart と SmartArt fallback を renderer model に変換する", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(buildSourceWithChartAndSmartArt()),

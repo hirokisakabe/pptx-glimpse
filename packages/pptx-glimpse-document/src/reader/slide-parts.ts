@@ -24,7 +24,7 @@ import { type SourceColor } from "../source/index.js";
 import { isTrue, numericAttr, parseColorElement, parseFill } from "./drawing.js";
 import { makeSidecar } from "./raw-node.js";
 import { parseShapeTree } from "./shape-tree.js";
-import { getAttr, getAttrs, getChild, type XmlNode } from "./xml.js";
+import { getAttr, getAttrs, getChild, type XmlNode, type XmlOrderedNode } from "./xml.js";
 
 const THEME_COLOR_SLOTS = [
   "dk1",
@@ -47,6 +47,7 @@ export function parseSlide(
   partPath: PartPath,
   layoutPartPath: PartPath,
   nextId: () => RawSidecarId,
+  orderedSpTree?: readonly XmlOrderedNode[],
 ): SourceSlide {
   const cSld = getChild(root, "cSld");
   const background = parseBackground(getChild(cSld, "bg"), nextId);
@@ -59,7 +60,7 @@ export function parseSlide(
     ...(background !== undefined ? { background } : {}),
     ...(colorMapOverride !== undefined ? { colorMapOverride } : {}),
     ...(showMasterShapes !== undefined ? { showMasterShapes } : {}),
-    shapes: parseShapeTree(getChild(cSld, "spTree"), partPath, nextId),
+    shapes: parseShapeTree(getChild(cSld, "spTree"), partPath, nextId, orderedSpTree),
     handle: { partPath },
   };
 }
@@ -70,6 +71,7 @@ export function parseSlideLayout(
   partPath: PartPath,
   masterPartPath: PartPath,
   nextId: () => RawSidecarId,
+  orderedSpTree?: readonly XmlOrderedNode[],
 ): SourceSlideLayout {
   const cSld = getChild(root, "cSld");
   const type = getAttr(root, "type");
@@ -84,7 +86,7 @@ export function parseSlideLayout(
     ...(background !== undefined ? { background } : {}),
     ...(colorMapOverride !== undefined ? { colorMapOverride } : {}),
     ...(showMasterShapes !== undefined ? { showMasterShapes } : {}),
-    shapes: parseShapeTree(getChild(cSld, "spTree"), partPath, nextId),
+    shapes: parseShapeTree(getChild(cSld, "spTree"), partPath, nextId, orderedSpTree),
     handle: { partPath },
   };
 }
@@ -96,6 +98,7 @@ export function parseSlideMaster(
   themePartPath: PartPath | undefined,
   layoutPartPaths: readonly PartPath[],
   nextId: () => RawSidecarId,
+  orderedSpTree?: readonly XmlOrderedNode[],
 ): SourceSlideMaster {
   const cSld = getChild(root, "cSld");
   const background = parseBackground(getChild(cSld, "bg"), nextId);
@@ -107,7 +110,7 @@ export function parseSlideMaster(
     layoutPartPaths,
     ...(background !== undefined ? { background } : {}),
     ...(colorMap !== undefined ? { colorMap } : {}),
-    shapes: parseShapeTree(getChild(cSld, "spTree"), partPath, nextId),
+    shapes: parseShapeTree(getChild(cSld, "spTree"), partPath, nextId, orderedSpTree),
     handle: { partPath },
   };
 }

@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 
 import type {
   SourceChart,
+  SourceConnector,
+  SourceGroup,
   SourceImage,
   SourceShape,
   SourceSmartArt,
@@ -367,7 +369,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     const [chart, smartArt, connector] = source.slides[0].shapes as [
       SourceChart,
       SourceSmartArt,
-      { readonly kind: "raw"; readonly raw: { readonly node: { readonly name: string } } },
+      SourceConnector,
     ];
     expect(chart).toMatchObject({
       kind: "chart",
@@ -387,10 +389,10 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(smartArt.rawSidecars?.map((sidecar) => sidecar.node.name)).toEqual(
       expect.arrayContaining(["dgm:relIds", "mc:AlternateContent"]),
     );
-    expect(connector).toMatchObject({ kind: "raw", raw: { node: { name: "p:cxnSp" } } });
+    expect(connector).toMatchObject({ kind: "connector", nodeId: "32", name: "Connector" });
   });
 
-  it("AlternateContent の branch が raw node のみの場合は wrapper を raw source node として保持する", () => {
+  it("AlternateContent の connector branch を typed source node として読む", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">` +
@@ -403,8 +405,65 @@ describe("readPptx — typed shape detail (synthetic)", () => {
 
     expect(source.slides[0].shapes).toHaveLength(1);
     expect(source.slides[0].shapes[0]).toMatchObject({
-      kind: "raw",
-      raw: { node: { name: "mc:AlternateContent" } },
+      kind: "connector",
+      nodeId: "40",
+      name: "Connector",
+    });
+    const [connector] = source.slides[0].shapes;
+    expect(connector.kind).toBe("connector");
+    if (connector.kind !== "connector") throw new Error("Expected connector");
+    expect(connector.rawSidecars?.map((sidecar) => sidecar.node.name)).toContain(
+      "mc:AlternateContent",
+    );
+  });
+
+  it("group / connector / custom geometry を typed source node として読み、異種タグ順序を保持する", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<p:cxnSp>` +
+          `<p:nvCxnSpPr><p:cNvPr id="50" name="Connector first"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="1" y="2"/><a:ext cx="3" cy="4"/></a:xfrm>` +
+          `<a:prstGeom prst="bentConnector3"><a:avLst><a:gd name="adj1" fmla="val 50000"/></a:avLst></a:prstGeom>` +
+          `<a:ln w="12700"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill><a:prstDash val="dash"/><a:tailEnd type="triangle" w="med" len="med"/></a:ln>` +
+          `</p:spPr>` +
+          `</p:cxnSp>` +
+          `<p:grpSp>` +
+          `<p:nvGrpSpPr><p:cNvPr id="51" name="Group second"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
+          `<p:grpSpPr><a:xfrm><a:off x="10" y="20"/><a:ext cx="300" cy="400"/><a:chOff x="5" y="6"/><a:chExt cx="30" cy="40"/></a:xfrm></p:grpSpPr>` +
+          `<p:sp><p:nvSpPr><p:cNvPr id="52" name="Group child"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="30" cy="40"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:sp>` +
+          `</p:grpSp>` +
+          `<p:sp><p:nvSpPr><p:cNvPr id="53" name="Custom third"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="100" y="200"/><a:ext cx="300" cy="400"/></a:xfrm>` +
+          `<a:custGeom><a:pathLst><a:path w="1000" h="1000"><a:moveTo><a:pt x="0" y="0"/></a:moveTo><a:lnTo><a:pt x="w" y="h"/></a:lnTo></a:path></a:pathLst></a:custGeom>` +
+          `</p:spPr></p:sp>`,
+      ),
+    );
+
+    expect(source.slides[0].shapes.map((shape) => shape.kind)).toEqual([
+      "connector",
+      "group",
+      "shape",
+    ]);
+    const [connector, group, custom] = source.slides[0].shapes as [
+      SourceConnector,
+      SourceGroup,
+      SourceShape,
+    ];
+    expect(connector).toMatchObject({
+      name: "Connector first",
+      geometry: { preset: "bentConnector3", adjustValues: { adj1: 50000 } },
+      outline: { width: 12700, dashStyle: "dash", tailEnd: { type: "triangle" } },
+    });
+    expect(group).toMatchObject({
+      name: "Group second",
+      transform: { offsetX: 10, offsetY: 20, width: 300, height: 400 },
+      childTransform: { offsetX: 5, offsetY: 6, width: 30, height: 40 },
+    });
+    expect(group.children.map((child) => child.kind)).toEqual(["shape"]);
+    expect(custom.geometry).toMatchObject({
+      kind: "custom",
+      paths: [{ width: 1000, height: 1000, commands: "M 0 0 L 1000 1000" }],
     });
   });
 
@@ -433,7 +492,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">` +
-          `<mc:Choice Requires="ext"><p:cxnSp><p:nvCxnSpPr><p:cNvPr id="41" name="Connector"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr></p:cxnSp></mc:Choice>` +
+          `<mc:Choice Requires="ext"><p:contentPart><p:nvContentPartPr><p:cNvPr id="41" name="Unsupported"/></p:nvContentPartPr></p:contentPart></mc:Choice>` +
           `<mc:Fallback>` +
           `<p:sp><p:nvSpPr><p:cNvPr id="42" name="Fallback shape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
           `<p:spPr><a:xfrm><a:off x="10" y="20"/><a:ext cx="30" cy="40"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>` +

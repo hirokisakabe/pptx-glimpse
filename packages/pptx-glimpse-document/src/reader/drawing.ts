@@ -9,15 +9,21 @@
 
 import type {
   RawSidecarId,
+  SourceArrowEndpoint,
+  SourceArrowSize,
+  SourceArrowType,
   SourceColor,
   SourceColorTransform,
+  SourceDashStyle,
   SourceFill,
+  SourceLineCap,
+  SourceLineJoin,
   SourceOutline,
   SourceTransform,
 } from "../source/index.js";
 import { asEmu, asOoxmlAngle, asOoxmlPercent } from "../source/index.js";
 import { makeSidecar } from "./raw-node.js";
-import { getAttr, getChild, hasChild, localName, type XmlNode } from "./xml.js";
+import { getAttr, getChild, getChildArray, hasChild, localName, type XmlNode } from "./xml.js";
 
 const COLOR_TRANSFORM_KINDS: ReadonlySet<string> = new Set([
   "lumMod",
@@ -117,9 +123,21 @@ export function parseLine(
 
   const width = numericAttr(ln, "w");
   const fill = parseFill(ln, nextId);
+  const dashStyle = parseDashStyle(getChild(ln, "prstDash"));
+  const customDash = parseCustomDash(ln);
+  const lineCap = parseLineCap(getAttr(ln, "cap"));
+  const lineJoin = parseLineJoin(ln);
+  const headEnd = parseArrowEndpoint(getChild(ln, "headEnd"));
+  const tailEnd = parseArrowEndpoint(getChild(ln, "tailEnd"));
   return {
     ...(width !== undefined ? { width: asEmu(width) } : {}),
     ...(fill !== undefined ? { fill } : {}),
+    ...(dashStyle !== undefined ? { dashStyle } : {}),
+    ...(customDash !== undefined ? { customDash } : {}),
+    ...(lineCap !== undefined ? { lineCap } : {}),
+    ...(lineJoin !== undefined ? { lineJoin } : {}),
+    ...(headEnd !== undefined ? { headEnd } : {}),
+    ...(tailEnd !== undefined ? { tailEnd } : {}),
   };
 }
 
@@ -190,4 +208,48 @@ export function numericAttr(node: XmlNode | undefined, name: string): number | u
 /** OOXML boolean 属性 (`1` / `0` / `true` / `false`) を判定する。 */
 export function isTrue(value: string | undefined): boolean {
   return value === "1" || value === "true";
+}
+
+function parseDashStyle(prstDash: XmlNode | undefined): SourceDashStyle | undefined {
+  const value = getAttr(prstDash, "val");
+  if (value === undefined) return undefined;
+  return value as SourceDashStyle;
+}
+
+function parseCustomDash(ln: XmlNode): number[] | undefined {
+  const custDash = getChild(ln, "custDash");
+  const segments = getChildArray(custDash, "ds");
+  if (segments.length === 0) return undefined;
+  return segments.flatMap((segment) => [
+    (numericAttr(segment, "d") ?? 100000) / 100000,
+    (numericAttr(segment, "sp") ?? 100000) / 100000,
+  ]);
+}
+
+const LINE_CAP_MAP: Record<string, SourceLineCap> = {
+  flat: "butt",
+  sq: "square",
+  rnd: "round",
+};
+
+function parseLineCap(value: string | undefined): SourceLineCap | undefined {
+  return value !== undefined ? LINE_CAP_MAP[value] : undefined;
+}
+
+function parseLineJoin(ln: XmlNode): SourceLineJoin | undefined {
+  if (hasChild(ln, "round")) return "round";
+  if (hasChild(ln, "bevel")) return "bevel";
+  if (hasChild(ln, "miter")) return "miter";
+  return undefined;
+}
+
+function parseArrowEndpoint(node: XmlNode | undefined): SourceArrowEndpoint | undefined {
+  if (!node) return undefined;
+  const type = (getAttr(node, "type") ?? "none") as SourceArrowType | "none";
+  if (type === "none") return undefined;
+  return {
+    type,
+    width: (getAttr(node, "w") ?? "med") as SourceArrowSize,
+    length: (getAttr(node, "len") ?? "med") as SourceArrowSize,
+  };
 }

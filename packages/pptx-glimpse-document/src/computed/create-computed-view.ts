@@ -28,9 +28,11 @@ import type {
   ComputedCellBorders,
   ComputedChartElement,
   ComputedColor,
+  ComputedConnectorElement,
   ComputedElement,
   ComputedElementLayer,
   ComputedFill,
+  ComputedGroupElement,
   ComputedImageElement,
   ComputedOutline,
   ComputedParagraph,
@@ -330,6 +332,10 @@ function computeElement(
   partPath: PartPath,
 ): ComputedElement {
   if (element.kind === "shape") return computeShapeElement(context, element, layer, partPath);
+  if (element.kind === "connector") {
+    return computeConnectorElement(context, element, layer, partPath);
+  }
+  if (element.kind === "group") return computeGroupElement(context, element, layer, partPath);
   if (element.kind === "image") return computeImageElement(context, element, layer, partPath);
   if (element.kind === "table") return computeTableElement(context, element, layer, partPath);
   if (element.kind === "chart") return computeChartElement(context, element, layer, partPath);
@@ -337,6 +343,42 @@ function computeElement(
     return computeSmartArtElement(context, element, layer, partPath);
   }
   return { kind: "raw", sourceLayer: layer, sourcePartPath: partPath, sourceNode: element };
+}
+
+function computeConnectorElement(
+  context: ComputeContext,
+  connector: Extract<SourceShapeNode, { kind: "connector" }>,
+  layer: ComputedElementLayer,
+  partPath: PartPath,
+): ComputedConnectorElement {
+  return {
+    kind: "connector",
+    sourceLayer: layer,
+    sourcePartPath: partPath,
+    sourceNode: connector,
+    ...(connector.transform !== undefined ? { transform: connector.transform } : {}),
+    ...(connector.geometry !== undefined ? { geometry: connector.geometry } : {}),
+    ...(connector.outline !== undefined
+      ? { outline: computeOutline(context, connector.outline) }
+      : {}),
+  };
+}
+
+function computeGroupElement(
+  context: ComputeContext,
+  group: Extract<SourceShapeNode, { kind: "group" }>,
+  layer: ComputedElementLayer,
+  partPath: PartPath,
+): ComputedGroupElement {
+  return {
+    kind: "group",
+    sourceLayer: layer,
+    sourcePartPath: partPath,
+    sourceNode: group,
+    ...(group.transform !== undefined ? { transform: group.transform } : {}),
+    ...(group.childTransform !== undefined ? { childTransform: group.childTransform } : {}),
+    children: group.children.map((child) => computeElement(context, child, layer, partPath)),
+  };
 }
 
 function computeShapeElement(

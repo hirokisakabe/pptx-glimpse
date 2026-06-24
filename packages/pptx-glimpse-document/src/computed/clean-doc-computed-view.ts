@@ -15,7 +15,9 @@ import type {
   SourceBackground,
   SourceCellBorders,
   SourceChart,
+  SourceConnector,
   SourceFill,
+  SourceGroup,
   SourceImage,
   SourceOutline,
   SourceParagraphProperties,
@@ -77,6 +79,8 @@ export interface ComputedRelationship {
 
 export type ComputedElement =
   | ComputedShapeElement
+  | ComputedConnectorElement
+  | ComputedGroupElement
   | ComputedImageElement
   | ComputedTableElement
   | ComputedChartElement
@@ -108,6 +112,22 @@ export interface ComputedImageElement extends ComputedElementBase {
   readonly transform?: SourceTransform;
   readonly relationship?: ComputedRelationship;
   readonly media?: MediaPart;
+}
+
+export interface ComputedConnectorElement extends ComputedElementBase {
+  readonly kind: "connector";
+  readonly sourceNode: SourceConnector;
+  readonly transform?: SourceTransform;
+  readonly geometry?: SourceConnector["geometry"];
+  readonly outline?: ComputedOutline;
+}
+
+export interface ComputedGroupElement extends ComputedElementBase {
+  readonly kind: "group";
+  readonly sourceNode: SourceGroup;
+  readonly transform?: SourceTransform;
+  readonly childTransform?: SourceTransform;
+  readonly children: readonly ComputedElement[];
 }
 
 export interface ComputedTableElement extends ComputedElementBase {
