@@ -15,6 +15,7 @@ import type {
 } from "../experimental.js";
 import {
   asEmu,
+  asOoxmlAngle,
   asOoxmlPercent,
   asPartPath,
   asPt,
@@ -188,6 +189,138 @@ describe("createComputedView", () => {
     });
   });
 
+  it("complex fill と shape style reference を computed fill/outline に解決する", () => {
+    const source = withSlide2Shapes(buildSource(), [
+      shape("Gradient fill", {
+        transform: transform(30, 31, 32, 33),
+        fill: {
+          kind: "gradient",
+          gradientType: "linear",
+          angle: asOoxmlAngle(5400000),
+          stops: [
+            { position: 0, color: { kind: "scheme", scheme: "accent1" } },
+            { position: 1, color: { kind: "srgb", hex: "00FF00" } },
+          ],
+        },
+      }),
+      shape("Pattern fill", {
+        transform: transform(40, 41, 42, 43),
+        fill: {
+          kind: "pattern",
+          preset: "pct20",
+          foregroundColor: { kind: "scheme", scheme: "accent1" },
+          backgroundColor: { kind: "srgb", hex: "FFFFFF" },
+        },
+      }),
+      shape("Image fill", {
+        transform: transform(50, 51, 52, 53),
+        fill: {
+          kind: "image",
+          blipRelationshipId: asRelationshipId("rIdImage"),
+          tile: {
+            tx: asEmu(1),
+            ty: asEmu(2),
+            sx: 0.5,
+            sy: 0.75,
+            flip: "xy",
+            align: "ctr",
+          },
+        },
+      }),
+      shape("Style ref", {
+        transform: transform(60, 61, 62, 63),
+        style: {
+          fillRef: { index: 1, color: { kind: "scheme", scheme: "accent1" } },
+          lineRef: { index: 1, color: { kind: "srgb", hex: "ABCDEF" } },
+          effectRef: { index: 1 },
+        },
+      }),
+    ]);
+    const sourceWithFormatScheme: CleanDocSource = {
+      ...source,
+      themes: source.themes.map((theme) => ({
+        ...theme,
+        formatScheme: {
+          fillStyles: [
+            {
+              kind: "gradient",
+              gradientType: "linear",
+              angle: asOoxmlAngle(0),
+              stops: [
+                { position: 0, color: { kind: "srgb", hex: "000000" } },
+                { position: 1, color: { kind: "srgb", hex: "FFFFFF" } },
+              ],
+            },
+          ],
+          lineStyles: [
+            {
+              width: asEmu(12700),
+              fill: { kind: "solid", color: { kind: "srgb", hex: "000000" } },
+            },
+          ],
+          effectStyles: [
+            undefined,
+            {
+              outerShadow: {
+                blurRadius: asEmu(10),
+                distance: asEmu(20),
+                direction: asOoxmlAngle(5400000),
+                color: {
+                  kind: "srgb",
+                  hex: "000000",
+                  transforms: [{ kind: "alpha", value: 63000 }],
+                },
+                alignment: "ctr",
+                rotateWithShape: false,
+              },
+            },
+          ],
+          backgroundFillStyles: [],
+        },
+      })),
+    };
+
+    const slide = getSlide(createComputedView(sourceWithFormatScheme).slides, 0);
+    expect(findShape(slide.elements, "Gradient fill").fill).toMatchObject({
+      kind: "gradient",
+      angle: 90,
+      stops: [
+        { position: 0, color: { hex: "#336699", alpha: 1 } },
+        { position: 1, color: { hex: "#00ff00", alpha: 1 } },
+      ],
+    });
+    expect(findShape(slide.elements, "Pattern fill").fill).toMatchObject({
+      kind: "pattern",
+      preset: "pct20",
+      foregroundColor: { hex: "#336699", alpha: 1 },
+      backgroundColor: { hex: "#ffffff", alpha: 1 },
+    });
+    expect(findShape(slide.elements, "Image fill").fill).toMatchObject({
+      kind: "image",
+      media: { contentType: "image/png" },
+      tile: { sx: 0.5, sy: 0.75, flip: "xy", align: "ctr" },
+    });
+    expect(findShape(slide.elements, "Style ref").fill).toMatchObject({
+      kind: "gradient",
+      stops: [
+        { position: 0, color: { hex: "#336699", alpha: 1 } },
+        { position: 1, color: { hex: "#336699", alpha: 1 } },
+      ],
+    });
+    expect(findShape(slide.elements, "Style ref").outline?.fill).toMatchObject({
+      kind: "solid",
+      color: { hex: "#abcdef", alpha: 1 },
+    });
+    expect(findShape(slide.elements, "Style ref").effects?.outerShadow).toMatchObject({
+      blurRadius: 10,
+      distance: 20,
+      direction: 90,
+      color: { hex: "#000000", alpha: 0.63 },
+      alignment: "ctr",
+      rotateWithShape: false,
+    });
+  });
+
   it("inline table borders が table style default border より優先される", () => {
     const table = findTable(
       getSlide(createComputedView(buildSource()).slides, 0).elements,
@@ -352,6 +485,20 @@ function elementNames(elements: readonly ComputedElement[]): (string | undefined
   return elements.map((element) =>
     "name" in element.sourceNode ? element.sourceNode.name : undefined,
   );
+}
+
+function withSlide2Shapes(
+  source: CleanDocSource,
+  extraShapes: readonly SourceShape[],
+): CleanDocSource {
+  return {
+    ...source,
+    slides: source.slides.map((slide) =>
+      slide.partPath === "ppt/slides/slide2.xml"
+        ? { ...slide, shapes: [...slide.shapes, ...extraShapes] }
+        : slide,
+    ),
+  };
 }
 
 function buildSource(): CleanDocSource {

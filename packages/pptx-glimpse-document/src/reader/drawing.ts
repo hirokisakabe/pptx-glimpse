@@ -16,14 +16,24 @@ import type {
   SourceColorTransform,
   SourceDashStyle,
   SourceFill,
+  SourceGradientStop,
+  SourceImageFillTile,
   SourceLineCap,
   SourceLineJoin,
   SourceOutline,
   SourceTransform,
 } from "../source/index.js";
-import { asEmu, asOoxmlAngle, asOoxmlPercent } from "../source/index.js";
+import { asEmu, asOoxmlAngle, asOoxmlPercent, asRelationshipId } from "../source/index.js";
 import { makeSidecar } from "./raw-node.js";
-import { getAttr, getChild, getChildArray, hasChild, localName, type XmlNode } from "./xml.js";
+import {
+  getAttr,
+  getChild,
+  getChildArray,
+  getNamespacedAttr,
+  hasChild,
+  localName,
+  type XmlNode,
+} from "./xml.js";
 
 const COLOR_TRANSFORM_KINDS: ReadonlySet<string> = new Set([
   "lumMod",
@@ -33,8 +43,8 @@ const COLOR_TRANSFORM_KINDS: ReadonlySet<string> = new Set([
   "alpha",
 ]);
 
-/** typed に解釈する fill 要素。raw fill 判定で除外するために使う。 */
-const RAW_FILL_LOCAL_NAMES = ["gradFill", "blipFill", "pattFill", "grpFill"] as const;
+/** typed に解釈しない fill 要素。raw fill 判定で除外するために使う。 */
+const RAW_FILL_LOCAL_NAMES = ["grpFill"] as const;
 
 /**
  * 色保持要素 (`a:solidFill` / `a:bgRef` / `a:rPr` 等) の直下にある色要素
@@ -97,12 +107,102 @@ export function parseFill(
 
   if (hasChild(parent, "noFill")) return { kind: "none" };
 
+  const grad = getChild(parent, "gradFill");
+  if (grad) {
+    const fill = parseGradientFill(grad);
+    return fill ?? { kind: "raw", raw: makeSidecar("a:gradFill", grad, nextId) };
+  }
+
+  const blip = getChild(parent, "blipFill");
+  if (blip) {
+    return parseBlipFill(blip) ?? { kind: "raw", raw: makeSidecar("a:blipFill", blip, nextId) };
+  }
+
+  const pattern = getChild(parent, "pattFill");
+  if (pattern) {
+    const fill = parsePatternFill(pattern);
+    return fill ?? { kind: "raw", raw: makeSidecar("a:pattFill", pattern, nextId) };
+  }
+
   for (const name of RAW_FILL_LOCAL_NAMES) {
     const node = getChild(parent, name);
     if (node) return { kind: "raw", raw: makeSidecar(`a:${name}`, node, nextId) };
   }
 
   return undefined;
+}
+
+function parseGradientFill(grad: XmlNode): SourceFill | undefined {
+  const stops: SourceGradientStop[] = [];
+  for (const gs of getChildArray(getChild(grad, "gsLst"), "gs")) {
+    const color = parseColorElement(gs);
+    if (color === undefined) continue;
+    stops.push({
+      position: (numericAttr(gs, "pos") ?? 0) / 100000,
+      color,
+    });
+  }
+  if (stops.length === 0) return undefined;
+
+  const path = getChild(grad, "path");
+  if (path !== undefined) {
+    const fillToRect = getChild(path, "fillToRect");
+    const l = numericAttr(fillToRect, "l") ?? 0;
+    const t = numericAttr(fillToRect, "t") ?? 0;
+    const r = numericAttr(fillToRect, "r") ?? 0;
+    const b = numericAttr(fillToRect, "b") ?? 0;
+    return {
+      kind: "gradient",
+      gradientType: "radial",
+      stops,
+      centerX: (l + (100000 - r)) / 2 / 100000,
+      centerY: (t + (100000 - b)) / 2 / 100000,
+    };
+  }
+
+  return {
+    kind: "gradient",
+    gradientType: "linear",
+    stops,
+    angle: asOoxmlAngle(numericAttr(getChild(grad, "lin"), "ang") ?? 0),
+  };
+}
+
+function parseBlipFill(blipFill: XmlNode): SourceFill | undefined {
+  const blip = getChild(blipFill, "blip");
+  const embed = getNamespacedAttr(blip, "embed");
+  if (embed === undefined) return undefined;
+  const tile = parseImageFillTile(getChild(blipFill, "tile"));
+  return {
+    kind: "image",
+    blipRelationshipId: asRelationshipId(embed),
+    ...(tile !== undefined ? { tile } : {}),
+  };
+}
+
+export function parseImageFillTile(tile: XmlNode | undefined): SourceImageFillTile | undefined {
+  if (tile === undefined) return undefined;
+  const flip = getAttr(tile, "flip") ?? "none";
+  return {
+    tx: asEmu(numericAttr(tile, "tx") ?? 0),
+    ty: asEmu(numericAttr(tile, "ty") ?? 0),
+    sx: (numericAttr(tile, "sx") ?? 100000) / 100000,
+    sy: (numericAttr(tile, "sy") ?? 100000) / 100000,
+    flip: flip === "x" || flip === "y" || flip === "xy" ? flip : "none",
+    align: getAttr(tile, "algn") ?? "tl",
+  };
+}
+
+function parsePatternFill(pattern: XmlNode): SourceFill | undefined {
+  const foregroundColor = parseColorElement(getChild(pattern, "fgClr"));
+  const backgroundColor = parseColorElement(getChild(pattern, "bgClr"));
+  if (foregroundColor === undefined || backgroundColor === undefined) return undefined;
+  return {
+    kind: "pattern",
+    preset: getAttr(pattern, "prst") ?? "ltDnDiag",
+    foregroundColor,
+    backgroundColor,
+  };
 }
 
 /** `a:ln` を読む。幅 (EMU) と solid line color のみの最小表現。 */

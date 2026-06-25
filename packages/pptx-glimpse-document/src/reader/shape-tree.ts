@@ -22,12 +22,15 @@ import type {
   SourceGroup,
   SourceImage,
   SourceImageCrop,
+  SourceImageStretch,
   SourceNodeId,
   SourcePlaceholder,
   SourceRawShapeNode,
   SourceShape,
   SourceShapeNode,
+  SourceShapeStyle,
   SourceSmartArt,
+  SourceStyleReference,
   SourceTable,
   SourceTableCell,
   SourceTableColumn,
@@ -39,7 +42,9 @@ import { parseCustomGeometry } from "./custom-geometry.js";
 import {
   isTrue,
   numericAttr,
+  parseColorElement,
   parseFill,
+  parseImageFillTile,
   parseLine,
   parseOutline,
   parseTransform,
@@ -57,11 +62,16 @@ import {
   type XmlOrderedNode,
 } from "./xml.js";
 
-const KNOWN_SHAPE_CHILDREN: ReadonlySet<string> = new Set(["nvSpPr", "spPr", "txBody"]);
+const KNOWN_SHAPE_CHILDREN: ReadonlySet<string> = new Set(["nvSpPr", "spPr", "style", "txBody"]);
 const KNOWN_CONNECTOR_CHILDREN: ReadonlySet<string> = new Set(["nvCxnSpPr", "spPr", "style"]);
 const KNOWN_GROUP_CHILDREN: ReadonlySet<string> = new Set(["nvGrpSpPr", "grpSpPr"]);
 const KNOWN_PICTURE_CHILDREN: ReadonlySet<string> = new Set(["nvPicPr", "blipFill", "spPr"]);
-const KNOWN_BLIP_FILL_CHILDREN: ReadonlySet<string> = new Set(["blip", "srcRect"]);
+const KNOWN_BLIP_FILL_CHILDREN: ReadonlySet<string> = new Set([
+  "blip",
+  "srcRect",
+  "stretch",
+  "tile",
+]);
 const KNOWN_GRAPHIC_FRAME_CHILDREN: ReadonlySet<string> = new Set([
   "nvGraphicFramePr",
   "xfrm",
@@ -241,6 +251,7 @@ function parseShape(
   const geometry = parseGeometry(spPr, orderedNestedChildChildren(orderedNode, "sp", "spPr"));
   const fill = parseFill(spPr, nextId);
   const outline = parseOutline(spPr, nextId);
+  const style = parseShapeStyle(getChild(sp, "style"));
   const textBody = parseTextBody(getChild(sp, "txBody"), partPath, nextId, nodeId, orderingSlot);
 
   const rawSidecars = [
@@ -256,6 +267,7 @@ function parseShape(
     ...(geometry !== undefined ? { geometry } : {}),
     ...(fill !== undefined ? { fill } : {}),
     ...(outline !== undefined ? { outline } : {}),
+    ...(style !== undefined ? { style } : {}),
     ...(textBody !== undefined ? { textBody } : {}),
     ...(placeholder !== undefined ? { placeholder } : {}),
     handle: { partPath, ...(nodeId !== undefined ? { nodeId } : {}), orderingSlot },
@@ -278,6 +290,7 @@ function parseConnector(
   const transform = parseTransform(spPr);
   const geometry = parseGeometry(spPr, orderedNestedChildChildren(orderedNode, "cxnSp", "spPr"));
   const outline = parseOutline(spPr, nextId);
+  const style = parseShapeStyle(getChild(cxnSp, "style"));
   const rawSidecars = [
     ...collectUnknownSidecars(cxnSp, KNOWN_CONNECTOR_CHILDREN, nextId),
     ...collectUnknownSidecars(spPr, KNOWN_SP_PR_CHILDREN, nextId),
@@ -290,8 +303,32 @@ function parseConnector(
     ...(transform !== undefined ? { transform } : {}),
     ...(geometry !== undefined ? { geometry } : {}),
     ...(outline !== undefined ? { outline } : {}),
+    ...(style !== undefined ? { style } : {}),
     handle: { partPath, ...(nodeId !== undefined ? { nodeId } : {}), orderingSlot },
     ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
+  };
+}
+
+function parseShapeStyle(style: XmlNode | undefined): SourceShapeStyle | undefined {
+  if (style === undefined) return undefined;
+  const fillRef = parseStyleReference(getChild(style, "fillRef"));
+  const lineRef = parseStyleReference(getChild(style, "lnRef"));
+  const effectRef = parseStyleReference(getChild(style, "effectRef"));
+  const parsed: SourceShapeStyle = {
+    ...(fillRef !== undefined ? { fillRef } : {}),
+    ...(lineRef !== undefined ? { lineRef } : {}),
+    ...(effectRef !== undefined ? { effectRef } : {}),
+  };
+  return Object.keys(parsed).length > 0 ? parsed : undefined;
+}
+
+function parseStyleReference(ref: XmlNode | undefined): SourceStyleReference | undefined {
+  if (ref === undefined) return undefined;
+  const index = numericAttr(ref, "idx") ?? 0;
+  const color = parseColorElement(ref);
+  return {
+    index,
+    ...(color !== undefined ? { color } : {}),
   };
 }
 
@@ -337,6 +374,8 @@ function parseImage(
   const blip = getChild(blipFill, "blip");
   const embed = getNamespacedAttr(blip, "embed");
   const crop = parseCrop(getChild(blipFill, "srcRect"));
+  const stretch = parseStretch(getChild(blipFill, "stretch"));
+  const tile = parseImageFillTile(getChild(blipFill, "tile"));
 
   const spPr = getChild(pic, "spPr");
   const transform = parseTransform(spPr);
@@ -356,6 +395,8 @@ function parseImage(
     ...(transform !== undefined ? { transform } : {}),
     ...(embed !== undefined ? { blipRelationshipId: asRelationshipId(embed) } : {}),
     ...(crop !== undefined ? { crop } : {}),
+    ...(stretch !== undefined ? { stretch } : {}),
+    ...(tile !== undefined ? { tile } : {}),
     handle: {
       partPath,
       ...(nodeId !== undefined ? { nodeId } : {}),
@@ -756,6 +797,17 @@ function parseCrop(srcRect: XmlNode | undefined): SourceImageCrop | undefined {
     ...(bottom !== undefined ? { bottom: asOoxmlPercent(bottom) } : {}),
   };
   return Object.keys(crop).length > 0 ? crop : undefined;
+}
+
+function parseStretch(stretch: XmlNode | undefined): SourceImageStretch | undefined {
+  const fillRect = getChild(stretch, "fillRect");
+  if (fillRect === undefined) return undefined;
+  const left = (numericAttr(fillRect, "l") ?? 0) / 100000;
+  const top = (numericAttr(fillRect, "t") ?? 0) / 100000;
+  const right = (numericAttr(fillRect, "r") ?? 0) / 100000;
+  const bottom = (numericAttr(fillRect, "b") ?? 0) / 100000;
+  if (left === 0 && top === 0 && right === 0 && bottom === 0) return undefined;
+  return { left, top, right, bottom };
 }
 
 function sourceNodeId(cNvPr: XmlNode | undefined): SourceNodeId | undefined {

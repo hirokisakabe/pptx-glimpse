@@ -5,6 +5,7 @@ export type {
   ComputedChartElement,
   ComputedColor,
   ComputedConnectorElement,
+  ComputedEffectList,
   ComputedElement,
   ComputedElementLayer,
   ComputedFill,
