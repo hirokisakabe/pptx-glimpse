@@ -260,6 +260,7 @@ describe("createComputedView", () => {
           ],
           effectStyles: [
             undefined,
+            // Current parser compatibility: effectRef idx=1 resolves to effectStyles[1].
             {
               outerShadow: {
                 blurRadius: asEmu(10),

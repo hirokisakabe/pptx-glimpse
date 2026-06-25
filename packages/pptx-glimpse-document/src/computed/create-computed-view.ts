@@ -655,6 +655,8 @@ function resolveFillReference(
   partPath: PartPath,
 ): ComputedFill | undefined {
   if (ref.index === 0) return undefined;
+  // Match the current parser oracle in style-reference-resolver.ts: idx >= 1000
+  // is routed to bgFillStyleLst, with idx=1000 resolving to no template.
   const list =
     ref.index >= 1000
       ? context.theme?.formatScheme?.backgroundFillStyles
@@ -704,6 +706,8 @@ function resolveEffectReference(
   context: ComputeContext,
   ref: SourceStyleReference,
 ): ComputedEffectList | undefined {
+  // Match the current parser oracle in style-reference-resolver.ts, where
+  // effectStyleLst is indexed directly by effectRef@idx.
   const template = context.theme?.formatScheme?.effectStyles[ref.index];
   return template !== undefined ? computeEffectList(context, template) : undefined;
 }
