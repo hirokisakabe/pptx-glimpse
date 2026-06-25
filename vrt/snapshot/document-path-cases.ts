@@ -39,7 +39,7 @@ const B = DOCUMENT_PATH_VRT_BLOCKER_ISSUES;
 export const DOCUMENT_PATH_VRT_SHARED_CASES = [
   shared("real-basic-theme", "real-basic-theme.pptx", 0, []),
   shared("real-product-page", "real-product-page.pptx", 0, []),
-  shared("real-financial-report", "real-financial-report.pptx", 0.16, [
+  shared("real-financial-report", "real-financial-report.pptx", 0, [
     B.tables,
     B.shapeTreeAndGeometry,
   ]),

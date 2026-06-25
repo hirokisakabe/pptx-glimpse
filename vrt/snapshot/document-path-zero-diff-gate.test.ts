@@ -5,6 +5,7 @@ import { fileURLToPath } from "url";
 import { convertPptxToPng } from "../../packages/pptx-glimpse/src/converter.js";
 import { convertPptxToPngViaDocumentPath } from "../../packages/pptx-glimpse/src/experimental-document-renderer.js";
 import { compareImageBuffers } from "../compare-utils.js";
+import { DOCUMENT_PATH_VRT_RENDER_WIDTH } from "./document-path-cases.js";
 import { SHARED_FIXTURE_CASES, VRT_CASES } from "./vrt-cases.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -12,7 +13,6 @@ const SHARED_FIXTURE_DIR = join(__dirname, "..", "..", "shared-fixtures");
 const GENERATED_FIXTURE_DIR = join(__dirname, "fixtures");
 const DIFF_DIR = join(__dirname, "diffs");
 
-const RENDER_WIDTH = 320;
 const PIXEL_THRESHOLD = 0;
 const MISMATCH_TOLERANCE = 0;
 
@@ -55,7 +55,7 @@ describe("Document path zero-diff default switch gate", { timeout: 60000 }, () =
 
         const input = readFileSync(fixturePath);
         const options = {
-          width: RENDER_WIDTH,
+          width: DOCUMENT_PATH_VRT_RENDER_WIDTH,
           skipSystemFonts: true,
         };
         const parserResults = await convertPptxToPng(input, options);
