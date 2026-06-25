@@ -1,10 +1,13 @@
 export type {
   CleanDocComputedView,
   ComputedBackground,
+  ComputedBlipEffects,
   ComputedCellBorders,
   ComputedChartElement,
   ComputedColor,
+  ComputedColorChangeEffect,
   ComputedConnectorElement,
+  ComputedDuotoneEffect,
   ComputedEffectList,
   ComputedElement,
   ComputedElementLayer,

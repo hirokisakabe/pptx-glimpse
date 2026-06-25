@@ -13,6 +13,7 @@ import type {
   Relationship,
   RelationshipId,
   SourceBackground,
+  SourceBlipEffects,
   SourceCellBorders,
   SourceChart,
   SourceConnector,
@@ -114,6 +115,8 @@ export interface ComputedImageElement extends ComputedElementBase {
   readonly transform?: SourceTransform;
   readonly relationship?: ComputedRelationship;
   readonly media?: MediaPart;
+  readonly effects?: ComputedEffectList;
+  readonly blipEffects?: ComputedBlipEffects;
 }
 
 export interface ComputedConnectorElement extends ComputedElementBase {
@@ -122,6 +125,7 @@ export interface ComputedConnectorElement extends ComputedElementBase {
   readonly transform?: SourceTransform;
   readonly geometry?: SourceConnector["geometry"];
   readonly outline?: ComputedOutline;
+  readonly effects?: ComputedEffectList;
 }
 
 export interface ComputedGroupElement extends ComputedElementBase {
@@ -129,6 +133,7 @@ export interface ComputedGroupElement extends ComputedElementBase {
   readonly sourceNode: SourceGroup;
   readonly transform?: SourceTransform;
   readonly childTransform?: SourceTransform;
+  readonly effects?: ComputedEffectList;
   readonly children: readonly ComputedElement[];
 }
 
@@ -281,6 +286,26 @@ export interface ComputedInnerShadow {
 export interface ComputedGlow {
   readonly radius: Emu;
   readonly color: ComputedColor;
+}
+
+export interface ComputedBlipEffects {
+  readonly source: SourceBlipEffects;
+  readonly grayscale: boolean;
+  readonly biLevel?: SourceBlipEffects["biLevel"];
+  readonly blur?: SourceBlipEffects["blur"];
+  readonly lum?: SourceBlipEffects["lum"];
+  readonly duotone?: ComputedDuotoneEffect;
+  readonly clrChange?: ComputedColorChangeEffect;
+}
+
+export interface ComputedDuotoneEffect {
+  readonly color1: ComputedColor;
+  readonly color2: ComputedColor;
+}
+
+export interface ComputedColorChangeEffect {
+  readonly from: ComputedColor;
+  readonly to: ComputedColor;
 }
 
 export interface ComputedColor {

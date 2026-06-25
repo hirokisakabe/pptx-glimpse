@@ -12,14 +12,21 @@ import type {
   SourceArrowEndpoint,
   SourceArrowSize,
   SourceArrowType,
+  SourceBiLevelEffect,
+  SourceBlipEffects,
+  SourceBlurEffect,
   SourceColor,
+  SourceColorChangeEffect,
   SourceColorTransform,
   SourceDashStyle,
+  SourceDuotoneEffect,
+  SourceEffectList,
   SourceFill,
   SourceGradientStop,
   SourceImageFillTile,
   SourceLineCap,
   SourceLineJoin,
+  SourceLumEffect,
   SourceOutline,
   SourceTransform,
 } from "../source/index.js";
@@ -45,6 +52,16 @@ const COLOR_TRANSFORM_KINDS: ReadonlySet<string> = new Set([
 
 /** typed に解釈しない fill 要素。raw fill 判定で除外するために使う。 */
 const RAW_FILL_LOCAL_NAMES = ["grpFill"] as const;
+const PRESET_COLOR_HEX: Readonly<Record<string, string>> = {
+  black: "000000",
+  white: "FFFFFF",
+  red: "FF0000",
+  green: "008000",
+  blue: "0000FF",
+  yellow: "FFFF00",
+  cyan: "00FFFF",
+  magenta: "FF00FF",
+};
 
 /**
  * 色保持要素 (`a:solidFill` / `a:bgRef` / `a:rPr` 等) の直下にある色要素
@@ -86,6 +103,160 @@ export function parseColorElement(parent: XmlNode | undefined): SourceColor | un
   }
 
   return undefined;
+}
+
+export function parseEffectList(effectList: XmlNode | undefined): SourceEffectList | undefined {
+  if (effectList === undefined) return undefined;
+  const outerShadow = parseOuterShadow(getChild(effectList, "outerShdw"));
+  const innerShadow = parseInnerShadow(getChild(effectList, "innerShdw"));
+  const glow = parseGlow(getChild(effectList, "glow"));
+  const softEdge = parseSoftEdge(getChild(effectList, "softEdge"));
+  const parsed: SourceEffectList = {
+    ...(outerShadow !== undefined ? { outerShadow } : {}),
+    ...(innerShadow !== undefined ? { innerShadow } : {}),
+    ...(glow !== undefined ? { glow } : {}),
+    ...(softEdge !== undefined ? { softEdge } : {}),
+  };
+  return Object.keys(parsed).length > 0 ? parsed : undefined;
+}
+
+export function parseBlipEffects(blip: XmlNode | undefined): SourceBlipEffects | undefined {
+  if (blip === undefined) return undefined;
+  const grayscale = getChild(blip, "grayscl") !== undefined;
+  const biLevel = parseBiLevel(getChild(blip, "biLevel"));
+  const blur = parseBlurEffect(getChild(blip, "blur"));
+  const lum = parseLumEffect(getChild(blip, "lum"));
+  const duotone = parseDuotoneEffect(getChild(blip, "duotone"));
+  const clrChange = parseColorChangeEffect(getChild(blip, "clrChange"));
+  const parsed: SourceBlipEffects = {
+    grayscale,
+    ...(biLevel !== undefined ? { biLevel } : {}),
+    ...(blur !== undefined ? { blur } : {}),
+    ...(lum !== undefined ? { lum } : {}),
+    ...(duotone !== undefined ? { duotone } : {}),
+    ...(clrChange !== undefined ? { clrChange } : {}),
+  };
+  return grayscale ||
+    biLevel !== undefined ||
+    blur !== undefined ||
+    lum !== undefined ||
+    duotone !== undefined ||
+    clrChange !== undefined
+    ? parsed
+    : undefined;
+}
+
+function parseOuterShadow(node: XmlNode | undefined): SourceEffectList["outerShadow"] | undefined {
+  if (node === undefined) return undefined;
+  const color = parseColorElement(node);
+  if (color === undefined) return undefined;
+  return {
+    blurRadius: asEmu(numericAttr(node, "blurRad") ?? 0),
+    distance: asEmu(numericAttr(node, "dist") ?? 0),
+    direction: asOoxmlAngle(numericAttr(node, "dir") ?? 0),
+    color,
+    alignment: getAttr(node, "algn") ?? "b",
+    rotateWithShape: getAttr(node, "rotWithShape") !== "0",
+  };
+}
+
+function parseInnerShadow(node: XmlNode | undefined): SourceEffectList["innerShadow"] | undefined {
+  if (node === undefined) return undefined;
+  const color = parseColorElement(node);
+  if (color === undefined) return undefined;
+  return {
+    blurRadius: asEmu(numericAttr(node, "blurRad") ?? 0),
+    distance: asEmu(numericAttr(node, "dist") ?? 0),
+    direction: asOoxmlAngle(numericAttr(node, "dir") ?? 0),
+    color,
+  };
+}
+
+function parseGlow(node: XmlNode | undefined): SourceEffectList["glow"] | undefined {
+  if (node === undefined) return undefined;
+  const color = parseColorElement(node);
+  if (color === undefined) return undefined;
+  return {
+    radius: asEmu(numericAttr(node, "rad") ?? 0),
+    color,
+  };
+}
+
+function parseSoftEdge(node: XmlNode | undefined): SourceEffectList["softEdge"] | undefined {
+  if (node === undefined) return undefined;
+  return {
+    radius: asEmu(numericAttr(node, "rad") ?? 0),
+  };
+}
+
+function parseBiLevel(node: XmlNode | undefined): SourceBiLevelEffect | undefined {
+  if (node === undefined) return undefined;
+  return {
+    threshold: (numericAttr(node, "thresh") ?? 50000) / 100000,
+  };
+}
+
+function parseBlurEffect(node: XmlNode | undefined): SourceBlurEffect | undefined {
+  if (node === undefined) return undefined;
+  return {
+    radius: asEmu(numericAttr(node, "rad") ?? 0),
+    grow: getAttr(node, "grow") !== "0",
+  };
+}
+
+function parseLumEffect(node: XmlNode | undefined): SourceLumEffect | undefined {
+  if (node === undefined) return undefined;
+  return {
+    brightness: (numericAttr(node, "bright") ?? 0) / 100000,
+    contrast: (numericAttr(node, "contrast") ?? 0) / 100000,
+  };
+}
+
+function parseDuotoneEffect(node: XmlNode | undefined): SourceDuotoneEffect | undefined {
+  if (node === undefined) return undefined;
+  const colors = collectColorChildren(node);
+  if (colors.length < 2) return undefined;
+  return { color1: colors[0], color2: colors[1] };
+}
+
+function parseColorChangeEffect(node: XmlNode | undefined): SourceColorChangeEffect | undefined {
+  if (node === undefined) return undefined;
+  const from = firstColorChild(getChild(node, "clrFrom"));
+  const to = firstColorChild(getChild(node, "clrTo"));
+  return from !== undefined && to !== undefined ? { from, to } : undefined;
+}
+
+function collectColorChildren(parent: XmlNode): SourceColor[] {
+  const colors: SourceColor[] = [];
+  for (const [key, value] of Object.entries(parent)) {
+    if (key.startsWith("@_")) continue;
+    const nodes = Array.isArray(value) ? value : [value];
+    for (const node of nodes) {
+      if (!isXmlNode(node)) continue;
+      const color = parseColorChild(key, node);
+      if (color !== undefined) colors.push(color);
+    }
+  }
+  return colors;
+}
+
+function firstColorChild(parent: XmlNode | undefined): SourceColor | undefined {
+  return parent !== undefined ? collectColorChildren(parent)[0] : undefined;
+}
+
+function parseColorChild(key: string, node: XmlNode): SourceColor | undefined {
+  const name = localName(key);
+  return name === "prstClr" ? parsePresetColor(node) : parseColorElement({ [name]: node });
+}
+
+function isXmlNode(value: unknown): value is XmlNode {
+  return typeof value === "object" && value !== null;
+}
+
+function parsePresetColor(node: XmlNode): SourceColor | undefined {
+  const value = getAttr(node, "val");
+  const hex = value !== undefined ? PRESET_COLOR_HEX[value] : undefined;
+  return hex !== undefined ? withTransforms({ kind: "srgb", hex }, node) : undefined;
 }
 
 /**

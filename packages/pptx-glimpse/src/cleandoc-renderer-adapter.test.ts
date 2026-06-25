@@ -194,6 +194,86 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it("shape effects と image blip effects を renderer model に変換する", () => {
+    const result = adaptComputedViewToRendererModel(
+      createComputedView(
+        buildSource({
+          extraSlideShapes: [
+            shape("Shadowed shape", {
+              transform: transform(90, 91, 92, 93),
+              effects: {
+                outerShadow: {
+                  blurRadius: asEmu(10),
+                  distance: asEmu(20),
+                  direction: asOoxmlAngle(5400000),
+                  color: { kind: "scheme", scheme: "accent1" },
+                  alignment: "ctr",
+                  rotateWithShape: false,
+                },
+                softEdge: { radius: asEmu(30) },
+              },
+            }),
+            {
+              kind: "image",
+              name: "Effect image",
+              transform: transform(100, 101, 102, 103),
+              blipRelationshipId: asRelationshipId("rIdImage"),
+              effects: { glow: { radius: asEmu(40), color: { kind: "srgb", hex: "FFFFFF" } } },
+              blipEffects: {
+                grayscale: true,
+                biLevel: { threshold: 0.25 },
+                blur: { radius: asEmu(50), grow: false },
+                lum: { brightness: 0.1, contrast: -0.2 },
+                duotone: {
+                  color1: { kind: "srgb", hex: "000000" },
+                  color2: { kind: "scheme", scheme: "accent1" },
+                },
+                clrChange: {
+                  from: { kind: "srgb", hex: "FF0000" },
+                  to: { kind: "scheme", scheme: "accent2" },
+                },
+              },
+            },
+          ],
+        }),
+      ),
+    );
+
+    expect(findElementByAltText(result.slides[0].elements, "Shadowed shape")).toMatchObject({
+      effects: {
+        outerShadow: {
+          blurRadius: 10,
+          distance: 20,
+          direction: 90,
+          color: { hex: "#336699", alpha: 1 },
+          alignment: "ctr",
+          rotateWithShape: false,
+        },
+        softEdge: { radius: 30 },
+      },
+    });
+    expect(findElementByAltText(result.slides[0].elements, "Effect image")).toMatchObject({
+      effects: {
+        glow: { radius: 40, color: { hex: "#ffffff", alpha: 1 } },
+      },
+      blipEffects: {
+        grayscale: true,
+        biLevel: { threshold: 0.25 },
+        blur: { radius: 50, grow: false },
+        lum: { brightness: 0.1, contrast: -0.2 },
+        duotone: {
+          color1: { hex: "#000000", alpha: 1 },
+          color2: { hex: "#336699", alpha: 1 },
+        },
+        clrChange: {
+          clrFrom: { hex: "#ff0000", alpha: 1 },
+          clrTo: { hex: "#336699", alpha: 1 },
+        },
+      },
+    });
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it("table を renderer model に変換する", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
@@ -334,12 +414,23 @@ describe("adaptComputedViewToRendererModel", () => {
                 dashStyle: "dash",
                 tailEnd: { type: "triangle", width: "med", length: "med" },
               },
+              effects: {
+                outerShadow: {
+                  blurRadius: asEmu(10),
+                  distance: asEmu(20),
+                  direction: asOoxmlAngle(5400000),
+                  color: { kind: "srgb", hex: "000000" },
+                  alignment: "b",
+                  rotateWithShape: true,
+                },
+              },
             },
             {
               kind: "group",
               name: "Group",
               transform: transform(600, 610, 620, 630),
               childTransform: transform(0, 0, 620, 630),
+              effects: { softEdge: { radius: asEmu(30) } },
               children: [
                 shape("Custom child", {
                   transform: transform(1, 2, 3, 4),
@@ -367,11 +458,20 @@ describe("adaptComputedViewToRendererModel", () => {
         dashStyle: "dash",
         tailEnd: { type: "triangle", width: "med", length: "med" },
       },
+      effects: {
+        outerShadow: {
+          blurRadius: 10,
+          distance: 20,
+          direction: 90,
+          color: { hex: "#000000", alpha: 1 },
+        },
+      },
     });
     expect(group).toMatchObject({
       type: "group",
       transform: { offsetX: 600, offsetY: 610, extentWidth: 620, extentHeight: 630 },
       childTransform: { offsetX: 0, offsetY: 0, extentWidth: 620, extentHeight: 630 },
+      effects: { softEdge: { radius: 30 } },
       children: [
         {
           type: "shape",
@@ -383,6 +483,37 @@ describe("adaptComputedViewToRendererModel", () => {
       ],
     });
     expect(result.diagnostics).toEqual([]);
+  });
+
+  it("document media content types を current parser 互換の image mime に正規化する", () => {
+    const source = buildSource({
+      extraSlideShapes: [
+        shape("EMF fill", {
+          transform: transform(110, 111, 112, 113),
+          fill: { kind: "image", blipRelationshipId: asRelationshipId("rIdImage") },
+        }),
+      ],
+    });
+    const sourceWithEmfMedia: CleanDocSource = {
+      ...source,
+      packageGraph: {
+        ...source.packageGraph,
+        media: source.packageGraph.media.map((media) => ({
+          ...media,
+          contentType: "image/x-emf",
+        })),
+      },
+    };
+    const result = adaptComputedViewToRendererModel(createComputedView(sourceWithEmfMedia));
+
+    expect(findElementByAltText(result.slides[0].elements, "Hero image")).toMatchObject({
+      type: "image",
+      mimeType: "image/emf",
+    });
+    expect(findElementByAltText(result.slides[0].elements, "EMF fill")).toMatchObject({
+      type: "shape",
+      fill: { type: "image", mimeType: "image/emf" },
+    });
   });
 
   it("chart と SmartArt fallback を renderer model に変換する", () => {

@@ -1,5 +1,6 @@
 import type {
   Background,
+  BlipEffects,
   BodyProperties,
   ChartElement,
   ColorMap,
@@ -29,6 +30,7 @@ import { asEmu, asHundredthPt, uint8ArrayToBase64 } from "pptx-glimpse-renderer"
 import type {
   CleanDocComputedView,
   ComputedBackground,
+  ComputedBlipEffects,
   ComputedChartElement,
   ComputedColor,
   ComputedConnectorElement,
@@ -214,7 +216,7 @@ function adaptConnector(
     geometry: adaptGeometry(connector.geometry),
     outline:
       connector.outline !== undefined ? adaptOutline(connector.outline, slide, diagnostics) : null,
-    effects: null,
+    effects: connector.effects !== undefined ? adaptEffects(connector.effects) : null,
     ...(connector.sourceNode.name !== undefined ? { altText: connector.sourceNode.name } : {}),
   };
 }
@@ -241,7 +243,7 @@ function adaptGroup(
             flipV: false,
           },
     children: group.children.flatMap((child) => adaptElement(child, slide, diagnostics)),
-    effects: null,
+    effects: group.effects !== undefined ? adaptEffects(group.effects) : null,
     ...(group.sourceNode.name !== undefined ? { altText: group.sourceNode.name } : {}),
   };
 }
@@ -497,9 +499,9 @@ function adaptImage(
     type: "image",
     transform: adaptTransform(image.transform, slide, diagnostics, image.sourcePartPath),
     imageData: uint8ArrayToBase64(image.media.bytes),
-    mimeType: image.media.contentType,
-    effects: null,
-    blipEffects: null,
+    mimeType: normalizeImageMimeType(image.media.contentType),
+    effects: image.effects !== undefined ? adaptEffects(image.effects) : null,
+    blipEffects: image.blipEffects !== undefined ? adaptBlipEffects(image.blipEffects) : null,
     srcRect: image.sourceNode.crop
       ? {
           left: ooxmlPercentToRatio(image.sourceNode.crop.left),
@@ -519,6 +521,32 @@ function adaptImage(
             sy: image.sourceNode.tile.sy,
             flip: image.sourceNode.tile.flip,
             align: image.sourceNode.tile.align,
+          }
+        : null,
+  };
+}
+
+function adaptBlipEffects(effects: ComputedBlipEffects): BlipEffects {
+  return {
+    grayscale: effects.grayscale,
+    biLevel: effects.biLevel ?? null,
+    blur:
+      effects.blur !== undefined
+        ? { radius: toRendererEmu(effects.blur.radius), grow: effects.blur.grow }
+        : null,
+    lum: effects.lum ?? null,
+    duotone:
+      effects.duotone !== undefined
+        ? {
+            color1: adaptColor(effects.duotone.color1),
+            color2: adaptColor(effects.duotone.color2),
+          }
+        : null,
+    clrChange:
+      effects.clrChange !== undefined
+        ? {
+            clrFrom: adaptColor(effects.clrChange.from),
+            clrTo: adaptColor(effects.clrChange.to),
           }
         : null,
   };
@@ -601,7 +629,7 @@ function adaptFill(
     return {
       type: "image",
       imageData: uint8ArrayToBase64(fill.media.bytes),
-      mimeType: fill.media.contentType,
+      mimeType: normalizeImageMimeType(fill.media.contentType),
       tile:
         fill.tile !== undefined
           ? {
@@ -777,4 +805,10 @@ function toRendererEmu(value: number): ReturnType<typeof asEmu> {
 
 function toRendererPt(value: number): NonNullable<RunProperties["fontSize"]> {
   return Number(value) as NonNullable<RunProperties["fontSize"]>;
+}
+
+function normalizeImageMimeType(contentType: string): string {
+  if (contentType === "image/x-emf") return "image/emf";
+  if (contentType === "image/x-wmf") return "image/wmf";
+  return contentType;
 }

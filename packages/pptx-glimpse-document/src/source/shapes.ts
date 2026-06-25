@@ -159,6 +159,39 @@ export interface SourceSoftEdge {
   readonly radius: Emu;
 }
 
+export interface SourceBlipEffects {
+  readonly grayscale: boolean;
+  readonly biLevel?: SourceBiLevelEffect;
+  readonly blur?: SourceBlurEffect;
+  readonly lum?: SourceLumEffect;
+  readonly duotone?: SourceDuotoneEffect;
+  readonly clrChange?: SourceColorChangeEffect;
+}
+
+export interface SourceBiLevelEffect {
+  readonly threshold: number;
+}
+
+export interface SourceBlurEffect {
+  readonly radius: Emu;
+  readonly grow: boolean;
+}
+
+export interface SourceLumEffect {
+  readonly brightness: number;
+  readonly contrast: number;
+}
+
+export interface SourceDuotoneEffect {
+  readonly color1: SourceColor;
+  readonly color2: SourceColor;
+}
+
+export interface SourceColorChangeEffect {
+  readonly from: SourceColor;
+  readonly to: SourceColor;
+}
+
 /** simple solid line の outline (`a:ln`)。色と幅のみの最小表現。 */
 export interface SourceOutline {
   readonly width?: Emu;
@@ -265,6 +298,7 @@ export interface SourceShape {
   readonly geometry?: SourceGeometry;
   readonly fill?: SourceFill;
   readonly outline?: SourceOutline;
+  readonly effects?: SourceEffectList;
   readonly style?: SourceShapeStyle;
   readonly textBody?: SourceTextBody;
   readonly placeholder?: SourcePlaceholder;
@@ -279,6 +313,7 @@ export interface SourceConnector {
   readonly transform?: SourceTransform;
   readonly geometry?: SourceGeometry;
   readonly outline?: SourceOutline;
+  readonly effects?: SourceEffectList;
   readonly style?: SourceShapeStyle;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
@@ -290,6 +325,7 @@ export interface SourceGroup {
   readonly name?: string;
   readonly transform?: SourceTransform;
   readonly childTransform?: SourceTransform;
+  readonly effects?: SourceEffectList;
   readonly children: readonly SourceShapeNode[];
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
@@ -321,6 +357,8 @@ export interface SourceImage {
   readonly crop?: SourceImageCrop;
   readonly stretch?: SourceImageStretch;
   readonly tile?: SourceImageFillTile;
+  readonly effects?: SourceEffectList;
+  readonly blipEffects?: SourceBlipEffects;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
 }

@@ -132,11 +132,12 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
     expect(table?.table.rows.length).toBeGreaterThan(0);
   });
 
-  it("typed shape 内の未対応子要素を raw sidecar として保持する", () => {
-    // `a:effectLst` (outerShdw) は typed 化しないため sidecar として残す。
+  it("typed shape effects と未対応子要素を保持する", () => {
     const shadowed = firstShape(product, "Shape 3");
+    expect(shadowed.effects?.outerShadow?.blurRadius).toBeGreaterThan(0);
+    expect(shadowed.effects?.outerShadow?.color).toBeDefined();
     const names = shadowed.rawSidecars?.map((sidecar) => sidecar.node.name) ?? [];
-    expect(names).toContain("a:effectLst");
+    expect(names).not.toContain("a:effectLst");
 
     // run property の `a:ea` / `a:cs` も sidecar として保持する。
     const run = firstShape(product, "Text 0").textBody!.paragraphs[0].runs[0];
@@ -144,7 +145,7 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
     expect(runSidecarNames).toContain("a:ea");
     expect(runSidecarNames).toContain("a:cs");
 
-    // 画像の default `a:stretch` は typed に解釈し、blip 配下の `a:alphaModFix` は保持する。
+    // 画像の default `a:stretch` は typed に解釈し、未対応の blip 子は保持する。
     const slide2 = basic.slides.find((s) => s.partPath === "ppt/slides/slide2.xml");
     const image = slide2!.shapes.find((s): s is SourceImage => s.kind === "image");
     const imageSidecarNames = image?.rawSidecars?.map((sidecar) => sidecar.node.name) ?? [];
@@ -263,20 +264,80 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(names).toContain("a:custGeom");
   });
 
-  it("raw sidecar が未対応要素の属性・子要素を保持する", () => {
+  it("direct effectLst を typed source effects として読む", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:sp><p:nvSpPr><p:cNvPr id="12" name="Ext"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
-          `<p:spPr><a:effectLst><a:outerShdw blurRad="40000"><a:srgbClr val="000000"><a:alpha val="40000"/></a:srgbClr></a:outerShdw></a:effectLst></p:spPr></p:sp>`,
+          `<p:spPr><a:effectLst>` +
+          `<a:outerShdw blurRad="40000" dist="20000" dir="5400000" algn="ctr" rotWithShape="0"><a:srgbClr val="000000"><a:alpha val="40000"/></a:srgbClr></a:outerShdw>` +
+          `<a:innerShdw blurRad="50000" dist="30000" dir="10800000"><a:srgbClr val="111111"/></a:innerShdw>` +
+          `<a:glow rad="1000"><a:schemeClr val="accent1"/></a:glow>` +
+          `<a:softEdge rad="3000"/>` +
+          `<a:reflection blurRad="7000"/>` +
+          `</a:effectLst></p:spPr></p:sp>`,
       ),
     );
     const shape = source.slides[0].shapes[0] as SourceShape;
-    const effect = shape.rawSidecars?.find((sidecar) => sidecar.node.name === "a:effectLst");
-    const outerShdw = effect?.node.children?.[0];
-    expect(outerShdw?.name).toBe("a:outerShdw");
-    expect(outerShdw?.attributes?.blurRad).toBe("40000");
-    expect(outerShdw?.children?.[0].name).toBe("a:srgbClr");
-    expect(outerShdw?.children?.[0].attributes?.val).toBe("000000");
+    expect(shape.effects).toMatchObject({
+      outerShadow: {
+        blurRadius: 40000,
+        distance: 20000,
+        direction: 5400000,
+        color: {
+          kind: "srgb",
+          hex: "000000",
+          transforms: [{ kind: "alpha", value: 40000 }],
+        },
+        alignment: "ctr",
+        rotateWithShape: false,
+      },
+      innerShadow: {
+        blurRadius: 50000,
+        distance: 30000,
+        direction: 10800000,
+        color: { kind: "srgb", hex: "111111" },
+      },
+      glow: { radius: 1000, color: { kind: "scheme", scheme: "accent1" } },
+      softEdge: { radius: 3000 },
+    });
+    expect(shape.rawSidecars?.map((sidecar) => sidecar.node.name) ?? []).not.toContain(
+      "a:effectLst",
+    );
+    expect(shape.rawSidecars?.map((sidecar) => sidecar.node.name) ?? []).toContain("a:reflection");
+  });
+
+  it("image shape effects と blip effects を typed source effects として読む", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<p:pic><p:nvPicPr><p:cNvPr id="13" name="Pic"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+          `<p:blipFill><a:blip r:embed="rIdImage">` +
+          `<a:grayscl/><a:biLevel thresh="25000"/><a:blur rad="5000" grow="0"/>` +
+          `<a:lum bright="10000" contrast="-20000"/>` +
+          `<a:duotone><a:schemeClr val="accent2"/><a:srgbClr val="FFFFFF"/></a:duotone>` +
+          `<a:clrChange><a:clrFrom><a:prstClr val="black"/></a:clrFrom><a:clrTo><a:schemeClr val="accent2"/></a:clrTo></a:clrChange>` +
+          `<a:alphaModFix/>` +
+          `</a:blip></p:blipFill>` +
+          `<p:spPr><a:effectLst><a:softEdge rad="1000"/></a:effectLst></p:spPr>` +
+          `</p:pic>`,
+      ),
+    );
+    const image = source.slides[0].shapes[0] as SourceImage;
+    expect(image.effects?.softEdge).toEqual({ radius: 1000 });
+    expect(image.blipEffects).toMatchObject({
+      grayscale: true,
+      biLevel: { threshold: 0.25 },
+      blur: { radius: 5000, grow: false },
+      lum: { brightness: 0.1, contrast: -0.2 },
+      duotone: {
+        color1: { kind: "scheme", scheme: "accent2" },
+        color2: { kind: "srgb", hex: "FFFFFF" },
+      },
+      clrChange: {
+        from: { kind: "srgb", hex: "000000" },
+        to: { kind: "scheme", scheme: "accent2" },
+      },
+    });
+    expect(image.rawSidecars?.map((sidecar) => sidecar.node.name) ?? []).toContain("a:alphaModFix");
   });
 
   it("graphicFrame table を typed source node として読む", () => {
