@@ -1,6 +1,7 @@
 import type {
   CleanDocSource,
   PartPath,
+  SourceBlipEffects,
   SourceCellBorders,
   SourceColor,
   SourceColorMap,
@@ -27,6 +28,7 @@ import { asEmu, asPartPath } from "../source/index.js";
 import type {
   CleanDocComputedView,
   ComputedBackground,
+  ComputedBlipEffects,
   ComputedCellBorders,
   ComputedChartElement,
   ComputedColor,
@@ -362,6 +364,12 @@ function computeConnectorElement(
   layer: ComputedElementLayer,
   partPath: PartPath,
 ): ComputedConnectorElement {
+  const effects =
+    connector.effects !== undefined
+      ? computeEffectList(context, connector.effects)
+      : connector.style?.effectRef !== undefined
+        ? resolveEffectReference(context, connector.style.effectRef)
+        : undefined;
   return {
     kind: "connector",
     sourceLayer: layer,
@@ -374,6 +382,7 @@ function computeConnectorElement(
       : connector.style?.lineRef !== undefined
         ? { outline: resolveLineReference(context, connector.style.lineRef, partPath) }
         : {}),
+    ...(effects !== undefined ? { effects } : {}),
   };
 }
 
@@ -383,6 +392,8 @@ function computeGroupElement(
   layer: ComputedElementLayer,
   partPath: PartPath,
 ): ComputedGroupElement {
+  const effects =
+    group.effects !== undefined ? computeEffectList(context, group.effects) : undefined;
   return {
     kind: "group",
     sourceLayer: layer,
@@ -390,6 +401,7 @@ function computeGroupElement(
     sourceNode: group,
     ...(group.transform !== undefined ? { transform: group.transform } : {}),
     ...(group.childTransform !== undefined ? { childTransform: group.childTransform } : {}),
+    ...(effects !== undefined ? { effects } : {}),
     children: group.children.map((child) => computeElement(context, child, layer, partPath)),
   };
 }
@@ -408,6 +420,12 @@ function computeShapeElement(
     match?.master?.transform,
   );
   const geometry = firstDefined(shape.geometry, match?.layout?.geometry, match?.master?.geometry);
+  const effects =
+    shape.effects !== undefined
+      ? computeEffectList(context, shape.effects)
+      : shape.style?.effectRef !== undefined
+        ? resolveEffectReference(context, shape.style.effectRef)
+        : undefined;
 
   return {
     kind: "shape",
@@ -426,9 +444,7 @@ function computeShapeElement(
       : shape.style?.lineRef !== undefined
         ? { outline: resolveLineReference(context, shape.style.lineRef, partPath) }
         : {}),
-    ...(shape.style?.effectRef !== undefined
-      ? { effects: resolveEffectReference(context, shape.style.effectRef) }
-      : {}),
+    ...(effects !== undefined ? { effects } : {}),
     ...(shape.textBody !== undefined
       ? { textBody: computeTextBody(context, shape.textBody, styleSource?.textBody) }
       : {}),
@@ -445,6 +461,10 @@ function computeImageElement(
   const relationship = resolveRelationships(context.source, partPath).find(
     (rel) => rel.id === image.blipRelationshipId && rel.type === IMAGE_REL_TYPE,
   );
+  const effects =
+    image.effects !== undefined ? computeEffectList(context, image.effects) : undefined;
+  const blipEffects =
+    image.blipEffects !== undefined ? computeBlipEffects(context, image.blipEffects) : undefined;
 
   return {
     kind: "image",
@@ -454,6 +474,8 @@ function computeImageElement(
     ...(image.transform !== undefined ? { transform: image.transform } : {}),
     ...(relationship !== undefined ? { relationship } : {}),
     ...(relationship?.media !== undefined ? { media: relationship.media } : {}),
+    ...(effects !== undefined ? { effects } : {}),
+    ...(blipEffects !== undefined ? { blipEffects } : {}),
   };
 }
 
@@ -760,6 +782,41 @@ function computeEffectList(
     computed.innerShadow !== undefined ||
     computed.glow !== undefined ||
     computed.softEdge !== undefined
+    ? computed
+    : undefined;
+}
+
+function computeBlipEffects(
+  context: ComputeContext,
+  source: SourceBlipEffects,
+): ComputedBlipEffects | undefined {
+  const duotoneColor1 =
+    source.duotone !== undefined ? resolveColor(context, source.duotone.color1) : undefined;
+  const duotoneColor2 =
+    source.duotone !== undefined ? resolveColor(context, source.duotone.color2) : undefined;
+  const clrChangeFrom =
+    source.clrChange !== undefined ? resolveColor(context, source.clrChange.from) : undefined;
+  const clrChangeTo =
+    source.clrChange !== undefined ? resolveColor(context, source.clrChange.to) : undefined;
+  const computed: ComputedBlipEffects = {
+    source,
+    grayscale: source.grayscale,
+    ...(source.biLevel !== undefined ? { biLevel: source.biLevel } : {}),
+    ...(source.blur !== undefined ? { blur: source.blur } : {}),
+    ...(source.lum !== undefined ? { lum: source.lum } : {}),
+    ...(duotoneColor1 !== undefined && duotoneColor2 !== undefined
+      ? { duotone: { color1: duotoneColor1, color2: duotoneColor2 } }
+      : {}),
+    ...(clrChangeFrom !== undefined && clrChangeTo !== undefined
+      ? { clrChange: { from: clrChangeFrom, to: clrChangeTo } }
+      : {}),
+  };
+  return computed.grayscale ||
+    computed.biLevel !== undefined ||
+    computed.blur !== undefined ||
+    computed.lum !== undefined ||
+    computed.duotone !== undefined ||
+    computed.clrChange !== undefined
     ? computed
     : undefined;
 }

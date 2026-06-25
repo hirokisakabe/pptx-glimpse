@@ -42,7 +42,9 @@ import { parseCustomGeometry } from "./custom-geometry.js";
 import {
   isTrue,
   numericAttr,
+  parseBlipEffects,
   parseColorElement,
+  parseEffectList,
   parseFill,
   parseImageFillTile,
   parseLine,
@@ -71,6 +73,14 @@ const KNOWN_BLIP_FILL_CHILDREN: ReadonlySet<string> = new Set([
   "srcRect",
   "stretch",
   "tile",
+]);
+const KNOWN_BLIP_CHILDREN: ReadonlySet<string> = new Set([
+  "grayscl",
+  "biLevel",
+  "blur",
+  "lum",
+  "duotone",
+  "clrChange",
 ]);
 const KNOWN_GRAPHIC_FRAME_CHILDREN: ReadonlySet<string> = new Set([
   "nvGraphicFramePr",
@@ -106,6 +116,7 @@ const KNOWN_SP_PR_CHILDREN: ReadonlySet<string> = new Set([
   "pattFill",
   "grpFill",
   "ln",
+  "effectLst",
 ]);
 
 const SHAPE_TREE_NODE_TAGS: ReadonlySet<string> = new Set([
@@ -251,6 +262,7 @@ function parseShape(
   const geometry = parseGeometry(spPr, orderedNestedChildChildren(orderedNode, "sp", "spPr"));
   const fill = parseFill(spPr, nextId);
   const outline = parseOutline(spPr, nextId);
+  const effects = parseEffectList(getChild(spPr, "effectLst"));
   const style = parseShapeStyle(getChild(sp, "style"));
   const textBody = parseTextBody(getChild(sp, "txBody"), partPath, nextId, nodeId, orderingSlot);
 
@@ -267,6 +279,7 @@ function parseShape(
     ...(geometry !== undefined ? { geometry } : {}),
     ...(fill !== undefined ? { fill } : {}),
     ...(outline !== undefined ? { outline } : {}),
+    ...(effects !== undefined ? { effects } : {}),
     ...(style !== undefined ? { style } : {}),
     ...(textBody !== undefined ? { textBody } : {}),
     ...(placeholder !== undefined ? { placeholder } : {}),
@@ -290,6 +303,7 @@ function parseConnector(
   const transform = parseTransform(spPr);
   const geometry = parseGeometry(spPr, orderedNestedChildChildren(orderedNode, "cxnSp", "spPr"));
   const outline = parseOutline(spPr, nextId);
+  const effects = parseEffectList(getChild(spPr, "effectLst"));
   const style = parseShapeStyle(getChild(cxnSp, "style"));
   const rawSidecars = [
     ...collectUnknownSidecars(cxnSp, KNOWN_CONNECTOR_CHILDREN, nextId),
@@ -303,6 +317,7 @@ function parseConnector(
     ...(transform !== undefined ? { transform } : {}),
     ...(geometry !== undefined ? { geometry } : {}),
     ...(outline !== undefined ? { outline } : {}),
+    ...(effects !== undefined ? { effects } : {}),
     ...(style !== undefined ? { style } : {}),
     handle: { partPath, ...(nodeId !== undefined ? { nodeId } : {}), orderingSlot },
     ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
@@ -346,7 +361,11 @@ function parseGroup(
   const grpSpPr = getChild(grpSp, "grpSpPr");
   const transform = parseTransform(grpSpPr);
   const childTransform = parseChildTransform(grpSpPr, transform);
-  const rawSidecars = collectUnknownSidecars(grpSp, KNOWN_GROUP_CHILDREN, nextId);
+  const effects = parseEffectList(getChild(grpSpPr, "effectLst"));
+  const rawSidecars = [
+    ...collectUnknownSidecars(grpSp, KNOWN_GROUP_CHILDREN, nextId),
+    ...collectUnknownSidecars(grpSpPr, KNOWN_SP_PR_CHILDREN, nextId),
+  ];
 
   return {
     kind: "group",
@@ -354,6 +373,7 @@ function parseGroup(
     ...(name !== undefined ? { name } : {}),
     ...(transform !== undefined ? { transform } : {}),
     ...(childTransform !== undefined ? { childTransform } : {}),
+    ...(effects !== undefined ? { effects } : {}),
     children: parseShapeTree(grpSp, partPath, nextId, orderedChildren),
     handle: { partPath, ...(nodeId !== undefined ? { nodeId } : {}), orderingSlot },
     ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
@@ -376,16 +396,18 @@ function parseImage(
   const crop = parseCrop(getChild(blipFill, "srcRect"));
   const stretch = parseStretch(getChild(blipFill, "stretch"));
   const tile = parseImageFillTile(getChild(blipFill, "tile"));
+  const blipEffects = parseBlipEffects(blip);
 
   const spPr = getChild(pic, "spPr");
   const transform = parseTransform(spPr);
+  const effects = parseEffectList(getChild(spPr, "effectLst"));
 
   const rawSidecars = [
     ...collectUnknownSidecars(pic, KNOWN_PICTURE_CHILDREN, nextId),
     ...collectUnknownSidecars(spPr, KNOWN_SP_PR_CHILDREN, nextId),
     // `a:stretch` / `a:tile` 等の fill mode と blip 配下の recolor 操作を保持する。
     ...collectUnknownSidecars(blipFill, KNOWN_BLIP_FILL_CHILDREN, nextId),
-    ...collectUnknownSidecars(blip, EMPTY_KNOWN, nextId),
+    ...collectUnknownSidecars(blip, KNOWN_BLIP_CHILDREN, nextId),
   ];
 
   return {
@@ -397,6 +419,8 @@ function parseImage(
     ...(crop !== undefined ? { crop } : {}),
     ...(stretch !== undefined ? { stretch } : {}),
     ...(tile !== undefined ? { tile } : {}),
+    ...(effects !== undefined ? { effects } : {}),
+    ...(blipEffects !== undefined ? { blipEffects } : {}),
     handle: {
       partPath,
       ...(nodeId !== undefined ? { nodeId } : {}),

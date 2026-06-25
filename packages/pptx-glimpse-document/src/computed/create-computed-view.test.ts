@@ -5,11 +5,13 @@ import type {
   ComputedConnectorElement,
   ComputedElement,
   ComputedGroupElement,
+  ComputedImageElement,
   ComputedShapeElement,
   ComputedSlide,
   ComputedTableElement,
   SourceRunProperties,
   SourceShape,
+  SourceShapeNode,
   SourceTable,
   SourceTextBody,
 } from "../experimental.js";
@@ -322,6 +324,93 @@ describe("createComputedView", () => {
     });
   });
 
+  it("direct shape effects と image blip effects を computed view に解決する", () => {
+    const source = withSlide2Shapes(buildSource(), [
+      shape("Direct effect", {
+        transform: transform(70, 71, 72, 73),
+        style: { effectRef: { index: 1 } },
+        effects: {
+          outerShadow: {
+            blurRadius: asEmu(10),
+            distance: asEmu(20),
+            direction: asOoxmlAngle(5400000),
+            color: { kind: "scheme", scheme: "accent1" },
+            alignment: "ctr",
+            rotateWithShape: false,
+          },
+        },
+      }),
+      {
+        kind: "image",
+        name: "Effect image",
+        transform: transform(80, 81, 82, 83),
+        blipRelationshipId: asRelationshipId("rIdImage"),
+        effects: { softEdge: { radius: asEmu(123) } },
+        blipEffects: {
+          grayscale: true,
+          biLevel: { threshold: 0.25 },
+          blur: { radius: asEmu(456), grow: false },
+          lum: { brightness: 0.1, contrast: -0.2 },
+          duotone: {
+            color1: { kind: "srgb", hex: "000000" },
+            color2: { kind: "scheme", scheme: "accent1" },
+          },
+          clrChange: {
+            from: { kind: "srgb", hex: "FF0000" },
+            to: { kind: "scheme", scheme: "accent2" },
+          },
+        },
+      },
+    ]);
+    const sourceWithStyleEffect: CleanDocSource = {
+      ...source,
+      themes: source.themes.map((theme) => ({
+        ...theme,
+        formatScheme: {
+          fillStyles: [],
+          lineStyles: [],
+          effectStyles: [
+            undefined,
+            {
+              glow: { radius: asEmu(999), color: { kind: "srgb", hex: "FFFFFF" } },
+            },
+          ],
+          backgroundFillStyles: [],
+        },
+      })),
+    };
+
+    const slide = getSlide(createComputedView(sourceWithStyleEffect).slides, 0);
+    expect(findShape(slide.elements, "Direct effect").effects).toMatchObject({
+      outerShadow: {
+        blurRadius: 10,
+        distance: 20,
+        direction: 90,
+        color: { hex: "#336699", alpha: 1 },
+        alignment: "ctr",
+        rotateWithShape: false,
+      },
+    });
+    expect(findShape(slide.elements, "Direct effect").effects?.glow).toBeUndefined();
+    expect(findImage(slide.elements, "Effect image")).toMatchObject({
+      effects: { softEdge: { radius: 123 } },
+      blipEffects: {
+        grayscale: true,
+        biLevel: { threshold: 0.25 },
+        blur: { radius: 456, grow: false },
+        lum: { brightness: 0.1, contrast: -0.2 },
+        duotone: {
+          color1: { hex: "#000000", alpha: 1 },
+          color2: { hex: "#336699", alpha: 1 },
+        },
+        clrChange: {
+          from: { hex: "#ff0000", alpha: 1 },
+          to: { hex: "#336699", alpha: 1 },
+        },
+      },
+    });
+  });
+
   it("inline table borders が table style default border より優先される", () => {
     const table = findTable(
       getSlide(createComputedView(buildSource()).slides, 0).elements,
@@ -482,6 +571,15 @@ function findTable(elements: readonly ComputedElement[], name: string): Computed
   return table;
 }
 
+function findImage(elements: readonly ComputedElement[], name: string): ComputedImageElement {
+  const image = elements.find(
+    (element): element is ComputedImageElement =>
+      element.kind === "image" && element.sourceNode.name === name,
+  );
+  if (image === undefined) throw new Error(`image '${name}' not found`);
+  return image;
+}
+
 function elementNames(elements: readonly ComputedElement[]): (string | undefined)[] {
   return elements.map((element) =>
     "name" in element.sourceNode ? element.sourceNode.name : undefined,
@@ -490,7 +588,7 @@ function elementNames(elements: readonly ComputedElement[]): (string | undefined
 
 function withSlide2Shapes(
   source: CleanDocSource,
-  extraShapes: readonly SourceShape[],
+  extraShapes: readonly SourceShapeNode[],
 ): CleanDocSource {
   return {
     ...source,

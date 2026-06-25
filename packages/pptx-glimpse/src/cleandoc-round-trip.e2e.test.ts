@@ -181,9 +181,20 @@ function renderDocumentPath(input: Uint8Array): RenderedDocumentPath {
     adapted,
     svgs: adapted.slides.map((slide) => ({
       slideNumber: slide.slideNumber,
-      svg: renderSlideToSvg(slide, slideSize),
+      svg: normalizeEffectFilterIds(renderSlideToSvg(slide, slideSize)),
     })),
   };
+}
+
+function normalizeEffectFilterIds(svg: string): string {
+  const ids = new Map<string, string>();
+  return svg.replace(/effect-[0-9a-f-]{36}/g, (id) => {
+    const existing = ids.get(id);
+    if (existing !== undefined) return existing;
+    const normalized = `effect-${ids.size}`;
+    ids.set(id, normalized);
+    return normalized;
+  });
 }
 
 function mediaBytesByPath(media: readonly MediaPart[]): Record<string, readonly number[]> {

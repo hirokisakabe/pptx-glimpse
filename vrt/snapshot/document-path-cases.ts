@@ -92,7 +92,7 @@ export const DOCUMENT_PATH_VRT_GENERATED_CASES = [
   generated("composite", "composite.pptx", 0, [], []),
   generated("text-decoration", "text-decoration.pptx", 0, [B.shapeTreeAndGeometry], []),
   generated("slide-size-4-3", "slide-size-4-3.pptx", 0, [], []),
-  generated("effects", "effects.pptx", 0.19, [B.effects], []),
+  generated("effects", "effects.pptx", 0, [], []),
   generated("hyperlinks", "hyperlinks.pptx", 0, [B.shapeTreeAndGeometry], []),
   generated("pattern-image-fill", "pattern-image-fill.pptx", 0, [], []),
   generated("smartart", "smartart.pptx", 0, [], []),
@@ -112,7 +112,7 @@ export const DOCUMENT_PATH_VRT_GENERATED_CASES = [
   generated("shrink-to-fit", "shrink-to-fit.pptx", 0, [B.shapeTreeAndGeometry], []),
   generated("sp-autofit", "sp-autofit.pptx", 0.01, [B.shapeTreeAndGeometry, B.textAndFonts], []),
   generated("style-reference", "style-reference.pptx", 0, [], []),
-  generated("blip-effects", "blip-effects.pptx", 0.65, [B.effects], []),
+  generated("blip-effects", "blip-effects.pptx", 0, [], []),
   generated("image-stretch-tile", "image-stretch-tile.pptx", 0, [], []),
   generated(
     "vertical-text",
