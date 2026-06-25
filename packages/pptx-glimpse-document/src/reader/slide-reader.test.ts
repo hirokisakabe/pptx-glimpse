@@ -139,11 +139,15 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
     const names = shadowed.rawSidecars?.map((sidecar) => sidecar.node.name) ?? [];
     expect(names).not.toContain("a:effectLst");
 
-    // run property の `a:ea` / `a:cs` も sidecar として保持する。
+    // run property の `a:ea` / `a:cs` は typed source property として保持する。
     const run = firstShape(product, "Text 0").textBody!.paragraphs[0].runs[0];
+    expect(run.properties).toMatchObject({
+      typefaceEa: "Noto Sans JP",
+      typefaceCs: "Noto Sans JP",
+    });
     const runSidecarNames = run.rawSidecars?.map((sidecar) => sidecar.node.name) ?? [];
-    expect(runSidecarNames).toContain("a:ea");
-    expect(runSidecarNames).toContain("a:cs");
+    expect(runSidecarNames).not.toContain("a:ea");
+    expect(runSidecarNames).not.toContain("a:cs");
 
     // 画像の default `a:stretch` は typed に解釈し、未対応の blip 子は保持する。
     const slide2 = basic.slides.find((s) => s.partPath === "ppt/slides/slide2.xml");
@@ -240,6 +244,67 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(shape.outline).toEqual({
       width: 12700,
       fill: { kind: "solid", color: { kind: "srgb", hex: "FF0000" } },
+    });
+  });
+
+  it("bodyPr autofit / wrap / vert と ea/cs run fonts を typed source property として読む", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<p:sp><p:nvSpPr><p:cNvPr id="14" name="Text props"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="1" y="2"/><a:ext cx="3" cy="4"/></a:xfrm></p:spPr>` +
+          `<p:txBody>` +
+          `<a:bodyPr wrap="none" vert="eaVert" numCol="2"><a:normAutofit fontScale="62500" lnSpcReduction="20000"/></a:bodyPr>` +
+          `<a:p><a:r><a:rPr sz="1800"><a:latin typeface="+mn-lt"/><a:ea typeface="+mn-ea"/><a:cs typeface="+mn-cs"/></a:rPr><a:t>文</a:t></a:r></a:p>` +
+          `</p:txBody>` +
+          `</p:sp>`,
+      ),
+    );
+
+    const shape = source.slides[0].shapes[0] as SourceShape;
+    expect(shape.textBody?.properties).toMatchObject({
+      wrap: "none",
+      vert: "eaVert",
+      numCol: 2,
+      autoFit: "normAutofit",
+      fontScale: 0.625,
+      lnSpcReduction: 0.2,
+    });
+    expect(shape.textBody?.paragraphs[0].runs[0].properties).toMatchObject({
+      typeface: "+mn-lt",
+      typefaceEa: "+mn-ea",
+      typefaceCs: "+mn-cs",
+    });
+  });
+
+  it("spAutoFit を typed source body property として読む", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<p:sp><p:nvSpPr><p:cNvPr id="15" name="Sp autofit"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="1" y="2"/><a:ext cx="3" cy="4"/></a:xfrm></p:spPr>` +
+          `<p:txBody><a:bodyPr><a:spAutoFit/></a:bodyPr><a:p><a:r><a:t>grow</a:t></a:r></a:p></p:txBody>` +
+          `</p:sp>`,
+      ),
+    );
+
+    const shape = source.slides[0].shapes[0] as SourceShape;
+    expect(shape.textBody?.properties).toMatchObject({ autoFit: "spAutofit" });
+  });
+
+  it("noAutofit を typed source body property として読む", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<p:sp><p:nvSpPr><p:cNvPr id="16" name="No autofit"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="1" y="2"/><a:ext cx="3" cy="4"/></a:xfrm></p:spPr>` +
+          `<p:txBody><a:bodyPr><a:noAutofit/></a:bodyPr><a:p><a:r><a:t>fixed</a:t></a:r></a:p></p:txBody>` +
+          `</p:sp>`,
+      ),
+    );
+
+    const shape = source.slides[0].shapes[0] as SourceShape;
+    expect(shape.textBody?.properties).toMatchObject({
+      autoFit: "noAutofit",
+      fontScale: 1,
+      lnSpcReduction: 0,
     });
   });
 

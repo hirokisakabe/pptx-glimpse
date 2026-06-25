@@ -26,7 +26,6 @@ const DOCUMENT_RENDER_UNSUPPORTED_SUBSET = [
   "raw background and fill variants outside the CleanDoc adapter subset",
   "unresolved images without a package media payload",
   "elements missing computed transforms",
-  "East Asian / complex-script theme font context for CJK text",
 ] as const;
 
 describe("experimental document render path", () => {
@@ -50,7 +49,6 @@ describe("experimental document render path", () => {
         "raw background and fill variants outside the CleanDoc adapter subset",
         "unresolved images without a package media payload",
         "elements missing computed transforms",
-        "East Asian / complex-script theme font context for CJK text",
       ]
     `);
   });
@@ -72,18 +70,15 @@ describe("experimental document render path", () => {
     },
   );
 
-  it("surfaces unsupported document subset through adapter diagnostics", async () => {
+  it("does not emit CJK font-context diagnostics when document text fonts are exposed", async () => {
     const result = await convertPptxToSvgViaDocumentPath(readFixture("real-basic-theme.pptx"), {
       slides: [1],
       textOutput: "text",
       skipSystemFonts: true,
     });
 
-    expect(result.diagnostics.length).toBeGreaterThan(0);
+    expect(result.diagnostics).toEqual([]);
     expectUnsupportedDiagnosticsToStayInScope(result.diagnostics);
-    expect(uniqueDiagnosticCodes(result.diagnostics)).toContain(
-      "document-render.cjk-font-context-unsupported",
-    );
   });
 
   it("connects the document SVG path to the existing PNG conversion", async () => {
@@ -100,11 +95,8 @@ describe("experimental document render path", () => {
       throw new Error("Expected one PNG slide from the document render path");
     }
     expect([...pngSlide.png.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
-    expect(result.diagnostics.length).toBeGreaterThan(0);
+    expect(result.diagnostics).toEqual([]);
     expectUnsupportedDiagnosticsToStayInScope(result.diagnostics);
-    expect(uniqueDiagnosticCodes(result.diagnostics)).toContain(
-      "document-render.cjk-font-context-unsupported",
-    );
   });
 
   it("keeps the public SVG converter on its existing default path", async () => {
@@ -143,8 +135,5 @@ function expectUnsupportedDiagnosticsToStayInScope(
 }
 
 function isExpectedDocumentRenderDiagnosticCode(code: string): boolean {
-  return (
-    code === "cleandoc-adapter.raw-element-skipped" ||
-    code === "document-render.cjk-font-context-unsupported"
-  );
+  return code === "cleandoc-adapter.raw-element-skipped";
 }

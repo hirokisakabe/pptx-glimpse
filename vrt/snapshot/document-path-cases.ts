@@ -23,8 +23,7 @@ export type DocumentPathVrtFixtureGroup = "shared" | "generated";
 
 type DocumentPathVrtDiagnosticCode =
   | "cleandoc-adapter.raw-element-skipped"
-  | "cleandoc-adapter.raw-fill-ignored"
-  | "document-render.cjk-font-context-unsupported";
+  | "cleandoc-adapter.raw-fill-ignored";
 
 interface DocumentPathVrtCase {
   readonly group: DocumentPathVrtFixtureGroup;
@@ -38,28 +37,13 @@ interface DocumentPathVrtCase {
 const B = DOCUMENT_PATH_VRT_BLOCKER_ISSUES;
 
 export const DOCUMENT_PATH_VRT_SHARED_CASES = [
-  shared(
-    "real-basic-theme",
-    "real-basic-theme.pptx",
-    0.02,
-    [B.textAndFonts],
-    ["document-render.cjk-font-context-unsupported"],
-  ),
-  shared("real-product-page", "real-product-page.pptx", 0.04, [B.textAndFonts]),
-  shared(
-    "real-financial-report",
-    "real-financial-report.pptx",
-    0.16,
-    [B.tables, B.shapeTreeAndGeometry, B.textAndFonts],
-    ["document-render.cjk-font-context-unsupported"],
-  ),
-  shared(
-    "sample",
-    "sample.pptx",
-    0,
-    [B.textAndFonts],
-    ["document-render.cjk-font-context-unsupported"],
-  ),
+  shared("real-basic-theme", "real-basic-theme.pptx", 0, []),
+  shared("real-product-page", "real-product-page.pptx", 0, []),
+  shared("real-financial-report", "real-financial-report.pptx", 0.16, [
+    B.tables,
+    B.shapeTreeAndGeometry,
+  ]),
+  shared("sample", "sample.pptx", 0, []),
   shared("sample-issue-387", "sample-issue-387.pptx", 0, []),
 ] as const satisfies readonly DocumentPathVrtCase[];
 
@@ -80,13 +64,7 @@ export const DOCUMENT_PATH_VRT_GENERATED_CASES = [
   generated("callouts-arcs", "callouts-arcs.pptx", 0, [B.shapeTreeAndGeometry], []),
   generated("arrows-stars", "arrows-stars.pptx", 0, [B.shapeTreeAndGeometry], []),
   generated("math-other", "math-other.pptx", 0, [B.shapeTreeAndGeometry], []),
-  generated(
-    "word-wrap",
-    "word-wrap.pptx",
-    0,
-    [B.shapeTreeAndGeometry, B.textAndFonts],
-    ["document-render.cjk-font-context-unsupported"],
-  ),
+  generated("word-wrap", "word-wrap.pptx", 0, [B.shapeTreeAndGeometry]),
   generated("background-blipfill", "background-blipfill.pptx", 0, [], []),
   generated("composite", "composite.pptx", 0, [], []),
   generated("text-decoration", "text-decoration.pptx", 0, [B.shapeTreeAndGeometry], []),
@@ -109,17 +87,11 @@ export const DOCUMENT_PATH_VRT_GENERATED_CASES = [
   generated("image-crop", "image-crop.pptx", 0, [B.shapeTreeAndGeometry], []),
   generated("text-advanced", "text-advanced.pptx", 0, [B.shapeTreeAndGeometry], []),
   generated("shrink-to-fit", "shrink-to-fit.pptx", 0, [B.shapeTreeAndGeometry], []),
-  generated("sp-autofit", "sp-autofit.pptx", 0.01, [B.shapeTreeAndGeometry, B.textAndFonts], []),
+  generated("sp-autofit", "sp-autofit.pptx", 0, [B.shapeTreeAndGeometry], []),
   generated("style-reference", "style-reference.pptx", 0, [], []),
   generated("blip-effects", "blip-effects.pptx", 0, [], []),
   generated("image-stretch-tile", "image-stretch-tile.pptx", 0, [], []),
-  generated(
-    "vertical-text",
-    "vertical-text.pptx",
-    0,
-    [B.shapeTreeAndGeometry, B.textAndFonts],
-    ["document-render.cjk-font-context-unsupported"],
-  ),
+  generated("vertical-text", "vertical-text.pptx", 0, [B.shapeTreeAndGeometry]),
   generated(
     "shape-hyperlink-text-outline",
     "shape-hyperlink-text-outline.pptx",
@@ -130,13 +102,7 @@ export const DOCUMENT_PATH_VRT_GENERATED_CASES = [
   generated("charts-3d-fallback", "charts-3d-fallback.pptx", 0, [], []),
   generated("color-transforms", "color-transforms.pptx", 0, [B.shapeTreeAndGeometry], []),
   generated("table-complex-merge", "table-complex-merge.pptx", 0, [], []),
-  generated(
-    "multi-lang-font",
-    "multi-lang-font.pptx",
-    0,
-    [B.shapeTreeAndGeometry, B.textAndFonts],
-    ["document-render.cjk-font-context-unsupported"],
-  ),
+  generated("multi-lang-font", "multi-lang-font.pptx", 0, [B.shapeTreeAndGeometry]),
   generated(
     "placeholder-inheritance-extended",
     "placeholder-inheritance-extended.pptx",

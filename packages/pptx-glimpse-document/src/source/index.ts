@@ -90,9 +90,12 @@ export type {
   SourceTableData,
   SourceTableRow,
   SourceTextAlign,
+  SourceTextAutoFit,
   SourceTextBody,
   SourceTextBodyProperties,
   SourceTextRun,
+  SourceTextVerticalType,
+  SourceTextWrap,
   SourceTransform,
   SourceVerticalAnchor,
 } from "./shapes.js";

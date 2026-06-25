@@ -49,10 +49,16 @@ export interface SourceThemeColorScheme {
   readonly colors: Readonly<Record<string, SourceColor>>;
 }
 
-/** theme の font scheme (`a:fontScheme`) の最小 subset (major / minor latin)。 */
+/** theme の font scheme (`a:fontScheme`) の最小 subset。 */
 export interface SourceThemeFontScheme {
   readonly majorLatin?: string;
   readonly minorLatin?: string;
+  readonly majorEastAsian?: string;
+  readonly minorEastAsian?: string;
+  readonly majorComplexScript?: string;
+  readonly minorComplexScript?: string;
+  readonly majorJapanese?: string;
+  readonly minorJapanese?: string;
 }
 
 /** theme の format scheme (`a:fmtScheme`) のうち shape style ref 解決に使う subset。 */

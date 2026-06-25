@@ -218,13 +218,39 @@ function parseColorScheme(clrScheme: XmlNode | undefined): SourceThemeColorSchem
 
 function parseFontScheme(fontScheme: XmlNode | undefined): SourceThemeFontScheme | undefined {
   if (!fontScheme) return undefined;
-  const majorLatin = getAttr(getChild(getChild(fontScheme, "majorFont"), "latin"), "typeface");
-  const minorLatin = getAttr(getChild(getChild(fontScheme, "minorFont"), "latin"), "typeface");
+  const majorFont = getChild(fontScheme, "majorFont");
+  const minorFont = getChild(fontScheme, "minorFont");
+  const majorLatin = getAttr(getChild(majorFont, "latin"), "typeface");
+  const minorLatin = getAttr(getChild(minorFont, "latin"), "typeface");
+  const majorEastAsian = resolveEastAsianFont(majorFont);
+  const minorEastAsian = resolveEastAsianFont(minorFont);
+  const majorComplexScript = getAttr(getChild(majorFont, "cs"), "typeface");
+  const minorComplexScript = getAttr(getChild(minorFont, "cs"), "typeface");
+  const majorJapanese = findScriptFont(majorFont, "Jpan");
+  const minorJapanese = findScriptFont(minorFont, "Jpan");
   const scheme: SourceThemeFontScheme = {
     ...(isNonEmpty(majorLatin) ? { majorLatin } : {}),
     ...(isNonEmpty(minorLatin) ? { minorLatin } : {}),
+    ...(isNonEmpty(majorEastAsian) ? { majorEastAsian } : {}),
+    ...(isNonEmpty(minorEastAsian) ? { minorEastAsian } : {}),
+    ...(isNonEmpty(majorComplexScript) ? { majorComplexScript } : {}),
+    ...(isNonEmpty(minorComplexScript) ? { minorComplexScript } : {}),
+    ...(isNonEmpty(majorJapanese) ? { majorJapanese } : {}),
+    ...(isNonEmpty(minorJapanese) ? { minorJapanese } : {}),
   };
   return Object.keys(scheme).length > 0 ? scheme : undefined;
+}
+
+function resolveEastAsianFont(fontNode: XmlNode | undefined): string | undefined {
+  const typeface = getAttr(getChild(fontNode, "ea"), "typeface");
+  return isNonEmpty(typeface) ? typeface : findScriptFont(fontNode, "Jpan");
+}
+
+function findScriptFont(fontNode: XmlNode | undefined, script: string): string | undefined {
+  const font = getChildArray(fontNode, "font").find(
+    (candidate) => getAttr(candidate, "script") === script,
+  );
+  return getAttr(font, "typeface");
 }
 
 function parseFormatScheme(

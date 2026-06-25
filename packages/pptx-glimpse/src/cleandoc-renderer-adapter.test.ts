@@ -73,6 +73,12 @@ describe("adaptComputedViewToRendererModel", () => {
         marginRight: 91440,
         marginTop: 45720,
         marginBottom: 45720,
+        wrap: "none",
+        autoFit: "normAutofit",
+        fontScale: 0.625,
+        lnSpcReduction: 0.2,
+        numCol: 2,
+        vert: "eaVert",
       },
       paragraphs: [
         {
@@ -87,6 +93,8 @@ describe("adaptComputedViewToRendererModel", () => {
               properties: {
                 fontSize: 30,
                 fontFamily: "Aptos",
+                fontFamilyEa: "Yu Gothic",
+                fontFamilyCs: "Arial",
                 bold: true,
                 italic: false,
                 underline: true,
@@ -693,7 +701,16 @@ function buildSource(options: BuildSourceOptions = {}): CleanDocSource {
             name: "Slide title",
             placeholder: { type: "ctrTitle", index: 1 },
             textBody: {
-              properties: { marginLeft: asEmu(111), anchor: "middle" },
+              properties: {
+                marginLeft: asEmu(111),
+                anchor: "middle",
+                wrap: "none",
+                autoFit: "normAutofit",
+                fontScale: 0.625,
+                lnSpcReduction: 0.2,
+                numCol: 2,
+                vert: "eaVert",
+              },
               paragraphs: [
                 {
                   properties: { align: "center", lineSpacingPts: 1200, level: 2 },
@@ -743,6 +760,8 @@ function buildSource(options: BuildSourceOptions = {}): CleanDocSource {
             textBody: textBody("", {
               fontSize: asPt(30),
               typeface: "Aptos",
+              typefaceEa: "+mn-ea",
+              typefaceCs: "+mn-cs",
               color: { kind: "srgb", hex: "111111" },
               underline: true,
             }),
@@ -767,6 +786,10 @@ function buildSource(options: BuildSourceOptions = {}): CleanDocSource {
     themes: [
       {
         partPath: themePath,
+        fontScheme: {
+          minorEastAsian: "Yu Gothic",
+          minorComplexScript: "Arial",
+        },
         colorScheme: {
           colors: {
             lt1: { kind: "srgb", hex: "FFFFFF" },
