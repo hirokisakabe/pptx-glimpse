@@ -5,7 +5,11 @@ import { fileURLToPath } from "url";
 import { convertPptxToPng } from "../../packages/pptx-glimpse/src/converter.js";
 import { convertPptxToPngViaDocumentPath } from "../../packages/pptx-glimpse/src/experimental-document-renderer.js";
 import { compareImageBuffers } from "../compare-utils.js";
-import { DOCUMENT_PATH_VRT_RENDER_WIDTH } from "./document-path-cases.js";
+import {
+  DOCUMENT_PATH_VRT_CASES,
+  DOCUMENT_PATH_VRT_RENDER_WIDTH,
+  type DocumentPathVrtFixtureGroup,
+} from "./document-path-cases.js";
 import { SHARED_FIXTURE_CASES, VRT_CASES } from "./vrt-cases.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -16,10 +20,8 @@ const DIFF_DIR = join(__dirname, "diffs");
 const PIXEL_THRESHOLD = 0;
 const MISMATCH_TOLERANCE = 0;
 
-type ZeroDiffFixtureGroup = "shared" | "generated";
-
 interface ZeroDiffCase {
-  readonly group: ZeroDiffFixtureGroup;
+  readonly group: DocumentPathVrtFixtureGroup;
   readonly name: string;
   readonly fixture: string;
 }
@@ -42,6 +44,9 @@ describe("Document path zero-diff default switch gate", { timeout: 60000 }, () =
         ...SHARED_FIXTURE_CASES.map(({ name }) => name),
         ...VRT_CASES.map(({ name }) => name),
       ].sort(),
+    );
+    expect(ZERO_DIFF_CASES.map(({ name }) => name).sort()).toEqual(
+      DOCUMENT_PATH_VRT_CASES.map(({ name }) => name).sort(),
     );
   });
 
@@ -110,6 +115,6 @@ describe("Document path zero-diff default switch gate", { timeout: 60000 }, () =
   }
 });
 
-function fixtureDir(group: ZeroDiffFixtureGroup): string {
+function fixtureDir(group: DocumentPathVrtFixtureGroup): string {
   return group === "shared" ? SHARED_FIXTURE_DIR : GENERATED_FIXTURE_DIR;
 }
