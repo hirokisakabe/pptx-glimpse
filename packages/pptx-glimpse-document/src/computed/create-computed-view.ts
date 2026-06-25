@@ -874,11 +874,50 @@ function mergeRunProperties(
   const merged = { ...inherited, ...local };
   if (Object.keys(merged).length === 0) return undefined;
   const color = merged.color !== undefined ? resolveColor(context, merged.color) : undefined;
-  const withoutColor = omitColor(merged);
+  const withoutColor = resolveThemeRunFonts(context, omitColor(merged));
   return {
     ...withoutColor,
     ...(color !== undefined ? { color } : {}),
   };
+}
+
+function resolveThemeRunFonts(
+  context: ComputeContext,
+  properties: Omit<SourceRunProperties, "color">,
+): Omit<SourceRunProperties, "color"> {
+  return {
+    ...properties,
+    ...(properties.typeface !== undefined
+      ? { typeface: resolveThemeTypeface(context, properties.typeface) }
+      : {}),
+    ...(properties.typefaceEa !== undefined
+      ? { typefaceEa: resolveThemeTypeface(context, properties.typefaceEa) }
+      : {}),
+    ...(properties.typefaceCs !== undefined
+      ? { typefaceCs: resolveThemeTypeface(context, properties.typefaceCs) }
+      : {}),
+  };
+}
+
+function resolveThemeTypeface(context: ComputeContext, typeface: string): string {
+  const scheme = context.theme?.fontScheme;
+  if (scheme === undefined) return typeface;
+  switch (typeface) {
+    case "+mj-lt":
+      return scheme.majorLatin ?? typeface;
+    case "+mn-lt":
+      return scheme.minorLatin ?? typeface;
+    case "+mj-ea":
+      return scheme.majorEastAsian ?? scheme.majorJapanese ?? typeface;
+    case "+mn-ea":
+      return scheme.minorEastAsian ?? scheme.minorJapanese ?? typeface;
+    case "+mj-cs":
+      return scheme.majorComplexScript ?? typeface;
+    case "+mn-cs":
+      return scheme.minorComplexScript ?? typeface;
+    default:
+      return typeface;
+  }
 }
 
 function findPlaceholderMatch(

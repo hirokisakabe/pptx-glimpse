@@ -238,6 +238,10 @@ export interface SourceRunProperties {
   readonly fontSize?: Pt;
   /** latin typeface 名 (theme token も含めて未解決のまま保持)。 */
   readonly typeface?: string;
+  /** East Asian typeface 名 (theme token も含めて未解決のまま保持)。 */
+  readonly typefaceEa?: string;
+  /** Complex script typeface 名 (theme token も含めて未解決のまま保持)。 */
+  readonly typefaceCs?: string;
   readonly color?: SourceColor;
 }
 
@@ -272,6 +276,18 @@ export interface SourceParagraph {
 /** vertical anchor (`a:bodyPr@anchor`)。 */
 export type SourceVerticalAnchor = "top" | "middle" | "bottom";
 
+export type SourceTextWrap = "square" | "none";
+
+export type SourceTextVerticalType =
+  | "horz"
+  | "vert"
+  | "vert270"
+  | "eaVert"
+  | "wordArtVert"
+  | "mongolianVert";
+
+export type SourceTextAutoFit = "noAutofit" | "normAutofit" | "spAutofit";
+
 /** text body properties (`a:bodyPr`) の最小 subset。inset と vertical anchor。 */
 export interface SourceTextBodyProperties {
   readonly marginLeft?: Emu;
@@ -279,6 +295,12 @@ export interface SourceTextBodyProperties {
   readonly marginTop?: Emu;
   readonly marginBottom?: Emu;
   readonly anchor?: SourceVerticalAnchor;
+  readonly wrap?: SourceTextWrap;
+  readonly autoFit?: SourceTextAutoFit;
+  readonly fontScale?: number;
+  readonly lnSpcReduction?: number;
+  readonly numCol?: number;
+  readonly vert?: SourceTextVerticalType;
 }
 
 /** text body (`p:txBody`)。 */

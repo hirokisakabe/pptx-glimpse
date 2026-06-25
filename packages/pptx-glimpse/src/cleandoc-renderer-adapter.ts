@@ -703,12 +703,12 @@ function adaptBodyProperties(properties: ComputedTextBody["properties"]): BodyPr
     marginRight: toRendererEmu(properties?.marginRight ?? 91440),
     marginTop: toRendererEmu(properties?.marginTop ?? 45720),
     marginBottom: toRendererEmu(properties?.marginBottom ?? 45720),
-    wrap: "square",
-    autoFit: "noAutofit",
-    fontScale: 1,
-    lnSpcReduction: 0,
-    numCol: 1,
-    vert: "horz",
+    wrap: properties?.wrap ?? "square",
+    autoFit: properties?.autoFit ?? "noAutofit",
+    fontScale: properties?.fontScale ?? 1,
+    lnSpcReduction: properties?.lnSpcReduction ?? 0,
+    numCol: properties?.numCol ?? 1,
+    vert: properties?.vert ?? "horz",
   };
 }
 
@@ -765,8 +765,8 @@ function adaptRunProperties(properties: ComputedRunProperties | undefined): RunP
   return {
     fontSize: properties?.fontSize !== undefined ? toRendererPt(properties.fontSize) : null,
     fontFamily: properties?.typeface ?? null,
-    fontFamilyEa: null,
-    fontFamilyCs: null,
+    fontFamilyEa: properties?.typefaceEa ?? null,
+    fontFamilyCs: properties?.typefaceCs ?? null,
     bold: properties?.bold ?? false,
     italic: properties?.italic ?? false,
     underline: properties?.underline ?? false,

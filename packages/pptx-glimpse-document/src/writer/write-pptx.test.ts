@@ -322,9 +322,10 @@ describe("writePptx — one plain text-run edit", () => {
       italic: true,
       fontSize: 24,
       typeface: "Aptos",
+      typefaceEa: "Noto Sans JP",
       color: { kind: "srgb", hex: "FF0000" },
     });
-    expect(run.rawSidecars?.map((sidecar) => sidecar.node.name)).toContain("a:ea");
+    expect(run.rawSidecars?.map((sidecar) => sidecar.node.name) ?? []).not.toContain("a:ea");
     expect(getEntry(output, "docProps/custom.xml")).toEqual(getEntry(input, "docProps/custom.xml"));
     expect(getEntry(output, "ppt/media/image1.png")).toEqual(
       getEntry(input, "ppt/media/image1.png"),

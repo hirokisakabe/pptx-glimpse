@@ -153,6 +153,58 @@ describe("createComputedView", () => {
     });
   });
 
+  it("theme font token と text body autofit properties を解決する", () => {
+    const source = withSlide2Shapes(buildSource(), [
+      shape("Theme fonts", {
+        transform: transform(20, 21, 22, 23),
+        textBody: {
+          properties: {
+            autoFit: "normAutofit",
+            fontScale: 0.625,
+            lnSpcReduction: 0.2,
+            wrap: "none",
+            numCol: 2,
+            vert: "eaVert",
+          },
+          paragraphs: [
+            {
+              runs: [
+                {
+                  kind: "textRun",
+                  text: "文",
+                  properties: {
+                    typeface: "+mn-lt",
+                    typefaceEa: "+mn-ea",
+                    typefaceCs: "+mn-cs",
+                  },
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ]);
+
+    const themeFonts = findShape(
+      getSlide(createComputedView(source).slides, 0).elements,
+      "Theme fonts",
+    );
+
+    expect(themeFonts.textBody?.properties).toMatchObject({
+      autoFit: "normAutofit",
+      fontScale: 0.625,
+      lnSpcReduction: 0.2,
+      wrap: "none",
+      numCol: 2,
+      vert: "eaVert",
+    });
+    expect(themeFonts.textBody?.paragraphs[0].runs[0].properties).toMatchObject({
+      typeface: "Aptos",
+      typefaceEa: "Yu Gothic",
+      typefaceCs: "Arial",
+    });
+  });
+
   it("table の cell fill / text color / style default border を解決する", () => {
     const computed = createComputedView(buildSource());
     const table = findTable(getSlide(computed.slides, 0).elements, "Metrics table");
@@ -786,6 +838,14 @@ function buildSource(): CleanDocSource {
     themes: [
       {
         partPath: asPartPath("ppt/theme/theme1.xml"),
+        fontScheme: {
+          majorLatin: "Aptos Display",
+          minorLatin: "Aptos",
+          majorEastAsian: "Yu Mincho",
+          minorEastAsian: "Yu Gothic",
+          majorComplexScript: "Times New Roman",
+          minorComplexScript: "Arial",
+        },
         colorScheme: {
           colors: {
             lt1: { kind: "srgb", hex: "FFFFFF" },
