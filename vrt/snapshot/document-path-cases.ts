@@ -16,7 +16,6 @@ export const DOCUMENT_PATH_VRT_BLOCKER_ISSUES = {
   chartsAndSmartArt: 492,
   shapeTreeAndGeometry: 493,
   fillsAndBackgrounds: 494,
-  effects: 495,
   textAndFonts: 496,
 } as const;
 

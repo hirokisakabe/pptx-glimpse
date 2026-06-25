@@ -221,20 +221,36 @@ function parseDuotoneEffect(node: XmlNode | undefined): SourceDuotoneEffect | un
 
 function parseColorChangeEffect(node: XmlNode | undefined): SourceColorChangeEffect | undefined {
   if (node === undefined) return undefined;
-  const from = parseColorElement(getChild(node, "clrFrom"));
-  const to = parseColorElement(getChild(node, "clrTo"));
+  const from = firstColorChild(getChild(node, "clrFrom"));
+  const to = firstColorChild(getChild(node, "clrTo"));
   return from !== undefined && to !== undefined ? { from, to } : undefined;
 }
 
 function collectColorChildren(parent: XmlNode): SourceColor[] {
   const colors: SourceColor[] = [];
-  for (const key of ["prstClr", "srgbClr", "schemeClr", "sysClr"]) {
-    for (const node of getChildArray(parent, key)) {
-      const color = key === "prstClr" ? parsePresetColor(node) : parseColorElement({ [key]: node });
+  for (const [key, value] of Object.entries(parent)) {
+    if (key.startsWith("@_")) continue;
+    const nodes = Array.isArray(value) ? value : [value];
+    for (const node of nodes) {
+      if (!isXmlNode(node)) continue;
+      const color = parseColorChild(key, node);
       if (color !== undefined) colors.push(color);
     }
   }
   return colors;
+}
+
+function firstColorChild(parent: XmlNode | undefined): SourceColor | undefined {
+  return parent !== undefined ? collectColorChildren(parent)[0] : undefined;
+}
+
+function parseColorChild(key: string, node: XmlNode): SourceColor | undefined {
+  const name = localName(key);
+  return name === "prstClr" ? parsePresetColor(node) : parseColorElement({ [name]: node });
+}
+
+function isXmlNode(value: unknown): value is XmlNode {
+  return typeof value === "object" && value !== null;
 }
 
 function parsePresetColor(node: XmlNode): SourceColor | undefined {

@@ -414,12 +414,23 @@ describe("adaptComputedViewToRendererModel", () => {
                 dashStyle: "dash",
                 tailEnd: { type: "triangle", width: "med", length: "med" },
               },
+              effects: {
+                outerShadow: {
+                  blurRadius: asEmu(10),
+                  distance: asEmu(20),
+                  direction: asOoxmlAngle(5400000),
+                  color: { kind: "srgb", hex: "000000" },
+                  alignment: "b",
+                  rotateWithShape: true,
+                },
+              },
             },
             {
               kind: "group",
               name: "Group",
               transform: transform(600, 610, 620, 630),
               childTransform: transform(0, 0, 620, 630),
+              effects: { softEdge: { radius: asEmu(30) } },
               children: [
                 shape("Custom child", {
                   transform: transform(1, 2, 3, 4),
@@ -447,11 +458,20 @@ describe("adaptComputedViewToRendererModel", () => {
         dashStyle: "dash",
         tailEnd: { type: "triangle", width: "med", length: "med" },
       },
+      effects: {
+        outerShadow: {
+          blurRadius: 10,
+          distance: 20,
+          direction: 90,
+          color: { hex: "#000000", alpha: 1 },
+        },
+      },
     });
     expect(group).toMatchObject({
       type: "group",
       transform: { offsetX: 600, offsetY: 610, extentWidth: 620, extentHeight: 630 },
       childTransform: { offsetX: 0, offsetY: 0, extentWidth: 620, extentHeight: 630 },
+      effects: { softEdge: { radius: 30 } },
       children: [
         {
           type: "shape",
@@ -463,6 +483,37 @@ describe("adaptComputedViewToRendererModel", () => {
       ],
     });
     expect(result.diagnostics).toEqual([]);
+  });
+
+  it("document media content types を current parser 互換の image mime に正規化する", () => {
+    const source = buildSource({
+      extraSlideShapes: [
+        shape("EMF fill", {
+          transform: transform(110, 111, 112, 113),
+          fill: { kind: "image", blipRelationshipId: asRelationshipId("rIdImage") },
+        }),
+      ],
+    });
+    const sourceWithEmfMedia: CleanDocSource = {
+      ...source,
+      packageGraph: {
+        ...source.packageGraph,
+        media: source.packageGraph.media.map((media) => ({
+          ...media,
+          contentType: "image/x-emf",
+        })),
+      },
+    };
+    const result = adaptComputedViewToRendererModel(createComputedView(sourceWithEmfMedia));
+
+    expect(findElementByAltText(result.slides[0].elements, "Hero image")).toMatchObject({
+      type: "image",
+      mimeType: "image/emf",
+    });
+    expect(findElementByAltText(result.slides[0].elements, "EMF fill")).toMatchObject({
+      type: "shape",
+      fill: { type: "image", mimeType: "image/emf" },
+    });
   });
 
   it("chart と SmartArt fallback を renderer model に変換する", () => {

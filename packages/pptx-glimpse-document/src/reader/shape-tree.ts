@@ -15,9 +15,11 @@
 import type {
   PartPath,
   RawSidecarId,
+  SourceBlipEffects,
   SourceCellBorders,
   SourceChart,
   SourceConnector,
+  SourceEffectList,
   SourceGeometry,
   SourceGroup,
   SourceImage,
@@ -81,6 +83,12 @@ const KNOWN_BLIP_CHILDREN: ReadonlySet<string> = new Set([
   "lum",
   "duotone",
   "clrChange",
+]);
+const KNOWN_EFFECT_CHILDREN: ReadonlySet<string> = new Set([
+  "outerShdw",
+  "innerShdw",
+  "glow",
+  "softEdge",
 ]);
 const KNOWN_GRAPHIC_FRAME_CHILDREN: ReadonlySet<string> = new Set([
   "nvGraphicFramePr",
@@ -269,6 +277,7 @@ function parseShape(
   const rawSidecars = [
     ...collectUnknownSidecars(sp, KNOWN_SHAPE_CHILDREN, nextId),
     ...collectUnknownSidecars(spPr, KNOWN_SP_PR_CHILDREN, nextId),
+    ...collectEffectSidecars(spPr, effects, nextId),
   ];
 
   return {
@@ -308,6 +317,7 @@ function parseConnector(
   const rawSidecars = [
     ...collectUnknownSidecars(cxnSp, KNOWN_CONNECTOR_CHILDREN, nextId),
     ...collectUnknownSidecars(spPr, KNOWN_SP_PR_CHILDREN, nextId),
+    ...collectEffectSidecars(spPr, effects, nextId),
   ];
 
   return {
@@ -365,6 +375,7 @@ function parseGroup(
   const rawSidecars = [
     ...collectUnknownSidecars(grpSp, KNOWN_GROUP_CHILDREN, nextId),
     ...collectUnknownSidecars(grpSpPr, KNOWN_SP_PR_CHILDREN, nextId),
+    ...collectEffectSidecars(grpSpPr, effects, nextId),
   ];
 
   return {
@@ -405,9 +416,10 @@ function parseImage(
   const rawSidecars = [
     ...collectUnknownSidecars(pic, KNOWN_PICTURE_CHILDREN, nextId),
     ...collectUnknownSidecars(spPr, KNOWN_SP_PR_CHILDREN, nextId),
+    ...collectEffectSidecars(spPr, effects, nextId),
     // `a:stretch` / `a:tile` 等の fill mode と blip 配下の recolor 操作を保持する。
     ...collectUnknownSidecars(blipFill, KNOWN_BLIP_FILL_CHILDREN, nextId),
-    ...collectUnknownSidecars(blip, KNOWN_BLIP_CHILDREN, nextId),
+    ...collectBlipEffectSidecars(blip, blipEffects, nextId),
   ];
 
   return {
@@ -429,6 +441,53 @@ function parseImage(
     },
     ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
   };
+}
+
+function collectEffectSidecars(
+  spPr: XmlNode | undefined,
+  effects: SourceEffectList | undefined,
+  nextId: () => RawSidecarId,
+) {
+  const effectList = getChild(spPr, "effectLst");
+  if (effectList === undefined) return [];
+  const sidecars = collectUnknownSidecars(effectList, KNOWN_EFFECT_CHILDREN, nextId);
+  const supportedChildren = [
+    ["outerShdw", effects?.outerShadow],
+    ["innerShdw", effects?.innerShadow],
+    ["glow", effects?.glow],
+    ["softEdge", effects?.softEdge],
+  ] as const;
+  for (const [name, parsed] of supportedChildren) {
+    const node = getChild(effectList, name);
+    if (node !== undefined && parsed === undefined) {
+      sidecars.push(makeSidecar(`a:${name}`, node, nextId));
+    }
+  }
+  return sidecars;
+}
+
+function collectBlipEffectSidecars(
+  blip: XmlNode | undefined,
+  effects: SourceBlipEffects | undefined,
+  nextId: () => RawSidecarId,
+) {
+  if (blip === undefined) return [];
+  const sidecars = collectUnknownSidecars(blip, KNOWN_BLIP_CHILDREN, nextId);
+  const supportedChildren = [
+    ["grayscl", effects?.grayscale === true],
+    ["biLevel", effects?.biLevel],
+    ["blur", effects?.blur],
+    ["lum", effects?.lum],
+    ["duotone", effects?.duotone],
+    ["clrChange", effects?.clrChange],
+  ] as const;
+  for (const [name, parsed] of supportedChildren) {
+    const node = getChild(blip, name);
+    if (node !== undefined && (parsed === undefined || parsed === false)) {
+      sidecars.push(makeSidecar(`a:${name}`, node, nextId));
+    }
+  }
+  return sidecars;
 }
 
 function parseGraphicFrame(
