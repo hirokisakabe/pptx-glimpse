@@ -205,6 +205,73 @@ describe("createComputedView", () => {
     });
   });
 
+  it("local sp/no autofit で inherited normAutofit の scale 値をリセットする", () => {
+    const source = buildSource();
+    const sourceWithAutofitPlaceholders: CleanDocSource = {
+      ...source,
+      slides: source.slides.map((slide) =>
+        slide.partPath === asPartPath("ppt/slides/slide2.xml")
+          ? {
+              ...slide,
+              shapes: [
+                ...slide.shapes,
+                placeholder("Slide sp autofit", "body", 9, {
+                  textBody: {
+                    properties: { autoFit: "spAutofit" },
+                    paragraphs: [{ runs: [{ kind: "textRun", text: "grow" }] }],
+                  },
+                }),
+                placeholder("Slide no autofit", "body", 10, {
+                  textBody: {
+                    properties: { autoFit: "noAutofit" },
+                    paragraphs: [{ runs: [{ kind: "textRun", text: "fixed" }] }],
+                  },
+                }),
+              ],
+            }
+          : slide,
+      ),
+      slideLayouts: source.slideLayouts.map((layout) => ({
+        ...layout,
+        shapes: [
+          ...layout.shapes,
+          placeholder("Layout norm autofit 9", "body", 9, {
+            textBody: {
+              properties: {
+                autoFit: "normAutofit",
+                fontScale: 0.5,
+                lnSpcReduction: 0.3,
+              },
+              paragraphs: [{ runs: [{ kind: "textRun", text: "" }] }],
+            },
+          }),
+          placeholder("Layout norm autofit 10", "body", 10, {
+            textBody: {
+              properties: {
+                autoFit: "normAutofit",
+                fontScale: 0.5,
+                lnSpcReduction: 0.3,
+              },
+              paragraphs: [{ runs: [{ kind: "textRun", text: "" }] }],
+            },
+          }),
+        ],
+      })),
+    };
+
+    const slide = getSlide(createComputedView(sourceWithAutofitPlaceholders).slides, 0);
+    expect(findShape(slide.elements, "Slide sp autofit").textBody?.properties).toMatchObject({
+      autoFit: "spAutofit",
+      fontScale: 1,
+      lnSpcReduction: 0,
+    });
+    expect(findShape(slide.elements, "Slide no autofit").textBody?.properties).toMatchObject({
+      autoFit: "noAutofit",
+      fontScale: 1,
+      lnSpcReduction: 0,
+    });
+  });
+
   it("table の cell fill / text color / style default border を解決する", () => {
     const computed = createComputedView(buildSource());
     const table = findTable(getSlide(computed.slides, 0).elements, "Metrics table");

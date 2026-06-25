@@ -99,6 +99,7 @@ function parseBodyProperties(bodyPr: XmlNode | undefined): SourceTextBodyPropert
   const numCol = numericAttr(bodyPr, "numCol");
   const normAutofit = getChild(bodyPr, "normAutofit");
   const hasSpAutofit = getChild(bodyPr, "spAutoFit") !== undefined;
+  const hasNoAutofit = getChild(bodyPr, "noAutofit") !== undefined;
   const fontScale = numericAttr(normAutofit, "fontScale");
   const lnSpcReduction = numericAttr(normAutofit, "lnSpcReduction");
 
@@ -116,8 +117,10 @@ function parseBodyProperties(bodyPr: XmlNode | undefined): SourceTextBodyPropert
           lnSpcReduction: lnSpcReduction !== undefined ? lnSpcReduction / 100000 : 0,
         }
       : hasSpAutofit
-        ? { autoFit: "spAutofit" }
-        : {}),
+        ? { autoFit: "spAutofit", fontScale: 1, lnSpcReduction: 0 }
+        : hasNoAutofit
+          ? { autoFit: "noAutofit", fontScale: 1, lnSpcReduction: 0 }
+          : {}),
     ...(numCol !== undefined ? { numCol: Math.max(1, numCol) } : {}),
     ...(vert !== undefined ? { vert } : {}),
   };
@@ -229,7 +232,7 @@ function parseRunProperties(rPr: XmlNode | undefined): SourceRunProperties | und
 
 /**
  * run の未対応素材を sidecar に集める。run 直下 (`a:rPr` / `a:t` 以外) に加え、
- * `a:rPr` 内の未対応子要素 (`a:ea` / `a:cs` / `a:hlinkClick` 等) も保持する。
+ * `a:rPr` 内の未対応子要素 (`a:hlinkClick` / `a:ln` 等) も保持する。
  */
 function collectRunSidecars(
   r: XmlNode,

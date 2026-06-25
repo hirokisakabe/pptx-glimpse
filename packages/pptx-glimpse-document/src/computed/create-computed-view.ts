@@ -827,16 +827,36 @@ function computeTextBody(
   inherited?: SourceTextBody,
 ): ComputedTextBody {
   const inheritedParagraph = inherited?.paragraphs[0];
+  const properties = mergeTextBodyProperties(inherited?.properties, textBody.properties);
   return {
-    ...(textBody.properties !== undefined
-      ? { properties: { ...inherited?.properties, ...textBody.properties } }
-      : inherited?.properties !== undefined
-        ? { properties: { ...inherited.properties } }
-        : {}),
+    ...(properties !== undefined ? { properties } : {}),
     paragraphs: textBody.paragraphs.map((paragraph) =>
       computeParagraph(context, paragraph, inheritedParagraph),
     ),
   };
+}
+
+function mergeTextBodyProperties(
+  inherited: SourceTextBody["properties"] | undefined,
+  local: SourceTextBody["properties"] | undefined,
+): SourceTextBody["properties"] | undefined {
+  const merged = { ...inherited, ...local };
+  if (Object.keys(merged).length === 0) return undefined;
+  if (merged.autoFit === "normAutofit") {
+    return {
+      ...merged,
+      fontScale: merged.fontScale ?? 1,
+      lnSpcReduction: merged.lnSpcReduction ?? 0,
+    };
+  }
+  if (merged.autoFit === "spAutofit" || merged.autoFit === "noAutofit") {
+    return {
+      ...merged,
+      fontScale: 1,
+      lnSpcReduction: 0,
+    };
+  }
+  return merged;
 }
 
 function computeParagraph(

@@ -290,6 +290,24 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(shape.textBody?.properties).toMatchObject({ autoFit: "spAutofit" });
   });
 
+  it("noAutofit を typed source body property として読む", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<p:sp><p:nvSpPr><p:cNvPr id="16" name="No autofit"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="1" y="2"/><a:ext cx="3" cy="4"/></a:xfrm></p:spPr>` +
+          `<p:txBody><a:bodyPr><a:noAutofit/></a:bodyPr><a:p><a:r><a:t>fixed</a:t></a:r></a:p></p:txBody>` +
+          `</p:sp>`,
+      ),
+    );
+
+    const shape = source.slides[0].shapes[0] as SourceShape;
+    expect(shape.textBody?.properties).toMatchObject({
+      autoFit: "noAutofit",
+      fontScale: 1,
+      lnSpcReduction: 0,
+    });
+  });
+
   it("gradient fill を typed source fill、custom geometry を raw として保持する", () => {
     const source = readPptx(
       buildSyntheticPptx(
