@@ -112,6 +112,88 @@ describe("adaptComputedViewToRendererModel", () => {
     });
   });
 
+  it("complex fill を renderer fill model に変換する", () => {
+    const result = adaptComputedViewToRendererModel(
+      createComputedView(
+        buildSource({
+          extraSlideShapes: [
+            shape("Gradient fill", {
+              transform: transform(30, 31, 32, 33),
+              fill: {
+                kind: "gradient",
+                gradientType: "linear",
+                angle: asOoxmlAngle(5400000),
+                stops: [
+                  { position: 0, color: { kind: "scheme", scheme: "accent1" } },
+                  { position: 1, color: { kind: "srgb", hex: "00FF00" } },
+                ],
+              },
+            }),
+            shape("Pattern fill", {
+              transform: transform(40, 41, 42, 43),
+              fill: {
+                kind: "pattern",
+                preset: "pct20",
+                foregroundColor: { kind: "scheme", scheme: "accent1" },
+                backgroundColor: { kind: "srgb", hex: "FFFFFF" },
+              },
+            }),
+            shape("Image fill", {
+              transform: transform(50, 51, 52, 53),
+              fill: {
+                kind: "image",
+                blipRelationshipId: asRelationshipId("rIdImage"),
+                tile: {
+                  tx: asEmu(1),
+                  ty: asEmu(2),
+                  sx: 0.5,
+                  sy: 0.75,
+                  flip: "xy",
+                  align: "ctr",
+                },
+              },
+            }),
+          ],
+        }),
+      ),
+    );
+
+    expect(findElementByAltText(result.slides[0].elements, "Gradient fill")).toMatchObject({
+      fill: {
+        type: "gradient",
+        angle: 90,
+        stops: [
+          { position: 0, color: { hex: "#336699", alpha: 1 } },
+          { position: 1, color: { hex: "#00ff00", alpha: 1 } },
+        ],
+      },
+    });
+    expect(findElementByAltText(result.slides[0].elements, "Pattern fill")).toMatchObject({
+      fill: {
+        type: "pattern",
+        preset: "pct20",
+        foregroundColor: { hex: "#336699", alpha: 1 },
+        backgroundColor: { hex: "#ffffff", alpha: 1 },
+      },
+    });
+    expect(findElementByAltText(result.slides[0].elements, "Image fill")).toMatchObject({
+      fill: {
+        type: "image",
+        imageData: "AQID",
+        mimeType: "image/png",
+        tile: {
+          tx: 1,
+          ty: 2,
+          sx: 0.5,
+          sy: 0.75,
+          flip: "xy",
+          align: "ctr",
+        },
+      },
+    });
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it("table を renderer model に変換する", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(

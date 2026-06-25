@@ -10,7 +10,13 @@
 
 import type { PartPath, SourceHandle } from "./handles.js";
 import type { RawSidecar } from "./raw.js";
-import type { SourceColor, SourceFill, SourceShapeNode } from "./shapes.js";
+import type {
+  SourceColor,
+  SourceEffectList,
+  SourceFill,
+  SourceOutline,
+  SourceShapeNode,
+} from "./shapes.js";
 import type { Emu } from "./units.js";
 
 /** スライドサイズ (`p:sldSz`)。EMU で保持する。 */
@@ -49,12 +55,21 @@ export interface SourceThemeFontScheme {
   readonly minorLatin?: string;
 }
 
+/** theme の format scheme (`a:fmtScheme`) のうち shape style ref 解決に使う subset。 */
+export interface SourceThemeFormatScheme {
+  readonly fillStyles: readonly SourceFill[];
+  readonly lineStyles: readonly SourceOutline[];
+  readonly effectStyles: readonly (SourceEffectList | undefined)[];
+  readonly backgroundFillStyles: readonly SourceFill[];
+}
+
 /** theme part (`ppt/theme/themeN.xml`)。 */
 export interface SourceTheme {
   readonly partPath: PartPath;
   readonly name?: string;
   readonly colorScheme?: SourceThemeColorScheme;
   readonly fontScheme?: SourceThemeFontScheme;
+  readonly formatScheme?: SourceThemeFormatScheme;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
 }

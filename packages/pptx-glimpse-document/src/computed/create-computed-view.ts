@@ -4,6 +4,7 @@ import type {
   SourceCellBorders,
   SourceColor,
   SourceColorMap,
+  SourceEffectList,
   SourceFill,
   SourceImage,
   SourceOutline,
@@ -16,6 +17,7 @@ import type {
   SourceSlideLayout,
   SourceSlideMaster,
   SourceSmartArt,
+  SourceStyleReference,
   SourceTable,
   SourceTableCell,
   SourceTextBody,
@@ -29,6 +31,7 @@ import type {
   ComputedChartElement,
   ComputedColor,
   ComputedConnectorElement,
+  ComputedEffectList,
   ComputedElement,
   ComputedElementLayer,
   ComputedFill,
@@ -270,11 +273,19 @@ function computeBackground(
 ): { readonly background: ComputedBackground } | undefined {
   const picked =
     slide.background !== undefined
-      ? { sourceLayer: "slide" as const, background: slide.background }
+      ? { sourceLayer: "slide" as const, partPath: slide.partPath, background: slide.background }
       : layout?.background !== undefined
-        ? { sourceLayer: "layout" as const, background: layout.background }
+        ? {
+            sourceLayer: "layout" as const,
+            partPath: layout.partPath,
+            background: layout.background,
+          }
         : master?.background !== undefined
-          ? { sourceLayer: "master" as const, background: master.background }
+          ? {
+              sourceLayer: "master" as const,
+              partPath: master.partPath,
+              background: master.background,
+            }
           : undefined;
   if (picked === undefined) return undefined;
 
@@ -284,7 +295,7 @@ function computeBackground(
       background: {
         kind: "fill",
         source: background,
-        fill: computeFill(context, background.fill),
+        fill: computeFill(context, background.fill, picked.partPath),
         sourceLayer,
       },
     };
@@ -359,8 +370,10 @@ function computeConnectorElement(
     ...(connector.transform !== undefined ? { transform: connector.transform } : {}),
     ...(connector.geometry !== undefined ? { geometry: connector.geometry } : {}),
     ...(connector.outline !== undefined
-      ? { outline: computeOutline(context, connector.outline) }
-      : {}),
+      ? { outline: computeOutline(context, connector.outline, partPath) }
+      : connector.style?.lineRef !== undefined
+        ? { outline: resolveLineReference(context, connector.style.lineRef, partPath) }
+        : {}),
   };
 }
 
@@ -403,8 +416,19 @@ function computeShapeElement(
     sourceNode: shape,
     ...(transform !== undefined ? { transform } : {}),
     ...(geometry !== undefined ? { geometry } : {}),
-    ...(shape.fill !== undefined ? { fill: computeFill(context, shape.fill) } : {}),
-    ...(shape.outline !== undefined ? { outline: computeOutline(context, shape.outline) } : {}),
+    ...(shape.fill !== undefined
+      ? { fill: computeFill(context, shape.fill, partPath) }
+      : shape.style?.fillRef !== undefined
+        ? { fill: resolveFillReference(context, shape.style.fillRef, partPath) }
+        : {}),
+    ...(shape.outline !== undefined
+      ? { outline: computeOutline(context, shape.outline, partPath) }
+      : shape.style?.lineRef !== undefined
+        ? { outline: resolveLineReference(context, shape.style.lineRef, partPath) }
+        : {}),
+    ...(shape.style?.effectRef !== undefined
+      ? { effects: resolveEffectReference(context, shape.style.effectRef) }
+      : {}),
     ...(shape.textBody !== undefined
       ? { textBody: computeTextBody(context, shape.textBody, styleSource?.textBody) }
       : {}),
@@ -418,7 +442,7 @@ function computeImageElement(
   layer: ComputedElementLayer,
   partPath: PartPath,
 ): ComputedImageElement {
-  const relationship = context.relationships.find(
+  const relationship = resolveRelationships(context.source, partPath).find(
     (rel) => rel.id === image.blipRelationshipId && rel.type === IMAGE_REL_TYPE,
   );
 
@@ -447,7 +471,7 @@ function computeTableElement(
     ...(table.transform !== undefined ? { transform: table.transform } : {}),
     table: {
       columns: table.table.columns.map((column) => ({ ...column })),
-      rows: table.table.rows.map((row) => computeTableRow(context, table, row)),
+      rows: table.table.rows.map((row) => computeTableRow(context, table, row, partPath)),
     },
   };
 }
@@ -516,11 +540,12 @@ function computeTableRow(
   context: ComputeContext,
   table: SourceTable,
   row: SourceTable["table"]["rows"][number],
+  partPath: PartPath,
 ): ComputedTableRow {
   return {
     source: row,
     height: row.height,
-    cells: row.cells.map((cell) => computeTableCell(context, table, cell)),
+    cells: row.cells.map((cell) => computeTableCell(context, table, cell, partPath)),
   };
 }
 
@@ -528,17 +553,18 @@ function computeTableCell(
   context: ComputeContext,
   table: SourceTable,
   cell: SourceTableCell,
+  partPath: PartPath,
 ): ComputedTableCell {
   const borders =
     cell.borders !== undefined
-      ? computeCellBorders(context, cell.borders)
+      ? computeCellBorders(context, cell.borders, partPath)
       : table.table.tableStyleId !== undefined
-        ? computeCellBorders(context, DEFAULT_TABLE_STYLE_BORDERS)
+        ? computeCellBorders(context, DEFAULT_TABLE_STYLE_BORDERS, partPath)
         : undefined;
   return {
     source: cell,
     ...(cell.textBody !== undefined ? { textBody: computeTextBody(context, cell.textBody) } : {}),
-    ...(cell.fill !== undefined ? { fill: computeFill(context, cell.fill) } : {}),
+    ...(cell.fill !== undefined ? { fill: computeFill(context, cell.fill, partPath) } : {}),
     ...(borders !== undefined ? { borders } : {}),
     gridSpan: cell.gridSpan,
     rowSpan: cell.rowSpan,
@@ -550,19 +576,60 @@ function computeTableCell(
 function computeCellBorders(
   context: ComputeContext,
   borders: SourceCellBorders,
+  partPath: PartPath,
 ): ComputedCellBorders | undefined {
   const computed: ComputedCellBorders = {
-    ...(borders.top !== undefined ? { top: computeOutline(context, borders.top) } : {}),
-    ...(borders.bottom !== undefined ? { bottom: computeOutline(context, borders.bottom) } : {}),
-    ...(borders.left !== undefined ? { left: computeOutline(context, borders.left) } : {}),
-    ...(borders.right !== undefined ? { right: computeOutline(context, borders.right) } : {}),
+    ...(borders.top !== undefined ? { top: computeOutline(context, borders.top, partPath) } : {}),
+    ...(borders.bottom !== undefined
+      ? { bottom: computeOutline(context, borders.bottom, partPath) }
+      : {}),
+    ...(borders.left !== undefined
+      ? { left: computeOutline(context, borders.left, partPath) }
+      : {}),
+    ...(borders.right !== undefined
+      ? { right: computeOutline(context, borders.right, partPath) }
+      : {}),
   };
   return Object.keys(computed).length > 0 ? computed : undefined;
 }
 
-function computeFill(context: ComputeContext, fill: SourceFill): ComputedFill {
+function computeFill(context: ComputeContext, fill: SourceFill, partPath: PartPath): ComputedFill {
   if (fill.kind === "none") return { kind: "none", source: fill };
   if (fill.kind === "raw") return { kind: "raw", source: fill };
+  if (fill.kind === "gradient") {
+    return {
+      kind: "gradient",
+      source: fill,
+      stops: fill.stops.map((stop) => ({
+        position: stop.position,
+        color: resolveColor(context, stop.color) ?? { hex: "#000000", alpha: 1 },
+      })),
+      gradientType: fill.gradientType,
+      ...(fill.gradientType === "linear" ? { angle: Number(fill.angle) / 60000 } : {}),
+      ...(fill.gradientType === "radial" ? { centerX: fill.centerX, centerY: fill.centerY } : {}),
+    };
+  }
+  if (fill.kind === "pattern") {
+    return {
+      kind: "pattern",
+      source: fill,
+      preset: fill.preset,
+      foregroundColor: resolveColor(context, fill.foregroundColor) ?? { hex: "#000000", alpha: 1 },
+      backgroundColor: resolveColor(context, fill.backgroundColor) ?? { hex: "#ffffff", alpha: 1 },
+    };
+  }
+  if (fill.kind === "image") {
+    const relationship = resolveRelationships(context.source, partPath).find(
+      (rel) => rel.id === fill.blipRelationshipId && rel.type === IMAGE_REL_TYPE,
+    );
+    return {
+      kind: "image",
+      source: fill,
+      ...(relationship !== undefined ? { relationship } : {}),
+      ...(relationship?.media !== undefined ? { media: relationship.media } : {}),
+      ...(fill.tile !== undefined ? { tile: fill.tile } : {}),
+    };
+  }
   return {
     kind: "solid",
     source: fill,
@@ -570,12 +637,131 @@ function computeFill(context: ComputeContext, fill: SourceFill): ComputedFill {
   };
 }
 
-function computeOutline(context: ComputeContext, outline: SourceOutline): ComputedOutline {
+function computeOutline(
+  context: ComputeContext,
+  outline: SourceOutline,
+  partPath: PartPath,
+): ComputedOutline {
   return {
     source: outline,
     ...(outline.width !== undefined ? { width: outline.width } : {}),
-    ...(outline.fill !== undefined ? { fill: computeFill(context, outline.fill) } : {}),
+    ...(outline.fill !== undefined ? { fill: computeFill(context, outline.fill, partPath) } : {}),
   };
+}
+
+function resolveFillReference(
+  context: ComputeContext,
+  ref: SourceStyleReference,
+  partPath: PartPath,
+): ComputedFill | undefined {
+  if (ref.index === 0) return undefined;
+  // Match the current parser oracle in style-reference-resolver.ts: idx >= 1000
+  // is routed to bgFillStyleLst, with idx=1000 resolving to no template.
+  const list =
+    ref.index >= 1000
+      ? context.theme?.formatScheme?.backgroundFillStyles
+      : context.theme?.formatScheme?.fillStyles;
+  const arrayIndex = ref.index >= 1000 ? ref.index - 1001 : ref.index - 1;
+  const template = list?.[arrayIndex];
+  if (template === undefined) return undefined;
+  const computed = computeFill(context, template, context.theme?.partPath ?? partPath);
+  const overrideColor = ref.color !== undefined ? resolveColor(context, ref.color) : undefined;
+  if (overrideColor === undefined) return computed;
+  if (computed.kind === "solid") {
+    return { ...computed, color: overrideColor };
+  }
+  if (computed.kind === "gradient") {
+    return {
+      ...computed,
+      stops: computed.stops.map((stop) => ({ ...stop, color: overrideColor })),
+    };
+  }
+  return computed;
+}
+
+function resolveLineReference(
+  context: ComputeContext,
+  ref: SourceStyleReference,
+  partPath: PartPath,
+): ComputedOutline | undefined {
+  if (ref.index === 0) return undefined;
+  const template = context.theme?.formatScheme?.lineStyles[ref.index - 1];
+  if (template === undefined) return undefined;
+  const computed = computeOutline(context, template, context.theme?.partPath ?? partPath);
+  const overrideSourceColor = ref.color;
+  if (overrideSourceColor === undefined) return computed;
+  const overrideColor = resolveColor(context, overrideSourceColor);
+  if (overrideColor === undefined) return computed;
+  return {
+    ...computed,
+    fill: {
+      kind: "solid",
+      source: { kind: "solid", color: overrideSourceColor },
+      color: overrideColor,
+    },
+  };
+}
+
+function resolveEffectReference(
+  context: ComputeContext,
+  ref: SourceStyleReference,
+): ComputedEffectList | undefined {
+  // Match the current parser oracle in style-reference-resolver.ts, where
+  // effectStyleLst is indexed directly by effectRef@idx.
+  const template = context.theme?.formatScheme?.effectStyles[ref.index];
+  return template !== undefined ? computeEffectList(context, template) : undefined;
+}
+
+function computeEffectList(
+  context: ComputeContext,
+  source: SourceEffectList,
+): ComputedEffectList | undefined {
+  const outerShadowColor =
+    source.outerShadow !== undefined ? resolveColor(context, source.outerShadow.color) : undefined;
+  const innerShadowColor =
+    source.innerShadow !== undefined ? resolveColor(context, source.innerShadow.color) : undefined;
+  const glowColor =
+    source.glow !== undefined ? resolveColor(context, source.glow.color) : undefined;
+  const computed: ComputedEffectList = {
+    source,
+    ...(source.outerShadow !== undefined && outerShadowColor !== undefined
+      ? {
+          outerShadow: {
+            blurRadius: source.outerShadow.blurRadius,
+            distance: source.outerShadow.distance,
+            direction: Number(source.outerShadow.direction) / 60000,
+            color: outerShadowColor,
+            alignment: source.outerShadow.alignment,
+            rotateWithShape: source.outerShadow.rotateWithShape,
+          },
+        }
+      : {}),
+    ...(source.innerShadow !== undefined && innerShadowColor !== undefined
+      ? {
+          innerShadow: {
+            blurRadius: source.innerShadow.blurRadius,
+            distance: source.innerShadow.distance,
+            direction: Number(source.innerShadow.direction) / 60000,
+            color: innerShadowColor,
+          },
+        }
+      : {}),
+    ...(source.glow !== undefined && glowColor !== undefined
+      ? {
+          glow: {
+            radius: source.glow.radius,
+            color: glowColor,
+          },
+        }
+      : {}),
+    ...(source.softEdge !== undefined ? { softEdge: source.softEdge } : {}),
+  };
+  return computed.outerShadow !== undefined ||
+    computed.innerShadow !== undefined ||
+    computed.glow !== undefined ||
+    computed.softEdge !== undefined
+    ? computed
+    : undefined;
 }
 
 function computeTextBody(

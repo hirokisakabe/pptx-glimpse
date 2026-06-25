@@ -19,12 +19,28 @@ import type {
   SourceTheme,
   SourceThemeColorScheme,
   SourceThemeFontScheme,
+  SourceThemeFormatScheme,
 } from "../source/index.js";
-import { type SourceColor } from "../source/index.js";
-import { isTrue, numericAttr, parseColorElement, parseFill } from "./drawing.js";
+import {
+  asEmu,
+  asOoxmlAngle,
+  type SourceColor,
+  type SourceEffectList,
+  type SourceFill,
+} from "../source/index.js";
+import { isTrue, numericAttr, parseColorElement, parseFill, parseLine } from "./drawing.js";
 import { makeSidecar } from "./raw-node.js";
 import { parseShapeTree } from "./shape-tree.js";
-import { getAttr, getAttrs, getChild, type XmlNode, type XmlOrderedNode } from "./xml.js";
+import {
+  getAttr,
+  getAttrs,
+  getChild,
+  getChildArray,
+  localName,
+  navigateOrdered,
+  type XmlNode,
+  type XmlOrderedNode,
+} from "./xml.js";
 
 const THEME_COLOR_SLOTS = [
   "dk1",
@@ -40,6 +56,14 @@ const THEME_COLOR_SLOTS = [
   "hlink",
   "folHlink",
 ] as const;
+
+const FILL_LOCAL_NAMES: ReadonlySet<string> = new Set([
+  "solidFill",
+  "gradFill",
+  "pattFill",
+  "blipFill",
+  "noFill",
+]);
 
 /** parse 済み slide root (`p:sld`) から `SourceSlide` を組み立てる。 */
 export function parseSlide(
@@ -116,17 +140,24 @@ export function parseSlideMaster(
 }
 
 /** parse 済み theme root (`a:theme`) から `SourceTheme` を組み立てる。 */
-export function parseTheme(root: XmlNode | undefined, partPath: PartPath): SourceTheme {
+export function parseTheme(
+  root: XmlNode | undefined,
+  partPath: PartPath,
+  nextId: () => RawSidecarId,
+  orderedRoot?: readonly XmlOrderedNode[],
+): SourceTheme {
   const name = getAttr(root, "name");
   const themeElements = getChild(root, "themeElements");
   const colorScheme = parseColorScheme(getChild(themeElements, "clrScheme"));
   const fontScheme = parseFontScheme(getChild(themeElements, "fontScheme"));
+  const formatScheme = parseFormatScheme(getChild(themeElements, "fmtScheme"), nextId, orderedRoot);
 
   return {
     partPath,
     ...(name !== undefined ? { name } : {}),
     ...(colorScheme !== undefined ? { colorScheme } : {}),
     ...(fontScheme !== undefined ? { fontScheme } : {}),
+    ...(formatScheme !== undefined ? { formatScheme } : {}),
     handle: { partPath },
   };
 }
@@ -194,6 +225,129 @@ function parseFontScheme(fontScheme: XmlNode | undefined): SourceThemeFontScheme
     ...(isNonEmpty(minorLatin) ? { minorLatin } : {}),
   };
   return Object.keys(scheme).length > 0 ? scheme : undefined;
+}
+
+function parseFormatScheme(
+  fmtScheme: XmlNode | undefined,
+  nextId: () => RawSidecarId,
+  orderedRoot?: readonly XmlOrderedNode[],
+): SourceThemeFormatScheme | undefined {
+  if (fmtScheme === undefined) return undefined;
+  const orderedFmtScheme =
+    orderedRoot !== undefined ? navigateOrdered(orderedRoot, ["themeElements", "fmtScheme"]) : [];
+  const fillStyles = parseFillStyleList(
+    getChild(fmtScheme, "fillStyleLst"),
+    orderedFmtScheme,
+    "fillStyleLst",
+    nextId,
+  );
+  const backgroundFillStyles = parseFillStyleList(
+    getChild(fmtScheme, "bgFillStyleLst"),
+    orderedFmtScheme,
+    "bgFillStyleLst",
+    nextId,
+  );
+  const lineStyles = getChildArray(getChild(fmtScheme, "lnStyleLst"), "ln").flatMap((ln) => {
+    const line = parseLine(ln, nextId);
+    return line !== undefined ? [line] : [];
+  });
+  const effectStyles = getChildArray(getChild(fmtScheme, "effectStyleLst"), "effectStyle").map(
+    (effectStyle) => parseEffectList(getChild(effectStyle, "effectLst")),
+  );
+
+  if (
+    fillStyles.length === 0 &&
+    backgroundFillStyles.length === 0 &&
+    lineStyles.length === 0 &&
+    effectStyles.length === 0
+  ) {
+    return undefined;
+  }
+
+  return { fillStyles, lineStyles, effectStyles, backgroundFillStyles };
+}
+
+function parseFillStyleList(
+  list: XmlNode | undefined,
+  orderedFmtScheme: readonly XmlOrderedNode[] | undefined,
+  listName: string,
+  nextId: () => RawSidecarId,
+): SourceFill[] {
+  if (list === undefined) return [];
+  const orderedList = orderedFmtScheme?.find((node) => listName in node)?.[listName];
+  if (!Array.isArray(orderedList)) return [];
+  const orderedItems = orderedList as readonly XmlOrderedNode[];
+
+  const fills: SourceFill[] = [];
+  const tagCounters: Record<string, number> = {};
+  for (const orderedChild of orderedItems) {
+    const qualifiedName = Object.keys(orderedChild).find((key) => FILL_LOCAL_NAMES.has(key));
+    if (qualifiedName === undefined) continue;
+    const name = localName(qualifiedName);
+    const index = tagCounters[name] ?? 0;
+    tagCounters[name] = index + 1;
+    const values = getChildArray(list, name);
+    const value = values[index];
+    if (value === undefined) continue;
+    const fill = parseFill({ [qualifiedName]: value }, nextId);
+    if (fill !== undefined) fills.push(fill);
+  }
+  return fills;
+}
+
+function parseEffectList(effectList: XmlNode | undefined): SourceEffectList | undefined {
+  if (effectList === undefined) return undefined;
+  const outerShadow = parseOuterShadow(getChild(effectList, "outerShdw"));
+  const innerShadow = parseInnerShadow(getChild(effectList, "innerShdw"));
+  const glow = parseGlow(getChild(effectList, "glow"));
+  const softEdge = parseSoftEdge(getChild(effectList, "softEdge"));
+  const parsed: SourceEffectList = {
+    ...(outerShadow !== undefined ? { outerShadow } : {}),
+    ...(innerShadow !== undefined ? { innerShadow } : {}),
+    ...(glow !== undefined ? { glow } : {}),
+    ...(softEdge !== undefined ? { softEdge } : {}),
+  };
+  return Object.keys(parsed).length > 0 ? parsed : undefined;
+}
+
+function parseOuterShadow(node: XmlNode | undefined): SourceEffectList["outerShadow"] | undefined {
+  const color = parseColorElement(node);
+  if (node === undefined || color === undefined) return undefined;
+  return {
+    blurRadius: asEmu(numericAttr(node, "blurRad") ?? 0),
+    distance: asEmu(numericAttr(node, "dist") ?? 0),
+    direction: asOoxmlAngle(numericAttr(node, "dir") ?? 0),
+    color,
+    alignment: getAttr(node, "algn") ?? "b",
+    rotateWithShape: getAttr(node, "rotWithShape") !== "0",
+  };
+}
+
+function parseInnerShadow(node: XmlNode | undefined): SourceEffectList["innerShadow"] | undefined {
+  const color = parseColorElement(node);
+  if (node === undefined || color === undefined) return undefined;
+  return {
+    blurRadius: asEmu(numericAttr(node, "blurRad") ?? 0),
+    distance: asEmu(numericAttr(node, "dist") ?? 0),
+    direction: asOoxmlAngle(numericAttr(node, "dir") ?? 0),
+    color,
+  };
+}
+
+function parseGlow(node: XmlNode | undefined): SourceEffectList["glow"] | undefined {
+  const color = parseColorElement(node);
+  if (node === undefined || color === undefined) return undefined;
+  return {
+    radius: asEmu(numericAttr(node, "rad") ?? 0),
+    color,
+  };
+}
+
+function parseSoftEdge(node: XmlNode | undefined): SourceEffectList["softEdge"] | undefined {
+  if (node === undefined) return undefined;
+  return {
+    radius: asEmu(numericAttr(node, "rad") ?? 0),
+  };
 }
 
 function booleanAttr(node: XmlNode | undefined, name: string): boolean | undefined {

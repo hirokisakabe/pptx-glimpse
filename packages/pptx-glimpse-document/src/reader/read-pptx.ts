@@ -219,9 +219,11 @@ function readSlideHierarchy(
 
   const themes: SourceTheme[] = [];
   for (const themePath of themePaths.values()) {
-    const part = parsePartRoot(entries, themePath, "theme", diagnostics, false);
+    const part = parsePartRoot(entries, themePath, "theme", diagnostics, true);
     if (part === undefined) continue;
-    themes.push(parseTheme(part.root, themePath));
+    themes.push(
+      parseTheme(part.root, themePath, createSidecarIdFactory(themePath), part.orderedRoot),
+    );
   }
 
   return { slides, slideLayouts, slideMasters, themes };

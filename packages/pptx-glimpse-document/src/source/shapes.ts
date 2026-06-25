@@ -77,7 +77,87 @@ export interface SourceColorTransform {
 export type SourceFill =
   | { readonly kind: "none" }
   | { readonly kind: "solid"; readonly color: SourceColor }
+  | ({ readonly kind: "gradient"; readonly stops: readonly SourceGradientStop[] } & SourceGradient)
+  | {
+      readonly kind: "pattern";
+      readonly preset: string;
+      readonly foregroundColor: SourceColor;
+      readonly backgroundColor: SourceColor;
+    }
+  | {
+      readonly kind: "image";
+      readonly blipRelationshipId?: RelationshipId;
+      readonly tile?: SourceImageFillTile;
+    }
   | { readonly kind: "raw"; readonly raw: RawSidecar };
+
+export interface SourceGradientStop {
+  readonly position: number;
+  readonly color: SourceColor;
+}
+
+export type SourceGradient =
+  | {
+      readonly gradientType: "linear";
+      readonly angle: OoxmlAngle;
+    }
+  | {
+      readonly gradientType: "radial";
+      readonly centerX: number;
+      readonly centerY: number;
+    };
+
+export interface SourceImageFillTile {
+  readonly tx: Emu;
+  readonly ty: Emu;
+  readonly sx: number;
+  readonly sy: number;
+  readonly flip: "none" | "x" | "y" | "xy";
+  readonly align: string;
+}
+
+export interface SourceStyleReference {
+  readonly index: number;
+  readonly color?: SourceColor;
+}
+
+export interface SourceShapeStyle {
+  readonly fillRef?: SourceStyleReference;
+  readonly lineRef?: SourceStyleReference;
+  readonly effectRef?: SourceStyleReference;
+}
+
+export interface SourceEffectList {
+  readonly outerShadow?: SourceOuterShadow;
+  readonly innerShadow?: SourceInnerShadow;
+  readonly glow?: SourceGlow;
+  readonly softEdge?: SourceSoftEdge;
+}
+
+export interface SourceOuterShadow {
+  readonly blurRadius: Emu;
+  readonly distance: Emu;
+  readonly direction: OoxmlAngle;
+  readonly color: SourceColor;
+  readonly alignment: string;
+  readonly rotateWithShape: boolean;
+}
+
+export interface SourceInnerShadow {
+  readonly blurRadius: Emu;
+  readonly distance: Emu;
+  readonly direction: OoxmlAngle;
+  readonly color: SourceColor;
+}
+
+export interface SourceGlow {
+  readonly radius: Emu;
+  readonly color: SourceColor;
+}
+
+export interface SourceSoftEdge {
+  readonly radius: Emu;
+}
 
 /** simple solid line の outline (`a:ln`)。色と幅のみの最小表現。 */
 export interface SourceOutline {
@@ -185,6 +265,7 @@ export interface SourceShape {
   readonly geometry?: SourceGeometry;
   readonly fill?: SourceFill;
   readonly outline?: SourceOutline;
+  readonly style?: SourceShapeStyle;
   readonly textBody?: SourceTextBody;
   readonly placeholder?: SourcePlaceholder;
   readonly handle?: SourceHandle;
@@ -198,6 +279,7 @@ export interface SourceConnector {
   readonly transform?: SourceTransform;
   readonly geometry?: SourceGeometry;
   readonly outline?: SourceOutline;
+  readonly style?: SourceShapeStyle;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
 }
@@ -221,6 +303,13 @@ export interface SourceImageCrop {
   readonly bottom?: OoxmlPercent;
 }
 
+export interface SourceImageStretch {
+  readonly left: number;
+  readonly top: number;
+  readonly right: number;
+  readonly bottom: number;
+}
+
 /** image (`p:pic`)。blip は relationship id (`r:embed`) を未解決のまま保持する。 */
 export interface SourceImage {
   readonly kind: "image";
@@ -230,6 +319,8 @@ export interface SourceImage {
   /** `a:blip@r:embed` の relationship id。media part は computed view で解決する。 */
   readonly blipRelationshipId?: RelationshipId;
   readonly crop?: SourceImageCrop;
+  readonly stretch?: SourceImageStretch;
+  readonly tile?: SourceImageFillTile;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
 }

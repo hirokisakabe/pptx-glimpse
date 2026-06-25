@@ -144,11 +144,11 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
     expect(runSidecarNames).toContain("a:ea");
     expect(runSidecarNames).toContain("a:cs");
 
-    // 画像の `a:stretch` / blip 配下の `a:alphaModFix` も保持する。
+    // 画像の default `a:stretch` は typed に解釈し、blip 配下の `a:alphaModFix` は保持する。
     const slide2 = basic.slides.find((s) => s.partPath === "ppt/slides/slide2.xml");
     const image = slide2!.shapes.find((s): s is SourceImage => s.kind === "image");
     const imageSidecarNames = image?.rawSidecars?.map((sidecar) => sidecar.node.name) ?? [];
-    expect(imageSidecarNames).toContain("a:stretch");
+    expect(image?.stretch).toBeUndefined();
     expect(imageSidecarNames).toContain("a:alphaModFix");
   });
 
@@ -242,7 +242,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     });
   });
 
-  it("gradient fill と custom geometry を raw として保持する", () => {
+  it("gradient fill を typed source fill、custom geometry を raw として保持する", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:sp><p:nvSpPr><p:cNvPr id="11" name="Grad"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
@@ -253,8 +253,11 @@ describe("readPptx — typed shape detail (synthetic)", () => {
       ),
     );
     const shape = source.slides[0].shapes[0] as SourceShape;
-    // gradient fill は typed 化せず raw fill として保持する。
-    expect(shape.fill?.kind).toBe("raw");
+    expect(shape.fill).toMatchObject({
+      kind: "gradient",
+      gradientType: "linear",
+      stops: [{ position: 0, color: { kind: "srgb", hex: "000000" } }],
+    });
     // custGeom は raw sidecar として保持する。
     const names = shape.rawSidecars?.map((sidecar) => sidecar.node.name) ?? [];
     expect(names).toContain("a:custGeom");

@@ -5,6 +5,7 @@ import type {
   ColorMap,
   ColorScheme,
   ConnectorElement,
+  EffectList,
   Fill,
   Geometry,
   GroupElement,
@@ -31,6 +32,7 @@ import type {
   ComputedChartElement,
   ComputedColor,
   ComputedConnectorElement,
+  ComputedEffectList,
   ComputedElement,
   ComputedFill,
   ComputedGroupElement,
@@ -426,7 +428,7 @@ function adaptShape(
     fill: shape.fill !== undefined ? adaptFill(shape.fill, slide, diagnostics) : null,
     outline: shape.outline !== undefined ? adaptOutline(shape.outline, slide, diagnostics) : null,
     textBody: shape.textBody !== undefined ? adaptTextBody(shape.textBody) : null,
-    effects: null,
+    effects: shape.effects !== undefined ? adaptEffects(shape.effects) : null,
     ...(shape.sourceNode.placeholder?.type !== undefined
       ? { placeholderType: shape.sourceNode.placeholder.type }
       : {}),
@@ -434,6 +436,44 @@ function adaptShape(
       ? { placeholderIdx: shape.sourceNode.placeholder.index }
       : {}),
     ...(shape.sourceNode.name !== undefined ? { altText: shape.sourceNode.name } : {}),
+  };
+}
+
+function adaptEffects(effects: ComputedEffectList): EffectList {
+  return {
+    outerShadow:
+      effects.outerShadow !== undefined
+        ? {
+            blurRadius: toRendererEmu(effects.outerShadow.blurRadius),
+            distance: toRendererEmu(effects.outerShadow.distance),
+            direction: effects.outerShadow.direction,
+            color: adaptColor(effects.outerShadow.color),
+            alignment: effects.outerShadow.alignment,
+            rotateWithShape: effects.outerShadow.rotateWithShape,
+          }
+        : null,
+    innerShadow:
+      effects.innerShadow !== undefined
+        ? {
+            blurRadius: toRendererEmu(effects.innerShadow.blurRadius),
+            distance: toRendererEmu(effects.innerShadow.distance),
+            direction: effects.innerShadow.direction,
+            color: adaptColor(effects.innerShadow.color),
+          }
+        : null,
+    glow:
+      effects.glow !== undefined
+        ? {
+            radius: toRendererEmu(effects.glow.radius),
+            color: adaptColor(effects.glow.color),
+          }
+        : null,
+    softEdge:
+      effects.softEdge !== undefined
+        ? {
+            radius: toRendererEmu(effects.softEdge.radius),
+          }
+        : null,
   };
 }
 
@@ -469,8 +509,18 @@ function adaptImage(
         }
       : null,
     ...(image.sourceNode.name !== undefined ? { altText: image.sourceNode.name } : {}),
-    stretch: null,
-    tile: null,
+    stretch: image.sourceNode.stretch ?? null,
+    tile:
+      image.sourceNode.tile !== undefined
+        ? {
+            tx: toRendererEmu(image.sourceNode.tile.tx),
+            ty: toRendererEmu(image.sourceNode.tile.ty),
+            sx: image.sourceNode.tile.sx,
+            sy: image.sourceNode.tile.sy,
+            flip: image.sourceNode.tile.flip,
+            align: image.sourceNode.tile.align,
+          }
+        : null,
   };
 }
 
@@ -528,6 +578,42 @@ function adaptFill(
   if (fill.kind === "none") return { type: "none" };
   if (fill.kind === "solid") {
     return { type: "solid", color: adaptColor(fill.color) };
+  }
+  if (fill.kind === "gradient") {
+    return {
+      type: "gradient",
+      stops: fill.stops.map((stop) => ({ position: stop.position, color: adaptColor(stop.color) })),
+      angle: fill.angle ?? 0,
+      gradientType: fill.gradientType,
+      ...(fill.centerX !== undefined ? { centerX: fill.centerX } : {}),
+      ...(fill.centerY !== undefined ? { centerY: fill.centerY } : {}),
+    };
+  }
+  if (fill.kind === "pattern") {
+    return {
+      type: "pattern",
+      preset: fill.preset,
+      foregroundColor: adaptColor(fill.foregroundColor),
+      backgroundColor: adaptColor(fill.backgroundColor),
+    };
+  }
+  if (fill.kind === "image" && fill.media !== undefined) {
+    return {
+      type: "image",
+      imageData: uint8ArrayToBase64(fill.media.bytes),
+      mimeType: fill.media.contentType,
+      tile:
+        fill.tile !== undefined
+          ? {
+              tx: toRendererEmu(fill.tile.tx),
+              ty: toRendererEmu(fill.tile.ty),
+              sx: fill.tile.sx,
+              sy: fill.tile.sy,
+              flip: fill.tile.flip,
+              align: fill.tile.align,
+            }
+          : null,
+    };
   }
 
   diagnostics.push({

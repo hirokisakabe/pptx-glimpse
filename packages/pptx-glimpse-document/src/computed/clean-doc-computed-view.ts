@@ -16,6 +16,7 @@ import type {
   SourceCellBorders,
   SourceChart,
   SourceConnector,
+  SourceEffectList,
   SourceFill,
   SourceGroup,
   SourceImage,
@@ -102,6 +103,7 @@ export interface ComputedShapeElement extends ComputedElementBase {
   readonly geometry?: SourceShape["geometry"];
   readonly fill?: ComputedFill;
   readonly outline?: ComputedOutline;
+  readonly effects?: ComputedEffectList;
   readonly textBody?: ComputedTextBody;
   readonly placeholderMatch?: ComputedPlaceholderMatch;
 }
@@ -216,12 +218,69 @@ export type ComputedBackground =
 export type ComputedFill =
   | { readonly kind: "none"; readonly source: SourceFill }
   | { readonly kind: "solid"; readonly source: SourceFill; readonly color: ComputedColor }
+  | {
+      readonly kind: "gradient";
+      readonly source: SourceFill;
+      readonly stops: readonly ComputedGradientStop[];
+      readonly gradientType: "linear" | "radial";
+      readonly angle?: number;
+      readonly centerX?: number;
+      readonly centerY?: number;
+    }
+  | {
+      readonly kind: "pattern";
+      readonly source: SourceFill;
+      readonly preset: string;
+      readonly foregroundColor: ComputedColor;
+      readonly backgroundColor: ComputedColor;
+    }
+  | {
+      readonly kind: "image";
+      readonly source: SourceFill;
+      readonly relationship?: ComputedRelationship;
+      readonly media?: MediaPart;
+      readonly tile?: Extract<SourceFill, { readonly kind: "image" }>["tile"];
+    }
   | { readonly kind: "raw"; readonly source: SourceFill };
+
+export interface ComputedGradientStop {
+  readonly position: number;
+  readonly color: ComputedColor;
+}
 
 export interface ComputedOutline {
   readonly width?: Emu;
   readonly fill?: ComputedFill;
   readonly source: SourceOutline;
+}
+
+export interface ComputedEffectList {
+  readonly source: SourceEffectList;
+  readonly outerShadow?: ComputedOuterShadow;
+  readonly innerShadow?: ComputedInnerShadow;
+  readonly glow?: ComputedGlow;
+  readonly softEdge?: SourceEffectList["softEdge"];
+}
+
+export interface ComputedOuterShadow {
+  readonly blurRadius: Emu;
+  readonly distance: Emu;
+  readonly direction: number;
+  readonly color: ComputedColor;
+  readonly alignment: string;
+  readonly rotateWithShape: boolean;
+}
+
+export interface ComputedInnerShadow {
+  readonly blurRadius: Emu;
+  readonly distance: Emu;
+  readonly direction: number;
+  readonly color: ComputedColor;
+}
+
+export interface ComputedGlow {
+  readonly radius: Emu;
+  readonly color: ComputedColor;
 }
 
 export interface ComputedColor {
