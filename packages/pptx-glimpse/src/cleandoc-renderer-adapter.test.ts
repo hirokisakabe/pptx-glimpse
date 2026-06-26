@@ -97,7 +97,7 @@ describe("adaptComputedViewToRendererModel", () => {
                 fontFamilyCs: "Arial",
                 bold: true,
                 italic: false,
-                underline: true,
+                underline: false,
                 color: { hex: "#111111", alpha: 1 },
               },
             },
@@ -713,7 +713,11 @@ function buildSource(options: BuildSourceOptions = {}): CleanDocSource {
               },
               paragraphs: [
                 {
-                  properties: { align: "center", lineSpacingPts: 1200, level: 2 },
+                  properties: {
+                    align: "center",
+                    lineSpacing: { type: "pts", value: 1200 },
+                    level: 2,
+                  },
                   runs: [{ kind: "textRun", text: "Hello", properties: { bold: true } }],
                 },
               ],
@@ -757,7 +761,7 @@ function buildSource(options: BuildSourceOptions = {}): CleanDocSource {
           placeholder("Layout title", "ctrTitle", 1, {
             transform: transform(10, 20, 300, 40, { rotation: 120000, flipHorizontal: true }),
             geometry: { preset: "roundRect" },
-            textBody: textBody("", {
+            textBody: listStyleTextBody({
               fontSize: asPt(30),
               typeface: "Aptos",
               typefaceEa: "+mn-ea",
@@ -962,6 +966,20 @@ function textBody(
         runs: [{ kind: "textRun", text, properties: runProperties }],
       },
     ],
+  };
+}
+
+function listStyleTextBody(
+  runProperties: NonNullable<
+    SourceShape["textBody"]
+  >["paragraphs"][number]["runs"][number]["properties"],
+): NonNullable<SourceShape["textBody"]> {
+  return {
+    listStyle: {
+      defaultParagraph: { defaultRunProperties: runProperties },
+      levels: [],
+    },
+    paragraphs: [{ runs: [] }],
   };
 }
 

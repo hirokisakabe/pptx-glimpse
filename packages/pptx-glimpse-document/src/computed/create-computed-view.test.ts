@@ -141,7 +141,10 @@ describe("createComputedView", () => {
       height: 40,
     });
     expect(slideTitle.geometry).toEqual({ preset: "roundRect" });
-    expect(slideTitle.textBody?.paragraphs[0].properties).toEqual({ align: "center" });
+    expect(slideTitle.textBody?.paragraphs[0].properties).toEqual({
+      align: "center",
+      level: 0,
+    });
     expect(slideTitle.textBody?.paragraphs[0].runs[0]).toEqual({
       text: "Hello",
       properties: {
@@ -723,12 +726,15 @@ function buildSource(): CleanDocSource {
   const masterTitle = placeholder("Master title", "title", 1, {
     transform: transform(100, 200, 300, 400),
     geometry: { preset: "rect" },
-    textBody: textBody("", { fontSize: asPt(20), color: { kind: "srgb", hex: "222222" } }),
+    textBody: listStyleTextBody({
+      fontSize: asPt(20),
+      color: { kind: "srgb", hex: "222222" },
+    }),
   });
   const layoutTitle = placeholder("Layout title", "ctrTitle", 1, {
     transform: transform(10, 20, 300, 40),
     geometry: { preset: "roundRect" },
-    textBody: textBody("", {
+    textBody: listStyleTextBody({
       fontSize: asPt(30),
       typeface: "Aptos",
       color: { kind: "srgb", hex: "111111" },
@@ -1062,5 +1068,14 @@ function textBody(text: string, runProperties: SourceRunProperties = {}): Source
         runs: [{ kind: "textRun" as const, text, properties: runProperties }],
       },
     ],
+  };
+}
+
+function listStyleTextBody(runProperties: SourceRunProperties = {}): SourceTextBody {
+  return {
+    listStyle: {
+      levels: [{ align: "center", defaultRunProperties: runProperties }],
+    },
+    paragraphs: [{ runs: [] }],
   };
 }

@@ -61,7 +61,6 @@ describe("Document path zero-diff default switch gate", { timeout: 60000 }, () =
         const input = readFileSync(fixturePath);
         const options = {
           width: DOCUMENT_PATH_VRT_RENDER_WIDTH,
-          skipSystemFonts: true,
         };
         const parserResults = await convertPptxToPng(input, options);
         const documentResults = await convertPptxToPngViaDocumentPath(input, options);

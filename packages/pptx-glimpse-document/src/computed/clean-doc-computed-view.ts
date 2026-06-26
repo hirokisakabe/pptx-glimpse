@@ -321,8 +321,15 @@ export interface ComputedTextBody {
 }
 
 export interface ComputedParagraph {
-  readonly properties?: SourceParagraphProperties;
+  readonly properties?: ComputedParagraphProperties;
   readonly runs: readonly ComputedTextRun[];
+}
+
+export interface ComputedParagraphProperties extends Omit<
+  SourceParagraphProperties,
+  "bulletColor" | "defaultRunProperties"
+> {
+  readonly bulletColor?: ComputedColor;
 }
 
 export interface ComputedTextRun {

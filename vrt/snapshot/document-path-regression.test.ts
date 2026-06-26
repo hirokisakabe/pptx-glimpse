@@ -74,7 +74,6 @@ describe("Document path Visual Regression Tests", { timeout: 60000 }, () => {
         const input = readFileSync(fixturePath);
         const options = {
           width: DOCUMENT_PATH_VRT_RENDER_WIDTH,
-          skipSystemFonts: true,
         };
         const currentResults = await convertPptxToPng(input, options);
         const documentResults = await convertPptxToPngViaDocumentPath(input, options);

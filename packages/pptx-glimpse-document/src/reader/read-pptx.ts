@@ -39,6 +39,7 @@ import type {
 import { asEmu, asPartPath, asRelationshipId } from "../source/index.js";
 import { createSidecarIdFactory } from "./raw-node.js";
 import { parseSlide, parseSlideLayout, parseSlideMaster, parseTheme } from "./slide-parts.js";
+import { parseTextStyle } from "./text.js";
 import {
   getAttr,
   getChild,
@@ -407,6 +408,7 @@ function readPresentation(
   }
 
   const slideSize = readSlideSize(root);
+  const defaultTextStyle = parseTextStyle(getChild(root, "defaultTextStyle"));
   const presentationRels = relationships.find(
     (rel) => rel.sourcePartPath === presentationPath,
   )?.relationships;
@@ -444,6 +446,7 @@ function readPresentation(
   return {
     partPath: presentationPartPath,
     ...(slideSize !== undefined ? { slideSize } : {}),
+    ...(defaultTextStyle !== undefined ? { defaultTextStyle } : {}),
     slidePartPaths,
     handle: { partPath: presentationPartPath },
   };

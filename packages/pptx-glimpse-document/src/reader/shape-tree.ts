@@ -248,7 +248,9 @@ function parseShapeTreeNode(
     const orderedGroupChildren = orderedNode?.[local] as readonly XmlOrderedNode[] | undefined;
     return parseGroup(node, partPath, nextId, orderingSlot, orderedGroupChildren);
   }
-  if (local === "graphicFrame") return parseGraphicFrame(node, partPath, nextId, orderingSlot);
+  if (local === "graphicFrame") {
+    return parseGraphicFrame(node, partPath, nextId, orderingSlot, orderedNode);
+  }
   return parseRawShapeNode(`p:${local}`, node, partPath, nextId, orderingSlot);
 }
 
@@ -272,7 +274,14 @@ function parseShape(
   const outline = parseOutline(spPr, nextId);
   const effects = parseEffectList(getChild(spPr, "effectLst"));
   const style = parseShapeStyle(getChild(sp, "style"));
-  const textBody = parseTextBody(getChild(sp, "txBody"), partPath, nextId, nodeId, orderingSlot);
+  const textBody = parseTextBody(
+    getChild(sp, "txBody"),
+    partPath,
+    nextId,
+    nodeId,
+    orderingSlot,
+    orderedNestedChildChildren(orderedNode, "sp", "txBody"),
+  );
 
   const rawSidecars = [
     ...collectUnknownSidecars(sp, KNOWN_SHAPE_CHILDREN, nextId),
@@ -495,6 +504,7 @@ function parseGraphicFrame(
   partPath: PartPath,
   nextId: () => RawSidecarId,
   orderingSlot: number,
+  orderedNode?: XmlOrderedNode,
 ): SourceShapeNode {
   const graphic = getChild(graphicFrame, "graphic");
   const graphicData = getChild(graphic, "graphicData");
@@ -513,7 +523,17 @@ function parseGraphicFrame(
     return parseRawShapeNode("p:graphicFrame", graphicFrame, partPath, nextId, orderingSlot);
   }
 
-  const parsedTable = parseTable(table, graphicFrame, partPath, nextId, orderingSlot);
+  const orderedGraphicChildren = orderedNestedChildChildren(orderedNode, "graphicFrame", "graphic");
+  const orderedGraphicDataChildren = orderedChildChildren(orderedGraphicChildren, "graphicData");
+  const orderedTableChildren = orderedChildChildren(orderedGraphicDataChildren, "tbl");
+  const parsedTable = parseTable(
+    table,
+    graphicFrame,
+    partPath,
+    nextId,
+    orderingSlot,
+    orderedTableChildren,
+  );
   if (parsedTable === undefined) {
     return parseRawShapeNode("p:graphicFrame", graphicFrame, partPath, nextId, orderingSlot);
   }
@@ -671,6 +691,7 @@ function parseTable(
   partPath: PartPath,
   nextId: () => RawSidecarId,
   orderingSlot: number,
+  orderedTableChildren?: readonly XmlOrderedNode[],
 ): SourceTable | undefined {
   const columns = parseTableColumns(getChild(tbl, "tblGrid"));
   if (columns.length === 0) return undefined;
@@ -685,7 +706,7 @@ function parseTable(
   const graphicData = getChild(graphic, "graphicData");
   const transform = parseTransform(graphicFrame);
 
-  const rows = parseTableRows(tbl, partPath, nextId, nodeId, orderingSlot);
+  const rows = parseTableRows(tbl, partPath, nextId, nodeId, orderingSlot, orderedTableChildren);
   const rawSidecars = [
     ...collectUnknownSidecars(graphicFrame, KNOWN_GRAPHIC_FRAME_CHILDREN, nextId),
     ...collectUnknownSidecars(graphic, KNOWN_GRAPHIC_CHILDREN, nextId),
@@ -718,12 +739,24 @@ function parseTableRows(
   nextId: () => RawSidecarId,
   tableNodeId: SourceNodeId | undefined,
   tableOrderingSlot: number,
+  orderedTableChildren?: readonly XmlOrderedNode[],
 ): SourceTableRow[] {
+  const orderedRows = orderedChildChildrenList(orderedTableChildren, "tr");
   return getChildArray(tbl, "tr").map((tr, rowIndex) => ({
     height: emuAttr(tr, "h"),
-    cells: getChildArray(tr, "tc").map((tc, cellIndex) =>
-      parseTableCell(tc, partPath, nextId, tableNodeId, tableOrderingSlot, rowIndex, cellIndex),
-    ),
+    cells: getChildArray(tr, "tc").map((tc, cellIndex) => {
+      const orderedCells = orderedChildChildrenList(orderedRows[rowIndex], "tc");
+      return parseTableCell(
+        tc,
+        partPath,
+        nextId,
+        tableNodeId,
+        tableOrderingSlot,
+        rowIndex,
+        cellIndex,
+        orderedCells[cellIndex],
+      );
+    }),
   }));
 }
 
@@ -735,6 +768,7 @@ function parseTableCell(
   tableOrderingSlot: number,
   rowIndex: number,
   cellIndex: number,
+  orderedCellChildren?: readonly XmlOrderedNode[],
 ): SourceTableCell {
   const tcPr = getChild(tc, "tcPr");
   const textOrderingSlot = tableOrderingSlot * 1_000_000_000 + rowIndex * 1_000_000 + cellIndex;
@@ -744,6 +778,7 @@ function parseTableCell(
     nextId,
     tableNodeId,
     textOrderingSlot,
+    orderedChildChildren(orderedCellChildren, "txBody"),
   );
   const fill = parseFill(tcPr, nextId);
   const borders = parseCellBorders(tcPr, nextId);
@@ -916,6 +951,23 @@ function orderedChildChildren(
   const key = Object.keys(child).find((candidate) => candidate !== ":@");
   const value = key !== undefined ? child[key] : undefined;
   return Array.isArray(value) ? (value as readonly XmlOrderedNode[]) : undefined;
+}
+
+function orderedChildChildrenList(
+  parent: readonly XmlOrderedNode[] | undefined,
+  childLocalName: string,
+): readonly (readonly XmlOrderedNode[] | undefined)[] {
+  if (parent === undefined) return [];
+  return parent
+    .filter((entry) => {
+      const key = Object.keys(entry).find((candidate) => candidate !== ":@");
+      return key !== undefined && localName(key) === childLocalName;
+    })
+    .map((entry) => {
+      const key = Object.keys(entry).find((candidate) => candidate !== ":@");
+      const value = key !== undefined ? entry[key] : undefined;
+      return Array.isArray(value) ? (value as readonly XmlOrderedNode[]) : undefined;
+    });
 }
 
 function orderedNestedChildChildren(
