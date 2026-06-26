@@ -276,6 +276,29 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     });
   });
 
+  it("interleaved bullet pPr の分割時も br / fld run を保持する", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<p:sp><p:nvSpPr><p:cNvPr id="17" name="Interleaved text"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="1" y="2"/><a:ext cx="3" cy="4"/></a:xfrm></p:spPr>` +
+          `<p:txBody><a:bodyPr/><a:p>` +
+          `<a:pPr><a:buChar char="&#x2022;"/></a:pPr>` +
+          `<a:r><a:t>first</a:t></a:r>` +
+          `<a:br/>` +
+          `<a:r><a:t>after break</a:t></a:r>` +
+          `<a:pPr><a:buChar char="&#x25E6;"/></a:pPr>` +
+          `<a:fld id="{00000000-0000-0000-0000-000000000000}" type="slidenum"><a:t>field</a:t></a:fld>` +
+          `</a:p></p:txBody>` +
+          `</p:sp>`,
+      ),
+    );
+
+    const shape = source.slides[0].shapes[0] as SourceShape;
+    expect(
+      shape.textBody?.paragraphs.map((paragraph) => paragraph.runs.map((run) => run.text)),
+    ).toEqual([["first", "\n", "after break"], ["field"]]);
+  });
+
   it("spAutoFit を typed source body property として読む", () => {
     const source = readPptx(
       buildSyntheticPptx(

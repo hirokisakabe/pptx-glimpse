@@ -188,10 +188,28 @@ function splitInterleavedParagraph(
 ): SourceParagraph[] {
   const pPrList = getChildArray(p, "pPr");
   const rList = getChildArray(p, "r");
-  const groups: { pPrIndex: number; runIndices: number[] }[] = [];
-  let currentGroup: { pPrIndex: number; runIndices: number[] } | undefined;
+  const fldList = getChildArray(p, "fld");
+  const brList = getChildArray(p, "br");
+  const groups: {
+    pPrIndex: number;
+    rNodes: XmlNode[];
+    fldNodes: XmlNode[];
+    brNodes: XmlNode[];
+    orderedChildren: XmlOrderedNode[];
+  }[] = [];
+  let currentGroup:
+    | {
+        pPrIndex: number;
+        rNodes: XmlNode[];
+        fldNodes: XmlNode[];
+        brNodes: XmlNode[];
+        orderedChildren: XmlOrderedNode[];
+      }
+    | undefined;
   let pPrCounter = 0;
   let runCounter = 0;
+  let fieldCounter = 0;
+  let breakCounter = 0;
 
   for (const child of orderedChildren) {
     const tag = orderedLocalName(child);
@@ -202,13 +220,50 @@ function splitInterleavedParagraph(
         (getChild(pPr, "buChar") !== undefined || getChild(pPr, "buAutoNum") !== undefined);
       if (hasBullet || currentGroup === undefined) {
         if (currentGroup !== undefined) groups.push(currentGroup);
-        currentGroup = { pPrIndex: pPrCounter, runIndices: [] };
+        currentGroup = {
+          pPrIndex: pPrCounter,
+          rNodes: [],
+          fldNodes: [],
+          brNodes: [],
+          orderedChildren: [child],
+        };
+      } else {
+        currentGroup.orderedChildren.push(child);
       }
       pPrCounter++;
     } else if (tag === "r") {
-      currentGroup ??= { pPrIndex: -1, runIndices: [] };
-      currentGroup.runIndices.push(runCounter);
+      currentGroup ??= {
+        pPrIndex: -1,
+        rNodes: [],
+        fldNodes: [],
+        brNodes: [],
+        orderedChildren: [],
+      };
+      currentGroup.orderedChildren.push(child);
+      if (rList[runCounter] !== undefined) currentGroup.rNodes.push(rList[runCounter]);
       runCounter++;
+    } else if (tag === "fld") {
+      currentGroup ??= {
+        pPrIndex: -1,
+        rNodes: [],
+        fldNodes: [],
+        brNodes: [],
+        orderedChildren: [],
+      };
+      currentGroup.orderedChildren.push(child);
+      if (fldList[fieldCounter] !== undefined) currentGroup.fldNodes.push(fldList[fieldCounter]);
+      fieldCounter++;
+    } else if (tag === "br") {
+      currentGroup ??= {
+        pPrIndex: -1,
+        rNodes: [],
+        fldNodes: [],
+        brNodes: [],
+        orderedChildren: [],
+      };
+      currentGroup.orderedChildren.push(child);
+      if (brList[breakCounter] !== undefined) currentGroup.brNodes.push(brList[breakCounter]);
+      breakCounter++;
     }
   }
   if (currentGroup !== undefined) groups.push(currentGroup);
@@ -216,7 +271,9 @@ function splitInterleavedParagraph(
   return groups.map((group, groupIndex) => {
     const synthetic: XmlNode = {};
     if (group.pPrIndex >= 0) synthetic.pPr = pPrList[group.pPrIndex];
-    synthetic.r = group.runIndices.map((index) => rList[index]);
+    synthetic.r = group.rNodes;
+    synthetic.fld = group.fldNodes;
+    synthetic.br = group.brNodes;
     if (groupIndex === groups.length - 1 && getChild(p, "endParaRPr") !== undefined) {
       synthetic.endParaRPr = getChild(p, "endParaRPr");
     }
@@ -227,6 +284,7 @@ function splitInterleavedParagraph(
       ownerNodeId,
       ownerOrderingSlot,
       paragraphIndex + groupIndex,
+      group.orderedChildren,
     );
     if (groupIndex < groups.length - 1 && paragraph.runs.length > 0) {
       const lastRun = paragraph.runs[paragraph.runs.length - 1];
