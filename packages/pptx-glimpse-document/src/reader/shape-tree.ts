@@ -272,7 +272,14 @@ function parseShape(
   const outline = parseOutline(spPr, nextId);
   const effects = parseEffectList(getChild(spPr, "effectLst"));
   const style = parseShapeStyle(getChild(sp, "style"));
-  const textBody = parseTextBody(getChild(sp, "txBody"), partPath, nextId, nodeId, orderingSlot);
+  const textBody = parseTextBody(
+    getChild(sp, "txBody"),
+    partPath,
+    nextId,
+    nodeId,
+    orderingSlot,
+    orderedNestedChildChildren(orderedNode, "sp", "txBody"),
+  );
 
   const rawSidecars = [
     ...collectUnknownSidecars(sp, KNOWN_SHAPE_CHILDREN, nextId),

@@ -234,6 +234,8 @@ export interface SourceRunProperties {
   readonly bold?: boolean;
   readonly italic?: boolean;
   readonly underline?: boolean;
+  readonly strikethrough?: boolean;
+  readonly baseline?: number;
   /** フォントサイズ。OOXML-domain では pt で保持する。 */
   readonly fontSize?: Pt;
   /** latin typeface 名 (theme token も含めて未解決のまま保持)。 */
@@ -244,6 +246,26 @@ export interface SourceRunProperties {
   readonly typefaceCs?: string;
   readonly color?: SourceColor;
 }
+
+export type SourceAutoNumScheme =
+  | "arabicPeriod"
+  | "arabicParenR"
+  | "romanUcPeriod"
+  | "romanLcPeriod"
+  | "alphaUcPeriod"
+  | "alphaLcPeriod"
+  | "alphaLcParenR"
+  | "alphaUcParenR"
+  | "arabicPlain";
+
+export type SourceBulletType =
+  | { readonly type: "none" }
+  | { readonly type: "char"; readonly char: string }
+  | { readonly type: "autoNum"; readonly scheme: SourceAutoNumScheme; readonly startAt: number };
+
+export type SourceSpacingValue =
+  | { readonly type: "pts"; readonly value: HundredthPt }
+  | { readonly type: "pct"; readonly value: number };
 
 /** text run (`a:r`)。 */
 export interface SourceTextRun {
@@ -256,13 +278,27 @@ export interface SourceTextRun {
 
 export type SourceTextAlign = "left" | "center" | "right" | "justify";
 
+export interface SourceTabStop {
+  readonly position: Emu;
+  readonly alignment: "l" | "ctr" | "r" | "dec";
+}
+
 /** paragraph (`a:p`) の段落プロパティ (`a:pPr`) の最小 subset。 */
 export interface SourceParagraphProperties {
   readonly align?: SourceTextAlign;
   /** インデントレベル (`a:pPr@lvl`)。 */
   readonly level?: number;
-  /** 行間 (`a:spcPts`)。 */
-  readonly lineSpacingPts?: HundredthPt;
+  readonly lineSpacing?: SourceSpacingValue;
+  readonly spaceBefore?: SourceSpacingValue;
+  readonly spaceAfter?: SourceSpacingValue;
+  readonly marginLeft?: Emu;
+  readonly indent?: Emu;
+  readonly bullet?: SourceBulletType;
+  readonly bulletFont?: string;
+  readonly bulletColor?: SourceColor;
+  readonly bulletSizePct?: number;
+  readonly tabStops?: readonly SourceTabStop[];
+  readonly defaultRunProperties?: SourceRunProperties;
 }
 
 /** paragraph (`a:p`)。 */
@@ -307,8 +343,14 @@ export interface SourceTextBodyProperties {
 export interface SourceTextBody {
   readonly paragraphs: readonly SourceParagraph[];
   readonly properties?: SourceTextBodyProperties;
+  readonly listStyle?: SourceTextStyle;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
+}
+
+export interface SourceTextStyle {
+  readonly defaultParagraph?: SourceParagraphProperties;
+  readonly levels: readonly (SourceParagraphProperties | undefined)[];
 }
 
 /** simple shape (`p:sp`)。 */

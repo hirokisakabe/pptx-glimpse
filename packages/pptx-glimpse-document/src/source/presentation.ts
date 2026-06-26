@@ -16,6 +16,7 @@ import type {
   SourceFill,
   SourceOutline,
   SourceShapeNode,
+  SourceTextStyle,
 } from "./shapes.js";
 import type { Emu } from "./units.js";
 
@@ -90,9 +91,16 @@ export interface SourceSlideMaster {
   readonly background?: SourceBackground;
   /** master の `p:clrMap`。 */
   readonly colorMap?: SourceColorMap;
+  readonly txStyles?: SourceMasterTextStyles;
   readonly shapes: readonly SourceShapeNode[];
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
+}
+
+export interface SourceMasterTextStyles {
+  readonly titleStyle?: SourceTextStyle;
+  readonly bodyStyle?: SourceTextStyle;
+  readonly otherStyle?: SourceTextStyle;
 }
 
 /** slide layout part。親 master を参照する。 */
@@ -131,6 +139,7 @@ export interface SourceSlide {
 export interface SourcePresentation {
   readonly partPath: PartPath;
   readonly slideSize?: SlideSize;
+  readonly defaultTextStyle?: SourceTextStyle;
   /** `p:sldIdLst` の順序を反映した slide part path 列。 */
   readonly slidePartPaths: readonly PartPath[];
   readonly handle?: SourceHandle;

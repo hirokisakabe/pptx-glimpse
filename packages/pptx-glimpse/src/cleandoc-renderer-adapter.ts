@@ -19,6 +19,7 @@ import type {
   Slide,
   SlideElement,
   SlideSize,
+  SpacingValue,
   TableCell,
   TableElement,
   TextBody,
@@ -431,8 +432,8 @@ function adaptShape(
     outline: shape.outline !== undefined ? adaptOutline(shape.outline, slide, diagnostics) : null,
     textBody: shape.textBody !== undefined ? adaptTextBody(shape.textBody) : null,
     effects: shape.effects !== undefined ? adaptEffects(shape.effects) : null,
-    ...(shape.sourceNode.placeholder?.type !== undefined
-      ? { placeholderType: shape.sourceNode.placeholder.type }
+    ...(shape.sourceNode.placeholder !== undefined
+      ? { placeholderType: shape.sourceNode.placeholder.type ?? "body" }
       : {}),
     ...(shape.sourceNode.placeholder?.index !== undefined
       ? { placeholderIdx: shape.sourceNode.placeholder.index }
@@ -736,20 +737,35 @@ function adaptParagraphProperties(
   return {
     alignment: properties?.align !== undefined ? adaptAlignment(properties.align) : null,
     lineSpacing:
-      properties?.lineSpacingPts !== undefined
-        ? { type: "pts", value: asHundredthPt(Number(properties.lineSpacingPts)) }
-        : null,
-    spaceBefore: { type: "pts", value: asHundredthPt(0) },
-    spaceAfter: { type: "pts", value: asHundredthPt(0) },
+      properties?.lineSpacing !== undefined ? adaptSpacing(properties.lineSpacing) : null,
+    spaceBefore:
+      properties?.spaceBefore !== undefined
+        ? adaptSpacing(properties.spaceBefore)
+        : { type: "pts", value: asHundredthPt(0) },
+    spaceAfter:
+      properties?.spaceAfter !== undefined
+        ? adaptSpacing(properties.spaceAfter)
+        : { type: "pts", value: asHundredthPt(0) },
     level: properties?.level ?? 0,
-    bullet: null,
-    bulletFont: null,
-    bulletColor: null,
-    bulletSizePct: null,
-    marginLeft: null,
-    indent: null,
-    tabStops: [],
+    bullet: properties?.bullet ?? null,
+    bulletFont: properties?.bulletFont ?? null,
+    bulletColor: properties?.bulletColor !== undefined ? adaptColor(properties.bulletColor) : null,
+    bulletSizePct: properties?.bulletSizePct ?? null,
+    marginLeft: properties?.marginLeft !== undefined ? toRendererEmu(properties.marginLeft) : null,
+    indent: properties?.indent !== undefined ? toRendererEmu(properties.indent) : null,
+    tabStops:
+      properties?.tabStops?.map((tab) => ({
+        position: toRendererEmu(tab.position),
+        alignment: tab.alignment,
+      })) ?? [],
   };
+}
+
+function adaptSpacing(
+  spacing: NonNullable<NonNullable<ComputedParagraph["properties"]>["lineSpacing"]>,
+): SpacingValue {
+  if (spacing.type === "pts") return { type: "pts", value: asHundredthPt(Number(spacing.value)) };
+  return { type: "pct", value: spacing.value };
 }
 
 function adaptAlignment(
@@ -770,9 +786,9 @@ function adaptRunProperties(properties: ComputedRunProperties | undefined): RunP
     bold: properties?.bold ?? false,
     italic: properties?.italic ?? false,
     underline: properties?.underline ?? false,
-    strikethrough: false,
+    strikethrough: properties?.strikethrough ?? false,
     color: properties?.color !== undefined ? adaptColor(properties.color) : null,
-    baseline: 0,
+    baseline: properties?.baseline ?? 0,
     hyperlink: null,
     outline: null,
   };

@@ -10,14 +10,17 @@
 import type {
   PartPath,
   RawSidecarId,
+  SourceAutoNumScheme,
   SourceNodeId,
   SourceParagraph,
   SourceParagraphProperties,
   SourceRunProperties,
+  SourceSpacingValue,
   SourceTextAlign,
   SourceTextBody,
   SourceTextBodyProperties,
   SourceTextRun,
+  SourceTextStyle,
   SourceTextVerticalType,
   SourceTextWrap,
   SourceVerticalAnchor,
@@ -26,10 +29,24 @@ import { asEmu, asHundredthPt, asPt, asSourceNodeId } from "../source/index.js";
 import { parseColorElement } from "./drawing.js";
 import { isTrue, numericAttr } from "./drawing.js";
 import { collectUnknownSidecars } from "./raw-node.js";
-import { getAttr, getChild, getChildArray, getChildText, type XmlNode } from "./xml.js";
+import {
+  getAttr,
+  getChild,
+  getChildArray,
+  getChildText,
+  localName,
+  type XmlNode,
+  type XmlOrderedNode,
+} from "./xml.js";
 
 const KNOWN_TXBODY_CHILDREN: ReadonlySet<string> = new Set(["bodyPr", "lstStyle", "p"]);
-const KNOWN_PARAGRAPH_CHILDREN: ReadonlySet<string> = new Set(["pPr", "r"]);
+const KNOWN_PARAGRAPH_CHILDREN: ReadonlySet<string> = new Set([
+  "pPr",
+  "r",
+  "fld",
+  "br",
+  "endParaRPr",
+]);
 const KNOWN_RUN_CHILDREN: ReadonlySet<string> = new Set(["rPr", "t"]);
 const KNOWN_RUN_PROPERTY_CHILDREN: ReadonlySet<string> = new Set([
   "latin",
@@ -61,6 +78,18 @@ const VERTICAL_VALUES = new Set([
   "mongolianVert",
 ]);
 
+const VALID_AUTO_NUM_SCHEMES = new Set([
+  "arabicPeriod",
+  "arabicParenR",
+  "romanUcPeriod",
+  "romanLcPeriod",
+  "alphaUcPeriod",
+  "alphaLcPeriod",
+  "alphaLcParenR",
+  "alphaUcParenR",
+  "arabicPlain",
+]);
+
 /** `p:txBody` を読む。`txBody` が無い shape では undefined。 */
 export function parseTextBody(
   txBody: XmlNode | undefined,
@@ -68,21 +97,148 @@ export function parseTextBody(
   nextId: () => RawSidecarId,
   ownerNodeId: SourceNodeId | undefined,
   ownerOrderingSlot: number,
+  orderedTxBody?: readonly XmlOrderedNode[],
 ): SourceTextBody | undefined {
   if (!txBody) return undefined;
 
   const properties = parseBodyProperties(getChild(txBody, "bodyPr"));
-  const paragraphs = getChildArray(txBody, "p").map((p, paragraphIndex) =>
-    parseParagraph(p, partPath, nextId, ownerNodeId, ownerOrderingSlot, paragraphIndex),
-  );
+  const listStyle = parseTextStyle(getChild(txBody, "lstStyle"));
+  const orderedParagraphs = orderedTxBody
+    ?.filter((child) => orderedLocalName(child) === "p")
+    .map((child) => {
+      const key = orderedKey(child);
+      const value = key !== undefined ? child[key] : undefined;
+      return Array.isArray(value) ? (value as readonly XmlOrderedNode[]) : undefined;
+    });
+  const paragraphs = getChildArray(txBody, "p").flatMap((p, paragraphIndex) => {
+    const orderedChildren = orderedParagraphs?.[paragraphIndex];
+    if (orderedChildren !== undefined && hasMultipleBulletPPr(p, orderedChildren)) {
+      return splitInterleavedParagraph(
+        p,
+        orderedChildren,
+        partPath,
+        nextId,
+        ownerNodeId,
+        ownerOrderingSlot,
+        paragraphIndex,
+      );
+    }
+    return [
+      parseParagraph(
+        p,
+        partPath,
+        nextId,
+        ownerNodeId,
+        ownerOrderingSlot,
+        paragraphIndex,
+        orderedChildren,
+      ),
+    ];
+  });
   const rawSidecars = collectUnknownSidecars(txBody, KNOWN_TXBODY_CHILDREN, nextId);
 
   return {
     paragraphs,
     ...(properties !== undefined ? { properties } : {}),
+    ...(listStyle !== undefined ? { listStyle } : {}),
     handle: { partPath },
     ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
   };
+}
+
+export function parseTextStyle(node: XmlNode | undefined): SourceTextStyle | undefined {
+  if (node === undefined) return undefined;
+  const defaultParagraph = parseParagraphProperties(getChild(node, "defPPr"));
+  const levels = Array.from({ length: 9 }, (_, index) =>
+    parseParagraphProperties(getChild(node, `lvl${index + 1}pPr`)),
+  );
+  if (defaultParagraph === undefined && levels.every((level) => level === undefined)) {
+    return undefined;
+  }
+  return { ...(defaultParagraph !== undefined ? { defaultParagraph } : {}), levels };
+}
+
+function hasMultipleBulletPPr(p: XmlNode, orderedChildren: readonly XmlOrderedNode[]): boolean {
+  const pPrList = getChildArray(p, "pPr");
+  let bulletPPrCount = 0;
+  let pPrCounter = 0;
+  for (const child of orderedChildren) {
+    if (orderedLocalName(child) !== "pPr") continue;
+    const pPr = pPrList[pPrCounter];
+    if (
+      pPr !== undefined &&
+      (getChild(pPr, "buChar") !== undefined || getChild(pPr, "buAutoNum") !== undefined)
+    ) {
+      bulletPPrCount++;
+      if (bulletPPrCount >= 2) return true;
+    }
+    pPrCounter++;
+  }
+  return false;
+}
+
+function splitInterleavedParagraph(
+  p: XmlNode,
+  orderedChildren: readonly XmlOrderedNode[],
+  partPath: PartPath,
+  nextId: () => RawSidecarId,
+  ownerNodeId: SourceNodeId | undefined,
+  ownerOrderingSlot: number,
+  paragraphIndex: number,
+): SourceParagraph[] {
+  const pPrList = getChildArray(p, "pPr");
+  const rList = getChildArray(p, "r");
+  const groups: { pPrIndex: number; runIndices: number[] }[] = [];
+  let currentGroup: { pPrIndex: number; runIndices: number[] } | undefined;
+  let pPrCounter = 0;
+  let runCounter = 0;
+
+  for (const child of orderedChildren) {
+    const tag = orderedLocalName(child);
+    if (tag === "pPr") {
+      const pPr = pPrList[pPrCounter];
+      const hasBullet =
+        pPr !== undefined &&
+        (getChild(pPr, "buChar") !== undefined || getChild(pPr, "buAutoNum") !== undefined);
+      if (hasBullet || currentGroup === undefined) {
+        if (currentGroup !== undefined) groups.push(currentGroup);
+        currentGroup = { pPrIndex: pPrCounter, runIndices: [] };
+      }
+      pPrCounter++;
+    } else if (tag === "r") {
+      currentGroup ??= { pPrIndex: -1, runIndices: [] };
+      currentGroup.runIndices.push(runCounter);
+      runCounter++;
+    }
+  }
+  if (currentGroup !== undefined) groups.push(currentGroup);
+
+  return groups.map((group, groupIndex) => {
+    const synthetic: XmlNode = {};
+    if (group.pPrIndex >= 0) synthetic.pPr = pPrList[group.pPrIndex];
+    synthetic.r = group.runIndices.map((index) => rList[index]);
+    if (groupIndex === groups.length - 1 && getChild(p, "endParaRPr") !== undefined) {
+      synthetic.endParaRPr = getChild(p, "endParaRPr");
+    }
+    const paragraph = parseParagraph(
+      synthetic,
+      partPath,
+      nextId,
+      ownerNodeId,
+      ownerOrderingSlot,
+      paragraphIndex + groupIndex,
+    );
+    if (groupIndex < groups.length - 1 && paragraph.runs.length > 0) {
+      const lastRun = paragraph.runs[paragraph.runs.length - 1];
+      if (lastRun.text.endsWith("\n")) {
+        return {
+          ...paragraph,
+          runs: [...paragraph.runs.slice(0, -1), { ...lastRun, text: lastRun.text.slice(0, -1) }],
+        };
+      }
+    }
+    return paragraph;
+  });
 }
 
 function parseBodyProperties(bodyPr: XmlNode | undefined): SourceTextBodyProperties | undefined {
@@ -144,10 +300,17 @@ function parseParagraph(
   ownerNodeId: SourceNodeId | undefined,
   ownerOrderingSlot: number,
   paragraphIndex: number,
+  orderedChildren?: readonly XmlOrderedNode[],
 ): SourceParagraph {
   const properties = parseParagraphProperties(getChild(p, "pPr"));
-  const runs = getChildArray(p, "r").map((r, runIndex) =>
-    parseRun(r, partPath, nextId, ownerNodeId, ownerOrderingSlot, paragraphIndex, runIndex),
+  const runs = parseRunsInOrder(
+    p,
+    partPath,
+    nextId,
+    ownerNodeId,
+    ownerOrderingSlot,
+    paragraphIndex,
+    orderedChildren,
   );
   const rawSidecars = collectUnknownSidecars(p, KNOWN_PARAGRAPH_CHILDREN, nextId);
 
@@ -163,20 +326,175 @@ function parseParagraph(
   };
 }
 
+function parseRunsInOrder(
+  p: XmlNode,
+  partPath: PartPath,
+  nextId: () => RawSidecarId,
+  ownerNodeId: SourceNodeId | undefined,
+  ownerOrderingSlot: number,
+  paragraphIndex: number,
+  orderedChildren?: readonly XmlOrderedNode[],
+): SourceTextRun[] {
+  const rList = getChildArray(p, "r");
+  const fldList = getChildArray(p, "fld");
+  const brList = getChildArray(p, "br");
+  if (orderedChildren === undefined) {
+    return [
+      ...rList.map((r, runIndex) =>
+        parseRun(r, partPath, nextId, ownerNodeId, ownerOrderingSlot, paragraphIndex, runIndex),
+      ),
+      ...fldList.map((fld, index) =>
+        parseRun(
+          fld,
+          partPath,
+          nextId,
+          ownerNodeId,
+          ownerOrderingSlot,
+          paragraphIndex,
+          rList.length + index,
+        ),
+      ),
+      ...brList.map((br, index) =>
+        parseBreakRun(
+          br,
+          partPath,
+          nextId,
+          ownerNodeId,
+          ownerOrderingSlot,
+          paragraphIndex,
+          rList.length + fldList.length + index,
+        ),
+      ),
+    ];
+  }
+
+  const counters: Record<string, number> = {};
+  const runs: SourceTextRun[] = [];
+  for (const child of orderedChildren) {
+    const tag = orderedLocalName(child);
+    if (tag !== "r" && tag !== "fld" && tag !== "br") continue;
+    const index = counters[tag] ?? 0;
+    counters[tag] = index + 1;
+    const runIndex = runs.length;
+    if (tag === "r" && rList[index] !== undefined) {
+      runs.push(
+        parseRun(
+          rList[index],
+          partPath,
+          nextId,
+          ownerNodeId,
+          ownerOrderingSlot,
+          paragraphIndex,
+          runIndex,
+        ),
+      );
+    } else if (tag === "fld" && fldList[index] !== undefined) {
+      runs.push(
+        parseRun(
+          fldList[index],
+          partPath,
+          nextId,
+          ownerNodeId,
+          ownerOrderingSlot,
+          paragraphIndex,
+          runIndex,
+        ),
+      );
+    } else if (tag === "br") {
+      runs.push(
+        parseBreakRun(
+          brList[index],
+          partPath,
+          nextId,
+          ownerNodeId,
+          ownerOrderingSlot,
+          paragraphIndex,
+          runIndex,
+        ),
+      );
+    }
+  }
+  return runs;
+}
+
 function parseParagraphProperties(pPr: XmlNode | undefined): SourceParagraphProperties | undefined {
   if (!pPr) return undefined;
 
   const alignToken = getAttr(pPr, "algn");
   const align = alignToken !== undefined ? ALIGN_MAP[alignToken] : undefined;
   const level = numericAttr(pPr, "lvl");
-  const lineSpacingPts = numericAttr(getChild(getChild(pPr, "lnSpc"), "spcPts"), "val");
+  const lineSpacing = parseSpacing(getChild(pPr, "lnSpc"));
+  const spaceBefore = parseSpacing(getChild(pPr, "spcBef"));
+  const spaceAfter = parseSpacing(getChild(pPr, "spcAft"));
+  const marginLeft = numericAttr(pPr, "marL");
+  const indent = numericAttr(pPr, "indent");
+  const bullet = parseBullet(pPr);
+  const bulletFont = getAttr(getChild(pPr, "buFont"), "typeface");
+  const bulletColor = parseColorElement(getChild(pPr, "buClr"));
+  const bulletSizePct = numericAttr(getChild(pPr, "buSzPct"), "val");
+  const tabStops = parseTabStops(pPr);
+  const defaultRunProperties = parseRunProperties(getChild(pPr, "defRPr"));
 
   const properties: SourceParagraphProperties = {
     ...(align !== undefined ? { align } : {}),
     ...(level !== undefined ? { level } : {}),
-    ...(lineSpacingPts !== undefined ? { lineSpacingPts: asHundredthPt(lineSpacingPts) } : {}),
+    ...(lineSpacing !== undefined ? { lineSpacing } : {}),
+    ...(spaceBefore !== undefined ? { spaceBefore } : {}),
+    ...(spaceAfter !== undefined ? { spaceAfter } : {}),
+    ...(marginLeft !== undefined ? { marginLeft: emu(marginLeft) } : {}),
+    ...(indent !== undefined ? { indent: emu(indent) } : {}),
+    ...(bullet !== undefined ? { bullet } : {}),
+    ...(bulletFont !== undefined ? { bulletFont } : {}),
+    ...(bulletColor !== undefined ? { bulletColor } : {}),
+    ...(bulletSizePct !== undefined ? { bulletSizePct } : {}),
+    ...(tabStops.length > 0 ? { tabStops } : {}),
+    ...(defaultRunProperties !== undefined ? { defaultRunProperties } : {}),
   };
   return Object.keys(properties).length > 0 ? properties : undefined;
+}
+
+function parseTabStops(
+  pPr: XmlNode | undefined,
+): NonNullable<SourceParagraphProperties["tabStops"]> {
+  return getChildArray(getChild(pPr, "tabLst"), "tab").map((tab) => ({
+    position: emu(numericAttr(tab, "pos") ?? 0),
+    alignment: (getAttr(tab, "algn") as "l" | "ctr" | "r" | "dec" | undefined) ?? "l",
+  }));
+}
+
+function parseSpacing(node: XmlNode | undefined): SourceSpacingValue | undefined {
+  const points = numericAttr(getChild(node, "spcPts"), "val");
+  if (points !== undefined) return { type: "pts", value: asHundredthPt(points) };
+  const percent = numericAttr(getChild(node, "spcPct"), "val");
+  if (percent !== undefined) return { type: "pct", value: percent };
+  return undefined;
+}
+
+function parseBullet(pPr: XmlNode | undefined): SourceParagraphProperties["bullet"] | undefined {
+  if (pPr === undefined) return undefined;
+  if (getChild(pPr, "buNone") !== undefined) return { type: "none" };
+  const buChar = getChild(pPr, "buChar");
+  if (buChar !== undefined) {
+    return { type: "char", char: decodeXmlCharRef(getAttr(buChar, "char") ?? "\u2022") };
+  }
+  const buAutoNum = getChild(pPr, "buAutoNum");
+  if (buAutoNum !== undefined) {
+    const scheme = getAttr(buAutoNum, "type") ?? "arabicPeriod";
+    return {
+      type: "autoNum",
+      scheme: VALID_AUTO_NUM_SCHEMES.has(scheme) ? (scheme as SourceAutoNumScheme) : "arabicPeriod",
+      startAt: numericAttr(buAutoNum, "startAt") ?? 1,
+    };
+  }
+  return undefined;
+}
+
+function decodeXmlCharRef(value: string): string {
+  return value.replace(
+    /&#x([0-9a-fA-F]+);|&#([0-9]+);/g,
+    (_match, hex?: string, decimal?: string) =>
+      String.fromCodePoint(parseInt(hex ?? decimal ?? "0", hex !== undefined ? 16 : 10)),
+  );
 }
 
 function parseRun(
@@ -193,7 +511,7 @@ function parseRun(
 
   return {
     kind: "textRun",
-    text: getChildText(r, "t") ?? "",
+    text: decodeXmlCharRef(getChildText(r, "t") ?? ""),
     ...(properties !== undefined ? { properties } : {}),
     handle: {
       partPath,
@@ -204,28 +522,63 @@ function parseRun(
   };
 }
 
+function parseBreakRun(
+  br: XmlNode | undefined,
+  partPath: PartPath,
+  nextId: () => RawSidecarId,
+  ownerNodeId: SourceNodeId | undefined,
+  ownerOrderingSlot: number,
+  paragraphIndex: number,
+  runIndex: number,
+): SourceTextRun {
+  const properties = parseRunProperties(getChild(br, "rPr"));
+  return {
+    kind: "textRun",
+    text: "\n",
+    ...(properties !== undefined ? { properties } : {}),
+    handle: {
+      partPath,
+      nodeId: textNodeId("run", ownerNodeId, ownerOrderingSlot, paragraphIndex, runIndex),
+      orderingSlot: runIndex,
+    },
+  };
+}
+
 function parseRunProperties(rPr: XmlNode | undefined): SourceRunProperties | undefined {
   if (!rPr) return undefined;
 
   const bold = getAttr(rPr, "b");
   const italic = getAttr(rPr, "i");
   const underline = getAttr(rPr, "u");
+  const strike = getAttr(rPr, "strike");
+  const baseline = numericAttr(rPr, "baseline");
   const size = numericAttr(rPr, "sz");
   const typeface = getAttr(getChild(rPr, "latin"), "typeface");
   const typefaceEa = getAttr(getChild(rPr, "ea"), "typeface");
   const typefaceCs = getAttr(getChild(rPr, "cs"), "typeface");
+  const hasHyperlink = getChild(rPr, "hlinkClick") !== undefined;
   const color = parseColorElement(getChild(rPr, "solidFill"));
 
   const properties: SourceRunProperties = {
     ...(bold !== undefined ? { bold: isTrue(bold) } : {}),
     ...(italic !== undefined ? { italic: isTrue(italic) } : {}),
-    ...(underline !== undefined ? { underline: underline !== "none" } : {}),
+    ...(underline !== undefined
+      ? { underline: underline !== "none" }
+      : hasHyperlink
+        ? { underline: true }
+        : {}),
+    ...(strike !== undefined ? { strikethrough: strike !== "noStrike" } : {}),
+    ...(baseline !== undefined ? { baseline: baseline / 1000 } : {}),
     // `a:rPr@sz` は 1/100 pt 単位。pt へ変換して保持する。
     ...(size !== undefined ? { fontSize: asPt(size / 100) } : {}),
     ...(typeface !== undefined ? { typeface } : {}),
     ...(typefaceEa !== undefined ? { typefaceEa } : {}),
     ...(typefaceCs !== undefined ? { typefaceCs } : {}),
-    ...(color !== undefined ? { color } : {}),
+    ...(color !== undefined
+      ? { color }
+      : hasHyperlink
+        ? { color: { kind: "scheme", scheme: "hlink" } }
+        : {}),
   };
   return Object.keys(properties).length > 0 ? properties : undefined;
 }
@@ -258,4 +611,13 @@ function textNodeId(
     ownerNodeId !== undefined ? `shape:${ownerNodeId}` : `shapeSlot:${ownerOrderingSlot}`;
   const suffix = kind === "paragraph" ? `p:${paragraphIndex}` : `p:${paragraphIndex}:r:${runIndex}`;
   return asSourceNodeId(`text:${owner}:${suffix}`);
+}
+
+function orderedKey(node: XmlOrderedNode): string | undefined {
+  return Object.keys(node).find((key) => key !== ":@");
+}
+
+function orderedLocalName(node: XmlOrderedNode): string | undefined {
+  const key = orderedKey(node);
+  return key !== undefined ? localName(key) : undefined;
 }

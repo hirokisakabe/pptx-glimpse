@@ -27,10 +27,12 @@ import {
   type SourceColor,
   type SourceEffectList,
   type SourceFill,
+  type SourceMasterTextStyles,
 } from "../source/index.js";
 import { isTrue, numericAttr, parseColorElement, parseFill, parseLine } from "./drawing.js";
 import { makeSidecar } from "./raw-node.js";
 import { parseShapeTree } from "./shape-tree.js";
+import { parseTextStyle } from "./text.js";
 import {
   getAttr,
   getAttrs,
@@ -127,6 +129,7 @@ export function parseSlideMaster(
   const cSld = getChild(root, "cSld");
   const background = parseBackground(getChild(cSld, "bg"), nextId);
   const colorMap = parseColorMap(getChild(root, "clrMap"));
+  const txStyles = parseMasterTextStyles(getChild(root, "txStyles"));
 
   return {
     partPath,
@@ -134,9 +137,26 @@ export function parseSlideMaster(
     layoutPartPaths,
     ...(background !== undefined ? { background } : {}),
     ...(colorMap !== undefined ? { colorMap } : {}),
+    ...(txStyles !== undefined ? { txStyles } : {}),
     shapes: parseShapeTree(getChild(cSld, "spTree"), partPath, nextId, orderedSpTree),
     handle: { partPath },
   };
+}
+
+function parseMasterTextStyles(txStyles: XmlNode | undefined): SourceMasterTextStyles | undefined {
+  if (txStyles === undefined) return undefined;
+  const parsed: SourceMasterTextStyles = {
+    ...(parseTextStyle(getChild(txStyles, "titleStyle")) !== undefined
+      ? { titleStyle: parseTextStyle(getChild(txStyles, "titleStyle")) }
+      : {}),
+    ...(parseTextStyle(getChild(txStyles, "bodyStyle")) !== undefined
+      ? { bodyStyle: parseTextStyle(getChild(txStyles, "bodyStyle")) }
+      : {}),
+    ...(parseTextStyle(getChild(txStyles, "otherStyle")) !== undefined
+      ? { otherStyle: parseTextStyle(getChild(txStyles, "otherStyle")) }
+      : {}),
+  };
+  return Object.keys(parsed).length > 0 ? parsed : undefined;
 }
 
 /** parse 済み theme root (`a:theme`) から `SourceTheme` を組み立てる。 */
@@ -233,8 +253,8 @@ function parseFontScheme(fontScheme: XmlNode | undefined): SourceThemeFontScheme
     ...(isNonEmpty(minorLatin) ? { minorLatin } : {}),
     ...(isNonEmpty(majorEastAsian) ? { majorEastAsian } : {}),
     ...(isNonEmpty(minorEastAsian) ? { minorEastAsian } : {}),
-    ...(isNonEmpty(majorComplexScript) ? { majorComplexScript } : {}),
-    ...(isNonEmpty(minorComplexScript) ? { minorComplexScript } : {}),
+    ...(majorComplexScript !== undefined ? { majorComplexScript } : {}),
+    ...(minorComplexScript !== undefined ? { minorComplexScript } : {}),
     ...(isNonEmpty(majorJapanese) ? { majorJapanese } : {}),
     ...(isNonEmpty(minorJapanese) ? { minorJapanese } : {}),
   };

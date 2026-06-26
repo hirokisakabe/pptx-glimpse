@@ -17,6 +17,7 @@ import {
   resetTextPathFontResolver,
   setFontMapping,
   setFontUsageCollector,
+  setScriptFonts,
   setTextMeasurer,
   setTextPathFontResolver,
   svgToPng,
@@ -73,6 +74,11 @@ export async function convertPptxToSvgViaDocumentPath(
     initWarningLogger(options?.logLevel ?? "off");
 
     const source = readPptx(input);
+    const scriptFontScheme = findScriptFontScheme(source);
+    setScriptFonts(
+      scriptFontScheme?.majorJapanese ?? null,
+      scriptFontScheme?.minorJapanese ?? null,
+    );
     if (source.presentation.slidePartPaths.length === 0) {
       warn("presentation.noSlides", "No slides found in the PPTX file");
     }
@@ -108,6 +114,16 @@ export async function convertPptxToSvgViaDocumentPath(
     resetFontMapping();
     resetScriptFonts();
   }
+}
+
+function findScriptFontScheme(source: ReturnType<typeof readPptx>) {
+  const firstThemePartPath = source.slideMasters.find(
+    (master) => master.themePartPath !== undefined,
+  )?.themePartPath;
+  return (
+    source.themes.find((theme) => theme.partPath === firstThemePartPath)?.fontScheme ??
+    source.themes[0]?.fontScheme
+  );
 }
 
 /**

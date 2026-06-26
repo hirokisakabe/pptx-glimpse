@@ -22,6 +22,7 @@ import type {
   SourceTable,
   SourceTableCell,
   SourceTextBody,
+  SourceTextStyle,
   SourceTheme,
 } from "../source/index.js";
 import { asEmu, asPartPath } from "../source/index.js";
@@ -213,6 +214,20 @@ interface ComputeContext {
   readonly colorMap: Readonly<Record<string, string>>;
   readonly relationships: readonly ComputedRelationship[];
 }
+
+interface TextStyleChainEntry {
+  readonly style: SourceTextStyle;
+  readonly includeRunDecorations: boolean;
+}
+
+interface RunPropertyDefaults {
+  readonly properties?: SourceRunProperties;
+  readonly includeDecorations: boolean;
+}
+
+type MutableRunProperties = {
+  -readonly [K in keyof SourceRunProperties]?: SourceRunProperties[K];
+};
 
 function buildEffectiveColorMap(
   master?: SourceColorMap,
@@ -413,7 +428,8 @@ function computeShapeElement(
   partPath: PartPath,
 ): ComputedShapeElement {
   const match = layer === "slide" ? findPlaceholderMatch(context, shape) : undefined;
-  const styleSource = firstDefined(match?.layout, match?.master);
+  const placeholderType =
+    shape.placeholder !== undefined ? (shape.placeholder.type ?? "body") : undefined;
   const transform = firstDefined(
     shape.transform,
     match?.layout?.transform,
@@ -446,7 +462,14 @@ function computeShapeElement(
         : {}),
     ...(effects !== undefined ? { effects } : {}),
     ...(shape.textBody !== undefined
-      ? { textBody: computeTextBody(context, shape.textBody, styleSource?.textBody) }
+      ? {
+          textBody: computeTextBody(
+            context,
+            shape.textBody,
+            [match?.layout?.textBody, match?.master?.textBody],
+            placeholderType,
+          ),
+        }
       : {}),
     ...(match !== undefined ? { placeholderMatch: match } : {}),
   };
@@ -585,7 +608,9 @@ function computeTableCell(
         : undefined;
   return {
     source: cell,
-    ...(cell.textBody !== undefined ? { textBody: computeTextBody(context, cell.textBody) } : {}),
+    ...(cell.textBody !== undefined
+      ? { textBody: computeTextBody(context, cell.textBody, [], undefined, false) }
+      : {}),
     ...(cell.fill !== undefined ? { fill: computeFill(context, cell.fill, partPath) } : {}),
     ...(borders !== undefined ? { borders } : {}),
     gridSpan: cell.gridSpan,
@@ -824,14 +849,22 @@ function computeBlipEffects(
 function computeTextBody(
   context: ComputeContext,
   textBody: SourceTextBody,
-  inherited?: SourceTextBody,
+  inheritedBodies: readonly (SourceTextBody | undefined)[] = [],
+  placeholderType?: string,
+  includeInheritedStyleChain = true,
 ): ComputedTextBody {
-  const inheritedParagraph = inherited?.paragraphs[0];
-  const properties = mergeTextBodyProperties(inherited?.properties, textBody.properties);
+  const styleChain = buildTextStyleChain(
+    context,
+    textBody,
+    inheritedBodies,
+    placeholderType,
+    includeInheritedStyleChain,
+  );
+  const properties = mergeTextBodyProperties(undefined, textBody.properties);
   return {
     ...(properties !== undefined ? { properties } : {}),
     paragraphs: textBody.paragraphs.map((paragraph) =>
-      computeParagraph(context, paragraph, inheritedParagraph),
+      computeParagraph(context, paragraph, styleChain),
     ),
   };
 }
@@ -862,14 +895,31 @@ function mergeTextBodyProperties(
 function computeParagraph(
   context: ComputeContext,
   paragraph: SourceParagraph,
-  inherited?: SourceParagraph,
+  styleChain: readonly TextStyleChainEntry[],
 ): ComputedParagraph {
-  const properties = mergeParagraphProperties(inherited?.properties, paragraph.properties);
-  const inheritedRun = inherited?.runs[0];
+  const level = paragraph.properties?.level ?? 0;
+  const styleLevelProperties = styleChain.map((entry) => ({
+    properties: textStyleLevelProperties(entry.style, level),
+    includeRunDecorations: entry.includeRunDecorations,
+  }));
+  const properties = computeParagraphProperties(
+    context,
+    paragraph.properties,
+    styleLevelProperties.map((entry) => entry.properties),
+  );
   return {
     ...(properties !== undefined ? { properties } : {}),
     runs: paragraph.runs.map((run) => {
-      const runProperties = mergeRunProperties(context, inheritedRun?.properties, run.properties);
+      const runProperties = mergeRunProperties(context, run.properties, [
+        {
+          properties: paragraph.properties?.defaultRunProperties,
+          includeDecorations: true,
+        },
+        ...styleLevelProperties.map((entry) => ({
+          properties: entry.properties?.defaultRunProperties,
+          includeDecorations: entry.includeRunDecorations,
+        })),
+      ]);
       return {
         text: run.text,
         ...(runProperties !== undefined ? { properties: runProperties } : {}),
@@ -878,20 +928,114 @@ function computeParagraph(
   };
 }
 
-function mergeParagraphProperties(
-  inherited: SourceParagraphProperties | undefined,
-  local: SourceParagraphProperties | undefined,
+function buildTextStyleChain(
+  context: ComputeContext,
+  textBody: SourceTextBody,
+  inheritedBodies: readonly (SourceTextBody | undefined)[],
+  placeholderType: string | undefined,
+  includeInheritedStyleChain: boolean,
+): TextStyleChainEntry[] {
+  return [
+    ...(textBody.listStyle !== undefined
+      ? [{ style: textBody.listStyle, includeRunDecorations: true }]
+      : []),
+    ...(includeInheritedStyleChain
+      ? [
+          ...inheritedBodies.flatMap((body) =>
+            body?.listStyle !== undefined
+              ? [{ style: body.listStyle, includeRunDecorations: false }]
+              : [],
+          ),
+          ...styleEntry(getTxStyleForPlaceholder(context.master?.txStyles, placeholderType)),
+          ...styleEntry(context.source.presentation.defaultTextStyle),
+        ]
+      : []),
+  ];
+}
+
+function getTxStyleForPlaceholder(
+  txStyles: NonNullable<ComputeContext["master"]>["txStyles"] | undefined,
+  placeholderType: string | undefined,
+): SourceTextStyle | undefined {
+  if (txStyles === undefined) return undefined;
+  if (placeholderType === undefined) return txStyles.otherStyle;
+  if (placeholderType === "title" || placeholderType === "ctrTitle") return txStyles.titleStyle;
+  if (placeholderType === "body" || placeholderType === "subTitle" || placeholderType === "obj") {
+    return txStyles.bodyStyle;
+  }
+  return txStyles.otherStyle;
+}
+
+function textStyleLevelProperties(
+  style: SourceTextStyle,
+  level: number,
 ): SourceParagraphProperties | undefined {
-  const merged = { ...inherited, ...local };
+  return style.levels[level] ?? style.defaultParagraph;
+}
+
+function computeParagraphProperties(
+  context: ComputeContext,
+  local: SourceParagraphProperties | undefined,
+  inherited: readonly (SourceParagraphProperties | undefined)[],
+): ComputedParagraph["properties"] {
+  const resolvedBulletColor = firstDefined(
+    local?.bulletColor !== undefined ? resolveColor(context, local.bulletColor) : undefined,
+    ...inherited.map((properties) =>
+      properties?.bulletColor !== undefined
+        ? resolveColor(context, properties.bulletColor)
+        : undefined,
+    ),
+  );
+  const merged: ComputedParagraph["properties"] = {
+    ...(local?.align !== undefined
+      ? { align: local.align }
+      : { align: pickInheritedValue(inherited, "align") ?? "left" }),
+    ...(local?.level !== undefined ? { level: local.level } : { level: 0 }),
+    ...(local?.lineSpacing !== undefined ? { lineSpacing: local.lineSpacing } : {}),
+    ...(local?.spaceBefore !== undefined ? { spaceBefore: local.spaceBefore } : {}),
+    ...(local?.spaceAfter !== undefined ? { spaceAfter: local.spaceAfter } : {}),
+    ...(local?.marginLeft !== undefined
+      ? { marginLeft: local.marginLeft }
+      : pickInherited(inherited, "marginLeft")),
+    ...(local?.indent !== undefined
+      ? { indent: local.indent }
+      : pickInherited(inherited, "indent")),
+    ...(local?.bullet !== undefined
+      ? { bullet: local.bullet }
+      : pickInherited(inherited, "bullet")),
+    ...(local?.bulletFont !== undefined
+      ? { bulletFont: local.bulletFont }
+      : pickInherited(inherited, "bulletFont")),
+    ...(resolvedBulletColor !== undefined ? { bulletColor: resolvedBulletColor } : {}),
+    ...(local?.bulletSizePct !== undefined
+      ? { bulletSizePct: local.bulletSizePct }
+      : pickInherited(inherited, "bulletSizePct")),
+    ...(local?.tabStops !== undefined ? { tabStops: local.tabStops } : {}),
+  };
   return Object.keys(merged).length > 0 ? merged : undefined;
 }
 
 function mergeRunProperties(
   context: ComputeContext,
-  inherited: SourceRunProperties | undefined,
   local: SourceRunProperties | undefined,
+  inherited: readonly RunPropertyDefaults[],
 ): ComputedRunProperties | undefined {
-  const merged = { ...inherited, ...local };
+  const merged: {
+    bold?: SourceRunProperties["bold"];
+    italic?: SourceRunProperties["italic"];
+    underline?: SourceRunProperties["underline"];
+    strikethrough?: SourceRunProperties["strikethrough"];
+    baseline?: SourceRunProperties["baseline"];
+    fontSize?: SourceRunProperties["fontSize"];
+    typeface?: SourceRunProperties["typeface"];
+    typefaceEa?: SourceRunProperties["typefaceEa"];
+    typefaceCs?: SourceRunProperties["typefaceCs"];
+    color?: SourceRunProperties["color"];
+  } = { ...local };
+  for (const defaults of inherited) {
+    if (defaults.properties === undefined) continue;
+    mergeDefaultRunProperties(merged, defaults.properties, defaults.includeDecorations);
+  }
   if (Object.keys(merged).length === 0) return undefined;
   const color = merged.color !== undefined ? resolveColor(context, merged.color) : undefined;
   const withoutColor = resolveThemeRunFonts(context, omitColor(merged));
@@ -899,6 +1043,45 @@ function mergeRunProperties(
     ...withoutColor,
     ...(color !== undefined ? { color } : {}),
   };
+}
+
+function styleEntry(style: SourceTextStyle | undefined): TextStyleChainEntry[] {
+  return style !== undefined ? [{ style, includeRunDecorations: false }] : [];
+}
+
+function mergeDefaultRunProperties(
+  target: MutableRunProperties,
+  defaults: SourceRunProperties,
+  includeDecorations: boolean,
+): void {
+  if (includeDecorations) {
+    target.bold ??= defaults.bold;
+    target.italic ??= defaults.italic;
+    target.underline ??= defaults.underline;
+    target.strikethrough ??= defaults.strikethrough;
+    target.baseline ??= defaults.baseline;
+  }
+  target.fontSize ??= defaults.fontSize;
+  target.typeface ??= defaults.typeface;
+  target.typefaceEa ??= defaults.typefaceEa;
+  target.typefaceCs ??= defaults.typefaceCs;
+  target.color ??= defaults.color;
+}
+
+function pickInherited<K extends keyof SourceParagraphProperties>(
+  inherited: readonly (SourceParagraphProperties | undefined)[],
+  key: K,
+): Pick<SourceParagraphProperties, K> | Record<string, never> {
+  const value = pickInheritedValue(inherited, key);
+  return value !== undefined ? ({ [key]: value } as Pick<SourceParagraphProperties, K>) : {};
+}
+
+function pickInheritedValue<K extends keyof SourceParagraphProperties>(
+  inherited: readonly (SourceParagraphProperties | undefined)[],
+  key: K,
+): SourceParagraphProperties[K] | undefined {
+  const value = inherited.find((properties) => properties?.[key] !== undefined)?.[key];
+  return value;
 }
 
 function resolveThemeRunFonts(
