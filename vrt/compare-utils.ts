@@ -15,6 +15,8 @@ interface CompareOptions {
   mismatchTolerance: number;
   /** 参照画像を actual のサイズにリサイズして比較する (LibreOffice VRT 用) */
   resizeRef?: boolean;
+  /** true のとき anti-alias 判定による差分除外を行わない */
+  includeAntiAliased?: boolean;
 }
 
 export async function compareImages(
@@ -62,7 +64,7 @@ export async function compareImageBuffers(
 
   const mismatched = pixelmatch(actualRaw, refRaw, diffBuf, width, height, {
     threshold: options.pixelThreshold,
-    includeAA: false,
+    includeAA: options.includeAntiAliased ?? false,
   });
 
   const mismatchPercentage = mismatched / totalPixels;

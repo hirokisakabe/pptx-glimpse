@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import * as documentExperimental from "../../pptx-glimpse-document/src/experimental.js";
 import * as adapterModule from "./cleandoc-renderer-adapter.js";
-import { convertPptxToSvg } from "./converter.js";
+import { convertPptxToPng, convertPptxToSvg } from "./converter.js";
 import {
   convertPptxToPngViaDocumentPath,
   convertPptxToSvgViaDocumentPath,
@@ -111,6 +111,22 @@ describe("experimental document render path", () => {
 
     expect(publicDefault.map((slide) => slide.slideNumber)).toEqual([1]);
     expect(publicDefault[0]?.svg).toContain("<svg");
+    expect(readPptxSpy).not.toHaveBeenCalled();
+    expect(adapterSpy).not.toHaveBeenCalled();
+  });
+
+  it("keeps the public PNG converter on its existing default path", async () => {
+    const readPptxSpy = vi.spyOn(documentExperimental, "readPptx");
+    const adapterSpy = vi.spyOn(adapterModule, "adaptComputedViewToRendererModel");
+    const input = readFixture("real-basic-theme.pptx");
+    const publicDefault = await convertPptxToPng(input, {
+      slides: [1],
+      width: 240,
+      skipSystemFonts: true,
+    });
+
+    expect(publicDefault.map((slide) => slide.slideNumber)).toEqual([1]);
+    expect(publicDefault[0]).toMatchObject({ width: 240 });
     expect(readPptxSpy).not.toHaveBeenCalled();
     expect(adapterSpy).not.toHaveBeenCalled();
   });
