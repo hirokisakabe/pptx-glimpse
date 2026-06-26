@@ -446,7 +446,12 @@ describe("readPptx — typed shape detail (synthetic)", () => {
           `<a:tblGrid><a:gridCol w="111"/><a:gridCol w="222"/></a:tblGrid>` +
           `<a:tr h="333">` +
           `<a:tc gridSpan="2" rowSpan="2">` +
-          `<a:txBody><a:bodyPr/><a:p><a:r><a:rPr sz="1200"><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:rPr><a:t>A</a:t></a:r></a:p></a:txBody>` +
+          `<a:txBody><a:bodyPr/><a:p>` +
+          `<a:r><a:rPr sz="1200"><a:solidFill><a:schemeClr val="accent1"/></a:solidFill></a:rPr><a:t>A</a:t></a:r>` +
+          `<a:br/>` +
+          `<a:r><a:t>B</a:t></a:r>` +
+          `<a:fld id="{00000000-0000-0000-0000-000000000001}" type="slidenum"><a:t>C</a:t></a:fld>` +
+          `</a:p></a:txBody>` +
           `<a:tcPr><a:lnL w="12700"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:lnL><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></a:tcPr>` +
           `</a:tc>` +
           `<a:tc hMerge="1" vMerge="1">` +
@@ -493,6 +498,9 @@ describe("readPptx — typed shape detail (synthetic)", () => {
         color: { kind: "scheme", scheme: "accent1" },
       },
     });
+    expect(
+      table.table.rows[0].cells[0].textBody?.paragraphs[0].runs.map((run) => run.text),
+    ).toEqual(["A", "\n", "B", "C"]);
     expect(table.table.rows[0].cells[0].borders?.left).toEqual({
       width: 12700,
       fill: { kind: "solid", color: { kind: "srgb", hex: "FF0000" } },
