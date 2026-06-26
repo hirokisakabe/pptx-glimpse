@@ -145,16 +145,13 @@ export function parseSlideMaster(
 
 function parseMasterTextStyles(txStyles: XmlNode | undefined): SourceMasterTextStyles | undefined {
   if (txStyles === undefined) return undefined;
+  const titleStyle = parseTextStyle(getChild(txStyles, "titleStyle"));
+  const bodyStyle = parseTextStyle(getChild(txStyles, "bodyStyle"));
+  const otherStyle = parseTextStyle(getChild(txStyles, "otherStyle"));
   const parsed: SourceMasterTextStyles = {
-    ...(parseTextStyle(getChild(txStyles, "titleStyle")) !== undefined
-      ? { titleStyle: parseTextStyle(getChild(txStyles, "titleStyle")) }
-      : {}),
-    ...(parseTextStyle(getChild(txStyles, "bodyStyle")) !== undefined
-      ? { bodyStyle: parseTextStyle(getChild(txStyles, "bodyStyle")) }
-      : {}),
-    ...(parseTextStyle(getChild(txStyles, "otherStyle")) !== undefined
-      ? { otherStyle: parseTextStyle(getChild(txStyles, "otherStyle")) }
-      : {}),
+    ...(titleStyle !== undefined ? { titleStyle } : {}),
+    ...(bodyStyle !== undefined ? { bodyStyle } : {}),
+    ...(otherStyle !== undefined ? { otherStyle } : {}),
   };
   return Object.keys(parsed).length > 0 ? parsed : undefined;
 }
@@ -253,6 +250,7 @@ function parseFontScheme(fontScheme: XmlNode | undefined): SourceThemeFontScheme
     ...(isNonEmpty(minorLatin) ? { minorLatin } : {}),
     ...(isNonEmpty(majorEastAsian) ? { majorEastAsian } : {}),
     ...(isNonEmpty(minorEastAsian) ? { minorEastAsian } : {}),
+    // Preserve explicit empty complex script fonts; parser path resolves +mn-cs to "" for them.
     ...(majorComplexScript !== undefined ? { majorComplexScript } : {}),
     ...(minorComplexScript !== undefined ? { minorComplexScript } : {}),
     ...(isNonEmpty(majorJapanese) ? { majorJapanese } : {}),

@@ -110,30 +110,36 @@ export function parseTextBody(
       const value = key !== undefined ? child[key] : undefined;
       return Array.isArray(value) ? (value as readonly XmlOrderedNode[]) : undefined;
     });
-  const paragraphs = getChildArray(txBody, "p").flatMap((p, paragraphIndex) => {
+  const paragraphs: SourceParagraph[] = [];
+  let logicalParagraphIndex = 0;
+  getChildArray(txBody, "p").forEach((p, paragraphIndex) => {
     const orderedChildren = orderedParagraphs?.[paragraphIndex];
     if (orderedChildren !== undefined && hasMultipleBulletPPr(p, orderedChildren)) {
-      return splitInterleavedParagraph(
+      const split = splitInterleavedParagraph(
         p,
         orderedChildren,
         partPath,
         nextId,
         ownerNodeId,
         ownerOrderingSlot,
-        paragraphIndex,
+        logicalParagraphIndex,
       );
+      paragraphs.push(...split);
+      logicalParagraphIndex += split.length;
+      return;
     }
-    return [
+    paragraphs.push(
       parseParagraph(
         p,
         partPath,
         nextId,
         ownerNodeId,
         ownerOrderingSlot,
-        paragraphIndex,
+        logicalParagraphIndex,
         orderedChildren,
       ),
-    ];
+    );
+    logicalParagraphIndex++;
   });
   const rawSidecars = collectUnknownSidecars(txBody, KNOWN_TXBODY_CHILDREN, nextId);
 
@@ -289,9 +295,11 @@ function splitInterleavedParagraph(
     if (groupIndex < groups.length - 1 && paragraph.runs.length > 0) {
       const lastRun = paragraph.runs[paragraph.runs.length - 1];
       if (lastRun.text.endsWith("\n")) {
+        const trimmed = lastRun.text.slice(0, -1);
+        const precedingRuns = paragraph.runs.slice(0, -1);
         return {
           ...paragraph,
-          runs: [...paragraph.runs.slice(0, -1), { ...lastRun, text: lastRun.text.slice(0, -1) }],
+          runs: trimmed === "" ? precedingRuns : [...precedingRuns, { ...lastRun, text: trimmed }],
         };
       }
     }
@@ -458,7 +466,7 @@ function parseRunsInOrder(
           runIndex,
         ),
       );
-    } else if (tag === "br") {
+    } else if (tag === "br" && brList[index] !== undefined) {
       runs.push(
         parseBreakRun(
           brList[index],

@@ -288,15 +288,21 @@ describe("readPptx — typed shape detail (synthetic)", () => {
           `<a:r><a:t>after break</a:t></a:r>` +
           `<a:pPr><a:buChar char="&#x25E6;"/></a:pPr>` +
           `<a:fld id="{00000000-0000-0000-0000-000000000000}" type="slidenum"><a:t>field</a:t></a:fld>` +
-          `</a:p></p:txBody>` +
+          `</a:p>` +
+          `<a:p><a:r><a:t>tail</a:t></a:r></a:p>` +
+          `</p:txBody>` +
           `</p:sp>`,
       ),
     );
 
     const shape = source.slides[0].shapes[0] as SourceShape;
-    expect(
-      shape.textBody?.paragraphs.map((paragraph) => paragraph.runs.map((run) => run.text)),
-    ).toEqual([["first", "\n", "after break"], ["field"]]);
+    const paragraphs = shape.textBody!.paragraphs;
+    expect(paragraphs.map((paragraph) => paragraph.runs.map((run) => run.text))).toEqual([
+      ["first", "\n", "after break"],
+      ["field"],
+      ["tail"],
+    ]);
+    expect(new Set(paragraphs.map((paragraph) => paragraph.handle.nodeId)).size).toBe(3);
   });
 
   it("spAutoFit を typed source body property として読む", () => {

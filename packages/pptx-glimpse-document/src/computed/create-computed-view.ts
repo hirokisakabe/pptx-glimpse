@@ -860,6 +860,8 @@ function computeTextBody(
     placeholderType,
     includeInheritedStyleChain,
   );
+  // Current parser path does not inherit placeholder bodyPr; keep computed output
+  // aligned until the document path intentionally owns that behavior.
   const properties = mergeTextBodyProperties(undefined, textBody.properties);
   return {
     ...(properties !== undefined ? { properties } : {}),
