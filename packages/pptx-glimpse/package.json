@@ -25,6 +25,7 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@pptx-glimpse/document": "workspace:*",
     "fast-xml-parser": "^5.7.3",
     "fflate": "^0.8.2",
     "pptx-glimpse-renderer": "workspace:*"
