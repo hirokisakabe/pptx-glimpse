@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -20,9 +20,10 @@ export const DOCUMENT_PATH_VRT_RENDER_OPTIONS = {
   skipSystemFonts: true,
 } as const satisfies Pick<ConvertOptions, "skipSystemFonts">;
 
-const VRT_FONT_DIR = join(tmpdir(), "pptx-glimpse-vrt-fonts-v5");
+const VRT_FONT_GENERATOR_VERSION = 6;
+const VRT_FONT_DIR = join(tmpdir(), `pptx-glimpse-vrt-fonts-v${VRT_FONT_GENERATOR_VERSION}`);
 const VRT_FONT_MANIFEST = join(VRT_FONT_DIR, "manifest.txt");
-const VRT_FONT_FAMILIES = [
+const BASE_VRT_FONT_FAMILIES = [
   "Carlito",
   "Arimo",
   "Tinos",
@@ -33,6 +34,11 @@ const VRT_FONT_FAMILIES = [
 ] as const;
 const GENERATED_FIXTURE_DIR = join(__dirname, "fixtures");
 const SHARED_FIXTURE_DIR = join(__dirname, "..", "..", "shared-fixtures");
+
+interface VrtFontInventory {
+  codePoints: Set<number>;
+  families: string[];
+}
 
 let renderOptionsPromise: Promise<VrtRenderOptions> | null = null;
 
@@ -48,20 +54,21 @@ export function getVrtRenderOptions(): Promise<VrtRenderOptions> {
 
 async function ensureVrtFontDir(): Promise<string> {
   await mkdir(VRT_FONT_DIR, { recursive: true });
-  const codePoints = await collectVrtTextCodePoints();
-  const manifest = [...codePoints].sort((a, b) => a - b).join(",");
-  const fontPaths = VRT_FONT_FAMILIES.map((familyName) =>
-    join(VRT_FONT_DIR, `${familyName.replaceAll(" ", "")}.ttf`),
-  );
+  const { codePoints, families } = await collectVrtFontInventory();
+  const manifest = createVrtFontManifest(codePoints, families);
+  const fontFileNames = families.map((familyName, index) => createFontFileName(familyName, index));
+  const fontPaths = fontFileNames.map((fileName) => join(VRT_FONT_DIR, fileName));
   if (
     fontPaths.every((fontPath) => existsSync(fontPath)) &&
+    (await hasExpectedFontFiles(fontFileNames)) &&
     (await readTextIfExists(VRT_FONT_MANIFEST)) === manifest
   ) {
     return VRT_FONT_DIR;
   }
 
+  await removeStaleFontFiles(fontFileNames);
   await Promise.all(
-    VRT_FONT_FAMILIES.map(async (familyName, index) => {
+    families.map(async (familyName, index) => {
       const fontPath = fontPaths[index];
       const buffer = await createVrtFontBuffer(familyName, codePoints);
       await writeFile(fontPath, Buffer.from(buffer));
@@ -69,6 +76,38 @@ async function ensureVrtFontDir(): Promise<string> {
   );
   await writeFile(VRT_FONT_MANIFEST, manifest);
   return VRT_FONT_DIR;
+}
+
+function createVrtFontManifest(
+  codePoints: ReadonlySet<number>,
+  families: readonly string[],
+): string {
+  return JSON.stringify({
+    generatorVersion: VRT_FONT_GENERATOR_VERSION,
+    families,
+    codePoints: [...codePoints].sort((a, b) => a - b),
+  });
+}
+
+function createFontFileName(familyName: string, index: number): string {
+  const safeFamilyName = familyName.replace(/[^A-Za-z0-9_-]+/g, "_") || "font";
+  return `${index.toString().padStart(2, "0")}-${safeFamilyName}.ttf`;
+}
+
+async function hasExpectedFontFiles(expectedFileNames: readonly string[]): Promise<boolean> {
+  const expected = new Set(expectedFileNames);
+  const entries = await readdir(VRT_FONT_DIR);
+  return entries.filter((entry) => entry.endsWith(".ttf")).every((entry) => expected.has(entry));
+}
+
+async function removeStaleFontFiles(expectedFileNames: readonly string[]): Promise<void> {
+  const expected = new Set(expectedFileNames);
+  const entries = await readdir(VRT_FONT_DIR);
+  await Promise.all(
+    entries
+      .filter((entry) => entry.endsWith(".ttf") && !expected.has(entry))
+      .map((entry) => unlink(join(VRT_FONT_DIR, entry))),
+  );
 }
 
 async function readTextIfExists(path: string): Promise<string | null> {
@@ -79,8 +118,9 @@ async function readTextIfExists(path: string): Promise<string | null> {
   }
 }
 
-async function collectVrtTextCodePoints(): Promise<Set<number>> {
+async function collectVrtFontInventory(): Promise<VrtFontInventory> {
   const codePoints = new Set<number>();
+  const families = new Set<string>(BASE_VRT_FONT_FAMILIES);
   codePoints.add(0);
   codePoints.add(0x0a);
   for (let codePoint = 32; codePoint <= 126; codePoint++) {
@@ -110,13 +150,26 @@ async function collectVrtTextCodePoints(): Promise<Set<number>> {
                 for (const match of xml.matchAll(/<a:buChar\b[^>]*\bchar="([^"]*)"/g)) {
                   addTextCodePoints(codePoints, decodeXmlText(match[1]));
                 }
+                for (const match of xml.matchAll(/\btypeface="([^"]*)"/g)) {
+                  addVrtFontFamily(families, decodeXmlText(match[1]));
+                }
               }),
           );
         }),
     );
   }
 
-  return codePoints;
+  const baseFamilies = new Set<string>(BASE_VRT_FONT_FAMILIES);
+  const extraFamilies = [...families]
+    .filter((familyName) => !baseFamilies.has(familyName))
+    .sort((a, b) => a.localeCompare(b));
+  return { codePoints, families: [...BASE_VRT_FONT_FAMILIES, ...extraFamilies] };
+}
+
+function addVrtFontFamily(families: Set<string>, familyName: string): void {
+  const trimmed = familyName.trim();
+  if (!trimmed || trimmed.startsWith("+")) return;
+  families.add(trimmed);
 }
 
 function addTextCodePoints(codePoints: Set<number>, text: string): void {
@@ -263,6 +316,10 @@ async function createVrtFontBuffer(
 
   function hashCodePoint(codePoint: number): number {
     let hash = codePoint >>> 0;
+    for (const char of familyName) {
+      hash ^= char.codePointAt(0) ?? 0;
+      hash = Math.imul(hash, 0x45d9f3b);
+    }
     hash ^= hash >>> 16;
     hash = Math.imul(hash, 0x7feb352d);
     hash ^= hash >>> 15;
