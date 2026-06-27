@@ -20,7 +20,7 @@ export const DOCUMENT_PATH_VRT_RENDER_OPTIONS = {
   skipSystemFonts: true,
 } as const satisfies Pick<ConvertOptions, "skipSystemFonts">;
 
-const VRT_FONT_DIR = join(tmpdir(), "pptx-glimpse-vrt-fonts-v4");
+const VRT_FONT_DIR = join(tmpdir(), "pptx-glimpse-vrt-fonts-v5");
 const VRT_FONT_MANIFEST = join(VRT_FONT_DIR, "manifest.txt");
 const VRT_FONT_FAMILIES = [
   "Carlito",
@@ -102,6 +102,9 @@ async function collectVrtTextCodePoints(): Promise<Set<number>> {
               .map(async ([, file]) => {
                 const xml = await file.async("string");
                 for (const match of xml.matchAll(/<a:t[^>]*>(.*?)<\/a:t>/gs)) {
+                  addTextCodePoints(codePoints, decodeXmlText(match[1]));
+                }
+                for (const match of xml.matchAll(/<c:v[^>]*>(.*?)<\/c:v>/gs)) {
                   addTextCodePoints(codePoints, decodeXmlText(match[1]));
                 }
                 for (const match of xml.matchAll(/<a:buChar\b[^>]*\bchar="([^"]*)"/g)) {
@@ -191,16 +194,13 @@ async function createVrtFontBuffer(
     if (codePoint === 0 || codePoint === 32) continue;
     const isControl = codePoint < 32;
     const isWide = codePoint >= 0x3000 || codePoint > 0xffff;
+    const advanceWidth = getGlyphAdvanceWidth(codePoint, isWide);
     glyphs.push(
       new opentype.Glyph({
         name: `uni${codePoint.toString(16).toUpperCase().padStart(4, "0")}`,
         unicode: codePoint,
-        advanceWidth: isControl ? 0 : isWide ? 1000 : 620,
-        path: isControl
-          ? new opentype.Path()
-          : isWide
-            ? createCjkGlyphPath()
-            : createLatinGlyphPath(),
+        advanceWidth: isControl ? 0 : advanceWidth,
+        path: isControl ? new opentype.Path() : createGlyphPath(codePoint, isWide),
       }),
     );
   }
@@ -216,22 +216,58 @@ async function createVrtFontBuffer(
 
   return font.toArrayBuffer();
 
-  function createLatinGlyphPath(): InstanceType<typeof opentype.Path> {
+  function getGlyphAdvanceWidth(codePoint: number, isWide: boolean): number {
+    const hash = hashCodePoint(codePoint);
+    return isWide ? 940 + (hash % 121) : 560 + (hash % 101);
+  }
+
+  function createGlyphPath(codePoint: number, isWide: boolean): InstanceType<typeof opentype.Path> {
+    return isWide ? createWideGlyphPath(codePoint) : createNarrowGlyphPath(codePoint);
+  }
+
+  function createNarrowGlyphPath(codePoint: number): InstanceType<typeof opentype.Path> {
+    const hash = hashCodePoint(codePoint);
+    const left = 50 + (hash % 35);
+    const right = 530 - ((hash >> 3) % 45);
+    const peakX = 250 + ((hash >> 6) % 130);
+    const peakY = 620 + ((hash >> 9) % 95);
+    const notchY = 30 + ((hash >> 12) % 90);
     const path = new opentype.Path();
-    path.moveTo(70, 0);
-    path.lineTo(310, 700);
-    path.lineTo(550, 0);
+    path.moveTo(left, 0);
+    path.lineTo(peakX, peakY);
+    path.lineTo(right, 0);
+    path.lineTo(350 + ((hash >> 15) % 80), notchY);
+    path.lineTo(180 + ((hash >> 18) % 80), notchY);
     path.close();
     return path;
   }
 
-  function createCjkGlyphPath(): InstanceType<typeof opentype.Path> {
+  function createWideGlyphPath(codePoint: number): InstanceType<typeof opentype.Path> {
+    const hash = hashCodePoint(codePoint);
+    const left = 70 + (hash % 45);
+    const right = 930 - ((hash >> 3) % 60);
+    const top = 690 + ((hash >> 6) % 80);
+    const shoulder = 170 + ((hash >> 9) % 180);
+    const notchX = 440 + ((hash >> 12) % 160);
+    const notchY = 40 + ((hash >> 15) % 120);
     const path = new opentype.Path();
-    path.moveTo(90, 0);
-    path.lineTo(90, 760);
-    path.lineTo(910, 760);
-    path.lineTo(910, 0);
+    path.moveTo(left, 0);
+    path.lineTo(left, top - shoulder);
+    path.lineTo(notchX, top);
+    path.lineTo(right, top - ((hash >> 18) % 90));
+    path.lineTo(right, 0);
+    path.lineTo(notchX, notchY);
     path.close();
     return path;
+  }
+
+  function hashCodePoint(codePoint: number): number {
+    let hash = codePoint >>> 0;
+    hash ^= hash >>> 16;
+    hash = Math.imul(hash, 0x7feb352d);
+    hash ^= hash >>> 15;
+    hash = Math.imul(hash, 0x846ca68b);
+    hash ^= hash >>> 16;
+    return hash >>> 0;
   }
 }
