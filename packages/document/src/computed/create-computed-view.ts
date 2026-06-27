@@ -1024,9 +1024,13 @@ function mergeDefaultRunProperties(
 function pickInherited<K extends keyof SourceParagraphProperties>(
   inherited: readonly (SourceParagraphProperties | undefined)[],
   key: K,
-): Pick<SourceParagraphProperties, K> | Record<string, never> {
+): Partial<Pick<SourceParagraphProperties, K>> {
   const value = pickInheritedValue(inherited, key);
-  return value !== undefined ? ({ [key]: value } as Pick<SourceParagraphProperties, K>) : {};
+  const picked: Partial<Pick<SourceParagraphProperties, K>> = {};
+  if (value !== undefined) {
+    picked[key] = value;
+  }
+  return picked;
 }
 
 function pickInheritedValue<K extends keyof SourceParagraphProperties>(
