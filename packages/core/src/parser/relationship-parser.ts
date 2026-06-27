@@ -1,6 +1,6 @@
 import { debug } from "@pptx-glimpse/renderer";
 
-import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
+import { unsafeXmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import { parseXml, type XmlNode } from "./xml-parser.js";
 
 export interface Relationship {
@@ -14,21 +14,21 @@ export function parseRelationships(xml: string): Map<string, Relationship> {
   const parsed = parseXml(xml);
   const rels = new Map<string, Relationship>();
 
-  const root = unsafeTypeAssertion<XmlNode | undefined>(parsed.Relationships);
+  const root = unsafeXmlBoundaryAssertion<XmlNode | undefined>(parsed.Relationships);
 
   if (!root) {
     debug("relationship.missing", `missing root element "Relationships" in XML`);
     return rels;
   }
 
-  const relationships = unsafeTypeAssertion<XmlNode[] | undefined>(root.Relationship);
+  const relationships = unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(root.Relationship);
   if (!relationships) return rels;
 
   for (const rel of relationships) {
-    const id = unsafeTypeAssertion<string | undefined>(rel["@_Id"]);
-    const type = unsafeTypeAssertion<string | undefined>(rel["@_Type"]);
-    const target = unsafeTypeAssertion<string | undefined>(rel["@_Target"]);
-    const targetMode = unsafeTypeAssertion<string | undefined>(rel["@_TargetMode"]);
+    const id = unsafeXmlBoundaryAssertion<string | undefined>(rel["@_Id"]);
+    const type = unsafeXmlBoundaryAssertion<string | undefined>(rel["@_Type"]);
+    const target = unsafeXmlBoundaryAssertion<string | undefined>(rel["@_Target"]);
+    const targetMode = unsafeXmlBoundaryAssertion<string | undefined>(rel["@_TargetMode"]);
 
     if (!id || !type || !target) {
       debug("relationship.attribute", "entry missing required attribute, skipping");

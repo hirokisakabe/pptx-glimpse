@@ -5,7 +5,7 @@ import { basename, resolve } from "path";
 import { promisify } from "util";
 import { type WebSocket, WebSocketServer } from "ws";
 
-import { unsafeTypeAssertion } from "./unsafe-type-assertion.js";
+import { unsafeScriptInputAssertion } from "./unsafe-type-assertion.js";
 
 const DEFAULT_PORT = 3000;
 const DEBOUNCE_MS = 300;
@@ -28,7 +28,7 @@ async function renderSlides(pptxPath: string): Promise<SlideSvg[]> {
     maxBuffer: MAX_BUFFER,
     timeout: RENDER_TIMEOUT_MS,
   });
-  return unsafeTypeAssertion<SlideSvg[]>(JSON.parse(stdout));
+  return unsafeScriptInputAssertion<SlideSvg[]>(JSON.parse(stdout));
 }
 
 // --- WebSocket ---

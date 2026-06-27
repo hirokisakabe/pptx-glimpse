@@ -3,7 +3,7 @@
  * ネイティブ <text> 出力モードの @font-face 埋め込み用。
  */
 
-import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
+import { unsafeExternalInteropAssertion } from "../unsafe-type-assertion.js";
 import { warn } from "../warning-logger.js";
 import type { OpentypeFullFont } from "./text-path-context.js";
 
@@ -65,7 +65,7 @@ export async function subsetFont(
   const opentype = await tryLoadOpentypeCtors();
   if (!opentype) return null;
 
-  const source = unsafeTypeAssertion<SubsettableFont>(font);
+  const source = unsafeExternalInteropAssertion<SubsettableFont>(font);
   if (typeof source.charToGlyph !== "function" || !source.glyphs) return null;
 
   // グリフインデックス → { グリフ, 担当ユニコード集合 }。

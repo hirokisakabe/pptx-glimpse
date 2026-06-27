@@ -9,7 +9,7 @@ import { hundredthPointToPoint } from "@pptx-glimpse/renderer";
 import { asEmu, asHundredthPt } from "@pptx-glimpse/renderer";
 
 import type { ColorResolver } from "../color/color-resolver.js";
-import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
+import { unsafeXmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import type { XmlNode } from "./xml-parser.js";
 
 export function parseDefaultRunProperties(
@@ -23,17 +23,17 @@ export function parseDefaultRunProperties(
   if (defRPr["@_sz"] !== undefined) {
     result.fontSize = hundredthPointToPoint(asHundredthPt(Number(defRPr["@_sz"])));
   }
-  const latin = unsafeTypeAssertion<XmlNode | undefined>(defRPr.latin);
+  const latin = unsafeXmlBoundaryAssertion<XmlNode | undefined>(defRPr.latin);
   if (latin?.["@_typeface"] !== undefined) {
-    result.fontFamily = unsafeTypeAssertion<string>(latin["@_typeface"]);
+    result.fontFamily = unsafeXmlBoundaryAssertion<string>(latin["@_typeface"]);
   }
-  const ea = unsafeTypeAssertion<XmlNode | undefined>(defRPr.ea);
+  const ea = unsafeXmlBoundaryAssertion<XmlNode | undefined>(defRPr.ea);
   if (ea?.["@_typeface"] !== undefined) {
-    result.fontFamilyEa = unsafeTypeAssertion<string>(ea["@_typeface"]);
+    result.fontFamilyEa = unsafeXmlBoundaryAssertion<string>(ea["@_typeface"]);
   }
-  const cs = unsafeTypeAssertion<XmlNode | undefined>(defRPr.cs);
+  const cs = unsafeXmlBoundaryAssertion<XmlNode | undefined>(defRPr.cs);
   if (cs?.["@_typeface"] !== undefined) {
-    result.fontFamilyCs = unsafeTypeAssertion<string>(cs["@_typeface"]);
+    result.fontFamilyCs = unsafeXmlBoundaryAssertion<string>(cs["@_typeface"]);
   }
   if (defRPr["@_b"] !== undefined) {
     result.bold = defRPr["@_b"] === "1" || defRPr["@_b"] === "true";
@@ -49,7 +49,7 @@ export function parseDefaultRunProperties(
   }
 
   if (colorResolver) {
-    const solidFill = unsafeTypeAssertion<XmlNode | undefined>(defRPr.solidFill);
+    const solidFill = unsafeXmlBoundaryAssertion<XmlNode | undefined>(defRPr.solidFill);
     if (solidFill) {
       const color = colorResolver.resolve(solidFill);
       if (color) {
@@ -82,7 +82,7 @@ export function parseParagraphLevelProperties(
   const result: DefaultParagraphLevelProperties = {};
 
   if (node["@_algn"] !== undefined) {
-    result.alignment = unsafeTypeAssertion<"l" | "ctr" | "r" | "just">(node["@_algn"]);
+    result.alignment = unsafeXmlBoundaryAssertion<"l" | "ctr" | "r" | "just">(node["@_algn"]);
   }
   if (node["@_marL"] !== undefined) {
     result.marginLeft = asEmu(Number(node["@_marL"]));
@@ -95,41 +95,42 @@ export function parseParagraphLevelProperties(
   if (node.buNone !== undefined) {
     result.bullet = { type: "none" };
   } else if (node.buChar) {
-    const buChar = unsafeTypeAssertion<XmlNode>(node.buChar);
+    const buChar = unsafeXmlBoundaryAssertion<XmlNode>(node.buChar);
     result.bullet = {
       type: "char",
-      char: unsafeTypeAssertion<string | undefined>(buChar["@_char"]) ?? "\u2022",
+      char: unsafeXmlBoundaryAssertion<string | undefined>(buChar["@_char"]) ?? "\u2022",
     };
   } else if (node.buAutoNum) {
-    const buAutoNum = unsafeTypeAssertion<XmlNode>(node.buAutoNum);
-    const scheme = unsafeTypeAssertion<string | undefined>(buAutoNum["@_type"]) ?? "arabicPeriod";
+    const buAutoNum = unsafeXmlBoundaryAssertion<XmlNode>(node.buAutoNum);
+    const scheme =
+      unsafeXmlBoundaryAssertion<string | undefined>(buAutoNum["@_type"]) ?? "arabicPeriod";
     result.bullet = {
       type: "autoNum",
       scheme: VALID_AUTO_NUM_SCHEMES.has(scheme)
-        ? unsafeTypeAssertion<AutoNumScheme>(scheme)
+        ? unsafeXmlBoundaryAssertion<AutoNumScheme>(scheme)
         : "arabicPeriod",
       startAt: Number(buAutoNum["@_startAt"] ?? 1),
     };
   }
   if (node.buFont) {
-    const buFont = unsafeTypeAssertion<XmlNode>(node.buFont);
-    const typeface = unsafeTypeAssertion<string | undefined>(buFont["@_typeface"]) ?? null;
+    const buFont = unsafeXmlBoundaryAssertion<XmlNode>(node.buFont);
+    const typeface = unsafeXmlBoundaryAssertion<string | undefined>(buFont["@_typeface"]) ?? null;
     if (typeface) result.bulletFont = typeface;
   }
   if (colorResolver) {
-    const buClr = unsafeTypeAssertion<XmlNode | undefined>(node.buClr);
+    const buClr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(node.buClr);
     if (buClr) {
       const color = colorResolver.resolve(buClr);
       if (color) result.bulletColor = color;
     }
   }
-  const buSzPct = unsafeTypeAssertion<XmlNode | undefined>(node.buSzPct);
+  const buSzPct = unsafeXmlBoundaryAssertion<XmlNode | undefined>(node.buSzPct);
   if (buSzPct) {
     result.bulletSizePct = Number(buSzPct["@_val"]);
   }
 
   const defRPr = parseDefaultRunProperties(
-    unsafeTypeAssertion<XmlNode>(node.defRPr),
+    unsafeXmlBoundaryAssertion<XmlNode>(node.defRPr),
     colorResolver,
   );
   if (defRPr) {
@@ -150,7 +151,7 @@ export function parseListStyle(
   if (!node) return undefined;
 
   const defaultParagraph = parseParagraphLevelProperties(
-    unsafeTypeAssertion<XmlNode>(node.defPPr),
+    unsafeXmlBoundaryAssertion<XmlNode>(node.defPPr),
     colorResolver,
   );
 
@@ -158,7 +159,7 @@ export function parseListStyle(
   for (let i = 1; i <= 9; i++) {
     levels.push(
       parseParagraphLevelProperties(
-        unsafeTypeAssertion<XmlNode>(node[`lvl${i}pPr`]),
+        unsafeXmlBoundaryAssertion<XmlNode>(node[`lvl${i}pPr`]),
         colorResolver,
       ),
     );

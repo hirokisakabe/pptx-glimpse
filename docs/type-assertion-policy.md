@@ -20,7 +20,7 @@ linted TypeScript sources. The main buckets are:
 
 | Category | Count | Policy |
 | --- | ---: | --- |
-| XML / external input boundary (`XmlNode`, `XmlOrderedNode`, parsed JSON) | 11 | Allowed at parser boundaries. Prefer shared XML helpers such as `getNode`, `getNodeArray`, `getAttr`, and enum parsers when touching nearby code. Unsafe narrowing belongs in `unsafeTypeAssertion` boundary helpers, not inline parser code. |
+| XML / external input boundary (`XmlNode`, `XmlOrderedNode`, parsed JSON) | 11 | Allowed at parser boundaries. Prefer shared XML helpers such as `getNode`, `getNodeArray`, `getAttr`, and enum parsers when touching nearby code. Unsafe narrowing belongs in purpose-specific `unsafe*Assertion` boundary helpers, not inline parser code. |
 | Test fixture / mock construction | 0 | Prefer fixture builders or boundary helpers when constructing narrow fixtures. |
 | `as const` literal preservation | 59 | Allowed. Prefer `satisfies` when shape validation is also needed. |
 | Branded unit / handle constructors (`Emu`, `Pt`, `PartPath`, etc.) | 0 | Callers should use constructor helpers such as `asEmu`, `asPt`, source unit helpers, and handle helpers. |
@@ -29,7 +29,7 @@ linted TypeScript sources. The main buckets are:
 | Array literal assertion | 0 | New direct array literal assertions to concrete types are banned by ESLint. |
 | `as any` | 0 | Not allowed in normal implementation code. |
 | External library / platform interop | 0 | Allowed inside the adapter module that owns the integration, preferably via a boundary helper. |
-| Other narrow assertions | 7 | Treat case-by-case. Enum/string-literal narrowing should move toward parser helpers such as `parseEnum`. External library gaps should stay inside adapter modules or `unsafeTypeAssertion` helpers. |
+| Other narrow assertions | 7 | Treat case-by-case. Enum/string-literal narrowing should move toward parser helpers such as `parseEnum`. External library gaps should stay inside adapter modules or purpose-specific `unsafe*Assertion` helpers. |
 
 No `as any` assertions were found in linted TypeScript sources during this
 audit.
@@ -46,8 +46,11 @@ rules:
 
 `no-unsafe-type-assertion` is enforced as an error. Existing unsafe narrowing
 from XML/OOXML parser boundaries, fixture narrowing, branded values, and
-external-library gaps has been moved behind local `unsafeTypeAssertion`
-helpers, each with a reasoned `eslint-disable-next-line` at the actual
+external-library gaps has been moved behind local helper functions grouped by
+boundary purpose (`unsafeXmlBoundaryAssertion`,
+`unsafeOoxmlBoundaryAssertion`, `unsafeFixtureAssertion`,
+`unsafeBrandAssertion`, external interop helpers, and adapter/script/VRT
+variants), each with a reasoned `eslint-disable-next-line` at the actual
 assertion boundary.
 
 Rule references:
@@ -60,7 +63,8 @@ Rule references:
 
 - XML and OOXML input parsing may narrow from `unknown`/record-shaped values at
   the boundary, but new code should use shared parser helpers or
-  `unsafeTypeAssertion` before adding another inline assertion.
+  purpose-specific `unsafe*Assertion` helpers before adding another inline
+  assertion.
 - Branded numeric/string values must be created through local constructor
   helpers. Direct brand assertions are allowed inside those constructors only.
 - Tests may use boundary helpers for fixture narrowing, but repeated patterns

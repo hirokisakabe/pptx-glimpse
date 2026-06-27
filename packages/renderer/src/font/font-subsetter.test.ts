@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
+import { unsafeFixtureAssertion } from "../unsafe-type-assertion.js";
 import { subsetFont } from "./font-subsetter.js";
 import type { OpentypeFullFont } from "./text-path-context.js";
 
@@ -78,13 +78,13 @@ async function createParsedTestFont(): Promise<OpentypeFullFont> {
     glyphs: [notdefGlyph, spaceGlyph, glyphA, glyphB],
   });
 
-  return unsafeTypeAssertion<OpentypeFullFont>(opentype.parse(font.toArrayBuffer()));
+  return unsafeFixtureAssertion<OpentypeFullFont>(opentype.parse(font.toArrayBuffer()));
 }
 
 async function parseSubsetBuffer(buffer: Uint8Array): Promise<ParsedFontForTest> {
   const opentype = await loadOpentype();
   return opentype.parse(
-    unsafeTypeAssertion<ArrayBuffer>(
+    unsafeFixtureAssertion<ArrayBuffer>(
       buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
     ),
   );
@@ -134,7 +134,7 @@ describe("subsetFont", () => {
   });
 
   it("charToGlyph を持たないオブジェクトで null を返す", async () => {
-    const fakeFont = unsafeTypeAssertion<OpentypeFullFont>({ unitsPerEm: 1000 });
+    const fakeFont = unsafeFixtureAssertion<OpentypeFullFont>({ unitsPerEm: 1000 });
     const buffer = await subsetFont(fakeFont, new Set(["A"]), "Fake");
 
     expect(buffer).toBeNull();

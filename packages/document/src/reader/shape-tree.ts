@@ -40,7 +40,7 @@ import type {
   SourceTransform,
 } from "../source/index.js";
 import { asEmu, asOoxmlPercent, asRelationshipId, asSourceNodeId } from "../source/index.js";
-import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
+import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import { parseCustomGeometry } from "./custom-geometry.js";
 import {
   isTrue,
@@ -169,7 +169,7 @@ export function parseShapeTree(
     const value = spTree[key];
     const items = Array.isArray(value) ? value : [value];
     for (const item of items) {
-      const node = unsafeTypeAssertion<XmlNode>(item);
+      const node = unsafeOoxmlBoundaryAssertion<XmlNode>(item);
       if (local === "sp") {
         nodes.push(parseShape(node, partPath, nextId, orderingSlot));
       } else if (local === "pic") {
@@ -246,9 +246,9 @@ function parseShapeTreeNode(
     return parseConnector(node, partPath, nextId, orderingSlot, orderedNode);
   }
   if (local === "grpSp") {
-    const orderedGroupChildren = unsafeTypeAssertion<readonly XmlOrderedNode[] | undefined>(
-      orderedNode?.[local],
-    );
+    const orderedGroupChildren = unsafeOoxmlBoundaryAssertion<
+      readonly XmlOrderedNode[] | undefined
+    >(orderedNode?.[local]);
     return parseGroup(node, partPath, nextId, orderingSlot, orderedGroupChildren);
   }
   if (local === "graphicFrame") {
@@ -593,7 +593,7 @@ function parseAlternateContentBranch(
     const value = branch[key];
     const items = Array.isArray(value) ? value : [value];
     for (const item of items) {
-      const node = unsafeTypeAssertion<XmlNode>(item);
+      const node = unsafeOoxmlBoundaryAssertion<XmlNode>(item);
       if (local === "sp") nodes.push(parseShape(node, partPath, nextId, orderingSlot));
       else if (local === "pic") nodes.push(parseImage(node, partPath, nextId, orderingSlot));
       else if (local === "cxnSp") {

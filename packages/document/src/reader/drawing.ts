@@ -31,7 +31,7 @@ import type {
   SourceTransform,
 } from "../source/index.js";
 import { asEmu, asOoxmlAngle, asOoxmlPercent, asRelationshipId } from "../source/index.js";
-import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
+import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import { parseEnumValue, parseEnumValueWithDefault } from "./ooxml-values.js";
 import { makeSidecar } from "./raw-node.js";
 import {
@@ -458,7 +458,7 @@ function withTransforms(base: SourceColor, colorNode: XmlNode): SourceColor {
     const value = colorNode[key];
     const items = Array.isArray(value) ? value : [value];
     for (const item of items) {
-      const raw = getAttr(unsafeTypeAssertion<XmlNode>(item), "val");
+      const raw = getAttr(unsafeOoxmlBoundaryAssertion<XmlNode>(item), "val");
       if (raw === undefined) continue;
       const numeric = Number(raw);
       if (!Number.isFinite(numeric)) continue;

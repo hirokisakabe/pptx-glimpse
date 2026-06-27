@@ -5,7 +5,7 @@ import type { Outline } from "@pptx-glimpse/renderer";
 import type { FormatScheme } from "@pptx-glimpse/renderer";
 
 import type { ColorResolver } from "../color/color-resolver.js";
-import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
+import { unsafeXmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import type { XmlNode } from "./xml-parser.js";
 
 interface ResolvedStyleReference {
@@ -22,10 +22,10 @@ export function resolveShapeStyle(
 ): ResolvedStyleReference | null {
   if (!styleNode || !fmtScheme) return null;
 
-  const fillRef = unsafeTypeAssertion<XmlNode | undefined>(styleNode.fillRef);
-  const lnRef = unsafeTypeAssertion<XmlNode | undefined>(styleNode.lnRef);
-  const effectRef = unsafeTypeAssertion<XmlNode | undefined>(styleNode.effectRef);
-  const fontRef = unsafeTypeAssertion<XmlNode | undefined>(styleNode.fontRef);
+  const fillRef = unsafeXmlBoundaryAssertion<XmlNode | undefined>(styleNode.fillRef);
+  const lnRef = unsafeXmlBoundaryAssertion<XmlNode | undefined>(styleNode.lnRef);
+  const effectRef = unsafeXmlBoundaryAssertion<XmlNode | undefined>(styleNode.effectRef);
+  const fontRef = unsafeXmlBoundaryAssertion<XmlNode | undefined>(styleNode.fontRef);
 
   const fill = resolveFillRef(fillRef, fmtScheme, colorResolver);
   const outline = resolveLineRef(lnRef, fmtScheme, colorResolver);
@@ -33,7 +33,7 @@ export function resolveShapeStyle(
 
   let fontRefResult: { idx: string; color: ResolvedColor | null } | undefined;
   if (fontRef) {
-    const idx = unsafeTypeAssertion<string | undefined>(fontRef["@_idx"]) ?? "minor";
+    const idx = unsafeXmlBoundaryAssertion<string | undefined>(fontRef["@_idx"]) ?? "minor";
     const color = colorResolver.resolve(fontRef);
     fontRefResult = { idx, color };
   }

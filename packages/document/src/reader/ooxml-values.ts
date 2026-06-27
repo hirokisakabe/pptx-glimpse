@@ -1,11 +1,11 @@
-import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
+import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 
 export function parseEnumValue<const T extends string>(
   value: string | undefined,
   allowed: ReadonlySet<T>,
 ): T | undefined {
-  return value !== undefined && allowed.has(unsafeTypeAssertion<T>(value))
-    ? unsafeTypeAssertion<T>(value)
+  return value !== undefined && allowed.has(unsafeOoxmlBoundaryAssertion<T>(value))
+    ? unsafeOoxmlBoundaryAssertion<T>(value)
     : undefined;
 }
 

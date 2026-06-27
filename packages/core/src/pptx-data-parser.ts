@@ -34,7 +34,7 @@ import { parseSlide } from "./parser/slide-parser.js";
 import { parseTheme } from "./parser/theme-parser.js";
 import { parseXml, type XmlNode } from "./parser/xml-parser.js";
 import { applyTextStyleInheritance } from "./text-style-resolver.js";
-import { unsafeTypeAssertion } from "./unsafe-type-assertion.js";
+import { unsafeXmlBoundaryAssertion } from "./unsafe-type-assertion.js";
 
 interface MasterData {
   colorMap: ColorMap;
@@ -444,17 +444,17 @@ function parseClrMapOverride(xml: string): Partial<ColorMap> | null {
   const parsed = parseXml(xml);
 
   // Navigate to root element (sld or sldLayout)
-  const root = unsafeTypeAssertion<XmlNode | undefined>(parsed.sld ?? parsed.sldLayout);
+  const root = unsafeXmlBoundaryAssertion<XmlNode | undefined>(parsed.sld ?? parsed.sldLayout);
   if (!root) return null;
 
-  const clrMapOvr = unsafeTypeAssertion<XmlNode | undefined>(root.clrMapOvr);
+  const clrMapOvr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(root.clrMapOvr);
   if (!clrMapOvr) return null;
 
   // masterClrMapping = use master as-is (no override)
   if (clrMapOvr.masterClrMapping !== undefined) return null;
 
   // overrideClrMapping = individual attribute overrides
-  const override = unsafeTypeAssertion<XmlNode | undefined>(clrMapOvr.overrideClrMapping);
+  const override = unsafeXmlBoundaryAssertion<XmlNode | undefined>(clrMapOvr.overrideClrMapping);
   if (!override) return null;
 
   const result: Partial<ColorMap> = {};
@@ -473,7 +473,7 @@ function parseClrMapOverride(xml: string): Partial<ColorMap> | null {
     "folHlink",
   ];
   for (const key of keys) {
-    const val = unsafeTypeAssertion<string | undefined>(override[`@_${key}`]);
+    const val = unsafeXmlBoundaryAssertion<string | undefined>(override[`@_${key}`]);
     if (val) {
       (result as Record<string, string>)[key] = val;
     }

@@ -2,7 +2,7 @@ import type { EffectList, Glow, InnerShadow, OuterShadow, SoftEdge } from "@pptx
 import { asEmu } from "@pptx-glimpse/renderer";
 
 import type { ColorResolver } from "../color/color-resolver.js";
-import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
+import { unsafeXmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import type { XmlNode } from "./xml-parser.js";
 
 export function parseEffectList(
@@ -12,15 +12,15 @@ export function parseEffectList(
   if (!effectLstNode) return null;
 
   const outerShadow = parseOuterShadow(
-    unsafeTypeAssertion<XmlNode>(effectLstNode.outerShdw),
+    unsafeXmlBoundaryAssertion<XmlNode>(effectLstNode.outerShdw),
     colorResolver,
   );
   const innerShadow = parseInnerShadow(
-    unsafeTypeAssertion<XmlNode>(effectLstNode.innerShdw),
+    unsafeXmlBoundaryAssertion<XmlNode>(effectLstNode.innerShdw),
     colorResolver,
   );
-  const glow = parseGlow(unsafeTypeAssertion<XmlNode>(effectLstNode.glow), colorResolver);
-  const softEdge = parseSoftEdge(unsafeTypeAssertion<XmlNode>(effectLstNode.softEdge));
+  const glow = parseGlow(unsafeXmlBoundaryAssertion<XmlNode>(effectLstNode.glow), colorResolver);
+  const softEdge = parseSoftEdge(unsafeXmlBoundaryAssertion<XmlNode>(effectLstNode.softEdge));
 
   if (!outerShadow && !innerShadow && !glow && !softEdge) {
     return null;
@@ -40,7 +40,7 @@ function parseOuterShadow(node: XmlNode, colorResolver: ColorResolver): OuterSha
     distance: asEmu(Number(node["@_dist"] ?? 0)),
     direction: Number(node["@_dir"] ?? 0) / 60000,
     color,
-    alignment: unsafeTypeAssertion<string | undefined>(node["@_algn"]) ?? "b",
+    alignment: unsafeXmlBoundaryAssertion<string | undefined>(node["@_algn"]) ?? "b",
     rotateWithShape: node["@_rotWithShape"] !== "0",
   };
 }

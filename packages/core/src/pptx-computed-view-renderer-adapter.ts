@@ -55,7 +55,7 @@ import type { Relationship } from "./parser/relationship-parser.js";
 import { navigateOrdered, parseShapeTree } from "./parser/slide-parser.js";
 import { parseXml, parseXmlOrdered, type XmlNode } from "./parser/xml-parser.js";
 import { convertChartXmlToRendererChartData } from "./renderer-chart-data-converter.js";
-import { unsafeTypeAssertion } from "./unsafe-type-assertion.js";
+import { unsafeAdapterBoundaryAssertion } from "./unsafe-type-assertion.js";
 
 interface RendererAdapterResult {
   readonly slideSize?: SlideSize;
@@ -313,8 +313,8 @@ function adaptSmartArt(
   }
 
   const parsed = parseXml(smartArt.drawingXml);
-  const drawing = unsafeTypeAssertion<XmlNode | undefined>(parsed.drawing);
-  const spTree = unsafeTypeAssertion<XmlNode | undefined>(drawing?.spTree);
+  const drawing = unsafeAdapterBoundaryAssertion<XmlNode | undefined>(parsed.drawing);
+  const spTree = unsafeAdapterBoundaryAssertion<XmlNode | undefined>(drawing?.spTree);
   if (spTree === undefined) {
     pushAdapterWarning(
       diagnostics,
@@ -380,11 +380,11 @@ function adaptSmartArt(
 }
 
 function adaptSmartArtChildTransform(spTree: XmlNode, groupTransform: Transform): Transform {
-  const xfrm = unsafeTypeAssertion<XmlNode | undefined>(
-    unsafeTypeAssertion<XmlNode | undefined>(spTree.grpSpPr)?.xfrm,
+  const xfrm = unsafeAdapterBoundaryAssertion<XmlNode | undefined>(
+    unsafeAdapterBoundaryAssertion<XmlNode | undefined>(spTree.grpSpPr)?.xfrm,
   );
-  const chOff = unsafeTypeAssertion<XmlNode | undefined>(xfrm?.chOff);
-  const chExt = unsafeTypeAssertion<XmlNode | undefined>(xfrm?.chExt);
+  const chOff = unsafeAdapterBoundaryAssertion<XmlNode | undefined>(xfrm?.chOff);
+  const chExt = unsafeAdapterBoundaryAssertion<XmlNode | undefined>(xfrm?.chExt);
 
   return {
     offsetX: asEmu(Number(chOff?.["@_x"] ?? 0)),
@@ -847,7 +847,7 @@ function toRendererEmu(value: number): ReturnType<typeof asEmu> {
 }
 
 function toRendererPt(value: number): NonNullable<RunProperties["fontSize"]> {
-  return unsafeTypeAssertion<NonNullable<RunProperties["fontSize"]>>(Number(value));
+  return unsafeAdapterBoundaryAssertion<NonNullable<RunProperties["fontSize"]>>(Number(value));
 }
 
 function normalizeImageMimeType(contentType: string): string {

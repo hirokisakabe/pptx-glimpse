@@ -1,17 +1,17 @@
 import { describe, expect, it } from "vitest";
 
-import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
+import { unsafeFixtureAssertion } from "../unsafe-type-assertion.js";
 import { parseXml } from "./xml-parser.js";
 
 describe("parseXml", () => {
   it("parses simple XML", () => {
     const result = parseXml("<root><child>value</child></root>");
-    expect(unsafeTypeAssertion<Record<string, unknown>>(result.root).child).toBe("value");
+    expect(unsafeFixtureAssertion<Record<string, unknown>>(result.root).child).toBe("value");
   });
 
   it("preserves attributes with @_ prefix", () => {
     const result = parseXml('<shape type="rect" id="1"/>');
-    const shape = unsafeTypeAssertion<Record<string, unknown>>(result.shape);
+    const shape = unsafeFixtureAssertion<Record<string, unknown>>(result.shape);
     expect(shape["@_type"]).toBe("rect");
     expect(shape["@_id"]).toBe("1");
   });
@@ -19,7 +19,7 @@ describe("parseXml", () => {
   it("removes namespace prefix", () => {
     const result = parseXml('<p:sp xmlns:p="http://example.com"><p:nvSpPr/></p:sp>');
     expect(result).toHaveProperty("sp");
-    const sp = unsafeTypeAssertion<Record<string, unknown>[]>(result.sp)[0];
+    const sp = unsafeFixtureAssertion<Record<string, unknown>[]>(result.sp)[0];
     expect(sp).toHaveProperty("nvSpPr");
   });
 });
@@ -49,7 +49,7 @@ describe("ARRAY_TAGS", () => {
   it.each(arrayTags)("returns <%s> as array when single element", (tag) => {
     const xml = `<root><${tag}>content</${tag}></root>`;
     const result = parseXml(xml);
-    const root = unsafeTypeAssertion<Record<string, unknown>>(result.root);
+    const root = unsafeFixtureAssertion<Record<string, unknown>>(result.root);
     expect(Array.isArray(root[tag])).toBe(true);
     expect(root[tag]).toHaveLength(1);
   });
@@ -57,7 +57,7 @@ describe("ARRAY_TAGS", () => {
   it("returns sp as array when multiple elements", () => {
     const xml = "<spTree><sp><nvSpPr/></sp><sp><nvSpPr/></sp></spTree>";
     const result = parseXml(xml);
-    const spTree = unsafeTypeAssertion<Record<string, unknown>>(result.spTree);
+    const spTree = unsafeFixtureAssertion<Record<string, unknown>>(result.spTree);
     expect(Array.isArray(spTree.sp)).toBe(true);
     expect(spTree.sp).toHaveLength(2);
   });
@@ -65,7 +65,7 @@ describe("ARRAY_TAGS", () => {
   it("does not return non-array tag as array", () => {
     const xml = "<root><single>value</single></root>";
     const result = parseXml(xml);
-    const root = unsafeTypeAssertion<Record<string, unknown>>(result.root);
+    const root = unsafeFixtureAssertion<Record<string, unknown>>(result.root);
     expect(Array.isArray(root.single)).toBe(false);
     expect(root.single).toBe("value");
   });

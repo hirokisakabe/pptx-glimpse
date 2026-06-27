@@ -10,7 +10,7 @@ import type { ColorMap, ColorScheme, ColorSchemeKey } from "@pptx-glimpse/render
 import { debug } from "@pptx-glimpse/renderer";
 
 import type { XmlNode } from "../parser/xml-parser.js";
-import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
+import { unsafeXmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import { applyColorTransforms } from "./color-transforms.js";
 
 export class ColorResolver {
@@ -23,13 +23,13 @@ export class ColorResolver {
     if (!colorNode) return null;
 
     if (colorNode.srgbClr) {
-      return this.resolveSrgbClr(unsafeTypeAssertion<XmlNode>(colorNode.srgbClr));
+      return this.resolveSrgbClr(unsafeXmlBoundaryAssertion<XmlNode>(colorNode.srgbClr));
     }
     if (colorNode.schemeClr) {
-      return this.resolveSchemeClr(unsafeTypeAssertion<XmlNode>(colorNode.schemeClr));
+      return this.resolveSchemeClr(unsafeXmlBoundaryAssertion<XmlNode>(colorNode.schemeClr));
     }
     if (colorNode.sysClr) {
-      return this.resolveSysClr(unsafeTypeAssertion<XmlNode>(colorNode.sysClr));
+      return this.resolveSysClr(unsafeXmlBoundaryAssertion<XmlNode>(colorNode.sysClr));
     }
 
     const keys = Object.keys(colorNode).filter((k) => !k.startsWith("@_"));
@@ -41,20 +41,20 @@ export class ColorResolver {
   }
 
   private resolveSrgbClr(node: XmlNode): ResolvedColor {
-    const hex = `#${unsafeTypeAssertion<string>(node["@_val"])}`;
+    const hex = `#${unsafeXmlBoundaryAssertion<string>(node["@_val"])}`;
     const alpha = extractAlpha(node);
     return applyColorTransforms({ hex, alpha }, node);
   }
 
   private resolveSchemeClr(node: XmlNode): ResolvedColor {
-    const schemeName = unsafeTypeAssertion<string>(node["@_val"]);
+    const schemeName = unsafeXmlBoundaryAssertion<string>(node["@_val"]);
     const hex = this.resolveSchemeColorName(schemeName);
     const alpha = extractAlpha(node);
     return applyColorTransforms({ hex, alpha }, node);
   }
 
   private resolveSysClr(node: XmlNode): ResolvedColor {
-    const hex = `#${unsafeTypeAssertion<string | undefined>(node["@_lastClr"]) ?? "000000"}`;
+    const hex = `#${unsafeXmlBoundaryAssertion<string | undefined>(node["@_lastClr"]) ?? "000000"}`;
     const alpha = extractAlpha(node);
     return applyColorTransforms({ hex, alpha }, node);
   }
@@ -66,17 +66,17 @@ export class ColorResolver {
 
   private mapColorName(name: string): ColorSchemeKey {
     if (name in this.colorMap) {
-      return this.colorMap[unsafeTypeAssertion<keyof ColorMap>(name)];
+      return this.colorMap[unsafeXmlBoundaryAssertion<keyof ColorMap>(name)];
     }
     if (name in this.colorScheme) {
-      return unsafeTypeAssertion<ColorSchemeKey>(name);
+      return unsafeXmlBoundaryAssertion<ColorSchemeKey>(name);
     }
     return "dk1";
   }
 }
 
 function extractAlpha(node: XmlNode): number {
-  const alphaNode = unsafeTypeAssertion<XmlNode | undefined>(node.alpha);
+  const alphaNode = unsafeXmlBoundaryAssertion<XmlNode | undefined>(node.alpha);
   if (alphaNode) {
     return Number(alphaNode["@_val"]) / 100000;
   }

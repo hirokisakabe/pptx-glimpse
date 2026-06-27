@@ -15,7 +15,7 @@ import type {
 } from "../experimental.js";
 // 実際の公開面 (`@pptx-glimpse/document/experimental`) 経由で import する。
 import { readPptx } from "../experimental.js";
-import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
+import { unsafeFixtureAssertion } from "../unsafe-type-assertion.js";
 
 const encoder = new TextEncoder();
 
@@ -221,7 +221,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
           `</p:spPr></p:sp>`,
       ),
     );
-    const shape = unsafeTypeAssertion<SourceShape>(source.slides[0].shapes[0]);
+    const shape = unsafeFixtureAssertion<SourceShape>(source.slides[0].shapes[0]);
     expect(shape.transform).toEqual({
       offsetX: 100,
       offsetY: 200,
@@ -261,7 +261,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
       ),
     );
 
-    const shape = unsafeTypeAssertion<SourceShape>(source.slides[0].shapes[0]);
+    const shape = unsafeFixtureAssertion<SourceShape>(source.slides[0].shapes[0]);
     expect(shape.textBody?.properties).toMatchObject({
       wrap: "none",
       vert: "eaVert",
@@ -296,7 +296,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
       ),
     );
 
-    const shape = unsafeTypeAssertion<SourceShape>(source.slides[0].shapes[0]);
+    const shape = unsafeFixtureAssertion<SourceShape>(source.slides[0].shapes[0]);
     const paragraphs = shape.textBody!.paragraphs;
     expect(paragraphs.map((paragraph) => paragraph.runs.map((run) => run.text))).toEqual([
       ["first", "\n", "after break"],
@@ -316,7 +316,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
       ),
     );
 
-    const shape = unsafeTypeAssertion<SourceShape>(source.slides[0].shapes[0]);
+    const shape = unsafeFixtureAssertion<SourceShape>(source.slides[0].shapes[0]);
     expect(shape.textBody?.properties).toMatchObject({ autoFit: "spAutofit" });
   });
 
@@ -330,7 +330,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
       ),
     );
 
-    const shape = unsafeTypeAssertion<SourceShape>(source.slides[0].shapes[0]);
+    const shape = unsafeFixtureAssertion<SourceShape>(source.slides[0].shapes[0]);
     expect(shape.textBody?.properties).toMatchObject({
       autoFit: "noAutofit",
       fontScale: 1,
@@ -348,7 +348,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
           `</p:spPr></p:sp>`,
       ),
     );
-    const shape = unsafeTypeAssertion<SourceShape>(source.slides[0].shapes[0]);
+    const shape = unsafeFixtureAssertion<SourceShape>(source.slides[0].shapes[0]);
     expect(shape.fill).toMatchObject({
       kind: "gradient",
       gradientType: "linear",
@@ -372,7 +372,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
           `</a:effectLst></p:spPr></p:sp>`,
       ),
     );
-    const shape = unsafeTypeAssertion<SourceShape>(source.slides[0].shapes[0]);
+    const shape = unsafeFixtureAssertion<SourceShape>(source.slides[0].shapes[0]);
     expect(shape.effects).toMatchObject({
       outerShadow: {
         blurRadius: 40000,
@@ -416,7 +416,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
           `</p:pic>`,
       ),
     );
-    const image = unsafeTypeAssertion<SourceImage>(source.slides[0].shapes[0]);
+    const image = unsafeFixtureAssertion<SourceImage>(source.slides[0].shapes[0]);
     expect(image.effects?.softEdge).toEqual({ radius: 1000 });
     expect(image.blipEffects).toMatchObject({
       grayscale: true,
@@ -466,7 +466,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
       ),
     );
 
-    const table = unsafeTypeAssertion<SourceTable>(source.slides[0].shapes[0]);
+    const table = unsafeFixtureAssertion<SourceTable>(source.slides[0].shapes[0]);
     expect(table.kind).toBe("table");
     expect(table.nodeId).toBe("20");
     expect(table.name).toBe("Sales table");
@@ -533,7 +533,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
       ),
     );
 
-    const [chart, smartArt, connector] = unsafeTypeAssertion<
+    const [chart, smartArt, connector] = unsafeFixtureAssertion<
       [SourceChart, SourceSmartArt, SourceConnector]
     >(source.slides[0].shapes);
     expect(chart).toMatchObject({
@@ -621,7 +621,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
       "shape",
       "shape",
     ]);
-    const [connector, group, custom, orderedCustom] = unsafeTypeAssertion<
+    const [connector, group, custom, orderedCustom] = unsafeFixtureAssertion<
       [SourceConnector, SourceGroup, SourceShape, SourceShape]
     >(source.slides[0].shapes);
     expect(connector).toMatchObject({

@@ -9,7 +9,7 @@
  */
 import { readFileSync } from "node:fs";
 
-import { unsafeTypeAssertion } from "./unsafe-type-assertion.js";
+import { unsafeScriptInputAssertion } from "./unsafe-type-assertion.js";
 
 interface VitestBenchmark {
   name: string;
@@ -46,7 +46,9 @@ function extractSuiteName(fullName: string): string {
 }
 
 function parseBenchOutput(path: string): FlatBenchmark[] {
-  const raw = unsafeTypeAssertion<VitestBenchOutput>(JSON.parse(readFileSync(path, "utf-8")));
+  const raw = unsafeScriptInputAssertion<VitestBenchOutput>(
+    JSON.parse(readFileSync(path, "utf-8")),
+  );
   const results: FlatBenchmark[] = [];
   for (const file of raw.files) {
     for (const group of file.groups) {

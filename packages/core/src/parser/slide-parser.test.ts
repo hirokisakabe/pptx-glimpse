@@ -3,7 +3,7 @@ import { initWarningLogger } from "@pptx-glimpse/renderer";
 import { describe, expect, it, vi } from "vitest";
 
 import { ColorResolver } from "../color/color-resolver.js";
-import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
+import { unsafeFixtureAssertion } from "../unsafe-type-assertion.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import type { Relationship } from "./relationship-parser.js";
 import { navigateOrdered, parseShapeTree, parseSlide, parseTextBody } from "./slide-parser.js";
@@ -72,7 +72,7 @@ describe("parseShapeTree", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -81,7 +81,7 @@ describe("parseShapeTree", () => {
 
     expect(elements).toHaveLength(1);
     expect(elements[0].type).toBe("shape");
-    expect(unsafeTypeAssertion<ShapeElement>(elements[0]).placeholderType).toBe("title");
+    expect(unsafeFixtureAssertion<ShapeElement>(elements[0]).placeholderType).toBe("title");
   });
 
   it("defaults placeholder type to body when type is not specified", () => {
@@ -108,7 +108,7 @@ describe("parseShapeTree", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -116,7 +116,7 @@ describe("parseShapeTree", () => {
     );
 
     expect(elements).toHaveLength(1);
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     expect(shape.placeholderType).toBe("body");
     expect(shape.placeholderIdx).toBe(1);
   });
@@ -143,7 +143,7 @@ describe("parseShapeTree", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -151,7 +151,7 @@ describe("parseShapeTree", () => {
     );
 
     expect(elements).toHaveLength(1);
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     expect(shape.placeholderType).toBeUndefined();
     expect(shape.placeholderIdx).toBeUndefined();
   });
@@ -189,14 +189,14 @@ describe("parseShapeTree", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
       createColorResolver(),
     );
 
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     expect(shape.textBody).not.toBeNull();
     expect(shape.textBody!.bodyProperties.autoFit).toBe("normAutofit");
     expect(shape.textBody!.bodyProperties.fontScale).toBe(0.625);
@@ -236,14 +236,14 @@ describe("parseShapeTree", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
       createColorResolver(),
     );
 
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     expect(shape.textBody!.bodyProperties.autoFit).toBe("normAutofit");
     expect(shape.textBody!.bodyProperties.fontScale).toBe(1);
     expect(shape.textBody!.bodyProperties.lnSpcReduction).toBe(0);
@@ -280,14 +280,14 @@ describe("parseShapeTree", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
       createColorResolver(),
     );
 
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     expect(shape.textBody!.bodyProperties.autoFit).toBe("noAutofit");
     expect(shape.textBody!.bodyProperties.fontScale).toBe(1);
     expect(shape.textBody!.bodyProperties.lnSpcReduction).toBe(0);
@@ -324,14 +324,14 @@ describe("parseShapeTree", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
       createColorResolver(),
     );
 
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     expect(shape.textBody!.paragraphs[0].runs[0].properties.baseline).toBe(30);
   });
 
@@ -366,14 +366,14 @@ describe("parseShapeTree", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
       createColorResolver(),
     );
 
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     expect(shape.textBody!.paragraphs[0].runs[0].properties.baseline).toBe(-25);
   });
 
@@ -408,14 +408,14 @@ describe("parseShapeTree", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
       createColorResolver(),
     );
 
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     expect(shape.textBody!.paragraphs[0].runs[0].properties.baseline).toBe(0);
   });
 
@@ -445,13 +445,13 @@ describe("parseShapeTree", () => {
       `;
       const parsed = parseXml(xml);
       const elements = parseShapeTree(
-        unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+        unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
         new Map(),
         "ppt/slides/slide1.xml",
         createEmptyArchive(),
         createColorResolver(),
       );
-      expect(unsafeTypeAssertion<ShapeElement>(elements[0]).placeholderType).toBe(phType);
+      expect(unsafeFixtureAssertion<ShapeElement>(elements[0]).placeholderType).toBe(phType);
     }
   });
 });
@@ -491,14 +491,14 @@ describe("bullet parsing", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
       createColorResolver(),
     );
 
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     const para = shape.textBody!.paragraphs[0];
     expect(para.properties.bullet).toEqual({ type: "char", char: "\u2022" });
     expect(para.properties.marginLeft).toBe(342900);
@@ -539,14 +539,14 @@ describe("bullet parsing", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
       createColorResolver(),
     );
 
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     const para = shape.textBody!.paragraphs[0];
     expect(para.properties.bullet).toEqual({
       type: "autoNum",
@@ -589,14 +589,14 @@ describe("bullet parsing", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
       createColorResolver(),
     );
 
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     const para = shape.textBody!.paragraphs[0];
     expect(para.properties.bullet).toEqual({ type: "none" });
   });
@@ -636,14 +636,14 @@ describe("bullet parsing", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
       createColorResolver(),
     );
 
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     const para = shape.textBody!.paragraphs[0];
     expect(para.properties.bulletFont).toBe("Wingdings");
     expect(para.properties.bullet).toEqual({ type: "char", char: "v" });
@@ -680,14 +680,14 @@ describe("bullet parsing", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
       createColorResolver(),
     );
 
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     const para = shape.textBody!.paragraphs[0];
     expect(para.properties.bullet).toBeNull();
     expect(para.properties.marginLeft).toBeNull();
@@ -734,7 +734,7 @@ describe("structural validation warnings", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -774,7 +774,7 @@ describe("structural validation warnings", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide2.xml",
       createEmptyArchive(),
@@ -814,7 +814,7 @@ describe("structural validation warnings", () => {
     `;
     const parsed = parseXml(xml);
     parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -873,7 +873,7 @@ describe("structural validation warnings", () => {
       minorFontEa: "Yu Mincho",
     };
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -884,7 +884,7 @@ describe("structural validation warnings", () => {
     );
 
     expect(elements).toHaveLength(1);
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     const runs = shape.textBody!.paragraphs[0].runs;
 
     expect(runs[0].properties.fontFamily).toBe("Calibri Light");
@@ -933,7 +933,7 @@ describe("structural validation warnings", () => {
       minorFontEa: "Yu Mincho",
     };
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -944,7 +944,7 @@ describe("structural validation warnings", () => {
     );
 
     expect(elements).toHaveLength(1);
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     const runs = shape.textBody!.paragraphs[0].runs;
 
     expect(runs[0].properties.fontFamily).toBe("Arial");
@@ -991,14 +991,14 @@ describe("lstStyle and defRPr parsing", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
       createColorResolver(),
     );
 
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     const para = shape.textBody!.paragraphs[0];
     // lstStyle の段落プロパティが適用される
     expect(para.properties.alignment).toBe("ctr");
@@ -1045,14 +1045,14 @@ describe("lstStyle and defRPr parsing", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
       createColorResolver(),
     );
 
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     const run = shape.textBody!.paragraphs[0].runs[0];
     expect(run.properties.fontSize).toBe(18);
     expect(run.properties.italic).toBe(true);
@@ -1105,14 +1105,14 @@ describe("lstStyle and defRPr parsing", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
       createColorResolver(),
     );
 
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     const run = shape.textBody!.paragraphs[0].runs[0];
     // rPr が最優先
     expect(run.properties.fontSize).toBe(12);
@@ -1164,14 +1164,14 @@ describe("lstStyle and defRPr parsing", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
       createColorResolver(),
     );
 
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     const run = shape.textBody!.paragraphs[0].runs[0];
     // pPr.defRPr > lstStyle.lvl.defRPr
     expect(run.properties.fontSize).toBe(24);
@@ -1212,14 +1212,14 @@ describe("lstStyle and defRPr parsing", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
       createColorResolver(),
     );
 
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     const para = shape.textBody!.paragraphs[0];
     expect(para.properties.marginLeft).toBe(342900);
     expect(para.properties.indent).toBe(-342900);
@@ -1273,14 +1273,14 @@ describe("lstStyle and defRPr parsing", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
       createColorResolver(),
     );
 
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     expect(shape.textBody!.paragraphs[0].runs[0].properties.fontSize).toBe(24);
     expect(shape.textBody!.paragraphs[1].runs[0].properties.fontSize).toBe(18);
   });
@@ -1320,14 +1320,14 @@ describe("lstStyle and defRPr parsing", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
       createColorResolver(),
     );
 
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     const run = shape.textBody!.paragraphs[0].runs[0];
     expect(run.properties.fontSize).toBe(20);
     expect(run.properties.bold).toBe(true);
@@ -1379,7 +1379,7 @@ describe("lstStyle and defRPr parsing", () => {
       minorFontEa: "Yu Mincho",
     };
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -1389,7 +1389,7 @@ describe("lstStyle and defRPr parsing", () => {
       fontScheme,
     );
 
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     const run = shape.textBody!.paragraphs[0].runs[0];
     expect(run.properties.fontFamily).toBe("Calibri Light");
     expect(run.properties.fontFamilyEa).toBe("Yu Mincho");
@@ -1432,7 +1432,7 @@ describe("Z-order across element types", () => {
     const orderedSpTree = navigateOrdered(orderedParsed, ["spTree"]);
 
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -1474,7 +1474,7 @@ describe("Z-order across element types", () => {
 
     // orderedChildren なし → タイプ別イテレーション（sp が先）
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -1502,7 +1502,7 @@ describe("parseTextBody", () => {
       </txBody>`;
     const parsed = parseXml(xml);
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
     );
     expect(result).not.toBeNull();
@@ -1527,7 +1527,7 @@ describe("parseTextBody", () => {
       </txBody>`;
     const parsed = parseXml(xml);
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
     );
     expect(result).not.toBeNull();
@@ -1555,7 +1555,7 @@ describe("parseTextBody", () => {
       </txBody>`;
     const parsed = parseXml(xml);
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
     );
     expect(result).not.toBeNull();
@@ -1579,7 +1579,7 @@ describe("parseTextBody", () => {
       </txBody>`;
     const parsed = parseXml(xml);
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
     );
     expect(result).not.toBeNull();
@@ -1600,7 +1600,7 @@ describe("parseTextBody", () => {
       </txBody>`;
     const parsed = parseXml(xml);
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
     );
     expect(result).not.toBeNull();
@@ -1618,7 +1618,7 @@ describe("parseTextBody", () => {
       </txBody>`;
     const parsed = parseXml(xml);
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
     );
     expect(result).not.toBeNull();
@@ -1636,7 +1636,7 @@ describe("parseTextBody", () => {
       </txBody>`;
     const parsed = parseXml(xml);
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
     );
     expect(result).not.toBeNull();
@@ -1654,7 +1654,7 @@ describe("parseTextBody", () => {
       </txBody>`;
     const parsed = parseXml(xml);
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
     );
     expect(result).not.toBeNull();
@@ -1680,7 +1680,7 @@ describe("parseTextBody", () => {
       </txBody>`;
     const parsed = parseXml(xml);
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
     );
     expect(result).not.toBeNull();
@@ -1708,14 +1708,14 @@ describe("parseTextBody", () => {
     const orderedFull = parseXmlOrdered(fullXml);
     const spChildren = orderedFull[0]?.sp;
     const txBodyEntry = Array.isArray(spChildren)
-      ? unsafeTypeAssertion<Record<string, unknown>[]>(spChildren).find((c) => "txBody" in c)
+      ? unsafeFixtureAssertion<Record<string, unknown>[]>(spChildren).find((c) => "txBody" in c)
       : null;
-    const orderedTxBody = unsafeTypeAssertion<Record<string, unknown>[] | undefined>(
+    const orderedTxBody = unsafeFixtureAssertion<Record<string, unknown>[] | undefined>(
       txBodyEntry?.txBody,
     );
 
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
       undefined,
       undefined,
@@ -1739,7 +1739,7 @@ describe("parseTextBody", () => {
       </txBody>`;
     const parsed = parseXml(xml);
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
     );
     expect(result).not.toBeNull();
@@ -1757,7 +1757,7 @@ describe("parseTextBody", () => {
       </txBody>`;
     const parsed = parseXml(xml);
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
     );
     expect(result).not.toBeNull();
@@ -1775,7 +1775,7 @@ describe("parseTextBody", () => {
       </txBody>`;
     const parsed = parseXml(xml);
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
     );
     expect(result).not.toBeNull();
@@ -1802,7 +1802,7 @@ describe("parseTextBody", () => {
       ["rId1", { id: "rId1", type: "hyperlink", target: "https://example.com" }],
     ]);
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
       rels,
     );
@@ -1834,7 +1834,7 @@ describe("parseTextBody", () => {
       ["rId1", { id: "rId1", type: "hyperlink", target: "https://example.com" }],
     ]);
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
       rels,
     );
@@ -1863,7 +1863,7 @@ describe("parseTextBody", () => {
       ["rId1", { id: "rId1", type: "hyperlink", target: "https://example.com" }],
     ]);
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
       rels,
     );
@@ -1905,14 +1905,14 @@ describe("parseTextBody", () => {
     const orderedFull = parseXmlOrdered(fullXml);
     const spChildren = orderedFull[0]?.sp;
     const txBodyEntry = Array.isArray(spChildren)
-      ? unsafeTypeAssertion<Record<string, unknown>[]>(spChildren).find((c) => "txBody" in c)
+      ? unsafeFixtureAssertion<Record<string, unknown>[]>(spChildren).find((c) => "txBody" in c)
       : null;
-    const orderedTxBody = unsafeTypeAssertion<Record<string, unknown>[] | undefined>(
+    const orderedTxBody = unsafeFixtureAssertion<Record<string, unknown>[] | undefined>(
       txBodyEntry?.txBody,
     );
 
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
       undefined,
       undefined,
@@ -1964,14 +1964,14 @@ describe("parseTextBody", () => {
     const orderedFull = parseXmlOrdered(fullXml);
     const spChildren = orderedFull[0]?.sp;
     const txBodyEntry = Array.isArray(spChildren)
-      ? unsafeTypeAssertion<Record<string, unknown>[]>(spChildren).find((c) => "txBody" in c)
+      ? unsafeFixtureAssertion<Record<string, unknown>[]>(spChildren).find((c) => "txBody" in c)
       : null;
-    const orderedTxBody = unsafeTypeAssertion<Record<string, unknown>[] | undefined>(
+    const orderedTxBody = unsafeFixtureAssertion<Record<string, unknown>[] | undefined>(
       txBodyEntry?.txBody,
     );
 
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
       undefined,
       undefined,
@@ -2006,14 +2006,14 @@ describe("parseTextBody", () => {
     const orderedFull = parseXmlOrdered(fullXml);
     const spChildren = orderedFull[0]?.sp;
     const txBodyEntry = Array.isArray(spChildren)
-      ? unsafeTypeAssertion<Record<string, unknown>[]>(spChildren).find((c) => "txBody" in c)
+      ? unsafeFixtureAssertion<Record<string, unknown>[]>(spChildren).find((c) => "txBody" in c)
       : null;
-    const orderedTxBody = unsafeTypeAssertion<Record<string, unknown>[] | undefined>(
+    const orderedTxBody = unsafeFixtureAssertion<Record<string, unknown>[] | undefined>(
       txBodyEntry?.txBody,
     );
 
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
       undefined,
       undefined,
@@ -2047,14 +2047,14 @@ describe("parseTextBody", () => {
     const orderedFull = parseXmlOrdered(fullXml);
     const spChildren = orderedFull[0]?.sp;
     const txBodyEntry = Array.isArray(spChildren)
-      ? unsafeTypeAssertion<Record<string, unknown>[]>(spChildren).find((c) => "txBody" in c)
+      ? unsafeFixtureAssertion<Record<string, unknown>[]>(spChildren).find((c) => "txBody" in c)
       : null;
-    const orderedTxBody = unsafeTypeAssertion<Record<string, unknown>[] | undefined>(
+    const orderedTxBody = unsafeFixtureAssertion<Record<string, unknown>[] | undefined>(
       txBodyEntry?.txBody,
     );
 
     const result = parseTextBody(
-      unsafeTypeAssertion<XmlNode>(parsed.txBody),
+      unsafeFixtureAssertion<XmlNode>(parsed.txBody),
       createColorResolver(),
       undefined,
       undefined,
@@ -2091,7 +2091,7 @@ describe("placeholder geometry inheritance", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -2105,10 +2105,10 @@ describe("placeholder geometry inheritance", () => {
         {
           placeholderType: "ctrTitle",
           transform: {
-            offsetX: unsafeTypeAssertion<never>(1000),
-            offsetY: unsafeTypeAssertion<never>(2000),
-            extentWidth: unsafeTypeAssertion<never>(5000),
-            extentHeight: unsafeTypeAssertion<never>(3000),
+            offsetX: unsafeFixtureAssertion<never>(1000),
+            offsetY: unsafeFixtureAssertion<never>(2000),
+            extentWidth: unsafeFixtureAssertion<never>(5000),
+            extentHeight: unsafeFixtureAssertion<never>(3000),
             rotation: 0,
             flipH: false,
             flipV: false,
@@ -2118,7 +2118,7 @@ describe("placeholder geometry inheritance", () => {
     );
 
     expect(elements).toHaveLength(1);
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     expect(shape.placeholderType).toBe("ctrTitle");
     expect(shape.transform.offsetX).toBe(1000);
     expect(shape.transform.extentWidth).toBe(5000);
@@ -2144,7 +2144,7 @@ describe("placeholder geometry inheritance", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -2158,10 +2158,10 @@ describe("placeholder geometry inheritance", () => {
         {
           placeholderType: "title",
           transform: {
-            offsetX: unsafeTypeAssertion<never>(500),
-            offsetY: unsafeTypeAssertion<never>(600),
-            extentWidth: unsafeTypeAssertion<never>(8000),
-            extentHeight: unsafeTypeAssertion<never>(1200),
+            offsetX: unsafeFixtureAssertion<never>(500),
+            offsetY: unsafeFixtureAssertion<never>(600),
+            extentWidth: unsafeFixtureAssertion<never>(8000),
+            extentHeight: unsafeFixtureAssertion<never>(1200),
             rotation: 0,
             flipH: false,
             flipV: false,
@@ -2172,7 +2172,7 @@ describe("placeholder geometry inheritance", () => {
     );
 
     expect(elements).toHaveLength(1);
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     expect(shape.geometry).toEqual({ type: "preset", preset: "roundRect", adjustValues: {} });
   });
 
@@ -2196,7 +2196,7 @@ describe("placeholder geometry inheritance", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -2210,10 +2210,10 @@ describe("placeholder geometry inheritance", () => {
         {
           placeholderType: "title",
           transform: {
-            offsetX: unsafeTypeAssertion<never>(100),
-            offsetY: unsafeTypeAssertion<never>(200),
-            extentWidth: unsafeTypeAssertion<never>(9000),
-            extentHeight: unsafeTypeAssertion<never>(1500),
+            offsetX: unsafeFixtureAssertion<never>(100),
+            offsetY: unsafeFixtureAssertion<never>(200),
+            extentWidth: unsafeFixtureAssertion<never>(9000),
+            extentHeight: unsafeFixtureAssertion<never>(1500),
             rotation: 0,
             flipH: false,
             flipV: false,
@@ -2223,7 +2223,7 @@ describe("placeholder geometry inheritance", () => {
     );
 
     expect(elements).toHaveLength(1);
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     expect(shape.transform.extentWidth).toBe(9000);
   });
 
@@ -2244,7 +2244,7 @@ describe("placeholder geometry inheritance", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -2279,7 +2279,7 @@ describe("placeholder geometry inheritance", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -2293,10 +2293,10 @@ describe("placeholder geometry inheritance", () => {
         {
           placeholderType: "title",
           transform: {
-            offsetX: unsafeTypeAssertion<never>(9999),
-            offsetY: unsafeTypeAssertion<never>(9999),
-            extentWidth: unsafeTypeAssertion<never>(9999),
-            extentHeight: unsafeTypeAssertion<never>(9999),
+            offsetX: unsafeFixtureAssertion<never>(9999),
+            offsetY: unsafeFixtureAssertion<never>(9999),
+            extentWidth: unsafeFixtureAssertion<never>(9999),
+            extentHeight: unsafeFixtureAssertion<never>(9999),
             rotation: 0,
             flipH: false,
             flipV: false,
@@ -2306,7 +2306,7 @@ describe("placeholder geometry inheritance", () => {
     );
 
     expect(elements).toHaveLength(1);
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     expect(shape.transform.offsetX).toBe(111);
     expect(shape.transform.offsetY).toBe(222);
   });
@@ -2331,7 +2331,7 @@ describe("placeholder geometry inheritance", () => {
     `;
     const parsed = parseXml(xml);
     const elements = parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -2348,10 +2348,10 @@ describe("placeholder geometry inheritance", () => {
         {
           placeholderType: "title",
           transform: {
-            offsetX: unsafeTypeAssertion<never>(500),
-            offsetY: unsafeTypeAssertion<never>(600),
-            extentWidth: unsafeTypeAssertion<never>(7000),
-            extentHeight: unsafeTypeAssertion<never>(1000),
+            offsetX: unsafeFixtureAssertion<never>(500),
+            offsetY: unsafeFixtureAssertion<never>(600),
+            extentWidth: unsafeFixtureAssertion<never>(7000),
+            extentHeight: unsafeFixtureAssertion<never>(1000),
             rotation: 0,
             flipH: false,
             flipV: false,
@@ -2361,7 +2361,7 @@ describe("placeholder geometry inheritance", () => {
     );
 
     expect(elements).toHaveLength(1);
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     expect(shape.transform.offsetX).toBe(500);
     expect(shape.transform.extentWidth).toBe(7000);
   });
@@ -2388,7 +2388,7 @@ describe("OOXML Strict compatibility", () => {
     `;
     const parsed = parseXml(xml);
     parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),
@@ -2425,7 +2425,7 @@ describe("OOXML Strict compatibility", () => {
     `;
     const parsed = parseXml(xml);
     parseShapeTree(
-      unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+      unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
       new Map(),
       "ppt/slides/slide1.xml",
       createEmptyArchive(),

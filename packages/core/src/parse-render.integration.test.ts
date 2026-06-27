@@ -9,7 +9,7 @@ import type { Relationship } from "./parser/relationship-parser.js";
 import { parseShapeTree } from "./parser/slide-parser.js";
 import type { XmlNode } from "./parser/xml-parser.js";
 import { parseXml } from "./parser/xml-parser.js";
-import { unsafeTypeAssertion } from "./unsafe-type-assertion.js";
+import { unsafeFixtureAssertion } from "./unsafe-type-assertion.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -89,7 +89,7 @@ function parseAndRenderShape(
 ): { shape: ShapeElement; svg: string; defs: string[] } {
   const parsed = parseXml(xml);
   const elements = parseShapeTree(
-    unsafeTypeAssertion<XmlNode | undefined>(parsed.spTree),
+    unsafeFixtureAssertion<XmlNode | undefined>(parsed.spTree),
     rels ?? new Map<string, Relationship>(),
     "ppt/slides/slide1.xml",
     createEmptyArchive(),
@@ -97,7 +97,7 @@ function parseAndRenderShape(
   );
   expect(elements).toHaveLength(1);
   expect(elements[0].type).toBe("shape");
-  const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+  const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
   const result = renderShape(shape);
   const svg = result.content;
   return { shape, svg, defs: result.defs };

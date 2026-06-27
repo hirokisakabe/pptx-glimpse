@@ -3,7 +3,7 @@ import { initWarningLogger } from "@pptx-glimpse/renderer";
 import { describe, expect, it, vi } from "vitest";
 
 import { ColorResolver } from "../color/color-resolver.js";
-import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
+import { unsafeFixtureAssertion } from "../unsafe-type-assertion.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import {
   parseSlideLayoutBackground,
@@ -114,9 +114,9 @@ describe("parseSlideLayoutElements", () => {
     );
 
     expect(elements).toHaveLength(2);
-    expect(unsafeTypeAssertion<ShapeElement>(elements[0]).placeholderType).toBe("title");
-    expect(unsafeTypeAssertion<ShapeElement>(elements[1]).placeholderType).toBe("ftr");
-    expect(unsafeTypeAssertion<ShapeElement>(elements[1]).placeholderIdx).toBe(10);
+    expect(unsafeFixtureAssertion<ShapeElement>(elements[0]).placeholderType).toBe("title");
+    expect(unsafeFixtureAssertion<ShapeElement>(elements[1]).placeholderType).toBe("ftr");
+    expect(unsafeFixtureAssertion<ShapeElement>(elements[1]).placeholderIdx).toBe(10);
   });
 
   it("returns empty array when no spTree", () => {
@@ -172,7 +172,7 @@ describe("parseSlideLayoutElements", () => {
     );
 
     expect(elements).toHaveLength(1);
-    const shape = unsafeTypeAssertion<ShapeElement>(elements[0]);
+    const shape = unsafeFixtureAssertion<ShapeElement>(elements[0]);
     expect(shape.placeholderType).toBeUndefined();
     expect(shape.fill).toEqual({ type: "solid", color: { hex: "#FF0000", alpha: 1 } });
   });

@@ -26,7 +26,7 @@ import type {
   SourceVerticalAnchor,
 } from "../source/index.js";
 import { asEmu, asHundredthPt, asPt, asSourceNodeId } from "../source/index.js";
-import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
+import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import { parseColorElement } from "./drawing.js";
 import { isTrue, numericAttr } from "./drawing.js";
 import { parseEnumValue, parseEnumValueWithDefault } from "./ooxml-values.js";
@@ -525,7 +525,8 @@ function parseTabStops(
   return getChildArray(getChild(pPr, "tabLst"), "tab").map((tab) => ({
     position: emu(numericAttr(tab, "pos") ?? 0),
     alignment:
-      unsafeTypeAssertion<"l" | "ctr" | "r" | "dec" | undefined>(getAttr(tab, "algn")) ?? "l",
+      unsafeOoxmlBoundaryAssertion<"l" | "ctr" | "r" | "dec" | undefined>(getAttr(tab, "algn")) ??
+      "l",
   }));
 }
 

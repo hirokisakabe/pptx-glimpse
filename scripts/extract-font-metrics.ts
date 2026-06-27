@@ -11,7 +11,7 @@ import { fileURLToPath } from "node:url";
 
 import opentype from "opentype.js";
 
-import { unsafeTypeAssertion } from "./unsafe-type-assertion.js";
+import { unsafeScriptInputAssertion } from "./unsafe-type-assertion.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -104,7 +104,7 @@ for (const { key, file } of FONTS) {
     const charCount = Object.keys(metrics.widths).length;
     console.error(`✓ ${key}: ${charCount} chars extracted (unitsPerEm=${metrics.unitsPerEm})`);
   } catch (e) {
-    console.error(`✗ ${key}: ${unsafeTypeAssertion<Error>(e).message}`);
+    console.error(`✗ ${key}: ${unsafeScriptInputAssertion<Error>(e).message}`);
   }
 }
 

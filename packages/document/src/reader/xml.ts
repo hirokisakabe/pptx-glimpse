@@ -12,7 +12,7 @@
 
 import { XMLParser } from "fast-xml-parser";
 
-import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
+import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 
 export type XmlNode = Record<string, unknown>;
 export type XmlOrderedNode = Record<string, unknown>;
@@ -38,11 +38,11 @@ const orderedParser = new XMLParser({
 
 /** XML 文字列をパースして root オブジェクトを返す。 */
 export function parseXml(xml: string): XmlNode {
-  return unsafeTypeAssertion<XmlNode>(parser.parse(xml));
+  return unsafeOoxmlBoundaryAssertion<XmlNode>(parser.parse(xml));
 }
 
 export function parseXmlOrdered(xml: string): XmlOrderedNode[] {
-  return unsafeTypeAssertion<XmlOrderedNode[]>(orderedParser.parse(xml));
+  return unsafeOoxmlBoundaryAssertion<XmlOrderedNode[]>(orderedParser.parse(xml));
 }
 
 export function navigateOrdered(
@@ -54,7 +54,7 @@ export function navigateOrdered(
     const entry = current.find((item) => key in item);
     const value = entry?.[key];
     if (!Array.isArray(value)) return undefined;
-    current = unsafeTypeAssertion<XmlOrderedNode[]>(value);
+    current = unsafeOoxmlBoundaryAssertion<XmlOrderedNode[]>(value);
   }
   return [...current];
 }
@@ -76,8 +76,8 @@ export function getChild(node: XmlNode | undefined, name: string): XmlNode | und
     if (localName(key) === name) {
       const value = node[key];
       return Array.isArray(value)
-        ? unsafeTypeAssertion<XmlNode | undefined>(value[0])
-        : unsafeTypeAssertion<XmlNode | undefined>(value);
+        ? unsafeOoxmlBoundaryAssertion<XmlNode | undefined>(value[0])
+        : unsafeOoxmlBoundaryAssertion<XmlNode | undefined>(value);
     }
   }
   return undefined;
@@ -105,7 +105,7 @@ export function getChildArray(node: XmlNode | undefined, name: string): XmlNode[
     if (localName(key) === name) {
       const value = node[key];
       if (value === undefined || value === null) return [];
-      return unsafeTypeAssertion<XmlNode[]>(Array.isArray(value) ? value : [value]);
+      return unsafeOoxmlBoundaryAssertion<XmlNode[]>(Array.isArray(value) ? value : [value]);
     }
   }
   return [];
@@ -153,7 +153,7 @@ export function getChildText(node: XmlNode | undefined, name: string): string | 
     if (typeof item === "string") return item;
     if (typeof item === "number" || typeof item === "boolean") return String(item);
     if (item && typeof item === "object") {
-      return scalarToString(unsafeTypeAssertion<XmlNode>(item)["#text"]);
+      return scalarToString(unsafeOoxmlBoundaryAssertion<XmlNode>(item)["#text"]);
     }
     return undefined;
   }
