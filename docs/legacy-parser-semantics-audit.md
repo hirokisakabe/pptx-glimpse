@@ -33,6 +33,11 @@ is complete, and the package-boundary cleanup follow-ups
 [#510](https://github.com/hirokisakabe/pptx-glimpse/issues/510) and
 [#511](https://github.com/hirokisakabe/pptx-glimpse/issues/511) are closed.
 
+The retirement conditions requested by
+[#531](https://github.com/hirokisakabe/pptx-glimpse/issues/531) are recorded
+below. This issue defines when the parser oracle and dual-reader structural
+comparison can be removed; it does not remove those files.
+
 ## Current owner split
 
 The public conversion path is now:
@@ -111,6 +116,121 @@ No public API currently imports old parser render orchestration.
 with `@pptx-glimpse/document` `readPptx`, builds `createComputedView`, adapts via
 `packages/core/src/pptx-computed-view-renderer-adapter.ts`, and then invokes the
 renderer.
+
+## Parser oracle retirement plan
+
+The explicit parser oracle currently exists for these consumers and should not
+be removed until each role has a non-parser replacement or is intentionally
+deleted:
+
+| Consumer                                                      | Oracle use                                                                                                             | Reason to keep now                                                                                                     | Replacement or deletion signal                                                                                                    |
+| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `vrt/snapshot/document-path-regression.test.ts`               | Calls `convertPptxToPngViaParserPath` and compares document-path PNG output against it in memory.                      | Provides broad visual parity coverage across all shared and generated VRT fixtures without committed parser snapshots. | Replace with committed document-path snapshots, external references, or another stable non-parser baseline for the same case set. |
+| `vrt/snapshot/document-path-zero-diff-gate.test.ts`           | Calls `convertPptxToPngViaParserPath` with zero mismatch tolerance.                                                    | Keeps the post-default-switch document path pixel-identical to the old parser path for the VRT gate.                   | Delete after the default-switch gate is no longer needed, or retarget it to a non-parser golden baseline.                         |
+| `packages/core/src/dual-reader-structural-comparison.test.ts` | Builds old-parser slides with `parsePptxData`, `parseSlideWithLayout`, and `buildEffectiveSlideElements`.              | Gives focused structural assertions for supported fields before PNG rendering hides the source of a regression.        | Delete after equivalent non-parser unit/regression tests cover the same fields and fixture intent.                                |
+| `packages/core/src/parser-path-oracle.test.ts`                | Unit-tests `buildEffectiveSlideElements`.                                                                              | Protects oracle-only master/layout/slide ordering and placeholder filtering while VRT still depends on the oracle.     | Delete with `parser-path-oracle.ts` once no remaining test/VRT imports that helper.                                               |
+| `bench/conversion.bench.ts`                                   | Benchmarks `parsePptxData` / `parseSlideWithLayout` as the old-parser baseline.                                        | Keeps performance comparisons with the historical parser path explicit.                                                | Remove the parser benchmark lane or retarget it to a document-path-only baseline when parser performance is no longer tracked.    |
+| `packages/core/src/text-style-resolver.ts` and its unit test  | Supports text inheritance consumed by `pptx-data-parser.ts`.                                                           | Remains needed only because the parser oracle still assembles old-parser render models.                                | Remove or narrow after `pptx-data-parser.ts` no longer exists or no longer consumes this helper.                                  |
+| Parser subsystem unit tests under `packages/core/src/parser/` | Protect parser helpers still reached by `pptx-data-parser.ts` and by the SmartArt adapter fallback's `parseShapeTree`. | Some parser helpers still serve the oracle; `parseShapeTree` also serves a separate renderer fallback.                 | Split by consumer: delete oracle-only tests with the oracle, keep or move `parseShapeTree` coverage until #535 replaces it.       |
+
+`parser-path-oracle.ts` itself can be removed only after no VRT, unit test,
+benchmark, or adapter fallback imports `convertPptxToPngViaParserPath`,
+`convertPptxToSvgViaParserPath`, or `buildEffectiveSlideElements`. Until then,
+it remains the intentional quarantine boundary that prevents old parser
+rendering from leaking back into public conversion orchestration.
+
+## Dual-reader structural comparison value
+
+`packages/core/src/dual-reader-structural-comparison.test.ts` is narrower than
+VRT by design. It compares renderer-model structure from the old parser against
+the PptxSourceModel document path and adapter for selected real fixtures. Its
+current verification value is:
+
+| Value category             | What it catches before VRT                                                                                             |
+| -------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Slide-level contract       | Slide size, slide numbers, and background fill differences before they become opaque PNG diffs.                        |
+| Effective element ordering | Master/layout/slide ordering, `showMasterSp` visibility, template placeholder filtering, and empty slide placeholders. |
+| Basic shape semantics      | Transform, preset geometry, placeholder metadata, solid fills, outlines, and theme-resolved colors.                    |
+| Supported text subset      | Plain text runs, body margins/anchor, and basic run styling for the subset currently exposed by the document path.     |
+| Raster image semantics     | Image transform, MIME type, payload presence, and crop rectangle mapping.                                              |
+| Adapter diagnostics        | Ensures raw skipped elements are expected warnings instead of silent structural drift.                                 |
+
+The test intentionally does not validate alt text/source names, adjustment
+handles, complex effects/fills, raw graphic frames, groups, bullets, numbering,
+tabs, hyperlinks, text fields not yet exposed by the document path, or
+renderer-only fallback fields. Those categories must be covered by dedicated
+document/computed/adapter tests before this structural comparison can be
+retired as a safety net for them.
+
+## Replacement coverage map
+
+The parser oracle's value can be replaced only by a combination of VRT,
+document-path regression tests, and focused unit tests. No single layer replaces
+it fully today.
+
+| Verification layer                                           | Already replaces or partially replaces                                                                                                         | Still not enough for retirement by itself                                                                                                        |
+| ------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Snapshot VRT and document-path VRT                           | Broad visual coverage across shared and generated fixtures, including final SVG/PNG behavior and renderer integration.                         | PNG diffs do not identify whether a regression came from source reading, computed cascade, adapter mapping, or renderer drawing.                 |
+| `document-path-zero-diff-gate.test.ts`                       | Enforces exact parser-vs-document visual parity for the default-switch fixture set.                                                            | It still depends on the parser oracle, so it is a gate for keeping the oracle honest rather than a replacement for it.                           |
+| Public conversion regression tests in core                   | Ensure `convertPptxToSvg` / `convertPptxToPng` keep using the document path and preserve public API behavior.                                  | They do not compare detailed old-parser render-model semantics or cover all visual fixture cases.                                                |
+| `@pptx-glimpse/document` reader and computed-view unit tests | Cover package graph, relationships, theme/color resolution, background fallback, placeholder cascade, source provenance, and raw preservation. | They do not prove the core adapter still maps computed values into the renderer model expected by existing SVG/PNG rendering.                    |
+| Adapter unit tests                                           | Cover focused computed-view-to-renderer mappings and renderer-specific defaults/fallbacks without invoking the old parser.                     | Existing adapter tests do not yet cover the full dual-reader comparison scope for both shared fixtures and all current edge cases.               |
+| Renderer unit tests                                          | Protect SVG/PNG rendering behavior once a renderer model is already constructed.                                                               | They cannot validate that PptxSourceModel reading, computed cascade, or adapter mapping produced the same model the old parser previously did.   |
+| LibreOffice VRT                                              | Provides an external rendering reference for generated cases where LibreOffice is an acceptable comparator.                                    | LibreOffice is not PowerPoint and does not define old-parser compatibility; tolerances make it unsuitable as the exact parser-oracle substitute. |
+
+The remaining un-replaced gap is structural parity for the supported shared
+fixture subset before render-time rasterization. Close that gap by expanding
+document/computed/adapter tests until they cover the value categories listed in
+the previous section without importing `pptx-data-parser.ts` or
+`parser-path-oracle.ts`.
+
+## Retirement conditions
+
+`packages/core/src/dual-reader-structural-comparison.test.ts` can be deleted
+when all of these are true:
+
+1. Adapter and document/computed-view tests cover every category in the
+   dual-reader comparison value table for `real-product-page.pptx` and
+   `real-basic-theme.pptx`, or the fixture-specific expectation has been
+   intentionally moved to VRT/public regression coverage with a documented
+   reason.
+2. Inherited placeholder/theme text styling that is currently guarded by
+   `includeRunProperties: false` for `real-basic-theme.pptx` is either exposed
+   and covered by non-parser tests, or explicitly documented as out of scope for
+   parser parity.
+3. Raw skipped element diagnostics covered by the dual-reader test are asserted
+   in adapter or document-path regression tests without constructing old-parser
+   slides.
+4. Document-path VRT continues to cover the full shared fixture set and generated
+   VRT set, or an intentional replacement baseline has been committed.
+5. A final `rg` check shows the only remaining imports of
+   `parsePptxData`, `parseSlideWithLayout`, and `buildEffectiveSlideElements`
+   are unrelated to this structural comparison.
+
+`packages/core/src/pptx-data-parser.ts` and old parser render-model tests can be
+deleted when all of these are true:
+
+1. `parser-path-oracle.ts` has no remaining consumers, including VRT,
+   `parser-path-oracle.test.ts`, `dual-reader-structural-comparison.test.ts`,
+   and `bench/conversion.bench.ts`.
+2. Document-path VRT no longer uses the parser path as its in-memory PNG
+   baseline. It either compares against committed document-path snapshots,
+   external references, or another non-parser baseline with equivalent fixture
+   coverage and documented tolerance policy.
+3. Old-parser-only helpers such as effective slide merging, placeholder
+   filtering, text-style inheritance, and theme font resolution have either
+   moved into `@pptx-glimpse/document` / adapter tests or are explicitly removed
+   as obsolete behavior.
+4. Parser subsystem tests have been split by remaining consumer: oracle-only
+   render-model tests are deleted, while parser helpers still needed by the
+   SmartArt fallback stay covered until the #535 replacement lands.
+5. Public conversion tests, package verification, and VRT prove that
+   `convertPptxToSvg` / `convertPptxToPng` remain document-path-only after the
+   deletion.
+
+No deletion is performed for #531. The current conclusion is to keep
+`parser-path-oracle.ts`, `dual-reader-structural-comparison.test.ts`, and
+`pptx-data-parser.ts` until the above replacement coverage exists.
 
 ## Shrink applied in #485
 
