@@ -25,11 +25,11 @@ import {
   warn,
 } from "@pptx-glimpse/renderer";
 
+import type { ConvertOptions, SlideImage, SlideSvg } from "./converter.js";
 import {
   adaptComputedViewToRendererModel,
   type RendererAdapterDiagnostic,
-} from "./cleandoc-renderer-adapter.js";
-import type { ConvertOptions, SlideImage, SlideSvg } from "./converter.js";
+} from "./pptx-computed-view-renderer-adapter.js";
 
 type DocumentRenderDiagnostic = RendererAdapterDiagnostic;
 
@@ -44,7 +44,7 @@ interface DocumentPathPngResult {
 }
 
 /**
- * CleanDoc document-path render orchestration used by the public converter
+ * PptxSourceModel document-path render orchestration used by the public converter
  * default. Parser-path helpers remain available for parity checks.
  */
 export async function convertPptxToSvgViaDocumentPath(
@@ -127,7 +127,7 @@ function findScriptFontScheme(source: ReturnType<typeof readPptx>) {
 }
 
 /**
- * Internal / experimental PNG path layered on top of the CleanDoc SVG path and
+ * Internal / experimental PNG path layered on top of the PptxSourceModel SVG path and
  * the existing renderer PNG conversion.
  */
 export async function convertPptxToPngViaDocumentPath(

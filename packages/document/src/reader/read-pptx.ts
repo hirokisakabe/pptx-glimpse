@@ -1,8 +1,8 @@
 /**
- * `readPptx(input)` — CleanDoc source reader の最初の slice。
+ * `readPptx(input)` — PptxSourceModel source reader の最初の slice。
  *
  * PPTX ZIP package を読み、package graph (content types / relationships /
- * media) と presentation metadata (slide size / slide order) を CleanDoc source
+ * media) と presentation metadata (slide size / slide order) を PptxSourceModel source
  * として返す。さらに presentation order の各 slide から layout → master → theme
  * の chain を辿り、simple shape / text / image を typed source node として読む。
  * 未編集・未対応の part / 子要素は raw package material / raw sidecar として
@@ -18,7 +18,6 @@
 import { unzipSync } from "fflate";
 
 import type {
-  CleanDocSource,
   ContentTypeDefault,
   ContentTypeOverride,
   Diagnostic,
@@ -26,6 +25,7 @@ import type {
   PackagePartRef,
   PartPath,
   PartRelationships,
+  PptxSourceModel,
   RawPackagePart,
   Relationship,
   RelationshipTargetMode,
@@ -73,11 +73,11 @@ const PRESENTATION_CONTENT_TYPE =
 const textDecoder = new TextDecoder();
 
 /**
- * PPTX バイト列を読み、CleanDoc source を返す。
+ * PPTX バイト列を読み、PptxSourceModel source を返す。
  *
  * @throws presentation part が見つからない (= 有効な PPTX ではない) 場合。
  */
-export function readPptx(input: ReadPptxInput): CleanDocSource {
+export function readPptx(input: ReadPptxInput): PptxSourceModel {
   const entries = unzipPackage(input);
   const diagnostics: Diagnostic[] = [];
 

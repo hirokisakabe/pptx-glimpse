@@ -1,4 +1,8 @@
-import type { CleanDocSource, SourceShape, SourceTable } from "@pptx-glimpse/document/experimental";
+import type {
+  PptxSourceModel,
+  SourceShape,
+  SourceTable,
+} from "@pptx-glimpse/document/experimental";
 import {
   asEmu,
   asOoxmlAngle,
@@ -12,7 +16,7 @@ import {
 import type { SlideElement } from "@pptx-glimpse/renderer";
 import { describe, expect, it } from "vitest";
 
-import { adaptComputedViewToRendererModel } from "./cleandoc-renderer-adapter.js";
+import { adaptComputedViewToRendererModel } from "./pptx-computed-view-renderer-adapter.js";
 
 describe("adaptComputedViewToRendererModel", () => {
   it("slide size / background / effective element ordering を renderer model に変換する", () => {
@@ -498,7 +502,7 @@ describe("adaptComputedViewToRendererModel", () => {
         }),
       ],
     });
-    const sourceWithEmfMedia: CleanDocSource = {
+    const sourceWithEmfMedia: PptxSourceModel = {
       ...source,
       packageGraph: {
         ...source.packageGraph,
@@ -585,7 +589,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toContainEqual(
       expect.objectContaining({
         severity: "warning",
-        code: "cleandoc-adapter.raw-element-skipped",
+        code: "pptx-computed-view-adapter.raw-element-skipped",
         slideNumber: 1,
         sourcePartPath: "ppt/slides/slide1.xml",
       }),
@@ -627,10 +631,10 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.slides[0]?.elements.map(getAltText)).not.toContain("Missing media");
     expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
       expect.arrayContaining([
-        "cleandoc-adapter.raw-background-ignored",
-        "cleandoc-adapter.missing-transform",
-        "cleandoc-adapter.raw-fill-ignored",
-        "cleandoc-adapter.unresolved-image-skipped",
+        "pptx-computed-view-adapter.raw-background-ignored",
+        "pptx-computed-view-adapter.missing-transform",
+        "pptx-computed-view-adapter.raw-fill-ignored",
+        "pptx-computed-view-adapter.unresolved-image-skipped",
       ]),
     );
   });
@@ -647,11 +651,11 @@ function getAltText(element: SlideElement): string | undefined {
 }
 
 interface BuildSourceOptions {
-  readonly extraSlideShapes?: CleanDocSource["slides"][number]["shapes"];
-  readonly slideBackground?: CleanDocSource["slides"][number]["background"];
+  readonly extraSlideShapes?: PptxSourceModel["slides"][number]["shapes"];
+  readonly slideBackground?: PptxSourceModel["slides"][number]["background"];
 }
 
-function buildSource(options: BuildSourceOptions = {}): CleanDocSource {
+function buildSource(options: BuildSourceOptions = {}): PptxSourceModel {
   const slidePath = asPartPath("ppt/slides/slide1.xml");
   const layoutPath = asPartPath("ppt/slideLayouts/layout1.xml");
   const masterPath = asPartPath("ppt/slideMasters/master1.xml");
@@ -804,7 +808,7 @@ function buildSource(options: BuildSourceOptions = {}): CleanDocSource {
   };
 }
 
-function buildSourceWithChartAndSmartArt(): CleanDocSource {
+function buildSourceWithChartAndSmartArt(): PptxSourceModel {
   const source = buildSource({
     extraSlideShapes: [
       {

@@ -1,9 +1,9 @@
 /**
- * `p:txBody` を CleanDoc source の text body / paragraph / run へ読み取る。
+ * `p:txBody` を PptxSourceModel source の text body / paragraph / run へ読み取る。
  *
  * PoC scope は plain run text と basic run properties (太字 / 斜体 / 下線 /
  * フォントサイズ / typeface / solid color) のみを typed に表す
- * (`docs/cleandoc-minimal-poc-scope.md`)。bullet / field / line break 等の
+ * (`docs/pptx-source-model-minimal-poc-scope.md`)。bullet / field / line break 等の
  * 未対応ノードは raw sidecar として保持する。
  */
 

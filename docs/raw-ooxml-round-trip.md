@@ -8,17 +8,17 @@ feed into [#445](https://github.com/hirokisakabe/pptx-glimpse/issues/445). It
 builds on the package boundary decision in
 [document-boundaries.md](./document-boundaries.md) and the source/computed
 layering decision in
-[cleandoc-source-computed-view.md](./cleandoc-source-computed-view.md).
+[pptx-source-model-computed-view.md](./pptx-source-model-computed-view.md).
 
 The related core dogfood migration decision is recorded in
 [core-document-dogfood-migration.md](./core-document-dogfood-migration.md). In
-short, public SVG/PNG conversion now routes through CleanDoc source reading,
+short, public SVG/PNG conversion now routes through PptxSourceModel source reading,
 computed view generation, and a core-owned adapter into the existing renderer
 model after the [#481](https://github.com/hirokisakabe/pptx-glimpse/issues/481)
 default switch.
 
 The goal is to make `@pptx-glimpse/document` reliable for existing PPTX files
-without turning CleanDoc into a byte-level OOXML editor. CleanDoc should expose a
+without turning PptxSourceModel into a byte-level OOXML editor. PptxSourceModel should expose a
 clean document model for supported semantics, while retaining enough raw source
 material to write back unsupported or unedited content.
 
@@ -43,7 +43,7 @@ Do not target byte equality.
 Byte equality is intentionally out of scope because XML serialization can change
 attribute order, namespace prefix placement, insignificant whitespace, ZIP entry
 metadata, compression settings, relationship ID allocation, and defaulted OOXML
-values. Preserving those details would force CleanDoc to become a package patcher
+values. Preserving those details would force PptxSourceModel to become a package patcher
 first and a document model second.
 
 Do not claim full semantic equality for edited content.
@@ -60,7 +60,7 @@ Adopt a hybrid preservation model:
 
 ```text
 PPTX package part
-  -> parsed CleanDoc source nodes
+  -> parsed PptxSourceModel source nodes
   -> raw node sidecars for unsupported or partially supported XML
   -> raw package part fallback for untouched parts
 ```
@@ -72,13 +72,13 @@ Preserve raw data at the following levels:
 | Level              | Use case                                              | Policy                                                                                 |
 | ------------------ | ----------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | Package part       | Untouched slide/layout/master/theme/chart/media parts | Keep the original bytes or original XML tree and write them back unchanged.            |
-| XML node sidecar   | Unknown child elements, vendor extensions, `extLst`   | Attach raw XML to the nearest CleanDoc source node with ordering metadata.             |
+| XML node sidecar   | Unknown child elements, vendor extensions, `extLst`   | Attach raw XML to the nearest PptxSourceModel source node with ordering metadata.      |
 | Alternate branch   | `mc:AlternateContent`                                 | Preserve all choices/fallback branches unless the owning node is regenerated.          |
 | Relationship entry | `_rels/*.rels` references                             | Preserve existing relationship IDs and targets where the referenced part is unchanged. |
 | Content type entry | `[Content_Types].xml` overrides/defaults              | Preserve entries for existing parts; add/remove entries only for package edits.        |
 | Binary asset       | Images, media, embedded workbooks                     | Preserve bytes and part paths unless the asset is replaced or removed.                 |
 
-CleanDoc source nodes should carry stable source handles, for example original
+PptxSourceModel source nodes should carry stable source handles, for example original
 part path, relationship ID, element ID, child ordering slots, and raw sidecar
 references. These handles let the writer decide whether it can splice a generated
 node into an existing part or must regenerate a larger scope.
@@ -96,7 +96,7 @@ Reject element-property raw storage as the default.
 
 Storing raw XML beside every property would make the public model noisy and would
 still not solve child ordering, namespace declarations, `mc:AlternateContent`,
-or relationship updates. Properties should become typed CleanDoc fields when they
+or relationship updates. Properties should become typed PptxSourceModel fields when they
 are supported; unsupported material should stay as raw node sidecars.
 
 Reject a single opaque raw XML string per slide as the only escape hatch.
@@ -105,7 +105,7 @@ That approach preserves untouched slides, but it cannot support precise edits or
 diagnostics. It also prevents editor-core from knowing which unsupported content
 is attached to which shape, table, chart, or text node.
 
-Reject full normalization into CleanDoc without raw sidecars.
+Reject full normalization into PptxSourceModel without raw sidecars.
 
 That would produce the cleanest model, but it would drop unsupported OOXML and
 make existing-file editing unsafe.
@@ -130,7 +130,7 @@ Policy:
 - If a part is dirty but contains mostly supported edits, regenerate only the
   dirty XML elements and splice preserved raw sidecars back into their original
   order.
-- If node-level splicing is unsafe, regenerate the whole XML part from CleanDoc
+- If node-level splicing is unsafe, regenerate the whole XML part from PptxSourceModel
   source plus preserved raw sidecars.
 - If an edit invalidates an unsupported node that cannot be preserved, drop that
   raw node only with an explicit diagnostic.
@@ -201,16 +201,16 @@ Keep the raw OOXML escape hatch primarily as an internal source-model mechanism
 for the first implementation.
 
 Public APIs should expose raw material cautiously through explicit expert-level
-handles, not as the default editing surface. The default CleanDoc API should stay
+handles, not as the default editing surface. The default PptxSourceModel API should stay
 semantic and typed.
 
 Recommended public shape:
 
 ```text
-readPptx(input, { preserveRaw: true }) -> CleanDocSource
+readPptx(input, { preserveRaw: true }) -> PptxSourceModel
 
 source.getRaw(handle) -> RawOoxmlNode | RawPackagePart | undefined
-source.replaceRaw(handle, raw, options) -> CleanDocSource
+source.replaceRaw(handle, raw, options) -> PptxSourceModel
 source.listDiagnostics() -> Diagnostic[]
 ```
 
@@ -219,7 +219,7 @@ API principles:
 - Raw handles are stable source references, not direct mutable object pointers.
 - Raw replacement is opt-in and should require namespace-aware XML validation.
 - Raw access should be available for advanced tools, migrations, and emergency
-  preservation workflows, but ordinary editor commands should use typed CleanDoc
+  preservation workflows, but ordinary editor commands should use typed PptxSourceModel
   operations.
 - Computed views may expose provenance back to raw handles for diagnostics, but
   they should not expose raw XML as their primary data.
@@ -231,7 +231,7 @@ schema and could encourage consumers to depend on OOXML internals that
 
 ## Conclusion for #445
 
-For #445, CleanDoc should define lossless behavior as structural preservation,
+For #445, PptxSourceModel should define lossless behavior as structural preservation,
 not byte equality. `@pptx-glimpse/document` should preserve raw OOXML at package
 part and XML-node sidecar granularity, keep relationships/content types/assets as
 source-model data, and use edit tracking so unedited parts can be written back
@@ -244,6 +244,6 @@ by default and are only dropped when an explicit edit invalidates them, with a
 diagnostic.
 
 The raw escape hatch should remain mostly internal at first, with a narrow
-expert-level public API based on stable raw handles. CleanDoc remains the normal
+expert-level public API based on stable raw handles. PptxSourceModel remains the normal
 semantic editing API; raw OOXML is a preservation and emergency escape mechanism,
 not the primary programming model.

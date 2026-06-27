@@ -1,10 +1,10 @@
 /**
- * CleanDoc source model のトップレベル型。
+ * PptxSourceModel source model のトップレベル型。
  *
  * `@pptx-glimpse/document` が所有する canonical な document 表現で、writer /
  * editor / round-trip の source of truth となる。renderer-specific fallback や
  * pixel output 固有の値は含まない (`docs/document-boundaries.md` /
- * `docs/cleandoc-source-computed-view.md`)。computed view はこの source から
+ * `docs/pptx-source-model-computed-view.md`)。computed view はこの source から
  * 派生して生成する derived projection であり、本型には含めない。
  */
 
@@ -19,7 +19,7 @@ import type {
   SourceTheme,
 } from "./presentation.js";
 
-export interface CleanDocSource {
+export interface PptxSourceModel {
   /** package part / relationship / content type / media の構造。 */
   readonly packageGraph: PackageGraph;
   readonly presentation: SourcePresentation;
@@ -29,13 +29,13 @@ export interface CleanDocSource {
   readonly themes: readonly SourceTheme[];
   /** document 正しさに関する診断。 */
   readonly diagnostics: readonly Diagnostic[];
-  /** typed CleanDoc operation と dirty scope。writer はここから最小更新範囲を判断する。 */
-  readonly edits?: readonly CleanDocEdit[];
+  /** typed PptxSourceModel operation と dirty scope。writer はここから最小更新範囲を判断する。 */
+  readonly edits?: readonly PptxSourceModelEdit[];
 }
 
-export type CleanDocEdit = CleanDocTextRunEdit;
+export type PptxSourceModelEdit = PptxSourceModelTextRunEdit;
 
-export interface CleanDocTextRunEdit {
+export interface PptxSourceModelTextRunEdit {
   readonly kind: "replaceTextRunPlainText";
   readonly handle: SourceHandle;
   readonly text: string;

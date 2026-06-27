@@ -1,17 +1,26 @@
-# CleanDoc source model and computed view
+# PptxSourceModel and computed view
 
 - Status: RFC decision for [#450](https://github.com/hirokisakabe/pptx-glimpse/issues/450)
 - Date: 2026-06-20
 
-This note records the CleanDoc layering decision that should feed into
+This note records the PptxSourceModel layering decision that should feed into
 [#445](https://github.com/hirokisakabe/pptx-glimpse/issues/445). It builds on
 the package boundary decision in
 [document-boundaries.md](./document-boundaries.md): `@pptx-glimpse/document` is
-the lower-level OOXML / CleanDoc foundation, and renderer / core / editor-core /
+the lower-level OOXML / PptxSourceModel foundation, and renderer / core / editor-core /
 pom are consumers of it.
 
+> Naming note, 2026-06-27: this concept was formerly called CleanDoc. The
+> current name is `PptxSourceModel` because the model is PPTX-domain source
+> material for reader / writer / computed-view workflows, including raw OOXML
+> preservation sidecars. `PptxSource` was rejected because it can sound like the
+> whole `@pptx-glimpse/document` package or an input stream rather than the
+> canonical in-memory source model. `PptxModel` was rejected because it is too
+> broad and blurs the source model with `PptxComputedView`, renderer adapter
+> models, and future editor projections.
+
 The related raw preservation and round-trip decision is recorded in
-[raw-ooxml-round-trip.md](./raw-ooxml-round-trip.md). In short, CleanDoc targets
+[raw-ooxml-round-trip.md](./raw-ooxml-round-trip.md). In short, PptxSourceModel targets
 structural preservation rather than byte equality, and raw OOXML is kept as
 source-model sidecars or untouched package parts instead of becoming the primary
 editing surface.
@@ -25,11 +34,11 @@ oracle and targeted fallback source.
 
 ## Decision
 
-Adopt a two-layer CleanDoc design:
+Adopt a two-layer PptxSourceModel design:
 
 ```text
 OOXML package parts
-  -> CleanDoc source model
+  -> PptxSourceModel source model
   -> computed document view
   -> renderer adapter / editor projections / AI-readable output
 ```
@@ -43,9 +52,9 @@ effective values. It resolves inheritance, relationships, theme references, and
 unit conversions into a deterministic, easy-to-consume view. It is derived data,
 not the editable source of truth.
 
-Do not merge the existing renderer model directly into CleanDoc. Treat it as the
+Do not merge the existing renderer model directly into PptxSourceModel. Treat it as the
 first rendering-oriented computed view shape, then migrate toward an explicit
-CleanDoc-to-renderer adapter.
+PptxSourceModel-to-renderer adapter.
 
 ## Source Model Responsibilities
 
@@ -60,7 +69,7 @@ It owns:
 - Element identity and ordering as authored in each source part.
 - Source-local values, including unresolved theme color references, style
   references, placeholder declarations, relationship IDs, and package part paths.
-- Raw or partially parsed OOXML for constructs CleanDoc does not model directly,
+- Raw or partially parsed OOXML for constructs PptxSourceModel does not model directly,
   such as vendor extensions, `mc:AlternateContent`, uncommon DrawingML nodes, and
   future features.
 - Lossless-preservation metadata where it matters for round-trip output:
@@ -116,9 +125,9 @@ parse.
 Recommended shape:
 
 ```text
-readPptx(input) -> CleanDocSource
+readPptx(input) -> PptxSourceModel
 
-createComputedView(source, options) -> CleanDocComputedView
+createComputedView(source, options) -> PptxComputedView
 
 createRenderView(computed, options) -> renderer model
 ```
@@ -223,7 +232,7 @@ like a render-oriented computed view:
 Migration direction:
 
 1. Keep the current renderer model as the SVG/PNG render view contract.
-2. Introduce CleanDoc source types separately in `@pptx-glimpse/document`.
+2. Introduce PptxSourceModel source types separately in `@pptx-glimpse/document`.
 3. Move source-preserving parse responsibility into `document`.
 4. Add a computed view generator that resolves cascade and references.
 5. Add an adapter from computed view to the current renderer model.
@@ -232,7 +241,7 @@ Migration direction:
 
 ## Historical Implementation Mapping Before #481
 
-Before the CleanDoc default switch, parser/core code already contained several
+Before the PptxSourceModel default switch, parser/core code already contained several
 computed-view behaviors:
 
 - `parseSlideWithLayout` resolves slide -> layout -> master chains.
@@ -251,13 +260,13 @@ the public default path.
 
 ## Schema Normalization Scope
 
-Normalize enough to make CleanDoc usable, but do not normalize away source
+Normalize enough to make PptxSourceModel usable, but do not normalize away source
 intent.
 
 Normalize:
 
 - Package paths and relationships into stable document references.
-- Namespaced OOXML names into CleanDoc field names.
+- Namespaced OOXML names into PptxSourceModel field names.
 - Common geometry, transform, fill, line, text, table, chart, and media
   structures.
 - Units into typed domain values.
@@ -282,7 +291,7 @@ Do not normalize source into:
 
 The conclusion to reflect in #445 is:
 
-CleanDoc should adopt a two-layer architecture. The canonical
+PptxSourceModel should adopt a two-layer architecture. The canonical
 `@pptx-glimpse/document` model is a source model that preserves document
 semantics, source references, typed OOXML-domain units, and raw escape hatches
 for writer/editor/round-trip work. A computed view is generated from that source
@@ -290,7 +299,7 @@ model to resolve theme, master, layout, slide, placeholder, relationship, and
 text-style cascades for renderer, AI reading, and editor projections.
 
 The existing renderer model should be treated as a render-specific computed view
-or adapter target, not as the CleanDoc schema itself. Unit normalization should
+or adapter target, not as the PptxSourceModel schema itself. Unit normalization should
 use typed PPTX-domain units in source and computed document views, with pixel
 conversion limited to renderer boundaries. If a future design rejects the
 two-layer approach, it must explain how one model can simultaneously preserve

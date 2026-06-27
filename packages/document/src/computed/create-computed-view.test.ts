@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
 import type {
-  CleanDocSource,
   ComputedConnectorElement,
   ComputedElement,
   ComputedGroupElement,
@@ -9,6 +8,7 @@ import type {
   ComputedShapeElement,
   ComputedSlide,
   ComputedTableElement,
+  PptxSourceModel,
   SourceRunProperties,
   SourceShape,
   SourceShapeNode,
@@ -210,7 +210,7 @@ describe("createComputedView", () => {
 
   it("local sp/no autofit で inherited normAutofit の scale 値をリセットする", () => {
     const source = buildSource();
-    const sourceWithAutofitPlaceholders: CleanDocSource = {
+    const sourceWithAutofitPlaceholders: PptxSourceModel = {
       ...source,
       slides: source.slides.map((slide) =>
         slide.partPath === asPartPath("ppt/slides/slide2.xml")
@@ -360,7 +360,7 @@ describe("createComputedView", () => {
         },
       }),
     ]);
-    const sourceWithFormatScheme: CleanDocSource = {
+    const sourceWithFormatScheme: PptxSourceModel = {
       ...source,
       themes: source.themes.map((theme) => ({
         ...theme,
@@ -484,7 +484,7 @@ describe("createComputedView", () => {
         },
       },
     ]);
-    const sourceWithStyleEffect: CleanDocSource = {
+    const sourceWithStyleEffect: PptxSourceModel = {
       ...source,
       themes: source.themes.map((theme) => ({
         ...theme,
@@ -581,7 +581,7 @@ describe("createComputedView", () => {
   it("connector / group / custom geometry を computed element として保持する", () => {
     const source = buildSource();
     const slidePath = asPartPath("ppt/slides/slide2.xml");
-    const extended: CleanDocSource = {
+    const extended: PptxSourceModel = {
       ...source,
       slides: source.slides.map((slide) =>
         slide.partPath === slidePath
@@ -709,9 +709,9 @@ function elementNames(elements: readonly ComputedElement[]): (string | undefined
 }
 
 function withSlide2Shapes(
-  source: CleanDocSource,
+  source: PptxSourceModel,
   extraShapes: readonly SourceShapeNode[],
-): CleanDocSource {
+): PptxSourceModel {
   return {
     ...source,
     slides: source.slides.map((slide) =>
@@ -722,7 +722,7 @@ function withSlide2Shapes(
   };
 }
 
-function buildSource(): CleanDocSource {
+function buildSource(): PptxSourceModel {
   const masterTitle = placeholder("Master title", "title", 1, {
     transform: transform(100, 200, 300, 400),
     geometry: { preset: "rect" },
@@ -937,7 +937,7 @@ function buildSourceWithChartAndSmartArt(
   options: {
     readonly chartRelationshipType?: string;
   } = {},
-): CleanDocSource {
+): PptxSourceModel {
   const source = buildSource();
   const slidePath = asPartPath("ppt/slides/slide2.xml");
   const dataPath = asPartPath("ppt/diagrams/data1.xml");

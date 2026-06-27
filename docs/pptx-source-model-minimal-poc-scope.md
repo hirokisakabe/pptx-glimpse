@@ -1,4 +1,4 @@
-# CleanDoc minimal PoC scope
+# PptxSourceModel minimal PoC scope
 
 - Status: RFC decision for [#453](https://github.com/hirokisakabe/pptx-glimpse/issues/453)
 - Date: 2026-06-20
@@ -7,11 +7,11 @@ This note records the first implementation slice for `@pptx-glimpse/document`.
 It builds on the package boundary decision in
 [document-boundaries.md](./document-boundaries.md), the source/computed layering
 decision in
-[cleandoc-source-computed-view.md](./cleandoc-source-computed-view.md), the raw
+[pptx-source-model-computed-view.md](./pptx-source-model-computed-view.md), the raw
 round-trip policy in [raw-ooxml-round-trip.md](./raw-ooxml-round-trip.md), and
 the core dogfood migration plan in
 [core-document-dogfood-migration.md](./core-document-dogfood-migration.md).
-Issue #453 is the PoC-scope child decision for the broader CleanDoc RFC in
+Issue #453 is the PoC-scope child decision for the broader PptxSourceModel RFC in
 [#445](https://github.com/hirokisakabe/pptx-glimpse/issues/445), so this note
 ends with a #445-ready conclusion.
 
@@ -26,13 +26,13 @@ prove the intended architecture end to end:
 
 ```text
 PPTX package
-  -> CleanDoc source model
+  -> PptxSourceModel source model
   -> computed document view
   -> current renderer model adapter
   -> SVG/PNG render verification
 
 PPTX package
-  -> CleanDoc source model
+  -> PptxSourceModel source model
   -> writer
   -> structurally preserved PPTX package
 ```
@@ -176,12 +176,12 @@ sidecars unless an explicit supported edit invalidates the owning node.
 
 ## Read to Computed View to Render Verification
 
-The PoC should verify the read -> CleanDoc -> computed view -> render path with
+The PoC should verify the read -> PptxSourceModel -> computed view -> render path with
 focused structural tests before relying on VRT.
 
 Recommended checks:
 
-1. Read a fixture PPTX into `CleanDocSource`.
+1. Read a fixture PPTX into `PptxSourceModel`.
 2. Assert package graph basics: slide count, slide order, slide size,
    slide/layout/master/theme references, relationship IDs, and media references.
 3. Assert typed source nodes for supported shapes, text runs, and images while
@@ -204,27 +204,27 @@ only when a specific inheritance or preservation case is not covered.
 VRT snapshot updates should not be part of the first PoC unless the public render
 output intentionally changes.
 
-## Read to CleanDoc to Write Verification
+## Read to PptxSourceModel to Write Verification
 
 The PoC writer should prove structural preservation, not byte equality.
 
 Recommended no-edit round-trip checks:
 
-1. Read a fixture PPTX into `CleanDocSource`.
+1. Read a fixture PPTX into `PptxSourceModel`.
 2. Write it without applying edits.
 3. Assert the result is a valid PPTX ZIP package with required content types and
    relationship parts.
 4. Assert slide count, slide size, slide order, slide/layout/master/theme
    references, relationship IDs, and media part bytes are preserved for
    unchanged material.
-5. Re-read the written PPTX and assert the supported CleanDoc source subset is
+5. Re-read the written PPTX and assert the supported PptxSourceModel source subset is
    equivalent to the original read.
 6. Render original and round-tripped PPTX through the current public conversion
    path and assert no meaningful output difference for the supported subset.
 
 Recommended one-text-edit checks:
 
-1. Read a fixture PPTX into `CleanDocSource`.
+1. Read a fixture PPTX into `PptxSourceModel`.
 2. Locate one existing text run by stable source handle.
 3. Replace only that run's plain text.
 4. Write the PPTX.
@@ -284,7 +284,7 @@ to:
 
 1. Add `@pptx-glimpse/document` workspace package skeleton, public experimental
    entry points, package-boundary tests, and build wiring.
-2. Define CleanDoc source model types for package graph, presentation, slides,
+2. Define PptxSourceModel source model types for package graph, presentation, slides,
    layouts, masters, themes, media, simple shapes, text, images, source handles,
    raw sidecars, and diagnostics.
 3. Implement `readPptx(input)` for package graph, presentation metadata, slide
@@ -296,7 +296,7 @@ to:
 5. Implement `createComputedView(source, options)` for slide size/order,
    relationship resolution, theme color resolution, background fallback,
    placeholder matching, text style inheritance, and `showMasterSp` visibility.
-6. Add a core-owned CleanDoc computed-view-to-current-renderer-model adapter for
+6. Add a core-owned PptxSourceModel computed-view-to-current-renderer-model adapter for
    the supported subset.
 7. Add dual-reader structural comparison tests against the current parser for
    selected shared fixtures.
@@ -315,7 +315,7 @@ to:
 The conclusion to reflect in #445 is:
 
 The first `@pptx-glimpse/document` PoC should be a narrow end-to-end slice, not a
-general OOXML rewrite. It should read simple themed PPTX slides into a CleanDoc
+general OOXML rewrite. It should read simple themed PPTX slides into a PptxSourceModel
 source model, generate a computed view that resolves slide/layout/master/theme
 semantics, adapt that view into the current renderer model for comparison, and
 write structurally preserved PPTX output for no-edit and one-plain-text-run edit

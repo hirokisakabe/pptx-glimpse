@@ -1,5 +1,5 @@
 /**
- * `p:spTree` を CleanDoc source の shape node 列へ読み取る。
+ * `p:spTree` を PptxSourceModel source の shape node 列へ読み取る。
  *
  * simple autoshape (`p:sp`), embedded raster image (`p:pic`), connector
  * (`p:cxnSp`), and group (`p:grpSp`) を typed に表す。graphicFrame は table /

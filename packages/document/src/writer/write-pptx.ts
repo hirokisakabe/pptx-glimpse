@@ -1,5 +1,5 @@
 /**
- * `writePptx(source)` — CleanDoc source writer の最初の round-trip slice。
+ * `writePptx(source)` — PptxSourceModel source writer の最初の round-trip slice。
  *
  * この writer は structural round-trip を目的に、reader が保持した raw package
  * material / media bytes / package bookkeeping を PPTX ZIP として再構成する。
@@ -13,11 +13,11 @@ import { zipSync } from "fflate";
 
 import { parseXml, type XmlNode } from "../reader/xml.js";
 import type {
-  CleanDocEdit,
-  CleanDocSource,
-  CleanDocTextRunEdit,
   PartPath,
   PartRelationships,
+  PptxSourceModel,
+  PptxSourceModelEdit,
+  PptxSourceModelTextRunEdit,
   RawOoxmlNode,
   RawPackagePart,
 } from "../source/index.js";
@@ -40,14 +40,14 @@ const xmlBuilder = new XMLBuilder({
 });
 
 /**
- * CleanDoc source を PPTX package bytes に書き戻す。
+ * PptxSourceModel source を PPTX package bytes に書き戻す。
  *
  * round-trip 用の初期 writer であり、未編集 package material を優先して
  * preserved output を作る。dirty part の patch に必要な raw bytes が無い場合や
  * 必要な raw bytes が無い non-bookkeeping part は、
  * 暗黙に再生成せずエラーにする。
  */
-export function writePptx(source: CleanDocSource): WritePptxOutput {
+export function writePptx(source: PptxSourceModel): WritePptxOutput {
   const textRunEdits = source.edits?.filter(isTextRunEdit) ?? [];
   const dirtyPartPaths = new Set(textRunEdits.map((edit) => edit.handle.partPath));
   const files: Record<string, Uint8Array> = {
@@ -90,14 +90,14 @@ export function writePptx(source: CleanDocSource): WritePptxOutput {
   return zipSync(files);
 }
 
-function isTextRunEdit(edit: CleanDocEdit): edit is CleanDocTextRunEdit {
+function isTextRunEdit(edit: PptxSourceModelEdit): edit is PptxSourceModelTextRunEdit {
   return edit.kind === "replaceTextRunPlainText";
 }
 
 function serializeDirtyXmlPart(
-  source: CleanDocSource,
+  source: PptxSourceModel,
   partPath: PartPath,
-  textRunEdits: readonly CleanDocTextRunEdit[],
+  textRunEdits: readonly PptxSourceModelTextRunEdit[],
 ): Uint8Array {
   const rawPart = source.packageGraph.rawParts?.find((part) => part.partPath === partPath);
   if (rawPart === undefined) {
@@ -115,7 +115,7 @@ function serializeDirtyXmlPart(
   return encodeXml(XML_DECLARATION + xmlBuilder.build(root));
 }
 
-function applyTextRunEdit(root: XmlNode, edit: CleanDocTextRunEdit): void {
+function applyTextRunEdit(root: XmlNode, edit: PptxSourceModelTextRunEdit): void {
   const locator = parseTextRunLocator(edit.handle.nodeId);
   const slide = getChild(root, "sld");
   const cSld = getChild(slide, "cSld");
@@ -141,7 +141,9 @@ interface TextRunLocator {
   readonly runIndex: number;
 }
 
-function parseTextRunLocator(nodeId: CleanDocTextRunEdit["handle"]["nodeId"]): TextRunLocator {
+function parseTextRunLocator(
+  nodeId: PptxSourceModelTextRunEdit["handle"]["nodeId"],
+): TextRunLocator {
   const value = String(nodeId ?? "");
   const byShapeId = /^text:shape:(.+):p:(\d+):r:(\d+)$/.exec(value);
   if (byShapeId !== null) {
@@ -271,7 +273,7 @@ function localName(key: string): string {
 }
 
 function serializeContentTypes(
-  contentTypes: CleanDocSource["packageGraph"]["contentTypes"],
+  contentTypes: PptxSourceModel["packageGraph"]["contentTypes"],
 ): string {
   const defaults = contentTypes.defaults
     .map(

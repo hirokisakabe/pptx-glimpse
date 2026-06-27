@@ -1,9 +1,9 @@
 /**
- * slide / slideLayout / slideMaster / theme part を CleanDoc source の typed
+ * slide / slideLayout / slideMaster / theme part を PptxSourceModel source の typed
  * node へ読み取る。
  *
  * 各 part は分離したまま保持し、cascade (master → layout → slide) の解決は
- * computed view の責務とする (`docs/cleandoc-source-computed-view.md`)。本
+ * computed view の責務とする (`docs/pptx-source-model-computed-view.md`)。本
  * モジュールは解決に必要な素材 (背景 / clrMap / clrMapOvr / theme scheme /
  * showMasterSp) と shape tree を source-local に読み出す。
  */

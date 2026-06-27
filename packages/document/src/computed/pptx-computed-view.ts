@@ -1,5 +1,5 @@
 /**
- * CleanDoc computed view の型。
+ * PptxSourceModel computed view の型。
  *
  * source model を mutation せず、slide / layout / master / theme cascade から
  * 消費しやすい effective value を派生させる。renderer 固有の pixel conversion
@@ -43,7 +43,7 @@ export interface CreateComputedViewOptions {
   readonly applyMasterVisibility?: boolean;
 }
 
-export interface CleanDocComputedView {
+export interface PptxComputedView {
   readonly slideSize?: ComputedSlideSize;
   readonly slides: readonly ComputedSlide[];
 }

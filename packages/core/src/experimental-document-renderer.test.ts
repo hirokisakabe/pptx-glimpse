@@ -4,26 +4,26 @@ import { fileURLToPath } from "node:url";
 import * as documentExperimental from "@pptx-glimpse/document/experimental";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import * as adapterModule from "./cleandoc-renderer-adapter.js";
 import { convertPptxToPng, convertPptxToSvg } from "./converter.js";
 import {
   convertPptxToPngViaDocumentPath,
   convertPptxToSvgViaDocumentPath,
 } from "./experimental-document-renderer.js";
+import * as adapterModule from "./pptx-computed-view-renderer-adapter.js";
 
 const SELECTED_SHARED_FIXTURES = ["real-basic-theme.pptx", "real-product-page.pptx"] as const;
 
 const DOCUMENT_RENDER_TEST_SCOPE = [
   "readPptx source model",
   "createComputedView cascade projection",
-  "CleanDoc computed-view to current renderer model adapter",
+  "PptxSourceModel computed-view to current renderer model adapter",
   "existing SVG renderer",
   "existing SVG to PNG conversion",
 ] as const;
 
 const DOCUMENT_RENDER_UNSUPPORTED_SUBSET = [
   "raw shape-tree nodes such as groups and unsupported graphicFrame content",
-  "raw background and fill variants outside the CleanDoc adapter subset",
+  "raw background and fill variants outside the PptxSourceModel adapter subset",
   "unresolved images without a package media payload",
   "elements missing computed transforms",
 ] as const;
@@ -38,7 +38,7 @@ describe("experimental document render path", () => {
       [
         "readPptx source model",
         "createComputedView cascade projection",
-        "CleanDoc computed-view to current renderer model adapter",
+        "PptxSourceModel computed-view to current renderer model adapter",
         "existing SVG renderer",
         "existing SVG to PNG conversion",
       ]
@@ -46,7 +46,7 @@ describe("experimental document render path", () => {
     expect(DOCUMENT_RENDER_UNSUPPORTED_SUBSET).toMatchInlineSnapshot(`
       [
         "raw shape-tree nodes such as groups and unsupported graphicFrame content",
-        "raw background and fill variants outside the CleanDoc adapter subset",
+        "raw background and fill variants outside the PptxSourceModel adapter subset",
         "unresolved images without a package media payload",
         "elements missing computed transforms",
       ]
@@ -151,5 +151,5 @@ function expectUnsupportedDiagnosticsToStayInScope(
 }
 
 function isExpectedDocumentRenderDiagnosticCode(code: string): boolean {
-  return code === "cleandoc-adapter.raw-element-skipped";
+  return code === "pptx-computed-view-adapter.raw-element-skipped";
 }

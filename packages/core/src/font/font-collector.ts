@@ -2,10 +2,10 @@
  * PPTX から使用フォント名を収集する API。
  */
 import {
-  type CleanDocSource,
   type ComputedElement,
   type ComputedTextBody,
   createComputedView,
+  type PptxSourceModel,
   readPptx,
   type SourceThemeFontScheme,
 } from "@pptx-glimpse/document/experimental";
@@ -86,7 +86,7 @@ export function collectUsedFonts(input: Buffer | Uint8Array): UsedFonts {
   };
 }
 
-function findDefaultThemeFontScheme(source: CleanDocSource): ResolvedThemeFontScheme {
+function findDefaultThemeFontScheme(source: PptxSourceModel): ResolvedThemeFontScheme {
   const firstThemePartPath = source.slideMasters.find(
     (master) => master.themePartPath !== undefined,
   )?.themePartPath;
@@ -95,7 +95,7 @@ function findDefaultThemeFontScheme(source: CleanDocSource): ResolvedThemeFontSc
 }
 
 function findThemeFontScheme(
-  source: CleanDocSource,
+  source: PptxSourceModel,
   themePartPath: string | undefined,
 ): ResolvedThemeFontScheme | undefined {
   if (themePartPath === undefined) return undefined;

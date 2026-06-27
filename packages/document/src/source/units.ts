@@ -1,5 +1,5 @@
 /**
- * CleanDoc source model が使う PPTX-native な typed units。
+ * PptxSourceModel source model が使う PPTX-native な typed units。
  *
  * source model は pixel 変換を持たず、OOXML が定義する単位系をそのまま
  * 型として保持する。renderer 側の単位型 (`@pptx-glimpse/renderer`) は

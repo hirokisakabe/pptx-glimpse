@@ -1,6 +1,6 @@
 import type {
-  CleanDocSource,
   PartPath,
+  PptxSourceModel,
   SourceBlipEffects,
   SourceCellBorders,
   SourceColor,
@@ -27,7 +27,6 @@ import type {
 } from "../source/index.js";
 import { asEmu, asPartPath } from "../source/index.js";
 import type {
-  CleanDocComputedView,
   ComputedBackground,
   ComputedBlipEffects,
   ComputedCellBorders,
@@ -53,7 +52,8 @@ import type {
   ComputedTableRow,
   ComputedTextBody,
   CreateComputedViewOptions,
-} from "./clean-doc-computed-view.js";
+  PptxComputedView,
+} from "./pptx-computed-view.js";
 
 const DEFAULT_COLOR_MAP: Readonly<Record<string, string>> = {
   bg1: "lt1",
@@ -124,9 +124,9 @@ const DEFAULT_TABLE_STYLE_BORDERS: SourceCellBorders = {
 };
 
 export function createComputedView(
-  source: CleanDocSource,
+  source: PptxSourceModel,
   options: CreateComputedViewOptions = {},
-): CleanDocComputedView {
+): PptxComputedView {
   const slidesByPath = new Map(source.slides.map((slide) => [slide.partPath, slide]));
   const selectedSlideNumbers = options.slides !== undefined ? new Set(options.slides) : undefined;
 
@@ -149,7 +149,7 @@ export function createComputedView(
 }
 
 function computeSlide(
-  source: CleanDocSource,
+  source: PptxSourceModel,
   slide: SourceSlide,
   slideNumber: number,
   options: CreateComputedViewOptions,
@@ -207,7 +207,7 @@ function computeSlide(
 }
 
 interface ComputeContext {
-  readonly source: CleanDocSource;
+  readonly source: PptxSourceModel;
   readonly layout?: SourceSlideLayout;
   readonly master?: SourceSlideMaster;
   readonly theme?: SourceTheme;
@@ -252,7 +252,7 @@ function buildComputedColorScheme(context: ComputeContext): Readonly<Record<stri
 }
 
 function resolveRelationships(
-  source: CleanDocSource,
+  source: PptxSourceModel,
   sourcePartPath: PartPath,
 ): ComputedRelationship[] {
   const rels =
@@ -1266,7 +1266,7 @@ function resolveRelationshipTarget(sourcePartPath: string, target: string): stri
   return segments.join("/");
 }
 
-function readRawPackageText(source: CleanDocSource, partPath: PartPath): string | undefined {
+function readRawPackageText(source: PptxSourceModel, partPath: PartPath): string | undefined {
   const rawPart = source.packageGraph.rawParts?.find((part) => part.partPath === partPath);
   if (rawPart?.kind === "binary") return textDecoder.decode(rawPart.bytes);
   return undefined;

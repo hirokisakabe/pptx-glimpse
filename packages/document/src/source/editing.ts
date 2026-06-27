@@ -1,5 +1,5 @@
 import type {
-  CleanDocSource,
+  PptxSourceModel,
   SourceHandle,
   SourceParagraph,
   SourceShape,
@@ -7,7 +7,7 @@ import type {
 } from "./index.js";
 
 export function findTextRunBySourceHandle(
-  source: CleanDocSource,
+  source: PptxSourceModel,
   handle: SourceHandle,
 ): SourceTextRun | undefined {
   for (const slide of source.slides) {
@@ -21,10 +21,10 @@ export function findTextRunBySourceHandle(
 }
 
 export function replaceTextRunPlainText(
-  source: CleanDocSource,
+  source: PptxSourceModel,
   handle: SourceHandle,
   text: string,
-): CleanDocSource {
+): PptxSourceModel {
   let replaced = false;
 
   const slides = source.slides.map((slide) => ({
@@ -57,7 +57,9 @@ export function replaceTextRunPlainText(
   }));
 
   if (!replaced) {
-    throw new Error("replaceTextRunPlainText: text run handle was not found in CleanDoc source");
+    throw new Error(
+      "replaceTextRunPlainText: text run handle was not found in PptxSourceModel source",
+    );
   }
 
   return {

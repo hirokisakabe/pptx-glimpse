@@ -2,10 +2,10 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import {
-  type CleanDocSource,
   createComputedView,
   findTextRunBySourceHandle,
   type MediaPart,
+  type PptxSourceModel,
   readPptx,
   replaceTextRunPlainText,
   type SourceParagraph,
@@ -17,13 +17,13 @@ import { renderSlideToSvg } from "@pptx-glimpse/renderer";
 import { unzipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 
-import { adaptComputedViewToRendererModel } from "./cleandoc-renderer-adapter.js";
 import { convertPptxToPng, convertPptxToSvg } from "./converter.js";
+import { adaptComputedViewToRendererModel } from "./pptx-computed-view-renderer-adapter.js";
 
 const SHARED_FIXTURES = ["real-basic-theme.pptx", "real-product-page.pptx"] as const;
 const EDITED_TEXT = "Edited 470";
 
-describe("CleanDoc PoC end-to-end round-trip", () => {
+describe("PptxSourceModel PoC end-to-end round-trip", () => {
   it.each(SHARED_FIXTURES)(
     "renders %s through read -> computed view -> adapter -> SVG",
     (fixtureName) => {
@@ -44,7 +44,7 @@ describe("CleanDoc PoC end-to-end round-trip", () => {
       for (const diagnostic of rendered.adapted.diagnostics) {
         expect(diagnostic).toMatchObject({
           severity: "warning",
-          code: "cleandoc-adapter.raw-element-skipped",
+          code: "pptx-computed-view-adapter.raw-element-skipped",
         });
       }
     },
@@ -156,7 +156,7 @@ describe("CleanDoc PoC end-to-end round-trip", () => {
 const textDecoder = new TextDecoder();
 
 interface RenderedDocumentPath {
-  readonly source: CleanDocSource;
+  readonly source: PptxSourceModel;
   readonly computed: ReturnType<typeof createComputedView>;
   readonly adapted: ReturnType<typeof adaptComputedViewToRendererModel>;
   readonly svgs: readonly { readonly slideNumber: number; readonly svg: string }[];
@@ -172,7 +172,7 @@ function renderDocumentPath(input: Uint8Array): RenderedDocumentPath {
   const adapted = adaptComputedViewToRendererModel(computed);
   const slideSize = adapted.slideSize;
   if (slideSize === undefined) {
-    throw new Error("CleanDoc render path requires a slide size for selected fixtures");
+    throw new Error("PptxSourceModel render path requires a slide size for selected fixtures");
   }
 
   return {
@@ -204,7 +204,7 @@ function mediaBytesByPath(media: readonly MediaPart[]): Record<string, readonly 
   return Object.fromEntries(media.map((part) => [part.partPath, [...part.bytes]]));
 }
 
-function selectedPreservedPartPaths(source: CleanDocSource): string[] {
+function selectedPreservedPartPaths(source: PptxSourceModel): string[] {
   return [
     ...source.presentation.slidePartPaths,
     ...source.slideLayouts.map((layout) => layout.partPath),
@@ -213,7 +213,7 @@ function selectedPreservedPartPaths(source: CleanDocSource): string[] {
   ];
 }
 
-function firstEditableRun(source: CleanDocSource): {
+function firstEditableRun(source: PptxSourceModel): {
   readonly slideNumber: number;
   readonly paragraph: SourceParagraph;
   readonly run: EditableTextRun;
@@ -229,7 +229,7 @@ function firstEditableRun(source: CleanDocSource): {
       }
     }
   }
-  throw new Error("No editable text run found in selected CleanDoc fixture");
+  throw new Error("No editable text run found in selected PptxSourceModel fixture");
 }
 
 type EditableTextRun = SourceTextRun & {
@@ -241,7 +241,7 @@ function isEditableTextRun(run: SourceTextRun): run is EditableTextRun {
 }
 
 function firstParagraphForRun(
-  source: CleanDocSource,
+  source: PptxSourceModel,
   handle: SourceTextRun["handle"],
 ): SourceParagraph | undefined {
   if (handle === undefined) return undefined;

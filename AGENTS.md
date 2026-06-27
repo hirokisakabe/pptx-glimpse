@@ -33,15 +33,15 @@ CI consists of 4 jobs:
 
 ## Architecture
 
-Data flow: **PPTX binary → CleanDoc reader → Computed view → Renderer model adapter → Renderer (SVG generation) → PNG conversion (optional)**
+Data flow: **PPTX binary → PptxSourceModel reader → Computed view → Renderer model adapter → Renderer (SVG generation) → PNG conversion (optional)**
 
-The legacy parser path remains available internally as an explicit parser-path oracle for parity checks and VRT, but public `convertPptxToSvg` / `convertPptxToPng` default to the CleanDoc document path.
+The legacy parser path remains available internally as an explicit parser-path oracle for parity checks and VRT, but public `convertPptxToSvg` / `convertPptxToPng` default to the PptxSourceModel document path.
 
 ソースは pnpm workspaces (`packages/*`) で分割されている。root は private な workspace orchestration 専用で、公開 npm package `pptx-glimpse` は `packages/core` から publish する。`pptx-glimpse` パッケージは build-time workspace dependency として `@pptx-glimpse/document` / `@pptx-glimpse/renderer` を参照し、公開 tarball には bundle された成果物を含める。
 
-`@pptx-glimpse/document` / CleanDoc / writer / editor-core / pom 連携に関わる issue に着手する前に、責務境界と依存方向の決定記録である `docs/document-boundaries.md` と、そこからリンクされる派生決定記録を必ず読むこと。`document` は `core` / `editor-core` / renderer / pom を知らない下位基盤として扱う。
+`@pptx-glimpse/document` / PptxSourceModel / writer / editor-core / pom 連携に関わる issue に着手する前に、責務境界と依存方向の決定記録である `docs/document-boundaries.md` と、そこからリンクされる派生決定記録を必ず読むこと。`document` は `core` / `editor-core` / renderer / pom を知らない下位基盤として扱う。
 
-`packages/document/src/` — experimental `@pptx-glimpse/document` パッケージ。CleanDoc / OOXML document foundation の下位基盤として追加されており、public conversion path の default reader / computed view として参照される。`@pptx-glimpse/document/experimental` は後続の source model / reader / writer 実装を積むための experimental entry point。
+`packages/document/src/` — experimental `@pptx-glimpse/document` パッケージ。PptxSourceModel / OOXML document foundation の下位基盤として追加されており、public conversion path の default reader / computed view として参照される。`@pptx-glimpse/document/experimental` は後続の source model / reader / writer 実装を積むための experimental entry point。
 
 `packages/core/src/` — 公開パッケージ `pptx-glimpse` の実装（パーサー + 公開 API）
 
