@@ -11,7 +11,14 @@
 import { XMLBuilder } from "fast-xml-parser";
 import { zipSync } from "fflate";
 
-import { parseXml, type XmlNode } from "../reader/xml.js";
+import {
+  getAttr,
+  getChild,
+  getChildArray,
+  localName,
+  parseXml,
+  type XmlNode,
+} from "../reader/xml.js";
 import type {
   PartPath,
   PartRelationships,
@@ -21,6 +28,7 @@ import type {
   RawOoxmlNode,
   RawPackagePart,
 } from "../source/index.js";
+import { isRelationshipPart, relationshipsPartPath } from "../source/package-paths.js";
 
 /** `writePptx` の出力。 */
 export type WritePptxOutput = Uint8Array;
@@ -202,40 +210,6 @@ function getShapeByOrderingSlot(
   return undefined;
 }
 
-function getChild(node: XmlNode | undefined, name: string): XmlNode | undefined {
-  if (!node) return undefined;
-  for (const key of Object.keys(node)) {
-    if (key.startsWith("@_")) continue;
-    if (localName(key) !== name) continue;
-    const value = node[key];
-    return Array.isArray(value)
-      ? (value[0] as XmlNode | undefined)
-      : (value as XmlNode | undefined);
-  }
-  return undefined;
-}
-
-function getChildArray(node: XmlNode | undefined, name: string): XmlNode[] {
-  if (!node) return [];
-  for (const key of Object.keys(node)) {
-    if (key.startsWith("@_")) continue;
-    if (localName(key) === name) {
-      const value = node[key];
-      if (value === undefined || value === null) return [];
-      return (Array.isArray(value) ? value : [value]) as XmlNode[];
-    }
-  }
-  return [];
-}
-
-function getAttr(node: XmlNode | undefined, name: string): string | undefined {
-  if (!node) return undefined;
-  const value = node[`@_${name}`];
-  if (typeof value === "string") return value;
-  if (typeof value === "number" || typeof value === "boolean") return String(value);
-  return undefined;
-}
-
 function setChildText(node: XmlNode, name: string, text: string): void {
   for (const key of Object.keys(node)) {
     if (key.startsWith("@_")) continue;
@@ -265,11 +239,6 @@ function textElementValue(existing: unknown, text: string): unknown {
 
 function textRequiresPreserve(text: string): boolean {
   return text.startsWith(" ") || text.endsWith(" ");
-}
-
-function localName(key: string): string {
-  const colon = key.indexOf(":");
-  return colon === -1 ? key : key.slice(colon + 1);
 }
 
 function serializeContentTypes(
@@ -342,18 +311,6 @@ function serializeRawNode(node: RawOoxmlNode): string {
   }
   if (text === "" && children === "") return `<${node.name}${attributes}/>`;
   return `<${node.name}${attributes}>${text}${children}</${node.name}>`;
-}
-
-function relationshipsPartPath(sourcePartPath: PartPath): string {
-  if (sourcePartPath === "") return "_rels/.rels";
-  const slash = sourcePartPath.lastIndexOf("/");
-  const dir = slash === -1 ? "" : sourcePartPath.slice(0, slash + 1);
-  const file = slash === -1 ? sourcePartPath : sourcePartPath.slice(slash + 1);
-  return `${dir}_rels/${file}.rels`;
-}
-
-function isRelationshipPart(path: string): boolean {
-  return path.endsWith(".rels") && path.includes("_rels/");
 }
 
 function encodeXml(xml: string): Uint8Array {

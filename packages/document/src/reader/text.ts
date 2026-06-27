@@ -28,6 +28,7 @@ import type {
 import { asEmu, asHundredthPt, asPt, asSourceNodeId } from "../source/index.js";
 import { parseColorElement } from "./drawing.js";
 import { isTrue, numericAttr } from "./drawing.js";
+import { parseEnumValue, parseEnumValueWithDefault } from "./ooxml-values.js";
 import { collectUnknownSidecars } from "./raw-node.js";
 import {
   getAttr,
@@ -68,8 +69,8 @@ const ANCHOR_MAP: Readonly<Record<string, SourceVerticalAnchor>> = {
   b: "bottom",
 };
 
-const WRAP_VALUES = new Set(["square", "none"]);
-const VERTICAL_VALUES = new Set([
+const WRAP_VALUES: ReadonlySet<SourceTextWrap> = new Set(["square", "none"]);
+const VERTICAL_VALUES: ReadonlySet<SourceTextVerticalType> = new Set([
   "horz",
   "vert",
   "vert270",
@@ -78,7 +79,7 @@ const VERTICAL_VALUES = new Set([
   "mongolianVert",
 ]);
 
-const VALID_AUTO_NUM_SCHEMES = new Set([
+const VALID_AUTO_NUM_SCHEMES: ReadonlySet<SourceAutoNumScheme> = new Set([
   "arabicPeriod",
   "arabicParenR",
   "romanUcPeriod",
@@ -350,13 +351,11 @@ function parseBodyProperties(bodyPr: XmlNode | undefined): SourceTextBodyPropert
 }
 
 function parseWrap(value: string | undefined): SourceTextWrap | undefined {
-  return value !== undefined && WRAP_VALUES.has(value) ? (value as SourceTextWrap) : undefined;
+  return parseEnumValue(value, WRAP_VALUES);
 }
 
 function parseVerticalType(value: string | undefined): SourceTextVerticalType | undefined {
-  return value !== undefined && VERTICAL_VALUES.has(value)
-    ? (value as SourceTextVerticalType)
-    : undefined;
+  return parseEnumValue(value, VERTICAL_VALUES);
 }
 
 function parseParagraph(
@@ -548,7 +547,7 @@ function parseBullet(pPr: XmlNode | undefined): SourceParagraphProperties["bulle
     const scheme = getAttr(buAutoNum, "type") ?? "arabicPeriod";
     return {
       type: "autoNum",
-      scheme: VALID_AUTO_NUM_SCHEMES.has(scheme) ? (scheme as SourceAutoNumScheme) : "arabicPeriod",
+      scheme: parseEnumValueWithDefault(scheme, VALID_AUTO_NUM_SCHEMES, "arabicPeriod"),
       startAt: numericAttr(buAutoNum, "startAt") ?? 1,
     };
   }
