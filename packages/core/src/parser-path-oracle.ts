@@ -187,7 +187,7 @@ function loadFontBuffers(fontDirs?: string[], skipSystemFonts?: boolean): Uint8A
       // Ignore unreadable font files.
     }
   }
-  pathsWithSize.sort((a, b) => a.size - b.size);
+  pathsWithSize.sort((a, b) => a.size - b.size || a.path.localeCompare(b.path));
 
   const buffers: Uint8Array[] = [];
   let totalSize = 0;

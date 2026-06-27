@@ -10,6 +10,7 @@ import {
   DOCUMENT_PATH_VRT_RENDER_WIDTH,
   type DocumentPathVrtFixtureGroup,
 } from "./document-path-cases.js";
+import { DOCUMENT_PATH_VRT_RENDER_OPTIONS } from "./render-options.js";
 import { SHARED_FIXTURE_CASES, VRT_CASES } from "./vrt-cases.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -60,6 +61,7 @@ describe("Document path zero-diff default switch gate", { timeout: 60000 }, () =
 
         const input = readFileSync(fixturePath);
         const options = {
+          ...DOCUMENT_PATH_VRT_RENDER_OPTIONS,
           width: DOCUMENT_PATH_VRT_RENDER_WIDTH,
         };
         const parserResults = await convertPptxToPngViaParserPath(input, options);
