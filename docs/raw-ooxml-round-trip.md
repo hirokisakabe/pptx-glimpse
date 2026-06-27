@@ -12,9 +12,10 @@ layering decision in
 
 The related core dogfood migration decision is recorded in
 [core-document-dogfood-migration.md](./core-document-dogfood-migration.md). In
-short, public SVG/PNG conversion should eventually route through CleanDoc source
-reading, computed view generation, and a core-owned adapter into the existing
-renderer model.
+short, public SVG/PNG conversion now routes through CleanDoc source reading,
+computed view generation, and a core-owned adapter into the existing renderer
+model after the [#481](https://github.com/hirokisakabe/pptx-glimpse/issues/481)
+default switch.
 
 The goal is to make `@pptx-glimpse/document` reliable for existing PPTX files
 without turning CleanDoc into a byte-level OOXML editor. CleanDoc should expose a

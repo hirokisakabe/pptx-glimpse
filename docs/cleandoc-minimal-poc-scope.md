@@ -15,6 +15,12 @@ Issue #453 is the PoC-scope child decision for the broader CleanDoc RFC in
 [#445](https://github.com/hirokisakabe/pptx-glimpse/issues/445), so this note
 ends with a #445-ready conclusion.
 
+> Current-state note, 2026-06-27: this is a historical PoC-scope decision. The
+> public conversion default switch tracked by
+> [#481](https://github.com/hirokisakabe/pptx-glimpse/issues/481) is complete,
+> and parser comparisons now refer to the explicit internal parser oracle rather
+> than the public default conversion path.
+
 The PoC is not a full PPTX implementation. It is the smallest slice that can
 prove the intended architecture end to end:
 
@@ -271,9 +277,10 @@ Not expected:
 - Safe edits to partially supported rich text constructs beyond plain run text.
 - Byte-level preservation of the edited XML part.
 
-## Follow-up Implementation Issues
+## Historical Follow-up Implementation Issues
 
-After this PoC scope is accepted, split implementation into issues similar to:
+After this PoC scope was accepted, implementation was split into issues similar
+to:
 
 1. Add `@pptx-glimpse/document` workspace package skeleton, public experimental
    entry points, package-boundary tests, and build wiring.
@@ -299,7 +306,7 @@ After this PoC scope is accepted, split implementation into issues similar to:
    for invalidated raw sidecars.
 10. Add end-to-end no-edit and one-text-edit round-trip tests.
 11. Add an internal or experimental core render path that can render selected
-    fixtures through `@pptx-glimpse/document` without changing the public default.
+    fixtures through `@pptx-glimpse/document` before changing the public default.
 12. Expand fixture coverage and opt selected VRT/shared fixtures into the
     document path only after structural parity is stable.
 
