@@ -99,6 +99,32 @@ export default tseslint.config(
     },
   },
   {
+    files: ["packages/*/src/**/*.ts"],
+    ignores: [
+      "packages/*/src/**/*.test.ts",
+      "packages/*/src/**/*.e2e.test.ts",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "./unsafe-type-assertion.js",
+              importNames: ["unsafeFixtureAssertion"],
+              message: "unsafeFixtureAssertion is test-only; production code must use a boundary-specific helper.",
+            },
+            {
+              name: "../unsafe-type-assertion.js",
+              importNames: ["unsafeFixtureAssertion"],
+              message: "unsafeFixtureAssertion is test-only; production code must use a boundary-specific helper.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     files: ["scripts/**/*.ts", "vrt/**/*.ts", "bench/**/*.ts", "e2e/**/*.ts"],
     rules: {
       "@typescript-eslint/no-unsafe-argument": "off",

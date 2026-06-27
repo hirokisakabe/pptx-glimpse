@@ -55,7 +55,7 @@ import type { Relationship } from "./parser/relationship-parser.js";
 import { navigateOrdered, parseShapeTree } from "./parser/slide-parser.js";
 import { parseXml, parseXmlOrdered, type XmlNode } from "./parser/xml-parser.js";
 import { convertChartXmlToRendererChartData } from "./renderer-chart-data-converter.js";
-import { unsafeAdapterBoundaryAssertion } from "./unsafe-type-assertion.js";
+import { unsafeAdapterBoundaryAssertion, unsafeBrandAssertion } from "./unsafe-type-assertion.js";
 
 interface RendererAdapterResult {
   readonly slideSize?: SlideSize;
@@ -847,7 +847,7 @@ function toRendererEmu(value: number): ReturnType<typeof asEmu> {
 }
 
 function toRendererPt(value: number): NonNullable<RunProperties["fontSize"]> {
-  return unsafeAdapterBoundaryAssertion<NonNullable<RunProperties["fontSize"]>>(Number(value));
+  return unsafeBrandAssertion<NonNullable<RunProperties["fontSize"]>>(Number(value));
 }
 
 function normalizeImageMimeType(contentType: string): string {

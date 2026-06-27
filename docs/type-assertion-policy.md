@@ -15,7 +15,7 @@ Command used for the broad inventory:
 npm run audit:type-assertions
 ```
 
-The current source tree contains 77 `as` / angle-bracket type assertions in
+The current source tree contains 84 `as` / angle-bracket type assertions in
 linted TypeScript sources. The main buckets are:
 
 | Category | Count | Policy |
@@ -29,7 +29,7 @@ linted TypeScript sources. The main buckets are:
 | Array literal assertion | 0 | New direct array literal assertions to concrete types are banned by ESLint. |
 | `as any` | 0 | Not allowed in normal implementation code. |
 | External library / platform interop | 0 | Allowed inside the adapter module that owns the integration, preferably via a boundary helper. |
-| Other narrow assertions | 7 | Treat case-by-case. Enum/string-literal narrowing should move toward parser helpers such as `parseEnum`. External library gaps should stay inside adapter modules or purpose-specific `unsafe*Assertion` helpers. |
+| Other narrow assertions | 14 | Treat case-by-case. Enum/string-literal narrowing should move toward parser helpers such as `parseEnum`. External library gaps should stay inside adapter modules or purpose-specific `unsafe*Assertion` helpers. |
 
 No `as any` assertions were found in linted TypeScript sources during this
 audit.
@@ -52,6 +52,8 @@ boundary purpose (`unsafeXmlBoundaryAssertion`,
 `unsafeBrandAssertion`, external interop helpers, and adapter/script/VRT
 variants), each with a reasoned `eslint-disable-next-line` at the actual
 assertion boundary.
+`unsafeFixtureAssertion` is test-only; ESLint rejects importing it from
+production package sources.
 
 Rule references:
 
