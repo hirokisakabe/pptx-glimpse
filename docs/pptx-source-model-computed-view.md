@@ -32,6 +32,13 @@ a core-owned adapter after the [#481](https://github.com/hirokisakabe/pptx-glimp
 default switch. The old parser remains only as an explicit internal parity
 oracle and targeted fallback source.
 
+The current PptxComputedView-to-renderer-model duplication boundary is recorded
+in
+[pptx-computed-renderer-model-boundaries.md](./pptx-computed-renderer-model-boundaries.md).
+In short, PptxComputedView keeps source provenance and effective document
+semantics, while the renderer model is a render-ready adapter target and should
+not be merged back into PptxSourceModel.
+
 ## Decision
 
 Adopt a two-layer PptxSourceModel design:
