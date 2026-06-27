@@ -11,6 +11,12 @@ supersedes the earlier "current state" and parallel-reader descriptions in the
 dogfood migration note where those descriptions still mention public conversion
 flowing through the old parser.
 
+This is the current-state companion to the historical migration plan. The
+default switch tracked by [#481](https://github.com/hirokisakabe/pptx-glimpse/issues/481)
+is complete, and the package-boundary cleanup follow-ups
+[#510](https://github.com/hirokisakabe/pptx-glimpse/issues/510) and
+[#511](https://github.com/hirokisakabe/pptx-glimpse/issues/511) are closed.
+
 ## Current owner split
 
 The public conversion path is now:
@@ -34,29 +40,29 @@ an internal oracle for parity checks.
 These reusable OOXML semantics are now owned by `@pptx-glimpse/document` source
 or computed view code:
 
-| Semantics | Document owner | Previous parser overlap removed or reduced |
-| --- | --- | --- |
-| Package graph, slide order, relationships, media payloads | `reader/read-pptx.ts`, source package graph, computed relationships | Public conversion no longer calls `parsePptxData` for package traversal |
-| Slide/layout/master chain resolution | `createComputedView` | Public conversion no longer calls `parseSlideWithLayout` for cascade assembly |
-| Background fallback | `createComputedView` | Public conversion uses computed `background` instead of parser-side fallback |
-| Theme color and color map resolution | source theme data + computed color resolution | Public conversion uses computed colors through the adapter |
-| Placeholder filtering and effective element ordering | `createComputedView` | Core converter no longer owns parser-path `mergeElements` |
-| Text style cascade for rendering/inspection | `createComputedView` | `collectUsedFonts` now reads CleanDoc/computed text instead of parser slides |
-| Theme font source data for rendering/inspection | source theme data + core runtime helpers | `collectUsedFonts` and rendering setup no longer depend on parser slide assembly |
-| Table/chart/image relationship resolution for rendering | `createComputedView` + adapter | Parser path remains only as comparison oracle |
+| Semantics                                                 | Document owner                                                      | Previous parser overlap removed or reduced                                       |
+| --------------------------------------------------------- | ------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Package graph, slide order, relationships, media payloads | `reader/read-pptx.ts`, source package graph, computed relationships | Public conversion no longer calls `parsePptxData` for package traversal          |
+| Slide/layout/master chain resolution                      | `createComputedView`                                                | Public conversion no longer calls `parseSlideWithLayout` for cascade assembly    |
+| Background fallback                                       | `createComputedView`                                                | Public conversion uses computed `background` instead of parser-side fallback     |
+| Theme color and color map resolution                      | source theme data + computed color resolution                       | Public conversion uses computed colors through the adapter                       |
+| Placeholder filtering and effective element ordering      | `createComputedView`                                                | Core converter no longer owns parser-path `mergeElements`                        |
+| Text style cascade for rendering/inspection               | `createComputedView`                                                | `collectUsedFonts` now reads CleanDoc/computed text instead of parser slides     |
+| Theme font source data for rendering/inspection           | source theme data + core runtime helpers                            | `collectUsedFonts` and rendering setup no longer depend on parser slide assembly |
+| Table/chart/image relationship resolution for rendering   | `createComputedView` + adapter                                      | Parser path remains only as comparison oracle                                    |
 
 ## Responsibilities left outside `document`
 
 These remain in core or renderer by design:
 
-| Responsibility | Owner | Reason |
-| --- | --- | --- |
-| Public API options | `packages/core/src/converter.ts`, `packages/core/src/index.ts` | Stable API compatibility remains a core package concern |
-| Warning setup, font setup, SVG text-output mode, PNG sizing | `packages/core/src/experimental-document-renderer.ts` | Renderer environment setup and runtime conversion options are core concerns |
-| CleanDoc computed view to renderer model mapping | `packages/core/src/cleandoc-renderer-adapter.ts` | The renderer model is a display-oriented compatibility target, not the CleanDoc source model |
-| Chart XML to renderer chart model mapping | Adapter calling parser `parseChart` | Chart rendering model is still renderer-specific; move only after a chart source/computed contract exists |
-| SmartArt drawing XML fallback to renderer shape tree | Adapter calling parser `parseShapeTree` | This is a rendering fallback for resolved diagram drawing XML, not canonical document semantics yet |
-| Font discovery, font mapping, text measurement, text-to-path, SVG/PNG output | `@pptx-glimpse/renderer` | Renderer-specific behavior per `document-boundaries.md` |
+| Responsibility                                                               | Owner                                                          | Reason                                                                                                    |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- |
+| Public API options                                                           | `packages/core/src/converter.ts`, `packages/core/src/index.ts` | Stable API compatibility remains a core package concern                                                   |
+| Warning setup, font setup, SVG text-output mode, PNG sizing                  | `packages/core/src/experimental-document-renderer.ts`          | Renderer environment setup and runtime conversion options are core concerns                               |
+| CleanDoc computed view to renderer model mapping                             | `packages/core/src/cleandoc-renderer-adapter.ts`               | The renderer model is a display-oriented compatibility target, not the CleanDoc source model              |
+| Chart XML to renderer chart model mapping                                    | Adapter calling parser `parseChart`                            | Chart rendering model is still renderer-specific; move only after a chart source/computed contract exists |
+| SmartArt drawing XML fallback to renderer shape tree                         | Adapter calling parser `parseShapeTree`                        | This is a rendering fallback for resolved diagram drawing XML, not canonical document semantics yet       |
+| Font discovery, font mapping, text measurement, text-to-path, SVG/PNG output | `@pptx-glimpse/renderer`                                       | Renderer-specific behavior per `document-boundaries.md`                                                   |
 
 ## Remaining legacy parser uses
 

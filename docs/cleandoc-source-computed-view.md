@@ -18,9 +18,10 @@ editing surface.
 
 The related core dogfood migration decision is recorded in
 [core-document-dogfood-migration.md](./core-document-dogfood-migration.md). In
-short, the public SVG/PNG conversion path should migrate through a computed view
-and a core-owned adapter while keeping the current parser in parallel until
-rendering parity is proven.
+short, the public SVG/PNG conversion path now routes through a computed view and
+a core-owned adapter after the [#481](https://github.com/hirokisakabe/pptx-glimpse/issues/481)
+default switch. The old parser remains only as an explicit internal parity
+oracle and targeted fallback source.
 
 ## Decision
 
@@ -229,10 +230,10 @@ Migration direction:
 6. Only after that, simplify or replace renderer model fields that duplicate
    computed view fields.
 
-## Current Implementation Mapping
+## Historical Implementation Mapping Before #481
 
-Current code already contains several computed-view behaviors, but they are
-spread across parser and core conversion code:
+Before the CleanDoc default switch, parser/core code already contained several
+computed-view behaviors:
 
 - `parseSlideWithLayout` resolves slide -> layout -> master chains.
 - `ColorResolver` resolves `schemeClr` through `clrMap` and `colorScheme`.
@@ -243,9 +244,10 @@ spread across parser and core conversion code:
 - `converter.ts` merges master, layout, and slide elements for rendering and
   filters template placeholders.
 
-Under the two-layer design, these behaviors should move behind explicit
-computed-view generation APIs. The current path can remain for compatibility
-until the CleanDoc reader and adapter exist.
+Under the two-layer design, these behaviors moved behind explicit computed-view
+generation APIs for public conversion. Any remaining old-parser overlap is
+scoped to the parser oracle or renderer-specific adapter fallbacks rather than
+the public default path.
 
 ## Schema Normalization Scope
 

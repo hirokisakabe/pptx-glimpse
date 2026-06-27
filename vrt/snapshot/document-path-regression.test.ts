@@ -6,7 +6,6 @@ import { convertPptxToPngViaDocumentPath } from "../../packages/core/src/experim
 import { convertPptxToPngViaParserPath } from "../../packages/core/src/parser-path-oracle.js";
 import { compareImageBuffers } from "../compare-utils.js";
 import {
-  DOCUMENT_PATH_VRT_BLOCKER_ISSUES,
   DOCUMENT_PATH_VRT_CASES,
   DOCUMENT_PATH_VRT_GENERATED_CASES,
   DOCUMENT_PATH_VRT_RENDER_WIDTH,
@@ -45,21 +44,11 @@ describe("Document path Visual Regression Tests", { timeout: 60000 }, () => {
     );
   });
 
-  it("keeps every non-zero or diagnostic-emitting gap linked to a blocker issue", () => {
-    const blockerIssueNumbers = new Set(Object.values(DOCUMENT_PATH_VRT_BLOCKER_ISSUES));
-
+  it("keeps document-path parity cases at zero visual tolerance", () => {
     for (const testCase of DOCUMENT_PATH_VRT_CASES) {
-      for (const issue of testCase.blockerIssues) {
-        expect(blockerIssueNumbers.has(issue), `${testCase.name}: unknown blocker #${issue}`).toBe(
-          true,
-        );
-      }
-      if (testCase.mismatchTolerance > 0 || testCase.expectedDiagnosticCodes.length > 0) {
-        expect(
-          testCase.blockerIssues.length,
-          `${testCase.name}: expected blocker issue for residual gap`,
-        ).toBeGreaterThan(0);
-      }
+      expect(testCase.mismatchTolerance, `${testCase.name}: expected zero visual tolerance`).toBe(
+        0,
+      );
     }
   });
 
@@ -89,9 +78,7 @@ describe("Document path Visual Regression Tests", { timeout: 60000 }, () => {
         expect(documentResults.slides.map((slide) => slide.slideNumber)).toEqual(
           currentResults.map((slide) => slide.slideNumber),
         );
-        expect(uniqueSortedCodes(documentResults.diagnostics)).toEqual(
-          [...testCase.expectedDiagnosticCodes].sort(),
-        );
+        expect(uniqueSortedCodes(documentResults.diagnostics)).toEqual([]);
 
         for (const documentResult of documentResults.slides) {
           const currentResult = currentResults.find(
@@ -120,8 +107,7 @@ describe("Document path Visual Regression Tests", { timeout: 60000 }, () => {
           console.log(
             `[document-path-vrt] ${testCase.name} slide${documentResult.slideNumber}: ` +
               `${(comparison.mismatchPercentage * 100).toFixed(3)}% ` +
-              `(tolerance ${(testCase.mismatchTolerance * 100).toFixed(1)}%)` +
-              blockerSuffix(testCase.blockerIssues),
+              `(tolerance ${(testCase.mismatchTolerance * 100).toFixed(1)}%)`,
           );
 
           expect(
@@ -129,8 +115,7 @@ describe("Document path Visual Regression Tests", { timeout: 60000 }, () => {
             `${testCase.name} slide ${documentResult.slideNumber}: ` +
               `${(comparison.mismatchPercentage * 100).toFixed(2)}% pixels differ ` +
               `(${comparison.mismatchedPixels}/${comparison.totalPixels}). ` +
-              `Tolerance: ${testCase.mismatchTolerance * 100}%. ` +
-              `Blockers: ${formatBlockers(testCase.blockerIssues)}`,
+              `Tolerance: ${testCase.mismatchTolerance * 100}%.`,
           ).toBe(true);
         }
       });
@@ -144,13 +129,4 @@ function uniqueSortedCodes(diagnostics: readonly { readonly code: string }[]): s
 
 function fixtureDir(group: DocumentPathVrtFixtureGroup): string {
   return group === "shared" ? SHARED_FIXTURE_DIR : GENERATED_FIXTURE_DIR;
-}
-
-function blockerSuffix(blockerIssues: readonly number[]): string {
-  if (blockerIssues.length === 0) return "";
-  return `; blockers ${formatBlockers(blockerIssues)}`;
-}
-
-function formatBlockers(blockerIssues: readonly number[]): string {
-  return blockerIssues.length === 0 ? "none" : blockerIssues.map((issue) => `#${issue}`).join(", ");
 }

@@ -16,9 +16,20 @@ raw OOXML round-trip policy in
 The target keeps the standalone `pptx-glimpse` conversion API intact while
 moving reusable OOXML reading semantics into `@pptx-glimpse/document`.
 
-## Current Core Flow
+> Current-state note, 2026-06-27: the migration tracked by
+> [#481](https://github.com/hirokisakabe/pptx-glimpse/issues/481) is complete.
+> Public `convertPptxToSvg` / `convertPptxToPng` now default to the CleanDoc
+> document path. This note remains a historical RFC for the migration plan and
+> should be read together with
+> [legacy-parser-semantics-audit.md](./legacy-parser-semantics-audit.md), which
+> records the post-switch owner split. The package-boundary cleanup follow-ups
+> [#510](https://github.com/hirokisakabe/pptx-glimpse/issues/510) and
+> [#511](https://github.com/hirokisakabe/pptx-glimpse/issues/511) are also
+> closed.
 
-The current public conversion API is orchestrated by
+## Historical Core Flow Before #481
+
+At the time of this RFC, the public conversion API was orchestrated by
 `packages/core/src/converter.ts`:
 
 ```text
@@ -32,12 +43,12 @@ PPTX Buffer | Uint8Array
 ```
 
 `parsePptxData` and `parseSlideWithLayout` were the effective core reader before
-the CleanDoc default path. They unzip the package, parse XML, collect
+the CleanDoc default switch. They unzip the package, parse XML, collect
 relationships/theme data, and produce the renderer model consumed by
 `@pptx-glimpse/renderer`.
 
-The current path already contains computed-view behavior, but it is implicit and
-spread across parser and converter code:
+That parser path already contained computed-view behavior, but it was implicit
+and spread across parser and converter code:
 
 - `parseSlideWithLayout` resolves slide, layout, and master package chains.
 - Theme colors are resolved through theme color schemes and effective color
@@ -51,9 +62,29 @@ spread across parser and converter code:
 - `convertPptxToPng` reuses `convertPptxToSvg` and then calls the PNG renderer,
   forcing path text output for resvg compatibility.
 
-This means the current parser is already a parser plus computed render-view
-builder. It is useful for rendering, but it is not the right canonical document
-source model for writer/editor/round-trip work.
+This meant the parser was already a parser plus computed render-view builder. It
+was useful for rendering, but it was not the right canonical document source
+model for writer/editor/round-trip work.
+
+## Current State After #481
+
+The public conversion path is now:
+
+```text
+PPTX Buffer | Uint8Array
+  -> @pptx-glimpse/document readPptx(input)
+  -> CleanDoc source model
+  -> createComputedView(source, options)
+  -> core-owned CleanDoc renderer adapter
+  -> existing @pptx-glimpse/renderer model
+  -> renderSlideToSvg(slide, slideSize)
+  -> svgToPng(svg, options) for PNG output
+```
+
+The old parser path remains only as an explicit internal oracle for parity
+checks and adapter fallbacks documented in
+[legacy-parser-semantics-audit.md](./legacy-parser-semantics-audit.md). It is
+not the public default.
 
 ## Target Flow Through `document`
 
@@ -85,19 +116,21 @@ The ownership boundary should be:
 pom. Core depends on `document`; the renderer consumes the adapter output and
 does not need to know CleanDoc directly.
 
-## Initial Parallel Reader Period
+## Historical Parallel Reader Period
 
-Adopt a parallel period instead of replacing the existing parser in one step.
+This section records the temporary parallel reader period that #481 has now
+completed. It remains useful as historical context for why parser-path oracle
+tests still exist.
 
-The first `document` reader should be introduced behind internal or experimental
-paths and compared against the current parser. The public default
-`convertPptxToSvg` / `convertPptxToPng` path should continue to use the current
-parser until the CleanDoc reader, computed view, and adapter reach rendering
-parity for the supported fixture set.
+The first `document` reader was introduced behind internal or experimental
+paths and compared against the then-current parser path. During that historical
+parallel period, the public `convertPptxToSvg` / `convertPptxToPng` default
+stayed on the parser path until the CleanDoc reader, computed view, and adapter
+reached rendering parity for the supported fixture set.
 
 Recommended sequence during the parallel period:
 
-1. Keep the current parser as the production render path.
+1. Keep the then-current parser as the production render path.
 2. Add `@pptx-glimpse/document` source types and `readPptx(input)` for a small
    but real subset of slides.
 3. Add computed view generation for slide size, slide order, relationships,
@@ -110,10 +143,10 @@ Recommended sequence during the parallel period:
 7. Only after parity is stable, make the document path the default public
    conversion path.
 
-Parallel reading is temporary dogfood scaffolding, not a permanent dual-source
-architecture. Once the document path becomes the default, parser semantics that
-are not renderer-specific should move into `@pptx-glimpse/document`; renderer
-fallbacks and visual diagnostics should stay outside it.
+Parallel reading was temporary dogfood scaffolding, not a permanent dual-source
+architecture. Now that the document path is the default, parser semantics that
+are not renderer-specific should continue to move into `@pptx-glimpse/document`;
+renderer fallbacks and visual diagnostics should stay outside it.
 
 ## Adapter Policy
 
@@ -209,18 +242,18 @@ It also does not require:
 
 ## Conclusion for #445
 
-The conclusion to reflect in #445 is:
+The historical conclusion to reflect in #445 was:
 
 `pptx-glimpse` core should dogfood `@pptx-glimpse/document` by routing the public
 SVG/PNG conversion path through CleanDoc source reading, computed document view
 generation, and a core-owned adapter into the existing renderer model.
 
-The migration should use a temporary parallel reader period. The current parser
-remains the production render path while `document` reader coverage, computed
-view behavior, and adapter parity are proven by unit tests, dual-reader tests,
-package verification, and VRT. After parity is stable, the document path becomes
-the default and reusable OOXML semantics move out of the current parser into
-`@pptx-glimpse/document`.
+That migration used a temporary parallel reader period. The old parser served as
+the production render path while `document` reader coverage, computed-view
+behavior, and adapter parity were proven by unit tests, dual-reader tests,
+package verification, and VRT. After parity stabilized, #481 switched the public
+default to the document path, and reusable OOXML semantics now continue to move
+out of the old parser into `@pptx-glimpse/document`.
 
 The existing renderer model remains a render-specific adapter target during the
 migration. CleanDoc is the canonical source model, computed view resolves
