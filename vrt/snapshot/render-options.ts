@@ -102,10 +102,10 @@ async function collectVrtTextCodePoints(): Promise<Set<number>> {
               .map(async ([, file]) => {
                 const xml = await file.async("string");
                 for (const match of xml.matchAll(/<a:t[^>]*>(.*?)<\/a:t>/gs)) {
-                  for (const char of match[1]) {
-                    const codePoint = char.codePointAt(0);
-                    if (codePoint !== undefined) codePoints.add(codePoint);
-                  }
+                  addTextCodePoints(codePoints, decodeXmlText(match[1]));
+                }
+                for (const match of xml.matchAll(/<a:buChar\b[^>]*\bchar="([^"]*)"/g)) {
+                  addTextCodePoints(codePoints, decodeXmlText(match[1]));
                 }
               }),
           );
@@ -114,6 +114,41 @@ async function collectVrtTextCodePoints(): Promise<Set<number>> {
   }
 
   return codePoints;
+}
+
+function addTextCodePoints(codePoints: Set<number>, text: string): void {
+  for (const char of text) {
+    const codePoint = char.codePointAt(0);
+    if (codePoint !== undefined) codePoints.add(codePoint);
+  }
+}
+
+function decodeXmlText(text: string): string {
+  return text.replace(/&(#x[0-9a-fA-F]+|#\d+|amp|lt|gt|quot|apos);/g, (entity, body) => {
+    if (typeof body !== "string") return entity;
+    if (body.startsWith("#x")) {
+      const codePoint = Number.parseInt(body.slice(2), 16);
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : entity;
+    }
+    if (body.startsWith("#")) {
+      const codePoint = Number.parseInt(body.slice(1), 10);
+      return Number.isFinite(codePoint) ? String.fromCodePoint(codePoint) : entity;
+    }
+    switch (body) {
+      case "amp":
+        return "&";
+      case "lt":
+        return "<";
+      case "gt":
+        return ">";
+      case "quot":
+        return '"';
+      case "apos":
+        return "'";
+      default:
+        return entity;
+    }
+  });
 }
 
 async function createVrtFontBuffer(
