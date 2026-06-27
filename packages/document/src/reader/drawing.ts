@@ -31,6 +31,7 @@ import type {
   SourceTransform,
 } from "../source/index.js";
 import { asEmu, asOoxmlAngle, asOoxmlPercent, asRelationshipId } from "../source/index.js";
+import { parseEnumValue, parseEnumValueWithDefault } from "./ooxml-values.js";
 import { makeSidecar } from "./raw-node.js";
 import {
   getAttr,
@@ -42,7 +43,7 @@ import {
   type XmlNode,
 } from "./xml.js";
 
-const COLOR_TRANSFORM_KINDS: ReadonlySet<string> = new Set([
+const COLOR_TRANSFORM_KINDS: ReadonlySet<SourceColorTransform["kind"]> = new Set([
   "lumMod",
   "lumOff",
   "tint",
@@ -451,7 +452,8 @@ function withTransforms(base: SourceColor, colorNode: XmlNode): SourceColor {
   for (const key of Object.keys(colorNode)) {
     if (key.startsWith("@_")) continue;
     const kind = localName(key);
-    if (!COLOR_TRANSFORM_KINDS.has(kind)) continue;
+    const transformKind = parseEnumValue(kind, COLOR_TRANSFORM_KINDS);
+    if (transformKind === undefined) continue;
     const value = colorNode[key];
     const items = Array.isArray(value) ? value : [value];
     for (const item of items) {
@@ -460,7 +462,7 @@ function withTransforms(base: SourceColor, colorNode: XmlNode): SourceColor {
       const numeric = Number(raw);
       if (!Number.isFinite(numeric)) continue;
       transforms.push({
-        kind: kind as SourceColorTransform["kind"],
+        kind: transformKind,
         value: asOoxmlPercent(numeric),
       });
     }
@@ -483,8 +485,7 @@ export function isTrue(value: string | undefined): boolean {
 
 function parseDashStyle(prstDash: XmlNode | undefined): SourceDashStyle | undefined {
   const value = getAttr(prstDash, "val");
-  if (value === undefined) return undefined;
-  return DASH_STYLES.has(value) ? (value as SourceDashStyle) : undefined;
+  return parseEnumValue(value, DASH_STYLES);
 }
 
 function parseCustomDash(ln: XmlNode): number[] | undefined {
@@ -516,19 +517,18 @@ function parseLineJoin(ln: XmlNode): SourceLineJoin | undefined {
 
 function parseArrowEndpoint(node: XmlNode | undefined): SourceArrowEndpoint | undefined {
   if (!node) return undefined;
-  const type = (getAttr(node, "type") ?? "none") as SourceArrowType | "none";
-  if (type === "none") return undefined;
-  if (!ARROW_TYPES.has(type)) return undefined;
+  const type = parseEnumValue(getAttr(node, "type"), ARROW_TYPES);
+  if (type === undefined) return undefined;
   const width = getAttr(node, "w") ?? "med";
   const length = getAttr(node, "len") ?? "med";
   return {
     type,
-    width: ARROW_SIZES.has(width) ? (width as SourceArrowSize) : "med",
-    length: ARROW_SIZES.has(length) ? (length as SourceArrowSize) : "med",
+    width: parseEnumValueWithDefault(width, ARROW_SIZES, "med"),
+    length: parseEnumValueWithDefault(length, ARROW_SIZES, "med"),
   };
 }
 
-const DASH_STYLES: ReadonlySet<string> = new Set([
+const DASH_STYLES: ReadonlySet<SourceDashStyle> = new Set([
   "solid",
   "dash",
   "dot",
@@ -539,7 +539,7 @@ const DASH_STYLES: ReadonlySet<string> = new Set([
   "sysDot",
 ]);
 
-const ARROW_TYPES: ReadonlySet<string> = new Set([
+const ARROW_TYPES: ReadonlySet<SourceArrowType> = new Set([
   "triangle",
   "stealth",
   "diamond",
@@ -547,4 +547,4 @@ const ARROW_TYPES: ReadonlySet<string> = new Set([
   "arrow",
 ]);
 
-const ARROW_SIZES: ReadonlySet<string> = new Set(["sm", "med", "lg"]);
+const ARROW_SIZES: ReadonlySet<SourceArrowSize> = new Set(["sm", "med", "lg"]);

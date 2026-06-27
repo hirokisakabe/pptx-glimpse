@@ -28,7 +28,6 @@ import type {
   PptxSourceModel,
   RawPackagePart,
   Relationship,
-  RelationshipTargetMode,
   SlideSize,
   SourcePresentation,
   SourceSlide,
@@ -37,6 +36,13 @@ import type {
   SourceTheme,
 } from "../source/index.js";
 import { asEmu, asPartPath, asRelationshipId } from "../source/index.js";
+import {
+  isRelationshipPart,
+  parseRelationshipTargetMode,
+  relationshipsSourcePartPath,
+  resolveInternalRelationshipTarget,
+  resolveRelationshipTarget,
+} from "../source/package-paths.js";
 import { createSidecarIdFactory } from "./raw-node.js";
 import { parseSlide, parseSlideLayout, parseSlideMaster, parseTheme } from "./slide-parts.js";
 import { parseTextStyle } from "./text.js";
@@ -56,7 +62,6 @@ import {
 export type ReadPptxInput = Uint8Array;
 
 const CONTENT_TYPES_PART = "[Content_Types].xml";
-const RELS_SUFFIX = ".rels";
 const PACKAGE_ROOT_PART = "";
 
 const OFFICE_DOCUMENT_REL_TYPE =
@@ -279,7 +284,7 @@ function resolveSingleRel(
   const rels = relationships.find((rel) => rel.sourcePartPath === sourcePart)?.relationships;
   const match = rels?.find((rel) => rel.type === relType && rel.targetMode !== "External");
   if (match === undefined) return undefined;
-  return asPartPath(resolveTarget(sourcePart, match.target));
+  return resolveInternalRelationshipTarget(sourcePart, match);
 }
 
 /** 指定 source part の relationship のうち、内部の該当 type をすべて解決する。 */
@@ -291,7 +296,10 @@ function resolveAllRels(
   const rels = relationships.find((rel) => rel.sourcePartPath === sourcePart)?.relationships ?? [];
   return rels
     .filter((rel) => rel.type === relType && rel.targetMode !== "External")
-    .map((rel) => asPartPath(resolveTarget(sourcePart, rel.target)));
+    .flatMap((rel) => {
+      const target = resolveInternalRelationshipTarget(sourcePart, rel);
+      return target === undefined ? [] : [target];
+    });
 }
 
 /** 挿入順を保ちつつ part path を重複排除する小さな集合。 */
@@ -364,16 +372,16 @@ function readRelationships(entries: Map<string, Uint8Array>): PartRelationships[
       const type = getAttr(node, "Type");
       const target = getAttr(node, "Target");
       if (id === undefined || type === undefined || target === undefined) continue;
-      const targetMode = getAttr(node, "TargetMode");
+      const targetMode = parseRelationshipTargetMode(getAttr(node, "TargetMode"));
       relationships.push({
         id: asRelationshipId(id),
         type,
         target,
-        ...(targetMode !== undefined ? { targetMode: targetMode as RelationshipTargetMode } : {}),
+        ...(targetMode !== undefined ? { targetMode } : {}),
       });
     }
 
-    result.push({ sourcePartPath: asPartPath(relsSourcePartPath(path)), relationships });
+    result.push({ sourcePartPath: relationshipsSourcePartPath(path), relationships });
   }
 
   return result;
@@ -440,7 +448,9 @@ function readPresentation(
       });
       continue;
     }
-    slidePartPaths.push(asPartPath(resolveTarget(presentationPath, relationship.target)));
+    slidePartPaths.push(
+      asPartPath(resolveRelationshipTarget(presentationPath, relationship.target)),
+    );
   }
 
   return {
@@ -478,7 +488,7 @@ function locatePresentationPart(
     (rel) => rel.type === OFFICE_DOCUMENT_REL_TYPE && rel.targetMode !== "External",
   );
   if (officeDocumentRel !== undefined) {
-    return resolveTarget(PACKAGE_ROOT_PART, officeDocumentRel.target);
+    return resolveRelationshipTarget(PACKAGE_ROOT_PART, officeDocumentRel.target);
   }
 
   const override = overrides.find((entry) => entry.contentType === PRESENTATION_CONTENT_TYPE);
@@ -489,10 +499,6 @@ const MEDIA_CONTENT_TYPE_PREFIXES = ["image/", "audio/", "video/"];
 
 function isMediaContentType(contentType: string): boolean {
   return MEDIA_CONTENT_TYPE_PREFIXES.some((prefix) => contentType.startsWith(prefix));
-}
-
-function isRelationshipPart(path: string): boolean {
-  return path.endsWith(RELS_SUFFIX) && path.includes("_rels/");
 }
 
 function resolveContentType(
@@ -523,46 +529,4 @@ function extensionOf(path: string): string | undefined {
 
 function stripLeadingSlash(path: string): string {
   return path.startsWith("/") ? path.slice(1) : path;
-}
-
-/**
- * `_rels/*.rels` part path から、その rels が属する source part path を求める。
- * 例: `ppt/_rels/presentation.xml.rels` → `ppt/presentation.xml`、
- * `_rels/.rels` → `""` (package root)。
- */
-function relsSourcePartPath(relsPath: string): string {
-  const marker = "_rels/";
-  const idx = relsPath.lastIndexOf(marker);
-  const dir = relsPath.slice(0, idx); // "" / "ppt/" / "ppt/slides/"
-  const file = relsPath.slice(idx + marker.length); // ".rels" / "presentation.xml.rels"
-  const base = file.endsWith(RELS_SUFFIX) ? file.slice(0, -RELS_SUFFIX.length) : file;
-  return dir + base;
-}
-
-/**
- * relationship target を source part path 基準で解決し、package 内の絶対 part
- * path (先頭スラッシュ無し) に正規化する。external (絶対 URI) はそのまま返す。
- */
-function resolveTarget(sourcePartPath: string, target: string): string {
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(target)) return target; // 絶対 URI (external)。
-
-  let combined: string;
-  if (target.startsWith("/")) {
-    combined = target.slice(1); // package root 起点。
-  } else {
-    const slash = sourcePartPath.lastIndexOf("/");
-    const baseDir = slash === -1 ? "" : sourcePartPath.slice(0, slash);
-    combined = baseDir === "" ? target : `${baseDir}/${target}`;
-  }
-
-  const segments: string[] = [];
-  for (const segment of combined.split("/")) {
-    if (segment === "" || segment === ".") continue;
-    if (segment === "..") {
-      segments.pop();
-      continue;
-    }
-    segments.push(segment);
-  }
-  return segments.join("/");
 }

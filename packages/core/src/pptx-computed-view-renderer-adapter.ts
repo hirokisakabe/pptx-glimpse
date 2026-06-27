@@ -78,6 +78,7 @@ export interface RendererAdapterDiagnostic {
 }
 
 type DiagnosticSink = RendererAdapterDiagnostic[];
+type RendererAdapterDiagnosticCode = RendererAdapterDiagnostic["code"];
 
 const ZERO_TRANSFORM: Transform = {
   offsetX: asEmu(0),
@@ -153,25 +154,27 @@ function adaptBackground(
   diagnostics: DiagnosticSink,
 ): Background | null {
   if (background === undefined) return null;
-  if (background.kind === "fill") {
-    return { fill: adaptFill(background.fill, slide, diagnostics) };
+  switch (background.kind) {
+    case "fill":
+      return { fill: adaptFill(background.fill, slide, diagnostics) };
+    case "styleReference":
+      return {
+        fill:
+          background.color !== undefined
+            ? { type: "solid", color: adaptColor(background.color) }
+            : null,
+      };
+    case "raw":
+      pushAdapterWarning(
+        diagnostics,
+        "pptx-computed-view-adapter.raw-background-ignored",
+        "Raw PptxSourceModel background is not supported by the renderer adapter.",
+        slide,
+      );
+      return null;
+    default:
+      return assertNever(background);
   }
-  if (background.kind === "styleReference") {
-    return {
-      fill:
-        background.color !== undefined
-          ? { type: "solid", color: adaptColor(background.color) }
-          : null,
-    };
-  }
-
-  diagnostics.push({
-    severity: "warning",
-    code: "pptx-computed-view-adapter.raw-background-ignored",
-    message: "Raw PptxSourceModel background is not supported by the renderer adapter.",
-    slideNumber: slide.slideNumber,
-  });
-  return null;
 }
 
 function adaptElement(
@@ -179,31 +182,39 @@ function adaptElement(
   slide: ComputedSlide,
   diagnostics: DiagnosticSink,
 ): SlideElement[] {
-  if (element.kind === "shape") return [adaptShape(element, slide, diagnostics)];
-  if (element.kind === "connector") return [adaptConnector(element, slide, diagnostics)];
-  if (element.kind === "group") return [adaptGroup(element, slide, diagnostics)];
-  if (element.kind === "image") {
-    const image = adaptImage(element, slide, diagnostics);
-    return image === undefined ? [] : [image];
+  switch (element.kind) {
+    case "shape":
+      return [adaptShape(element, slide, diagnostics)];
+    case "connector":
+      return [adaptConnector(element, slide, diagnostics)];
+    case "group":
+      return [adaptGroup(element, slide, diagnostics)];
+    case "image": {
+      const image = adaptImage(element, slide, diagnostics);
+      return image === undefined ? [] : [image];
+    }
+    case "table":
+      return [adaptTable(element, slide, diagnostics)];
+    case "chart": {
+      const chart = adaptChart(element, slide, diagnostics);
+      return chart === undefined ? [] : [chart];
+    }
+    case "smartArt": {
+      const smartArt = adaptSmartArt(element, slide, diagnostics);
+      return smartArt === undefined ? [] : [smartArt];
+    }
+    case "raw":
+      pushAdapterWarning(
+        diagnostics,
+        "pptx-computed-view-adapter.raw-element-skipped",
+        "Raw PptxSourceModel shape tree node is outside the renderer adapter subset.",
+        slide,
+        element.sourcePartPath,
+      );
+      return [];
+    default:
+      return assertNever(element);
   }
-  if (element.kind === "table") return [adaptTable(element, slide, diagnostics)];
-  if (element.kind === "chart") {
-    const chart = adaptChart(element, slide, diagnostics);
-    return chart === undefined ? [] : [chart];
-  }
-  if (element.kind === "smartArt") {
-    const smartArt = adaptSmartArt(element, slide, diagnostics);
-    return smartArt === undefined ? [] : [smartArt];
-  }
-
-  diagnostics.push({
-    severity: "warning",
-    code: "pptx-computed-view-adapter.raw-element-skipped",
-    message: "Raw PptxSourceModel shape tree node is outside the renderer adapter subset.",
-    slideNumber: slide.slideNumber,
-    sourcePartPath: element.sourcePartPath,
-  });
-  return [];
 }
 
 function adaptConnector(
@@ -255,25 +266,25 @@ function adaptChart(
   diagnostics: DiagnosticSink,
 ): ChartElement | undefined {
   if (chart.chartXml === undefined) {
-    diagnostics.push({
-      severity: "warning",
-      code: "pptx-computed-view-adapter.unresolved-chart-skipped",
-      message: "PptxSourceModel chart element has no resolved chart XML.",
-      slideNumber: slide.slideNumber,
-      sourcePartPath: chart.sourcePartPath,
-    });
+    pushAdapterWarning(
+      diagnostics,
+      "pptx-computed-view-adapter.unresolved-chart-skipped",
+      "PptxSourceModel chart element has no resolved chart XML.",
+      slide,
+      chart.sourcePartPath,
+    );
     return undefined;
   }
 
   const chartData = parseChart(chart.chartXml, createColorResolver(slide));
   if (chartData === null) {
-    diagnostics.push({
-      severity: "warning",
-      code: "pptx-computed-view-adapter.unresolved-chart-skipped",
-      message: "PptxSourceModel chart XML could not be parsed into the renderer chart model.",
-      slideNumber: slide.slideNumber,
-      sourcePartPath: chart.sourcePartPath,
-    });
+    pushAdapterWarning(
+      diagnostics,
+      "pptx-computed-view-adapter.unresolved-chart-skipped",
+      "PptxSourceModel chart XML could not be parsed into the renderer chart model.",
+      slide,
+      chart.sourcePartPath,
+    );
     return undefined;
   }
 
@@ -290,13 +301,13 @@ function adaptSmartArt(
   diagnostics: DiagnosticSink,
 ): GroupElement | undefined {
   if (smartArt.drawingXml === undefined || smartArt.drawingPartPath === undefined) {
-    diagnostics.push({
-      severity: "warning",
-      code: "pptx-computed-view-adapter.unresolved-smartart-skipped",
-      message: "PptxSourceModel SmartArt element has no resolved diagram drawing XML.",
-      slideNumber: slide.slideNumber,
-      sourcePartPath: smartArt.sourcePartPath,
-    });
+    pushAdapterWarning(
+      diagnostics,
+      "pptx-computed-view-adapter.unresolved-smartart-skipped",
+      "PptxSourceModel SmartArt element has no resolved diagram drawing XML.",
+      slide,
+      smartArt.sourcePartPath,
+    );
     return undefined;
   }
 
@@ -304,13 +315,13 @@ function adaptSmartArt(
   const drawing = parsed.drawing as XmlNode | undefined;
   const spTree = drawing?.spTree as XmlNode | undefined;
   if (spTree === undefined) {
-    diagnostics.push({
-      severity: "warning",
-      code: "pptx-computed-view-adapter.unresolved-smartart-skipped",
-      message: "PptxSourceModel SmartArt diagram drawing XML has no shape tree.",
-      slideNumber: slide.slideNumber,
-      sourcePartPath: smartArt.sourcePartPath,
-    });
+    pushAdapterWarning(
+      diagnostics,
+      "pptx-computed-view-adapter.unresolved-smartart-skipped",
+      "PptxSourceModel SmartArt diagram drawing XML has no shape tree.",
+      slide,
+      smartArt.sourcePartPath,
+    );
     return undefined;
   }
 
@@ -486,13 +497,13 @@ function adaptImage(
   diagnostics: DiagnosticSink,
 ): ImageElement | undefined {
   if (image.media === undefined) {
-    diagnostics.push({
-      severity: "warning",
-      code: "pptx-computed-view-adapter.unresolved-image-skipped",
-      message: "PptxSourceModel image element has no resolved media payload.",
-      slideNumber: slide.slideNumber,
-      sourcePartPath: image.sourcePartPath,
-    });
+    pushAdapterWarning(
+      diagnostics,
+      "pptx-computed-view-adapter.unresolved-image-skipped",
+      "PptxSourceModel image element has no resolved media payload.",
+      slide,
+      image.sourcePartPath,
+    );
     return undefined;
   }
 
@@ -560,13 +571,13 @@ function adaptTransform(
   sourcePartPath: string,
 ): Transform {
   if (transform === undefined) {
-    diagnostics.push({
-      severity: "warning",
-      code: "pptx-computed-view-adapter.missing-transform",
-      message: "PptxSourceModel element has no computed transform; using a zero-size fallback.",
-      slideNumber: slide.slideNumber,
+    pushAdapterWarning(
+      diagnostics,
+      "pptx-computed-view-adapter.missing-transform",
+      "PptxSourceModel element has no computed transform; using a zero-size fallback.",
+      slide,
       sourcePartPath,
-    });
+    );
     return ZERO_TRANSFORM;
   }
 
@@ -604,54 +615,67 @@ function adaptFill(
   slide: ComputedSlide,
   diagnostics: DiagnosticSink,
 ): Fill | null {
-  if (fill.kind === "none") return { type: "none" };
-  if (fill.kind === "solid") {
-    return { type: "solid", color: adaptColor(fill.color) };
+  switch (fill.kind) {
+    case "none":
+      return { type: "none" };
+    case "solid":
+      return { type: "solid", color: adaptColor(fill.color) };
+    case "gradient":
+      return {
+        type: "gradient",
+        stops: fill.stops.map((stop) => ({
+          position: stop.position,
+          color: adaptColor(stop.color),
+        })),
+        angle: fill.angle ?? 0,
+        gradientType: fill.gradientType,
+        ...(fill.centerX !== undefined ? { centerX: fill.centerX } : {}),
+        ...(fill.centerY !== undefined ? { centerY: fill.centerY } : {}),
+      };
+    case "pattern":
+      return {
+        type: "pattern",
+        preset: fill.preset,
+        foregroundColor: adaptColor(fill.foregroundColor),
+        backgroundColor: adaptColor(fill.backgroundColor),
+      };
+    case "image":
+      if (fill.media !== undefined) {
+        return {
+          type: "image",
+          imageData: uint8ArrayToBase64(fill.media.bytes),
+          mimeType: normalizeImageMimeType(fill.media.contentType),
+          tile:
+            fill.tile !== undefined
+              ? {
+                  tx: toRendererEmu(fill.tile.tx),
+                  ty: toRendererEmu(fill.tile.ty),
+                  sx: fill.tile.sx,
+                  sy: fill.tile.sy,
+                  flip: fill.tile.flip,
+                  align: fill.tile.align,
+                }
+              : null,
+        };
+      }
+      pushAdapterWarning(
+        diagnostics,
+        "pptx-computed-view-adapter.raw-fill-ignored",
+        "Raw PptxSourceModel fill is outside the renderer adapter subset.",
+        slide,
+      );
+      return null;
+    case "raw":
+      pushAdapterWarning(
+        diagnostics,
+        "pptx-computed-view-adapter.raw-fill-ignored",
+        "Raw PptxSourceModel fill is outside the renderer adapter subset.",
+        slide,
+      );
+      return null;
+    default:
+      return assertNever(fill);
   }
-  if (fill.kind === "gradient") {
-    return {
-      type: "gradient",
-      stops: fill.stops.map((stop) => ({ position: stop.position, color: adaptColor(stop.color) })),
-      angle: fill.angle ?? 0,
-      gradientType: fill.gradientType,
-      ...(fill.centerX !== undefined ? { centerX: fill.centerX } : {}),
-      ...(fill.centerY !== undefined ? { centerY: fill.centerY } : {}),
-    };
-  }
-  if (fill.kind === "pattern") {
-    return {
-      type: "pattern",
-      preset: fill.preset,
-      foregroundColor: adaptColor(fill.foregroundColor),
-      backgroundColor: adaptColor(fill.backgroundColor),
-    };
-  }
-  if (fill.kind === "image" && fill.media !== undefined) {
-    return {
-      type: "image",
-      imageData: uint8ArrayToBase64(fill.media.bytes),
-      mimeType: normalizeImageMimeType(fill.media.contentType),
-      tile:
-        fill.tile !== undefined
-          ? {
-              tx: toRendererEmu(fill.tile.tx),
-              ty: toRendererEmu(fill.tile.ty),
-              sx: fill.tile.sx,
-              sy: fill.tile.sy,
-              flip: fill.tile.flip,
-              align: fill.tile.align,
-            }
-          : null,
-    };
-  }
-
-  diagnostics.push({
-    severity: "warning",
-    code: "pptx-computed-view-adapter.raw-fill-ignored",
-    message: "Raw PptxSourceModel fill is outside the renderer adapter subset.",
-    slideNumber: slide.slideNumber,
-  });
-  return null;
 }
 
 function adaptOutline(
@@ -827,4 +851,24 @@ function normalizeImageMimeType(contentType: string): string {
   if (contentType === "image/x-emf") return "image/emf";
   if (contentType === "image/x-wmf") return "image/wmf";
   return contentType;
+}
+
+function pushAdapterWarning(
+  diagnostics: DiagnosticSink,
+  code: RendererAdapterDiagnosticCode,
+  message: string,
+  slide: ComputedSlide,
+  sourcePartPath?: string,
+): void {
+  diagnostics.push({
+    severity: "warning",
+    code,
+    message,
+    slideNumber: slide.slideNumber,
+    ...(sourcePartPath !== undefined ? { sourcePartPath } : {}),
+  });
+}
+
+function assertNever(value: never): never {
+  throw new Error(`Unexpected computed view union member: ${JSON.stringify(value)}`);
 }
