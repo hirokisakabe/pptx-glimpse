@@ -25,8 +25,10 @@ export interface UsedFonts {
   fonts: string[];
 }
 
-const DEFAULT_THEME_FONTS: Required<Pick<SourceThemeFontScheme, "majorLatin" | "minorLatin">> &
-  SourceThemeFontScheme = {
+type ResolvedThemeFontScheme = Required<Pick<SourceThemeFontScheme, "majorLatin" | "minorLatin">> &
+  SourceThemeFontScheme;
+
+const DEFAULT_THEME_FONTS: ResolvedThemeFontScheme = {
   majorLatin: "Calibri",
   minorLatin: "Calibri",
 };
@@ -37,19 +39,21 @@ const DEFAULT_THEME_FONTS: Required<Pick<SourceThemeFontScheme, "majorLatin" | "
  */
 export function collectUsedFonts(input: Buffer | Uint8Array): UsedFonts {
   const source = readPptx(input);
-  const fontScheme = findThemeFontScheme(source);
+  const defaultFontScheme = findDefaultThemeFontScheme(source);
   const computed = createComputedView(source);
 
   const fonts = new Set<string>();
 
-  collectThemeFonts(fontScheme, fonts);
+  collectThemeFonts(defaultFontScheme, fonts);
 
   const visitedTemplateParts = new Set<string>();
   for (const slide of computed.slides) {
+    const slideFontScheme = findThemeFontScheme(source, slide.themePartPath) ?? defaultFontScheme;
+
     const templateElementsByPart = new Map<string, ComputedElement[]>();
     for (const element of slide.elements) {
       if (element.sourceLayer === "slide") {
-        collectFontsFromElements([element], fonts, fontScheme);
+        collectFontsFromElements([element], fonts, slideFontScheme);
         continue;
       }
 
@@ -65,32 +69,43 @@ export function collectUsedFonts(input: Buffer | Uint8Array): UsedFonts {
     for (const [key, elements] of templateElementsByPart) {
       if (visitedTemplateParts.has(key)) continue;
       visitedTemplateParts.add(key);
-      collectFontsFromElements(elements, fonts, fontScheme);
+      collectFontsFromElements(elements, fonts, slideFontScheme);
     }
   }
 
   return {
     theme: {
-      majorFont: fontScheme.majorLatin,
-      minorFont: fontScheme.minorLatin,
-      majorFontEa: fontScheme.majorEastAsian ?? null,
-      minorFontEa: fontScheme.minorEastAsian ?? null,
-      majorFontCs: fontScheme.majorComplexScript ?? null,
-      minorFontCs: fontScheme.minorComplexScript ?? null,
+      majorFont: defaultFontScheme.majorLatin,
+      minorFont: defaultFontScheme.minorLatin,
+      majorFontEa: defaultFontScheme.majorEastAsian ?? null,
+      minorFontEa: defaultFontScheme.minorEastAsian ?? null,
+      majorFontCs: defaultFontScheme.majorComplexScript ?? null,
+      minorFontCs: defaultFontScheme.minorComplexScript ?? null,
     },
     fonts: [...fonts].sort(),
   };
 }
 
-function findThemeFontScheme(
-  source: CleanDocSource,
-): Required<Pick<SourceThemeFontScheme, "majorLatin" | "minorLatin">> & SourceThemeFontScheme {
+function findDefaultThemeFontScheme(source: CleanDocSource): ResolvedThemeFontScheme {
   const firstThemePartPath = source.slideMasters.find(
     (master) => master.themePartPath !== undefined,
   )?.themePartPath;
-  const scheme =
-    source.themes.find((theme) => theme.partPath === firstThemePartPath)?.fontScheme ??
-    source.themes[0]?.fontScheme;
+  const scheme = findThemeFontScheme(source, firstThemePartPath) ?? source.themes[0]?.fontScheme;
+  return applyDefaultThemeFonts(scheme);
+}
+
+function findThemeFontScheme(
+  source: CleanDocSource,
+  themePartPath: string | undefined,
+): ResolvedThemeFontScheme | undefined {
+  if (themePartPath === undefined) return undefined;
+  const scheme = source.themes.find((theme) => theme.partPath === themePartPath)?.fontScheme;
+  return scheme !== undefined ? applyDefaultThemeFonts(scheme) : undefined;
+}
+
+function applyDefaultThemeFonts(
+  scheme: SourceThemeFontScheme | undefined,
+): ResolvedThemeFontScheme {
   return {
     ...DEFAULT_THEME_FONTS,
     ...scheme,
