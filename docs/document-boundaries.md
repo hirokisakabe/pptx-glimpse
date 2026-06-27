@@ -33,6 +33,13 @@ first slice should prove simple themed slide read, computed render view, current
 renderer adapter parity, no-edit structural round-trip, and one plain text-run
 edit round-trip.
 
+The current duplication boundary between PptxComputedView and the renderer
+model is recorded in
+[pptx-computed-renderer-model-boundaries.md](./pptx-computed-renderer-model-boundaries.md).
+In short, source/computed types preserve document provenance and effective
+document semantics, while the renderer model remains a display-oriented adapter
+target with render-ready defaults and fallbacks.
+
 Package names with the `@pptx-glimpse/*` scope describe the intended long-term
 package boundaries. Older repository revisions used transitionary names such as
 `packages/pptx-glimpse` and `pptx-glimpse-renderer`; the current directory
