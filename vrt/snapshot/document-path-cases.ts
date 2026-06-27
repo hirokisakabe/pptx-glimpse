@@ -14,16 +14,11 @@ export const DOCUMENT_PATH_VRT_SNAPSHOT_POLICY =
 
 export type DocumentPathVrtFixtureGroup = "shared" | "generated";
 
-type DocumentPathVrtDiagnosticCode =
-  | "cleandoc-adapter.raw-element-skipped"
-  | "cleandoc-adapter.raw-fill-ignored";
-
 interface DocumentPathVrtCase {
   readonly group: DocumentPathVrtFixtureGroup;
   readonly name: string;
   readonly fixture: string;
   readonly mismatchTolerance: number;
-  readonly expectedDiagnosticCodes: readonly DocumentPathVrtDiagnosticCode[];
 }
 
 export const DOCUMENT_PATH_VRT_SHARED_CASES = [
@@ -90,32 +85,20 @@ export const DOCUMENT_PATH_VRT_CASES = [
   ...DOCUMENT_PATH_VRT_GENERATED_CASES,
 ] as const satisfies readonly DocumentPathVrtCase[];
 
-function shared(
-  name: string,
-  fixture: string,
-  mismatchTolerance: number,
-  expectedDiagnosticCodes: readonly DocumentPathVrtDiagnosticCode[] = [],
-): DocumentPathVrtCase {
+function shared(name: string, fixture: string, mismatchTolerance: number): DocumentPathVrtCase {
   return {
     group: "shared",
     name,
     fixture,
     mismatchTolerance,
-    expectedDiagnosticCodes,
   };
 }
 
-function generated(
-  name: string,
-  fixture: string,
-  mismatchTolerance: number,
-  expectedDiagnosticCodes: readonly DocumentPathVrtDiagnosticCode[] = [],
-): DocumentPathVrtCase {
+function generated(name: string, fixture: string, mismatchTolerance: number): DocumentPathVrtCase {
   return {
     group: "generated",
     name,
     fixture,
     mismatchTolerance,
-    expectedDiagnosticCodes,
   };
 }

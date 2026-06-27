@@ -78,9 +78,7 @@ describe("Document path Visual Regression Tests", { timeout: 60000 }, () => {
         expect(documentResults.slides.map((slide) => slide.slideNumber)).toEqual(
           currentResults.map((slide) => slide.slideNumber),
         );
-        expect(uniqueSortedCodes(documentResults.diagnostics)).toEqual(
-          [...testCase.expectedDiagnosticCodes].sort(),
-        );
+        expect(uniqueSortedCodes(documentResults.diagnostics)).toEqual([]);
 
         for (const documentResult of documentResults.slides) {
           const currentResult = currentResults.find(
@@ -109,8 +107,7 @@ describe("Document path Visual Regression Tests", { timeout: 60000 }, () => {
           console.log(
             `[document-path-vrt] ${testCase.name} slide${documentResult.slideNumber}: ` +
               `${(comparison.mismatchPercentage * 100).toFixed(3)}% ` +
-              `(tolerance ${(testCase.mismatchTolerance * 100).toFixed(1)}%)` +
-              diagnosticSuffix(testCase.expectedDiagnosticCodes),
+              `(tolerance ${(testCase.mismatchTolerance * 100).toFixed(1)}%)`,
           );
 
           expect(
@@ -132,9 +129,4 @@ function uniqueSortedCodes(diagnostics: readonly { readonly code: string }[]): s
 
 function fixtureDir(group: DocumentPathVrtFixtureGroup): string {
   return group === "shared" ? SHARED_FIXTURE_DIR : GENERATED_FIXTURE_DIR;
-}
-
-function diagnosticSuffix(expectedDiagnosticCodes: readonly string[]): string {
-  if (expectedDiagnosticCodes.length === 0) return "";
-  return `; diagnostics ${expectedDiagnosticCodes.join(", ")}`;
 }
