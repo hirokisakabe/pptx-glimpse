@@ -20,7 +20,7 @@ import { describe, expect, it } from "vitest";
 
 import { createComputedView, readPptx } from "../../pptx-glimpse-document/src/experimental.js";
 import { adaptComputedViewToRendererModel } from "./cleandoc-renderer-adapter.js";
-import { buildEffectiveSlideElements } from "./converter.js";
+import { buildEffectiveSlideElements } from "./parser-path-oracle.js";
 import { parsePptxData, parseSlideWithLayout } from "./pptx-data-parser.js";
 
 const CASES = [

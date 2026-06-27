@@ -171,19 +171,124 @@ const theme1 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
   </a:themeElements>
 </a:theme>`;
 
-async function createTestPptx(): Promise<Buffer> {
+const slideWithThemeAliases = slide1Xml
+  .replace(
+    `<a:p>
+            <a:r>
+              <a:rPr lang="en-US">
+                <a:latin typeface="Arial"/>
+                <a:ea typeface="MS PGothic"/>
+                <a:cs typeface="Arial"/>
+              </a:rPr>`,
+    `<a:p>
+            <a:pPr><a:buFont typeface="+mj-lt"/></a:pPr>
+            <a:r>
+              <a:rPr lang="en-US">
+                <a:latin typeface="+mn-lt"/>
+                <a:ea typeface="+mn-ea"/>
+                <a:cs typeface="+mn-cs"/>
+              </a:rPr>`,
+  )
+  .replace(
+    `<a:rPr lang="ja-JP">
+                <a:latin typeface="Times New Roman"/>
+                <a:ea typeface="Yu Gothic"/>
+              </a:rPr>`,
+    `<a:rPr lang="ja-JP">
+                <a:latin typeface="+mj-lt"/>
+                <a:ea typeface="+mj-ea"/>
+                <a:cs typeface="+mj-cs"/>
+              </a:rPr>`,
+  );
+
+const themeWithoutRegionalFonts = theme1
+  .replaceAll('\n        <a:ea typeface="MS PGothic"/>', "")
+  .replace('\n        <a:cs typeface="Times New Roman"/>', "")
+  .replace('\n        <a:cs typeface="Arial"/>', "");
+
+const contentTypesWithSecondSlide = contentTypes.replace(
+  "</Types>",
+  `  <Override PartName="/ppt/slides/slide2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+  <Override PartName="/ppt/slideLayouts/slideLayout2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>
+  <Override PartName="/ppt/slideMasters/slideMaster2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>
+  <Override PartName="/ppt/theme/theme2.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>
+</Types>`,
+);
+
+const presentationWithTwoSlidesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+  <p:sldMasterIdLst>
+    <p:sldMasterId r:id="rId1"/>
+    <p:sldMasterId r:id="rId4"/>
+  </p:sldMasterIdLst>
+  <p:sldIdLst>
+    <p:sldId id="256" r:id="rId2"/>
+    <p:sldId id="257" r:id="rId5"/>
+  </p:sldIdLst>
+  <p:sldSz cx="9144000" cy="5143500" type="screen16x9"/>
+</p:presentation>`;
+
+const presentationWithTwoSlidesRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>
+  <Relationship Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster2.xml"/>
+  <Relationship Id="rId5" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide2.xml"/>
+</Relationships>`;
+
+const slide2Rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout2.xml"/>
+</Relationships>`;
+
+const slideMaster2Rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout2.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme" Target="../theme/theme2.xml"/>
+</Relationships>`;
+
+const slideLayout2Rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster2.xml"/>
+</Relationships>`;
+
+const theme2 = theme1
+  .replace("Calibri Light", "Contoso Heading")
+  .replace("Calibri", "Contoso Body")
+  .replaceAll("MS PGothic", "MS Mincho")
+  .replace("Times New Roman", "Contoso Complex")
+  .replace("Arial", "Contoso Minor Complex");
+
+async function createTestPptx({
+  contentTypesXml = contentTypes,
+  presentationXmlOverride = presentationXml,
+  presentationRelsXml = presentationRels,
+  slideXml = slide1Xml,
+  themeXml = theme1,
+  extraFiles = {},
+}: {
+  contentTypesXml?: string;
+  presentationXmlOverride?: string;
+  presentationRelsXml?: string;
+  slideXml?: string;
+  themeXml?: string;
+  extraFiles?: Record<string, string>;
+} = {}): Promise<Buffer> {
   const zip = new JSZip();
-  zip.file("[Content_Types].xml", contentTypes);
+  zip.file("[Content_Types].xml", contentTypesXml);
   zip.file("_rels/.rels", rootRels);
-  zip.file("ppt/presentation.xml", presentationXml);
-  zip.file("ppt/_rels/presentation.xml.rels", presentationRels);
-  zip.file("ppt/slides/slide1.xml", slide1Xml);
+  zip.file("ppt/presentation.xml", presentationXmlOverride);
+  zip.file("ppt/_rels/presentation.xml.rels", presentationRelsXml);
+  zip.file("ppt/slides/slide1.xml", slideXml);
   zip.file("ppt/slides/_rels/slide1.xml.rels", slide1Rels);
   zip.file("ppt/slideMasters/slideMaster1.xml", slideMaster1);
   zip.file("ppt/slideMasters/_rels/slideMaster1.xml.rels", slideMaster1Rels);
   zip.file("ppt/slideLayouts/slideLayout1.xml", slideLayout1);
   zip.file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", slideLayout1Rels);
-  zip.file("ppt/theme/theme1.xml", theme1);
+  zip.file("ppt/theme/theme1.xml", themeXml);
+  for (const [path, content] of Object.entries(extraFiles)) {
+    zip.file(path, content);
+  }
   return zip.generateAsync({ type: "nodebuffer" });
 }
 
@@ -220,6 +325,72 @@ describe("collectUsedFonts", () => {
 
     expect(result.fonts).toContain("Calibri Light");
     expect(result.fonts).toContain("Calibri");
+  });
+
+  it("テーマフォント alias を解決して収集する", async () => {
+    const pptx = await createTestPptx({ slideXml: slideWithThemeAliases });
+    const result = collectUsedFonts(pptx);
+
+    expect(result.fonts).toContain("Calibri Light");
+    expect(result.fonts).toContain("Calibri");
+    expect(result.fonts).toContain("MS PGothic");
+    expect(result.fonts).toContain("Times New Roman");
+    expect(result.fonts).toContain("Arial");
+    expect(result.fonts).not.toContain("+mj-lt");
+    expect(result.fonts).not.toContain("+mn-lt");
+    expect(result.fonts).not.toContain("+mj-ea");
+    expect(result.fonts).not.toContain("+mn-ea");
+    expect(result.fonts).not.toContain("+mj-cs");
+    expect(result.fonts).not.toContain("+mn-cs");
+  });
+
+  it("解決できない theme regional alias は fonts 一覧へ漏らさない", async () => {
+    const pptx = await createTestPptx({
+      slideXml: slideWithThemeAliases,
+      themeXml: themeWithoutRegionalFonts,
+    });
+    const result = collectUsedFonts(pptx);
+
+    expect(result.theme.majorFontEa).toBeNull();
+    expect(result.theme.minorFontEa).toBeNull();
+    expect(result.theme.majorFontCs).toBeNull();
+    expect(result.theme.minorFontCs).toBeNull();
+    expect(result.fonts).toContain("Calibri Light");
+    expect(result.fonts).toContain("Calibri");
+    expect(result.fonts).not.toContain("+mj-ea");
+    expect(result.fonts).not.toContain("+mn-ea");
+    expect(result.fonts).not.toContain("+mj-cs");
+    expect(result.fonts).not.toContain("+mn-cs");
+  });
+
+  it("スライドごとの theme font alias を各 slide の theme で解決する", async () => {
+    const pptx = await createTestPptx({
+      contentTypesXml: contentTypesWithSecondSlide,
+      presentationXmlOverride: presentationWithTwoSlidesXml,
+      presentationRelsXml: presentationWithTwoSlidesRels,
+      extraFiles: {
+        "ppt/slides/slide2.xml": slideWithThemeAliases,
+        "ppt/slides/_rels/slide2.xml.rels": slide2Rels,
+        "ppt/slideMasters/slideMaster2.xml": slideMaster1,
+        "ppt/slideMasters/_rels/slideMaster2.xml.rels": slideMaster2Rels,
+        "ppt/slideLayouts/slideLayout2.xml": slideLayout1,
+        "ppt/slideLayouts/_rels/slideLayout2.xml.rels": slideLayout2Rels,
+        "ppt/theme/theme2.xml": theme2,
+      },
+    });
+    const result = collectUsedFonts(pptx);
+
+    expect(result.fonts).toContain("Contoso Heading");
+    expect(result.fonts).toContain("Contoso Body");
+    expect(result.fonts).toContain("MS Mincho");
+    expect(result.fonts).toContain("Contoso Complex");
+    expect(result.fonts).toContain("Contoso Minor Complex");
+    expect(result.fonts).not.toContain("+mj-lt");
+    expect(result.fonts).not.toContain("+mn-lt");
+    expect(result.fonts).not.toContain("+mj-ea");
+    expect(result.fonts).not.toContain("+mn-ea");
+    expect(result.fonts).not.toContain("+mj-cs");
+    expect(result.fonts).not.toContain("+mn-cs");
   });
 
   it("フォント名は重複なしでソート済み", () => {
