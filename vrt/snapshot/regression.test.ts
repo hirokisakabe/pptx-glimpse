@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 
 import { convertPptxToPng } from "../../packages/core/src/converter.js";
 import { compareImages } from "../compare-utils.js";
-import { VRT_RENDER_OPTIONS } from "./render-options.js";
+import { getVrtRenderOptions } from "./render-options.js";
 import { SHARED_FIXTURE_CASES, VRT_CASES } from "./vrt-cases.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -32,7 +32,7 @@ describe("Visual Regression Tests", { timeout: 60000 }, () => {
         }
 
         const input = readFileSync(fixturePath);
-        const results = await convertPptxToPng(input, VRT_RENDER_OPTIONS);
+        const results = await convertPptxToPng(input, await getVrtRenderOptions());
 
         for (const result of results) {
           const refPath = join(SNAPSHOT_DIR, `${name}-slide${result.slideNumber}.png`);
@@ -62,7 +62,7 @@ describe("Visual Regression Tests (shared fixtures)", { timeout: 60000 }, () => 
         }
 
         const input = readFileSync(fixturePath);
-        const results = await convertPptxToPng(input, VRT_RENDER_OPTIONS);
+        const results = await convertPptxToPng(input, await getVrtRenderOptions());
 
         for (const result of results) {
           const refPath = join(SNAPSHOT_DIR, `${name}-slide${result.slideNumber}.png`);
