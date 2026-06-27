@@ -6,7 +6,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@pptx-glimpse/document/experimental": fileURLToPath(new URL(
-        "./packages/pptx-glimpse-document/src/experimental.ts",
+        "./packages/document/src/experimental.ts",
         import.meta.url,
       )),
     },

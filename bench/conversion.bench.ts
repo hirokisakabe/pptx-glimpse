@@ -1,15 +1,12 @@
 import JSZip from "jszip";
 import { beforeAll, bench, describe } from "vitest";
 
-import { convertPptxToPng, convertPptxToSvg } from "../packages/pptx-glimpse/src/converter.js";
-import {
-  parsePptxData,
-  parseSlideWithLayout,
-} from "../packages/pptx-glimpse/src/pptx-data-parser.js";
-import type { SlideSize } from "../packages/pptx-glimpse-renderer/src/model/presentation.js";
-import type { SlideElement } from "../packages/pptx-glimpse-renderer/src/model/shape.js";
-import type { Slide } from "../packages/pptx-glimpse-renderer/src/model/slide.js";
-import { renderSlideToSvg } from "../packages/pptx-glimpse-renderer/src/renderer/svg-renderer.js";
+import { convertPptxToPng, convertPptxToSvg } from "../packages/core/src/converter.js";
+import { parsePptxData, parseSlideWithLayout } from "../packages/core/src/pptx-data-parser.js";
+import type { SlideSize } from "../packages/renderer/src/model/presentation.js";
+import type { SlideElement } from "../packages/renderer/src/model/shape.js";
+import type { Slide } from "../packages/renderer/src/model/slide.js";
+import { renderSlideToSvg } from "../packages/renderer/src/renderer/svg-renderer.js";
 
 // ---------------------------------------------------------------------------
 // XML templates (minimal PPTX structure)

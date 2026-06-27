@@ -1,6 +1,6 @@
 import { readFileSync } from "fs";
 
-import { convertPptxToSvg } from "../packages/pptx-glimpse/src/converter.js";
+import { convertPptxToSvg } from "../packages/core/src/converter.js";
 
 async function main(): Promise<void> {
   const pptxPath = process.argv[2];

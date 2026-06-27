@@ -34,11 +34,11 @@ renderer adapter parity, no-edit structural round-trip, and one plain text-run
 edit round-trip.
 
 Package names with the `@pptx-glimpse/*` scope describe the intended long-term
-package boundaries. The current repository still contains unscoped packages such
-as `pptx-glimpse` and `pptx-glimpse-renderer`; this RFC uses the scoped names to
-describe the target architecture. In that target architecture, current
-`pptx-glimpse` corresponds to `@pptx-glimpse/core`, and current
-`pptx-glimpse-renderer` corresponds to `@pptx-glimpse/renderer`.
+package boundaries. Older repository revisions used transitionary names such as
+`packages/pptx-glimpse` and `pptx-glimpse-renderer`; the current directory
+layout uses `packages/core`, `packages/document`, and `packages/renderer` to make
+those roles explicit. The public npm package name remains `pptx-glimpse`, while
+the core role corresponds to the future `@pptx-glimpse/core` boundary.
 
 ## Dependency direction
 

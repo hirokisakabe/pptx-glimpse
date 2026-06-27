@@ -16,9 +16,11 @@
     "isolatedModules": true,
     "baseUrl": ".",
     "paths": {
+      "@pptx-glimpse/document": ["packages/document/src/index.ts"],
       "@pptx-glimpse/document/experimental": [
-        "packages/pptx-glimpse-document/src/experimental.ts"
-      ]
+        "packages/document/src/experimental.ts"
+      ],
+      "@pptx-glimpse/renderer": ["packages/renderer/src/index.ts"]
     }
   },
   "include": ["packages/*/src/**/*"],

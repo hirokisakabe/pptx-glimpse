@@ -1,0 +1,30 @@
+{
+  "name": "@pptx-glimpse/renderer",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Internal renderer package: shared SVG/PNG rendering primitives consumed by pptx-glimpse.",
+  "type": "module",
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@resvg/resvg-wasm": "^2.6.2",
+    "opentype.js": "1.3.4"
+  }
+}

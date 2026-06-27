@@ -7,10 +7,7 @@ import { type WebSocket, WebSocketServer } from "ws";
 
 const DEFAULT_PORT = 3000;
 const DEBOUNCE_MS = 300;
-const WATCH_DIRS = [
-  resolve("packages/pptx-glimpse/src"),
-  resolve("packages/pptx-glimpse-renderer/src"),
-];
+const WATCH_DIRS = [resolve("packages/core/src"), resolve("packages/renderer/src")];
 const RENDER_TIMEOUT_MS = 30_000;
 const MAX_BUFFER = 50 * 1024 * 1024;
 

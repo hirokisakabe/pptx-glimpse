@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from "fs";
 import { basename, join, resolve } from "path";
 
-import { convertPptxToPng, convertPptxToSvg } from "../packages/pptx-glimpse/src/converter.js";
+import { convertPptxToPng, convertPptxToSvg } from "../packages/core/src/converter.js";
 
 async function main() {
   const filePath = process.argv[2];
