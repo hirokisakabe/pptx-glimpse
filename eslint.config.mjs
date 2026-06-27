@@ -77,12 +77,11 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-call": "error",
       "@typescript-eslint/no-unsafe-member-access": "error",
       "@typescript-eslint/no-unsafe-return": "error",
-      // Type assertions are allowed at explicit boundaries (XML parsing,
-      // branded constructors, and test fixtures), but unnecessary assertions
-      // must fail CI and unsafe narrowing stays visible while the boundary
-      // helpers are consolidated.
+      // Type assertions are allowed at explicit boundaries only. Unsafe
+      // narrowing must stay inside boundary helpers or a reasoned local
+      // eslint-disable-next-line directive.
       "@typescript-eslint/no-unnecessary-type-assertion": "error",
-      "@typescript-eslint/no-unsafe-type-assertion": "warn",
+      "@typescript-eslint/no-unsafe-type-assertion": "error",
       "@typescript-eslint/consistent-type-assertions": [
         "error",
         {

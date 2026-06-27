@@ -1,3 +1,5 @@
+import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
+
 /**
  * PptxSourceModel source model が使う PPTX-native な typed units。
  *
@@ -35,21 +37,21 @@ export type OoxmlPercent = number & { readonly [OoxmlPercentBrand]: typeof Ooxml
 export type OoxmlAngle = number & { readonly [OoxmlAngleBrand]: typeof OoxmlAngleBrand };
 
 export function asEmu(value: number): Emu {
-  return value as Emu;
+  return unsafeTypeAssertion<Emu>(value);
 }
 
 export function asPt(value: number): Pt {
-  return value as Pt;
+  return unsafeTypeAssertion<Pt>(value);
 }
 
 export function asHundredthPt(value: number): HundredthPt {
-  return value as HundredthPt;
+  return unsafeTypeAssertion<HundredthPt>(value);
 }
 
 export function asOoxmlPercent(value: number): OoxmlPercent {
-  return value as OoxmlPercent;
+  return unsafeTypeAssertion<OoxmlPercent>(value);
 }
 
 export function asOoxmlAngle(value: number): OoxmlAngle {
-  return value as OoxmlAngle;
+  return unsafeTypeAssertion<OoxmlAngle>(value);
 }

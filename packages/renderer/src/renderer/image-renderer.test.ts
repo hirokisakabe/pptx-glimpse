@@ -2,12 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { ImageElement } from "../model/image.js";
 import type { Transform } from "../model/shape.js";
+import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
 import { renderImage } from "./image-renderer.js";
 
 beforeEach(() => {
   let counter = 0;
   vi.spyOn(crypto, "randomUUID").mockImplementation(() => {
-    return `test-uuid-${counter++}` as ReturnType<typeof crypto.randomUUID>;
+    return unsafeTypeAssertion<ReturnType<typeof crypto.randomUUID>>(`test-uuid-${counter++}`);
   });
 });
 

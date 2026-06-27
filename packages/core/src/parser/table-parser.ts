@@ -10,6 +10,7 @@ import type { FontScheme } from "@pptx-glimpse/renderer";
 import { asEmu } from "@pptx-glimpse/renderer";
 
 import type { ColorResolver } from "../color/color-resolver.js";
+import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
 import { parseFillFromNode, parseOutline } from "./fill-parser.js";
 import { parseTextBody } from "./slide-parser.js";
 import type { XmlNode } from "./xml-parser.js";
@@ -21,14 +22,19 @@ export function parseTable(
 ): TableData | null {
   if (!tblNode) return null;
 
-  const columns = parseColumns(tblNode.tblGrid as XmlNode);
+  const columns = parseColumns(unsafeTypeAssertion<XmlNode>(tblNode.tblGrid));
   if (columns.length === 0) return null;
 
-  const tblPr = tblNode.tblPr as XmlNode | undefined;
+  const tblPr = unsafeTypeAssertion<XmlNode | undefined>(tblNode.tblPr);
   const hasTableStyle = tblPr?.tableStyleId !== undefined;
   const defaultBorders = hasTableStyle ? createDefaultBorders() : null;
 
-  const rows = parseRows(tblNode.tr as XmlNode, colorResolver, fontScheme, defaultBorders);
+  const rows = parseRows(
+    unsafeTypeAssertion<XmlNode>(tblNode.tr),
+    colorResolver,
+    fontScheme,
+    defaultBorders,
+  );
 
   return { rows, columns };
 }
@@ -36,7 +42,7 @@ export function parseTable(
 function parseColumns(tblGrid: XmlNode): TableColumn[] {
   if (!tblGrid) return [];
 
-  const gridCols = (tblGrid.gridCol as XmlNode[] | undefined) ?? [];
+  const gridCols = unsafeTypeAssertion<XmlNode[] | undefined>(tblGrid.gridCol) ?? [];
   return gridCols.map((col) => ({
     width: asEmu(Number(col["@_w"] ?? 0)),
   }));
@@ -54,7 +60,12 @@ function parseRows(
   const rows: TableRow[] = [];
   for (const tr of trArr) {
     const height = asEmu(Number(tr["@_h"] ?? 0));
-    const cells = parseCells(tr.tc as XmlNode, colorResolver, fontScheme, defaultBorders);
+    const cells = parseCells(
+      unsafeTypeAssertion<XmlNode>(tr.tc),
+      colorResolver,
+      fontScheme,
+      defaultBorders,
+    );
     rows.push({ height, cells });
   }
   return rows;
@@ -71,19 +82,24 @@ function parseCells(
   const tcArr = Array.isArray(tcList) ? (tcList as XmlNode[]) : [tcList];
   const cells: TableCell[] = [];
   for (const tc of tcArr) {
-    const textBody = parseTextBody(tc.txBody as XmlNode, colorResolver, undefined, fontScheme);
-    const tcPr = tc.tcPr as XmlNode | undefined;
+    const textBody = parseTextBody(
+      unsafeTypeAssertion<XmlNode>(tc.txBody),
+      colorResolver,
+      undefined,
+      fontScheme,
+    );
+    const tcPr = unsafeTypeAssertion<XmlNode | undefined>(tc.tcPr);
     const fill = tcPr ? parseFillFromNode(tcPr, colorResolver) : null;
     const inlineBorders = tcPr ? parseCellBorders(tcPr, colorResolver) : null;
     const borders = inlineBorders ?? defaultBorders ?? null;
     const gridSpan = Number(tc["@_gridSpan"] ?? 1);
     const rowSpan = Number(tc["@_rowSpan"] ?? 1);
     const hMerge =
-      (tcPr?.["@_hMerge"] as string | undefined) === "1" ||
-      (tcPr?.["@_hMerge"] as string | undefined) === "true";
+      unsafeTypeAssertion<string | undefined>(tcPr?.["@_hMerge"]) === "1" ||
+      unsafeTypeAssertion<string | undefined>(tcPr?.["@_hMerge"]) === "true";
     const vMerge =
-      (tcPr?.["@_vMerge"] as string | undefined) === "1" ||
-      (tcPr?.["@_vMerge"] as string | undefined) === "true";
+      unsafeTypeAssertion<string | undefined>(tcPr?.["@_vMerge"]) === "1" ||
+      unsafeTypeAssertion<string | undefined>(tcPr?.["@_vMerge"]) === "true";
 
     cells.push({ textBody, fill, borders, gridSpan, rowSpan, hMerge, vMerge });
   }
@@ -91,10 +107,10 @@ function parseCells(
 }
 
 function parseCellBorders(tcPr: XmlNode, colorResolver: ColorResolver): CellBorders | null {
-  const top = parseOutline(tcPr.lnT as XmlNode, colorResolver);
-  const bottom = parseOutline(tcPr.lnB as XmlNode, colorResolver);
-  const left = parseOutline(tcPr.lnL as XmlNode, colorResolver);
-  const right = parseOutline(tcPr.lnR as XmlNode, colorResolver);
+  const top = parseOutline(unsafeTypeAssertion<XmlNode>(tcPr.lnT), colorResolver);
+  const bottom = parseOutline(unsafeTypeAssertion<XmlNode>(tcPr.lnB), colorResolver);
+  const left = parseOutline(unsafeTypeAssertion<XmlNode>(tcPr.lnL), colorResolver);
+  const right = parseOutline(unsafeTypeAssertion<XmlNode>(tcPr.lnR), colorResolver);
 
   for (const border of [top, bottom, left, right]) {
     if (border && !border.fill) {

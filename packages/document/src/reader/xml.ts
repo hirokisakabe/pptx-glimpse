@@ -12,6 +12,8 @@
 
 import { XMLParser } from "fast-xml-parser";
 
+import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
+
 export type XmlNode = Record<string, unknown>;
 export type XmlOrderedNode = Record<string, unknown>;
 
@@ -36,11 +38,11 @@ const orderedParser = new XMLParser({
 
 /** XML 文字列をパースして root オブジェクトを返す。 */
 export function parseXml(xml: string): XmlNode {
-  return parser.parse(xml) as XmlNode;
+  return unsafeTypeAssertion<XmlNode>(parser.parse(xml));
 }
 
 export function parseXmlOrdered(xml: string): XmlOrderedNode[] {
-  return orderedParser.parse(xml) as XmlOrderedNode[];
+  return unsafeTypeAssertion<XmlOrderedNode[]>(orderedParser.parse(xml));
 }
 
 export function navigateOrdered(
@@ -52,7 +54,7 @@ export function navigateOrdered(
     const entry = current.find((item) => key in item);
     const value = entry?.[key];
     if (!Array.isArray(value)) return undefined;
-    current = value as XmlOrderedNode[];
+    current = unsafeTypeAssertion<XmlOrderedNode[]>(value);
   }
   return [...current];
 }
@@ -74,8 +76,8 @@ export function getChild(node: XmlNode | undefined, name: string): XmlNode | und
     if (localName(key) === name) {
       const value = node[key];
       return Array.isArray(value)
-        ? (value[0] as XmlNode | undefined)
-        : (value as XmlNode | undefined);
+        ? unsafeTypeAssertion<XmlNode | undefined>(value[0])
+        : unsafeTypeAssertion<XmlNode | undefined>(value);
     }
   }
   return undefined;
@@ -103,7 +105,7 @@ export function getChildArray(node: XmlNode | undefined, name: string): XmlNode[
     if (localName(key) === name) {
       const value = node[key];
       if (value === undefined || value === null) return [];
-      return (Array.isArray(value) ? value : [value]) as XmlNode[];
+      return unsafeTypeAssertion<XmlNode[]>(Array.isArray(value) ? value : [value]);
     }
   }
   return [];
@@ -151,7 +153,7 @@ export function getChildText(node: XmlNode | undefined, name: string): string | 
     if (typeof item === "string") return item;
     if (typeof item === "number" || typeof item === "boolean") return String(item);
     if (item && typeof item === "object") {
-      return scalarToString((item as XmlNode)["#text"]);
+      return scalarToString(unsafeTypeAssertion<XmlNode>(item)["#text"]);
     }
     return undefined;
   }

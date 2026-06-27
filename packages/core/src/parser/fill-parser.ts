@@ -21,6 +21,7 @@ import { asEmu } from "@pptx-glimpse/renderer";
 import { debug, warn } from "@pptx-glimpse/renderer";
 
 import type { ColorResolver } from "../color/color-resolver.js";
+import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import type { Relationship } from "./relationship-parser.js";
 import { resolveRelationshipTarget } from "./relationship-parser.js";
@@ -45,22 +46,22 @@ export function parseFillFromNode(
   }
 
   if (node.solidFill) {
-    const color = colorResolver.resolve(node.solidFill as XmlNode);
+    const color = colorResolver.resolve(unsafeTypeAssertion<XmlNode>(node.solidFill));
     if (color) {
       return { type: "solid", color };
     }
   }
 
   if (node.gradFill) {
-    return parseGradientFill(node.gradFill as XmlNode, colorResolver);
+    return parseGradientFill(unsafeTypeAssertion<XmlNode>(node.gradFill), colorResolver);
   }
 
   if (node.blipFill && context) {
-    return parseBlipFill(node.blipFill as XmlNode, context);
+    return parseBlipFill(unsafeTypeAssertion<XmlNode>(node.blipFill), context);
   }
 
   if (node.pattFill) {
-    return parsePatternFill(node.pattFill as XmlNode, colorResolver);
+    return parsePatternFill(unsafeTypeAssertion<XmlNode>(node.pattFill), colorResolver);
   }
 
   if (node.grpFill !== undefined && context?.groupFill) {
@@ -71,9 +72,10 @@ export function parseFillFromNode(
 }
 
 function parseBlipFill(blipFillNode: XmlNode, context: FillParseContext): ImageFill | null {
-  const blip = blipFillNode?.blip as XmlNode | undefined;
+  const blip = unsafeTypeAssertion<XmlNode | undefined>(blipFillNode?.blip);
   const rId =
-    (blip?.["@_r:embed"] as string | undefined) ?? (blip?.["@_embed"] as string | undefined);
+    unsafeTypeAssertion<string | undefined>(blip?.["@_r:embed"]) ??
+    unsafeTypeAssertion<string | undefined>(blip?.["@_embed"]);
   if (!rId) return null;
 
   const rel = context.rels.get(rId);
@@ -96,15 +98,17 @@ function parseBlipFill(blipFillNode: XmlNode, context: FillParseContext): ImageF
   const mimeType = mimeMap[ext] ?? "image/png";
   const imageData = uint8ArrayToBase64(mediaData);
 
-  const tileNode = blipFillNode.tile as XmlNode | undefined;
+  const tileNode = unsafeTypeAssertion<XmlNode | undefined>(blipFillNode.tile);
   const tile = tileNode
     ? {
         tx: asEmu(Number(tileNode["@_tx"] ?? 0)),
         ty: asEmu(Number(tileNode["@_ty"] ?? 0)),
         sx: Number(tileNode["@_sx"] ?? 100000) / 100000,
         sy: Number(tileNode["@_sy"] ?? 100000) / 100000,
-        flip: ((tileNode["@_flip"] as string) ?? "none") as ImageFillTile["flip"],
-        align: (tileNode["@_algn"] as string) ?? "tl",
+        flip: unsafeTypeAssertion<ImageFillTile["flip"]>(
+          unsafeTypeAssertion<string>(tileNode["@_flip"]) ?? "none",
+        ),
+        align: unsafeTypeAssertion<string>(tileNode["@_algn"]) ?? "tl",
       }
     : null;
 
@@ -112,8 +116,8 @@ function parseBlipFill(blipFillNode: XmlNode, context: FillParseContext): ImageF
 }
 
 function parseGradientFill(gradNode: XmlNode, colorResolver: ColorResolver): Fill | null {
-  const gsLst = gradNode.gsLst as XmlNode | undefined;
-  const gsArr = gsLst?.gs as XmlNode[] | undefined;
+  const gsLst = unsafeTypeAssertion<XmlNode | undefined>(gradNode.gsLst);
+  const gsArr = unsafeTypeAssertion<XmlNode[] | undefined>(gsLst?.gs);
   if (!gsArr) {
     debug("gradientFill.gsLst", "GradientFill: gsLst not found, skipping gradient");
     return null;
@@ -128,9 +132,9 @@ function parseGradientFill(gradNode: XmlNode, colorResolver: ColorResolver): Fil
     }
   }
 
-  const pathNode = gradNode.path as XmlNode | undefined;
+  const pathNode = unsafeTypeAssertion<XmlNode | undefined>(gradNode.path);
   if (pathNode) {
-    const fillToRect = pathNode.fillToRect as XmlNode | undefined;
+    const fillToRect = unsafeTypeAssertion<XmlNode | undefined>(pathNode.fillToRect);
     let centerX = 0.5;
     let centerY = 0.5;
     if (fillToRect) {
@@ -145,7 +149,7 @@ function parseGradientFill(gradNode: XmlNode, colorResolver: ColorResolver): Fil
   }
 
   let angle = 0;
-  const lin = gradNode.lin as XmlNode | undefined;
+  const lin = unsafeTypeAssertion<XmlNode | undefined>(gradNode.lin);
   if (lin) {
     angle = Number(lin["@_ang"] ?? 0) / 60000;
   }
@@ -154,9 +158,13 @@ function parseGradientFill(gradNode: XmlNode, colorResolver: ColorResolver): Fil
 }
 
 function parsePatternFill(pattNode: XmlNode, colorResolver: ColorResolver): PatternFill | null {
-  const preset = (pattNode["@_prst"] as string | undefined) ?? "ltDnDiag";
-  const fgColor = pattNode.fgClr ? colorResolver.resolve(pattNode.fgClr as XmlNode) : null;
-  const bgColor = pattNode.bgClr ? colorResolver.resolve(pattNode.bgClr as XmlNode) : null;
+  const preset = unsafeTypeAssertion<string | undefined>(pattNode["@_prst"]) ?? "ltDnDiag";
+  const fgColor = pattNode.fgClr
+    ? colorResolver.resolve(unsafeTypeAssertion<XmlNode>(pattNode.fgClr))
+    : null;
+  const bgColor = pattNode.bgClr
+    ? colorResolver.resolve(unsafeTypeAssertion<XmlNode>(pattNode.bgClr))
+    : null;
 
   if (!fgColor || !bgColor) return null;
 
@@ -175,12 +183,15 @@ export function parseOutline(lnNode: XmlNode, colorResolver: ColorResolver): Out
 
   let fill: SolidFill | GradientFill | null = null;
   if (lnNode.solidFill) {
-    const color = colorResolver.resolve(lnNode.solidFill as XmlNode);
+    const color = colorResolver.resolve(unsafeTypeAssertion<XmlNode>(lnNode.solidFill));
     if (color) {
       fill = { type: "solid", color };
     }
   } else if (lnNode.gradFill) {
-    const gradFill = parseGradientFill(lnNode.gradFill as XmlNode, colorResolver);
+    const gradFill = parseGradientFill(
+      unsafeTypeAssertion<XmlNode>(lnNode.gradFill),
+      colorResolver,
+    );
     if (gradFill && gradFill.type === "gradient") {
       fill = gradFill;
     }
@@ -190,24 +201,26 @@ export function parseOutline(lnNode: XmlNode, colorResolver: ColorResolver): Out
     return null;
   }
 
-  const prstDash = lnNode.prstDash as XmlNode | undefined;
-  const dashStyle = ((prstDash?.["@_val"] as string | undefined) ?? "solid") as DashStyle;
+  const prstDash = unsafeTypeAssertion<XmlNode | undefined>(lnNode.prstDash);
+  const dashStyle = unsafeTypeAssertion<DashStyle>(
+    unsafeTypeAssertion<string | undefined>(prstDash?.["@_val"]) ?? "solid",
+  );
 
   const customDash = parseCustomDash(lnNode);
 
-  const lineCap = parseLineCap(lnNode["@_cap"] as string | undefined);
+  const lineCap = parseLineCap(unsafeTypeAssertion<string | undefined>(lnNode["@_cap"]));
   const lineJoin = parseLineJoin(lnNode);
 
-  const headEnd = parseArrowEndpoint(lnNode.headEnd as XmlNode);
-  const tailEnd = parseArrowEndpoint(lnNode.tailEnd as XmlNode);
+  const headEnd = parseArrowEndpoint(unsafeTypeAssertion<XmlNode>(lnNode.headEnd));
+  const tailEnd = parseArrowEndpoint(unsafeTypeAssertion<XmlNode>(lnNode.tailEnd));
 
   return { width, fill, dashStyle, customDash, lineCap, lineJoin, headEnd, tailEnd };
 }
 
 function parseCustomDash(lnNode: XmlNode): number[] | undefined {
-  const custDash = lnNode.custDash as XmlNode | undefined;
+  const custDash = unsafeTypeAssertion<XmlNode | undefined>(lnNode.custDash);
   if (!custDash) return undefined;
-  const dsArr = custDash.ds as XmlNode[] | undefined;
+  const dsArr = unsafeTypeAssertion<XmlNode[] | undefined>(custDash.ds);
   if (!dsArr || dsArr.length === 0) return undefined;
 
   const result: number[] = [];
@@ -239,11 +252,17 @@ function parseLineJoin(lnNode: XmlNode): LineJoin | undefined {
 
 function parseArrowEndpoint(node: XmlNode): ArrowEndpoint | null {
   if (!node) return null;
-  const type = ((node["@_type"] as string | undefined) ?? "none") as ArrowType;
+  const type = unsafeTypeAssertion<ArrowType>(
+    unsafeTypeAssertion<string | undefined>(node["@_type"]) ?? "none",
+  );
   if (type === "none") return null;
   return {
     type,
-    width: ((node["@_w"] as string | undefined) ?? "med") as ArrowSize,
-    length: ((node["@_len"] as string | undefined) ?? "med") as ArrowSize,
+    width: unsafeTypeAssertion<ArrowSize>(
+      unsafeTypeAssertion<string | undefined>(node["@_w"]) ?? "med",
+    ),
+    length: unsafeTypeAssertion<ArrowSize>(
+      unsafeTypeAssertion<string | undefined>(node["@_len"]) ?? "med",
+    ),
   };
 }

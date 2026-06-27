@@ -3,6 +3,7 @@ import { initWarningLogger } from "@pptx-glimpse/renderer";
 import { describe, expect, it, vi } from "vitest";
 
 import { ColorResolver } from "../color/color-resolver.js";
+import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
 import type { PptxArchive } from "./pptx-reader.js";
 import {
   parseSlideMasterBackground,
@@ -174,9 +175,9 @@ describe("parseSlideMasterElements", () => {
     );
 
     expect(elements).toHaveLength(2);
-    expect((elements[0] as ShapeElement).placeholderType).toBe("title");
-    expect((elements[1] as ShapeElement).placeholderType).toBeUndefined();
-    expect((elements[1] as ShapeElement).fill).toEqual({
+    expect(unsafeTypeAssertion<ShapeElement>(elements[0]).placeholderType).toBe("title");
+    expect(unsafeTypeAssertion<ShapeElement>(elements[1]).placeholderType).toBeUndefined();
+    expect(unsafeTypeAssertion<ShapeElement>(elements[1]).fill).toEqual({
       type: "solid",
       color: { hex: "#4472C4", alpha: 1 },
     });

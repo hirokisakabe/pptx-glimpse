@@ -1,3 +1,5 @@
+import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
+
 /**
  * Source handle 関連の型。
  *
@@ -28,19 +30,19 @@ export type SourceNodeId = string & { readonly [SourceNodeIdBrand]: typeof Sourc
 export type RawSidecarId = string & { readonly [RawSidecarIdBrand]: typeof RawSidecarIdBrand };
 
 export function asPartPath(value: string): PartPath {
-  return value as PartPath;
+  return unsafeTypeAssertion<PartPath>(value);
 }
 
 export function asRelationshipId(value: string): RelationshipId {
-  return value as RelationshipId;
+  return unsafeTypeAssertion<RelationshipId>(value);
 }
 
 export function asSourceNodeId(value: string): SourceNodeId {
-  return value as SourceNodeId;
+  return unsafeTypeAssertion<SourceNodeId>(value);
 }
 
 export function asRawSidecarId(value: string): RawSidecarId {
-  return value as RawSidecarId;
+  return unsafeTypeAssertion<RawSidecarId>(value);
 }
 
 /**

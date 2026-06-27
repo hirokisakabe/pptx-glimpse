@@ -3,6 +3,7 @@ import type { ResolvedColor } from "@pptx-glimpse/renderer";
 
 import type { ColorResolver } from "./color/color-resolver.js";
 import { parseXml, type XmlNode } from "./parser/xml-parser.js";
+import { unsafeTypeAssertion } from "./unsafe-type-assertion.js";
 
 const ACCENT_KEYS = ["accent1", "accent2", "accent3", "accent4", "accent5", "accent6"] as const;
 
@@ -42,16 +43,16 @@ export function convertChartXmlToRendererChartData(
   colorResolver: ColorResolver,
 ): ChartData | null {
   const parsed = parseXml(chartXml);
-  const chartSpace = parsed.chartSpace as XmlNode | undefined;
+  const chartSpace = unsafeTypeAssertion<XmlNode | undefined>(parsed.chartSpace);
   if (!chartSpace) return null;
 
-  const chart = chartSpace.chart as XmlNode | undefined;
+  const chart = unsafeTypeAssertion<XmlNode | undefined>(chartSpace.chart);
   if (!chart) return null;
 
-  const plotArea = chart.plotArea as XmlNode | undefined;
+  const plotArea = unsafeTypeAssertion<XmlNode | undefined>(chart.plotArea);
   if (!plotArea) return null;
 
-  const title = parseChartTitle(chart.title as XmlNode);
+  const title = parseChartTitle(unsafeTypeAssertion<XmlNode>(chart.title));
   const {
     chartType,
     series,
@@ -65,7 +66,7 @@ export function convertChartXmlToRendererChartData(
   } = parseChartTypeAndData(plotArea, colorResolver);
   if (!chartType) return null;
 
-  const legend = parseLegend(chart.legend as XmlNode);
+  const legend = parseLegend(unsafeTypeAssertion<XmlNode>(chart.legend));
 
   return {
     chartType,
@@ -97,43 +98,46 @@ function parseChartTypeAndData(
   splitPos?: number;
 } {
   for (const [xmlTag, chartType] of CHART_TYPE_MAP) {
-    const chartNode = plotArea[xmlTag] as XmlNode | undefined;
+    const chartNode = unsafeTypeAssertion<XmlNode | undefined>(plotArea[xmlTag]);
     if (!chartNode) continue;
 
-    const serList = (chartNode.ser as XmlNode[] | undefined) ?? [];
+    const serList = unsafeTypeAssertion<XmlNode[] | undefined>(chartNode.ser) ?? [];
     const series = serList.map((ser: XmlNode, index: number) =>
       parseSeries(ser, chartType, index, colorResolver),
     );
     const categories = extractCategories(serList);
-    const barDirNode = chartNode.barDir as XmlNode | undefined;
+    const barDirNode = unsafeTypeAssertion<XmlNode | undefined>(chartNode.barDir);
     const barDirection =
       chartType === "bar"
-        ? (((barDirNode?.["@_val"] as string | undefined) ?? "col") as "col" | "bar")
+        ? unsafeTypeAssertion<"col" | "bar">(
+            unsafeTypeAssertion<string | undefined>(barDirNode?.["@_val"]) ?? "col",
+          )
         : undefined;
 
-    const holeSizeNode = chartNode.holeSize as XmlNode | undefined;
+    const holeSizeNode = unsafeTypeAssertion<XmlNode | undefined>(chartNode.holeSize);
     const holeSize = chartType === "doughnut" ? Number(holeSizeNode?.["@_val"] ?? 50) : undefined;
 
-    const radarStyleNode = chartNode.radarStyle as XmlNode | undefined;
+    const radarStyleNode = unsafeTypeAssertion<XmlNode | undefined>(chartNode.radarStyle);
     const radarStyle =
       chartType === "radar"
-        ? (((radarStyleNode?.["@_val"] as string | undefined) ?? "standard") as
-            | "standard"
-            | "marker"
-            | "filled")
+        ? unsafeTypeAssertion<"standard" | "marker" | "filled">(
+            unsafeTypeAssertion<string | undefined>(radarStyleNode?.["@_val"]) ?? "standard",
+          )
         : undefined;
 
-    const ofPieTypeNode = chartNode.ofPieType as XmlNode | undefined;
+    const ofPieTypeNode = unsafeTypeAssertion<XmlNode | undefined>(chartNode.ofPieType);
     const ofPieType =
       chartType === "ofPie"
-        ? (((ofPieTypeNode?.["@_val"] as string | undefined) ?? "pie") as "pie" | "bar")
+        ? unsafeTypeAssertion<"pie" | "bar">(
+            unsafeTypeAssertion<string | undefined>(ofPieTypeNode?.["@_val"]) ?? "pie",
+          )
         : undefined;
 
-    const secondPieSizeNode = chartNode.secondPieSize as XmlNode | undefined;
+    const secondPieSizeNode = unsafeTypeAssertion<XmlNode | undefined>(chartNode.secondPieSize);
     const secondPieSize =
       chartType === "ofPie" ? Number(secondPieSizeNode?.["@_val"] ?? 75) : undefined;
 
-    const splitPosNode = chartNode.splitPos as XmlNode | undefined;
+    const splitPosNode = unsafeTypeAssertion<XmlNode | undefined>(chartNode.splitPos);
     const splitPos = chartType === "ofPie" ? Number(splitPosNode?.["@_val"] ?? 2) : undefined;
 
     return {
@@ -158,13 +162,21 @@ function parseSeries(
   seriesIndex: number,
   colorResolver: ColorResolver,
 ): ChartSeries {
-  const name = parseSeriesName(ser.tx as XmlNode);
+  const name = parseSeriesName(unsafeTypeAssertion<XmlNode>(ser.tx));
   const usesXY = chartType === "scatter" || chartType === "bubble";
-  const values = parseNumericData(usesXY ? (ser.yVal as XmlNode) : (ser.val as XmlNode));
-  const xValues = usesXY ? parseNumericData(ser.xVal as XmlNode) : undefined;
+  const values = parseNumericData(
+    usesXY ? unsafeTypeAssertion<XmlNode>(ser.yVal) : unsafeTypeAssertion<XmlNode>(ser.val),
+  );
+  const xValues = usesXY ? parseNumericData(unsafeTypeAssertion<XmlNode>(ser.xVal)) : undefined;
   const bubbleSizes =
-    chartType === "bubble" ? parseNumericData(ser.bubbleSize as XmlNode) : undefined;
-  const color = resolveSeriesColor(ser.spPr as XmlNode, seriesIndex, colorResolver);
+    chartType === "bubble"
+      ? parseNumericData(unsafeTypeAssertion<XmlNode>(ser.bubbleSize))
+      : undefined;
+  const color = resolveSeriesColor(
+    unsafeTypeAssertion<XmlNode>(ser.spPr),
+    seriesIndex,
+    colorResolver,
+  );
 
   return {
     name,
@@ -177,11 +189,11 @@ function parseSeries(
 
 function parseSeriesName(tx: XmlNode): string | null {
   if (!tx) return null;
-  const strRef = tx.strRef as XmlNode | undefined;
-  const strCache = strRef?.strCache as XmlNode | undefined;
+  const strRef = unsafeTypeAssertion<XmlNode | undefined>(tx.strRef);
+  const strCache = unsafeTypeAssertion<XmlNode | undefined>(strRef?.strCache);
   if (strCache?.pt) {
-    const pts = strCache.pt as XmlNode[];
-    return (pts[0]?.v as string | undefined) ?? null;
+    const pts = unsafeTypeAssertion<XmlNode[]>(strCache.pt);
+    return unsafeTypeAssertion<string | undefined>(pts[0]?.v) ?? null;
   }
   if (typeof tx.v === "string") return tx.v;
   return null;
@@ -189,10 +201,10 @@ function parseSeriesName(tx: XmlNode): string | null {
 
 function parseNumericData(valNode: XmlNode): number[] {
   if (!valNode) return [];
-  const numRef = valNode.numRef as XmlNode | undefined;
-  const numCache = numRef?.numCache as XmlNode | undefined;
+  const numRef = unsafeTypeAssertion<XmlNode | undefined>(valNode.numRef);
+  const numCache = unsafeTypeAssertion<XmlNode | undefined>(numRef?.numCache);
   if (!numCache?.pt) return [];
-  const pts = numCache.pt as XmlNode[];
+  const pts = unsafeTypeAssertion<XmlNode[]>(numCache.pt);
 
   return pts
     .slice()
@@ -202,31 +214,34 @@ function parseNumericData(valNode: XmlNode): number[] {
 
 function extractCategories(serList: XmlNode[]): string[] {
   for (const ser of serList) {
-    const cat = ser.cat as XmlNode | undefined;
+    const cat = unsafeTypeAssertion<XmlNode | undefined>(ser.cat);
     if (!cat) continue;
-    const strRef = cat.strRef as XmlNode | undefined;
-    const numRef = cat.numRef as XmlNode | undefined;
-    const multiLvlStrRef = cat.multiLvlStrRef as XmlNode | undefined;
+    const strRef = unsafeTypeAssertion<XmlNode | undefined>(cat.strRef);
+    const numRef = unsafeTypeAssertion<XmlNode | undefined>(cat.numRef);
+    const multiLvlStrRef = unsafeTypeAssertion<XmlNode | undefined>(cat.multiLvlStrRef);
     const strCache =
-      (strRef?.strCache as XmlNode | undefined) ?? (numRef?.numCache as XmlNode | undefined);
+      unsafeTypeAssertion<XmlNode | undefined>(strRef?.strCache) ??
+      unsafeTypeAssertion<XmlNode | undefined>(numRef?.numCache);
     if (strCache?.pt) {
-      return (strCache.pt as XmlNode[])
+      return unsafeTypeAssertion<XmlNode[]>(strCache.pt)
         .slice()
         .sort((a: XmlNode, b: XmlNode) => Number(a["@_idx"]) - Number(b["@_idx"]))
-        .map((pt: XmlNode) => String((pt.v as string | number | undefined) ?? ""));
+        .map((pt: XmlNode) => String(unsafeTypeAssertion<string | number | undefined>(pt.v) ?? ""));
     }
     // multiLvlStrRef: categories stored in lvl > pt structure (uses first level only)
-    const multiCache = multiLvlStrRef?.multiLvlStrCache as XmlNode | undefined;
+    const multiCache = unsafeTypeAssertion<XmlNode | undefined>(multiLvlStrRef?.multiLvlStrCache);
     if (multiCache?.lvl) {
       const lvls = Array.isArray(multiCache.lvl)
-        ? (multiCache.lvl as XmlNode[])
-        : [multiCache.lvl as XmlNode];
+        ? unsafeTypeAssertion<XmlNode[]>(multiCache.lvl)
+        : [unsafeTypeAssertion<XmlNode>(multiCache.lvl)];
       const firstLvl = lvls[0];
       if (firstLvl?.pt) {
-        return (firstLvl.pt as XmlNode[])
+        return unsafeTypeAssertion<XmlNode[]>(firstLvl.pt)
           .slice()
           .sort((a: XmlNode, b: XmlNode) => Number(a["@_idx"]) - Number(b["@_idx"]))
-          .map((pt: XmlNode) => String((pt.v as string | number | undefined) ?? ""));
+          .map((pt: XmlNode) =>
+            String(unsafeTypeAssertion<string | number | undefined>(pt.v) ?? ""),
+          );
       }
     }
   }
@@ -239,7 +254,9 @@ function resolveSeriesColor(
   colorResolver: ColorResolver,
 ): ResolvedColor {
   if (spPr) {
-    const resolved = colorResolver.resolve((spPr.solidFill as XmlNode | undefined) ?? spPr);
+    const resolved = colorResolver.resolve(
+      unsafeTypeAssertion<XmlNode | undefined>(spPr.solidFill) ?? spPr,
+    );
     if (resolved) return resolved;
   }
   // Default: use theme accent colors
@@ -250,17 +267,20 @@ function resolveSeriesColor(
 
 function parseChartTitle(titleNode: XmlNode): string | null {
   if (!titleNode) return null;
-  const tx = titleNode.tx as XmlNode | undefined;
-  const rich = tx?.rich as XmlNode | undefined;
+  const tx = unsafeTypeAssertion<XmlNode | undefined>(titleNode.tx);
+  const rich = unsafeTypeAssertion<XmlNode | undefined>(tx?.rich);
   if (!rich?.p) return null;
-  const pList = Array.isArray(rich.p) ? (rich.p as XmlNode[]) : [rich.p as XmlNode];
+  const pList = Array.isArray(rich.p)
+    ? unsafeTypeAssertion<XmlNode[]>(rich.p)
+    : [unsafeTypeAssertion<XmlNode>(rich.p)];
   const texts: string[] = [];
   for (const p of pList) {
-    const rList = (p.r as XmlNode[] | undefined) ?? [];
+    const rList = unsafeTypeAssertion<XmlNode[] | undefined>(p.r) ?? [];
     for (const r of rList) {
       const t = r.t;
       if (typeof t === "string") texts.push(t);
-      else if (t && (t as XmlNode)["#text"]) texts.push(String((t as XmlNode)["#text"]));
+      else if (t && unsafeTypeAssertion<XmlNode>(t)["#text"])
+        texts.push(String(unsafeTypeAssertion<XmlNode>(t)["#text"]));
     }
   }
   return texts.length > 0 ? texts.join("") : null;
@@ -268,7 +288,9 @@ function parseChartTitle(titleNode: XmlNode): string | null {
 
 function parseLegend(legendNode: XmlNode): ChartLegend | null {
   if (!legendNode) return null;
-  const legendPos = legendNode.legendPos as XmlNode | undefined;
-  const pos = ((legendPos?.["@_val"] as string | undefined) ?? "r") as ChartLegend["position"];
+  const legendPos = unsafeTypeAssertion<XmlNode | undefined>(legendNode.legendPos);
+  const pos = unsafeTypeAssertion<ChartLegend["position"]>(
+    unsafeTypeAssertion<string | undefined>(legendPos?.["@_val"]) ?? "r",
+  );
   return { position: pos };
 }

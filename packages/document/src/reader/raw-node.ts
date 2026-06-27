@@ -9,6 +9,7 @@
 
 import type { RawOoxmlNode, RawSidecar, RawSidecarId } from "../source/index.js";
 import { asRawSidecarId } from "../source/index.js";
+import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
 import { localName, type XmlNode } from "./xml.js";
 
 const ATTR_PREFIX = "@_";
@@ -31,7 +32,7 @@ function xmlValueToRawNode(name: string, value: unknown): RawOoxmlNode {
     return text !== undefined && text !== "" ? { name, text } : { name };
   }
 
-  const obj = value as Record<string, unknown>;
+  const obj = unsafeTypeAssertion<Record<string, unknown>>(value);
   const attributes: Record<string, string> = {};
   const children: RawOoxmlNode[] = [];
   let text: string | undefined;

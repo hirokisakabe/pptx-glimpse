@@ -8,31 +8,32 @@
 import type { ResolvedColor } from "@pptx-glimpse/renderer";
 
 import type { XmlNode } from "../parser/xml-parser.js";
+import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
 
 export function applyColorTransforms(color: ResolvedColor, node: XmlNode): ResolvedColor {
   let { hex, alpha } = color;
 
-  const lumMod = node.lumMod as XmlNode | undefined;
-  const lumOff = node.lumOff as XmlNode | undefined;
+  const lumMod = unsafeTypeAssertion<XmlNode | undefined>(node.lumMod);
+  const lumOff = unsafeTypeAssertion<XmlNode | undefined>(node.lumOff);
   if (lumMod || lumOff) {
     hex = applyLuminance(
       hex,
-      lumMod?.["@_val"] as string | undefined,
-      lumOff?.["@_val"] as string | undefined,
+      unsafeTypeAssertion<string | undefined>(lumMod?.["@_val"]),
+      unsafeTypeAssertion<string | undefined>(lumOff?.["@_val"]),
     );
   }
 
-  const tintNode = node.tint as XmlNode | undefined;
+  const tintNode = unsafeTypeAssertion<XmlNode | undefined>(node.tint);
   if (tintNode) {
     hex = applyTint(hex, Number(tintNode["@_val"]) / 100000);
   }
 
-  const shadeNode = node.shade as XmlNode | undefined;
+  const shadeNode = unsafeTypeAssertion<XmlNode | undefined>(node.shade);
   if (shadeNode) {
     hex = applyShade(hex, Number(shadeNode["@_val"]) / 100000);
   }
 
-  const alphaNode = node.alpha as XmlNode | undefined;
+  const alphaNode = unsafeTypeAssertion<XmlNode | undefined>(node.alpha);
   if (alphaNode) {
     alpha = Number(alphaNode["@_val"]) / 100000;
   }

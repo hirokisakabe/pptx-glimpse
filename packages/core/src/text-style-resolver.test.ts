@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 
 import type { TextStyleContext } from "./text-style-resolver.js";
 import { applyTextStyleInheritance } from "./text-style-resolver.js";
+import { unsafeTypeAssertion } from "./unsafe-type-assertion.js";
 
 function makeRunProperties(overrides: Partial<RunProperties> = {}): RunProperties {
   return {
@@ -514,10 +515,9 @@ describe("applyTextStyleInheritance", () => {
   describe("レベル対応", () => {
     it("段落レベルに応じた正しいスタイルが適用される", () => {
       const shape = makeShape({ placeholderType: "body" });
-      const levels = Array(9).fill(undefined) as (
-        | undefined
-        | { defaultRunProperties: { fontSize: number } }
-      )[];
+      const levels = unsafeTypeAssertion<
+        (undefined | { defaultRunProperties: { fontSize: number } })[]
+      >(Array(9).fill(undefined));
       levels[0] = { defaultRunProperties: { fontSize: 32 } };
       levels[1] = { defaultRunProperties: { fontSize: 28 } };
       levels[2] = { defaultRunProperties: { fontSize: 24 } };

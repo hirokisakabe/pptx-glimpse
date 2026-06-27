@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { buildEffectiveSlideElements } from "./parser-path-oracle.js";
 import type { ParsedSlide } from "./pptx-data-parser.js";
+import { unsafeTypeAssertion } from "./unsafe-type-assertion.js";
 
 describe("buildEffectiveSlideElements", () => {
   it("omits master elements when the slide hides master shapes", () => {
@@ -103,10 +104,10 @@ function shape(
           paragraphs: [{ runs: [{ text: options.text }] }],
         };
 
-  return {
+  return unsafeTypeAssertion<ShapeElement>({
     type: "shape",
     id,
     placeholderType: options.placeholderType,
     textBody,
-  } as unknown as ShapeElement;
+  });
 }

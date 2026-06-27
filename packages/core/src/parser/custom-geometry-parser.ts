@@ -1,22 +1,23 @@
 import type { CustomGeometryPath } from "@pptx-glimpse/renderer";
 import { debug } from "@pptx-glimpse/renderer";
 
+import { unsafeTypeAssertion } from "../unsafe-type-assertion.js";
 import { evaluateGuides, type GuideDefinition, resolveValue } from "./geometry-formula.js";
 import type { XmlNode } from "./xml-parser.js";
 
 /** custGeom ノードをパースして CustomGeometryPath[] を返す */
 export function parseCustomGeometry(custGeom: XmlNode): CustomGeometryPath[] | null {
-  const pathLst = custGeom.pathLst as XmlNode | undefined;
+  const pathLst = unsafeTypeAssertion<XmlNode | undefined>(custGeom.pathLst);
   if (!pathLst?.path) return null;
 
-  const avLst = custGeom.avLst as XmlNode | undefined;
-  const gdLst = custGeom.gdLst as XmlNode | undefined;
-  const avGd = parseGuideList(avLst?.gd as XmlNode);
-  const gdGd = parseGuideList(gdLst?.gd as XmlNode);
+  const avLst = unsafeTypeAssertion<XmlNode | undefined>(custGeom.avLst);
+  const gdLst = unsafeTypeAssertion<XmlNode | undefined>(custGeom.gdLst);
+  const avGd = parseGuideList(unsafeTypeAssertion<XmlNode>(avLst?.gd));
+  const gdGd = parseGuideList(unsafeTypeAssertion<XmlNode>(gdLst?.gd));
 
   const paths = Array.isArray(pathLst.path)
-    ? (pathLst.path as XmlNode[])
-    : [pathLst.path as XmlNode];
+    ? unsafeTypeAssertion<XmlNode[]>(pathLst.path)
+    : [unsafeTypeAssertion<XmlNode>(pathLst.path)];
   const result: CustomGeometryPath[] = [];
 
   for (const path of paths) {
@@ -45,8 +46,8 @@ function parseGuideList(gd: XmlNode): GuideDefinition[] {
   const list = Array.isArray(gd) ? (gd as XmlNode[]) : [gd];
   return list
     .map((g) => ({
-      name: (g["@_name"] as string | undefined) ?? "",
-      fmla: (g["@_fmla"] as string | undefined) ?? "",
+      name: unsafeTypeAssertion<string | undefined>(g["@_name"]) ?? "",
+      fmla: unsafeTypeAssertion<string | undefined>(g["@_fmla"]) ?? "",
     }))
     .filter((g: GuideDefinition) => g.name && g.fmla);
 }
@@ -63,12 +64,14 @@ function buildPathCommands(path: XmlNode, vars: Record<string, number>): string 
     if (key.startsWith("@_")) continue;
 
     const value = path[key];
-    const items = Array.isArray(value) ? (value as XmlNode[]) : [value as XmlNode];
+    const items = Array.isArray(value)
+      ? unsafeTypeAssertion<XmlNode[]>(value)
+      : [unsafeTypeAssertion<XmlNode>(value)];
 
     for (const item of items) {
       switch (key) {
         case "moveTo": {
-          const pt = resolveFirstPoint(item.pt as XmlNode, vars);
+          const pt = resolveFirstPoint(unsafeTypeAssertion<XmlNode>(item.pt), vars);
           if (pt) {
             parts.push(`M ${pt.x} ${pt.y}`);
             curX = pt.x;
@@ -79,7 +82,7 @@ function buildPathCommands(path: XmlNode, vars: Record<string, number>): string 
           break;
         }
         case "lnTo": {
-          const pt = resolveFirstPoint(item.pt as XmlNode, vars);
+          const pt = resolveFirstPoint(unsafeTypeAssertion<XmlNode>(item.pt), vars);
           if (pt) {
             parts.push(`L ${pt.x} ${pt.y}`);
             curX = pt.x;
@@ -88,7 +91,7 @@ function buildPathCommands(path: XmlNode, vars: Record<string, number>): string 
           break;
         }
         case "cubicBezTo": {
-          const pts = resolvePoints(item.pt as XmlNode, vars);
+          const pts = resolvePoints(unsafeTypeAssertion<XmlNode>(item.pt), vars);
           if (pts.length >= 3) {
             parts.push(`C ${pts.map((p) => `${p.x} ${p.y}`).join(", ")}`);
             curX = pts[pts.length - 1].x;
@@ -97,7 +100,7 @@ function buildPathCommands(path: XmlNode, vars: Record<string, number>): string 
           break;
         }
         case "quadBezTo": {
-          const pts = resolvePoints(item.pt as XmlNode, vars);
+          const pts = resolvePoints(unsafeTypeAssertion<XmlNode>(item.pt), vars);
           if (pts.length >= 2) {
             parts.push(`Q ${pts.map((p) => `${p.x} ${p.y}`).join(", ")}`);
             curX = pts[pts.length - 1].x;
@@ -132,11 +135,11 @@ function resolveFirstPoint(
   vars: Record<string, number>,
 ): { x: number; y: number } | null {
   if (!pt) return null;
-  const p = Array.isArray(pt) ? (pt[0] as XmlNode) : pt;
+  const p = Array.isArray(pt) ? unsafeTypeAssertion<XmlNode>(pt[0]) : pt;
   if (!p) return null;
   return {
-    x: resolveValue(p["@_x"] as string, vars),
-    y: resolveValue(p["@_y"] as string, vars),
+    x: resolveValue(unsafeTypeAssertion<string>(p["@_x"]), vars),
+    y: resolveValue(unsafeTypeAssertion<string>(p["@_y"]), vars),
   };
 }
 
@@ -144,8 +147,8 @@ function resolvePoints(pt: XmlNode, vars: Record<string, number>): Array<{ x: nu
   if (!pt) return [];
   const pts = Array.isArray(pt) ? (pt as XmlNode[]) : [pt];
   return pts.map((p) => ({
-    x: resolveValue(p["@_x"] as string, vars),
-    y: resolveValue(p["@_y"] as string, vars),
+    x: resolveValue(unsafeTypeAssertion<string>(p["@_x"]), vars),
+    y: resolveValue(unsafeTypeAssertion<string>(p["@_y"]), vars),
   }));
 }
 
@@ -156,10 +159,10 @@ function convertArcTo(
   curY: number,
   vars: Record<string, number>,
 ): { svg: string; endX: number; endY: number } | null {
-  const wR = resolveValue((arc["@_wR"] as string | undefined) ?? "0", vars);
-  const hR = resolveValue((arc["@_hR"] as string | undefined) ?? "0", vars);
-  const stAng = resolveValue((arc["@_stAng"] as string | undefined) ?? "0", vars);
-  const swAng = resolveValue((arc["@_swAng"] as string | undefined) ?? "0", vars);
+  const wR = resolveValue(unsafeTypeAssertion<string | undefined>(arc["@_wR"]) ?? "0", vars);
+  const hR = resolveValue(unsafeTypeAssertion<string | undefined>(arc["@_hR"]) ?? "0", vars);
+  const stAng = resolveValue(unsafeTypeAssertion<string | undefined>(arc["@_stAng"]) ?? "0", vars);
+  const swAng = resolveValue(unsafeTypeAssertion<string | undefined>(arc["@_swAng"]) ?? "0", vars);
 
   if (wR === 0 && hR === 0) return null;
   if (swAng === 0) return null;
