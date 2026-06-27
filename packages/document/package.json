@@ -2,7 +2,7 @@
   "name": "@pptx-glimpse/document",
   "version": "0.0.0",
   "private": true,
-  "description": "Experimental CleanDoc and OOXML document foundation for pptx-glimpse.",
+  "description": "Experimental PptxSourceModel and OOXML document foundation for pptx-glimpse.",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",

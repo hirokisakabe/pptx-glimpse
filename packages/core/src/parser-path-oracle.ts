@@ -33,7 +33,7 @@ import { parsePptxData, parseSlideWithLayout } from "./pptx-data-parser.js";
 /**
  * Explicit old-parser render oracle for document-path parity checks.
  *
- * Public conversion defaults to the CleanDoc document path. Keep this module
+ * Public conversion defaults to the PptxSourceModel document path. Keep this module
  * internal so old parser semantics do not leak back into core orchestration.
  */
 async function convertPptxToSvgViaParserPath(

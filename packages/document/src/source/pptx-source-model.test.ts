@@ -11,14 +11,14 @@ import {
   asRawSidecarId,
   asRelationshipId,
   asSourceNodeId,
-  type CleanDocSource,
+  type PptxSourceModel,
   type SourceImage,
   type SourceShape,
   type SourceTextRun,
 } from "../experimental.js";
 
-describe("CleanDoc source model types", () => {
-  it("can build a minimal CleanDocSource value", () => {
+describe("PptxSourceModel source model types", () => {
+  it("can build a minimal PptxSourceModel value", () => {
     const slidePath = asPartPath("ppt/slides/slide1.xml");
     const layoutPath = asPartPath("ppt/slideLayouts/slideLayout1.xml");
     const masterPath = asPartPath("ppt/slideMasters/slideMaster1.xml");
@@ -73,7 +73,7 @@ describe("CleanDoc source model types", () => {
       handle: { partPath: slidePath, relationshipId: asRelationshipId("rId2") },
     };
 
-    const source: CleanDocSource = {
+    const source: PptxSourceModel = {
       packageGraph: {
         contentTypes: {
           defaults: [{ extension: "png", contentType: "image/png" }],

@@ -3,7 +3,7 @@
  *
  * PoC scope の最小 subset (simple shapes / text / images) のみを typed に表す。
  * theme color や relationship は source では未解決の参照のまま保持し
- * (`docs/cleandoc-source-computed-view.md`)、cascade 解決は computed view の
+ * (`docs/pptx-source-model-computed-view.md`)、cascade 解決は computed view の
  * 責務とする。未対応ノードは raw escape hatch で保存する。
  */
 

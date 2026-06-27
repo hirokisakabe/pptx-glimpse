@@ -1,5 +1,4 @@
 import type {
-  CleanDocComputedView,
   ComputedBackground,
   ComputedBlipEffects,
   ComputedChartElement,
@@ -19,6 +18,7 @@ import type {
   ComputedSmartArtElement,
   ComputedTableElement,
   ComputedTextBody,
+  PptxComputedView,
 } from "@pptx-glimpse/document/experimental";
 import type {
   Background,
@@ -65,13 +65,13 @@ interface RendererAdapterResult {
 export interface RendererAdapterDiagnostic {
   readonly severity: "warning";
   readonly code:
-    | "cleandoc-adapter.missing-transform"
-    | "cleandoc-adapter.raw-element-skipped"
-    | "cleandoc-adapter.raw-background-ignored"
-    | "cleandoc-adapter.raw-fill-ignored"
-    | "cleandoc-adapter.unresolved-chart-skipped"
-    | "cleandoc-adapter.unresolved-smartart-skipped"
-    | "cleandoc-adapter.unresolved-image-skipped";
+    | "pptx-computed-view-adapter.missing-transform"
+    | "pptx-computed-view-adapter.raw-element-skipped"
+    | "pptx-computed-view-adapter.raw-background-ignored"
+    | "pptx-computed-view-adapter.raw-fill-ignored"
+    | "pptx-computed-view-adapter.unresolved-chart-skipped"
+    | "pptx-computed-view-adapter.unresolved-smartart-skipped"
+    | "pptx-computed-view-adapter.unresolved-image-skipped";
   readonly message: string;
   readonly slideNumber?: number;
   readonly sourcePartPath?: string;
@@ -120,7 +120,7 @@ const DEFAULT_COLOR_MAP: ColorMap = {
 };
 
 export function adaptComputedViewToRendererModel(
-  computed: CleanDocComputedView,
+  computed: PptxComputedView,
 ): RendererAdapterResult {
   const diagnostics: DiagnosticSink = [];
 
@@ -167,8 +167,8 @@ function adaptBackground(
 
   diagnostics.push({
     severity: "warning",
-    code: "cleandoc-adapter.raw-background-ignored",
-    message: "Raw CleanDoc background is not supported by the renderer adapter.",
+    code: "pptx-computed-view-adapter.raw-background-ignored",
+    message: "Raw PptxSourceModel background is not supported by the renderer adapter.",
     slideNumber: slide.slideNumber,
   });
   return null;
@@ -198,8 +198,8 @@ function adaptElement(
 
   diagnostics.push({
     severity: "warning",
-    code: "cleandoc-adapter.raw-element-skipped",
-    message: "Raw CleanDoc shape tree node is outside the renderer adapter subset.",
+    code: "pptx-computed-view-adapter.raw-element-skipped",
+    message: "Raw PptxSourceModel shape tree node is outside the renderer adapter subset.",
     slideNumber: slide.slideNumber,
     sourcePartPath: element.sourcePartPath,
   });
@@ -257,8 +257,8 @@ function adaptChart(
   if (chart.chartXml === undefined) {
     diagnostics.push({
       severity: "warning",
-      code: "cleandoc-adapter.unresolved-chart-skipped",
-      message: "CleanDoc chart element has no resolved chart XML.",
+      code: "pptx-computed-view-adapter.unresolved-chart-skipped",
+      message: "PptxSourceModel chart element has no resolved chart XML.",
       slideNumber: slide.slideNumber,
       sourcePartPath: chart.sourcePartPath,
     });
@@ -269,8 +269,8 @@ function adaptChart(
   if (chartData === null) {
     diagnostics.push({
       severity: "warning",
-      code: "cleandoc-adapter.unresolved-chart-skipped",
-      message: "CleanDoc chart XML could not be parsed into the renderer chart model.",
+      code: "pptx-computed-view-adapter.unresolved-chart-skipped",
+      message: "PptxSourceModel chart XML could not be parsed into the renderer chart model.",
       slideNumber: slide.slideNumber,
       sourcePartPath: chart.sourcePartPath,
     });
@@ -292,8 +292,8 @@ function adaptSmartArt(
   if (smartArt.drawingXml === undefined || smartArt.drawingPartPath === undefined) {
     diagnostics.push({
       severity: "warning",
-      code: "cleandoc-adapter.unresolved-smartart-skipped",
-      message: "CleanDoc SmartArt element has no resolved diagram drawing XML.",
+      code: "pptx-computed-view-adapter.unresolved-smartart-skipped",
+      message: "PptxSourceModel SmartArt element has no resolved diagram drawing XML.",
       slideNumber: slide.slideNumber,
       sourcePartPath: smartArt.sourcePartPath,
     });
@@ -306,8 +306,8 @@ function adaptSmartArt(
   if (spTree === undefined) {
     diagnostics.push({
       severity: "warning",
-      code: "cleandoc-adapter.unresolved-smartart-skipped",
-      message: "CleanDoc SmartArt diagram drawing XML has no shape tree.",
+      code: "pptx-computed-view-adapter.unresolved-smartart-skipped",
+      message: "PptxSourceModel SmartArt diagram drawing XML has no shape tree.",
       slideNumber: slide.slideNumber,
       sourcePartPath: smartArt.sourcePartPath,
     });
@@ -488,8 +488,8 @@ function adaptImage(
   if (image.media === undefined) {
     diagnostics.push({
       severity: "warning",
-      code: "cleandoc-adapter.unresolved-image-skipped",
-      message: "CleanDoc image element has no resolved media payload.",
+      code: "pptx-computed-view-adapter.unresolved-image-skipped",
+      message: "PptxSourceModel image element has no resolved media payload.",
       slideNumber: slide.slideNumber,
       sourcePartPath: image.sourcePartPath,
     });
@@ -562,8 +562,8 @@ function adaptTransform(
   if (transform === undefined) {
     diagnostics.push({
       severity: "warning",
-      code: "cleandoc-adapter.missing-transform",
-      message: "CleanDoc element has no computed transform; using a zero-size fallback.",
+      code: "pptx-computed-view-adapter.missing-transform",
+      message: "PptxSourceModel element has no computed transform; using a zero-size fallback.",
       slideNumber: slide.slideNumber,
       sourcePartPath,
     });
@@ -647,8 +647,8 @@ function adaptFill(
 
   diagnostics.push({
     severity: "warning",
-    code: "cleandoc-adapter.raw-fill-ignored",
-    message: "Raw CleanDoc fill is outside the renderer adapter subset.",
+    code: "pptx-computed-view-adapter.raw-fill-ignored",
+    message: "Raw PptxSourceModel fill is outside the renderer adapter subset.",
     slideNumber: slide.slideNumber,
   });
   return null;

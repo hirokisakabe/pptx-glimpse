@@ -69,7 +69,7 @@ function buildSyntheticPptx(): Uint8Array {
 describe("readPptx — package graph と presentation metadata", () => {
   const source = readPptx(buildSyntheticPptx());
 
-  it("presentation metadata を含む CleanDoc source を返す", () => {
+  it("presentation metadata を含む PptxSourceModel source を返す", () => {
     expect(source.presentation.partPath).toBe("ppt/presentation.xml");
     expect(source.presentation.handle?.partPath).toBe("ppt/presentation.xml");
     // slide は presentation order どおり typed に読まれる (cSld が空なので shapes は空)。

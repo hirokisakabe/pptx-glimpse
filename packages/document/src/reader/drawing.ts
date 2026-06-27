@@ -1,8 +1,8 @@
 /**
- * DrawingML の色・塗り・線・座標変換を CleanDoc source 型へ読み取るヘルパー。
+ * DrawingML の色・塗り・線・座標変換を PptxSourceModel source 型へ読み取るヘルパー。
  *
  * source では theme color / relationship を未解決のまま保持する
- * (`docs/cleandoc-source-computed-view.md`)。lumMod / tint 等の変換は適用せず
+ * (`docs/pptx-source-model-computed-view.md`)。lumMod / tint 等の変換は適用せず
  * そのまま保存し、解決は computed view の責務とする。未対応の塗り (gradient /
  * pattern / picture fill) は raw sidecar として保存する。
  */

@@ -1,5 +1,5 @@
 /**
- * CleanDoc source writer の barrel re-export。
+ * PptxSourceModel source writer の barrel re-export。
  */
 
 export type { WritePptxOutput } from "./write-pptx.js";

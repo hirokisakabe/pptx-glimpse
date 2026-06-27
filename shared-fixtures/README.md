@@ -6,11 +6,11 @@
 
 このディレクトリのファイルは複数のテストスイートから共有される:
 
-| テスト                   | ファイル                                        | 目的                                                                             |
-| ------------------------ | ----------------------------------------------- | -------------------------------------------------------------------------------- |
-| E2E スモークテスト       | `e2e/smoke.test.ts`                             | エラーなく変換できること・主要要素の SVG 出力確認                                |
-| スナップショット VRT     | `vrt/snapshot/regression.test.ts`               | レンダリング結果のリグレッション検出                                             |
-| document path parity VRT | `vrt/snapshot/document-path-regression.test.ts` | CleanDoc document path と parser path oracle の zero-diff / zero-diagnostic 確認 |
+| テスト                   | ファイル                                        | 目的                                                                                    |
+| ------------------------ | ----------------------------------------------- | --------------------------------------------------------------------------------------- |
+| E2E スモークテスト       | `e2e/smoke.test.ts`                             | エラーなく変換できること・主要要素の SVG 出力確認                                       |
+| スナップショット VRT     | `vrt/snapshot/regression.test.ts`               | レンダリング結果のリグレッション検出                                                    |
+| document path parity VRT | `vrt/snapshot/document-path-regression.test.ts` | PptxSourceModel document path と parser path oracle の zero-diff / zero-diagnostic 確認 |
 
 ## プログラム合成フィクスチャとの違い
 

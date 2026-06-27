@@ -1,7 +1,7 @@
 /**
  * Source handle 関連の型。
  *
- * CleanDoc source node は、書き戻し (writer) / 編集 (editor) / round-trip の
+ * PptxSourceModel source node は、書き戻し (writer) / 編集 (editor) / round-trip の
  * ために「どの package part のどのノードから来たか」を stable な handle として
  * 保持する。handle は直接の mutable pointer ではなく、安定した参照
  * (part path / relationship id / node id / 兄弟内の順序 / raw sidecar 参照) で

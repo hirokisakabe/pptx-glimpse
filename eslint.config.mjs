@@ -63,7 +63,7 @@ export default tseslint.config(
                 "./scripts",
               ],
               message:
-                "@pptx-glimpse/document is the lower-level OOXML/CleanDoc foundation and must not import higher-level packages or app/script code.",
+                "@pptx-glimpse/document is the lower-level OOXML/PptxSourceModel foundation and must not import higher-level packages or app/script code.",
             },
           ],
         },

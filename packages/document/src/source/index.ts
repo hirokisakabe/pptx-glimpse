@@ -1,8 +1,7 @@
 /**
- * CleanDoc source model 型の barrel re-export。
+ * PptxSourceModel source model 型の barrel re-export。
  */
 
-export type { CleanDocEdit, CleanDocSource, CleanDocTextRunEdit } from "./clean-doc-source.js";
 export type { Diagnostic, DiagnosticSeverity } from "./diagnostics.js";
 export { findTextRunBySourceHandle, replaceTextRunPlainText } from "./editing.js";
 export type {
@@ -24,6 +23,11 @@ export type {
   Relationship,
   RelationshipTargetMode,
 } from "./package-graph.js";
+export type {
+  PptxSourceModel,
+  PptxSourceModelEdit,
+  PptxSourceModelTextRunEdit,
+} from "./pptx-source-model.js";
 export type {
   SlideSize,
   SourceBackground,

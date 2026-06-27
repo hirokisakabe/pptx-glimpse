@@ -2,7 +2,7 @@
  * Document path VRT は public snapshot を更新せず、明示的な parser path の PNG を
  * 参照画像としてその場で比較する full parity harness。
  *
- * CleanDoc default switch 後も parser path oracle との zero-diff gate として残す。
+ * PptxSourceModel default switch 後も parser path oracle との zero-diff gate として残す。
  * 以前の migration blocker issue はすべて解消済みなので、ケースごとの issue 番号は
  * ここでは保持しない。
  */

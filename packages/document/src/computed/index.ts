@@ -1,5 +1,5 @@
+export { createComputedView } from "./create-computed-view.js";
 export type {
-  CleanDocComputedView,
   ComputedBackground,
   ComputedBlipEffects,
   ComputedCellBorders,
@@ -31,5 +31,5 @@ export type {
   ComputedTextBody,
   ComputedTextRun,
   CreateComputedViewOptions,
-} from "./clean-doc-computed-view.js";
-export { createComputedView } from "./create-computed-view.js";
+  PptxComputedView,
+} from "./pptx-computed-view.js";

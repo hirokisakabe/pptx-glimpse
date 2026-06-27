@@ -19,8 +19,8 @@ import type {
 } from "@pptx-glimpse/renderer";
 import { describe, expect, it } from "vitest";
 
-import { adaptComputedViewToRendererModel } from "./cleandoc-renderer-adapter.js";
 import { buildEffectiveSlideElements } from "./parser-path-oracle.js";
+import { adaptComputedViewToRendererModel } from "./pptx-computed-view-renderer-adapter.js";
 import { parsePptxData, parseSlideWithLayout } from "./pptx-data-parser.js";
 
 const CASES = [
@@ -51,7 +51,7 @@ const OUT_OF_SCOPE_FIELDS = [
 ] as const;
 
 describe("dual-reader structural comparison", () => {
-  it("comparison scope is intentionally limited to the CleanDoc PoC supported subset", () => {
+  it("comparison scope is intentionally limited to the PptxSourceModel PoC supported subset", () => {
     expect(COMPARISON_SCOPE).toMatchInlineSnapshot(`
       [
         "slide size",
@@ -77,7 +77,7 @@ describe("dual-reader structural comparison", () => {
   });
 
   it.each(CASES)(
-    "$fixtureName matches between current parser and CleanDoc document path for supported fields",
+    "$fixtureName matches between current parser and PptxSourceModel document path for supported fields",
     ({ fixtureName, includeRunProperties }) => {
       const input = readFixture(fixtureName);
       const options = { includeRunProperties };
@@ -87,7 +87,7 @@ describe("dual-reader structural comparison", () => {
       for (const diagnostic of document.diagnostics) {
         expect(diagnostic).toMatchObject({
           severity: "warning",
-          code: "cleandoc-adapter.raw-element-skipped",
+          code: "pptx-computed-view-adapter.raw-element-skipped",
         });
       }
       expect(document.presentation).toEqual(current);

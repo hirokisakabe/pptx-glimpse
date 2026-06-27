@@ -127,7 +127,7 @@ function getEntry(output: Uint8Array, path: string): Uint8Array {
 }
 
 describe("writePptx — no-edit round-trip", () => {
-  it("CleanDoc source から no-edit PPTX を write し、再読込できる", () => {
+  it("PptxSourceModel source から no-edit PPTX を write し、再読込できる", () => {
     const input = buildRoundTripFixture();
     const original = readPptx(input);
 
@@ -292,7 +292,7 @@ describe("writePptx — one plain text-run edit", () => {
     expect(findTextRunBySourceHandle(source, run.handle!)).toBe(run);
   });
 
-  it("plain text 置換を CleanDoc source に適用し、write 後の PPTX に反映する", () => {
+  it("plain text 置換を PptxSourceModel source に適用し、write 後の PPTX に反映する", () => {
     const input = buildTextEditFixture();
     const source = readPptx(input);
     const run = firstRun(source);

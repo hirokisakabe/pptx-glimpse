@@ -1,5 +1,5 @@
 /**
- * CleanDoc source reader の barrel re-export。
+ * PptxSourceModel source reader の barrel re-export。
  */
 
 export type { ReadPptxInput } from "./read-pptx.js";

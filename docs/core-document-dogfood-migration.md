@@ -7,9 +7,9 @@ This note records how the public `convertPptxToSvg` / `convertPptxToPng` path
 should eventually dogfood `@pptx-glimpse/document`. It feeds into
 [#445](https://github.com/hirokisakabe/pptx-glimpse/issues/445) and builds on
 the package boundary decision in
-[document-boundaries.md](./document-boundaries.md), the CleanDoc source/computed
+[document-boundaries.md](./document-boundaries.md), the PptxSourceModel source/computed
 view decision in
-[cleandoc-source-computed-view.md](./cleandoc-source-computed-view.md), and the
+[pptx-source-model-computed-view.md](./pptx-source-model-computed-view.md), and the
 raw OOXML round-trip policy in
 [raw-ooxml-round-trip.md](./raw-ooxml-round-trip.md).
 
@@ -18,7 +18,7 @@ moving reusable OOXML reading semantics into `@pptx-glimpse/document`.
 
 > Current-state note, 2026-06-27: the migration tracked by
 > [#481](https://github.com/hirokisakabe/pptx-glimpse/issues/481) is complete.
-> Public `convertPptxToSvg` / `convertPptxToPng` now default to the CleanDoc
+> Public `convertPptxToSvg` / `convertPptxToPng` now default to the PptxSourceModel
 > document path. This note remains a historical RFC for the migration plan and
 > should be read together with
 > [legacy-parser-semantics-audit.md](./legacy-parser-semantics-audit.md), which
@@ -43,7 +43,7 @@ PPTX Buffer | Uint8Array
 ```
 
 `parsePptxData` and `parseSlideWithLayout` were the effective core reader before
-the CleanDoc default switch. They unzip the package, parse XML, collect
+the PptxSourceModel default switch. They unzip the package, parse XML, collect
 relationships/theme data, and produce the renderer model consumed by
 `@pptx-glimpse/renderer`.
 
@@ -73,9 +73,9 @@ The public conversion path is now:
 ```text
 PPTX Buffer | Uint8Array
   -> @pptx-glimpse/document readPptx(input)
-  -> CleanDoc source model
+  -> PptxSourceModel source model
   -> createComputedView(source, options)
-  -> core-owned CleanDoc renderer adapter
+  -> core-owned PptxSourceModel renderer adapter
   -> existing @pptx-glimpse/renderer model
   -> renderSlideToSvg(slide, slideSize)
   -> svgToPng(svg, options) for PNG output
@@ -93,7 +93,7 @@ The final conversion flow should be:
 ```text
 PPTX Buffer | Uint8Array
   -> @pptx-glimpse/document readPptx(input)
-  -> CleanDoc source model
+  -> PptxSourceModel source model
   -> createComputedView(source, options)
   -> createRenderView(computed, renderOptions)
   -> existing @pptx-glimpse/renderer model
@@ -103,18 +103,18 @@ PPTX Buffer | Uint8Array
 
 The ownership boundary should be:
 
-- `@pptx-glimpse/document` owns OOXML package reading, CleanDoc source types,
+- `@pptx-glimpse/document` owns OOXML package reading, PptxSourceModel source types,
   relationship/package bookkeeping, source handles, raw preservation sidecars,
   and document-level computed view generation.
 - `@pptx-glimpse/core` owns the public conversion API, slide selection,
   compatibility options, warning behavior, font setup, and the
-  CleanDoc-computed-view-to-renderer-model adapter.
+  PptxSourceModel-computed-view-to-renderer-model adapter.
 - `@pptx-glimpse/renderer` keeps owning SVG/PNG rendering, font measurement,
   text-to-path behavior, visual fallbacks, and renderer-specific warnings.
 
 `@pptx-glimpse/document` must not import `core`, `editor-core`, the renderer, or
 pom. Core depends on `document`; the renderer consumes the adapter output and
-does not need to know CleanDoc directly.
+does not need to know PptxSourceModel directly.
 
 ## Historical Parallel Reader Period
 
@@ -125,7 +125,7 @@ tests still exist.
 The first `document` reader was introduced behind internal or experimental
 paths and compared against the then-current parser path. During that historical
 parallel period, the public `convertPptxToSvg` / `convertPptxToPng` default
-stayed on the parser path until the CleanDoc reader, computed view, and adapter
+stayed on the parser path until the PptxSourceModel reader, computed view, and adapter
 reached rendering parity for the supported fixture set.
 
 Recommended sequence during the parallel period:
@@ -136,7 +136,7 @@ Recommended sequence during the parallel period:
 3. Add computed view generation for slide size, slide order, relationships,
    theme resolution, background fallback, placeholder cascade, and text style
    inheritance, including slide and layout `showMasterSp` visibility.
-4. Add a CleanDoc computed view to current renderer model adapter in core.
+4. Add a PptxSourceModel computed view to current renderer model adapter in core.
 5. Run dual-reader comparison tests where both paths parse the same fixtures and
    the adapter output is compared against the current renderer model.
 6. Switch selected fixtures to render through the document path in tests.
@@ -150,8 +150,8 @@ renderer fallbacks and visual diagnostics should stay outside it.
 
 ## Adapter Policy
 
-The adapter should translate from CleanDoc computed view to the existing
-renderer model, not merge the renderer model into CleanDoc.
+The adapter should translate from PptxSourceModel computed view to the existing
+renderer model, not merge the renderer model into PptxSourceModel.
 
 Adapter responsibilities:
 
@@ -181,16 +181,16 @@ computed-view fields can be simplified in separate, rendering-focused PRs.
 
 Dogfood should be verified at multiple levels instead of relying on only VRT:
 
-| Level                      | Purpose                                                                     | Suggested checks                                                                                                                          |
-| -------------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Document reader unit tests | Ensure OOXML parts become CleanDoc source nodes with stable references      | minimal PPTX fixtures, relationship graph assertions, raw sidecar preservation assertions                                                 |
-| Computed view unit tests   | Ensure document semantics are resolved outside the renderer                 | theme/color map resolution, background fallback, placeholder matching, text style cascade, unit conversion                                |
-| Adapter tests              | Ensure CleanDoc computed view maps to the current renderer contract         | compare adapter output with selected current parser model snapshots or focused structural assertions, including `showMasterSp` visibility |
-| Core dual-reader tests     | Ensure public conversion can dogfood `document` without changing behavior   | run both paths on shared fixtures and compare selected render model fields, slide selection, warnings, and result shapes                  |
-| Public API behavior tests  | Ensure public conversion options remain compatible                          | verify `slides` filtering, warning/log behavior, `convertPptxToPng` path-text forcing, and returned object shapes                         |
-| Snapshot VRT               | Catch visual regressions once fixtures are opted into the document path     | existing `vrt/snapshot` cases and shared real PPTX fixtures                                                                               |
-| LibreOffice VRT            | Compare generated output against external rendering references where useful | existing `vrt/libreoffice` cases after the document path affects rendering                                                                |
-| Package verification       | Ensure the published API shape remains compatible                           | existing build, typecheck, package verification, and API import smoke tests                                                               |
+| Level                      | Purpose                                                                       | Suggested checks                                                                                                                          |
+| -------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Document reader unit tests | Ensure OOXML parts become PptxSourceModel source nodes with stable references | minimal PPTX fixtures, relationship graph assertions, raw sidecar preservation assertions                                                 |
+| Computed view unit tests   | Ensure document semantics are resolved outside the renderer                   | theme/color map resolution, background fallback, placeholder matching, text style cascade, unit conversion                                |
+| Adapter tests              | Ensure PptxSourceModel computed view maps to the current renderer contract    | compare adapter output with selected current parser model snapshots or focused structural assertions, including `showMasterSp` visibility |
+| Core dual-reader tests     | Ensure public conversion can dogfood `document` without changing behavior     | run both paths on shared fixtures and compare selected render model fields, slide selection, warnings, and result shapes                  |
+| Public API behavior tests  | Ensure public conversion options remain compatible                            | verify `slides` filtering, warning/log behavior, `convertPptxToPng` path-text forcing, and returned object shapes                         |
+| Snapshot VRT               | Catch visual regressions once fixtures are opted into the document path       | existing `vrt/snapshot` cases and shared real PPTX fixtures                                                                               |
+| LibreOffice VRT            | Compare generated output against external rendering references where useful   | existing `vrt/libreoffice` cases after the document path affects rendering                                                                |
+| Package verification       | Ensure the published API shape remains compatible                             | existing build, typecheck, package verification, and API import smoke tests                                                               |
 
 For early PRs, unit and adapter tests are more important than snapshot churn.
 VRT snapshots should only be updated when the public render output intentionally
@@ -200,11 +200,11 @@ changes. The first dogfood milestone should aim for no visual output changes.
 
 Split the migration into small PRs with explicit compatibility checkpoints:
 
-1. Add `@pptx-glimpse/document` package skeleton, CleanDoc source types, and
+1. Add `@pptx-glimpse/document` package skeleton, PptxSourceModel source types, and
    package boundary tests.
 2. Implement minimal `readPptx(input)` that can read presentation metadata,
    slide list, relationships, and slide size while preserving raw package parts.
-3. Add CleanDoc source coverage for shapes, text, images, theme references,
+3. Add PptxSourceModel source coverage for shapes, text, images, theme references,
    layouts, and masters needed by the existing fixtures.
 4. Add `createComputedView(source, options)` for slide size, slide order,
    relationship resolution, theme/color map resolution, background fallback,
@@ -245,7 +245,7 @@ It also does not require:
 The historical conclusion to reflect in #445 was:
 
 `pptx-glimpse` core should dogfood `@pptx-glimpse/document` by routing the public
-SVG/PNG conversion path through CleanDoc source reading, computed document view
+SVG/PNG conversion path through PptxSourceModel source reading, computed document view
 generation, and a core-owned adapter into the existing renderer model.
 
 That migration used a temporary parallel reader period. The old parser served as
@@ -256,6 +256,6 @@ default to the document path, and reusable OOXML semantics now continue to move
 out of the old parser into `@pptx-glimpse/document`.
 
 The existing renderer model remains a render-specific adapter target during the
-migration. CleanDoc is the canonical source model, computed view resolves
+migration. PptxSourceModel is the canonical source model, computed view resolves
 document semantics, and renderer/core continue to own rendering-specific
 fallbacks and output behavior.
