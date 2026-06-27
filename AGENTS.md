@@ -12,7 +12,7 @@ Input: `Buffer | Uint8Array`, Output: SVG string or PNG Buffer.
 ```bash
 npm run build          # Build with tsup (CJS + ESM + .d.ts)
 npm run test           # Run all tests with vitest
-npm run test -- packages/pptx-glimpse-renderer/src/utils/emu.test.ts  # Run a single test file
+npm run test -- packages/renderer/src/utils/emu.test.ts  # Run a single test file
 npm run test:watch     # Watch mode for tests
 npm run lint           # ESLint check
 npm run lint:fix       # ESLint auto-fix
@@ -37,13 +37,13 @@ Data flow: **PPTX binary → CleanDoc reader → Computed view → Renderer mode
 
 The legacy parser path remains available internally as an explicit parser-path oracle for parity checks and VRT, but public `convertPptxToSvg` / `convertPptxToPng` default to the CleanDoc document path.
 
-ソースは pnpm workspaces (`.` + `packages/*`) で分割されている。`packages/*` 配下に renderer / cli の skeleton と `pptx-glimpse` の実装ソースが置かれており、`.` (ルート) は引き続き npm publish 対象の `pptx-glimpse` パッケージとして workspace に含めている (Changesets に root を認識させるための明示指定)。`pptx-glimpse` パッケージは `pptx-glimpse-renderer` を workspace 依存として参照する。
+ソースは pnpm workspaces (`packages/*`) で分割されている。root は private な workspace orchestration 専用で、公開 npm package `pptx-glimpse` は `packages/core` から publish する。`pptx-glimpse` パッケージは build-time workspace dependency として `@pptx-glimpse/document` / `@pptx-glimpse/renderer` を参照し、公開 tarball には bundle された成果物を含める。
 
 `@pptx-glimpse/document` / CleanDoc / writer / editor-core / pom 連携に関わる issue に着手する前に、責務境界と依存方向の決定記録である `docs/document-boundaries.md` と、そこからリンクされる派生決定記録を必ず読むこと。`document` は `core` / `editor-core` / renderer / pom を知らない下位基盤として扱う。
 
-`packages/pptx-glimpse-document/src/` — experimental `@pptx-glimpse/document` パッケージの skeleton。CleanDoc / OOXML document foundation の下位基盤として追加されており、public conversion path の default reader / computed view として参照される。`@pptx-glimpse/document/experimental` は後続の source model / reader / writer 実装を積むための experimental entry point。
+`packages/document/src/` — experimental `@pptx-glimpse/document` パッケージ。CleanDoc / OOXML document foundation の下位基盤として追加されており、public conversion path の default reader / computed view として参照される。`@pptx-glimpse/document/experimental` は後続の source model / reader / writer 実装を積むための experimental entry point。
 
-`packages/pptx-glimpse/src/` — 公開パッケージ `pptx-glimpse` の実装（パーサー + 公開 API）
+`packages/core/src/` — 公開パッケージ `pptx-glimpse` の実装（パーサー + 公開 API）
 
 - `parser/` — Builds intermediate model from PPTX via ZIP extraction (`fflate`) and XML parsing (`fast-xml-parser`)
 - `color/` — Theme color resolution (schemeClr → colorMap → colorScheme) and color transformations (lumMod/tint/shade)
@@ -52,7 +52,7 @@ The legacy parser path remains available internally as an explicit parser-path o
 - `pptx-data-parser.ts`, `text-style-resolver.ts` — パーサー共通ヘルパー
 - `index.ts` — 公開エントリポイント
 
-`packages/pptx-glimpse-renderer/src/` — 内部 renderer パッケージ（private; 親 issue #340 決定）
+`packages/renderer/src/` — 内部 renderer パッケージ `@pptx-glimpse/renderer`（private; 親 issue #340 決定）
 
 - `renderer/` — Generates SVG strings from the intermediate model. Includes preset shape definitions in `geometry/`, plus dedicated renderers for tables, charts, and images
 - `model/` — TypeScript interfaces for the intermediate model (Slide, Shape, Fill, Text, Theme, Table, Chart, Image, Line, Effect, Presentation, etc.)
@@ -63,15 +63,15 @@ The legacy parser path remains available internally as an explicit parser-path o
 - `warning-logger.ts` — 共有警告ロガー
 - `index.ts` — pptx-glimpse が import する barrel re-export
 
-Entry point: `packages/pptx-glimpse/src/index.ts` exports `convertPptxToSvg`, `convertPptxToPng`, warning utilities (`getWarningSummary`, `getWarningEntries`), font utilities (`collectUsedFonts`, `DEFAULT_FONT_MAPPING`, `createFontMapping`, `getMappedFont`), and related types.
+Entry point: `packages/core/src/index.ts` exports `convertPptxToSvg`, `convertPptxToPng`, warning utilities (`getWarningSummary`, `getWarningEntries`), font utilities (`collectUsedFonts`, `DEFAULT_FONT_MAPPING`, `createFontMapping`, `getMappedFont`), and related types.
 
-ルートの `tsup.config.ts` が `packages/pptx-glimpse/src/index.ts` を bundle して `dist/` を生成し、`pptx-glimpse` パッケージとして publish する（renderer は `noExternal` で bundle 内に取り込む）。publish 経路の monorepo 対応 (`packages/pptx-glimpse` を直接 publish する形への移行) は #340 子4 で実施予定。
+`packages/core/tsup.config.ts` が `packages/core/src/index.ts` を bundle して `packages/core/dist/` を生成し、`pptx-glimpse` パッケージとして publish する（document / renderer は `noExternal` で bundle 内に取り込む）。root の `tsup.config.ts` は互換的な手動ビルド用で、通常の publish 経路は `packages/core` 側を使う。
 
 ## Technical Constraints
 
 - **SVG uses inline attributes only** — No CSS classes. resvg and librsvg do not correctly interpret CSS
 - **`isArray` configuration in fast-xml-parser is required** — Tags such as `sp`, `pic`, `p`, `r` must be returned as arrays even for single elements (`ARRAY_TAGS` in `xml-parser.ts`)
-- **EMU units & branded types** — PPTX internal coordinates use EMU (English Metric Units). Convert with `emuToPixels()`. A 16:9 slide is 9144000×5143500 EMU = 960×540 px. Model fields use branded types (`Emu`, `Pt`, `HundredthPt` in `packages/pptx-glimpse-renderer/src/utils/unit-types.ts`) to prevent unit confusion at compile time. Use `asEmu()`, `asPt()`, `asHundredthPt()` to create branded values from raw numbers
+- **EMU units & branded types** — PPTX internal coordinates use EMU (English Metric Units). Convert with `emuToPixels()`. A 16:9 slide is 9144000×5143500 EMU = 960×540 px. Model fields use branded types (`Emu`, `Pt`, `HundredthPt` in `packages/renderer/src/utils/unit-types.ts`) to prevent unit confusion at compile time. Use `asEmu()`, `asPt()`, `asHundredthPt()` to create branded values from raw numbers
 - **Background fallback** — Backgrounds are resolved in order: slide → slide layout → slide master
 
 ## VRT (Visual Regression Testing)
@@ -181,4 +181,4 @@ Changes that do NOT require a changeset: docs-only updates, CI config, test-only
 - Prettier: double quotes, semicolons, trailing commas, printWidth 100
 - ESLint: unused variables with `_` prefix are allowed
 - ESM (`"type": "module"`) — imports require `.js` extension
-- Tests are colocated with source files (`packages/pptx-glimpse/src/parser/slide-parser.test.ts`, etc.)
+- Tests are colocated with source files (`packages/core/src/parser/slide-parser.test.ts`, etc.)

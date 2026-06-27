@@ -8,8 +8,8 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 echo "=== Package publish verification ==="
 echo "Working directory: $WORK_DIR"
 
-# npm pack でタールボールを生成
-TARBALL=$(npm pack --pack-destination "$WORK_DIR" 2>/dev/null)
+# npm pack で公開対象 package のタールボールを生成
+TARBALL=$(cd packages/core && npm pack --pack-destination "$WORK_DIR" 2>/dev/null)
 TARBALL_PATH="$WORK_DIR/$TARBALL"
 echo "Packed: $TARBALL"
 

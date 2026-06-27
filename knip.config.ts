@@ -3,10 +3,8 @@ import type { KnipConfig } from "knip";
 const config: KnipConfig = {
   ignore: ["demo/**"],
   ignoreDependencies: [
-    // root tsup が packages/pptx-glimpse/src/index.ts を bundle した output が runtime で参照する。
-    // root 側のコードからは直接 import されないが、公開パッケージの runtime dep として必要。
+    // core bundles @pptx-glimpse/renderer, whose PNG path loads this runtime dependency.
     "@resvg/resvg-wasm",
-    "fflate",
   ],
   workspaces: {
     ".": {

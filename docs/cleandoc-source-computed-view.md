@@ -205,7 +205,7 @@ a typed-source policy plus explicit consumer-specific conversion.
 
 ## Relationship to the Current Renderer Model
 
-The existing model in `packages/pptx-glimpse-renderer/src/model/` already acts
+The existing model in `packages/renderer/src/model/` already acts
 like a render-oriented computed view:
 
 | Current renderer model                               | Computed view role                                                                | Source model counterpart                                             |

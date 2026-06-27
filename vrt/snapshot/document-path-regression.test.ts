@@ -2,8 +2,8 @@ import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
-import { convertPptxToPngViaDocumentPath } from "../../packages/pptx-glimpse/src/experimental-document-renderer.js";
-import { convertPptxToPngViaParserPath } from "../../packages/pptx-glimpse/src/parser-path-oracle.js";
+import { convertPptxToPngViaDocumentPath } from "../../packages/core/src/experimental-document-renderer.js";
+import { convertPptxToPngViaParserPath } from "../../packages/core/src/parser-path-oracle.js";
 import { compareImageBuffers } from "../compare-utils.js";
 import {
   DOCUMENT_PATH_VRT_BLOCKER_ISSUES,

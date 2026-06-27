@@ -26,7 +26,7 @@ convertPptxToSvg / convertPptxToPng
 
 The old parser path is no longer part of public conversion orchestration. Its
 remaining render entry points live in
-`packages/pptx-glimpse/src/parser-path-oracle.ts` and are intentionally scoped as
+`packages/core/src/parser-path-oracle.ts` and are intentionally scoped as
 an internal oracle for parity checks.
 
 ## Semantics moved to `document`
@@ -51,12 +51,12 @@ These remain in core or renderer by design:
 
 | Responsibility | Owner | Reason |
 | --- | --- | --- |
-| Public API options | `packages/pptx-glimpse/src/converter.ts`, `packages/pptx-glimpse/src/index.ts` | Stable API compatibility remains a core package concern |
-| Warning setup, font setup, SVG text-output mode, PNG sizing | `packages/pptx-glimpse/src/experimental-document-renderer.ts` | Renderer environment setup and runtime conversion options are core concerns |
-| CleanDoc computed view to renderer model mapping | `packages/pptx-glimpse/src/cleandoc-renderer-adapter.ts` | The renderer model is a display-oriented compatibility target, not the CleanDoc source model |
+| Public API options | `packages/core/src/converter.ts`, `packages/core/src/index.ts` | Stable API compatibility remains a core package concern |
+| Warning setup, font setup, SVG text-output mode, PNG sizing | `packages/core/src/experimental-document-renderer.ts` | Renderer environment setup and runtime conversion options are core concerns |
+| CleanDoc computed view to renderer model mapping | `packages/core/src/cleandoc-renderer-adapter.ts` | The renderer model is a display-oriented compatibility target, not the CleanDoc source model |
 | Chart XML to renderer chart model mapping | Adapter calling parser `parseChart` | Chart rendering model is still renderer-specific; move only after a chart source/computed contract exists |
 | SmartArt drawing XML fallback to renderer shape tree | Adapter calling parser `parseShapeTree` | This is a rendering fallback for resolved diagram drawing XML, not canonical document semantics yet |
-| Font discovery, font mapping, text measurement, text-to-path, SVG/PNG output | `pptx-glimpse-renderer` | Renderer-specific behavior per `document-boundaries.md` |
+| Font discovery, font mapping, text measurement, text-to-path, SVG/PNG output | `@pptx-glimpse/renderer` | Renderer-specific behavior per `document-boundaries.md` |
 
 ## Remaining legacy parser uses
 
@@ -88,13 +88,13 @@ Some duplication intentionally remains:
 
 - `pptx-data-parser.ts` still assembles slide/layout/master render models. Keep
   it until the parser oracle is no longer needed for zero-diff gates.
-- Parser unit tests under `packages/pptx-glimpse/src/parser/` still protect the
+- Parser unit tests under `packages/core/src/parser/` still protect the
   old oracle and adapter fallback helpers. Delete or narrow them only after the
   corresponding oracle role is removed.
 - `cleandoc-renderer-adapter.ts` still calls parser helpers for chart parsing
   and SmartArt fallback rendering. Split follow-up issues should define
   document-owned chart/diagram source contracts before moving this logic.
-- Comments in `packages/pptx-glimpse-document/src/computed/create-computed-view.ts`
+- Comments in `packages/document/src/computed/create-computed-view.ts`
   that mention current-parser compatibility are retained as parity signposts.
   They should be removed only when the document path intentionally owns a
   different behavior and tests are updated with that decision.

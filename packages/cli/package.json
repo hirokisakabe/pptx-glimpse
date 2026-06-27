@@ -1,0 +1,17 @@
+{
+  "name": "@pptx-glimpse/cli",
+  "version": "0.0.0",
+  "private": true,
+  "description": "CLI package skeleton; implementation tracked in issue #412.",
+  "type": "module",
+  "bin": {
+    "pptx-glimpse": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "license": "MIT"
+}

@@ -7,7 +7,7 @@ import prettier from "eslint-config-prettier";
 
 const repoRoot = dirname(fileURLToPath(import.meta.url));
 const documentExperimentalSource = fileURLToPath(
-  new URL("./packages/pptx-glimpse-document/src/experimental.ts", import.meta.url),
+  new URL("./packages/document/src/experimental.ts", import.meta.url),
 );
 
 export default tseslint.config(
@@ -54,11 +54,11 @@ export default tseslint.config(
           basePath: repoRoot,
           zones: [
             {
-              target: "./packages/pptx-glimpse-document/src",
+              target: "./packages/document/src",
               from: [
-                "./packages/pptx-glimpse/src",
-                "./packages/pptx-glimpse-renderer/src",
-                "./packages/pptx-glimpse-cli/src",
+                "./packages/core/src",
+                "./packages/renderer/src",
+                "./packages/cli/src",
                 "./demo",
                 "./scripts",
               ],
@@ -96,32 +96,16 @@ export default tseslint.config(
     },
   },
   {
-    files: ["packages/pptx-glimpse/src/**/*.ts"],
+    files: ["packages/core/src/**/*.ts"],
     ignores: [
-      "packages/pptx-glimpse/src/**/*.test.ts",
-      "packages/pptx-glimpse/src/**/*.e2e.test.ts",
+      "packages/core/src/**/*.test.ts",
+      "packages/core/src/**/*.e2e.test.ts",
     ],
     rules: {
       "import-x/no-extraneous-dependencies": [
         "error",
         {
-          packageDir: ["packages/pptx-glimpse"],
-          devDependencies: false,
-          includeInternal: true,
-        },
-      ],
-    },
-  },
-  {
-    files: [
-      "packages/pptx-glimpse/src/**/*.test.ts",
-      "packages/pptx-glimpse/src/**/*.e2e.test.ts",
-    ],
-    rules: {
-      "import-x/no-extraneous-dependencies": [
-        "error",
-        {
-          packageDir: ["packages/pptx-glimpse", "."],
+          packageDir: ["packages/core"],
           devDependencies: true,
           includeInternal: true,
         },
@@ -129,32 +113,15 @@ export default tseslint.config(
     },
   },
   {
-    files: ["packages/pptx-glimpse-document/src/**/*.ts"],
-    ignores: [
-      "packages/pptx-glimpse-document/src/**/*.test.ts",
-      "packages/pptx-glimpse-document/src/**/*.e2e.test.ts",
-    ],
-    rules: {
-      "import-x/no-extraneous-dependencies": [
-        "error",
-        {
-          packageDir: ["packages/pptx-glimpse-document"],
-          devDependencies: false,
-          includeInternal: true,
-        },
-      ],
-    },
-  },
-  {
     files: [
-      "packages/pptx-glimpse-document/src/**/*.test.ts",
-      "packages/pptx-glimpse-document/src/**/*.e2e.test.ts",
+      "packages/core/src/**/*.test.ts",
+      "packages/core/src/**/*.e2e.test.ts",
     ],
     rules: {
       "import-x/no-extraneous-dependencies": [
         "error",
         {
-          packageDir: ["packages/pptx-glimpse-document", "."],
+          packageDir: ["packages/core", "."],
           devDependencies: true,
           includeInternal: true,
         },
@@ -162,16 +129,16 @@ export default tseslint.config(
     },
   },
   {
-    files: ["packages/pptx-glimpse-renderer/src/**/*.ts"],
+    files: ["packages/document/src/**/*.ts"],
     ignores: [
-      "packages/pptx-glimpse-renderer/src/**/*.test.ts",
-      "packages/pptx-glimpse-renderer/src/**/*.e2e.test.ts",
+      "packages/document/src/**/*.test.ts",
+      "packages/document/src/**/*.e2e.test.ts",
     ],
     rules: {
       "import-x/no-extraneous-dependencies": [
         "error",
         {
-          packageDir: ["packages/pptx-glimpse-renderer"],
+          packageDir: ["packages/document"],
           devDependencies: false,
           includeInternal: true,
         },
@@ -180,14 +147,14 @@ export default tseslint.config(
   },
   {
     files: [
-      "packages/pptx-glimpse-renderer/src/**/*.test.ts",
-      "packages/pptx-glimpse-renderer/src/**/*.e2e.test.ts",
+      "packages/document/src/**/*.test.ts",
+      "packages/document/src/**/*.e2e.test.ts",
     ],
     rules: {
       "import-x/no-extraneous-dependencies": [
         "error",
         {
-          packageDir: ["packages/pptx-glimpse-renderer", "."],
+          packageDir: ["packages/document", "."],
           devDependencies: true,
           includeInternal: true,
         },
@@ -195,16 +162,16 @@ export default tseslint.config(
     },
   },
   {
-    files: ["packages/pptx-glimpse-cli/src/**/*.ts"],
+    files: ["packages/renderer/src/**/*.ts"],
     ignores: [
-      "packages/pptx-glimpse-cli/src/**/*.test.ts",
-      "packages/pptx-glimpse-cli/src/**/*.e2e.test.ts",
+      "packages/renderer/src/**/*.test.ts",
+      "packages/renderer/src/**/*.e2e.test.ts",
     ],
     rules: {
       "import-x/no-extraneous-dependencies": [
         "error",
         {
-          packageDir: ["packages/pptx-glimpse-cli"],
+          packageDir: ["packages/renderer"],
           devDependencies: false,
           includeInternal: true,
         },
@@ -213,14 +180,47 @@ export default tseslint.config(
   },
   {
     files: [
-      "packages/pptx-glimpse-cli/src/**/*.test.ts",
-      "packages/pptx-glimpse-cli/src/**/*.e2e.test.ts",
+      "packages/renderer/src/**/*.test.ts",
+      "packages/renderer/src/**/*.e2e.test.ts",
     ],
     rules: {
       "import-x/no-extraneous-dependencies": [
         "error",
         {
-          packageDir: ["packages/pptx-glimpse-cli", "."],
+          packageDir: ["packages/renderer", "."],
+          devDependencies: true,
+          includeInternal: true,
+        },
+      ],
+    },
+  },
+  {
+    files: ["packages/cli/src/**/*.ts"],
+    ignores: [
+      "packages/cli/src/**/*.test.ts",
+      "packages/cli/src/**/*.e2e.test.ts",
+    ],
+    rules: {
+      "import-x/no-extraneous-dependencies": [
+        "error",
+        {
+          packageDir: ["packages/cli"],
+          devDependencies: false,
+          includeInternal: true,
+        },
+      ],
+    },
+  },
+  {
+    files: [
+      "packages/cli/src/**/*.test.ts",
+      "packages/cli/src/**/*.e2e.test.ts",
+    ],
+    rules: {
+      "import-x/no-extraneous-dependencies": [
+        "error",
+        {
+          packageDir: ["packages/cli", "."],
           devDependencies: true,
           includeInternal: true,
         },

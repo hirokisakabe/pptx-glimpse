@@ -19,7 +19,7 @@ moving reusable OOXML reading semantics into `@pptx-glimpse/document`.
 ## Current Core Flow
 
 The current public conversion API is orchestrated by
-`packages/pptx-glimpse/src/converter.ts`:
+`packages/core/src/converter.ts`:
 
 ```text
 PPTX Buffer | Uint8Array
@@ -31,10 +31,10 @@ PPTX Buffer | Uint8Array
   -> svgToPng(svg, options) for PNG output
 ```
 
-`parsePptxData` and `parseSlideWithLayout` are currently the effective core
-reader. They unzip the package, parse XML, collect relationships/theme data, and
-produce the renderer model consumed by the current `pptx-glimpse-renderer`
-package.
+`parsePptxData` and `parseSlideWithLayout` were the effective core reader before
+the CleanDoc default path. They unzip the package, parse XML, collect
+relationships/theme data, and produce the renderer model consumed by
+`@pptx-glimpse/renderer`.
 
 The current path already contains computed-view behavior, but it is implicit and
 spread across parser and converter code:
@@ -79,8 +79,7 @@ The ownership boundary should be:
   compatibility options, warning behavior, font setup, and the
   CleanDoc-computed-view-to-renderer-model adapter.
 - `@pptx-glimpse/renderer` keeps owning SVG/PNG rendering, font measurement,
-  text-to-path behavior, visual fallbacks, and renderer-specific warnings. It is
-  currently implemented by the unscoped `pptx-glimpse-renderer` package.
+  text-to-path behavior, visual fallbacks, and renderer-specific warnings.
 
 `@pptx-glimpse/document` must not import `core`, `editor-core`, the renderer, or
 pom. Core depends on `document`; the renderer consumes the adapter output and
