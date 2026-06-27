@@ -81,7 +81,7 @@ export async function convertPptxToSvg(
   return [...result.slides];
 }
 
-export async function convertPptxToSvgViaParserPath(
+async function convertPptxToSvgViaParserPath(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
 ): Promise<SlideSvg[]> {
