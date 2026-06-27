@@ -88,6 +88,7 @@ export function collectFontFilePaths(additionalDirs?: string[], skipSystemFonts 
   for (const dir of allDirs) {
     walk(dir, result);
   }
+  result.sort((a, b) => a.localeCompare(b));
 
   cachedPaths = result;
   cachedAdditionalDirs = dirs;

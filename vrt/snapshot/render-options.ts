@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import JSZip from "jszip";
 
 import type { ConvertOptions } from "../../packages/core/src/converter.js";
+import { createFontMapping, getMappedFont } from "../../packages/renderer/src/font/font-mapping.js";
 
 type VrtRenderOptions = Pick<ConvertOptions, "fontDirs" | "skipSystemFonts">;
 
@@ -34,6 +35,7 @@ const BASE_VRT_FONT_FAMILIES = [
 ] as const;
 const GENERATED_FIXTURE_DIR = join(__dirname, "fixtures");
 const SHARED_FIXTURE_DIR = join(__dirname, "..", "..", "shared-fixtures");
+const VRT_FONT_MAPPING = createFontMapping();
 
 interface VrtFontInventory {
   codePoints: Set<number>;
@@ -169,6 +171,7 @@ async function collectVrtFontInventory(): Promise<VrtFontInventory> {
 function addVrtFontFamily(families: Set<string>, familyName: string): void {
   const trimmed = familyName.trim();
   if (!trimmed || trimmed.startsWith("+")) return;
+  if (getMappedFont(trimmed, VRT_FONT_MAPPING) !== null) return;
   families.add(trimmed);
 }
 
