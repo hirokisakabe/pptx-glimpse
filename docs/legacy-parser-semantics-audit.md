@@ -125,11 +125,11 @@ Some duplication intentionally remains:
   corresponding oracle role is removed.
 - `pptx-computed-view-renderer-adapter.ts` still calls renderer-specific fallback
   helpers for chart parsing and SmartArt fallback rendering. Chart XML conversion
-  is isolated in `renderer-chart-data-converter.ts`; move it to `document` only
-  after a source/computed chart contract covers chart data, style/color parts,
-  embedded workbook references, and compatibility expectations. Split follow-up
-  issues should define document-owned chart/diagram source contracts before
-  moving this logic.
+  is isolated in `renderer-chart-data-converter.ts`; keep the renderer `ChartData`
+  adapter outside `document` unless it is replaced by a renderer-owned contract.
+  Split follow-up issues should define document-owned chart/diagram source
+  contracts only after chart data, style/color parts, embedded workbook
+  references, and compatibility expectations are covered.
 - Comments in `packages/document/src/computed/create-computed-view.ts`
   that mention current-parser compatibility are retained as parity signposts.
   They should be removed only when the document path intentionally owns a
@@ -139,9 +139,9 @@ Suggested follow-up slices:
 
 1. Replace adapter SmartArt fallback use of `parseShapeTree` with a
    document-owned diagram drawing source model.
-2. Introduce a chart source/computed contract and move
-   `renderer-chart-data-converter.ts` out of core once `document` owns that
-   contract.
+2. Introduce a chart source/computed contract in `document`, then replace or
+   narrow `renderer-chart-data-converter.ts` from the core/renderer side without
+   moving renderer `ChartData` ownership into `document`.
 3. Retire `dual-reader-structural-comparison.test.ts` after VRT and public
    regression tests fully cover the parser oracle's remaining value.
 4. Remove `pptx-data-parser.ts` and parser render-model tests after the explicit

@@ -31,11 +31,11 @@ const CHART_TYPE_MAP: [string, ChartType][] = [
  * Input: resolved chart part XML from the computed view plus the slide color resolver.
  * Output: the current renderer ChartData model, or null when the XML is unsupported.
  *
- * This stays in core because ChartData is a renderer compatibility target. The
- * document package should keep exposing source/computed chart parts and should
- * only own this conversion after a document-level chart source/computed contract
- * exists for chart data, style/color parts, embedded workbook references, and
- * compatibility expectations.
+ * This stays in core because ChartData is a renderer compatibility target.
+ * Future document work should own chart source/computed semantics only after it
+ * covers chart data, style/color parts, embedded workbook references, and
+ * compatibility expectations. The renderer ChartData adapter must stay outside
+ * document or be replaced by another renderer-owned contract.
  */
 export function convertChartXmlToRendererChartData(
   chartXml: string,
