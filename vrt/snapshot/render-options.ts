@@ -7,11 +7,15 @@ import type { ConvertOptions } from "../../packages/core/src/converter.js";
 
 type VrtRenderOptions = Pick<ConvertOptions, "fontDirs" | "skipSystemFonts">;
 
+// Document-path parity VRT compares the parser and document renderers at zero
+// tolerance. Keep it fontless so the gate remains focused on adapter parity
+// while still avoiding local system-font scans; standard snapshot VRT uses the
+// generated fonts below for text-path visual coverage.
 export const DOCUMENT_PATH_VRT_RENDER_OPTIONS = {
   skipSystemFonts: true,
 } as const satisfies Pick<ConvertOptions, "skipSystemFonts">;
 
-const VRT_FONT_DIR = join(tmpdir(), "pptx-glimpse-vrt-fonts-v1");
+const VRT_FONT_DIR = join(tmpdir(), "pptx-glimpse-vrt-fonts-v2");
 const VRT_FONT_FAMILIES = [
   "Carlito",
   "Arimo",
@@ -21,6 +25,10 @@ const VRT_FONT_FAMILIES = [
   "Noto Sans JP",
   "Noto Serif CJK JP",
 ] as const;
+const VRT_CJK_SAMPLE_TEXT =
+  "、。いえかがきくこさしじすそたっつてでとなにのはべまみめもよらりるれを" +
+  "アイウエオカキクグケコサシステトドネフプベホマメャュョラリンー" +
+  "一下中丸事互交位作使値側像優先入全内円出前力加動半単印参収右合同向図在型基場大央字完定小常座弧形必成承折拡持指挙挟接揃描数文方日普曲書最未本楕標横次正残段混済準漢照生用画白的直矢矩確示空章素紫継緑線縦縮置義背色落行表装複要角設認語赤返通配長間青非面飾黄（）";
 
 let renderOptionsPromise: Promise<VrtRenderOptions> | null = null;
 
@@ -81,17 +89,25 @@ async function createVrtFontBuffer(familyName: string): Promise<ArrayBuffer> {
 
   const glyphs = [notdefGlyph, spaceGlyph];
   for (let codePoint = 33; codePoint <= 126; codePoint++) {
-    const path = new opentype.Path();
-    path.moveTo(70, 0);
-    path.lineTo(310, 700);
-    path.lineTo(550, 0);
-    path.close();
     glyphs.push(
       new opentype.Glyph({
         name: `uni${codePoint.toString(16).toUpperCase().padStart(4, "0")}`,
         unicode: codePoint,
         advanceWidth: 620,
-        path,
+        path: createLatinGlyphPath(),
+      }),
+    );
+  }
+
+  for (const char of VRT_CJK_SAMPLE_TEXT) {
+    const codePoint = char.codePointAt(0);
+    if (codePoint === undefined) continue;
+    glyphs.push(
+      new opentype.Glyph({
+        name: `uni${codePoint.toString(16).toUpperCase().padStart(4, "0")}`,
+        unicode: codePoint,
+        advanceWidth: 1000,
+        path: createCjkGlyphPath(),
       }),
     );
   }
@@ -106,4 +122,23 @@ async function createVrtFontBuffer(familyName: string): Promise<ArrayBuffer> {
   });
 
   return font.toArrayBuffer();
+
+  function createLatinGlyphPath(): InstanceType<typeof opentype.Path> {
+    const path = new opentype.Path();
+    path.moveTo(70, 0);
+    path.lineTo(310, 700);
+    path.lineTo(550, 0);
+    path.close();
+    return path;
+  }
+
+  function createCjkGlyphPath(): InstanceType<typeof opentype.Path> {
+    const path = new opentype.Path();
+    path.moveTo(90, 0);
+    path.lineTo(90, 760);
+    path.lineTo(910, 760);
+    path.lineTo(910, 0);
+    path.close();
+    return path;
+  }
 }
