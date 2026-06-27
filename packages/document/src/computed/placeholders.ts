@@ -1,7 +1,7 @@
 import type { SourceShape, SourceShapeNode } from "../source/index.js";
 import type { ComputedPlaceholderMatch } from "./pptx-computed-view.js";
 
-export interface PlaceholderMatchContext {
+interface PlaceholderMatchContext {
   readonly layoutShapes: readonly SourceShapeNode[];
   readonly masterShapes: readonly SourceShapeNode[];
 }

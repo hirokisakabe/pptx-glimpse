@@ -37,7 +37,7 @@ const FALLBACK_SCHEME_COLORS: Readonly<Record<string, string>> = {
   folHlink: "#954f72",
 };
 
-export interface ColorResolutionContext {
+interface ColorResolutionContext {
   readonly theme?: SourceTheme;
   readonly colorMap: Readonly<Record<string, string>>;
 }

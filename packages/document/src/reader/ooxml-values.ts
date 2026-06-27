@@ -12,10 +12,3 @@ export function parseEnumValueWithDefault<const T extends string>(
 ): T {
   return parseEnumValue(value, allowed) ?? fallback;
 }
-
-export function isEnumValue<const T extends string>(
-  value: string | undefined,
-  allowed: ReadonlySet<T>,
-): value is T {
-  return value !== undefined && allowed.has(value as T);
-}
