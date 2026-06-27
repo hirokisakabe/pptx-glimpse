@@ -5,5 +5,5 @@ export default defineConfig({
   format: ["cjs", "esm"],
   dts: true,
   clean: true,
-  noExternal: ["pptx-glimpse-renderer"],
+  noExternal: ["@pptx-glimpse/document", "pptx-glimpse-renderer"],
 });

@@ -17,13 +17,6 @@ const config: KnipConfig = {
         "bench/conversion.bench.ts",
       ],
     },
-    "packages/pptx-glimpse": {
-      ignoreDependencies: [
-        // Core currently dogfoods document through workspace source imports.
-        // Keep the manifest dependency explicit until package imports migrate.
-        "@pptx-glimpse/document",
-      ],
-    },
   },
 };
 

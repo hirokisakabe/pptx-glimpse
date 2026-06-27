@@ -1,11 +1,4 @@
-import type { SlideElement } from "pptx-glimpse-renderer";
-import { describe, expect, it } from "vitest";
-
-import type {
-  CleanDocSource,
-  SourceShape,
-  SourceTable,
-} from "../../pptx-glimpse-document/src/experimental.js";
+import type { CleanDocSource, SourceShape, SourceTable } from "@pptx-glimpse/document/experimental";
 import {
   asEmu,
   asOoxmlAngle,
@@ -15,7 +8,10 @@ import {
   asRawSidecarId,
   asRelationshipId,
   createComputedView,
-} from "../../pptx-glimpse-document/src/experimental.js";
+} from "@pptx-glimpse/document/experimental";
+import type { SlideElement } from "pptx-glimpse-renderer";
+import { describe, expect, it } from "vitest";
+
 import { adaptComputedViewToRendererModel } from "./cleandoc-renderer-adapter.js";
 
 describe("adaptComputedViewToRendererModel", () => {

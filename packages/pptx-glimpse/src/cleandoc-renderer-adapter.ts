@@ -1,4 +1,26 @@
 import type {
+  CleanDocComputedView,
+  ComputedBackground,
+  ComputedBlipEffects,
+  ComputedChartElement,
+  ComputedColor,
+  ComputedConnectorElement,
+  ComputedEffectList,
+  ComputedElement,
+  ComputedFill,
+  ComputedGroupElement,
+  ComputedImageElement,
+  ComputedOutline,
+  ComputedParagraph,
+  ComputedRunProperties,
+  ComputedShapeElement,
+  ComputedSlide,
+  ComputedSlideSize,
+  ComputedSmartArtElement,
+  ComputedTableElement,
+  ComputedTextBody,
+} from "@pptx-glimpse/document/experimental";
+import type {
   Background,
   BlipEffects,
   BodyProperties,
@@ -28,28 +50,6 @@ import type {
 } from "pptx-glimpse-renderer";
 import { asEmu, asHundredthPt, uint8ArrayToBase64 } from "pptx-glimpse-renderer";
 
-import type {
-  CleanDocComputedView,
-  ComputedBackground,
-  ComputedBlipEffects,
-  ComputedChartElement,
-  ComputedColor,
-  ComputedConnectorElement,
-  ComputedEffectList,
-  ComputedElement,
-  ComputedFill,
-  ComputedGroupElement,
-  ComputedImageElement,
-  ComputedOutline,
-  ComputedParagraph,
-  ComputedRunProperties,
-  ComputedShapeElement,
-  ComputedSlide,
-  ComputedSlideSize,
-  ComputedSmartArtElement,
-  ComputedTableElement,
-  ComputedTextBody,
-} from "../../pptx-glimpse-document/src/experimental.js";
 import { ColorResolver } from "./color/color-resolver.js";
 import { parseChart } from "./parser/chart-parser.js";
 import type { Relationship } from "./parser/relationship-parser.js";

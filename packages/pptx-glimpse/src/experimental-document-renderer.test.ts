@@ -1,9 +1,9 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+import * as documentExperimental from "@pptx-glimpse/document/experimental";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import * as documentExperimental from "../../pptx-glimpse-document/src/experimental.js";
 import * as adapterModule from "./cleandoc-renderer-adapter.js";
 import { convertPptxToPng, convertPptxToSvg } from "./converter.js";
 import {

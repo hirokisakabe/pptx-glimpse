@@ -92,9 +92,8 @@ describe("@pptx-glimpse/document package boundary", () => {
       status: "experimental",
     });
     expect(packageJson.exports?.["./experimental"]).toEqual({
-      types: "./dist/experimental.d.ts",
-      import: "./dist/experimental.js",
-      require: "./dist/experimental.cjs",
+      types: "./src/experimental.ts",
+      default: "./src/experimental.ts",
     });
   });
 
