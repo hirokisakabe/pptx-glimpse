@@ -51,10 +51,10 @@ import type {
 import { asEmu, asHundredthPt, uint8ArrayToBase64 } from "@pptx-glimpse/renderer";
 
 import { ColorResolver } from "./color/color-resolver.js";
-import { parseChart } from "./parser/chart-parser.js";
 import type { Relationship } from "./parser/relationship-parser.js";
 import { navigateOrdered, parseShapeTree } from "./parser/slide-parser.js";
 import { parseXml, parseXmlOrdered, type XmlNode } from "./parser/xml-parser.js";
+import { convertChartXmlToRendererChartData } from "./renderer-chart-data-converter.js";
 
 interface RendererAdapterResult {
   readonly slideSize?: SlideSize;
@@ -276,7 +276,7 @@ function adaptChart(
     return undefined;
   }
 
-  const chartData = parseChart(chart.chartXml, createColorResolver(slide));
+  const chartData = convertChartXmlToRendererChartData(chart.chartXml, createColorResolver(slide));
   if (chartData === null) {
     pushAdapterWarning(
       diagnostics,
