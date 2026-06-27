@@ -44,8 +44,29 @@ export function collectUsedFonts(input: Buffer | Uint8Array): UsedFonts {
 
   collectThemeFonts(fontScheme, fonts);
 
+  const visitedTemplateParts = new Set<string>();
   for (const slide of computed.slides) {
-    collectFontsFromElements(slide.elements, fonts);
+    const templateElementsByPart = new Map<string, ComputedElement[]>();
+    for (const element of slide.elements) {
+      if (element.sourceLayer === "slide") {
+        collectFontsFromElements([element], fonts, fontScheme);
+        continue;
+      }
+
+      const key = `${element.sourceLayer}:${element.sourcePartPath}`;
+      const elements = templateElementsByPart.get(key);
+      if (elements) {
+        elements.push(element);
+      } else {
+        templateElementsByPart.set(key, [element]);
+      }
+    }
+
+    for (const [key, elements] of templateElementsByPart) {
+      if (visitedTemplateParts.has(key)) continue;
+      visitedTemplateParts.add(key);
+      collectFontsFromElements(elements, fonts, fontScheme);
+    }
   }
 
   return {
@@ -77,27 +98,33 @@ function findThemeFontScheme(
 }
 
 function collectThemeFonts(fontScheme: SourceThemeFontScheme, fonts: Set<string>): void {
-  addFont(fonts, fontScheme.majorLatin);
-  addFont(fonts, fontScheme.minorLatin);
-  addFont(fonts, fontScheme.majorEastAsian);
-  addFont(fonts, fontScheme.minorEastAsian);
-  addFont(fonts, fontScheme.majorComplexScript);
-  addFont(fonts, fontScheme.minorComplexScript);
+  addFont(fonts, fontScheme.majorLatin, fontScheme);
+  addFont(fonts, fontScheme.minorLatin, fontScheme);
+  addFont(fonts, fontScheme.majorEastAsian, fontScheme);
+  addFont(fonts, fontScheme.minorEastAsian, fontScheme);
+  addFont(fonts, fontScheme.majorComplexScript, fontScheme);
+  addFont(fonts, fontScheme.minorComplexScript, fontScheme);
+  addFont(fonts, fontScheme.majorJapanese, fontScheme);
+  addFont(fonts, fontScheme.minorJapanese, fontScheme);
 }
 
-function collectFontsFromElements(elements: readonly ComputedElement[], fonts: Set<string>): void {
+function collectFontsFromElements(
+  elements: readonly ComputedElement[],
+  fonts: Set<string>,
+  fontScheme: SourceThemeFontScheme,
+): void {
   for (const el of elements) {
     switch (el.kind) {
       case "shape":
-        if (el.textBody) collectFontsFromTextBody(el.textBody, fonts);
+        if (el.textBody) collectFontsFromTextBody(el.textBody, fonts, fontScheme);
         break;
       case "group":
-        collectFontsFromElements(el.children, fonts);
+        collectFontsFromElements(el.children, fonts, fontScheme);
         break;
       case "table":
         for (const row of el.table.rows) {
           for (const cell of row.cells) {
-            if (cell.textBody) collectFontsFromTextBody(cell.textBody, fonts);
+            if (cell.textBody) collectFontsFromTextBody(cell.textBody, fonts, fontScheme);
           }
         }
         break;
@@ -105,17 +132,48 @@ function collectFontsFromElements(elements: readonly ComputedElement[], fonts: S
   }
 }
 
-function collectFontsFromTextBody(textBody: ComputedTextBody, fonts: Set<string>): void {
+function collectFontsFromTextBody(
+  textBody: ComputedTextBody,
+  fonts: Set<string>,
+  fontScheme: SourceThemeFontScheme,
+): void {
   for (const para of textBody.paragraphs) {
-    addFont(fonts, para.properties?.bulletFont);
+    addFont(fonts, para.properties?.bulletFont, fontScheme);
     for (const run of para.runs) {
-      addFont(fonts, run.properties?.typeface);
-      addFont(fonts, run.properties?.typefaceEa);
-      addFont(fonts, run.properties?.typefaceCs);
+      addFont(fonts, run.properties?.typeface, fontScheme);
+      addFont(fonts, run.properties?.typefaceEa, fontScheme);
+      addFont(fonts, run.properties?.typefaceCs, fontScheme);
     }
   }
 }
 
-function addFont(fonts: Set<string>, font: string | undefined): void {
-  if (font) fonts.add(font);
+function addFont(
+  fonts: Set<string>,
+  font: string | undefined,
+  fontScheme: SourceThemeFontScheme,
+): void {
+  const resolved = resolveThemeFontAlias(font, fontScheme);
+  if (resolved) fonts.add(resolved);
+}
+
+function resolveThemeFontAlias(
+  font: string | undefined,
+  fontScheme: SourceThemeFontScheme,
+): string | undefined {
+  switch (font) {
+    case "+mj-lt":
+      return fontScheme.majorLatin;
+    case "+mn-lt":
+      return fontScheme.minorLatin;
+    case "+mj-ea":
+      return fontScheme.majorEastAsian ?? fontScheme.majorJapanese;
+    case "+mn-ea":
+      return fontScheme.minorEastAsian ?? fontScheme.minorJapanese;
+    case "+mj-cs":
+      return fontScheme.majorComplexScript;
+    case "+mn-cs":
+      return fontScheme.minorComplexScript;
+    default:
+      return font?.startsWith("+mj-") || font?.startsWith("+mn-") ? undefined : font;
+  }
 }

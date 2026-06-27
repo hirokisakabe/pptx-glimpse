@@ -6,7 +6,10 @@
 This note records the first shrink pass after public SVG/PNG conversion moved to
 the CleanDoc document path. It complements
 [core-document-dogfood-migration.md](./core-document-dogfood-migration.md) and
-[document-boundaries.md](./document-boundaries.md).
+[document-boundaries.md](./document-boundaries.md). For #485, this note
+supersedes the earlier "current state" and parallel-reader descriptions in the
+dogfood migration note where those descriptions still mention public conversion
+flowing through the old parser.
 
 ## Current owner split
 
@@ -38,7 +41,8 @@ or computed view code:
 | Background fallback | `createComputedView` | Public conversion uses computed `background` instead of parser-side fallback |
 | Theme color and color map resolution | source theme data + computed color resolution | Public conversion uses computed colors through the adapter |
 | Placeholder filtering and effective element ordering | `createComputedView` | Core converter no longer owns parser-path `mergeElements` |
-| Text style and theme font resolution for rendering/inspection | `createComputedView` | `collectUsedFonts` now reads CleanDoc/computed text instead of parser slides |
+| Text style cascade for rendering/inspection | `createComputedView` | `collectUsedFonts` now reads CleanDoc/computed text instead of parser slides |
+| Theme font source data for rendering/inspection | source theme data + core runtime helpers | `collectUsedFonts` and rendering setup no longer depend on parser slide assembly |
 | Table/chart/image relationship resolution for rendering | `createComputedView` + adapter | Parser path remains only as comparison oracle |
 
 ## Responsibilities left outside `document`
@@ -47,7 +51,8 @@ These remain in core or renderer by design:
 
 | Responsibility | Owner | Reason |
 | --- | --- | --- |
-| Public API options, warning setup, font setup, SVG text-output mode, PNG sizing | `packages/pptx-glimpse/src/experimental-document-renderer.ts` | API compatibility and renderer environment setup are core concerns |
+| Public API options | `packages/pptx-glimpse/src/converter.ts`, `packages/pptx-glimpse/src/index.ts` | Stable API compatibility remains a core package concern |
+| Warning setup, font setup, SVG text-output mode, PNG sizing | `packages/pptx-glimpse/src/experimental-document-renderer.ts` | Renderer environment setup and runtime conversion options are core concerns |
 | CleanDoc computed view to renderer model mapping | `packages/pptx-glimpse/src/cleandoc-renderer-adapter.ts` | The renderer model is a display-oriented compatibility target, not the CleanDoc source model |
 | Chart XML to renderer chart model mapping | Adapter calling parser `parseChart` | Chart rendering model is still renderer-specific; move only after a chart source/computed contract exists |
 | SmartArt drawing XML fallback to renderer shape tree | Adapter calling parser `parseShapeTree` | This is a rendering fallback for resolved diagram drawing XML, not canonical document semantics yet |

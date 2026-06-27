@@ -171,19 +171,60 @@ const theme1 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
   </a:themeElements>
 </a:theme>`;
 
-async function createTestPptx(): Promise<Buffer> {
+const slideWithThemeAliases = slide1Xml
+  .replace(
+    `<a:p>
+            <a:r>
+              <a:rPr lang="en-US">
+                <a:latin typeface="Arial"/>
+                <a:ea typeface="MS PGothic"/>
+                <a:cs typeface="Arial"/>
+              </a:rPr>`,
+    `<a:p>
+            <a:pPr><a:buFont typeface="+mj-lt"/></a:pPr>
+            <a:r>
+              <a:rPr lang="en-US">
+                <a:latin typeface="+mn-lt"/>
+                <a:ea typeface="+mn-ea"/>
+                <a:cs typeface="+mn-cs"/>
+              </a:rPr>`,
+  )
+  .replace(
+    `<a:rPr lang="ja-JP">
+                <a:latin typeface="Times New Roman"/>
+                <a:ea typeface="Yu Gothic"/>
+              </a:rPr>`,
+    `<a:rPr lang="ja-JP">
+                <a:latin typeface="+mj-lt"/>
+                <a:ea typeface="+mj-ea"/>
+                <a:cs typeface="+mj-cs"/>
+              </a:rPr>`,
+  );
+
+const themeWithoutRegionalFonts = theme1
+  .replaceAll('\n        <a:ea typeface="MS PGothic"/>', "")
+  .replace('\n        <a:cs typeface="Times New Roman"/>', "")
+  .replace('\n        <a:cs typeface="Arial"/>', "");
+
+async function createTestPptx({
+  slideXml = slide1Xml,
+  themeXml = theme1,
+}: {
+  slideXml?: string;
+  themeXml?: string;
+} = {}): Promise<Buffer> {
   const zip = new JSZip();
   zip.file("[Content_Types].xml", contentTypes);
   zip.file("_rels/.rels", rootRels);
   zip.file("ppt/presentation.xml", presentationXml);
   zip.file("ppt/_rels/presentation.xml.rels", presentationRels);
-  zip.file("ppt/slides/slide1.xml", slide1Xml);
+  zip.file("ppt/slides/slide1.xml", slideXml);
   zip.file("ppt/slides/_rels/slide1.xml.rels", slide1Rels);
   zip.file("ppt/slideMasters/slideMaster1.xml", slideMaster1);
   zip.file("ppt/slideMasters/_rels/slideMaster1.xml.rels", slideMaster1Rels);
   zip.file("ppt/slideLayouts/slideLayout1.xml", slideLayout1);
   zip.file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", slideLayout1Rels);
-  zip.file("ppt/theme/theme1.xml", theme1);
+  zip.file("ppt/theme/theme1.xml", themeXml);
   return zip.generateAsync({ type: "nodebuffer" });
 }
 
@@ -220,6 +261,42 @@ describe("collectUsedFonts", () => {
 
     expect(result.fonts).toContain("Calibri Light");
     expect(result.fonts).toContain("Calibri");
+  });
+
+  it("テーマフォント alias を解決して収集する", async () => {
+    const pptx = await createTestPptx({ slideXml: slideWithThemeAliases });
+    const result = collectUsedFonts(pptx);
+
+    expect(result.fonts).toContain("Calibri Light");
+    expect(result.fonts).toContain("Calibri");
+    expect(result.fonts).toContain("MS PGothic");
+    expect(result.fonts).toContain("Times New Roman");
+    expect(result.fonts).toContain("Arial");
+    expect(result.fonts).not.toContain("+mj-lt");
+    expect(result.fonts).not.toContain("+mn-lt");
+    expect(result.fonts).not.toContain("+mj-ea");
+    expect(result.fonts).not.toContain("+mn-ea");
+    expect(result.fonts).not.toContain("+mj-cs");
+    expect(result.fonts).not.toContain("+mn-cs");
+  });
+
+  it("解決できない theme regional alias は fonts 一覧へ漏らさない", async () => {
+    const pptx = await createTestPptx({
+      slideXml: slideWithThemeAliases,
+      themeXml: themeWithoutRegionalFonts,
+    });
+    const result = collectUsedFonts(pptx);
+
+    expect(result.theme.majorFontEa).toBeNull();
+    expect(result.theme.minorFontEa).toBeNull();
+    expect(result.theme.majorFontCs).toBeNull();
+    expect(result.theme.minorFontCs).toBeNull();
+    expect(result.fonts).toContain("Calibri Light");
+    expect(result.fonts).toContain("Calibri");
+    expect(result.fonts).not.toContain("+mj-ea");
+    expect(result.fonts).not.toContain("+mn-ea");
+    expect(result.fonts).not.toContain("+mj-cs");
+    expect(result.fonts).not.toContain("+mn-cs");
   });
 
   it("フォント名は重複なしでソート済み", () => {

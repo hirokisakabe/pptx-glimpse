@@ -107,6 +107,13 @@ export async function convertPptxToPngViaParserPath(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
 ): Promise<SlideImage[]> {
+  return runParserPathExclusive(() => convertPptxToPngViaParserPathUnsafe(input, options));
+}
+
+async function convertPptxToPngViaParserPathUnsafe(
+  input: Buffer | Uint8Array,
+  options?: ConvertOptions,
+): Promise<SlideImage[]> {
   const svgResults = await convertPptxToSvgViaParserPath(input, { ...options, textOutput: "path" });
   const width = options?.width ?? DEFAULT_OUTPUT_WIDTH;
   const height = options?.height;
@@ -124,6 +131,23 @@ export async function convertPptxToPngViaParserPath(
   }
 
   return results;
+}
+
+let parserPathQueue: Promise<void> = Promise.resolve();
+
+async function runParserPathExclusive<T>(fn: () => Promise<T>): Promise<T> {
+  const previous = parserPathQueue;
+  let release!: () => void;
+  parserPathQueue = new Promise((resolve) => {
+    release = resolve;
+  });
+
+  await previous;
+  try {
+    return await fn();
+  } finally {
+    release();
+  }
 }
 
 export function buildEffectiveSlideElements(parsed: ParsedSlide): SlideElement[] {
@@ -144,7 +168,7 @@ let cachedFontBuffersKey: string | null = null;
 const MAX_TOTAL_FONT_BUFFER_BYTES = 100 * 1024 * 1024;
 
 function loadFontBuffers(fontDirs?: string[], skipSystemFonts?: boolean): Uint8Array[] {
-  const key = `${(fontDirs ?? []).join("\0")}\n${skipSystemFonts ?? false}`;
+  const key = `${[...(fontDirs ?? [])].sort().join("\0")}\n${skipSystemFonts ?? false}`;
   if (cachedFontBuffers !== null && cachedFontBuffersKey === key) {
     return cachedFontBuffers;
   }
