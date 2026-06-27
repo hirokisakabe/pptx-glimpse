@@ -55,6 +55,7 @@ import type { Relationship } from "./parser/relationship-parser.js";
 import { navigateOrdered, parseShapeTree } from "./parser/slide-parser.js";
 import { parseXml, parseXmlOrdered, type XmlNode } from "./parser/xml-parser.js";
 import { convertChartXmlToRendererChartData } from "./renderer-chart-data-converter.js";
+import { unsafeAdapterBoundaryAssertion, unsafeBrandAssertion } from "./unsafe-type-assertion.js";
 
 interface RendererAdapterResult {
   readonly slideSize?: SlideSize;
@@ -312,8 +313,8 @@ function adaptSmartArt(
   }
 
   const parsed = parseXml(smartArt.drawingXml);
-  const drawing = parsed.drawing as XmlNode | undefined;
-  const spTree = drawing?.spTree as XmlNode | undefined;
+  const drawing = unsafeAdapterBoundaryAssertion<XmlNode | undefined>(parsed.drawing);
+  const spTree = unsafeAdapterBoundaryAssertion<XmlNode | undefined>(drawing?.spTree);
   if (spTree === undefined) {
     pushAdapterWarning(
       diagnostics,
@@ -379,9 +380,11 @@ function adaptSmartArt(
 }
 
 function adaptSmartArtChildTransform(spTree: XmlNode, groupTransform: Transform): Transform {
-  const xfrm = (spTree.grpSpPr as XmlNode | undefined)?.xfrm as XmlNode | undefined;
-  const chOff = xfrm?.chOff as XmlNode | undefined;
-  const chExt = xfrm?.chExt as XmlNode | undefined;
+  const xfrm = unsafeAdapterBoundaryAssertion<XmlNode | undefined>(
+    unsafeAdapterBoundaryAssertion<XmlNode | undefined>(spTree.grpSpPr)?.xfrm,
+  );
+  const chOff = unsafeAdapterBoundaryAssertion<XmlNode | undefined>(xfrm?.chOff);
+  const chExt = unsafeAdapterBoundaryAssertion<XmlNode | undefined>(xfrm?.chExt);
 
   return {
     offsetX: asEmu(Number(chOff?.["@_x"] ?? 0)),
@@ -844,7 +847,7 @@ function toRendererEmu(value: number): ReturnType<typeof asEmu> {
 }
 
 function toRendererPt(value: number): NonNullable<RunProperties["fontSize"]> {
-  return Number(value) as NonNullable<RunProperties["fontSize"]>;
+  return unsafeBrandAssertion<NonNullable<RunProperties["fontSize"]>>(Number(value));
 }
 
 function normalizeImageMimeType(contentType: string): string {

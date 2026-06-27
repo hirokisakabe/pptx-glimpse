@@ -3,6 +3,7 @@ import type { DefaultTextStyle } from "@pptx-glimpse/renderer";
 import { asEmu } from "@pptx-glimpse/renderer";
 import { debug } from "@pptx-glimpse/renderer";
 
+import { unsafeXmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import { parseListStyle } from "./text-style-parser.js";
 import { parseXml, type XmlNode } from "./xml-parser.js";
 
@@ -19,7 +20,7 @@ const DEFAULT_SLIDE_HEIGHT = asEmu(5143500);
 
 export function parsePresentation(xml: string): PresentationInfo {
   const parsed = parseXml(xml);
-  const pres = parsed.presentation as XmlNode | undefined;
+  const pres = unsafeXmlBoundaryAssertion<XmlNode | undefined>(parsed.presentation);
 
   if (!pres) {
     debug("presentation.missing", `missing root element "presentation" in XML`);
@@ -29,7 +30,7 @@ export function parsePresentation(xml: string): PresentationInfo {
     };
   }
 
-  const sldSz = pres.sldSz as XmlNode | undefined;
+  const sldSz = unsafeXmlBoundaryAssertion<XmlNode | undefined>(pres.sldSz);
   let slideSize: SlideSize;
   if (!sldSz || sldSz["@_cx"] === undefined || sldSz["@_cy"] === undefined) {
     debug(
@@ -44,10 +45,14 @@ export function parsePresentation(xml: string): PresentationInfo {
     };
   }
 
-  const sldIdLst = pres.sldIdLst as XmlNode | undefined;
-  const sldIdArr = (sldIdLst?.sldId as XmlNode[] | undefined) ?? [];
+  const sldIdLst = unsafeXmlBoundaryAssertion<XmlNode | undefined>(pres.sldIdLst);
+  const sldIdArr = unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(sldIdLst?.sldId) ?? [];
   const slideRIds: string[] = sldIdArr
-    .map((s) => (s["@_r:id"] as string | undefined) ?? (s["@_id"] as string | undefined))
+    .map(
+      (s) =>
+        unsafeXmlBoundaryAssertion<string | undefined>(s["@_r:id"]) ??
+        unsafeXmlBoundaryAssertion<string | undefined>(s["@_id"]),
+    )
     .filter((id): id is string => {
       if (id === undefined) {
         debug("presentation.slideRId", "undefined slide relationship ID found, skipping");
@@ -56,9 +61,15 @@ export function parsePresentation(xml: string): PresentationInfo {
       return true;
     });
 
-  const defaultTextStyle = parseListStyle(pres.defaultTextStyle as XmlNode);
-  const embeddedFonts = parseEmbeddedFontList(pres.embeddedFontLst as XmlNode | undefined);
-  const protection = parseProtection(pres.modifyVerifier as XmlNode | undefined);
+  const defaultTextStyle = parseListStyle(
+    unsafeXmlBoundaryAssertion<XmlNode>(pres.defaultTextStyle),
+  );
+  const embeddedFonts = parseEmbeddedFontList(
+    unsafeXmlBoundaryAssertion<XmlNode | undefined>(pres.embeddedFontLst),
+  );
+  const protection = parseProtection(
+    unsafeXmlBoundaryAssertion<XmlNode | undefined>(pres.modifyVerifier),
+  );
 
   return {
     slideSize,
@@ -73,16 +84,19 @@ function parseEmbeddedFontList(node: XmlNode | undefined): EmbeddedFont[] | unde
   if (!node) return undefined;
   const fonts = node.embeddedFont;
   if (!fonts) return undefined;
-  const fontArr = (Array.isArray(fonts) ? fonts : [fonts]) as XmlNode[];
+  const fontArr = unsafeXmlBoundaryAssertion<XmlNode[]>(Array.isArray(fonts) ? fonts : [fonts]);
   const result: EmbeddedFont[] = [];
   for (const f of fontArr) {
     const fontRaw = f.font;
-    const fontNode = (Array.isArray(fontRaw) ? fontRaw[0] : fontRaw) as XmlNode | undefined;
+    const fontNode = unsafeXmlBoundaryAssertion<XmlNode | undefined>(
+      Array.isArray(fontRaw) ? fontRaw[0] : fontRaw,
+    );
     if (!fontNode) continue;
     const font: EmbeddedFont = {
-      typeface: (fontNode["@_typeface"] as string | undefined) ?? "",
+      typeface: unsafeXmlBoundaryAssertion<string | undefined>(fontNode["@_typeface"]) ?? "",
     };
-    if (fontNode["@_panose"]) font.panose = fontNode["@_panose"] as string;
+    if (fontNode["@_panose"])
+      font.panose = unsafeXmlBoundaryAssertion<string>(fontNode["@_panose"]);
     if (fontNode["@_pitchFamily"] !== undefined)
       font.pitchFamily = Number(fontNode["@_pitchFamily"]);
     if (fontNode["@_charset"] !== undefined) font.charset = Number(fontNode["@_charset"]);
@@ -94,9 +108,12 @@ function parseEmbeddedFontList(node: XmlNode | undefined): EmbeddedFont[] | unde
 function parseProtection(node: XmlNode | undefined): Protection | undefined {
   if (!node) return undefined;
   const verifier: NonNullable<Protection["modifyVerifier"]> = {};
-  if (node["@_algorithmName"]) verifier.algorithmName = node["@_algorithmName"] as string;
-  if (node["@_hashValue"]) verifier.hashValue = node["@_hashValue"] as string;
-  if (node["@_saltValue"]) verifier.saltValue = node["@_saltValue"] as string;
+  if (node["@_algorithmName"])
+    verifier.algorithmName = unsafeXmlBoundaryAssertion<string>(node["@_algorithmName"]);
+  if (node["@_hashValue"])
+    verifier.hashValue = unsafeXmlBoundaryAssertion<string>(node["@_hashValue"]);
+  if (node["@_saltValue"])
+    verifier.saltValue = unsafeXmlBoundaryAssertion<string>(node["@_saltValue"]);
   if (node["@_spinCount"] !== undefined) verifier.spinCount = Number(node["@_spinCount"]);
   return { modifyVerifier: verifier };
 }

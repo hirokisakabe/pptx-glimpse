@@ -5,6 +5,7 @@ import type { ColorScheme, FontScheme, FormatScheme, Theme } from "@pptx-glimpse
 import { debug } from "@pptx-glimpse/renderer";
 
 import { ColorResolver } from "../color/color-resolver.js";
+import { unsafeXmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import { parseEffectList } from "./effect-parser.js";
 import { parseFillFromNode, parseOutline } from "./fill-parser.js";
 import { parseXml, parseXmlOrdered, type XmlNode, type XmlOrderedNode } from "./xml-parser.js";
@@ -29,7 +30,9 @@ export function parseTheme(xml: string): Theme {
     };
   }
 
-  const themeElements = (parsed.theme as XmlNode).themeElements as XmlNode | undefined;
+  const themeElements = unsafeXmlBoundaryAssertion<XmlNode | undefined>(
+    unsafeXmlBoundaryAssertion<XmlNode>(parsed.theme).themeElements,
+  );
   if (!themeElements) {
     debug("theme.themeElements", "themeElements not found, using defaults");
     return {
@@ -54,11 +57,13 @@ export function parseTheme(xml: string): Theme {
     debug("theme.fontScheme", "fontScheme not found, using defaults");
   }
 
-  const colorScheme = parseColorScheme(themeElements.clrScheme as XmlNode);
-  const fontScheme = parseFontScheme(themeElements.fontScheme as XmlNode);
+  const colorScheme = parseColorScheme(
+    unsafeXmlBoundaryAssertion<XmlNode>(themeElements.clrScheme),
+  );
+  const fontScheme = parseFontScheme(unsafeXmlBoundaryAssertion<XmlNode>(themeElements.fontScheme));
 
   const fmtScheme = parseFmtScheme(
-    themeElements.fmtScheme as XmlNode | undefined,
+    unsafeXmlBoundaryAssertion<XmlNode | undefined>(themeElements.fmtScheme),
     colorScheme,
     xml,
   );
@@ -70,31 +75,31 @@ function parseColorScheme(clrScheme: XmlNode): ColorScheme {
   if (!clrScheme) return defaultColorScheme();
 
   return {
-    dk1: extractColor(clrScheme.dk1 as XmlNode),
-    lt1: extractColor(clrScheme.lt1 as XmlNode),
-    dk2: extractColor(clrScheme.dk2 as XmlNode),
-    lt2: extractColor(clrScheme.lt2 as XmlNode),
-    accent1: extractColor(clrScheme.accent1 as XmlNode),
-    accent2: extractColor(clrScheme.accent2 as XmlNode),
-    accent3: extractColor(clrScheme.accent3 as XmlNode),
-    accent4: extractColor(clrScheme.accent4 as XmlNode),
-    accent5: extractColor(clrScheme.accent5 as XmlNode),
-    accent6: extractColor(clrScheme.accent6 as XmlNode),
-    hlink: extractColor(clrScheme.hlink as XmlNode),
-    folHlink: extractColor(clrScheme.folHlink as XmlNode),
+    dk1: extractColor(unsafeXmlBoundaryAssertion<XmlNode>(clrScheme.dk1)),
+    lt1: extractColor(unsafeXmlBoundaryAssertion<XmlNode>(clrScheme.lt1)),
+    dk2: extractColor(unsafeXmlBoundaryAssertion<XmlNode>(clrScheme.dk2)),
+    lt2: extractColor(unsafeXmlBoundaryAssertion<XmlNode>(clrScheme.lt2)),
+    accent1: extractColor(unsafeXmlBoundaryAssertion<XmlNode>(clrScheme.accent1)),
+    accent2: extractColor(unsafeXmlBoundaryAssertion<XmlNode>(clrScheme.accent2)),
+    accent3: extractColor(unsafeXmlBoundaryAssertion<XmlNode>(clrScheme.accent3)),
+    accent4: extractColor(unsafeXmlBoundaryAssertion<XmlNode>(clrScheme.accent4)),
+    accent5: extractColor(unsafeXmlBoundaryAssertion<XmlNode>(clrScheme.accent5)),
+    accent6: extractColor(unsafeXmlBoundaryAssertion<XmlNode>(clrScheme.accent6)),
+    hlink: extractColor(unsafeXmlBoundaryAssertion<XmlNode>(clrScheme.hlink)),
+    folHlink: extractColor(unsafeXmlBoundaryAssertion<XmlNode>(clrScheme.folHlink)),
   };
 }
 
 function extractColor(colorNode: XmlNode): string {
   if (!colorNode) return "#000000";
 
-  const srgbClr = colorNode.srgbClr as XmlNode | undefined;
+  const srgbClr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(colorNode.srgbClr);
   if (srgbClr) {
-    return `#${srgbClr["@_val"] as string}`;
+    return `#${unsafeXmlBoundaryAssertion<string>(srgbClr["@_val"])}`;
   }
-  const sysClr = colorNode.sysClr as XmlNode | undefined;
+  const sysClr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(colorNode.sysClr);
   if (sysClr) {
-    return `#${(sysClr["@_lastClr"] as string | undefined) ?? "000000"}`;
+    return `#${unsafeXmlBoundaryAssertion<string | undefined>(sysClr["@_lastClr"]) ?? "000000"}`;
   }
   return "#000000";
 }
@@ -112,20 +117,26 @@ function parseFontScheme(fontScheme: XmlNode): FontScheme {
       minorFontJpan: null,
     };
 
-  const majorFontNode = fontScheme.majorFont as XmlNode | undefined;
-  const minorFontNode = fontScheme.minorFont as XmlNode | undefined;
+  const majorFontNode = unsafeXmlBoundaryAssertion<XmlNode | undefined>(fontScheme.majorFont);
+  const minorFontNode = unsafeXmlBoundaryAssertion<XmlNode | undefined>(fontScheme.minorFont);
   const majorFont =
-    ((majorFontNode?.latin as XmlNode | undefined)?.["@_typeface"] as string | undefined) ??
-    "Calibri";
+    unsafeXmlBoundaryAssertion<string | undefined>(
+      unsafeXmlBoundaryAssertion<XmlNode | undefined>(majorFontNode?.latin)?.["@_typeface"],
+    ) ?? "Calibri";
   const minorFont =
-    ((minorFontNode?.latin as XmlNode | undefined)?.["@_typeface"] as string | undefined) ??
-    "Calibri";
+    unsafeXmlBoundaryAssertion<string | undefined>(
+      unsafeXmlBoundaryAssertion<XmlNode | undefined>(minorFontNode?.latin)?.["@_typeface"],
+    ) ?? "Calibri";
   const majorFontEa = resolveEaFont(majorFontNode);
   const minorFontEa = resolveEaFont(minorFontNode);
   const majorFontCs =
-    ((majorFontNode?.cs as XmlNode | undefined)?.["@_typeface"] as string | undefined) ?? null;
+    unsafeXmlBoundaryAssertion<string | undefined>(
+      unsafeXmlBoundaryAssertion<XmlNode | undefined>(majorFontNode?.cs)?.["@_typeface"],
+    ) ?? null;
   const minorFontCs =
-    ((minorFontNode?.cs as XmlNode | undefined)?.["@_typeface"] as string | undefined) ?? null;
+    unsafeXmlBoundaryAssertion<string | undefined>(
+      unsafeXmlBoundaryAssertion<XmlNode | undefined>(minorFontNode?.cs)?.["@_typeface"],
+    ) ?? null;
   const majorFontJpan = findScriptFont(majorFontNode, "Jpan");
   const minorFontJpan = findScriptFont(minorFontNode, "Jpan");
 
@@ -145,7 +156,9 @@ function parseFontScheme(fontScheme: XmlNode): FontScheme {
  * ea タグの typeface を取得し、空文字の場合は script="Jpan" のフォントにフォールバックする。
  */
 function resolveEaFont(fontNode: XmlNode | undefined): string | null {
-  const eaTypeface = (fontNode?.ea as XmlNode | undefined)?.["@_typeface"] as string | undefined;
+  const eaTypeface = unsafeXmlBoundaryAssertion<string | undefined>(
+    unsafeXmlBoundaryAssertion<XmlNode | undefined>(fontNode?.ea)?.["@_typeface"],
+  );
   if (eaTypeface) return eaTypeface;
 
   return findScriptFont(fontNode, "Jpan");
@@ -155,11 +168,11 @@ function resolveEaFont(fontNode: XmlNode | undefined): string | null {
  * <a:font script="..." typeface="..."> からスクリプトベースのフォント名を取得する。
  */
 function findScriptFont(fontNode: XmlNode | undefined, script: string): string | null {
-  const fontItems = fontNode?.font as XmlNode[] | undefined;
+  const fontItems = unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(fontNode?.font);
   if (!fontItems) return null;
   for (const f of fontItems) {
     if (f["@_script"] === script && f["@_typeface"]) {
-      return f["@_typeface"] as string;
+      return unsafeXmlBoundaryAssertion<string>(f["@_typeface"]);
     }
   }
   return null;
@@ -216,21 +229,21 @@ function parseFmtScheme(
   const fillStyles = parseFillStyleListOrdered(
     fmtSchemeOrdered,
     "fillStyleLst",
-    fmtSchemeNode.fillStyleLst as XmlNode | undefined,
+    unsafeXmlBoundaryAssertion<XmlNode | undefined>(fmtSchemeNode.fillStyleLst),
     colorResolver,
   );
   const bgFillStyles = parseFillStyleListOrdered(
     fmtSchemeOrdered,
     "bgFillStyleLst",
-    fmtSchemeNode.bgFillStyleLst as XmlNode | undefined,
+    unsafeXmlBoundaryAssertion<XmlNode | undefined>(fmtSchemeNode.bgFillStyleLst),
     colorResolver,
   );
   const lnStyles = parseLineStyleList(
-    fmtSchemeNode.lnStyleLst as XmlNode | undefined,
+    unsafeXmlBoundaryAssertion<XmlNode | undefined>(fmtSchemeNode.lnStyleLst),
     colorResolver,
   );
   const effectStyles = parseEffectStyleList(
-    fmtSchemeNode.effectStyleLst as XmlNode | undefined,
+    unsafeXmlBoundaryAssertion<XmlNode | undefined>(fmtSchemeNode.effectStyleLst),
     colorResolver,
   );
 
@@ -251,7 +264,7 @@ function navigateThemeOrdered(ordered: XmlOrderedNode[], path: string[]): XmlOrd
   for (const key of path) {
     const entry = current.find((item: XmlOrderedNode) => key in item);
     if (!entry) return null;
-    current = entry[key] as XmlOrderedNode[];
+    current = unsafeXmlBoundaryAssertion<XmlOrderedNode[]>(entry[key]);
     if (!Array.isArray(current)) return null;
   }
   return current;
@@ -267,7 +280,7 @@ function parseFillStyleListOrdered(
 
   const listOrdered = fmtSchemeOrdered.find((c: XmlOrderedNode) => listTag in c);
   if (!listOrdered) return [];
-  const children = listOrdered[listTag] as XmlOrderedNode[] | undefined;
+  const children = unsafeXmlBoundaryAssertion<XmlOrderedNode[] | undefined>(listOrdered[listTag]);
   if (!Array.isArray(children)) return [];
 
   const fills: Fill[] = [];
@@ -283,7 +296,7 @@ function parseFillStyleListOrdered(
     // Wrap the fill in a container node for parseFillFromNode
     const rawItems = listNode[tag];
     const items = Array.isArray(rawItems) ? rawItems : rawItems ? [rawItems] : [];
-    const fillData = items[idx] as XmlNode | undefined;
+    const fillData = unsafeXmlBoundaryAssertion<XmlNode | undefined>(items[idx]);
     if (!fillData) continue;
 
     const wrapper: XmlNode = { [tag]: fillData };
@@ -303,7 +316,7 @@ function parseLineStyleList(
   const lnArr = Array.isArray(lnItems) ? lnItems : lnItems ? [lnItems] : [];
   const outlines: Outline[] = [];
   for (const ln of lnArr) {
-    const outline = parseOutline(ln as XmlNode, colorResolver);
+    const outline = parseOutline(unsafeXmlBoundaryAssertion<XmlNode>(ln), colorResolver);
     if (outline) outlines.push(outline);
   }
   return outlines;
@@ -314,6 +327,9 @@ function parseEffectStyleList(
   colorResolver: ColorResolver,
 ): (EffectList | null)[] {
   if (!effectStyleLstNode) return [];
-  const items = (effectStyleLstNode.effectStyle as XmlNode[] | undefined) ?? [];
-  return items.map((es) => parseEffectList(es.effectLst as XmlNode, colorResolver));
+  const items =
+    unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(effectStyleLstNode.effectStyle) ?? [];
+  return items.map((es) =>
+    parseEffectList(unsafeXmlBoundaryAssertion<XmlNode>(es.effectLst), colorResolver),
+  );
 }

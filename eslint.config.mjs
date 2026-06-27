@@ -77,12 +77,11 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-call": "error",
       "@typescript-eslint/no-unsafe-member-access": "error",
       "@typescript-eslint/no-unsafe-return": "error",
-      // Type assertions are allowed at explicit boundaries (XML parsing,
-      // branded constructors, and test fixtures), but unnecessary assertions
-      // must fail CI and unsafe narrowing stays visible while the boundary
-      // helpers are consolidated.
+      // Type assertions are allowed at explicit boundaries only. Unsafe
+      // narrowing must stay inside boundary helpers or a reasoned local
+      // eslint-disable-next-line directive.
       "@typescript-eslint/no-unnecessary-type-assertion": "error",
-      "@typescript-eslint/no-unsafe-type-assertion": "warn",
+      "@typescript-eslint/no-unsafe-type-assertion": "error",
       "@typescript-eslint/consistent-type-assertions": [
         "error",
         {
@@ -97,6 +96,28 @@ export default tseslint.config(
     files: ["packages/*/src/**/*.ts"],
     rules: {
       "import-x/no-relative-packages": "error",
+    },
+  },
+  {
+    files: ["packages/*/src/**/*.ts"],
+    ignores: [
+      "packages/*/src/**/*.test.ts",
+      "packages/*/src/**/*.e2e.test.ts",
+    ],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/unsafe-type-assertion.js"],
+              importNames: ["unsafeFixtureAssertion"],
+              message:
+                "unsafeFixtureAssertion is test-only; production code must use a boundary-specific helper.",
+            },
+          ],
+        },
+      ],
     },
   },
   {

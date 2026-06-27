@@ -3,6 +3,7 @@
  */
 import { readFile } from "node:fs/promises";
 
+import { unsafeExternalInteropAssertion } from "../unsafe-type-assertion.js";
 import type { FontMapping } from "./font-mapping.js";
 import { createFontMapping } from "./font-mapping.js";
 import type { OpentypeFont } from "./opentype-text-measurer.js";
@@ -66,7 +67,9 @@ function buildReverseMapping(mapping: FontMapping): Map<string, string[]> {
  */
 function toArrayBuffer(data: ArrayBuffer | Uint8Array): ArrayBuffer {
   if (data instanceof ArrayBuffer) return data;
-  return data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) as ArrayBuffer;
+  return unsafeExternalInteropAssertion<ArrayBuffer>(
+    data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
+  );
 }
 
 /**
@@ -142,7 +145,8 @@ export async function createOpentypeSetupFromBuffers(
 
       for (const font of fonts) {
         if (!firstMeasurerFont) firstMeasurerFont = font;
-        if (!firstResolverFont) firstResolverFont = font as unknown as OpentypeFullFont;
+        if (!firstResolverFont)
+          firstResolverFont = unsafeExternalInteropAssertion<OpentypeFullFont>(font);
 
         if (isTtc) {
           // TTC: names テーブルからフォント名を取得して登録
@@ -176,7 +180,7 @@ function registerFont(
   measurerFonts: Map<string, OpentypeFont>,
   resolverFonts: Map<string, OpentypeFullFont>,
 ): void {
-  const fullFont = font as unknown as OpentypeFullFont;
+  const fullFont = unsafeExternalInteropAssertion<OpentypeFullFont>(font);
   if (!measurerFonts.has(name)) {
     measurerFonts.set(name, font);
     resolverFonts.set(name, fullFont);
@@ -285,7 +289,8 @@ export async function createOpentypeSetupFromSystem(
 
       for (const font of fonts) {
         if (!firstMeasurerFont) firstMeasurerFont = font;
-        if (!firstResolverFont) firstResolverFont = font as unknown as OpentypeFullFont;
+        if (!firstResolverFont)
+          firstResolverFont = unsafeExternalInteropAssertion<OpentypeFullFont>(font);
 
         // names テーブルからフォント名を取得して登録
         for (const name of collectFontNames(font)) {

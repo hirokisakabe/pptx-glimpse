@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
 import { documentExperimentalApi } from "./experimental.js";
+import { unsafeFixtureAssertion } from "./unsafe-type-assertion.js";
 
 interface PackageJson {
   readonly dependencies?: Record<string, string>;
@@ -79,7 +80,7 @@ async function listTypeScriptFiles(dir: string): Promise<string[]> {
 function parsePackageJson(text: string): PackageJson {
   const parsed: unknown = JSON.parse(text);
 
-  return parsed as PackageJson;
+  return unsafeFixtureAssertion<PackageJson>(parsed);
 }
 
 describe("@pptx-glimpse/document package boundary", () => {

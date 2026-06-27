@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { EffectList } from "../model/effect.js";
+import { unsafeFixtureAssertion } from "../unsafe-type-assertion.js";
 import { renderEffects } from "./effect-renderer.js";
 
 beforeEach(() => {
   let counter = 0;
   vi.spyOn(crypto, "randomUUID").mockImplementation(() => {
-    return `test-uuid-${counter++}` as ReturnType<typeof crypto.randomUUID>;
+    return unsafeFixtureAssertion<ReturnType<typeof crypto.randomUUID>>(`test-uuid-${counter++}`);
   });
 });
 

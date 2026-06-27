@@ -1,5 +1,7 @@
 import { XMLParser } from "fast-xml-parser";
 
+import { unsafeXmlBoundaryAssertion } from "../unsafe-type-assertion.js";
+
 /** fast-xml-parser が返す XML ノードの型エイリアス */
 export type XmlNode = Record<string, unknown>;
 
@@ -78,7 +80,7 @@ export function parseXml(xml: string): Record<string, unknown> {
     const cached = xmlCache.get(xml);
     if (cached) return cached;
   }
-  const result = standardParser.parse(xml) as Record<string, unknown>;
+  const result = unsafeXmlBoundaryAssertion<Record<string, unknown>>(standardParser.parse(xml));
   xmlCache?.set(xml, result);
   return result;
 }
@@ -91,7 +93,7 @@ export function parseXmlOrdered(xml: string): XmlOrderedNode[] {
     const cached = xmlOrderedCache.get(xml);
     if (cached) return cached;
   }
-  const result = orderedParser.parse(xml) as XmlOrderedNode[];
+  const result = unsafeXmlBoundaryAssertion<XmlOrderedNode[]>(orderedParser.parse(xml));
   xmlOrderedCache?.set(xml, result);
   return result;
 }

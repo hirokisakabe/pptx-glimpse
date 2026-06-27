@@ -11,6 +11,7 @@ import type { ConvertOptions } from "../../packages/core/src/converter.js";
 import { createFontMapping, getMappedFont } from "../../packages/renderer/src/font/font-mapping.js";
 import { subsetFont } from "../../packages/renderer/src/font/font-subsetter.js";
 import type { OpentypeFullFont } from "../../packages/renderer/src/font/text-path-context.js";
+import { unsafeVrtInteropAssertion } from "../unsafe-type-assertion.js";
 
 type VrtRenderOptions = Pick<ConvertOptions, "fontDirs" | "skipSystemFonts">;
 
@@ -290,10 +291,9 @@ async function readBufferIfExists(path: string): Promise<Buffer | null> {
 }
 
 function toArrayBuffer(buffer: Uint8Array): ArrayBuffer {
-  return buffer.buffer.slice(
-    buffer.byteOffset,
-    buffer.byteOffset + buffer.byteLength,
-  ) as ArrayBuffer;
+  return unsafeVrtInteropAssertion<ArrayBuffer>(
+    buffer.buffer.slice(buffer.byteOffset, buffer.byteOffset + buffer.byteLength),
+  );
 }
 
 function sha256(buffer: Uint8Array): string {

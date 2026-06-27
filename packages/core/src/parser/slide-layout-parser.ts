@@ -5,6 +5,7 @@ import type { FontScheme, FormatScheme } from "@pptx-glimpse/renderer";
 import { debug } from "@pptx-glimpse/renderer";
 
 import type { ColorResolver } from "../color/color-resolver.js";
+import { unsafeXmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import type { FillParseContext } from "./fill-parser.js";
 import { parseFillFromNode } from "./fill-parser.js";
 import type { PptxArchive } from "./pptx-reader.js";
@@ -20,17 +21,17 @@ export function parseSlideLayoutBackground(
 ): Background | null {
   const parsed = parseXml(xml);
 
-  const sldLayout = parsed.sldLayout as XmlNode | undefined;
+  const sldLayout = unsafeXmlBoundaryAssertion<XmlNode | undefined>(parsed.sldLayout);
   if (!sldLayout) {
     debug("slideLayout.missing", `missing root element "sldLayout" in XML`);
     return null;
   }
 
-  const cSld = sldLayout.cSld as XmlNode | undefined;
-  const bg = cSld?.bg as XmlNode | undefined;
+  const cSld = unsafeXmlBoundaryAssertion<XmlNode | undefined>(sldLayout.cSld);
+  const bg = unsafeXmlBoundaryAssertion<XmlNode | undefined>(cSld?.bg);
   if (!bg) return null;
 
-  const bgPr = bg.bgPr as XmlNode | undefined;
+  const bgPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(bg.bgPr);
   if (!bgPr) return null;
 
   const fill = parseFillFromNode(bgPr, colorResolver, context);
@@ -47,14 +48,14 @@ export function parseSlideLayoutElements(
 ): SlideElement[] {
   const parsed = parseXml(xml);
 
-  const sldLayout = parsed.sldLayout as XmlNode | undefined;
+  const sldLayout = unsafeXmlBoundaryAssertion<XmlNode | undefined>(parsed.sldLayout);
   if (!sldLayout) {
     debug("slideLayout.missing", `missing root element "sldLayout" in XML`);
     return [];
   }
 
-  const cSld = sldLayout.cSld as XmlNode | undefined;
-  const spTree = cSld?.spTree as XmlNode | undefined;
+  const cSld = unsafeXmlBoundaryAssertion<XmlNode | undefined>(sldLayout.cSld);
+  const spTree = unsafeXmlBoundaryAssertion<XmlNode | undefined>(cSld?.spTree);
   if (!spTree) return [];
 
   const relsPath = buildRelsPath(layoutPath);
@@ -80,7 +81,7 @@ export function parseSlideLayoutElements(
 
 export function parseSlideLayoutShowMasterSp(xml: string): boolean {
   const parsed = parseXml(xml);
-  const sldLayout = parsed.sldLayout as XmlNode | undefined;
+  const sldLayout = unsafeXmlBoundaryAssertion<XmlNode | undefined>(parsed.sldLayout);
   const attr = sldLayout?.["@_showMasterSp"];
   return attr !== "0" && attr !== "false";
 }
@@ -91,31 +92,33 @@ export function parseSlideLayoutPlaceholderStyles(
 ): PlaceholderStyleInfo[] {
   const parsed = parseXml(xml);
 
-  const sldLayout = parsed.sldLayout as XmlNode | undefined;
+  const sldLayout = unsafeXmlBoundaryAssertion<XmlNode | undefined>(parsed.sldLayout);
   if (!sldLayout) return [];
 
-  const cSld = sldLayout.cSld as XmlNode | undefined;
-  const spTree = cSld?.spTree as XmlNode | undefined;
+  const cSld = unsafeXmlBoundaryAssertion<XmlNode | undefined>(sldLayout.cSld);
+  const spTree = unsafeXmlBoundaryAssertion<XmlNode | undefined>(cSld?.spTree);
   if (!spTree) return [];
 
   const results: PlaceholderStyleInfo[] = [];
-  const shapes = (spTree.sp as XmlNode[] | undefined) ?? [];
+  const shapes = unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(spTree.sp) ?? [];
 
   for (const sp of shapes) {
-    const nvSpPr = sp.nvSpPr as XmlNode | undefined;
-    const nvPr = nvSpPr?.nvPr as XmlNode | undefined;
-    const ph = nvPr?.ph as XmlNode | undefined;
+    const nvSpPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(sp.nvSpPr);
+    const nvPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(nvSpPr?.nvPr);
+    const ph = unsafeXmlBoundaryAssertion<XmlNode | undefined>(nvPr?.ph);
     if (!ph) continue;
 
-    const placeholderType: string = (ph["@_type"] as string) ?? "body";
+    const placeholderType: string = unsafeXmlBoundaryAssertion<string>(ph["@_type"]) ?? "body";
     const placeholderIdx = ph["@_idx"] !== undefined ? Number(ph["@_idx"]) : undefined;
-    const txBody = sp.txBody as XmlNode | undefined;
-    const lstStyleNode = txBody?.lstStyle as XmlNode | undefined;
+    const txBody = unsafeXmlBoundaryAssertion<XmlNode | undefined>(sp.txBody);
+    const lstStyleNode = unsafeXmlBoundaryAssertion<XmlNode | undefined>(txBody?.lstStyle);
     const lstStyle = lstStyleNode ? parseListStyle(lstStyleNode, colorResolver) : undefined;
 
-    const spPr = sp.spPr as XmlNode | undefined;
+    const spPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(sp.spPr);
     const transform =
-      spPr && typeof spPr === "object" ? parseTransform(spPr.xfrm as XmlNode | undefined) : null;
+      spPr && typeof spPr === "object"
+        ? parseTransform(unsafeXmlBoundaryAssertion<XmlNode | undefined>(spPr.xfrm))
+        : null;
     const geometry = spPr && typeof spPr === "object" ? parseGeometry(spPr) : undefined;
 
     results.push({

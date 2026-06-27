@@ -1,3 +1,5 @@
+import { unsafeBrandAssertion } from "../unsafe-type-assertion.js";
+
 /**
  * ブランド型（Branded Types）による単位の型安全性
  *
@@ -20,9 +22,9 @@ export type Pt = number & { readonly [PtBrand]: typeof PtBrand };
 export type HundredthPt = number & { readonly [HundredthPtBrand]: typeof HundredthPtBrand };
 
 export function asEmu(value: number): Emu {
-  return value as Emu;
+  return unsafeBrandAssertion<Emu>(value);
 }
 
 export function asHundredthPt(value: number): HundredthPt {
-  return value as HundredthPt;
+  return unsafeBrandAssertion<HundredthPt>(value);
 }

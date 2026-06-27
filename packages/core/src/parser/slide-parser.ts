@@ -33,6 +33,7 @@ import { asEmu, asHundredthPt } from "@pptx-glimpse/renderer";
 import { debug, warn } from "@pptx-glimpse/renderer";
 
 import type { ColorResolver } from "../color/color-resolver.js";
+import { unsafeXmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import { parseBlipEffects } from "./blip-effect-parser.js";
 import { parseChart } from "./chart-parser.js";
 import { parseCustomGeometry } from "./custom-geometry-parser.js";
@@ -72,7 +73,7 @@ export function navigateOrdered(
   for (const key of path) {
     const entry = current.find((item: XmlOrderedNode) => key in item);
     if (!entry) return null;
-    current = entry[key] as XmlOrderedNode[];
+    current = unsafeXmlBoundaryAssertion<XmlOrderedNode[]>(entry[key]);
     if (!Array.isArray(current)) return null;
   }
   return current;
@@ -89,7 +90,7 @@ export function parseSlide(
   placeholderStyles?: PlaceholderStyleInfo[],
 ): Slide {
   const parsed = parseXml(slideXml);
-  const sld = parsed.sld as XmlNode | undefined;
+  const sld = unsafeXmlBoundaryAssertion<XmlNode | undefined>(parsed.sld);
   if (!sld) {
     debug("slide.missing", `missing root element "sld" in XML`, `Slide ${slideNumber}`);
   }
@@ -99,15 +100,19 @@ export function parseSlide(
   const rels = relsXml ? parseRelationships(relsXml) : new Map<string, Relationship>();
 
   const fillContext: FillParseContext = { rels, archive, basePath: slidePath };
-  const cSld = (sld?.cSld as XmlNode | undefined) ?? undefined;
-  const background = parseBackground(cSld?.bg as XmlNode | undefined, colorResolver, fillContext);
+  const cSld = unsafeXmlBoundaryAssertion<XmlNode | undefined>(sld?.cSld) ?? undefined;
+  const background = parseBackground(
+    unsafeXmlBoundaryAssertion<XmlNode | undefined>(cSld?.bg),
+    colorResolver,
+    fillContext,
+  );
 
   // ordered パーサーで子要素の出現順序を取得（Z-order 保持のため）
   const orderedParsed = parseXmlOrdered(slideXml);
   const orderedSpTree = navigateOrdered(orderedParsed, ["sld", "cSld", "spTree"]);
 
   const elements = parseShapeTree(
-    cSld?.spTree as XmlNode | undefined,
+    unsafeXmlBoundaryAssertion<XmlNode | undefined>(cSld?.spTree),
     rels,
     slidePath,
     archive,
@@ -133,7 +138,7 @@ function parseBackground(
 ): Background | null {
   if (!bgNode) return null;
 
-  const bgPr = bgNode.bgPr as XmlNode | undefined;
+  const bgPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(bgNode.bgPr);
   if (!bgPr) return null;
 
   const fill = parseFillFromNode(bgPr, colorResolver, context);
@@ -150,7 +155,7 @@ function mergeChildElements(spTree: XmlNode, source: XmlNode): void {
     }
     const arr = Array.isArray(items) ? items : [items];
     for (const item of arr) {
-      (spTree[tag] as unknown[]).push(item);
+      unsafeXmlBoundaryAssertion<unknown[]>(spTree[tag]).push(item);
     }
   }
 }
@@ -189,18 +194,19 @@ export function parseShapeTree(
 
   // フォールバック: タイプ別イテレーション（後方互換）
   // mc:AlternateContent の処理: Choice 内の要素を spTree にマージ
-  const alternateContents = (spTree.AlternateContent as XmlNode[] | undefined) ?? [];
+  const alternateContents =
+    unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(spTree.AlternateContent) ?? [];
   for (const ac of alternateContents) {
     const choices = Array.isArray(ac.Choice) ? ac.Choice : ac.Choice ? [ac.Choice] : [];
     for (const choice of choices) {
-      mergeChildElements(spTree, choice as XmlNode);
+      mergeChildElements(spTree, unsafeXmlBoundaryAssertion<XmlNode>(choice));
     }
   }
 
   const ctx = context ?? slidePath;
   const elements: SlideElement[] = [];
 
-  const shapes = (spTree.sp as XmlNode[] | undefined) ?? [];
+  const shapes = unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(spTree.sp) ?? [];
   for (const sp of shapes) {
     const shape = parseShape(
       sp,
@@ -219,7 +225,7 @@ export function parseShapeTree(
     }
   }
 
-  const pics = (spTree.pic as XmlNode[] | undefined) ?? [];
+  const pics = unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(spTree.pic) ?? [];
   for (const pic of pics) {
     const img = parseImage(pic, rels, slidePath, archive, colorResolver);
     if (img) {
@@ -229,7 +235,7 @@ export function parseShapeTree(
     }
   }
 
-  const cxnSps = (spTree.cxnSp as XmlNode[] | undefined) ?? [];
+  const cxnSps = unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(spTree.cxnSp) ?? [];
   for (const cxn of cxnSps) {
     const connector = parseConnector(cxn, colorResolver, fmtScheme);
     if (connector) {
@@ -239,7 +245,7 @@ export function parseShapeTree(
     }
   }
 
-  const grpSps = (spTree.grpSp as XmlNode[] | undefined) ?? [];
+  const grpSps = unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(spTree.grpSp) ?? [];
   for (const grp of grpSps) {
     const group = parseGroup(
       grp,
@@ -259,7 +265,8 @@ export function parseShapeTree(
     }
   }
 
-  const graphicFrames = (spTree.graphicFrame as XmlNode[] | undefined) ?? [];
+  const graphicFrames =
+    unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(spTree.graphicFrame) ?? [];
   for (const gf of graphicFrames) {
     const chart = parseGraphicFrame(gf, rels, slidePath, archive, colorResolver, fontScheme);
     if (chart) {
@@ -299,7 +306,8 @@ function parseShapeTreeOrdered(
       const acIndex = tagCounters["AlternateContent"] ?? 0;
       tagCounters["AlternateContent"] = acIndex + 1;
 
-      const acList = (spTree.AlternateContent as XmlNode[] | undefined) ?? [];
+      const acList =
+        unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(spTree.AlternateContent) ?? [];
       const acData = acList[acIndex] as XmlNode | undefined;
       if (!acData) continue;
 
@@ -308,16 +316,20 @@ function parseShapeTreeOrdered(
         : acData.Choice
           ? [acData.Choice]
           : [];
-      const firstChoice = choices[0] as XmlNode | undefined;
+      const firstChoice = unsafeXmlBoundaryAssertion<XmlNode | undefined>(choices[0]);
       if (!firstChoice) continue;
 
       // ordered 結果から Choice の子要素を取得
-      const acOrderedChildren = child.AlternateContent as XmlOrderedNode[] | undefined;
+      const acOrderedChildren = unsafeXmlBoundaryAssertion<XmlOrderedNode[] | undefined>(
+        child.AlternateContent,
+      );
 
       const choiceOrdered = Array.isArray(acOrderedChildren)
         ? acOrderedChildren.find((c: XmlOrderedNode) => "Choice" in c)
         : null;
-      const choiceChildren = choiceOrdered?.Choice as XmlOrderedNode[] | undefined;
+      const choiceChildren = unsafeXmlBoundaryAssertion<XmlOrderedNode[] | undefined>(
+        choiceOrdered?.Choice,
+      );
 
       if (Array.isArray(choiceChildren)) {
         // Choice 内の子要素をドキュメント順で処理
@@ -331,7 +343,7 @@ function parseShapeTreeOrdered(
 
           const items = firstChoice[choiceTag];
           const arr = Array.isArray(items) ? items : items ? [items] : [];
-          const element = arr[choiceIdx] as XmlNode | undefined;
+          const element = unsafeXmlBoundaryAssertion<XmlNode | undefined>(arr[choiceIdx]);
           if (!element) continue;
 
           parseAndPushElement(
@@ -359,7 +371,7 @@ function parseShapeTreeOrdered(
     const index = tagCounters[tag] ?? 0;
     tagCounters[tag] = index + 1;
 
-    const tagArray = spTree[tag] as XmlNode[] | undefined;
+    const tagArray = unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(spTree[tag]);
     const element = tagArray?.[index];
     if (!element) continue;
 
@@ -438,7 +450,8 @@ function parseAndPushElement(
     }
     case "grpSp": {
       // ordered 結果からグループの子要素順序を取得
-      const grpOrderedChildren = (orderedNode[tag] as XmlOrderedNode[] | undefined) ?? null;
+      const grpOrderedChildren =
+        unsafeXmlBoundaryAssertion<XmlOrderedNode[] | undefined>(orderedNode[tag]) ?? null;
       const group = parseGroup(
         element,
         rels,
@@ -486,14 +499,16 @@ function parseShape(
   fmtScheme?: FormatScheme,
   placeholderStyles?: PlaceholderStyleInfo[],
 ): ShapeElement | null {
-  const spPr = sp.spPr as XmlNode | undefined;
+  const spPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(sp.spPr);
   const spPrIsObject = spPr != null && typeof spPr === "object";
 
   // プレースホルダー情報を先に抽出（transform フォールバックに必要）
-  const nvSpPr = sp.nvSpPr as XmlNode | undefined;
-  const nvPr = nvSpPr?.nvPr as XmlNode | undefined;
-  const ph = nvPr?.ph as XmlNode | undefined;
-  const placeholderType = ph ? ((ph["@_type"] as string | undefined) ?? "body") : undefined;
+  const nvSpPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(sp.nvSpPr);
+  const nvPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(nvSpPr?.nvPr);
+  const ph = unsafeXmlBoundaryAssertion<XmlNode | undefined>(nvPr?.ph);
+  const placeholderType = ph
+    ? (unsafeXmlBoundaryAssertion<string | undefined>(ph["@_type"]) ?? "body")
+    : undefined;
   const placeholderIdx = ph?.["@_idx"] !== undefined ? Number(ph["@_idx"]) : undefined;
 
   // spPr が空/未定義の場合、プレースホルダーならコンテキストからフォールバック
@@ -501,7 +516,7 @@ function parseShape(
   let geometry: Geometry;
 
   if (spPrIsObject) {
-    transform = parseTransform(spPr.xfrm as XmlNode | undefined);
+    transform = parseTransform(unsafeXmlBoundaryAssertion<XmlNode | undefined>(spPr.xfrm));
     geometry = parseGeometry(spPr);
   } else {
     geometry = { type: "preset", preset: "rect", adjustValues: {} };
@@ -529,26 +544,32 @@ function parseShape(
   }
 
   // Resolve style references (sp.style) as fallback for direct attributes
-  const styleRef = resolveShapeStyle(sp.style as XmlNode | undefined, fmtScheme, colorResolver);
+  const styleRef = resolveShapeStyle(
+    unsafeXmlBoundaryAssertion<XmlNode | undefined>(sp.style),
+    fmtScheme,
+    colorResolver,
+  );
 
   const directFill = spPrIsObject ? parseFillFromNode(spPr, colorResolver, fillContext) : null;
   const fill = directFill ?? styleRef?.fill ?? null;
 
-  const directOutline = spPrIsObject ? parseOutline(spPr.ln as XmlNode, colorResolver) : null;
+  const directOutline = spPrIsObject
+    ? parseOutline(unsafeXmlBoundaryAssertion<XmlNode>(spPr.ln), colorResolver)
+    : null;
   const outline = directOutline ?? styleRef?.outline ?? null;
 
   // ordered ノードから txBody の ordered children を抽出
   let orderedTxBody: XmlOrderedNode[] | undefined;
   if (orderedNode) {
-    const spChildren = orderedNode.sp as XmlOrderedNode[] | undefined;
+    const spChildren = unsafeXmlBoundaryAssertion<XmlOrderedNode[] | undefined>(orderedNode.sp);
     if (Array.isArray(spChildren)) {
       const txBodyEntry = spChildren.find((c: XmlOrderedNode) => "txBody" in c);
-      orderedTxBody = txBodyEntry?.txBody as XmlOrderedNode[] | undefined;
+      orderedTxBody = unsafeXmlBoundaryAssertion<XmlOrderedNode[] | undefined>(txBodyEntry?.txBody);
     }
   }
 
   const textBody = parseTextBody(
-    sp.txBody as XmlNode | undefined,
+    unsafeXmlBoundaryAssertion<XmlNode | undefined>(sp.txBody),
     colorResolver,
     rels,
     fontScheme,
@@ -557,13 +578,16 @@ function parseShape(
   );
 
   const directEffects = spPrIsObject
-    ? parseEffectList(spPr.effectLst as XmlNode, colorResolver)
+    ? parseEffectList(unsafeXmlBoundaryAssertion<XmlNode>(spPr.effectLst), colorResolver)
     : null;
   const effects = directEffects ?? styleRef?.effects ?? null;
 
-  const cNvPr = nvSpPr?.cNvPr as XmlNode | undefined;
-  const altText = cNvPr?.["@_descr"] as string | undefined;
-  const hyperlink = parseHyperlink(cNvPr?.hlinkClick as XmlNode | undefined, rels);
+  const cNvPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(nvSpPr?.cNvPr);
+  const altText = unsafeXmlBoundaryAssertion<string | undefined>(cNvPr?.["@_descr"]);
+  const hyperlink = parseHyperlink(
+    unsafeXmlBoundaryAssertion<XmlNode | undefined>(cNvPr?.hlinkClick),
+    rels,
+  );
 
   return {
     type: "shape",
@@ -587,16 +611,17 @@ function parseImage(
   archive: PptxArchive,
   colorResolver: ColorResolver,
 ): ImageElement | null {
-  const spPr = pic.spPr as XmlNode | undefined;
+  const spPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(pic.spPr);
   if (!spPr) return null;
 
-  const transform = parseTransform(spPr.xfrm as XmlNode | undefined);
+  const transform = parseTransform(unsafeXmlBoundaryAssertion<XmlNode | undefined>(spPr.xfrm));
   if (!transform) return null;
 
-  const blipFill = pic.blipFill as XmlNode | undefined;
-  const blip = blipFill?.blip as XmlNode | undefined;
+  const blipFill = unsafeXmlBoundaryAssertion<XmlNode | undefined>(pic.blipFill);
+  const blip = unsafeXmlBoundaryAssertion<XmlNode | undefined>(blipFill?.blip);
   const rId =
-    (blip?.["@_r:embed"] as string | undefined) ?? (blip?.["@_embed"] as string | undefined);
+    unsafeXmlBoundaryAssertion<string | undefined>(blip?.["@_r:embed"]) ??
+    unsafeXmlBoundaryAssertion<string | undefined>(blip?.["@_embed"]);
   if (!rId) return null;
 
   const rel = rels.get(rId);
@@ -621,15 +646,20 @@ function parseImage(
   };
   const mimeType = mimeMap[ext] ?? "image/png";
   const imageData = uint8ArrayToBase64(mediaData);
-  const effects = parseEffectList(spPr.effectLst as XmlNode, colorResolver);
-  const blipEffects = parseBlipEffects(blip as XmlNode, colorResolver);
-  const srcRect = parseSrcRect(blipFill?.srcRect as XmlNode | undefined);
-  const stretch = parseStretchFillRect(blipFill?.stretch as XmlNode | undefined);
-  const tile = parseTileInfo(blipFill?.tile as XmlNode | undefined);
+  const effects = parseEffectList(
+    unsafeXmlBoundaryAssertion<XmlNode>(spPr.effectLst),
+    colorResolver,
+  );
+  const blipEffects = parseBlipEffects(unsafeXmlBoundaryAssertion<XmlNode>(blip), colorResolver);
+  const srcRect = parseSrcRect(unsafeXmlBoundaryAssertion<XmlNode | undefined>(blipFill?.srcRect));
+  const stretch = parseStretchFillRect(
+    unsafeXmlBoundaryAssertion<XmlNode | undefined>(blipFill?.stretch),
+  );
+  const tile = parseTileInfo(unsafeXmlBoundaryAssertion<XmlNode | undefined>(blipFill?.tile));
 
-  const nvPicPr = pic.nvPicPr as XmlNode | undefined;
-  const cNvPr = nvPicPr?.cNvPr as XmlNode | undefined;
-  const altText = cNvPr?.["@_descr"] as string | undefined;
+  const nvPicPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(pic.nvPicPr);
+  const cNvPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(nvPicPr?.cNvPr);
+  const altText = unsafeXmlBoundaryAssertion<string | undefined>(cNvPr?.["@_descr"]);
 
   return {
     type: "image",
@@ -657,7 +687,7 @@ function parseSrcRect(node: XmlNode | undefined): SrcRect | null {
 
 function parseStretchFillRect(stretchNode: XmlNode | undefined): StretchFillRect | null {
   if (!stretchNode) return null;
-  const fillRect = stretchNode.fillRect as XmlNode | undefined;
+  const fillRect = unsafeXmlBoundaryAssertion<XmlNode | undefined>(stretchNode.fillRect);
   if (!fillRect) return null;
   const l = Number(fillRect["@_l"] ?? 0) / 100000;
   const t = Number(fillRect["@_t"] ?? 0) / 100000;
@@ -674,8 +704,8 @@ function parseTileInfo(node: XmlNode | undefined): TileInfo | null {
     ty: asEmu(Number(node["@_ty"] ?? 0)),
     sx: Number(node["@_sx"] ?? 100000) / 100000,
     sy: Number(node["@_sy"] ?? 100000) / 100000,
-    flip: ((node["@_flip"] as string) ?? "none") as TileInfo["flip"],
-    align: (node["@_algn"] as string) ?? "tl",
+    flip: unsafeXmlBoundaryAssertion<TileInfo["flip"]>(node["@_flip"] ?? "none"),
+    align: unsafeXmlBoundaryAssertion<string>(node["@_algn"]) ?? "tl",
   };
 }
 
@@ -684,23 +714,30 @@ function parseConnector(
   colorResolver: ColorResolver,
   fmtScheme?: FormatScheme,
 ): ConnectorElement | null {
-  const spPr = cxn.spPr as XmlNode | undefined;
+  const spPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(cxn.spPr);
   if (!spPr) return null;
 
-  const transform = parseTransform(spPr.xfrm as XmlNode | undefined);
+  const transform = parseTransform(unsafeXmlBoundaryAssertion<XmlNode | undefined>(spPr.xfrm));
   if (!transform) return null;
 
   const geometry = parseGeometry(spPr);
 
-  const styleRef = resolveShapeStyle(cxn.style as XmlNode | undefined, fmtScheme, colorResolver);
-  const directOutline = parseOutline(spPr.ln as XmlNode, colorResolver);
+  const styleRef = resolveShapeStyle(
+    unsafeXmlBoundaryAssertion<XmlNode | undefined>(cxn.style),
+    fmtScheme,
+    colorResolver,
+  );
+  const directOutline = parseOutline(unsafeXmlBoundaryAssertion<XmlNode>(spPr.ln), colorResolver);
   const outline = directOutline ?? styleRef?.outline ?? null;
-  const directEffects = parseEffectList(spPr.effectLst as XmlNode, colorResolver);
+  const directEffects = parseEffectList(
+    unsafeXmlBoundaryAssertion<XmlNode>(spPr.effectLst),
+    colorResolver,
+  );
   const effects = directEffects ?? styleRef?.effects ?? null;
 
-  const nvCxnSpPr = cxn.nvCxnSpPr as XmlNode | undefined;
-  const cNvPr = nvCxnSpPr?.cNvPr as XmlNode | undefined;
-  const altText = cNvPr?.["@_descr"] as string | undefined;
+  const nvCxnSpPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(cxn.nvCxnSpPr);
+  const cNvPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(nvCxnSpPr?.cNvPr);
+  const altText = unsafeXmlBoundaryAssertion<string | undefined>(cNvPr?.["@_descr"]);
 
   return { type: "connector", transform, geometry, outline, effects, ...(altText && { altText }) };
 }
@@ -716,15 +753,15 @@ function parseGroup(
   orderedChildren?: XmlOrderedNode[] | null,
   fmtScheme?: FormatScheme,
 ): GroupElement | null {
-  const grpSpPr = grp.grpSpPr as XmlNode | undefined;
+  const grpSpPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(grp.grpSpPr);
   if (!grpSpPr) return null;
 
-  const xfrm = grpSpPr.xfrm as XmlNode | undefined;
+  const xfrm = unsafeXmlBoundaryAssertion<XmlNode | undefined>(grpSpPr.xfrm);
   const transform = parseTransform(xfrm);
   if (!transform) return null;
 
-  const childOff = xfrm?.chOff as XmlNode | undefined;
-  const childExt = xfrm?.chExt as XmlNode | undefined;
+  const childOff = unsafeXmlBoundaryAssertion<XmlNode | undefined>(xfrm?.chOff);
+  const childExt = unsafeXmlBoundaryAssertion<XmlNode | undefined>(xfrm?.chExt);
   const childTransform: Transform = {
     offsetX: asEmu(Number(childOff?.["@_x"] ?? 0)),
     offsetY: asEmu(Number(childOff?.["@_y"] ?? 0)),
@@ -755,11 +792,14 @@ function parseGroup(
     orderedChildren,
     fmtScheme,
   );
-  const effects = parseEffectList(grpSpPr.effectLst as XmlNode, colorResolver);
+  const effects = parseEffectList(
+    unsafeXmlBoundaryAssertion<XmlNode>(grpSpPr.effectLst),
+    colorResolver,
+  );
 
-  const nvGrpSpPr = grp.nvGrpSpPr as XmlNode | undefined;
-  const cNvPr = nvGrpSpPr?.cNvPr as XmlNode | undefined;
-  const altText = cNvPr?.["@_descr"] as string | undefined;
+  const nvGrpSpPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(grp.nvGrpSpPr);
+  const cNvPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(nvGrpSpPr?.cNvPr);
+  const altText = unsafeXmlBoundaryAssertion<string | undefined>(cNvPr?.["@_descr"]);
 
   return {
     type: "group",
@@ -779,19 +819,20 @@ function parseGraphicFrame(
   colorResolver: ColorResolver,
   fontScheme?: FontScheme | null,
 ): ChartElement | TableElement | GroupElement | null {
-  const xfrm = gf.xfrm as XmlNode | undefined;
+  const xfrm = unsafeXmlBoundaryAssertion<XmlNode | undefined>(gf.xfrm);
   const transform = parseTransform(xfrm);
   if (!transform) return null;
 
-  const graphic = gf.graphic as XmlNode | undefined;
-  const graphicData = graphic?.graphicData as XmlNode | undefined;
+  const graphic = unsafeXmlBoundaryAssertion<XmlNode | undefined>(gf.graphic);
+  const graphicData = unsafeXmlBoundaryAssertion<XmlNode | undefined>(graphic?.graphicData);
   if (!graphicData) return null;
 
   // Chart
-  const chartRef = graphicData.chart as XmlNode | undefined;
+  const chartRef = unsafeXmlBoundaryAssertion<XmlNode | undefined>(graphicData.chart);
   if (chartRef) {
     const rId =
-      (chartRef["@_r:id"] as string | undefined) ?? (chartRef["@_id"] as string | undefined);
+      unsafeXmlBoundaryAssertion<string | undefined>(chartRef["@_r:id"]) ??
+      unsafeXmlBoundaryAssertion<string | undefined>(chartRef["@_id"]);
     if (!rId) return null;
 
     const rel = rels.get(rId);
@@ -808,7 +849,7 @@ function parseGraphicFrame(
   }
 
   // Table
-  const tblNode = graphicData.tbl as XmlNode | undefined;
+  const tblNode = unsafeXmlBoundaryAssertion<XmlNode | undefined>(graphicData.tbl);
   if (tblNode) {
     const tableData = parseTable(tblNode, colorResolver, fontScheme);
     if (!tableData) return null;
@@ -817,7 +858,7 @@ function parseGraphicFrame(
   }
 
   // SmartArt (Diagram) — Transitional and Strict URIs
-  if (SMARTART_DIAGRAM_URIS.has(graphicData["@_uri"] as string)) {
+  if (SMARTART_DIAGRAM_URIS.has(unsafeXmlBoundaryAssertion<string>(graphicData["@_uri"]))) {
     return parseSmartArt(
       graphicData,
       transform,
@@ -829,7 +870,7 @@ function parseGraphicFrame(
     );
   }
 
-  const uri = (graphicData["@_uri"] as string | undefined) ?? "unknown";
+  const uri = unsafeXmlBoundaryAssertion<string | undefined>(graphicData["@_uri"]) ?? "unknown";
   warn("graphicFrame.unsupported", `unsupported graphicFrame content (uri: ${uri})`);
 
   return null;
@@ -845,11 +886,13 @@ function parseSmartArt(
   fontScheme?: FontScheme | null,
 ): GroupElement | null {
   // dgm:relIds → removeNSPrefix → relIds
-  const relIds = graphicData.relIds as XmlNode | undefined;
+  const relIds = unsafeXmlBoundaryAssertion<XmlNode | undefined>(graphicData.relIds);
   if (!relIds) return null;
 
   // r:dm 属性 (data model relationship ID)
-  const dmRId = (relIds["@_r:dm"] as string | undefined) ?? (relIds["@_dm"] as string | undefined);
+  const dmRId =
+    unsafeXmlBoundaryAssertion<string | undefined>(relIds["@_r:dm"]) ??
+    unsafeXmlBoundaryAssertion<string | undefined>(relIds["@_dm"]);
   if (!dmRId) return null;
 
   const dmRel = rels.get(dmRId);
@@ -895,8 +938,8 @@ function parseSmartArt(
   }
 
   const parsed = parseXml(drawingXml);
-  const drawing = parsed.drawing as XmlNode | undefined;
-  const spTree = drawing?.spTree as XmlNode | undefined;
+  const drawing = unsafeXmlBoundaryAssertion<XmlNode | undefined>(parsed.drawing);
+  const spTree = unsafeXmlBoundaryAssertion<XmlNode | undefined>(drawing?.spTree);
   if (!spTree) return null;
 
   // drawing XML 用のリレーションシップを取得
@@ -907,10 +950,10 @@ function parseSmartArt(
     : new Map<string, Relationship>();
 
   // grpSpPr から childTransform を取得
-  const grpSpPr = spTree.grpSpPr as XmlNode | undefined;
-  const grpXfrm = grpSpPr?.xfrm as XmlNode | undefined;
-  const childOff = grpXfrm?.chOff as XmlNode | undefined;
-  const childExt = grpXfrm?.chExt as XmlNode | undefined;
+  const grpSpPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(spTree.grpSpPr);
+  const grpXfrm = unsafeXmlBoundaryAssertion<XmlNode | undefined>(grpSpPr?.xfrm);
+  const childOff = unsafeXmlBoundaryAssertion<XmlNode | undefined>(grpXfrm?.chOff);
+  const childExt = unsafeXmlBoundaryAssertion<XmlNode | undefined>(grpXfrm?.chExt);
   const childTransform: Transform = {
     offsetX: asEmu(Number(childOff?.["@_x"] ?? 0)),
     offsetY: asEmu(Number(childOff?.["@_y"] ?? 0)),
@@ -957,8 +1000,8 @@ function parseSmartArt(
 export function parseTransform(xfrm: XmlNode | undefined): Transform | null {
   if (!xfrm) return null;
 
-  const off = xfrm.off as XmlNode | undefined;
-  const ext = xfrm.ext as XmlNode | undefined;
+  const off = unsafeXmlBoundaryAssertion<XmlNode | undefined>(xfrm.off);
+  const ext = unsafeXmlBoundaryAssertion<XmlNode | undefined>(xfrm.ext);
   if (!off || !ext) return null;
 
   let offsetX = asEmu(Number(off["@_x"] ?? 0));
@@ -1001,17 +1044,17 @@ export function parseTransform(xfrm: XmlNode | undefined): Transform | null {
 
 export function parseGeometry(spPr: XmlNode): Geometry {
   if (spPr.prstGeom) {
-    const prstGeom = spPr.prstGeom as XmlNode;
-    const preset = (prstGeom["@_prst"] as string | undefined) ?? "rect";
-    const avLst = prstGeom.avLst as XmlNode | undefined;
+    const prstGeom = unsafeXmlBoundaryAssertion<XmlNode>(spPr.prstGeom);
+    const preset = unsafeXmlBoundaryAssertion<string | undefined>(prstGeom["@_prst"]) ?? "rect";
+    const avLst = unsafeXmlBoundaryAssertion<XmlNode | undefined>(prstGeom.avLst);
     const adjustValues: Record<string, number> = {};
 
     if (avLst?.gd) {
       const guides = Array.isArray(avLst.gd) ? avLst.gd : [avLst.gd];
       for (const gd of guides) {
-        const gdNode = gd as XmlNode;
-        const name = gdNode["@_name"] as string;
-        const fmla = gdNode["@_fmla"] as string;
+        const gdNode = unsafeXmlBoundaryAssertion<XmlNode>(gd);
+        const name = unsafeXmlBoundaryAssertion<string>(gdNode["@_name"]);
+        const fmla = unsafeXmlBoundaryAssertion<string>(gdNode["@_fmla"]);
         const match = fmla?.match(/val\s+(\d+)/);
         if (name && match) {
           adjustValues[name] = Number(match[1]);
@@ -1023,7 +1066,7 @@ export function parseGeometry(spPr: XmlNode): Geometry {
   }
 
   if (spPr.custGeom) {
-    const paths = parseCustomGeometry(spPr.custGeom as XmlNode);
+    const paths = parseCustomGeometry(unsafeXmlBoundaryAssertion<XmlNode>(spPr.custGeom));
     if (paths) {
       return { type: "custom", paths };
     }
@@ -1080,9 +1123,9 @@ function findMatchingPlaceholder(
 function hasMultipleBulletPPr(p: XmlNode, orderedChildren: XmlOrderedNode[]): boolean {
   const rawPPr = p.pPr;
   const pPrList: XmlNode[] = Array.isArray(rawPPr)
-    ? (rawPPr as XmlNode[])
+    ? unsafeXmlBoundaryAssertion<XmlNode[]>(rawPPr)
     : rawPPr
-      ? [rawPPr as XmlNode]
+      ? [unsafeXmlBoundaryAssertion<XmlNode>(rawPPr)]
       : [];
 
   let bulletPPrCount = 0;
@@ -1122,14 +1165,14 @@ function splitInterleavedParagraph(
 ): Paragraph[] {
   const rawPPr = p.pPr;
   const pPrList: XmlNode[] = Array.isArray(rawPPr)
-    ? (rawPPr as XmlNode[])
+    ? unsafeXmlBoundaryAssertion<XmlNode[]>(rawPPr)
     : rawPPr
-      ? [rawPPr as XmlNode]
+      ? [unsafeXmlBoundaryAssertion<XmlNode>(rawPPr)]
       : [];
 
-  const rList: XmlNode[] = (p.r as XmlNode[] | undefined) ?? [];
-  const fldList: XmlNode[] = (p.fld as XmlNode[] | undefined) ?? [];
-  const brList: XmlNode[] = (p.br as XmlNode[] | undefined) ?? [];
+  const rList: XmlNode[] = unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(p.r) ?? [];
+  const fldList: XmlNode[] = unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(p.fld) ?? [];
+  const brList: XmlNode[] = unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(p.br) ?? [];
 
   interface Group {
     pPrIdx: number;
@@ -1252,9 +1295,10 @@ export function parseTextBody(
 ): TextBody | null {
   if (!txBody) return null;
 
-  const bodyPr = txBody.bodyPr as XmlNode | undefined;
+  const bodyPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(txBody.bodyPr);
 
-  const vert = (bodyPr?.["@_vert"] as BodyProperties["vert"] | undefined) ?? "horz";
+  const vert =
+    unsafeXmlBoundaryAssertion<BodyProperties["vert"] | undefined>(bodyPr?.["@_vert"]) ?? "horz";
 
   const numCol = bodyPr?.["@_numCol"] ? Math.max(1, Number(bodyPr["@_numCol"])) : 1;
 
@@ -1265,7 +1309,7 @@ export function parseTextBody(
     autoFit = "normAutofit";
     const normAutofit = bodyPr.normAutofit;
     if (typeof normAutofit === "object" && normAutofit !== null) {
-      const normNode = normAutofit as XmlNode;
+      const normNode = unsafeXmlBoundaryAssertion<XmlNode>(normAutofit);
       fontScale = normNode["@_fontScale"] ? Number(normNode["@_fontScale"]) / 100000 : 1;
       lnSpcReduction = normNode["@_lnSpcReduction"]
         ? Number(normNode["@_lnSpcReduction"]) / 100000
@@ -1276,12 +1320,12 @@ export function parseTextBody(
   }
 
   const bodyProperties: BodyProperties = {
-    anchor: (bodyPr?.["@_anchor"] as "t" | "ctr" | "b") ?? "t",
+    anchor: unsafeXmlBoundaryAssertion<"t" | "ctr" | "b">(bodyPr?.["@_anchor"]) ?? "t",
     marginLeft: asEmu(Number(bodyPr?.["@_lIns"] ?? 91440)),
     marginRight: asEmu(Number(bodyPr?.["@_rIns"] ?? 91440)),
     marginTop: asEmu(Number(bodyPr?.["@_tIns"] ?? 45720)),
     marginBottom: asEmu(Number(bodyPr?.["@_bIns"] ?? 45720)),
-    wrap: (bodyPr?.["@_wrap"] as "square" | "none") ?? "square",
+    wrap: unsafeXmlBoundaryAssertion<"square" | "none">(bodyPr?.["@_wrap"]) ?? "square",
     autoFit,
     fontScale,
     lnSpcReduction,
@@ -1289,20 +1333,21 @@ export function parseTextBody(
     vert,
   };
 
-  const lstStyle = lstStyleOverride ?? parseListStyle(txBody.lstStyle as XmlNode);
+  const lstStyle =
+    lstStyleOverride ?? parseListStyle(unsafeXmlBoundaryAssertion<XmlNode>(txBody.lstStyle));
 
   // ordered data から各段落の ordered children を抽出
   const orderedParagraphs: (XmlOrderedNode[] | undefined)[] = [];
   if (orderedTxBody) {
     for (const child of orderedTxBody) {
       if ("p" in child) {
-        orderedParagraphs.push(child.p as XmlOrderedNode[]);
+        orderedParagraphs.push(unsafeXmlBoundaryAssertion<XmlOrderedNode[]>(child.p));
       }
     }
   }
 
   const paragraphs: Paragraph[] = [];
-  const pList = (txBody.p as XmlNode[] | undefined) ?? [];
+  const pList = unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(txBody.p) ?? [];
   for (let i = 0; i < pList.length; i++) {
     const orderedChildren = orderedParagraphs[i];
     // 単一 <a:p> 内に bullet pPr が複数回交互配置されている非標準XMLを検出して分割
@@ -1345,30 +1390,36 @@ const VALID_AUTO_NUM_SCHEMES = new Set([
 function parseBullet(pPr: XmlNode | undefined, colorResolver: ColorResolver) {
   let bullet: BulletType | null = null;
   let bulletFont: string | null = null;
-  const buClr = pPr?.buClr as XmlNode | undefined;
-  let bulletColor = colorResolver.resolve(buClr as XmlNode);
+  const buClr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(pPr?.buClr);
+  let bulletColor = colorResolver.resolve(unsafeXmlBoundaryAssertion<XmlNode>(buClr));
   if (!buClr) bulletColor = null;
-  const buSzPct = pPr?.buSzPct as XmlNode | undefined;
+  const buSzPct = unsafeXmlBoundaryAssertion<XmlNode | undefined>(pPr?.buSzPct);
   const bulletSizePct: number | null = buSzPct ? Number(buSzPct["@_val"]) : null;
 
   if (pPr?.buNone !== undefined) {
     bullet = { type: "none" };
   } else if (pPr?.buChar) {
-    const buChar = pPr.buChar as XmlNode;
-    bullet = { type: "char", char: (buChar["@_char"] as string | undefined) ?? "\u2022" };
+    const buChar = unsafeXmlBoundaryAssertion<XmlNode>(pPr.buChar);
+    bullet = {
+      type: "char",
+      char: unsafeXmlBoundaryAssertion<string | undefined>(buChar["@_char"]) ?? "\u2022",
+    };
   } else if (pPr?.buAutoNum) {
-    const buAutoNum = pPr.buAutoNum as XmlNode;
-    const scheme = (buAutoNum["@_type"] as string | undefined) ?? "arabicPeriod";
+    const buAutoNum = unsafeXmlBoundaryAssertion<XmlNode>(pPr.buAutoNum);
+    const scheme =
+      unsafeXmlBoundaryAssertion<string | undefined>(buAutoNum["@_type"]) ?? "arabicPeriod";
     bullet = {
       type: "autoNum",
-      scheme: VALID_AUTO_NUM_SCHEMES.has(scheme) ? (scheme as AutoNumScheme) : "arabicPeriod",
+      scheme: VALID_AUTO_NUM_SCHEMES.has(scheme)
+        ? unsafeXmlBoundaryAssertion<AutoNumScheme>(scheme)
+        : "arabicPeriod",
       startAt: Number(buAutoNum["@_startAt"] ?? 1),
     };
   }
 
   if (pPr?.buFont) {
-    const buFont = pPr.buFont as XmlNode;
-    bulletFont = (buFont["@_typeface"] as string | undefined) ?? null;
+    const buFont = unsafeXmlBoundaryAssertion<XmlNode>(pPr.buFont);
+    bulletFont = unsafeXmlBoundaryAssertion<string | undefined>(buFont["@_typeface"]) ?? null;
   }
 
   return { bullet, bulletFont, bulletColor, bulletSizePct };
@@ -1376,27 +1427,29 @@ function parseBullet(pPr: XmlNode | undefined, colorResolver: ColorResolver) {
 
 function parseSpacing(spc: XmlNode | undefined): SpacingValue {
   if (spc?.spcPts) {
-    const spcPts = spc.spcPts as XmlNode;
+    const spcPts = unsafeXmlBoundaryAssertion<XmlNode>(spc.spcPts);
     return { type: "pts", value: asHundredthPt(Number(spcPts["@_val"])) };
   }
   if (spc?.spcPct) {
-    const spcPct = spc.spcPct as XmlNode;
+    const spcPct = unsafeXmlBoundaryAssertion<XmlNode>(spc.spcPct);
     return { type: "pct", value: Number(spcPct["@_val"]) };
   }
   return { type: "pts", value: asHundredthPt(0) };
 }
 
 function parseTabStops(pPr: XmlNode | undefined): TabStop[] {
-  const tabLst = pPr?.tabLst as XmlNode | undefined;
+  const tabLst = unsafeXmlBoundaryAssertion<XmlNode | undefined>(pPr?.tabLst);
   if (!tabLst) return [];
 
   const tabs = tabLst.tab;
   if (!tabs) return [];
 
-  const tabArr = Array.isArray(tabs) ? (tabs as XmlNode[]) : [tabs as XmlNode];
+  const tabArr = Array.isArray(tabs)
+    ? unsafeXmlBoundaryAssertion<XmlNode[]>(tabs)
+    : [unsafeXmlBoundaryAssertion<XmlNode>(tabs)];
   return tabArr.map((tab) => ({
     position: asEmu(Number(tab["@_pos"] ?? 0)),
-    alignment: (tab["@_algn"] as TabStop["alignment"]) ?? "l",
+    alignment: unsafeXmlBoundaryAssertion<TabStop["alignment"]>(tab["@_algn"]) ?? "l",
   }));
 }
 
@@ -1407,7 +1460,9 @@ function extractMathText(node: XmlNode): string {
     if (key.startsWith("@_")) continue;
     if (key === "t") {
       if (typeof value === "object" && value !== null) {
-        text += ((value as XmlNode)["#text"] as string) ?? "";
+        text +=
+          unsafeXmlBoundaryAssertion<string>(unsafeXmlBoundaryAssertion<XmlNode>(value)["#text"]) ??
+          "";
       } else if (
         typeof value === "string" ||
         typeof value === "number" ||
@@ -1419,7 +1474,7 @@ function extractMathText(node: XmlNode): string {
       const items = Array.isArray(value) ? value : [value];
       for (const item of items) {
         if (typeof item === "object" && item !== null) {
-          text += extractMathText(item as XmlNode);
+          text += extractMathText(unsafeXmlBoundaryAssertion<XmlNode>(item));
         }
       }
     }
@@ -1430,7 +1485,9 @@ function extractMathText(node: XmlNode): string {
 function extractTextContent(node: XmlNode): string {
   const text = node.t;
   if (typeof text === "object") {
-    return ((text as XmlNode)["#text"] as string) ?? "";
+    return (
+      unsafeXmlBoundaryAssertion<string>(unsafeXmlBoundaryAssertion<XmlNode>(text)["#text"]) ?? ""
+    );
   }
   return typeof text === "string" || typeof text === "number" || typeof text === "boolean"
     ? String(text)
@@ -1445,20 +1502,23 @@ function parseParagraph(
   lstStyle?: DefaultTextStyle,
   orderedPChildren?: XmlOrderedNode[],
 ): Paragraph {
-  const pPr = p.pPr as XmlNode | undefined;
+  const pPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(p.pPr);
   const level = Number(pPr?.["@_lvl"] ?? 0);
 
   // lstStyle からレベル対応のデフォルト段落プロパティを取得
   const lstLevelProps = lstStyle?.levels[level];
 
   const { bullet, bulletFont, bulletColor, bulletSizePct } = parseBullet(pPr, colorResolver);
-  const lnSpc = pPr?.lnSpc as XmlNode | undefined;
+  const lnSpc = unsafeXmlBoundaryAssertion<XmlNode | undefined>(pPr?.lnSpc);
   const tabStops = parseTabStops(pPr);
   const properties = {
-    alignment: (pPr?.["@_algn"] as "l" | "ctr" | "r" | "just") ?? lstLevelProps?.alignment ?? null,
+    alignment:
+      unsafeXmlBoundaryAssertion<"l" | "ctr" | "r" | "just">(pPr?.["@_algn"]) ??
+      lstLevelProps?.alignment ??
+      null,
     lineSpacing: lnSpc?.spcPts || lnSpc?.spcPct ? parseSpacing(lnSpc) : null,
-    spaceBefore: parseSpacing(pPr?.spcBef as XmlNode | undefined),
-    spaceAfter: parseSpacing(pPr?.spcAft as XmlNode | undefined),
+    spaceBefore: parseSpacing(unsafeXmlBoundaryAssertion<XmlNode | undefined>(pPr?.spcBef)),
+    spaceAfter: parseSpacing(unsafeXmlBoundaryAssertion<XmlNode | undefined>(pPr?.spcAft)),
     level,
     bullet: bullet ?? lstLevelProps?.bullet ?? null,
     bulletFont: bulletFont ?? lstLevelProps?.bulletFont ?? null,
@@ -1476,7 +1536,7 @@ function parseParagraph(
   };
 
   // defRPr のマージ: pPr.defRPr > lstStyle.lvl.defRPr
-  const pPrDefRPr = parseDefaultRunProperties(pPr?.defRPr as XmlNode);
+  const pPrDefRPr = parseDefaultRunProperties(unsafeXmlBoundaryAssertion<XmlNode>(pPr?.defRPr));
   const lstDefRPr = lstLevelProps?.defaultRunProperties;
   const mergedDefaults = mergeDefaultRunProperties(pPrDefRPr, lstDefRPr);
 
@@ -1485,9 +1545,9 @@ function parseParagraph(
   if (orderedPChildren) {
     // ordered children があれば、ドキュメント順で r/fld/br を処理
     const tagCounters: Record<string, number> = {};
-    const rList = (p.r as XmlNode[] | undefined) ?? [];
-    const fldList = (p.fld as XmlNode[] | undefined) ?? [];
-    const brList = (p.br as XmlNode[] | undefined) ?? [];
+    const rList = unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(p.r) ?? [];
+    const fldList = unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(p.fld) ?? [];
+    const brList = unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(p.br) ?? [];
 
     for (const child of orderedPChildren) {
       const tag = Object.keys(child).find((k) => k !== ":@");
@@ -1500,7 +1560,7 @@ function parseParagraph(
         const r = rList[idx];
         if (r) {
           const textContent = extractTextContent(r);
-          const rPr = r.rPr as XmlNode | undefined;
+          const rPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(r.rPr);
           const runProps = parseRunProperties(rPr, colorResolver, rels, fontScheme, mergedDefaults);
           runs.push({ text: textContent, properties: runProps });
         }
@@ -1508,18 +1568,18 @@ function parseParagraph(
         const fld = fldList[idx];
         if (fld) {
           const textContent = extractTextContent(fld);
-          const rPr = fld.rPr as XmlNode | undefined;
+          const rPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(fld.rPr);
           const runProps = parseRunProperties(rPr, colorResolver, rels, fontScheme, mergedDefaults);
           runs.push({ text: textContent, properties: runProps });
         }
       } else if (tag === "br") {
         const br = brList[idx];
-        const rPr = br?.rPr as XmlNode | undefined;
+        const rPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(br?.rPr);
         const runProps = parseRunProperties(rPr, colorResolver, rels, fontScheme, mergedDefaults);
         runs.push({ text: "\n", properties: runProps });
       } else if (tag === "m") {
         // 数式テキスト抽出 (a14:m → NS prefix removed → m)
-        const mNode = p.m as XmlNode | XmlNode[] | undefined;
+        const mNode = unsafeXmlBoundaryAssertion<XmlNode | XmlNode[] | undefined>(p.m);
         if (mNode) {
           const mData = Array.isArray(mNode) ? mNode[idx] : idx === 0 ? mNode : undefined;
           if (mData) {
@@ -1540,33 +1600,33 @@ function parseParagraph(
     }
   } else {
     // フォールバック: ordered data がない場合は r のみ処理し、fld/br を追加
-    const rList = (p.r as XmlNode[] | undefined) ?? [];
+    const rList = unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(p.r) ?? [];
     for (const r of rList) {
       const textContent = extractTextContent(r);
-      const rPr = r.rPr as XmlNode | undefined;
+      const rPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(r.rPr);
       const runProps = parseRunProperties(rPr, colorResolver, rels, fontScheme, mergedDefaults);
       runs.push({ text: textContent, properties: runProps });
     }
 
     // fld をフォールバック処理（ordered data なしでも最低限表示）
-    const fldList = (p.fld as XmlNode[] | undefined) ?? [];
+    const fldList = unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(p.fld) ?? [];
     for (const fld of fldList) {
       const textContent = extractTextContent(fld);
-      const rPr = fld.rPr as XmlNode | undefined;
+      const rPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(fld.rPr);
       const runProps = parseRunProperties(rPr, colorResolver, rels, fontScheme, mergedDefaults);
       runs.push({ text: textContent, properties: runProps });
     }
 
     // br をフォールバック処理
-    const brList = (p.br as XmlNode[] | undefined) ?? [];
+    const brList = unsafeXmlBoundaryAssertion<XmlNode[] | undefined>(p.br) ?? [];
     for (const _br of brList) {
-      const rPr = _br?.rPr as XmlNode | undefined;
+      const rPr = unsafeXmlBoundaryAssertion<XmlNode | undefined>(_br?.rPr);
       const runProps = parseRunProperties(rPr, colorResolver, rels, fontScheme, mergedDefaults);
       runs.push({ text: "\n", properties: runProps });
     }
 
     // 数式テキスト抽出
-    const mNode = p.m as XmlNode | XmlNode[] | undefined;
+    const mNode = unsafeXmlBoundaryAssertion<XmlNode | XmlNode[] | undefined>(p.m);
     if (mNode) {
       const mArr = Array.isArray(mNode) ? mNode : [mNode];
       for (const m of mArr) {
@@ -1586,7 +1646,7 @@ function parseParagraph(
   }
 
   // endParaRPr をパース（空段落の高さ計算に使用）
-  const endParaRPrNode = p.endParaRPr as XmlNode | undefined;
+  const endParaRPrNode = unsafeXmlBoundaryAssertion<XmlNode | undefined>(p.endParaRPr);
   const endParaRunProperties = endParaRPrNode
     ? parseRunProperties(endParaRPrNode, colorResolver, rels, fontScheme, mergedDefaults)
     : undefined;
@@ -1645,23 +1705,29 @@ function parseRunProperties(
     warn("rPr.highlight", "text highlighting not implemented");
   }
 
-  const latin = rPr.latin as XmlNode | undefined;
-  const ea = rPr.ea as XmlNode | undefined;
-  const cs = rPr.cs as XmlNode | undefined;
+  const latin = unsafeXmlBoundaryAssertion<XmlNode | undefined>(rPr.latin);
+  const ea = unsafeXmlBoundaryAssertion<XmlNode | undefined>(rPr.ea);
+  const cs = unsafeXmlBoundaryAssertion<XmlNode | undefined>(rPr.cs);
 
   const fontSize = rPr["@_sz"]
     ? hundredthPointToPoint(asHundredthPt(Number(rPr["@_sz"])))
     : (defaults?.fontSize ?? null);
   const fontFamily = resolveThemeFont(
-    (latin?.["@_typeface"] as string | undefined) ?? defaults?.fontFamily ?? null,
+    unsafeXmlBoundaryAssertion<string | undefined>(latin?.["@_typeface"]) ??
+      defaults?.fontFamily ??
+      null,
     fontScheme,
   );
   const fontFamilyEa = resolveThemeFont(
-    (ea?.["@_typeface"] as string | undefined) ?? defaults?.fontFamilyEa ?? null,
+    unsafeXmlBoundaryAssertion<string | undefined>(ea?.["@_typeface"]) ??
+      defaults?.fontFamilyEa ??
+      null,
     fontScheme,
   );
   const fontFamilyCs = resolveThemeFont(
-    (cs?.["@_typeface"] as string | undefined) ?? defaults?.fontFamilyCs ?? null,
+    unsafeXmlBoundaryAssertion<string | undefined>(cs?.["@_typeface"]) ??
+      defaults?.fontFamilyCs ??
+      null,
     fontScheme,
   );
   const bold =
@@ -1680,13 +1746,16 @@ function parseRunProperties(
       : (defaults?.strikethrough ?? false);
   const baseline = rPr["@_baseline"] ? Number(rPr["@_baseline"]) / 1000 : 0;
 
-  const solidFill = rPr.solidFill as XmlNode | undefined;
+  const solidFill = unsafeXmlBoundaryAssertion<XmlNode | undefined>(rPr.solidFill);
   let color = colorResolver.resolve(solidFill ?? rPr);
   if (!solidFill && !rPr.srgbClr && !rPr.schemeClr && !rPr.sysClr) {
     color = null;
   }
 
-  const hyperlink = parseHyperlink(rPr.hlinkClick as XmlNode | undefined, rels);
+  const hyperlink = parseHyperlink(
+    unsafeXmlBoundaryAssertion<XmlNode | undefined>(rPr.hlinkClick),
+    rels,
+  );
 
   // Default hyperlink style: theme hlink color + underline
   if (hyperlink) {
@@ -1698,11 +1767,11 @@ function parseRunProperties(
     }
   }
 
-  const ln = rPr.ln as XmlNode | undefined;
+  const ln = unsafeXmlBoundaryAssertion<XmlNode | undefined>(rPr.ln);
   let outline: TextOutline | null = null;
   if (ln) {
     const lnWidth = asEmu(Number(ln["@_w"] ?? 12700));
-    const lnFill = ln.solidFill as XmlNode | undefined;
+    const lnFill = unsafeXmlBoundaryAssertion<XmlNode | undefined>(ln.solidFill);
     const lnColor = lnFill ? colorResolver.resolve(lnFill) : null;
     if (lnColor) {
       outline = { width: lnWidth, color: lnColor };
@@ -1732,12 +1801,13 @@ function parseHyperlink(
   if (!hlinkClick) return null;
 
   const rId =
-    (hlinkClick["@_r:id"] as string | undefined) ?? (hlinkClick["@_id"] as string | undefined);
+    unsafeXmlBoundaryAssertion<string | undefined>(hlinkClick["@_r:id"]) ??
+    unsafeXmlBoundaryAssertion<string | undefined>(hlinkClick["@_id"]);
   if (!rId || !rels) return null;
 
   const rel = rels.get(rId);
   if (!rel) return null;
 
-  const tooltip = hlinkClick["@_tooltip"] as string | undefined;
+  const tooltip = unsafeXmlBoundaryAssertion<string | undefined>(hlinkClick["@_tooltip"]);
   return { url: rel.target, ...(tooltip && { tooltip }) };
 }

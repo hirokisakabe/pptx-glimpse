@@ -29,6 +29,7 @@ import type {
   RawPackagePart,
 } from "../source/index.js";
 import { isRelationshipPart, relationshipsPartPath } from "../source/package-paths.js";
+import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 
 /** `writePptx` の出力。 */
 export type WritePptxOutput = Uint8Array;
@@ -202,7 +203,7 @@ function getShapeByOrderingSlot(
     const items = Array.isArray(value) ? value : [value];
     for (const item of items) {
       if (currentSlot === orderingSlot) {
-        return local === "sp" ? (item as XmlNode) : undefined;
+        return local === "sp" ? unsafeOoxmlBoundaryAssertion<XmlNode>(item) : undefined;
       }
       currentSlot++;
     }
@@ -229,7 +230,7 @@ function setChildText(node: XmlNode, name: string, text: string): void {
 
 function textElementValue(existing: unknown, text: string): unknown {
   if (typeof existing === "object" && existing !== null && !Array.isArray(existing)) {
-    const next: XmlNode = { ...(existing as XmlNode), "#text": text };
+    const next: XmlNode = { ...unsafeOoxmlBoundaryAssertion<XmlNode>(existing), "#text": text };
     if (textRequiresPreserve(text)) next["@_xml:space"] = "preserve";
     else delete next["@_xml:space"];
     return next;
