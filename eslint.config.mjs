@@ -5,6 +5,11 @@ import simpleImportSort from "eslint-plugin-simple-import-sort";
 import tseslint from "typescript-eslint";
 import prettier from "eslint-config-prettier";
 
+const repoRoot = dirname(fileURLToPath(import.meta.url));
+const documentExperimentalSource = fileURLToPath(
+  new URL("./packages/pptx-glimpse-document/src/experimental.ts", import.meta.url),
+);
+
 export default tseslint.config(
   {
     files: [
@@ -22,7 +27,7 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         project: "./tsconfig.eslint.json",
-        tsconfigRootDir: dirname(fileURLToPath(import.meta.url)),
+        tsconfigRootDir: repoRoot,
       },
     },
     settings: {
@@ -32,6 +37,9 @@ export default tseslint.config(
           extensions: [".ts", ".js", ".json", ".node"],
           extensionAlias: {
             ".js": [".ts", ".js"],
+          },
+          alias: {
+            "@pptx-glimpse/document/experimental": [documentExperimentalSource],
           },
           mainFields: ["module", "main"],
         }),
@@ -43,7 +51,7 @@ export default tseslint.config(
       "import-x/no-restricted-paths": [
         "error",
         {
-          basePath: dirname(fileURLToPath(import.meta.url)),
+          basePath: repoRoot,
           zones: [
             {
               target: "./packages/pptx-glimpse-document/src",
@@ -198,6 +206,22 @@ export default tseslint.config(
         {
           packageDir: ["packages/pptx-glimpse-cli"],
           devDependencies: false,
+          includeInternal: true,
+        },
+      ],
+    },
+  },
+  {
+    files: [
+      "packages/pptx-glimpse-cli/src/**/*.test.ts",
+      "packages/pptx-glimpse-cli/src/**/*.e2e.test.ts",
+    ],
+    rules: {
+      "import-x/no-extraneous-dependencies": [
+        "error",
+        {
+          packageDir: ["packages/pptx-glimpse-cli", "."],
+          devDependencies: true,
           includeInternal: true,
         },
       ],

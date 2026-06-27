@@ -14,8 +14,9 @@
       "require": "./dist/index.cjs"
     },
     "./experimental": {
-      "types": "./src/experimental.ts",
-      "default": "./src/experimental.ts"
+      "types": "./dist/experimental.d.ts",
+      "import": "./dist/experimental.js",
+      "require": "./dist/experimental.cjs"
     }
   },
   "scripts": {

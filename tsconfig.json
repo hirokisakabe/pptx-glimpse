@@ -13,7 +13,13 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "baseUrl": ".",
+    "paths": {
+      "@pptx-glimpse/document/experimental": [
+        "packages/pptx-glimpse-document/src/experimental.ts"
+      ]
+    }
   },
   "include": ["packages/*/src/**/*"],
   "exclude": ["node_modules", "dist", "**/dist", "vrt", "packages/*/src/**/*.test.ts"]
