@@ -11,6 +11,15 @@ supersedes the earlier "current state" and parallel-reader descriptions in the
 dogfood migration note where those descriptions still mention public conversion
 flowing through the old parser.
 
+It also updates the inventory requested by
+[#527](https://github.com/hirokisakabe/pptx-glimpse/issues/527). Older issue text
+in [#516](https://github.com/hirokisakabe/pptx-glimpse/issues/516) used the
+transitionary `CleanDoc` name and `packages/pptx-glimpse/src/*` paths. In the
+current repository those map to PptxSourceModel and the workspace package paths
+under `packages/core`, `packages/document`, and `packages/renderer`; for example
+the old `cleandoc-renderer-adapter.ts` reference is now
+`packages/core/src/pptx-computed-view-renderer-adapter.ts`.
+
 This is the current-state companion to the historical migration plan. The
 default switch tracked by [#481](https://github.com/hirokisakabe/pptx-glimpse/issues/481)
 is complete, and the package-boundary cleanup follow-ups
@@ -64,20 +73,37 @@ These remain in core or renderer by design:
 | SmartArt drawing XML fallback to renderer shape tree                         | Adapter calling parser `parseShapeTree`                        | This is a rendering fallback for resolved diagram drawing XML, not canonical document semantics yet       |
 | Font discovery, font mapping, text measurement, text-to-path, SVG/PNG output | `@pptx-glimpse/renderer`                                       | Renderer-specific behavior per `document-boundaries.md`                                                   |
 
-## Remaining legacy parser uses
+## Remaining legacy parser call-site inventory
 
-The old parser code still has three explicit roles:
+The old parser code still has three explicit roles. This inventory lists the
+current cross-boundary call sites using current file paths. Parser subsystem
+internals under `packages/core/src/parser/` and their colocated unit tests remain
+because they implement and protect these roles; they are not additional public
+conversion orchestration.
 
-1. `parser-path-oracle.ts` renders through the old parser for document-path
-   parity checks.
-2. `dual-reader-structural-comparison.test.ts` compares a focused structural
-   subset against the old parser while the migration still needs a readable
-   model-level oracle.
-3. `pptx-computed-view-renderer-adapter.ts` reuses `parseChart` and `parseShapeTree` for
-   renderer-specific chart and SmartArt fallbacks.
+| Current call site                                                          | Legacy parser dependency                                                                                                                             | Classification               | Current role                                                                                                                                       | Follow-up state                                                                    |
+| -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `packages/core/src/parser-path-oracle.ts`                                  | Imports `parsePptxData` / `parseSlideWithLayout` from `packages/core/src/pptx-data-parser.ts` and XML cache helpers from `packages/core/src/parser/` | `parser oracle`              | Renders through the old parser only for document-path parity checks and VRT/test oracles.                                                          | Keep until the explicit parser oracle is retired.                                  |
+| `packages/core/src/parser-path-oracle.ts`                                  | Exports `buildEffectiveSlideElements` around old parser slide/layout/master outputs                                                                  | `parser oracle`              | Preserves old parser effective element ordering and placeholder filtering for oracle comparisons.                                                  | Keep with the parser oracle; remove with `pptx-data-parser.ts` retirement.         |
+| `vrt/snapshot/document-path-regression.test.ts`                            | Imports and calls `convertPptxToPngViaParserPath` from `packages/core/src/parser-path-oracle.ts`                                                     | `parser oracle`              | Compares document-path PNG output against the explicit parser oracle for the document-path VRT set.                                                | Remove or retarget when the parser oracle no longer backs document-path VRT.       |
+| `vrt/snapshot/document-path-zero-diff-gate.test.ts`                        | Imports and calls `convertPptxToPngViaParserPath` from `packages/core/src/parser-path-oracle.ts`                                                     | `parser oracle`              | Keeps the default-switch zero-diff gate against the explicit parser oracle.                                                                        | Remove or retarget when the parser oracle no longer backs the zero-diff gate.      |
+| `packages/core/src/dual-reader-structural-comparison.test.ts`              | Imports `parsePptxData`, `parseSlideWithLayout`, and `buildEffectiveSlideElements`                                                                   | `structural comparison`      | Compares a focused supported subset of the old parser render model against the PptxSourceModel document path and core adapter output.              | Retire after VRT and public regressions fully cover the parser oracle's value.     |
+| `bench/conversion.bench.ts`                                                | Imports and calls `parsePptxData` / `parseSlideWithLayout` from `packages/core/src/pptx-data-parser.ts`                                              | `parser oracle`              | Benchmarks the old parser pipeline as an explicit baseline beside the public document-path conversion APIs.                                        | Remove or retarget with `pptx-data-parser.ts` retirement.                          |
+| `packages/core/src/pptx-computed-view-renderer-adapter.ts` `adaptChart`    | Imports and calls `parseChart` from `packages/core/src/parser/chart-parser.ts`                                                                       | `renderer-specific fallback` | Maps resolved chart XML from PptxSourceModel into the current renderer chart model until a document-owned chart source/computed contract exists.   | Replace after chart source/computed contracts are designed.                        |
+| `packages/core/src/pptx-computed-view-renderer-adapter.ts` `adaptSmartArt` | Imports `navigateOrdered` / `parseShapeTree` from `packages/core/src/parser/slide-parser.ts` and XML helpers from `packages/core/src/parser/`        | `renderer-specific fallback` | Turns resolved SmartArt diagram drawing XML into the current renderer group/shape model as a visual fallback, not as canonical document semantics. | Replace after a document-owned diagram drawing source model exists.                |
+| `packages/core/src/parse-render.integration.test.ts`                       | Imports `parseShapeTree` and parser XML/archive relationship types                                                                                   | `renderer-specific fallback` | Keeps direct coverage for old parser shape-tree output that the renderer and SmartArt fallback still consume.                                      | Remove or move when adapter fallback use of `parseShapeTree` is replaced.          |
+| `packages/core/src/parser-path-oracle.test.ts`                             | Imports `buildEffectiveSlideElements` and `ParsedSlide` from `packages/core/src/pptx-data-parser.ts`                                                 | `parser oracle`              | Protects oracle-only effective element merging semantics after that logic moved out of `converter.ts`.                                             | Remove with `parser-path-oracle.ts`.                                               |
+| `packages/core/src/text-style-resolver.ts`                                 | Imports `resolveThemeFont` from `packages/core/src/parser/text-style-parser.ts`                                                                      | `parser oracle`              | Supports old parser text-style inheritance used by `packages/core/src/pptx-data-parser.ts`; public font collection no longer depends on it.        | Remove or narrow with `pptx-data-parser.ts` retirement.                            |
+| `packages/core/src/text-style-resolver.test.ts`                            | Imports `applyTextStyleInheritance` and `TextStyleContext` from `packages/core/src/text-style-resolver.ts`                                           | `parser oracle`              | Protects the old parser text-style inheritance helper while `pptx-data-parser.ts` still consumes it.                                               | Remove or narrow with `text-style-resolver.ts` retirement.                         |
+| None found outside the roles above                                         | n/a                                                                                                                                                  | `obsolete`                   | No obsolete old-parser cross-boundary call site was found in the current tree during the #527 audit.                                               | If a future obsolete use appears, remove it or split a follow-up issue before use. |
 
-No public API currently imports old parser render orchestration. `converter.ts`
-only calls the document path.
+No public API currently imports old parser render orchestration.
+`packages/core/src/converter.ts` calls only
+`convertPptxToSvgViaDocumentPath` and `convertPptxToPngViaDocumentPath` from
+`packages/core/src/experimental-document-renderer.ts`. That document path reads
+with `@pptx-glimpse/document` `readPptx`, builds `createComputedView`, adapts via
+`packages/core/src/pptx-computed-view-renderer-adapter.ts`, and then invokes the
+renderer.
 
 ## Shrink applied in #485
 
