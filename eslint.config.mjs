@@ -108,16 +108,12 @@ export default tseslint.config(
       "no-restricted-imports": [
         "error",
         {
-          paths: [
+          patterns: [
             {
-              name: "./unsafe-type-assertion.js",
+              group: ["**/unsafe-type-assertion.js"],
               importNames: ["unsafeFixtureAssertion"],
-              message: "unsafeFixtureAssertion is test-only; production code must use a boundary-specific helper.",
-            },
-            {
-              name: "../unsafe-type-assertion.js",
-              importNames: ["unsafeFixtureAssertion"],
-              message: "unsafeFixtureAssertion is test-only; production code must use a boundary-specific helper.",
+              message:
+                "unsafeFixtureAssertion is test-only; production code must use a boundary-specific helper.",
             },
           ],
         },
