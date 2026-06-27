@@ -1,12 +1,14 @@
 /**
  * PPTX から使用フォント名を収集する API。
  */
-import type { SlideElement } from "pptx-glimpse-renderer";
-import type { TextBody } from "pptx-glimpse-renderer";
-import type { FontScheme } from "pptx-glimpse-renderer";
-
-import { clearXmlCache, enableXmlCache } from "../parser/xml-parser.js";
-import { parsePptxData, parseSlideWithLayout } from "../pptx-data-parser.js";
+import {
+  type CleanDocSource,
+  type ComputedElement,
+  type ComputedTextBody,
+  createComputedView,
+  readPptx,
+  type SourceThemeFontScheme,
+} from "../../../pptx-glimpse-document/src/experimental.js";
 
 /** フォント収集結果 */
 export interface UsedFonts {
@@ -23,61 +25,69 @@ export interface UsedFonts {
   fonts: string[];
 }
 
+const DEFAULT_THEME_FONTS: Required<Pick<SourceThemeFontScheme, "majorLatin" | "minorLatin">> &
+  SourceThemeFontScheme = {
+  majorLatin: "Calibri",
+  minorLatin: "Calibri",
+};
+
 /**
  * PPTX をパースして使用されているフォント名を収集する。
  * レンダリングは行わないため軽量。
  */
 export function collectUsedFonts(input: Buffer | Uint8Array): UsedFonts {
-  enableXmlCache();
-  try {
-    const data = parsePptxData(input);
-    const fontScheme = data.theme.fontScheme;
+  const source = readPptx(input);
+  const fontScheme = findThemeFontScheme(source);
+  const computed = createComputedView(source);
 
-    const fonts = new Set<string>();
+  const fonts = new Set<string>();
 
-    // テーマフォントを収集
-    collectThemeFonts(fontScheme, fonts);
+  collectThemeFonts(fontScheme, fonts);
 
-    // 各スライドから収集（スライドごとのマスター要素も含む）
-    const collectedMasters = new Set<SlideElement[]>();
-    for (const { slideNumber, path } of data.slidePaths) {
-      const parsed = parseSlideWithLayout(slideNumber, path, data);
-      if (!parsed) continue;
-      collectFontsFromElements(parsed.slide.elements, fonts);
-      if (!collectedMasters.has(parsed.masterElements)) {
-        collectedMasters.add(parsed.masterElements);
-        collectFontsFromElements(parsed.masterElements, fonts);
-      }
-    }
-
-    return {
-      theme: {
-        majorFont: fontScheme.majorFont,
-        minorFont: fontScheme.minorFont,
-        majorFontEa: fontScheme.majorFontEa,
-        minorFontEa: fontScheme.minorFontEa,
-        majorFontCs: fontScheme.majorFontCs,
-        minorFontCs: fontScheme.minorFontCs,
-      },
-      fonts: [...fonts].sort(),
-    };
-  } finally {
-    clearXmlCache();
+  for (const slide of computed.slides) {
+    collectFontsFromElements(slide.elements, fonts);
   }
+
+  return {
+    theme: {
+      majorFont: fontScheme.majorLatin,
+      minorFont: fontScheme.minorLatin,
+      majorFontEa: fontScheme.majorEastAsian ?? null,
+      minorFontEa: fontScheme.minorEastAsian ?? null,
+      majorFontCs: fontScheme.majorComplexScript ?? null,
+      minorFontCs: fontScheme.minorComplexScript ?? null,
+    },
+    fonts: [...fonts].sort(),
+  };
 }
 
-function collectThemeFonts(fontScheme: FontScheme, fonts: Set<string>): void {
-  fonts.add(fontScheme.majorFont);
-  fonts.add(fontScheme.minorFont);
-  if (fontScheme.majorFontEa) fonts.add(fontScheme.majorFontEa);
-  if (fontScheme.minorFontEa) fonts.add(fontScheme.minorFontEa);
-  if (fontScheme.majorFontCs) fonts.add(fontScheme.majorFontCs);
-  if (fontScheme.minorFontCs) fonts.add(fontScheme.minorFontCs);
+function findThemeFontScheme(
+  source: CleanDocSource,
+): Required<Pick<SourceThemeFontScheme, "majorLatin" | "minorLatin">> & SourceThemeFontScheme {
+  const firstThemePartPath = source.slideMasters.find(
+    (master) => master.themePartPath !== undefined,
+  )?.themePartPath;
+  const scheme =
+    source.themes.find((theme) => theme.partPath === firstThemePartPath)?.fontScheme ??
+    source.themes[0]?.fontScheme;
+  return {
+    ...DEFAULT_THEME_FONTS,
+    ...scheme,
+  };
 }
 
-function collectFontsFromElements(elements: SlideElement[], fonts: Set<string>): void {
+function collectThemeFonts(fontScheme: SourceThemeFontScheme, fonts: Set<string>): void {
+  addFont(fonts, fontScheme.majorLatin);
+  addFont(fonts, fontScheme.minorLatin);
+  addFont(fonts, fontScheme.majorEastAsian);
+  addFont(fonts, fontScheme.minorEastAsian);
+  addFont(fonts, fontScheme.majorComplexScript);
+  addFont(fonts, fontScheme.minorComplexScript);
+}
+
+function collectFontsFromElements(elements: readonly ComputedElement[], fonts: Set<string>): void {
   for (const el of elements) {
-    switch (el.type) {
+    switch (el.kind) {
       case "shape":
         if (el.textBody) collectFontsFromTextBody(el.textBody, fonts);
         break;
@@ -95,13 +105,17 @@ function collectFontsFromElements(elements: SlideElement[], fonts: Set<string>):
   }
 }
 
-function collectFontsFromTextBody(textBody: TextBody, fonts: Set<string>): void {
+function collectFontsFromTextBody(textBody: ComputedTextBody, fonts: Set<string>): void {
   for (const para of textBody.paragraphs) {
-    if (para.properties.bulletFont) fonts.add(para.properties.bulletFont);
+    addFont(fonts, para.properties?.bulletFont);
     for (const run of para.runs) {
-      if (run.properties.fontFamily) fonts.add(run.properties.fontFamily);
-      if (run.properties.fontFamilyEa) fonts.add(run.properties.fontFamilyEa);
-      if (run.properties.fontFamilyCs) fonts.add(run.properties.fontFamilyCs);
+      addFont(fonts, run.properties?.typeface);
+      addFont(fonts, run.properties?.typefaceEa);
+      addFont(fonts, run.properties?.typefaceCs);
     }
   }
+}
+
+function addFont(fonts: Set<string>, font: string | undefined): void {
+  if (font) fonts.add(font);
 }
