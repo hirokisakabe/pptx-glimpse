@@ -12,7 +12,7 @@ Audit date: 2026-06-27.
 Command used for the broad inventory:
 
 ```bash
-npx tsx scripts/audit-type-assertions.ts
+npm run audit:type-assertions
 ```
 
 The current source tree contains 751 `as` / angle-bracket type assertions in

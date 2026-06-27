@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "pnpm --filter @pptx-glimpse/document build && pnpm --filter @pptx-glimpse/renderer build && pnpm --filter pptx-glimpse build",
+    "audit:type-assertions": "tsx scripts/audit-type-assertions.ts",
     "bench": "vitest bench",
     "lint": "eslint packages/*/src/ vrt/ scripts/ bench/ e2e/",
     "lint:fix": "eslint packages/*/src/ vrt/ scripts/ bench/ e2e/ --fix",
