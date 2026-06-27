@@ -8,7 +8,7 @@ import {
   createComputedView,
   readPptx,
   type SourceThemeFontScheme,
-} from "../../../pptx-glimpse-document/src/experimental.js";
+} from "@pptx-glimpse/document/experimental";
 
 /** フォント収集結果 */
 export interface UsedFonts {

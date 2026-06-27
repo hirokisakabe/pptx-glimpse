@@ -1,18 +1,17 @@
 import JSZip from "jszip";
+import { clearFontCache } from "pptx-glimpse-renderer";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
-// システムフォントスキャンを抑止する。macOS 上では `/System/Library/Fonts` 等から
-// 数百個のフォントが読み込まれ、parse 結果が worker メモリに蓄積して OOM を引き起こす。
-// converter のテストはフォントメトリクスに依存しない構造検証 (slide 数 / SVG 構造 / 塗り色)
-// が中心なので、`DefaultTextMeasurer` フォールバックで十分。
-vi.mock("../../pptx-glimpse-renderer/src/font/system-font-loader.js", () => ({
-  collectFontFilePaths: vi.fn(() => []),
-  getSystemFontDirs: vi.fn(() => []),
-}));
+import {
+  convertPptxToPng as convertPptxToPngBase,
+  convertPptxToSvg as convertPptxToSvgBase,
+} from "./converter.js";
 
-import { clearFontCache } from "pptx-glimpse-renderer";
+const convertPptxToSvg: typeof convertPptxToSvgBase = (input, options) =>
+  convertPptxToSvgBase(input, { skipSystemFonts: true, ...options });
 
-import { convertPptxToPng, convertPptxToSvg } from "./converter.js";
+const convertPptxToPng: typeof convertPptxToPngBase = (input, options) =>
+  convertPptxToPngBase(input, { skipSystemFonts: true, ...options });
 
 const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">

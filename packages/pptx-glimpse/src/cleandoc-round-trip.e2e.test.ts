@@ -1,9 +1,6 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import { unzipSync } from "fflate";
-import { describe, expect, it } from "vitest";
-
 import {
   type CleanDocSource,
   createComputedView,
@@ -15,8 +12,11 @@ import {
   type SourceShape,
   type SourceTextRun,
   writePptx,
-} from "../../pptx-glimpse-document/src/experimental.js";
-import { renderSlideToSvg } from "../../pptx-glimpse-renderer/src/index.js";
+} from "@pptx-glimpse/document/experimental";
+import { unzipSync } from "fflate";
+import { renderSlideToSvg } from "pptx-glimpse-renderer";
+import { describe, expect, it } from "vitest";
+
 import { adaptComputedViewToRendererModel } from "./cleandoc-renderer-adapter.js";
 import { convertPptxToPng, convertPptxToSvg } from "./converter.js";
 

@@ -1,5 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 
+import { createComputedView, readPptx } from "@pptx-glimpse/document/experimental";
 import {
   buildFontFaceStyle,
   collectFontFilePaths,
@@ -24,7 +25,6 @@ import {
   warn,
 } from "pptx-glimpse-renderer";
 
-import { createComputedView, readPptx } from "../../pptx-glimpse-document/src/experimental.js";
 import {
   adaptComputedViewToRendererModel,
   type RendererAdapterDiagnostic,
