@@ -171,9 +171,10 @@ Renderer `ChartData` should not be moved into `document`.
 ### SmartArt and raw elements
 
 SmartArt is currently a raw-resolved fallback. `ComputedSmartArtElement`
-provides the resolved diagram drawing XML, drawing relationships, media, and
-slide theme color context. The adapter maps that into a renderer `GroupElement`
-using the temporary `parseShapeTree` bridge documented in
+provides the resolved diagram drawing XML, drawing relationships, and media.
+The adapter combines that element data with the surrounding `ComputedSlide`
+color context and maps it into a renderer `GroupElement` using the temporary
+`parseShapeTree` bridge documented in
 [smartart-fallback-contract.md](./smartart-fallback-contract.md).
 
 Raw elements, raw backgrounds, and raw fills have no renderer model equivalent.
