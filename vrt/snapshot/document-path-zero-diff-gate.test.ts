@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
-import { convertPptxToPng } from "../../packages/pptx-glimpse/src/converter.js";
+import { convertPptxToPngViaParserPath } from "../../packages/pptx-glimpse/src/converter.js";
 import { convertPptxToPngViaDocumentPath } from "../../packages/pptx-glimpse/src/experimental-document-renderer.js";
 import { compareImageBuffers } from "../compare-utils.js";
 import {
@@ -62,7 +62,7 @@ describe("Document path zero-diff default switch gate", { timeout: 60000 }, () =
         const options = {
           width: DOCUMENT_PATH_VRT_RENDER_WIDTH,
         };
-        const parserResults = await convertPptxToPng(input, options);
+        const parserResults = await convertPptxToPngViaParserPath(input, options);
         const documentResults = await convertPptxToPngViaDocumentPath(input, options);
 
         expect(

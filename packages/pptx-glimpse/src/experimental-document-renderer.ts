@@ -44,8 +44,8 @@ interface DocumentPathPngResult {
 }
 
 /**
- * Internal / experimental render orchestration for dogfooding the CleanDoc
- * document path. This intentionally does not replace the public converter path.
+ * CleanDoc document-path render orchestration used by the public converter
+ * default. Parser-path helpers remain available for parity checks.
  */
 export async function convertPptxToSvgViaDocumentPath(
   input: Buffer | Uint8Array,

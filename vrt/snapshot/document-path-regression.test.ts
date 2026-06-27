@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 
-import { convertPptxToPng } from "../../packages/pptx-glimpse/src/converter.js";
+import { convertPptxToPngViaParserPath } from "../../packages/pptx-glimpse/src/converter.js";
 import { convertPptxToPngViaDocumentPath } from "../../packages/pptx-glimpse/src/experimental-document-renderer.js";
 import { compareImageBuffers } from "../compare-utils.js";
 import {
@@ -41,7 +41,7 @@ describe("Document path Visual Regression Tests", { timeout: 60000 }, () => {
     expect(scopedSharedFixtureNames).toEqual(sharedFixtureNames);
     expect(scopedGeneratedFixtureNames).toEqual(generatedFixtureNames);
     expect(DOCUMENT_PATH_VRT_SNAPSHOT_POLICY).toMatchInlineSnapshot(
-      `"No committed snapshot update is required: document path VRT compares against the current parser path in-memory until the public default path changes."`,
+      `"No committed snapshot update is required: document path VRT compares against the explicit parser path oracle in-memory."`,
     );
   });
 
@@ -75,7 +75,7 @@ describe("Document path Visual Regression Tests", { timeout: 60000 }, () => {
         const options = {
           width: DOCUMENT_PATH_VRT_RENDER_WIDTH,
         };
-        const currentResults = await convertPptxToPng(input, options);
+        const currentResults = await convertPptxToPngViaParserPath(input, options);
         const documentResults = await convertPptxToPngViaDocumentPath(input, options);
 
         expect(

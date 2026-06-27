@@ -307,9 +307,9 @@ describe("convertPptxToSvg", () => {
     const svg = results[0].svg;
 
     // Blue rectangle fill
-    expect(svg).toContain("#4472C4");
+    expect(svg.toLowerCase()).toContain("#4472c4");
     // Orange ellipse fill
-    expect(svg).toContain("#ED7D31");
+    expect(svg.toLowerCase()).toContain("#ed7d31");
   });
 
   it("supports slide number filtering", async () => {
@@ -512,10 +512,10 @@ describe("master placeholder text filtering", () => {
     // Placeholder shapes should be filtered out
 
     // Decorative shape's red fill should appear
-    expect(svg).toContain("#FF0000");
+    expect(svg.toLowerCase()).toContain("#ff0000");
 
     // Count shape groups — should have decorative master shape + slide shape = 2 groups
-    const groupCount = (svg.match(/<g transform="translate/g) || []).length;
+    const groupCount = (svg.match(/<g\b[^>]*transform="translate/g) || []).length;
     expect(groupCount).toBe(2);
   });
 });
@@ -727,10 +727,10 @@ describe("layout placeholder text filtering", () => {
     // Placeholder shapes should be filtered out
 
     // Decorative shape's blue fill should appear
-    expect(svg).toContain("#0000FF");
+    expect(svg.toLowerCase()).toContain("#0000ff");
 
     // Count shape groups — should have decorative layout shape + slide shape = 2 groups
-    const groupCount = (svg.match(/<g transform="translate/g) || []).length;
+    const groupCount = (svg.match(/<g\b[^>]*transform="translate/g) || []).length;
     expect(groupCount).toBe(2);
   });
 });
@@ -833,13 +833,13 @@ describe("slide placeholder text filtering", () => {
     const svg = results[0].svg;
 
     // Decorative (non-placeholder) shape with magenta fill should remain.
-    expect(svg).toContain("#FF00FF");
+    expect(svg.toLowerCase()).toContain("#ff00ff");
 
     // Empty placeholders' green fill must NOT be rendered.
-    expect(svg).not.toContain("#00FF00");
+    expect(svg.toLowerCase()).not.toContain("#00ff00");
 
     // Only the decorative shape should produce a translate group.
-    const groupCount = (svg.match(/<g transform="translate/g) || []).length;
+    const groupCount = (svg.match(/<g\b[^>]*transform="translate/g) || []).length;
     expect(groupCount).toBe(1);
   });
 
@@ -854,12 +854,12 @@ describe("slide placeholder text filtering", () => {
     const svg = results[0].svg;
 
     // Filled title placeholder is kept (green fill renders).
-    expect(svg).toContain("#00FF00");
+    expect(svg.toLowerCase()).toContain("#00ff00");
     // Decorative shape still rendered.
-    expect(svg).toContain("#FF00FF");
+    expect(svg.toLowerCase()).toContain("#ff00ff");
 
     // Filled title + still-empty body (filtered) + decorative = 2 groups.
-    const groupCount = (svg.match(/<g transform="translate/g) || []).length;
+    const groupCount = (svg.match(/<g\b[^>]*transform="translate/g) || []).length;
     expect(groupCount).toBe(2);
   });
 });

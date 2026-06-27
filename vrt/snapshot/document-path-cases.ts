@@ -1,5 +1,5 @@
 /**
- * Document path VRT は public snapshot を更新せず、current parser path の PNG を
+ * Document path VRT は public snapshot を更新せず、明示的な parser path の PNG を
  * 参照画像としてその場で比較する full parity harness。
  *
  * mismatchTolerance は #489 時点の実測 gap を blocker issue 単位で固定した上限。
@@ -9,7 +9,7 @@
 export const DOCUMENT_PATH_VRT_RENDER_WIDTH = 320;
 
 export const DOCUMENT_PATH_VRT_SNAPSHOT_POLICY =
-  "No committed snapshot update is required: document path VRT compares against the current parser path in-memory until the public default path changes.";
+  "No committed snapshot update is required: document path VRT compares against the explicit parser path oracle in-memory.";
 
 export const DOCUMENT_PATH_VRT_BLOCKER_ISSUES = {
   tables: 491,
