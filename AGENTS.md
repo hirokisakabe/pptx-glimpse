@@ -108,6 +108,12 @@ vrt/
 
 Snapshots are generated inside a Docker container (Node.js + sharp + fonts) to ensure consistent rendering across macOS and Linux. Both snapshot generation and CI test execution use the same Docker image.
 
+Snapshot VRT passes `skipSystemFonts: true` through `vrt/snapshot/render-options.ts`.
+This keeps local runs from scanning and parsing every system font on macOS while using
+the same font-loading policy for Docker snapshot generation and CI verification. The
+Docker image still fixes the runtime and rendering toolchain; the VRT intentionally
+does not depend on each developer machine's full OS font inventory.
+
 #### Setup
 
 ```bash
