@@ -77,12 +77,18 @@ const buckets: Record<Category, CategoryBucket> = {
   },
 };
 
-const lintedRoots = ["packages", "vrt", "scripts", "bench", "e2e"];
+const lintedFileGlobs = [
+  "packages/*/src/**/*.ts",
+  "packages/*/src/**/*.tsx",
+  "vrt/**/*.ts",
+  "scripts/**/*.ts",
+  "bench/**/*.ts",
+  "e2e/**/*.ts",
+];
 
 function listSourceFiles(): string[] {
-  return execFileSync("rg", ["--files", "-g", "*.ts", "-g", "*.tsx", ...lintedRoots], {
-    encoding: "utf8",
-  })
+  const globArgs = lintedFileGlobs.flatMap((glob) => ["-g", glob]);
+  return execFileSync("rg", ["--files", ...globArgs, "."], { encoding: "utf8" })
     .split("\n")
     .filter((file) => file.length > 0);
 }
