@@ -6521,7 +6521,7 @@ async function createMultiLangFontFixture(): Promise<void> {
   </p:txBody>
 </p:sp>`);
 
-  // Shape 4 (row1, col1): Same font for both (no split needed)
+  // Shape 4 (row1, col1): Same CJK-capable font for both (no split needed)
   const pos4 = gridPosition(1, 1, 2, 2);
   shapes.push(`<p:sp>
   <p:nvSpPr><p:cNvPr id="5" name="Same Font"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
@@ -6537,8 +6537,8 @@ async function createMultiLangFontFixture(): Promise<void> {
       <a:r>
         <a:rPr lang="en-US" sz="1600">
           <a:solidFill><a:srgbClr val="000000"/></a:solidFill>
-          <a:latin typeface="Liberation Sans"/>
-          <a:ea typeface="Liberation Sans"/>
+          <a:latin typeface="Noto Sans CJK JP"/>
+          <a:ea typeface="Noto Sans CJK JP"/>
         </a:rPr>
         <a:t>Test テスト (same font)</a:t>
       </a:r>
