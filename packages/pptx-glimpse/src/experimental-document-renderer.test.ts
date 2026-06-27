@@ -99,7 +99,7 @@ describe("experimental document render path", () => {
     expectUnsupportedDiagnosticsToStayInScope(result.diagnostics);
   });
 
-  it("keeps the public SVG converter on its existing default path", async () => {
+  it("uses the document path as the public SVG converter default", async () => {
     const readPptxSpy = vi.spyOn(documentExperimental, "readPptx");
     const adapterSpy = vi.spyOn(adapterModule, "adaptComputedViewToRendererModel");
     const input = readFixture("real-basic-theme.pptx");
@@ -111,11 +111,11 @@ describe("experimental document render path", () => {
 
     expect(publicDefault.map((slide) => slide.slideNumber)).toEqual([1]);
     expect(publicDefault[0]?.svg).toContain("<svg");
-    expect(readPptxSpy).not.toHaveBeenCalled();
-    expect(adapterSpy).not.toHaveBeenCalled();
+    expect(readPptxSpy).toHaveBeenCalledOnce();
+    expect(adapterSpy).toHaveBeenCalledOnce();
   });
 
-  it("keeps the public PNG converter on its existing default path", async () => {
+  it("uses the document path as the public PNG converter default", async () => {
     const readPptxSpy = vi.spyOn(documentExperimental, "readPptx");
     const adapterSpy = vi.spyOn(adapterModule, "adaptComputedViewToRendererModel");
     const input = readFixture("real-basic-theme.pptx");
@@ -127,8 +127,8 @@ describe("experimental document render path", () => {
 
     expect(publicDefault.map((slide) => slide.slideNumber)).toEqual([1]);
     expect(publicDefault[0]).toMatchObject({ width: 240 });
-    expect(readPptxSpy).not.toHaveBeenCalled();
-    expect(adapterSpy).not.toHaveBeenCalled();
+    expect(readPptxSpy).toHaveBeenCalledOnce();
+    expect(adapterSpy).toHaveBeenCalledOnce();
   });
 });
 

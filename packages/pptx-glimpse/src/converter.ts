@@ -21,6 +21,10 @@ import { renderSlideToSvg } from "pptx-glimpse-renderer";
 import { DEFAULT_OUTPUT_WIDTH } from "pptx-glimpse-renderer";
 import { flushWarnings, initWarningLogger, warn } from "pptx-glimpse-renderer";
 
+import {
+  convertPptxToPngViaDocumentPath,
+  convertPptxToSvgViaDocumentPath,
+} from "./experimental-document-renderer.js";
 import { clearXmlCache, enableXmlCache } from "./parser/xml-parser.js";
 import type { ParsedSlide } from "./pptx-data-parser.js";
 import { parsePptxData, parseSlideWithLayout } from "./pptx-data-parser.js";
@@ -70,6 +74,14 @@ export function buildEffectiveSlideElements(parsed: ParsedSlide): SlideElement[]
 }
 
 export async function convertPptxToSvg(
+  input: Buffer | Uint8Array,
+  options?: ConvertOptions,
+): Promise<SlideSvg[]> {
+  const result = await convertPptxToSvgViaDocumentPath(input, options);
+  return [...result.slides];
+}
+
+export async function convertPptxToSvgViaParserPath(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
 ): Promise<SlideSvg[]> {
@@ -211,9 +223,17 @@ export async function convertPptxToPng(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
 ): Promise<SlideImage[]> {
+  const result = await convertPptxToPngViaDocumentPath(input, options);
+  return [...result.slides];
+}
+
+export async function convertPptxToPngViaParserPath(
+  input: Buffer | Uint8Array,
+  options?: ConvertOptions,
+): Promise<SlideImage[]> {
   // PNG 経路は常にパス出力で変換する。resvg は <style> 内の @font-face を解釈できず、
   // textOutput: "text" のままでは埋め込みフォントが反映されないため
-  const svgResults = await convertPptxToSvg(input, { ...options, textOutput: "path" });
+  const svgResults = await convertPptxToSvgViaParserPath(input, { ...options, textOutput: "path" });
 
   const width = options?.width ?? DEFAULT_OUTPUT_WIDTH;
   const height = options?.height;
