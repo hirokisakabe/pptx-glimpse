@@ -80,16 +80,6 @@ const { slides, diagnostics, supportCoverage } = await convertPptxToSvg(pptx);
 - `diagnostics` contains document reader, computed view, renderer adapter, and renderer warning diagnostics collected during conversion.
 - `supportCoverage` summarizes support/renderability counts such as input elements, output elements, skipped elements, unresolved elements, fallback elements, and warnings. It is not a PowerPoint visual-match or pixel-accuracy score.
 
-Migration from the old array return value:
-
-```typescript
-// before
-const slides = await convertPptxToSvg(pptx);
-
-// after
-const { slides } = await convertPptxToSvg(pptx);
-```
-
 ### Options
 
 Both `convertPptxToSvg` and `convertPptxToPng` accept an optional `ConvertOptions` object.
