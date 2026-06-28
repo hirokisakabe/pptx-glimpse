@@ -16,13 +16,13 @@ const CONCURRENCY = 4;
 async function processFixture(fixturePath: string, name: string): Promise<number> {
   const input = readFileSync(fixturePath);
   console.log(`Processing: ${name}`);
-  const { slides: results } = await convertPptxToPng(input, await getVrtRenderOptions());
+  const { slides } = await convertPptxToPng(input, await getVrtRenderOptions());
   let count = 0;
 
-  for (const result of results) {
-    const snapshotPath = join(SNAPSHOT_DIR, `${name}-slide${result.slideNumber}.png`);
-    writeFileSync(snapshotPath, result.png);
-    console.log(`  Updated: ${snapshotPath} (${result.width}x${result.height})`);
+  for (const slide of slides) {
+    const snapshotPath = join(SNAPSHOT_DIR, `${name}-slide${slide.slideNumber}.png`);
+    writeFileSync(snapshotPath, slide.png);
+    console.log(`  Updated: ${snapshotPath} (${slide.width}x${slide.height})`);
     count++;
   }
 

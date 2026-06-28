@@ -105,8 +105,8 @@ const _pngFn: (input: Buffer | Uint8Array, options?: ConvertOptions) => Promise<
 
 // Verify SlideImage.png is Buffer
 async function _verifyPngType(input: Uint8Array) {
-  const { slides: results } = await convertPptxToPng(input);
-  const _png: Buffer = results[0].png;
+  const { slides } = await convertPptxToPng(input);
+  const _png: Buffer = slides[0].png;
   void _png;
 }
 

@@ -438,17 +438,17 @@ describe("convertPptxToSvg", () => {
   });
 
   it("converts a PPTX file to SVG", async () => {
-    const { slides: results } = await convertPptxToSvg(testPptx);
+    const { slides } = await convertPptxToSvg(testPptx);
 
-    expect(results).toHaveLength(1);
-    expect(results[0].slideNumber).toBe(1);
-    expect(results[0].svg).toContain("<svg");
-    expect(results[0].svg).toContain("</svg>");
+    expect(slides).toHaveLength(1);
+    expect(slides[0].slideNumber).toBe(1);
+    expect(slides[0].svg).toContain("<svg");
+    expect(slides[0].svg).toContain("</svg>");
   });
 
   it("renders basic shapes", async () => {
-    const { slides: results } = await convertPptxToSvg(testPptx);
-    const svg = results[0].svg;
+    const { slides } = await convertPptxToSvg(testPptx);
+    const svg = slides[0].svg;
 
     // Should contain rect (blue rectangle)
     expect(svg).toContain("<rect");
@@ -459,16 +459,16 @@ describe("convertPptxToSvg", () => {
   });
 
   it("has correct viewBox dimensions for 16:9", async () => {
-    const { slides: results } = await convertPptxToSvg(testPptx);
-    const svg = results[0].svg;
+    const { slides } = await convertPptxToSvg(testPptx);
+    const svg = slides[0].svg;
 
     // 9144000 EMU = 960px, 5143500 EMU ≈ 540px
     expect(svg).toContain('viewBox="0 0 960');
   });
 
   it("applies fill colors", async () => {
-    const { slides: results } = await convertPptxToSvg(testPptx);
-    const svg = results[0].svg;
+    const { slides } = await convertPptxToSvg(testPptx);
+    const svg = slides[0].svg;
 
     // Blue rectangle fill
     expect(svg.toLowerCase()).toContain("#4472c4");
@@ -477,16 +477,16 @@ describe("convertPptxToSvg", () => {
   });
 
   it("supports slide number filtering", async () => {
-    const { slides: results } = await convertPptxToSvg(testPptx, { slides: [1] });
+    const { slides } = await convertPptxToSvg(testPptx, { slides: [1] });
 
-    expect(results).toHaveLength(1);
-    expect(results[0].slideNumber).toBe(1);
+    expect(slides).toHaveLength(1);
+    expect(slides[0].slideNumber).toBe(1);
   });
 
   it("returns empty for non-existent slide numbers", async () => {
-    const { slides: results } = await convertPptxToSvg(testPptx, { slides: [99] });
+    const { slides } = await convertPptxToSvg(testPptx, { slides: [99] });
 
-    expect(results).toHaveLength(0);
+    expect(slides).toHaveLength(0);
   });
 });
 
@@ -625,24 +625,24 @@ describe("convertPptxToPng", () => {
   });
 
   it("converts a PPTX file to PNG", async () => {
-    const { slides: results } = await convertPptxToPng(testPptx);
+    const { slides } = await convertPptxToPng(testPptx);
 
-    expect(results).toHaveLength(1);
-    expect(results[0].slideNumber).toBe(1);
-    expect(results[0].png).toBeInstanceOf(Uint8Array);
-    expect(results[0].png.length).toBeGreaterThan(0);
+    expect(slides).toHaveLength(1);
+    expect(slides[0].slideNumber).toBe(1);
+    expect(slides[0].png).toBeInstanceOf(Uint8Array);
+    expect(slides[0].png.length).toBeGreaterThan(0);
     // PNG magic bytes
-    expect(results[0].png[0]).toBe(0x89);
-    expect(results[0].png[1]).toBe(0x50); // P
-    expect(results[0].png[2]).toBe(0x4e); // N
-    expect(results[0].png[3]).toBe(0x47); // G
+    expect(slides[0].png[0]).toBe(0x89);
+    expect(slides[0].png[1]).toBe(0x50); // P
+    expect(slides[0].png[2]).toBe(0x4e); // N
+    expect(slides[0].png[3]).toBe(0x47); // G
   });
 
   it("respects width option", async () => {
-    const { slides: results } = await convertPptxToPng(testPptx, { width: 480 });
+    const { slides } = await convertPptxToPng(testPptx, { width: 480 });
 
-    expect(results[0].width).toBe(480);
-    expect(results[0].height).toBeGreaterThan(0);
+    expect(slides[0].width).toBe(480);
+    expect(slides[0].height).toBeGreaterThan(0);
   });
 });
 
@@ -801,8 +801,8 @@ describe("master placeholder text filtering", () => {
 
   it("does not render master placeholder shapes on actual slides", async () => {
     const pptx = await createPptxWithMasterPlaceholder();
-    const { slides: results } = await convertPptxToSvg(pptx);
-    const svg = results[0].svg;
+    const { slides } = await convertPptxToSvg(pptx);
+    const svg = slides[0].svg;
 
     // Master has 3 shapes: title placeholder (id=2), body placeholder (id=3), decorative (id=4)
     // Only decorative (non-placeholder) should be rendered (red fill #FF0000)
@@ -1016,8 +1016,8 @@ describe("layout placeholder text filtering", () => {
 
   it("does not render layout placeholder shapes on actual slides", async () => {
     const pptx = await createPptxWithLayoutPlaceholder();
-    const { slides: results } = await convertPptxToSvg(pptx);
-    const svg = results[0].svg;
+    const { slides } = await convertPptxToSvg(pptx);
+    const svg = slides[0].svg;
 
     // Layout has 5 shapes: ctrTitle, subTitle, dt, ftr (all placeholders), decorative (non-placeholder)
     // Only decorative (non-placeholder) should be rendered (blue fill #0000FF)
@@ -1126,8 +1126,8 @@ describe("slide placeholder text filtering", () => {
 
   it("does not render empty placeholder shapes on the slide itself", async () => {
     const pptx = await createPptxWithSlidePlaceholders(emptyPlaceholderSlide);
-    const { slides: results } = await convertPptxToSvg(pptx);
-    const svg = results[0].svg;
+    const { slides } = await convertPptxToSvg(pptx);
+    const svg = slides[0].svg;
 
     // Decorative (non-placeholder) shape with magenta fill should remain.
     expect(svg.toLowerCase()).toContain("#ff00ff");
@@ -1147,8 +1147,8 @@ describe("slide placeholder text filtering", () => {
     );
 
     const pptx = await createPptxWithSlidePlaceholders(filledSlide);
-    const { slides: results } = await convertPptxToSvg(pptx);
-    const svg = results[0].svg;
+    const { slides } = await convertPptxToSvg(pptx);
+    const svg = slides[0].svg;
 
     // Filled title placeholder is kept (green fill renders).
     expect(svg.toLowerCase()).toContain("#00ff00");

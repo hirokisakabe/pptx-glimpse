@@ -85,7 +85,7 @@ const { slides, diagnostics, supportCoverage } = await convertPptxToSvg(pptx);
 Both `convertPptxToSvg` and `convertPptxToPng` accept an optional `ConvertOptions` object.
 
 ```typescript
-const { slides: results } = await convertPptxToPng(pptx, {
+const { slides } = await convertPptxToPng(pptx, {
   slides: [1, 3], // Convert only slides 1 and 3
   width: 1920, // Output width in pixels (default: 960)
   height: 1080, // Currently ignored by public conversion; width controls PNG size
@@ -199,7 +199,7 @@ Default mapping:
 You can customize the mapping via the `fontMapping` option:
 
 ```typescript
-const { slides: results } = await convertPptxToSvg(pptx, {
+const { slides } = await convertPptxToSvg(pptx, {
   fontMapping: {
     "Custom Corp Font": "Noto Sans", // Add a new mapping
     Arial: "Inter", // Override the default

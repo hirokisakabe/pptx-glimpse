@@ -32,19 +32,19 @@ describe("Visual Regression Tests", { timeout: 60000 }, () => {
         }
 
         const input = readFileSync(fixturePath);
-        const { slides: results } = await convertPptxToPng(input, await getVrtRenderOptions());
+        const { slides } = await convertPptxToPng(input, await getVrtRenderOptions());
 
-        for (const result of results) {
-          const refPath = join(SNAPSHOT_DIR, `${name}-slide${result.slideNumber}.png`);
-          const diffPath = join(DIFF_DIR, `${name}-slide${result.slideNumber}-diff.png`);
-          const comparison = await compareImages(result.png, refPath, diffPath, {
+        for (const slide of slides) {
+          const refPath = join(SNAPSHOT_DIR, `${name}-slide${slide.slideNumber}.png`);
+          const diffPath = join(DIFF_DIR, `${name}-slide${slide.slideNumber}-diff.png`);
+          const comparison = await compareImages(slide.png, refPath, diffPath, {
             pixelThreshold: PIXEL_THRESHOLD,
             mismatchTolerance: MISMATCH_TOLERANCE,
           });
 
           expect(
             comparison.passed,
-            `${name} slide ${result.slideNumber}: ${(comparison.mismatchPercentage * 100).toFixed(2)}% pixels differ (${comparison.mismatchedPixels}/${comparison.totalPixels})`,
+            `${name} slide ${slide.slideNumber}: ${(comparison.mismatchPercentage * 100).toFixed(2)}% pixels differ (${comparison.mismatchedPixels}/${comparison.totalPixels})`,
           ).toBe(true);
         }
       });
@@ -62,19 +62,19 @@ describe("Visual Regression Tests (shared fixtures)", { timeout: 60000 }, () => 
         }
 
         const input = readFileSync(fixturePath);
-        const { slides: results } = await convertPptxToPng(input, await getVrtRenderOptions());
+        const { slides } = await convertPptxToPng(input, await getVrtRenderOptions());
 
-        for (const result of results) {
-          const refPath = join(SNAPSHOT_DIR, `${name}-slide${result.slideNumber}.png`);
-          const diffPath = join(DIFF_DIR, `${name}-slide${result.slideNumber}-diff.png`);
-          const comparison = await compareImages(result.png, refPath, diffPath, {
+        for (const slide of slides) {
+          const refPath = join(SNAPSHOT_DIR, `${name}-slide${slide.slideNumber}.png`);
+          const diffPath = join(DIFF_DIR, `${name}-slide${slide.slideNumber}-diff.png`);
+          const comparison = await compareImages(slide.png, refPath, diffPath, {
             pixelThreshold: SHARED_PIXEL_THRESHOLD,
             mismatchTolerance: SHARED_MISMATCH_TOLERANCE,
           });
 
           expect(
             comparison.passed,
-            `${name} slide ${result.slideNumber}: ${(comparison.mismatchPercentage * 100).toFixed(2)}% pixels differ (${comparison.mismatchedPixels}/${comparison.totalPixels})`,
+            `${name} slide ${slide.slideNumber}: ${(comparison.mismatchPercentage * 100).toFixed(2)}% pixels differ (${comparison.mismatchedPixels}/${comparison.totalPixels})`,
           ).toBe(true);
         }
       });
