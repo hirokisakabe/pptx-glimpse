@@ -563,8 +563,70 @@ describe("adaptComputedViewToRendererModel", () => {
         extentHeight: 430,
       },
     });
-    expect(smartArt?.children.map((element) => element.type)).toEqual(["shape"]);
+    expect(smartArt?.children.map((element) => element.type)).toEqual(["image", "group", "shape"]);
+    expect(smartArt?.children[0]).toMatchObject({
+      type: "image",
+      transform: {
+        offsetX: 11,
+        offsetY: 12,
+        extentWidth: 13,
+        extentHeight: 14,
+      },
+      mimeType: "image/png",
+    });
+    expect(smartArt?.children[1]).toMatchObject({
+      type: "group",
+      childTransform: {
+        offsetX: 210,
+        offsetY: 220,
+        extentWidth: 230,
+        extentHeight: 240,
+      },
+      children: [
+        expect.objectContaining({
+          type: "shape",
+          fill: { type: "solid", color: { hex: "#00ff00", alpha: 1 } },
+        }),
+      ],
+    });
+    expect(smartArt?.children[2]).toMatchObject({
+      type: "shape",
+      fill: { type: "solid", color: { hex: "#336699", alpha: 1 } },
+      outline: {
+        fill: { type: "solid", color: { hex: "#123456", alpha: 1 } },
+        width: 12700,
+      },
+      textBody: {
+        paragraphs: [
+          expect.objectContaining({
+            runs: [expect.objectContaining({ text: "Step" })],
+          }),
+        ],
+      },
+    });
     expect(result.diagnostics).toEqual([]);
+  });
+
+  it("SmartArt fallback の diagram drawing skip diagnostic を返す", () => {
+    const result = adaptComputedViewToRendererModel(
+      createComputedView(
+        buildSourceWithChartAndSmartArt({
+          smartArtDrawingXml: `<dsp:drawing xmlns:dsp="http://schemas.microsoft.com/office/drawing/2008/diagram"/>`,
+        }),
+      ),
+    );
+
+    expect(
+      result.slides[0].elements.some(
+        (element) => element.type === "group" && element.altText === "Process",
+      ),
+    ).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "pptx-computed-view-adapter.unresolved-smartart-skipped",
+        sourcePartPath: "ppt/diagrams/drawing1.xml",
+      }),
+    );
   });
 
   it("unsupported raw elements を diagnostic として扱い renderer model に漏らさない", () => {
@@ -808,7 +870,9 @@ function buildSource(options: BuildSourceOptions = {}): PptxSourceModel {
   };
 }
 
-function buildSourceWithChartAndSmartArt(): PptxSourceModel {
+function buildSourceWithChartAndSmartArt(
+  options: { readonly smartArtDrawingXml?: string } = {},
+): PptxSourceModel {
   const source = buildSource({
     extraSlideShapes: [
       {
@@ -863,11 +927,21 @@ function buildSourceWithChartAndSmartArt(): PptxSourceModel {
             },
           ],
         },
+        {
+          sourcePartPath: asPartPath("ppt/diagrams/drawing1.xml"),
+          relationships: [
+            {
+              id: asRelationshipId("rIdDiagramImage"),
+              type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+              target: "../media/image1.png",
+            },
+          ],
+        },
       ],
       rawParts: [
         rawXmlPart("ppt/charts/chart1.xml", chartXml()),
         rawXmlPart("ppt/diagrams/data1.xml", `<dgm:dataModel/>`),
-        rawXmlPart("ppt/diagrams/drawing1.xml", smartArtDrawingXml()),
+        rawXmlPart("ppt/diagrams/drawing1.xml", options.smartArtDrawingXml ?? smartArtDrawingXml()),
       ],
     },
   };
@@ -888,12 +962,26 @@ function chartXml(): string {
 function smartArtDrawingXml(): string {
   return `<dsp:drawing xmlns:dsp="http://schemas.microsoft.com/office/drawing/2008/diagram"
     xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
-    xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+    xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"
+    xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <dsp:spTree>
     <dsp:grpSpPr><a:xfrm><a:off x="700" y="710"/><a:ext cx="720" cy="730"/><a:chOff x="100" y="110"/><a:chExt cx="420" cy="430"/></a:xfrm></dsp:grpSpPr>
+    <p:pic>
+      <p:nvPicPr><p:cNvPr id="3" name="Diagram image"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>
+      <p:blipFill><a:blip r:embed="rIdDiagramImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>
+      <p:spPr><a:xfrm><a:off x="11" y="12"/><a:ext cx="13" cy="14"/></a:xfrm></p:spPr>
+    </p:pic>
+    <p:grpSp>
+      <p:nvGrpSpPr><p:cNvPr id="4" name="Diagram group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+      <p:grpSpPr><a:xfrm><a:off x="200" y="201"/><a:ext cx="202" cy="203"/><a:chOff x="210" y="220"/><a:chExt cx="230" cy="240"/></a:xfrm></p:grpSpPr>
+      <p:sp>
+        <p:nvSpPr><p:cNvPr id="5" name="Grouped shape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+        <p:spPr><a:xfrm><a:off x="21" y="22"/><a:ext cx="23" cy="24"/></a:xfrm><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></p:spPr>
+      </p:sp>
+    </p:grpSp>
     <p:sp>
       <p:nvSpPr><p:cNvPr id="1" name="Step"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-      <p:spPr><a:xfrm><a:off x="10" y="20"/><a:ext cx="30" cy="40"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>
+      <p:spPr><a:xfrm><a:off x="10" y="20"/><a:ext cx="30" cy="40"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:schemeClr val="accent1"/></a:solidFill><a:ln w="12700"><a:solidFill><a:srgbClr val="123456"/></a:solidFill></a:ln></p:spPr>
       <p:txBody><a:bodyPr/><a:p><a:r><a:t>Step</a:t></a:r></a:p></p:txBody>
     </p:sp>
   </dsp:spTree>
