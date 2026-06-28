@@ -1,13 +1,20 @@
 /**
- * reader 内部で使う最小限の OOXML XML ヘルパー。
+ * Minimal OOXML XML helpers for document readers.
  *
- * `@pptx-glimpse/document` は下位基盤であり renderer 側の XML パーサーを参照
- * できないため、fast-xml-parser を直接利用する。namespace prefix は **保持**
- * する (`removeNSPrefix: false`)。これは `p:sldId` が namespace 無しの `id`
- * (スライド ID) と relationships namespace の `r:id` (relationship 参照) を
- * 同時に持ち、prefix を落とすと両者が衝突して relationship 参照を復元できなく
- * なるため。要素アクセスは local name (prefix を無視) で行い、属性は plain /
- * namespaced を区別して取得する。
+ * `@pptx-glimpse/document` owns the OOXML reader boundary as a lower-level
+ * package, so it parses OOXML parts directly instead of depending on parsing
+ * helpers from `@pptx-glimpse/core` or `@pptx-glimpse/renderer`.
+ *
+ * The object parser keeps namespace prefixes (`removeNSPrefix: false`) because
+ * elements such as `p:sldId` can carry both a plain `id` attribute (slide ID)
+ * and a relationships `r:id` attribute (relationship reference). Dropping the
+ * prefix would collapse those attributes into the same key and lose the
+ * relationship reference. Element lookup therefore uses local names while
+ * attribute lookup distinguishes plain and namespaced attributes.
+ *
+ * The ordered parser is used only when reader logic needs element order. It
+ * intentionally normalizes prefixes and ignores attributes, so it must not be
+ * used for relationship IDs or other attribute-sensitive OOXML data.
  */
 
 import { XMLParser } from "fast-xml-parser";
