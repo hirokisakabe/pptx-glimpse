@@ -40,6 +40,7 @@ import type {
   SourceOutline,
   SourceParagraphProperties,
   SourceRawShapeNode,
+  SourceRectangleAlignment,
   SourceRunProperties,
   SourceShape,
   SourceShapeNode,
@@ -309,7 +310,7 @@ export interface ComputedOuterShadow {
   readonly distance: Emu;
   readonly direction: number;
   readonly color: ComputedColor;
-  readonly alignment: string;
+  readonly alignment: SourceRectangleAlignment;
   readonly rotateWithShape: boolean;
 }
 

@@ -107,13 +107,15 @@ export type SourceGradient =
       readonly centerY: number;
     };
 
+export type SourceRectangleAlignment = "tl" | "t" | "tr" | "l" | "ctr" | "r" | "bl" | "b" | "br";
+
 export interface SourceImageFillTile {
   readonly tx: Emu;
   readonly ty: Emu;
   readonly sx: number;
   readonly sy: number;
   readonly flip: "none" | "x" | "y" | "xy";
-  readonly align: string;
+  readonly align: SourceRectangleAlignment;
 }
 
 export interface SourceStyleReference {
@@ -139,7 +141,7 @@ export interface SourceOuterShadow {
   readonly distance: Emu;
   readonly direction: OoxmlAngle;
   readonly color: SourceColor;
-  readonly alignment: string;
+  readonly alignment: SourceRectangleAlignment;
   readonly rotateWithShape: boolean;
 }
 

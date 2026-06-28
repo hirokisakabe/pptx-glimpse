@@ -1,4 +1,5 @@
 import type { Emu } from "../utils/unit-types.js";
+import type { ImageMimeType, RectangleAlignment } from "./tokens.js";
 
 export type Fill = SolidFill | GradientFill | ImageFill | PatternFill | NoFill;
 
@@ -24,7 +25,7 @@ export interface GradientStop {
 export interface ImageFill {
   type: "image";
   imageData: string;
-  mimeType: string;
+  mimeType: ImageMimeType;
   tile: ImageFillTile | null;
 }
 
@@ -34,7 +35,7 @@ export interface ImageFillTile {
   sx: number;
   sy: number;
   flip: "none" | "x" | "y" | "xy";
-  align: string;
+  align: RectangleAlignment;
 }
 
 export interface PatternFill {

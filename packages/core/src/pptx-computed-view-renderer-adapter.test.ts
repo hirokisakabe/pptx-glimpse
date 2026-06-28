@@ -13,6 +13,7 @@ import type { SlideElement } from "@pptx-glimpse/renderer";
 import { describe, expect, it } from "vitest";
 
 import { adaptComputedViewToRendererModel } from "./pptx-computed-view-renderer-adapter.js";
+import { unsafeFixtureAssertion } from "./unsafe-type-assertion.js";
 
 describe("adaptComputedViewToRendererModel", () => {
   it("slide size / background / effective element ordering を renderer model に変換する", () => {
@@ -518,6 +519,87 @@ describe("adaptComputedViewToRendererModel", () => {
       type: "shape",
       fill: { type: "image", mimeType: "image/emf" },
     });
+  });
+
+  it("unknown image MIME type を renderer contract の既定値へ正規化する", () => {
+    const source = buildSource();
+    const sourceWithUnknownMedia: PptxSourceModel = {
+      ...source,
+      packageGraph: {
+        ...source.packageGraph,
+        media: source.packageGraph.media.map((media) => ({
+          ...media,
+          contentType: "application/octet-stream",
+        })),
+      },
+    };
+
+    const result = adaptComputedViewToRendererModel(createComputedView(sourceWithUnknownMedia));
+
+    expect(findElementByAltText(result.slides[0].elements, "Hero image")).toMatchObject({
+      type: "image",
+      mimeType: "image/png",
+    });
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "pptx-computed-view-adapter.unsupported-image-mime-type",
+        sourcePartPath: "ppt/slides/slide1.xml",
+      }),
+    );
+  });
+
+  it("unknown rectangle alignment token を renderer contract の既定値へ正規化する", () => {
+    const result = adaptComputedViewToRendererModel(
+      createComputedView(
+        buildSource({
+          extraSlideShapes: [
+            shape("Unknown shadow alignment", {
+              transform: transform(110, 111, 112, 113),
+              effects: {
+                outerShadow: {
+                  blurRadius: asEmu(10),
+                  distance: asEmu(20),
+                  direction: asOoxmlAngle(30),
+                  color: { kind: "srgb", hex: "000000" },
+                  alignment: unsafeFixtureAssertion<"b">("unknown"),
+                  rotateWithShape: true,
+                },
+              },
+            }),
+            {
+              kind: "image",
+              name: "Unknown tile alignment",
+              transform: transform(120, 121, 122, 123),
+              blipRelationshipId: asRelationshipId("rIdImage"),
+              tile: {
+                tx: asEmu(1),
+                ty: asEmu(2),
+                sx: 0.5,
+                sy: 0.75,
+                flip: "none",
+                align: unsafeFixtureAssertion<"tl">("unknown"),
+              },
+            },
+          ],
+        }),
+      ),
+    );
+
+    expect(
+      findElementByAltText(result.slides[0].elements, "Unknown shadow alignment"),
+    ).toMatchObject({
+      type: "shape",
+      effects: { outerShadow: { alignment: "b" } },
+    });
+    expect(findElementByAltText(result.slides[0].elements, "Unknown tile alignment")).toMatchObject(
+      {
+        type: "image",
+        tile: { align: "tl" },
+      },
+    );
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
+      expect.arrayContaining(["pptx-computed-view-adapter.unsupported-rectangle-alignment"]),
+    );
   });
 
   it("chart と SmartArt fallback を renderer model に変換する", () => {

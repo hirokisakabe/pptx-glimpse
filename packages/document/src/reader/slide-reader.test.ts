@@ -401,6 +401,26 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(shape.rawSidecars?.map((sidecar) => sidecar.node.name) ?? []).toContain("a:reflection");
   });
 
+  it("unknown rectangle alignment token は source field ごとの既定値に fallback する", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<p:sp><p:nvSpPr><p:cNvPr id="13" name="Shadow"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:effectLst>` +
+          `<a:outerShdw algn="invalid"><a:srgbClr val="000000"/></a:outerShdw>` +
+          `</a:effectLst></p:spPr></p:sp>` +
+          `<p:pic><p:nvPicPr><p:cNvPr id="14" name="Pic"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+          `<p:blipFill><a:blip r:embed="rIdImage"/><a:tile algn="invalid"/></p:blipFill>` +
+          `<p:spPr/></p:pic>`,
+      ),
+    );
+
+    const shape = unsafeFixtureAssertion<SourceShape>(source.slides[0].shapes[0]);
+    const image = unsafeFixtureAssertion<SourceImage>(source.slides[0].shapes[1]);
+
+    expect(shape.effects?.outerShadow?.alignment).toBe("b");
+    expect(image.tile?.align).toBe("tl");
+  });
+
   it("image shape effects と blip effects を typed source effects として読む", () => {
     const source = readPptx(
       buildSyntheticPptx(
