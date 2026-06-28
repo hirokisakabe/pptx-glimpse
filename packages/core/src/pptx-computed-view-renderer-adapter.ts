@@ -7,10 +7,11 @@
  * effective values を renderer の render-ready contract へ写す境界である。
  *
  * Adapter 側では renderer-specific defaults、missing transform fallback、
- * `null` fill/outline/background convention、base64 media payload、chart XML to
- * renderer ChartData conversion、SmartArt diagram drawing fallback、raw
- * element/fill/background warning policy を扱う。これらは writer/editor/round-trip
- * に必要な PptxSourceModel semantics ではないため document package に戻さない。
+ * `null` fill/outline/background convention、base64 media payload、computed
+ * chart data から renderer ChartData への薄い mapping、SmartArt diagram drawing
+ * fallback、raw element/fill/background warning policy を扱う。これらは
+ * writer/editor/round-trip に必要な PptxSourceModel semantics ではないため
+ * document package に戻さない。
  *
  * Font discovery/fallback、text measurement/wrapping、text-to-path、SVG/PNG output
  * choices は renderer/core 側に残す。ComputedSlide/ComputedElement の part path、
