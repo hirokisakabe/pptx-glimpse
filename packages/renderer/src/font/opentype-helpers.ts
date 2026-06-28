@@ -13,9 +13,22 @@ import type { OpentypeFullFont, TextPathFontResolver } from "./text-path-context
 import { DefaultTextPathFontResolver } from "./text-path-context.js";
 import { extractTtcFonts, isTtcBuffer } from "./ttc-parser.js";
 
-/** Font buffer input format */
+/**
+ * Font file data supplied directly by the caller.
+ *
+ * Use this when system font scanning is unavailable or undesirable, such as in
+ * serverless environments. `name` is used to register TTF/OTF buffers under a
+ * specific family name; TTC buffers also read family names from their names
+ * table.
+ */
 export interface FontBuffer {
+  /**
+   * Optional font family name to register for this buffer.
+   */
   name?: string;
+  /**
+   * Raw TTF, OTF, or TTC font file bytes.
+   */
   data: ArrayBuffer | Uint8Array;
 }
 
@@ -97,10 +110,16 @@ function parseFontBuffer(
 }
 
 /**
- * Construct an OpentypeTextMeasurer from a font buffer array.
+ * Create a text measurer from caller-provided font buffers.
  *
- * Dynamically import opentype.js internally to parse the font.
- * Returns null if opentype.js is not available.
+ * This low-level helper is useful when rendering in an environment where fonts
+ * are bundled as bytes instead of discovered from the OS. It dynamically imports
+ * `opentype.js` and returns `null` if no fonts can be parsed or the optional
+ * dependency is unavailable.
+ *
+ * @param fontBuffers Font file bytes to parse.
+ * @param fontMapping Optional PPTX font name to replacement font mapping.
+ * @returns A text measurer, or `null` when setup is not possible.
  */
 export async function createOpentypeTextMeasurerFromBuffers(
   fontBuffers: FontBuffer[],
@@ -110,16 +129,31 @@ export async function createOpentypeTextMeasurerFromBuffers(
   return setup?.measurer ?? null;
 }
 
+/**
+ * Font services created from OpenType font data.
+ */
 export interface OpentypeSetup {
+  /**
+   * Measures text width for layout and wrapping.
+   */
   measurer: OpentypeTextMeasurer;
+  /**
+   * Resolves fonts for converting text to SVG path outlines.
+   */
   fontResolver: TextPathFontResolver;
 }
 
 /**
- * Construct OpentypeTextMeasurer and TextPathFontResolver simultaneously from the font buffer array.
+ * Create font measurement and SVG path resolution services from font buffers.
  *
- * The object returned by opentype.parse() satisfies both OpentypeFont and OpentypeFullFont, so
- * Pass the same Font object to both measurer and fontResolver.
+ * Use this for advanced integrations that need to provide fonts explicitly
+ * instead of relying on system font directories. Returned services can be wired
+ * into renderer internals; the public conversion APIs usually only need
+ * `fontDirs`, `skipSystemFonts`, and `fontMapping`.
+ *
+ * @param fontBuffers TTF, OTF, or TTC font file bytes.
+ * @param fontMapping Optional PPTX font name to replacement font mapping.
+ * @returns Font services, or `null` when no usable font setup can be created.
  */
 export async function createOpentypeSetupFromBuffers(
   fontBuffers: FontBuffer[],
@@ -239,9 +273,11 @@ let cachedSetup: OpentypeSetup | null = null;
 let cachedSetupKey: string | null = null;
 
 /**
- * Clear the font object cache.
- * Normally there is no need to call it, but after installing/uninstalling a font
- * Use this when you want to force reload.
+ * Clear the module-level cache of parsed system fonts.
+ *
+ * Conversion APIs cache parsed font objects for repeated calls with the same
+ * font options. Call this after installing, removing, or replacing fonts in a
+ * long-running process when subsequent conversions must reload font files.
  */
 export function clearFontCache(): void {
   cachedSetup = null;

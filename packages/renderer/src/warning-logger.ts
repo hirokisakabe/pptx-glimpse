@@ -1,16 +1,40 @@
+/**
+ * Controls how unsupported-feature warnings are collected and printed.
+ *
+ * `"off"` disables collection, `"warn"` collects entries and prints summaries,
+ * and `"debug"` also prints each warning as it is recorded.
+ */
 export type LogLevel = "off" | "warn" | "debug";
 
+/**
+ * One unsupported or approximated feature encountered during conversion.
+ */
 export interface WarningEntry {
-  /** The feature key, e.g. "sp.style", "bodyPr@vert" */
+  /**
+   * Stable feature key, for example `"sp.style"` or `"bodyPr@vert"`.
+   */
   feature: string;
-  /** Human-readable description */
+  /**
+   * Human-readable warning message.
+   */
   message: string;
-  /** Location context, e.g. "Slide 1" */
+  /**
+   * Optional location context, for example `"Slide 1"`.
+   */
   context?: string;
 }
 
+/**
+ * Aggregated warnings from the most recent conversion cycle.
+ */
 export interface WarningSummary {
+  /**
+   * Total number of warning entries.
+   */
   totalCount: number;
+  /**
+   * Warning counts grouped by feature key.
+   */
   features: { feature: string; message: string; count: number }[];
 }
 
@@ -60,6 +84,15 @@ export function debug(feature: string, message: string, context?: string): void 
   console.warn(`${PREFIX} DEBUG: ${feature} - ${message}${ctx}`);
 }
 
+/**
+ * Return a grouped summary of currently collected warnings.
+ *
+ * This reads the active warning logger state. The public conversion APIs flush
+ * warnings at the end of a conversion so summaries can be printed; after that
+ * flush, this returns an empty summary until new warnings are recorded. It is
+ * mainly useful for lower-level renderer workflows, tests, and integrations
+ * that manage the warning cycle directly.
+ */
 export function getWarningSummary(): WarningSummary {
   const features: WarningSummary["features"] = [];
   for (const [feature, { message, count }] of featureCounts) {
@@ -84,6 +117,14 @@ export function flushWarnings(): WarningSummary {
   return summary;
 }
 
+/**
+ * Return individual warning entries collected in the current warning cycle.
+ *
+ * Entries include optional slide or element context when available. The public
+ * conversion APIs flush entries at the end of a conversion, so this is mainly
+ * useful for lower-level renderer workflows, tests, and integrations that
+ * manage the warning cycle directly.
+ */
 export function getWarningEntries(): readonly WarningEntry[] {
   return entries;
 }
