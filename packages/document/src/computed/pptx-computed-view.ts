@@ -2,8 +2,23 @@
  * PptxSourceModel computed view の型。
  *
  * source model を mutation せず、slide / layout / master / theme cascade から
- * 消費しやすい effective value を派生させる。renderer 固有の pixel conversion
- * や font fallback はここに含めない。
+ * consumer が使う effective document value を派生させる。source は各 package
+ * part の authored state と raw preservation hooks を保持し、この view は
+ * presentation order、slide size、per-slide layout/master/theme chain、
+ * relationship targets、background fallback、theme color map/color scheme、
+ * placeholder match、text style cascade、showMasterSp visibility、computed
+ * element ordering を決定論的に解決する。
+ *
+ * Computed view は document semantics の projection であり、editable source of
+ * truth ではない。source provenance と diagnostics に必要な part path /
+ * source node / source layer は保持するが、renderer contract へ都合のよい
+ * required defaults や `null` fallback をここで materialize しない。
+ *
+ * Renderer-specific pixel conversion、system font discovery、font fallback、
+ * text measurement / wrapping、text-to-path、SVG/PNG output decision、renderer
+ * warning policy は core adapter または renderer の責務に残す。raw elements /
+ * raw fills / raw backgrounds は preservation and diagnostics のために保持し、
+ * direct rendering policy は adapter が決める。
  */
 
 import type {

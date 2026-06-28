@@ -1,10 +1,9 @@
 /**
  * `p:txBody` を PptxSourceModel source の text body / paragraph / run へ読み取る。
  *
- * PoC scope は plain run text と basic run properties (太字 / 斜体 / 下線 /
- * フォントサイズ / typeface / solid color) のみを typed に表す
- * (`docs/pptx-source-model-minimal-poc-scope.md`)。bullet / field / line break 等の
- * 未対応ノードは raw sidecar として保持する。
+ * 現在の typed subset は plain run text と basic run properties (太字 / 斜体 /
+ * 下線 / フォントサイズ / typeface / solid color) を中心に表す。bullet / field /
+ * line break 等の未対応ノードは raw sidecar として保持する。
  */
 
 import type {

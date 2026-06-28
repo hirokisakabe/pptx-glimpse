@@ -1,3 +1,24 @@
+/**
+ * PptxComputedView から renderer model への core-owned adapter。
+ *
+ * `@pptx-glimpse/document` は source/computed document semantics を所有し、
+ * `@pptx-glimpse/renderer` は SVG/PNG generation 向けの display-oriented model
+ * を所有する。この adapter は両者を統合せず、computed view の provenance-rich
+ * effective values を renderer の render-ready contract へ写す境界である。
+ *
+ * Adapter 側では renderer-specific defaults、missing transform fallback、
+ * `null` fill/outline/background convention、base64 media payload、chart XML to
+ * renderer ChartData conversion、SmartArt diagram drawing fallback、raw
+ * element/fill/background warning policy を扱う。これらは writer/editor/round-trip
+ * に必要な PptxSourceModel semantics ではないため document package に戻さない。
+ *
+ * Font discovery/fallback、text measurement/wrapping、text-to-path、SVG/PNG output
+ * choices は renderer/core 側に残す。ComputedSlide/ComputedElement の part path、
+ * source layer、source node、relationships、theme context は diagnostics と
+ * fallback conversion の入力として使い、renderer model へは必要な render contract
+ * だけを渡す。
+ */
+
 import type {
   ComputedBackground,
   ComputedBlipEffects,

@@ -39,7 +39,7 @@ Public `convertPptxToSvg` / `convertPptxToPng` use the PptxSourceModel document 
 
 ソースは pnpm workspaces (`packages/*`) で分割されている。root は private な workspace orchestration 専用で、公開 npm package `pptx-glimpse` は `packages/core` から publish する。`pptx-glimpse` パッケージは build-time workspace dependency として `@pptx-glimpse/document` / `@pptx-glimpse/renderer` を参照し、公開 tarball には bundle された成果物を含める。
 
-`@pptx-glimpse/document` / PptxSourceModel / writer / editor-core / pom 連携に関わる issue に着手する前に、責務境界と依存方向の決定記録である `docs/document-boundaries.md` と、そこからリンクされる派生決定記録を必ず読むこと。`document` は `core` / `editor-core` / renderer / pom を知らない下位基盤として扱う。
+`@pptx-glimpse/document` / PptxSourceModel / writer / editor-core / pom 連携に関わる issue に着手する前に、`packages/document/src/source/pptx-source-model.ts`、`packages/document/src/computed/pptx-computed-view.ts`、`packages/document/src/writer/write-pptx.ts`、`packages/core/src/pptx-computed-view-renderer-adapter.ts` の module-level comment を読み、最新の責務境界と依存方向を確認すること。`document` は `core` / `editor-core` / renderer / pom を知らない下位基盤として扱う。
 
 `packages/document/src/` — `@pptx-glimpse/document` パッケージ。PptxSourceModel / OOXML document foundation の下位基盤として追加されており、public conversion path の default reader / computed view として参照される。reader / computed view / writer / 最小 editing operation は root entry point から import する。
 

@@ -6,13 +6,13 @@
  * として返す。さらに presentation order の各 slide から layout → master → theme
  * の chain を辿り、simple shape / text / image を typed source node として読む。
  * 未編集・未対応の part / 子要素は raw package material / raw sidecar として
- * 保持し、structural round-trip の土台にする (`docs/raw-ooxml-round-trip.md`)。
+ * 保持し、structural round-trip の土台にする。
  *
  * typed node を持つ slide/layout/master/theme part も、未編集 part の忠実な
  * 書き戻しのために `packageGraph.rawParts` 経由で元バイト列を併せて保持する
  * (typed model は編集・computed view 用、raw part は round-trip 用の二重表現)。
  *
- * 本 slice の scope 外 (後続 issue): computed view 生成 / writer 出力。
+ * Computed view 生成と writer 出力は reader から分離した module の責務。
  */
 
 import { unzipSync } from "fflate";
@@ -109,7 +109,7 @@ export function readPptx(input: ReadPptxInput): PptxSourceModel {
 
     // 本 slice では typed に解釈しない part をすべて元バイト列で保持する。
     // byte 一致は目標にしないが、untouched part は原バイトのまま書き戻すのが
-    // 最も忠実な structural round-trip になる (`docs/raw-ooxml-round-trip.md`)。
+    // 最も忠実な structural round-trip になる。
     rawParts.push({ kind: "binary", partPath: asPartPath(path), contentType, bytes });
   }
 

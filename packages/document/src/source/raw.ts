@@ -1,5 +1,5 @@
 /**
- * Raw OOXML escape hatch 関連の型 (`docs/raw-ooxml-round-trip.md`)。
+ * Raw OOXML escape hatch 関連の型。
  *
  * PptxSourceModel は supported semantics を typed field で表しつつ、未対応・部分対応の
  * XML を raw sidecar として、未編集の part を raw package part として保持し、

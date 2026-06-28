@@ -1,11 +1,24 @@
 /**
  * PptxSourceModel source model のトップレベル型。
  *
- * `@pptx-glimpse/document` が所有する canonical な document 表現で、writer /
- * editor / round-trip の source of truth となる。renderer-specific fallback や
- * pixel output 固有の値は含まない (`docs/document-boundaries.md` /
- * `docs/pptx-source-model-computed-view.md`)。computed view はこの source から
- * 派生して生成する derived projection であり、本型には含めない。
+ * `@pptx-glimpse/document` が所有する canonical な PPTX document 表現で、OOXML
+ * package parts をそのまま公開 API にする代わりに、presentation / slides /
+ * layouts / masters / themes / relationships / media / content types を source
+ * semantics として束ねる。core、editor-core、renderer、pom はこの package を
+ * consume できるが、document からそれらへ依存してはいけない。
+ *
+ * この model は writer / editor / round-trip の source of truth であり、source
+ * local な値、relationship id、part path、element ordering、typed PPTX-domain
+ * units、stable source handles、diagnostics、raw preservation hooks を保持する。
+ * Unsupported OOXML、vendor extension、mc:AlternateContent、未対応 DrawingML は
+ * typed operation の primary API に混ぜず、raw sidecar / raw package part として
+ * structural preservation のために残す。
+ *
+ * PptxSourceModel には renderer-specific fallback、environment-specific font
+ * substitution、SVG/PNG output、pixel output 固有の値、pom authoring primitive を
+ * 入れない。slide/layout/master/theme cascade、relationship resolution、theme
+ * color resolution、placeholder / text style resolution などの effective value は
+ * source を mutate しない computed view として派生させる。
  */
 
 import type { Diagnostic } from "./diagnostics.js";

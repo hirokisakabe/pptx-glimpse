@@ -1,11 +1,9 @@
 /**
  * Presentation hierarchy の source 型。slide / layout / master / theme の参照
  * 関係を part path で表す。各 part は分離したまま保持し、cascade (master →
- * layout → slide) の **解決** は computed view の責務とする
- * (`docs/pptx-source-model-computed-view.md`)。ただし解決に必要な素材
- * (background / clrMap / clrMapOvr / theme scheme / showMasterSp) は、source が
- * raw XML に戻らず保持できるよう source-local に置く
- * (`docs/pptx-source-model-minimal-poc-scope.md` の Included PPTX Subset)。
+ * layout → slide) の **解決** は computed view の責務とする。ただし解決に必要な
+ * 素材 (background / clrMap / clrMapOvr / theme scheme / showMasterSp) は、source
+ * が raw XML に戻らず保持できるよう source-local に置く。
  */
 
 import type { PartPath, SourceHandle } from "./handles.js";
