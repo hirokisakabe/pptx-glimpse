@@ -15,43 +15,43 @@ describe("getCjkFallbackFonts", () => {
     _resetCjkFallbackCache();
   });
 
-  it("macOS ではゴシック系に Hiragino Sans 等を返す", () => {
+  it("covers cjk-font-fallback behavior 1", () => {
     mockPlatform.mockReturnValue("darwin");
     const result = getCjkFallbackFonts("Noto Sans JP");
     expect(result).toEqual(["Hiragino Sans", "Hiragino Kaku Gothic ProN"]);
   });
 
-  it("macOS では明朝系に Hiragino Mincho ProN を返す", () => {
+  it("covers cjk-font-fallback behavior 2", () => {
     mockPlatform.mockReturnValue("darwin");
     const result = getCjkFallbackFonts("Noto Serif CJK JP");
     expect(result).toEqual(["Hiragino Mincho ProN"]);
   });
 
-  it("macOS では Noto Sans CJK JP にも同じフォールバックを返す", () => {
+  it("covers cjk-font-fallback behavior 3", () => {
     mockPlatform.mockReturnValue("darwin");
     const result = getCjkFallbackFonts("Noto Sans CJK JP");
     expect(result).toEqual(["Hiragino Sans", "Hiragino Kaku Gothic ProN"]);
   });
 
-  it("Windows ではゴシック系に Yu Gothic 等を返す", () => {
+  it("covers cjk-font-fallback behavior 4", () => {
     mockPlatform.mockReturnValue("win32");
     const result = getCjkFallbackFonts("Noto Sans JP");
     expect(result).toEqual(["Yu Gothic", "Meiryo", "MS Gothic"]);
   });
 
-  it("Windows では明朝系に Yu Mincho 等を返す", () => {
+  it("covers cjk-font-fallback behavior 5", () => {
     mockPlatform.mockReturnValue("win32");
     const result = getCjkFallbackFonts("Noto Serif CJK JP");
     expect(result).toEqual(["Yu Mincho", "MS Mincho"]);
   });
 
-  it("Linux では空配列を返す", () => {
+  it("covers cjk-font-fallback behavior 6", () => {
     mockPlatform.mockReturnValue("linux");
     const result = getCjkFallbackFonts("Noto Sans JP");
     expect(result).toEqual([]);
   });
 
-  it("未知のマッピング先では空配列を返す", () => {
+  it("covers cjk-font-fallback behavior 7", () => {
     mockPlatform.mockReturnValue("darwin");
     const result = getCjkFallbackFonts("Unknown Font");
     expect(result).toEqual([]);

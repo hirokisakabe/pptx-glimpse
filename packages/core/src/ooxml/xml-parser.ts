@@ -2,41 +2,41 @@ import { XMLParser } from "fast-xml-parser";
 
 import { unsafeXmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 
-/** fast-xml-parser が返す XML ノードの型エイリアス */
+/** Internal note. */
 export type XmlNode = Record<string, unknown>;
 
-// OOXML XML で単一要素でも配列として扱う必要があるタグ。
-// fast-xml-parser は子要素が 1 つだとオブジェクト、複数だと配列を返すため、
-// スライド上に図形が 1 つだけの場合などにパース結果が不安定になる。
-// isArray で常に配列化することで、下流コードを統一的に記述できる。
+// Internal note.
+// Internal note.
+// Internal note.
+// Internal note.
 const ARRAY_TAGS = new Set([
-  "sp", // 図形 (Shape)
-  "pic", // 画像 (Picture)
-  "cxnSp", // コネクタ (Connector)
-  "grpSp", // グループ (Group Shape)
-  "graphicFrame", // テーブル・チャート等のフレーム
-  "p", // テキスト段落 (Paragraph)
-  "r", // テキストラン (Run)
-  "br", // 改行 (Break)
-  "fld", // フィールドコード (Field)
-  "Relationship", // リレーションシップ
-  "sldId", // スライド ID
-  "gs", // グラデーションストップ (Gradient Stop)
-  "gridCol", // テーブル列定義
-  "tr", // テーブル行 (Table Row)
-  "tc", // テーブルセル (Table Cell)
-  "ser", // チャートデータ系列 (Series)
-  "pt", // チャートデータポイント (Point)
-  "gd", // ガイド定義 (Guide Definition)
-  "ds", // カスタムダッシュセグメント (Custom Dash Segment)
-  "AlternateContent", // mc:AlternateContent (SmartArt 等)
-  "embeddedFont", // 埋め込みフォント (Embedded Font)
-  "effectStyle", // エフェクトスタイル (Effect Style)
-  "font", // スクリプトベースフォント定義 (Script-based Font)
+  "sp", // Internal note.
+  "pic", // Internal note.
+  "cxnSp", // Internal note.
+  "grpSp", // Internal note.
+  "graphicFrame", // Internal note.
+  "p", // Internal note.
+  "r", // Internal note.
+  "br", // Internal note.
+  "fld", // Internal note.
+  "Relationship", // Internal note.
+  "sldId", // Internal note.
+  "gs", // Internal note.
+  "gridCol", // Internal note.
+  "tr", // Internal note.
+  "tc", // Internal note.
+  "ser", // Internal note.
+  "pt", // Internal note.
+  "gd", // Internal note.
+  "ds", // Internal note.
+  "AlternateContent", // Internal note.
+  "embeddedFont", // Internal note.
+  "effectStyle", // Internal note.
+  "font", // Internal note.
 ]);
 
-// シングルトンパーサーインスタンス。
-// XMLParser.parse() はステートレスなため、安全に再利用できる。
+// Internal note.
+// Internal note.
 const standardParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",

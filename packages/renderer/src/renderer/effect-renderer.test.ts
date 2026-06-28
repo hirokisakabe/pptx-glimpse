@@ -172,7 +172,7 @@ describe("renderEffects", () => {
     expect(result.filterDefs).toContain('operator="over"');
   });
 
-  // --- filter 構造 ---
+  // Test note.
 
   it("generates filter with correct structure", () => {
     const result = renderEffects(makeEffects({ softEdge: { radius: 63500 } }));
@@ -185,7 +185,7 @@ describe("renderEffects", () => {
     expect(result.filterDefs).toContain("</filter>");
   });
 
-  // --- 複合エフェクト ---
+  // Test note.
 
   it("chains softEdge into glow", () => {
     const result = renderEffects(
@@ -195,9 +195,9 @@ describe("renderEffects", () => {
       }),
     );
 
-    // softEdge が先に適用される
+    // Test note.
     expect(result.filterDefs).toContain('result="softEdgeResult"');
-    // glow は softEdgeResult を入力として使用
+    // Test note.
     expect(result.filterDefs).toContain('in="softEdgeResult"');
     expect(result.filterDefs).toContain('<feMergeNode in="softEdgeResult"/>');
   });

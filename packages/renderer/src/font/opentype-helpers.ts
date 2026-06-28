@@ -1,5 +1,5 @@
 /**
- * opentype.js を使ってフォントを読み込み OpentypeTextMeasurer を構築するヘルパー。
+ * Internal note.
  */
 import { readFile } from "node:fs/promises";
 
@@ -13,7 +13,7 @@ import type { OpentypeFullFont, TextPathFontResolver } from "./text-path-context
 import { DefaultTextPathFontResolver } from "./text-path-context.js";
 import { extractTtcFonts, isTtcBuffer } from "./ttc-parser.js";
 
-/** フォントバッファの入力形式 */
+/** Internal note. */
 export interface FontBuffer {
   name?: string;
   data: ArrayBuffer | Uint8Array;
@@ -27,8 +27,8 @@ interface OpentypeFontWithNames extends OpentypeFont {
 }
 
 /**
- * opentype.js を動的 import でロードする。
- * opentype.js がインストールされていない場合は null を返す。
+ * Internal note.
+ * Internal note.
  */
 async function tryLoadOpentype(): Promise<{
   parse: (buffer: ArrayBuffer) => OpentypeFontWithNames;
@@ -47,9 +47,9 @@ async function tryLoadOpentype(): Promise<{
 }
 
 /**
- * フォントマッピングの逆引きテーブルを構築する。
- * OSS フォント名 → PPTX フォント名[] のマッピング。
- * 例: "Carlito" → ["Calibri"]
+ * Internal note.
+ * Internal note.
+ * Example: "Carlito" → ["Calibri"]
  */
 function buildReverseMapping(mapping: FontMapping): Map<string, string[]> {
   const reverse = new Map<string, string[]>();
@@ -62,8 +62,8 @@ function buildReverseMapping(mapping: FontMapping): Map<string, string[]> {
 }
 
 /**
- * ArrayBuffer | Uint8Array → ArrayBuffer に変換する。
- * Uint8Array の場合は slice で独立した ArrayBuffer を取得する。
+ * Internal note.
+ * Internal note.
  */
 function toArrayBuffer(data: ArrayBuffer | Uint8Array): ArrayBuffer {
   if (data instanceof ArrayBuffer) return data;
@@ -73,22 +73,22 @@ function toArrayBuffer(data: ArrayBuffer | Uint8Array): ArrayBuffer {
 }
 
 /**
- * バッファ (TTF/OTF または TTC) からパース済みフォント配列を返す。
- * TTC の場合はメモリ消費を抑えるため最初の1フォントのみ抽出してパースする。
+ * Internal note.
+ * Internal note.
  */
 function parseFontBuffer(
   arrayBuffer: ArrayBuffer,
   opentype: { parse: (buffer: ArrayBuffer) => OpentypeFontWithNames },
 ): OpentypeFontWithNames[] {
   if (isTtcBuffer(arrayBuffer)) {
-    // TTC からは最初の1フォントのみ抽出する。
-    // CJK TTC (NotoSansCJK 等) は全フォント展開すると数百MBのメモリを消費するため。
+    // Internal note.
+    // Internal note.
     const fonts = extractTtcFonts(arrayBuffer);
     if (fonts.length > 0) {
       try {
         return [opentype.parse(fonts[0])];
       } catch {
-        // パース失敗はスキップ
+        // Internal note.
       }
     }
     return [];
@@ -97,10 +97,10 @@ function parseFontBuffer(
 }
 
 /**
- * フォントバッファ配列から OpentypeTextMeasurer を構築する。
+ * Internal note.
  *
- * 内部で opentype.js を動的 import してフォントをパースする。
- * opentype.js が利用不可な場合は null を返す。
+ * Internal note.
+ * Internal note.
  */
 export async function createOpentypeTextMeasurerFromBuffers(
   fontBuffers: FontBuffer[],
@@ -116,10 +116,10 @@ export interface OpentypeSetup {
 }
 
 /**
- * フォントバッファ配列から OpentypeTextMeasurer と TextPathFontResolver を同時に構築する。
+ * Internal note.
  *
- * opentype.parse() が返すオブジェクトは OpentypeFont と OpentypeFullFont の両方を満たすため、
- * 同じ Font オブジェクトを measurer と fontResolver の両方に渡す。
+ * Internal note.
+ * Internal note.
  */
 export async function createOpentypeSetupFromBuffers(
   fontBuffers: FontBuffer[],
@@ -149,7 +149,7 @@ export async function createOpentypeSetupFromBuffers(
           firstResolverFont = unsafeExternalInteropAssertion<OpentypeFullFont>(font);
 
         if (isTtc) {
-          // TTC: names テーブルからフォント名を取得して登録
+          // Internal note.
           for (const name of collectFontNames(font)) {
             registerFont(name, font, reverseMap, measurerFonts, resolverFonts);
           }
@@ -158,7 +158,7 @@ export async function createOpentypeSetupFromBuffers(
         }
       }
     } catch {
-      // パース失敗のフォントはスキップ
+      // Internal note.
     }
   }
 
@@ -186,7 +186,7 @@ function registerFont(
     resolverFonts.set(name, fullFont);
   }
 
-  // 逆引きで PPTX フォント名も登録
+  // Internal note.
   const pptxNames = reverseMap.get(name);
   if (pptxNames) {
     for (const pptxName of pptxNames) {
@@ -199,10 +199,10 @@ function registerFont(
 }
 
 /**
- * フォントの names テーブルからフォント名のセットを収集する。
- * fontFamily と preferredFamily の両方を含める。
- * Variable Font では fontFamily が "Noto Sans JP Thin" のように
- * インスタンス名になるため、preferredFamily ("Noto Sans JP") も登録する。
+ * Internal note.
+ * Internal note.
+ * Internal note.
+ * Internal note.
  */
 function collectFontNames(font: OpentypeFontWithNames): Set<string> {
   const names = new Set<string>();
@@ -220,7 +220,7 @@ function collectFontNames(font: OpentypeFontWithNames): Set<string> {
 }
 
 /**
- * キャッシュキーを生成する。fontDirs と fontMapping の組み合わせで一意に識別する。
+ * Internal note.
  */
 function buildCacheKey(
   additionalFontDirs?: string[],
@@ -234,14 +234,14 @@ function buildCacheKey(
   return `${dirsKey}\n${mappingKey}\n${skipSystemFonts}`;
 }
 
-/** パース済み Font オブジェクトのキャッシュ */
+/** Internal note. */
 let cachedSetup: OpentypeSetup | null = null;
 let cachedSetupKey: string | null = null;
 
 /**
- * フォントオブジェクトキャッシュをクリアする。
- * 通常は呼び出す必要はないが、フォントのインストール/アンインストール後に
- * 強制的に再読み込みしたい場合に使用する。
+ * Internal note.
+ * Internal note.
+ * Internal note.
  */
 export function clearFontCache(): void {
   cachedSetup = null;
@@ -249,14 +249,14 @@ export function clearFontCache(): void {
 }
 
 /**
- * システムフォント + 追加ディレクトリから OpentypeTextMeasurer と TextPathFontResolver を構築する。
+ * Internal note.
  *
- * 1. collectFontFilePaths() でフォントファイルパスを収集
- * 2. 各ファイルを readFile + opentype.parse でパース
- * 3. フォント名をキーとしてマップに登録（逆引きマッピング含む）
+ * Internal note.
+ * Internal note.
+ * Internal note.
  *
- * パース済みの Font オブジェクトはモジュールレベルでキャッシュされ、
- * 同じ fontDirs / fontMapping での 2 回目以降の呼び出しではキャッシュを返す。
+ * Internal note.
+ * Internal note.
  */
 export async function createOpentypeSetupFromSystem(
   additionalFontDirs?: string[],
@@ -292,13 +292,13 @@ export async function createOpentypeSetupFromSystem(
         if (!firstResolverFont)
           firstResolverFont = unsafeExternalInteropAssertion<OpentypeFullFont>(font);
 
-        // names テーブルからフォント名を取得して登録
+        // Internal note.
         for (const name of collectFontNames(font)) {
           registerFont(name, font, reverseMap, measurerFonts, resolverFonts);
         }
       }
     } catch {
-      // パース失敗のフォントはスキップ
+      // Internal note.
     }
   }
 

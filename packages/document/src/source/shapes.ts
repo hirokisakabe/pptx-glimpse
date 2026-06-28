@@ -1,17 +1,17 @@
 /**
- * Simple shape / text run / image の source node 型。
+ * Simple shape / text run / image  source node types.
  *
- * 現在の supported subset (simple shapes / text / images を中心とする drawing
- * nodes) を typed に表す。theme color や relationship は source では未解決の参照
- * のまま保持し、cascade 解決は computed view の責務とする。未対応ノードは raw
- * escape hatch で保存する。
+ * Internal note.
+ * Internal note.
+ * Internal note.
+ * Internal note.
  */
 
 import type { RelationshipId, SourceHandle, SourceNodeId } from "./handles.js";
 import type { RawSidecar } from "./raw.js";
 import type { Emu, HundredthPt, OoxmlAngle, OoxmlPercent, Pt } from "./units.js";
 
-/** `a:xfrm` 由来の source transform。座標・サイズは EMU のまま保持する。 */
+/** Internal note. */
 export interface SourceTransform {
   readonly offsetX: Emu;
   readonly offsetY: Emu;
@@ -22,9 +22,9 @@ export interface SourceTransform {
   readonly flipVertical?: boolean;
 }
 
-/** preset geometry (`a:prstGeom`) の source 参照。preset 名のみ保持する。 */
+/** Internal note. */
 export interface SourcePresetGeometry {
-  /** preset 名 (例: `rect`, `roundRect`)。 */
+  /** Preset name (Example: `rect`, `roundRect`)。 */
   readonly preset: string;
   readonly adjustValues?: Readonly<Record<string, number>>;
 }
@@ -43,9 +43,9 @@ export interface SourceCustomGeometry {
 export type SourceGeometry = SourcePresetGeometry | SourceCustomGeometry;
 
 /**
- * 未解決の source color 参照。`schemeClr` は scheme 名のまま保持し、computed
- * view で `clrMap` / `colorScheme` を経由して具体色へ解決する。`srgbClr` /
- * `sysClr` は具体値だが、変換 (lumMod 等) は適用前のまま保持する。
+ * Internal note.
+ * Internal note.
+ * Internal note.
  */
 export type SourceColor =
   | {
@@ -60,20 +60,20 @@ export type SourceColor =
     }
   | {
       readonly kind: "system";
-      /** `a:sysClr@val` (例: `windowText`)。 */
+      /** `a:sysClr@val` (Example: `windowText`)。 */
       readonly value: string;
-      /** `a:sysClr@lastClr` の解決済みフォールバック hex (持つ場合)。 */
+      /** Internal note. */
       readonly lastColor?: string;
       readonly transforms?: readonly SourceColorTransform[];
     };
 
-/** lumMod / tint / shade 等の色変換 (値は OOXML パーセンテージ)。 */
+/** Internal note. */
 export interface SourceColorTransform {
   readonly kind: "lumMod" | "lumOff" | "tint" | "shade" | "alpha";
   readonly value: OoxmlPercent;
 }
 
-/** shape の fill (source レベル、最小)。未対応 fill は raw で保存する。 */
+/** Internal note. */
 export type SourceFill =
   | { readonly kind: "none" }
   | { readonly kind: "solid"; readonly color: SourceColor }
@@ -194,7 +194,7 @@ export interface SourceColorChangeEffect {
   readonly to: SourceColor;
 }
 
-/** simple solid line の outline (`a:ln`)。色と幅のみの最小表現。 */
+/** Internal note. */
 export interface SourceOutline {
   readonly width?: Emu;
   readonly fill?: SourceFill;
@@ -225,26 +225,26 @@ export type SourceDashStyle =
 export type SourceLineCap = "butt" | "round" | "square";
 export type SourceLineJoin = "miter" | "round" | "bevel";
 
-/** placeholder 宣言 (`p:ph`)。type / idx を未解決のまま保持する。 */
+/** Internal note. */
 export interface SourcePlaceholder {
   readonly type?: string;
   readonly index?: number;
 }
 
-/** text run (`a:r`) の run プロパティ (`a:rPr`) の最小 subset。 */
+/** Internal note. */
 export interface SourceRunProperties {
   readonly bold?: boolean;
   readonly italic?: boolean;
   readonly underline?: boolean;
   readonly strikethrough?: boolean;
   readonly baseline?: number;
-  /** フォントサイズ。OOXML-domain では pt で保持する。 */
+  /** Internal note. */
   readonly fontSize?: Pt;
-  /** latin typeface 名 (theme token も含めて未解決のまま保持)。 */
+  /** Internal note. */
   readonly typeface?: string;
-  /** East Asian typeface 名 (theme token も含めて未解決のまま保持)。 */
+  /** Internal note. */
   readonly typefaceEa?: string;
-  /** Complex script typeface 名 (theme token も含めて未解決のまま保持)。 */
+  /** Internal note. */
   readonly typefaceCs?: string;
   readonly color?: SourceColor;
 }
@@ -285,10 +285,10 @@ export interface SourceTabStop {
   readonly alignment: "l" | "ctr" | "r" | "dec";
 }
 
-/** paragraph (`a:p`) の段落プロパティ (`a:pPr`) の最小 subset。 */
+/** Internal note. */
 export interface SourceParagraphProperties {
   readonly align?: SourceTextAlign;
-  /** インデントレベル (`a:pPr@lvl`)。 */
+  /** indentation level (`a:pPr@lvl`)。 */
   readonly level?: number;
   readonly lineSpacing?: SourceSpacingValue;
   readonly spaceBefore?: SourceSpacingValue;
@@ -326,7 +326,7 @@ export type SourceTextVerticalType =
 
 export type SourceTextAutoFit = "noAutofit" | "normAutofit" | "spAutofit";
 
-/** text body properties (`a:bodyPr`) の最小 subset。inset と vertical anchor。 */
+/** Internal note. */
 export interface SourceTextBodyProperties {
   readonly marginLeft?: Emu;
   readonly marginRight?: Emu;
@@ -398,7 +398,7 @@ export interface SourceGroup {
   readonly rawSidecars?: readonly RawSidecar[];
 }
 
-/** image の crop (`a:srcRect`)。各辺の inset を OOXML パーセンテージで保持する。 */
+/** Internal note. */
 export interface SourceImageCrop {
   readonly left?: OoxmlPercent;
   readonly top?: OoxmlPercent;
@@ -413,13 +413,13 @@ export interface SourceImageStretch {
   readonly bottom: number;
 }
 
-/** image (`p:pic`)。blip は relationship id (`r:embed`) を未解決のまま保持する。 */
+/** Internal note. */
 export interface SourceImage {
   readonly kind: "image";
   readonly nodeId?: SourceNodeId;
   readonly name?: string;
   readonly transform?: SourceTransform;
-  /** `a:blip@r:embed` の relationship id。media part は computed view で解決する。 */
+  /** Internal note. */
   readonly blipRelationshipId?: RelationshipId;
   readonly crop?: SourceImageCrop;
   readonly stretch?: SourceImageStretch;
@@ -478,7 +478,7 @@ export interface SourceChart {
   readonly nodeId?: SourceNodeId;
   readonly name?: string;
   readonly transform?: SourceTransform;
-  /** `c:chart@r:id` の relationship id。chart part は computed view で解決する。 */
+  /** Internal note. */
   readonly chartRelationshipId?: RelationshipId;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
@@ -489,15 +489,15 @@ export interface SourceSmartArt {
   readonly nodeId?: SourceNodeId;
   readonly name?: string;
   readonly transform?: SourceTransform;
-  /** `dgm:relIds@r:dm` の relationship id。diagram data/drawing part は computed view で解決する。 */
+  /** Internal note. */
   readonly dataRelationshipId?: RelationshipId;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
 }
 
 /**
- * typed に表現しない shape tree ノードの raw escape hatch。未対応の図形・
- * グループ・コネクタ等を round-trip のために保存する。
+ * Raw escape hatch for shape tree nodes that are not represented as typed nodes. Unsupported shapes,
+ * groups, connectors, and similar nodes are saved for round trips.
  */
 export interface SourceRawShapeNode {
   readonly kind: "raw";
@@ -506,7 +506,7 @@ export interface SourceRawShapeNode {
   readonly handle?: SourceHandle;
 }
 
-/** shape tree の source node 共用体。 */
+/** Shape tree source node union. */
 export type SourceShapeNode =
   | SourceShape
   | SourceConnector

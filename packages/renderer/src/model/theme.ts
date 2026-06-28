@@ -54,7 +54,7 @@ export interface FontScheme {
   minorFontEa: string | null;
   majorFontCs: string | null;
   minorFontCs: string | null;
-  /** スクリプトベースフォント（Jpan）— CJK テキストの最終フォールバック */
+  /** script-based font（Jpan）— final fallback for CJK text */
   majorFontJpan: string | null;
   minorFontJpan: string | null;
 }

@@ -1,19 +1,18 @@
 /**
- * `writePptx(source)` — PptxSourceModel source writer の最初の round-trip slice。
+ * `writePptx(source)` — the first round-trip slice of the PptxSourceModel source writer.
  *
- * writer の目標は byte equality ではなく structural round-trip preservation。
- * XML attribute order、namespace prefix placement、ZIP metadata、defaulted OOXML
- * values まで一致させる package patcher にはしない。Content types と
- * relationships は `packageGraph` から構造的に再生成し、media bytes / unknown
- * parts / non-bookkeeping raw parts は reader が保持した raw package material を
- * 優先して書き戻す。Dirty scope だけを supported PptxSourceModel operation に
- * 従って更新する。
+ * The writer targets structural round-trip preservation rather than byte equality. It is
+ * not a package patcher that preserves XML attribute order, namespace prefix placement,
+ * ZIP metadata, or defaulted OOXML values. Content types and relationships are
+ * regenerated structurally from `packageGraph`; media bytes, unknown parts, and
+ * non-bookkeeping raw parts prefer the raw package material preserved by the reader.
+ * Only dirty scopes are updated according to supported PptxSourceModel operations.
  *
- * 現在の slice は one plain text-run edit を support し、dirty slide XML part を
- * 再シリアライズして対象 run の `a:t` 値だけを stable source handle で差し替える。
- * Node-level XML splicing、unsupported raw sidecar の精密な invalidation、package
- * topology rewrite は後続 writer slice の責務だが、API と dirty-scope tracking は
- * その方向へ拡張できる形を保つ。
+ * The current slice supports one plain text-run edit, reserializing the dirty slide XML
+ * part and replacing only the target run's `a:t` value via a stable source handle.
+ * Node-level XML splicing, precise unsupported raw-sidecar invalidation, and package
+ * topology rewrites belong to later writer slices, but the API and dirty-scope tracking
+ * remain shaped for that extension path.
  */
 
 import { XMLBuilder } from "fast-xml-parser";
@@ -39,7 +38,7 @@ import type {
 import { isRelationshipPart, relationshipsPartPath } from "../source/package-paths.js";
 import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 
-/** `writePptx` の出力。 */
+/** `writePptx` output. */
 export type WritePptxOutput = Uint8Array;
 
 const CONTENT_TYPES_PART = "[Content_Types].xml";
@@ -57,12 +56,12 @@ const xmlBuilder = new XMLBuilder({
 });
 
 /**
- * PptxSourceModel source を PPTX package bytes に書き戻す。
+ * Writes a PptxSourceModel source back to PPTX package bytes.
  *
- * round-trip 用の初期 writer であり、未編集 package material を優先して
- * preserved output を作る。dirty part の patch に必要な raw bytes が無い場合や
- * 必要な raw bytes が無い non-bookkeeping part は、
- * 暗黙に再生成せずエラーにする。
+ * This initial round-trip writer prefers unedited package material
+ * to create preserved output. If the raw bytes needed to patch a dirty part are unavailable, or
+ * a non-bookkeeping part lacks required raw bytes,
+ * it throws instead of regenerating content implicitly.
  */
 export function writePptx(source: PptxSourceModel): WritePptxOutput {
   const textRunEdits = source.edits?.filter(isTextRunEdit) ?? [];

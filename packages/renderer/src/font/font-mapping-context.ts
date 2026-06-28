@@ -1,6 +1,6 @@
 /**
- * レンダリング中のフォントマッピングテーブルをモジュールレベルで保持する。
- * text-measurer.ts の setTextMeasurer/resetTextMeasurer パターンと同じ。
+ * Keeps the font mapping table used during rendering at module level.
+ * Internal note.
  */
 import type { FontMapping } from "./font-mapping.js";
 import { DEFAULT_FONT_MAPPING, getMappedFont } from "./font-mapping.js";
@@ -16,7 +16,7 @@ export function resetFontMapping(): void {
 }
 
 /**
- * 現在のマッピングテーブルから OSS 代替フォント名を取得するショートカット。
+ * Shortcut for getting an OSS replacement font name from the current mapping table.
  */
 export function getCurrentMappedFont(fontFamily: string | null | undefined): string | null {
   return getMappedFont(fontFamily, currentMapping);

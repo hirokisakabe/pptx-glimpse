@@ -1,13 +1,13 @@
 import { unsafeBrandAssertion } from "../unsafe-type-assertion.js";
 
 /**
- * Source handle 関連の型。
+ * Internal note.
  *
- * PptxSourceModel source node は、書き戻し (writer) / 編集 (editor) / round-trip の
- * ために「どの package part のどのノードから来たか」を stable な handle として
- * 保持する。handle は直接の mutable pointer ではなく、安定した参照
- * (part path / relationship id / node id / 兄弟内の順序 / raw sidecar 参照) で
- * 構成する。
+ * Internal note.
+ * Internal note.
+ * A handle is not a direct mutable pointer, but a stable reference
+ * Internal note.
+ * composes it.
  */
 
 declare const PartPathBrand: unique symbol;
@@ -15,18 +15,18 @@ declare const RelationshipIdBrand: unique symbol;
 declare const SourceNodeIdBrand: unique symbol;
 declare const RawSidecarIdBrand: unique symbol;
 
-/** OOXML package 内の part path (例: `ppt/slides/slide1.xml`)。 */
+/** Part path inside the OOXML package (Example: `ppt/slides/slide1.xml`)。 */
 export type PartPath = string & { readonly [PartPathBrand]: typeof PartPathBrand };
 
-/** relationship id (例: `rId1`)。`_rels/*.rels` 由来。 */
+/** Relationship id (Example: `rId1`)。`_rels/*.rels` source. */
 export type RelationshipId = string & {
   readonly [RelationshipIdBrand]: typeof RelationshipIdBrand;
 };
 
-/** source part 内で要素を一意に指す id (spid / 生成 id 等)。 */
+/** Internal note. */
 export type SourceNodeId = string & { readonly [SourceNodeIdBrand]: typeof SourceNodeIdBrand };
 
-/** raw sidecar を指す id。 */
+/** Id pointing to a raw sidecar. */
 export type RawSidecarId = string & { readonly [RawSidecarIdBrand]: typeof RawSidecarIdBrand };
 
 export function asPartPath(value: string): PartPath {
@@ -46,19 +46,19 @@ export function asRawSidecarId(value: string): RawSidecarId {
 }
 
 /**
- * source node の出自を表す stable handle。writer は handle を見て、生成した
- * ノードを既存 part に splice できるか、より広い scope を再生成すべきかを
- * 判断する。
+ * Stable handle describing a source node's provenance. The writer uses the handle to decide whether a generated
+ * node can be spliced into an existing part or whether a broader scope must be regenerated.
+ *
  */
 export interface SourceHandle {
-  /** このノードを所有する package part。 */
+  /** Package part that owns this node. */
   readonly partPath: PartPath;
-  /** part 内でのノード id (取得できる場合)。 */
+  /** Node id inside the part (when available)。 */
   readonly nodeId?: SourceNodeId;
-  /** このノードを参照している relationship id (例: blip の `r:embed`)。 */
+  /** Internal note. */
   readonly relationshipId?: RelationshipId;
-  /** 親要素内での子の順序スロット。raw sidecar との順序復元に使う。 */
+  /** Internal note. */
   readonly orderingSlot?: number;
-  /** このノードに紐づく raw sidecar の id 群。 */
+  /** Raw sidecar ids associated with this node. */
   readonly rawSidecarIds?: readonly RawSidecarId[];
 }

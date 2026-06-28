@@ -4,7 +4,7 @@ import { extractTtcFonts, isTtcBuffer } from "./ttc-parser.js";
 import { buildTtcFromTtfs } from "./ttc-test-helper.js";
 
 /**
- * opentype.js で最小限の有効な TTF バッファを作成する。
+ * Test note.
  */
 async function createTestTtfBuffer(familyName: string): Promise<ArrayBuffer> {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -58,27 +58,27 @@ async function createTestTtfBuffer(familyName: string): Promise<ArrayBuffer> {
 }
 
 describe("isTtcBuffer", () => {
-  it("TTC バッファを正しく判定する", () => {
+  it("covers ttc-parser behavior 1", () => {
     const buf = new ArrayBuffer(12);
     const view = new DataView(buf);
     view.setUint32(0, 0x74746366); // "ttcf"
     expect(isTtcBuffer(buf)).toBe(true);
   });
 
-  it("TTF バッファは false を返す", async () => {
+  it("covers ttc-parser behavior 2", async () => {
     const ttf = await createTestTtfBuffer("TestFont");
     expect(isTtcBuffer(ttf)).toBe(false);
   });
 
-  it("空バッファは false を返す", () => {
+  it("covers ttc-parser behavior 3", () => {
     expect(isTtcBuffer(new ArrayBuffer(0))).toBe(false);
   });
 
-  it("4 バイト未満のバッファは false を返す", () => {
+  it("covers ttc-parser behavior 4", () => {
     expect(isTtcBuffer(new ArrayBuffer(3))).toBe(false);
   });
 
-  it("Uint8Array 入力で動作する", () => {
+  it("covers ttc-parser behavior 5", () => {
     const buf = new ArrayBuffer(12);
     const view = new DataView(buf);
     view.setUint32(0, 0x74746366);
@@ -87,7 +87,7 @@ describe("isTtcBuffer", () => {
 });
 
 describe("extractTtcFonts", () => {
-  it("TTC から個別 TTF を抽出できる", async () => {
+  it("covers ttc-parser behavior 6", async () => {
     const ttf1 = await createTestTtfBuffer("FontAlpha");
     const ttf2 = await createTestTtfBuffer("FontBeta");
     const ttc = buildTtcFromTtfs([ttf1, ttf2]);
@@ -96,7 +96,7 @@ describe("extractTtcFonts", () => {
     expect(extracted).toHaveLength(2);
   });
 
-  it("抽出した TTF が opentype.js でパースできる", async () => {
+  it("covers ttc-parser behavior 7", async () => {
     const ttf1 = await createTestTtfBuffer("FontAlpha");
     const ttf2 = await createTestTtfBuffer("FontBeta");
     const ttc = buildTtcFromTtfs([ttf1, ttf2]);
@@ -116,16 +116,16 @@ describe("extractTtcFonts", () => {
     expect(names2).toContain("FontBeta");
   });
 
-  it("TTC でないバッファは空配列を返す", async () => {
+  it("covers ttc-parser behavior 8", async () => {
     const ttf = await createTestTtfBuffer("TestFont");
     expect(extractTtcFonts(ttf)).toEqual([]);
   });
 
-  it("空バッファは空配列を返す", () => {
+  it("covers ttc-parser behavior 9", () => {
     expect(extractTtcFonts(new ArrayBuffer(0))).toEqual([]);
   });
 
-  it("numFonts が 0 の TTC は空配列を返す", () => {
+  it("covers ttc-parser behavior 10", () => {
     const buf = new ArrayBuffer(12);
     const view = new DataView(buf);
     view.setUint32(0, 0x74746366);
@@ -135,7 +135,7 @@ describe("extractTtcFonts", () => {
     expect(extractTtcFonts(buf)).toEqual([]);
   });
 
-  it("Uint8Array 入力で動作する", async () => {
+  it("covers ttc-parser behavior 11", async () => {
     const ttf1 = await createTestTtfBuffer("FontAlpha");
     const ttc = buildTtcFromTtfs([ttf1]);
     const uint8 = new Uint8Array(ttc);
@@ -144,7 +144,7 @@ describe("extractTtcFonts", () => {
     expect(extracted).toHaveLength(1);
   });
 
-  it("単一フォントの TTC でも動作する", async () => {
+  it("covers ttc-parser behavior 12", async () => {
     const ttf = await createTestTtfBuffer("SingleFont");
     const ttc = buildTtcFromTtfs([ttf]);
 
@@ -159,35 +159,35 @@ describe("extractTtcFonts", () => {
     expect(Object.values(font.names.fontFamily)).toContain("SingleFont");
   });
 
-  it("テーブルオフセットが範囲外のフォントはスキップされる", async () => {
+  it("covers ttc-parser behavior 13", async () => {
     const ttf1 = await createTestTtfBuffer("GoodFont");
     const ttc = buildTtcFromTtfs([ttf1]);
 
-    // TTC 内の最初のフォントのテーブルレコードのオフセットを範囲外に書き換え
+    // Test note.
     const view = new DataView(ttc);
-    const fontOffset = view.getUint32(12); // 最初のフォントのオフセット
-    const firstTableRecordOffset = fontOffset + 12; // 最初のテーブルレコード
-    // テーブルオフセットを巨大な値に書き換え
+    const fontOffset = view.getUint32(12); // Test note.
+    const firstTableRecordOffset = fontOffset + 12; // Test note.
+    // Test note.
     view.setUint32(firstTableRecordOffset + 8, 0xffffffff);
 
     const extracted = extractTtcFonts(ttc);
-    // 不正なフォントはスキップされるので空配列
+    // Test note.
     expect(extracted).toEqual([]);
   });
 
-  it("2フォント中1フォントが不正でも正常なフォントは抽出される", async () => {
+  it("covers ttc-parser behavior 14", async () => {
     const ttf1 = await createTestTtfBuffer("GoodFont");
     const ttf2 = await createTestTtfBuffer("BadFont");
     const ttc = buildTtcFromTtfs([ttf1, ttf2]);
 
-    // 2番目のフォントのテーブルオフセットを範囲外に書き換え
+    // Test note.
     const view = new DataView(ttc);
-    const font2Offset = view.getUint32(16); // 2番目のフォントのオフセット
+    const font2Offset = view.getUint32(16); // Test note.
     const firstTableRecordOffset = font2Offset + 12;
     view.setUint32(firstTableRecordOffset + 8, 0xffffffff);
 
     const extracted = extractTtcFonts(ttc);
-    // 1番目の正常なフォントのみ抽出
+    // Test note.
     expect(extracted).toHaveLength(1);
   });
 });

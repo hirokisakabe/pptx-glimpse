@@ -299,7 +299,7 @@ beforeAll(async () => {
 });
 
 describe("collectUsedFonts", () => {
-  it("テーマフォント情報を返す", () => {
+  it("covers font-collector behavior 1", () => {
     const result = collectUsedFonts(testPptx);
 
     expect(result.theme.majorFont).toBe("Calibri Light");
@@ -310,24 +310,24 @@ describe("collectUsedFonts", () => {
     expect(result.theme.minorFontCs).toBe("Arial");
   });
 
-  it("テキストランのフォント名を収集する", () => {
+  it("covers font-collector behavior 2", () => {
     const result = collectUsedFonts(testPptx);
 
-    // テキストランで指定されたフォント
+    // Test note.
     expect(result.fonts).toContain("Arial");
     expect(result.fonts).toContain("MS PGothic");
     expect(result.fonts).toContain("Times New Roman");
     expect(result.fonts).toContain("Yu Gothic");
   });
 
-  it("テーマフォント名も fonts 一覧に含まれる", () => {
+  it("covers font-collector behavior 3", () => {
     const result = collectUsedFonts(testPptx);
 
     expect(result.fonts).toContain("Calibri Light");
     expect(result.fonts).toContain("Calibri");
   });
 
-  it("テーマフォント alias を解決して収集する", async () => {
+  it("covers font-collector behavior 4", async () => {
     const pptx = await createTestPptx({ slideXml: slideWithThemeAliases });
     const result = collectUsedFonts(pptx);
 
@@ -344,7 +344,7 @@ describe("collectUsedFonts", () => {
     expect(result.fonts).not.toContain("+mn-cs");
   });
 
-  it("解決できない theme regional alias は fonts 一覧へ漏らさない", async () => {
+  it("covers font-collector behavior 5", async () => {
     const pptx = await createTestPptx({
       slideXml: slideWithThemeAliases,
       themeXml: themeWithoutRegionalFonts,
@@ -363,7 +363,7 @@ describe("collectUsedFonts", () => {
     expect(result.fonts).not.toContain("+mn-cs");
   });
 
-  it("スライドごとの theme font alias を各 slide の theme で解決する", async () => {
+  it("covers font-collector behavior 6", async () => {
     const pptx = await createTestPptx({
       contentTypesXml: contentTypesWithSecondSlide,
       presentationXmlOverride: presentationWithTwoSlidesXml,
@@ -393,14 +393,14 @@ describe("collectUsedFonts", () => {
     expect(result.fonts).not.toContain("+mn-cs");
   });
 
-  it("フォント名は重複なしでソート済み", () => {
+  it("covers font-collector behavior 7", () => {
     const result = collectUsedFonts(testPptx);
 
-    // 重複がないことを確認
+    // Test note.
     const unique = [...new Set(result.fonts)];
     expect(result.fonts).toEqual(unique);
 
-    // ソートされていることを確認
+    // Test note.
     const sorted = [...result.fonts].sort();
     expect(result.fonts).toEqual(sorted);
   });

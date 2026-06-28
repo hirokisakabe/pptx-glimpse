@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 
-// 実際の公開面 (`@pptx-glimpse/document`) 経由で import する。
+// Test note.
 import { readPptx } from "../index.js";
 
 const encoder = new TextEncoder();
@@ -14,9 +14,9 @@ function xml(content: string): Uint8Array {
 }
 
 /**
- * 受け入れ条件を精密に検証するための合成 PPTX。slide 2 枚 (順序が rId と
- * 逆になるよう意図的に並べる)、media 1 つ、未対応 part (docProps/custom.xml)、
- * external relationship、`../` を含む相対 target を含む。
+ * Test note.
+ * Test note.
+ * Test note.
  */
 function buildSyntheticPptx(): Uint8Array {
   const files: Record<string, Uint8Array> = {
@@ -38,7 +38,7 @@ function buildSyntheticPptx(): Uint8Array {
     "ppt/presentation.xml": xml(
       `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
         `<p:sldIdLst>` +
-        // sldIdLst の並び順 (slide1 → slide2) が slide order の真実。
+        // Test note.
         `<p:sldId id="256" r:id="rIdSlide1"/>` +
         `<p:sldId id="257" r:id="rIdSlide2"/>` +
         `</p:sldIdLst>` +
@@ -55,7 +55,7 @@ function buildSyntheticPptx(): Uint8Array {
     "ppt/slides/slide2.xml": xml(`<p:sld xmlns:p="x"><p:cSld/></p:sld>`),
     "ppt/slides/_rels/slide1.xml.rels": xml(
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-        // `../` を含む相対 target と external relationship。
+        // Test note.
         `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>` +
         `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/" TargetMode="External"/>` +
         `</Relationships>`,
@@ -66,19 +66,19 @@ function buildSyntheticPptx(): Uint8Array {
   return zipSync(files);
 }
 
-describe("readPptx — package graph と presentation metadata", () => {
+describe("reader/read-pptx.test behavior", () => {
   const source = readPptx(buildSyntheticPptx());
 
-  it("presentation metadata を含む PptxSourceModel source を返す", () => {
+  it("covers read-pptx behavior 1", () => {
     expect(source.presentation.partPath).toBe("ppt/presentation.xml");
     expect(source.presentation.handle?.partPath).toBe("ppt/presentation.xml");
-    // slide は presentation order どおり typed に読まれる (cSld が空なので shapes は空)。
+    // Test note.
     expect(source.slides.map((slide) => slide.partPath)).toEqual([
       "ppt/slides/slide1.xml",
       "ppt/slides/slide2.xml",
     ]);
     expect(source.slides.every((slide) => slide.shapes.length === 0)).toBe(true);
-    // この合成 fixture は slideLayout 関係を持たないため chain は辿れない。
+    // Test note.
     expect(source.slideLayouts).toEqual([]);
     expect(source.slideMasters).toEqual([]);
     expect(source.themes).toEqual([]);
@@ -87,7 +87,7 @@ describe("readPptx — package graph と presentation metadata", () => {
     );
   });
 
-  it("slide count / slide order / slide size を取得できる", () => {
+  it("covers read-pptx behavior 2", () => {
     expect(source.presentation.slidePartPaths).toEqual([
       "ppt/slides/slide1.xml",
       "ppt/slides/slide2.xml",
@@ -95,7 +95,7 @@ describe("readPptx — package graph と presentation metadata", () => {
     expect(source.presentation.slideSize).toEqual({ width: 9144000, height: 5143500 });
   });
 
-  it("relationship IDs / targets / target modes を保持できる", () => {
+  it("covers read-pptx behavior 3", () => {
     const slideRels = source.packageGraph.relationships.find(
       (rel) => rel.sourcePartPath === "ppt/slides/slide1.xml",
     );
@@ -113,24 +113,24 @@ describe("readPptx — package graph と presentation metadata", () => {
       },
     ]);
 
-    // package root の rels は sourcePartPath を "" として保持する。
+    // Test note.
     const rootRels = source.packageGraph.relationships.find((rel) => rel.sourcePartPath === "");
     expect(rootRels?.relationships[0]?.id).toBe("rId1");
   });
 
-  it("content type defaults / overrides を保持できる", () => {
+  it("covers read-pptx behavior 4", () => {
     expect(source.packageGraph.contentTypes.defaults).toContainEqual({
       extension: "png",
       contentType: "image/png",
     });
-    // override の PartName は先頭スラッシュを除去して PartPath に正規化する。
+    // Test note.
     expect(source.packageGraph.contentTypes.overrides).toContainEqual({
       partName: "ppt/slides/slide1.xml",
       contentType: "application/vnd.openxmlformats-officedocument.presentationml.slide+xml",
     });
   });
 
-  it("media bytes と part paths を保持できる", () => {
+  it("covers read-pptx behavior 5", () => {
     expect(source.packageGraph.media).toEqual([
       {
         partPath: "ppt/media/image1.png",
@@ -140,13 +140,13 @@ describe("readPptx — package graph と presentation metadata", () => {
     ]);
   });
 
-  it("unsupported package parts を raw material として保持できる", () => {
+  it("covers read-pptx behavior 6", () => {
     const rawPaths = source.packageGraph.rawParts?.map((part) => part.partPath) ?? [];
-    // 未対応 part / typed 化しない slide / presentation は raw として保持する。
+    // Test note.
     expect(rawPaths).toContain("docProps/custom.xml");
     expect(rawPaths).toContain("ppt/slides/slide1.xml");
     expect(rawPaths).toContain("ppt/presentation.xml");
-    // content types / rels / media は structural data / media として別管理し raw に含めない。
+    // Test note.
     expect(rawPaths).not.toContain("[Content_Types].xml");
     expect(rawPaths).not.toContain("ppt/media/image1.png");
     expect(rawPaths.some((path) => path.endsWith(".rels"))).toBe(false);
@@ -158,7 +158,7 @@ describe("readPptx — package graph と presentation metadata", () => {
     expect(customPart?.contentType).toBe("application/xml");
   });
 
-  it("part manifest が全 part を content type 付きで列挙する", () => {
+  it("covers read-pptx behavior 7", () => {
     const partMap = new Map(
       source.packageGraph.parts.map((part) => [part.partPath, part.contentType]),
     );
@@ -166,15 +166,15 @@ describe("readPptx — package graph と presentation metadata", () => {
     expect(partMap.get("ppt/slides/slide1.xml")).toBe(
       "application/vnd.openxmlformats-officedocument.presentationml.slide+xml",
     );
-    // rels part は Default extension で content type を解決する。
+    // Test note.
     expect(partMap.get("ppt/_rels/presentation.xml.rels")).toBe(
       "application/vnd.openxmlformats-package.relationships+xml",
     );
-    // [Content_Types].xml 自体は part manifest に含めない。
+    // Test note.
     expect(partMap.has("[Content_Types].xml")).toBe(false);
   });
 
-  it("presentation part が無い場合はエラーを投げる", () => {
+  it("covers read-pptx behavior 8", () => {
     const bogus = zipSync({
       "[Content_Types].xml": xml(
         `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>`,
@@ -183,7 +183,7 @@ describe("readPptx — package graph と presentation metadata", () => {
     expect(() => readPptx(bogus)).toThrow(/presentation part not found/);
   });
 
-  it("officeDocument relationship が presentation 以外を指す場合はエラーを投げる", () => {
+  it("covers read-pptx behavior 9", () => {
     const bogus = zipSync({
       "[Content_Types].xml": xml(
         `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -193,7 +193,7 @@ describe("readPptx — package graph と presentation metadata", () => {
       ),
       "_rels/.rels": xml(
         `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-          // officeDocument が誤って別 XML part を指している。
+          // Test note.
           `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="docProps/app.xml"/>` +
           `</Relationships>`,
       ),
@@ -202,7 +202,7 @@ describe("readPptx — package graph と presentation metadata", () => {
     expect(() => readPptx(bogus)).toThrow(/not a presentation part/);
   });
 
-  it("p:sldId が slide 以外の relationship を指す場合は除外し diagnostic を残す", () => {
+  it("covers read-pptx behavior 10", () => {
     const bogus = zipSync({
       "[Content_Types].xml": xml(
         `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -222,7 +222,7 @@ describe("readPptx — package graph と presentation metadata", () => {
       ),
       "ppt/_rels/presentation.xml.rels": xml(
         `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-          // slide ではなく notesMaster を指す relationship。
+          // Test note.
           `<Relationship Id="rIdBogus" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="notesMasters/notesMaster1.xml"/>` +
           `</Relationships>`,
       ),
@@ -241,7 +241,7 @@ describe("readPptx — real fixture smoke test", () => {
   );
   const source = readPptx(readFileSync(fixturePath));
 
-  it("real-basic-theme から slide order / size / media を読める", () => {
+  it("covers read-pptx behavior 11", () => {
     expect(source.presentation.slidePartPaths).toEqual([
       "ppt/slides/slide1.xml",
       "ppt/slides/slide2.xml",
@@ -255,7 +255,7 @@ describe("readPptx — real fixture smoke test", () => {
     expect(image?.contentType).toBe("image/png");
     expect(image && image.bytes.length).toBeGreaterThan(0);
 
-    // 全 slide part が raw として round-trip 用に保持されている。
+    // Test note.
     const rawPaths = source.packageGraph.rawParts?.map((part) => part.partPath) ?? [];
     expect(rawPaths).toContain("ppt/slides/slide1.xml");
     expect(rawPaths).toContain("ppt/slides/slide2.xml");

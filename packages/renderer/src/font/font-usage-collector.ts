@@ -1,18 +1,18 @@
 /**
- * ネイティブ <text> 出力モード用のフォント使用状況コレクタ。
- * レンダリング中に「フォント名 → 使用文字集合」を収集し、
- * サブセット化フォントの @font-face 埋め込みに利用する。
+ * Internal note.
+ * Internal note.
+ * Internal note.
  */
 
 export interface FontUsage {
-  /** resolveFont に渡すフォント名の優先順リスト (tspan の font-family と同順) */
+  /** Internal note. */
   fonts: (string | null)[];
-  /** このフォントで描画される文字の集合 */
+  /** Internal note. */
   chars: Set<string>;
 }
 
 export class FontUsageCollector {
-  /** key: tspan の font-family リスト先頭のフォント名 (= @font-face で宣言する名前) */
+  /** Internal note. */
   private usages = new Map<string, FontUsage>();
 
   record(fonts: (string | null)[], text: string): void {

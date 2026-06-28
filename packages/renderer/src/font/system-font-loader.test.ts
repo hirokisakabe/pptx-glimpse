@@ -24,28 +24,28 @@ afterEach(() => {
 });
 
 describe("collectFontFilePaths skipSystemFonts", () => {
-  it("skipSystemFonts=true のとき additionalDirs のファイルのみ返す", () => {
+  it("covers system-font-loader behavior 1", () => {
     const { dir, fontPath } = makeTempFontDir();
     const result = collectFontFilePaths([dir], true);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe(fontPath);
   });
 
-  it("skipSystemFonts=true かつ fontDirs 未指定のとき空配列を返す", () => {
+  it("covers system-font-loader behavior 2", () => {
     const result = collectFontFilePaths([], true);
     expect(result).toEqual([]);
   });
 
-  it("skipSystemFonts=false のとき additionalDirs のファイルが含まれる", () => {
+  it("covers system-font-loader behavior 3", () => {
     const { dir, fontPath } = makeTempFontDir();
     const result = collectFontFilePaths([dir], false);
     expect(result).toContain(fontPath);
   });
 
-  it("skipSystemFonts=false は skipSystemFonts=true と同数以上のファイルを返す", () => {
+  it("covers system-font-loader behavior 4", () => {
     const { dir } = makeTempFontDir();
     const skipSystem = collectFontFilePaths([dir], true);
-    // 同じ dir で false を呼ぶ (dirsKey は同じだが skipSystemFonts が異なるためキャッシュミス)
+    // Test note.
     const withSystem = collectFontFilePaths([dir], false);
     expect(withSystem.length).toBeGreaterThanOrEqual(skipSystem.length);
   });

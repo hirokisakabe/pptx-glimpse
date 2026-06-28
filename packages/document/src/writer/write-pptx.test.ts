@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { unzipSync, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 
-// 実際の公開面 (`@pptx-glimpse/document`) 経由で import する。
+// Test note.
 import { readPptx, writePptx } from "../index.js";
 import { findTextRunBySourceHandle, replaceTextRunPlainText, type SourceShape } from "../index.js";
 
@@ -123,7 +123,7 @@ function getEntry(output: Uint8Array, path: string): Uint8Array {
 }
 
 describe("writePptx — no-edit round-trip", () => {
-  it("PptxSourceModel source から no-edit PPTX を write し、再読込できる", () => {
+  it("covers write-pptx behavior 1", () => {
     const input = buildRoundTripFixture();
     const original = readPptx(input);
 
@@ -137,7 +137,7 @@ describe("writePptx — no-edit round-trip", () => {
     );
   });
 
-  it("relationship IDs と content types を structural に preserving する", () => {
+  it("covers write-pptx behavior 2", () => {
     const original = readPptx(buildRoundTripFixture());
     const reread = readPptx(writePptx(original));
 
@@ -145,7 +145,7 @@ describe("writePptx — no-edit round-trip", () => {
     expect(reread.packageGraph.relationships).toEqual(original.packageGraph.relationships);
   });
 
-  it("media bytes と unsupported raw package material を preserving する", () => {
+  it("covers write-pptx behavior 3", () => {
     const input = buildRoundTripFixture();
     const source = readPptx(input);
     const output = writePptx(source);
@@ -161,7 +161,7 @@ describe("writePptx — no-edit round-trip", () => {
     );
   });
 
-  it("xml raw package material を serializable な範囲で write できる", () => {
+  it("covers write-pptx behavior 4", () => {
     const source = readPptx(buildRoundTripFixture());
     const withXmlRaw = {
       ...source,
@@ -200,7 +200,7 @@ describe("writePptx — no-edit round-trip", () => {
     );
   });
 
-  it("xml raw package material の mixed content は順序保持できないため reject する", () => {
+  it("covers write-pptx behavior 5", () => {
     const source = readPptx(buildRoundTripFixture());
     const withMixedContentRaw = {
       ...source,
@@ -229,7 +229,7 @@ describe("writePptx — no-edit round-trip", () => {
     expect(() => writePptx(withMixedContentRaw)).toThrow(/mixed text\/element content/);
   });
 
-  it("byte equality ではなく structural preservation を検証対象にする", () => {
+  it("covers write-pptx behavior 6", () => {
     const input = buildRoundTripFixture();
     const output = writePptx(readPptx(input));
 
@@ -240,7 +240,7 @@ describe("writePptx — no-edit round-trip", () => {
     ]);
   });
 
-  it("real fixture でも write 後の PPTX を readPptx で再読込できる", () => {
+  it("covers write-pptx behavior 7", () => {
     const fixturePath = fileURLToPath(
       new URL("../../../../shared-fixtures/real-basic-theme.pptx", import.meta.url),
     );
@@ -259,7 +259,7 @@ describe("writePptx — no-edit round-trip", () => {
     expect(rereadImage?.bytes).toEqual(originalImage?.bytes);
   });
 
-  it("preserved material が無い part は no-edit writer で暗黙に再生成しない", () => {
+  it("covers write-pptx behavior 8", () => {
     const source = readPptx(buildRoundTripFixture());
     const withoutRawSlide = {
       ...source,
@@ -276,7 +276,7 @@ describe("writePptx — no-edit round-trip", () => {
 });
 
 describe("writePptx — one plain text-run edit", () => {
-  it("existing text run を stable source handle で特定できる", () => {
+  it("covers write-pptx behavior 9", () => {
     const source = readPptx(buildTextEditFixture());
     const run = firstRun(source);
 
@@ -288,7 +288,7 @@ describe("writePptx — one plain text-run edit", () => {
     expect(findTextRunBySourceHandle(source, run.handle!)).toBe(run);
   });
 
-  it("plain text 置換を PptxSourceModel source に適用し、write 後の PPTX に反映する", () => {
+  it("covers write-pptx behavior 10", () => {
     const input = buildTextEditFixture();
     const source = readPptx(input);
     const run = firstRun(source);
@@ -303,7 +303,7 @@ describe("writePptx — one plain text-run edit", () => {
     expect(firstParagraph(reread).runs[1].text).toBe(" Keep ");
   });
 
-  it("run / paragraph formatting と unrelated package material を preserving する", () => {
+  it("covers write-pptx behavior 11", () => {
     const input = buildTextEditFixture();
     const source = readPptx(input);
     const edited = replaceTextRunPlainText(source, firstRun(source).handle!, "Edited text");
@@ -328,7 +328,7 @@ describe("writePptx — one plain text-run edit", () => {
     );
   });
 
-  it("shape id が無い run も shapeSlot handle で dirty slide XML に反映できる", () => {
+  it("covers write-pptx behavior 12", () => {
     const source = readPptx(buildSlotHandleTextEditFixture());
     const run = firstRun(source);
 

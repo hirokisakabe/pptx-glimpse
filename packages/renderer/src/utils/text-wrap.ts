@@ -21,10 +21,10 @@ interface Token {
 const DEFAULT_FONT_SIZE = 18;
 
 /**
- * フォントメトリクスの近似誤差を吸収するための折り返しトレランス。
- * availableWidth に対する比率で指定する。
- * 代替フォントメトリクス（例: Meiryo → Noto Sans JP）による幅の過大評価で、
- * 本来1行に収まるテキストの末尾文字が次行に送られる問題を緩和する。
+ * Internal note.
+ * Internal note.
+ * Internal note.
+ * Internal note.
  */
 const WRAP_TOLERANCE_RATIO = 0.02;
 
@@ -42,10 +42,10 @@ function isWhitespace(codePoint: number): boolean {
 }
 
 /**
- * テキストをブレーク可能な単位に分割する。
- * - 空白: 個別トークン (breakable)
- * - CJK 文字: 1文字ずつ (breakable)
- * - ラテン文字の連続: 1ワード (先頭以外で breakable)
+ * Internal note.
+ * Internal note.
+ * Internal note.
+ * Internal note.
  */
 function splitTextIntoFragments(text: string): { fragment: string; breakable: boolean }[] {
   const fragments: { fragment: string; breakable: boolean }[] = [];
@@ -70,12 +70,12 @@ function splitTextIntoFragments(text: string): { fragment: string; breakable: bo
         });
         current = "";
       }
-      // CJK 文字は1文字ずつ独立トークン
+      // Internal note.
       fragments.push({ fragment: char, breakable: true });
       currentType = "cjk";
       current = "";
     } else {
-      // ラテン文字
+      // Internal note.
       if (current && currentType !== "latin") {
         fragments.push({ fragment: current, breakable: currentType === "space" });
         current = "";
@@ -106,12 +106,12 @@ function tokenizeRuns(
   for (const run of runs) {
     if (run.text.length === 0) continue;
 
-    // \n を含むランは分割して強制改行トークンを挿入
+    // Internal note.
     if (run.text.includes("\n")) {
       const parts = run.text.split("\n");
       for (let pi = 0; pi < parts.length; pi++) {
         if (pi > 0) {
-          // 強制改行トークン
+          // Internal note.
           tokens.push({
             text: "",
             properties: run.properties,
@@ -187,7 +187,7 @@ function isSpaceOnly(text: string): boolean {
 }
 
 /**
- * 長いトークンを文字単位で強制分割する
+ * Internal note.
  */
 function splitTokenByChars(
   token: Token,
@@ -287,7 +287,7 @@ function layoutTokensIntoLines(
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
 
-    // 強制改行トークン: 即座に行を終了
+    // Internal note.
     if (token.forceBreak) {
       const segments = trimTrailingSpaces(mergeSegments(currentLine));
       lines.push({ segments: segments.length > 0 ? segments : [] });
@@ -300,9 +300,9 @@ function layoutTokensIntoLines(
       currentLine.push(token);
       currentWidth += token.width;
     } else if (currentLine.length === 0) {
-      // 行が空で1トークンすら入らない → 文字単位で強制分割
+      // Internal note.
       if (isSpaceOnly(token.text)) {
-        // 空白だけのトークンはスキップ
+        // Internal note.
         continue;
       }
       const splitLines = splitTokenByChars(token, availableWidth, defaultFontSize, fontScale);
@@ -311,18 +311,18 @@ function layoutTokensIntoLines(
           const segments = trimTrailingSpaces(mergeSegments(splitLines[j]));
           if (segments.length > 0) lines.push({ segments });
         } else {
-          // 最後のチャンクは次の行の先頭になる
+          // Internal note.
           currentLine = splitLines[j];
           currentWidth = splitLines[j].reduce((sum, t) => sum + t.width, 0);
         }
       }
     } else if (token.breakable) {
-      // 改行可能な位置で改行
+      // Internal note.
       const segments = trimTrailingSpaces(mergeSegments(currentLine));
       if (segments.length > 0) lines.push({ segments });
 
       if (isSpaceOnly(token.text)) {
-        // 行頭の空白はスキップ
+        // Internal note.
         currentLine = [];
         currentWidth = 0;
       } else {
@@ -330,7 +330,7 @@ function layoutTokensIntoLines(
         currentWidth = token.width;
       }
     } else {
-      // breakable でないが行に収まらない → 手前で改行してこのトークンを次の行へ
+      // Internal note.
       const segments = trimTrailingSpaces(mergeSegments(currentLine));
       if (segments.length > 0) lines.push({ segments });
       currentLine = [token];
@@ -347,7 +347,7 @@ function layoutTokensIntoLines(
 }
 
 /**
- * 段落のランを折り返して行配列に変換する
+ * Internal note.
  */
 export function wrapParagraph(
   paragraph: Paragraph,

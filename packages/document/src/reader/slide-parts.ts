@@ -1,11 +1,11 @@
 /**
- * slide / slideLayout / slideMaster / theme part を PptxSourceModel source の typed
- * node へ読み取る。
+ * Internal note.
+ * node .
  *
- * 各 part は分離したまま保持し、cascade (master → layout → slide) の解決は
- * computed view の責務とする。本モジュールは解決に必要な素材 (背景 / clrMap /
- * clrMapOvr / theme scheme / showMasterSp) と shape tree を source-local に
- * 読み出す。
+ * Internal note.
+ * Internal note.
+ * Internal note.
+ * source-locally。
  */
 
 import type {
@@ -74,7 +74,7 @@ const FILL_LOCAL_NAMES: ReadonlySet<string> = new Set([
   "noFill",
 ]);
 
-/** parse 済み slide root (`p:sld`) から `SourceSlide` を組み立てる。 */
+/** Parsed slide root (`p:sld`) to `SourceSlide` . */
 export function parseSlide(
   root: XmlNode | undefined,
   partPath: PartPath,
@@ -98,7 +98,7 @@ export function parseSlide(
   };
 }
 
-/** parse 済み layout root (`p:sldLayout`) から `SourceSlideLayout` を組み立てる。 */
+/** Parsed layout root (`p:sldLayout`) to `SourceSlideLayout` . */
 export function parseSlideLayout(
   root: XmlNode | undefined,
   partPath: PartPath,
@@ -124,7 +124,7 @@ export function parseSlideLayout(
   };
 }
 
-/** parse 済み master root (`p:sldMaster`) から `SourceSlideMaster` を組み立てる。 */
+/** Parsed master root (`p:sldMaster`) to `SourceSlideMaster` . */
 export function parseSlideMaster(
   root: XmlNode | undefined,
   partPath: PartPath,
@@ -163,7 +163,7 @@ function parseMasterTextStyles(txStyles: XmlNode | undefined): SourceMasterTextS
   return Object.keys(parsed).length > 0 ? parsed : undefined;
 }
 
-/** parse 済み theme root (`a:theme`) から `SourceTheme` を組み立てる。 */
+/** Parsed theme root (`a:theme`) to `SourceTheme` . */
 export function parseTheme(
   root: XmlNode | undefined,
   partPath: PartPath,
@@ -218,9 +218,9 @@ function parseColorMap(clrMap: XmlNode | undefined): SourceColorMap | undefined 
 }
 
 /**
- * `p:clrMapOvr` を読む。`a:overrideClrMapping` があればその mapping を返し、
- * `a:masterClrMapping` (= master の clrMap を踏襲) の場合は override 無しとして
- * undefined を返す。
+ * Reads `p:clrMapOvr`. If `a:overrideClrMapping` exists, returns that mapping;
+ * Internal note.
+ * undefined .
  */
 function parseColorMapOverride(clrMapOvr: XmlNode | undefined): SourceColorMap | undefined {
   if (!clrMapOvr) return undefined;

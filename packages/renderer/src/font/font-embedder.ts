@@ -1,6 +1,6 @@
 /**
- * フォント使用状況から @font-face 定義入りの <style> 要素を構築する。
- * ネイティブ <text> 出力モードで SVG にサブセット化フォントを埋め込むために使う。
+ * Internal note.
+ * Internal note.
  */
 
 import { Buffer } from "node:buffer";
@@ -11,8 +11,8 @@ import { getJpanFallbackFont } from "./script-font-context.js";
 import type { TextPathFontResolver } from "./text-path-context.js";
 
 /**
- * CSS 文字列リテラル用にフォント名をエスケープする。
- * <style> の中身は XML テキストノードでもあるため、XML 特殊文字は CSS 16進エスケープで表現する。
+ * Escapes a font name for CSS string literals.
+ * Internal note.
  */
 function escapeCssFamilyName(name: string): string {
   return name
@@ -21,8 +21,8 @@ function escapeCssFamilyName(name: string): string {
 }
 
 /**
- * 収集したフォント使用状況をサブセット化し、@font-face 定義の <style> 要素を返す。
- * 埋め込めるフォントが 1 つも無い場合は空文字列を返す。
+ * Internal note.
+ * Internal note.
  */
 export async function buildFontFaceStyle(
   usages: Map<string, FontUsage>,

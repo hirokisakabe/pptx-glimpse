@@ -32,7 +32,7 @@ function makeParagraph(texts: string[], props?: Partial<RunProperties>): Paragra
 }
 
 describe("wrapParagraph", () => {
-  it("短いテキストは折り返さない", () => {
+  it("covers text-wrap behavior 1", () => {
     const para = makeParagraph(["Hi"]);
     const lines = wrapParagraph(para, 500, 18);
     expect(lines).toHaveLength(1);
@@ -40,38 +40,38 @@ describe("wrapParagraph", () => {
     expect(lines[0].segments[0].text).toBe("Hi");
   });
 
-  it("長い英語テキストをワード境界で折り返す", () => {
+  it("covers text-wrap behavior 2", () => {
     const para = makeParagraph(["The quick brown fox jumps over the lazy dog"]);
-    // 幅を狭くして折り返しを発生させる
+    // Test note.
     const lines = wrapParagraph(para, 100, 18);
     expect(lines.length).toBeGreaterThan(1);
-    // 各行の先頭が大文字 or 小文字の単語で始まる
+    // Test note.
     for (const line of lines) {
       expect(line.segments.length).toBeGreaterThan(0);
     }
   });
 
-  it("長い CJK テキストを文字境界で折り返す", () => {
+  it("covers text-wrap behavior 3", () => {
     const para = makeParagraph(["本日は晴天なり今日もいい天気です"]);
     const lines = wrapParagraph(para, 100, 18);
     expect(lines.length).toBeGreaterThan(1);
   });
 
-  it("空の段落は空の行を返す", () => {
+  it("covers text-wrap behavior 4", () => {
     const para = makeParagraph([]);
     const lines = wrapParagraph(para, 500, 18);
     expect(lines).toHaveLength(1);
     expect(lines[0].segments).toHaveLength(0);
   });
 
-  it("空テキストのランのみの段落は空の行を返す", () => {
+  it("covers text-wrap behavior 5", () => {
     const para = makeParagraph([""]);
     const lines = wrapParagraph(para, 500, 18);
     expect(lines).toHaveLength(1);
     expect(lines[0].segments).toHaveLength(0);
   });
 
-  it("複数の TextRun が正しくセグメントに分割される", () => {
+  it("covers text-wrap behavior 6", () => {
     const boldProps = makeRunProps({ bold: true });
     const normalProps = makeRunProps({ bold: false });
     const para: Paragraph = {
@@ -89,12 +89,12 @@ describe("wrapParagraph", () => {
     };
     const lines = wrapParagraph(para, 500, 18);
     expect(lines).toHaveLength(1);
-    // bold と normal で少なくとも2つのセグメントになるか、マージされない
+    // Test note.
     const allText = lines[0].segments.map((s) => s.text).join("");
     expect(allText).toBe("Bold Normal");
   });
 
-  it("スタイルが異なる TextRun の境界をまたぐ折り返し", () => {
+  it("covers text-wrap behavior 7", () => {
     const boldProps = makeRunProps({ bold: true });
     const normalProps = makeRunProps({ bold: false });
     const para: Paragraph = {
@@ -112,8 +112,8 @@ describe("wrapParagraph", () => {
     };
     const lines = wrapParagraph(para, 150, 18);
     expect(lines.length).toBeGreaterThan(1);
-    // 各行をスペースで結合して全テキストが保持されていることを確認
-    // (行末空白はトリムされるので行間にスペースを補って結合)
+    // Test note.
+    // Test note.
     const allText = lines.map((l) => l.segments.map((s) => s.text).join("")).join(" ");
     expect(allText).toContain("First part");
     expect(allText).toContain("bold and");
@@ -121,7 +121,7 @@ describe("wrapParagraph", () => {
     expect(allText).toContain("normal text");
   });
 
-  it("availableWidth が非常に小さい場合でも少なくとも1文字は配置する", () => {
+  it("covers text-wrap behavior 8", () => {
     const para = makeParagraph(["AB"]);
     const lines = wrapParagraph(para, 1, 18);
     expect(lines.length).toBeGreaterThanOrEqual(1);
@@ -129,9 +129,9 @@ describe("wrapParagraph", () => {
     expect(allText).toBe("AB");
   });
 
-  it("行末の空白がトリムされる", () => {
+  it("covers text-wrap behavior 9", () => {
     const para = makeParagraph(["Hello World"]);
-    // Hello(~60px) + space(~7px) = ~67px で折り返し
+    // Test note.
     const lines = wrapParagraph(para, 80, 18);
     expect(lines.length).toBeGreaterThanOrEqual(1);
     for (const line of lines) {
@@ -142,9 +142,9 @@ describe("wrapParagraph", () => {
     }
   });
 
-  it("fontScale が run 個別の fontSize に適用される", () => {
-    // run に明示的な fontSize=36 を設定し、fontScale=0.5 で幅計測
-    // fontScale 適用後は fontSize=18 相当になるため、fontSize=18 と同じ折り返し結果になるはず
+  it("covers text-wrap behavior 10", () => {
+    // Test note.
+    // Test note.
     const para = makeParagraph(["The quick brown fox jumps over the lazy dog"], {
       fontSize: 36,
     });
@@ -156,9 +156,9 @@ describe("wrapParagraph", () => {
     expect(linesWithScale.length).toBe(linesSmall.length);
   });
 
-  it("フォントメトリクス誤差で僅かにはみ出す CJK テキストを折り返さない", () => {
-    // "ABCシステム" の計測幅 ≈ 135.74px (Carlito ABC + NotoSansJP CJK×4, 18pt)
-    // availableWidth=134 → はみ出し 1.74px, tolerance=134*0.02=2.68px → 1行に収まる
+  it("covers text-wrap behavior 11", () => {
+    // Test note.
+    // Test note.
     const props = makeRunProps({
       fontFamily: "Calibri",
       fontFamilyEa: "Meiryo",
@@ -179,9 +179,9 @@ describe("wrapParagraph", () => {
     expect(lines[0].segments.map((s) => s.text).join("")).toBe("ABCシステム");
   });
 
-  it("トレランスを超える幅超過では正しく折り返される", () => {
-    // "ABCシステム" の計測幅 ≈ 135.74px
-    // availableWidth=120 → はみ出し 15.74px, tolerance=120*0.02=2.4px → 折り返される
+  it("covers text-wrap behavior 12", () => {
+    // Test note.
+    // Test note.
     const props = makeRunProps({
       fontFamily: "Calibri",
       fontFamilyEa: "Meiryo",
@@ -201,10 +201,10 @@ describe("wrapParagraph", () => {
     expect(lines.length).toBeGreaterThan(1);
   });
 
-  it("fontScale が 1 のとき run の fontSize がそのまま使われる", () => {
+  it("covers text-wrap behavior 13", () => {
     const para = makeParagraph(["Hello World"], { fontSize: 36 });
     const linesNoScale = wrapParagraph(para, 200, 18, 1);
-    // fontSize=36 は fontSize=18 より幅が広いので、より多くの行に折り返されるはず
+    // Test note.
     const paraSmall = makeParagraph(["Hello World"], { fontSize: 18 });
     const linesSmall = wrapParagraph(paraSmall, 200, 18, 1);
     expect(linesNoScale.length).toBeGreaterThanOrEqual(linesSmall.length);

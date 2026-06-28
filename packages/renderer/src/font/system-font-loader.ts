@@ -5,9 +5,9 @@ import { extname, join } from "node:path";
 const FONT_EXTENSIONS = new Set([".ttf", ".otf"]);
 
 /**
- * CJK TTC フォントの既知パターン。
- * TTC ファイルは大量にあるとメモリを消費するため、
- * CJK テキストに必要なもののみを選択的に読み込む。
+ * Known patterns for CJK TTC fonts.
+ * Internal note.
+ * so only fonts needed for CJK text are loaded selectively.
  */
 const CJK_TTC_PATTERNS = [
   "NotoSansCJK",
@@ -38,9 +38,9 @@ function getSystemFontDirs(): string[] {
 }
 
 function isCjkTtc(name: string): boolean {
-  // macOS (APFS) はファイル名を NFD (分解形) で返すため、
-  // NFC に正規化してからパターンマッチする。
-  // 例: "ギ" が "キ" + 濁点(U+3099) に分解されている場合がある。
+  // macOS (APFS) returns filenames as NFD (decomposed form) 、
+  // Normalize to NFC before pattern matching.
+  // Internal note.
   const lower = name.normalize("NFC").toLowerCase();
   return lower.endsWith(".ttc") && CJK_TTC_PATTERNS.some((p) => lower.includes(p.toLowerCase()));
 }
@@ -62,13 +62,13 @@ function walk(dir: string, result: string[]): void {
 }
 
 /**
- * OS のシステムフォントディレクトリ + 追加ディレクトリから
- * .ttf / .otf ファイルパスを収集する。
+ * From OS system font directories plus additional directories,
+ * .ttf / .otf collects .ttf / .otf file paths.
  *
- * skipSystemFonts が true の場合、システムフォントディレクトリをスキャンせず
- * additionalDirs のみを対象とする。
+ * Internal note.
+ * additionalDirs only.
  *
- * 結果はモジュールレベルでキャッシュされ、同一引数での再呼び出しは即座に返る。
+ * Results are cached at module level, and repeated calls with the same arguments return immediately.
  */
 export function collectFontFilePaths(additionalDirs?: string[], skipSystemFonts = false): string[] {
   const dirs = additionalDirs ?? [];

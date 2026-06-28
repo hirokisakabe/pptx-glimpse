@@ -26,7 +26,7 @@ npm run dev -- file.pptx  # Live preview dev server (auto-reload on packages/*/s
 
 CI consists of 4 jobs:
 
-- **lint**: `knip` → `lint` → `format:check` → `typecheck` (Node 22 only, 1回実行)
+- **lint**: `knip` → `lint` → `format:check` → `typecheck` (Node 22 only, runs once)
 - **test**: `test` with coverage → `build` → package verification (Node 22/24, coverage report on Node 22)
 - **vrt**: Snapshot VRT (Docker-based, self-comparison)
 - **libreoffice-vrt**: LibreOffice VRT (generates fixtures and reference images via Docker)
@@ -37,21 +37,21 @@ Data flow: **PPTX binary → PptxSourceModel reader → Computed view → Render
 
 Public `convertPptxToSvg` / `convertPptxToPng` use the PptxSourceModel document path. VRT baselines are committed document-path snapshots rather than an in-memory legacy parser oracle.
 
-ソースは pnpm workspaces (`packages/*`) で分割されている。root は private な workspace orchestration 専用で、公開 npm package `pptx-glimpse` は `packages/core` から publish する。`pptx-glimpse` パッケージは build-time workspace dependency として `@pptx-glimpse/document` / `@pptx-glimpse/renderer` を参照し、公開 tarball には bundle された成果物を含める。
+The source code is split across pnpm workspaces (`packages/*`). The root package is private and only orchestrates the workspace. The public npm package `pptx-glimpse` is published from `packages/core`. The `pptx-glimpse` package references `@pptx-glimpse/document` / `@pptx-glimpse/renderer` as build-time workspace dependencies, and the published tarball contains the bundled output.
 
-`@pptx-glimpse/document` / PptxSourceModel / writer / editor-core / pom 連携に関わる issue に着手する前に、`packages/document/src/source/pptx-source-model.ts`、`packages/document/src/computed/pptx-computed-view.ts`、`packages/document/src/writer/write-pptx.ts`、`packages/core/src/pptx-computed-view-renderer-adapter.ts` の module-level comment を読み、最新の責務境界と依存方向を確認すること。`document` は `core` / `editor-core` / renderer / pom を知らない下位基盤として扱う。
+Before working on issues related to `@pptx-glimpse/document`, PptxSourceModel, the writer, editor-core, or pom integration, read the module-level comments in `packages/document/src/source/pptx-source-model.ts`, `packages/document/src/computed/pptx-computed-view.ts`, `packages/document/src/writer/write-pptx.ts`, and `packages/core/src/pptx-computed-view-renderer-adapter.ts` to confirm the current responsibility boundaries and dependency direction. Treat `document` as a lower-level foundation that does not know about `core`, `editor-core`, renderer, or pom.
 
-`packages/document/src/` — `@pptx-glimpse/document` パッケージ。PptxSourceModel / OOXML document foundation の下位基盤として追加されており、public conversion path の default reader / computed view として参照される。reader / computed view / writer / 最小 editing operation は root entry point から import する。
+`packages/document/src/` — The `@pptx-glimpse/document` package. This lower-level foundation provides the PptxSourceModel / OOXML document layer and is used as the default reader / computed view for the public conversion path. Import the reader, computed view, writer, and minimal editing operations from the root entry point.
 
-`packages/core/src/` — 公開パッケージ `pptx-glimpse` の実装（document path orchestration + 公開 API）
+`packages/core/src/` — Implementation of the public `pptx-glimpse` package (document path orchestration + public API)
 
 - `ooxml/` — Core-local OOXML utilities such as XML parsing for adapter helpers
 - `color/` — Theme color resolution (schemeClr → colorMap → colorScheme) and color transformations (lumMod/tint/shade)
-- `font/font-collector.ts` — PPTX から使用フォント名を収集する公開 API (`collectUsedFonts`)
-- `converter.ts` — `convertPptxToSvg` / `convertPptxToPng` の実装
-- `index.ts` — 公開エントリポイント
+- `font/font-collector.ts` — Public API for collecting font names used by a PPTX (`collectUsedFonts`)
+- `converter.ts` — Implementation of `convertPptxToSvg` / `convertPptxToPng`
+- `index.ts` — Public entry point
 
-`packages/renderer/src/` — 内部 renderer パッケージ `@pptx-glimpse/renderer`（private; 親 issue #340 決定）
+`packages/renderer/src/` — Internal renderer package `@pptx-glimpse/renderer` (private; decided by parent issue #340)
 
 - `renderer/` — Generates SVG strings from the intermediate model. Includes preset shape definitions in `geometry/`, plus dedicated renderers for tables, charts, and images
 - `model/` — TypeScript interfaces for the intermediate model (Slide, Shape, Fill, Text, Theme, Table, Chart, Image, Line, Effect, Presentation, etc.)
@@ -59,12 +59,12 @@ Public `convertPptxToSvg` / `convertPptxToPng` use the PptxSourceModel document 
 - `png/` — SVG → PNG conversion using `@resvg/resvg-wasm`
 - `data/` — Font metrics data (fallback character width information)
 - `utils/` — EMU ↔ pixel conversion (1 inch = 914400 EMU, 96 DPI) and text wrapping
-- `warning-logger.ts` — 共有警告ロガー
-- `index.ts` — pptx-glimpse が import する barrel re-export
+- `warning-logger.ts` — Shared warning logger
+- `index.ts` — Barrel re-export imported by pptx-glimpse
 
 Entry point: `packages/core/src/index.ts` exports `convertPptxToSvg`, `convertPptxToPng`, warning utilities (`getWarningSummary`, `getWarningEntries`), font utilities (`collectUsedFonts`, `DEFAULT_FONT_MAPPING`, `createFontMapping`, `getMappedFont`), and related types.
 
-`packages/core/tsup.config.ts` が `packages/core/src/index.ts` を bundle して `packages/core/dist/` を生成し、`pptx-glimpse` パッケージとして publish する（document / renderer は `noExternal` で bundle 内に取り込む）。root の `tsup.config.ts` は互換的な手動ビルド用で、通常の publish 経路は `packages/core` 側を使う。
+`packages/core/tsup.config.ts` bundles `packages/core/src/index.ts`, generates `packages/core/dist/`, and publishes it as the `pptx-glimpse` package (`document` / `renderer` are included in the bundle via `noExternal`). The root `tsup.config.ts` remains for compatible manual builds; the normal publish path uses the `packages/core` config.
 
 ## Technical Constraints
 

@@ -1,11 +1,11 @@
 /**
- * フォントメトリクスデータ。
- * OSS のメトリクス互換フォントから scripts/extract-font-metrics.ts で抽出。
+ * Font metrics data.
+ * Extracted by scripts/extract-font-metrics.ts from OSS metric-compatible fonts.
  *
- * - Carlito (SIL OFL) → Calibri 互換
- * - Liberation Sans (SIL OFL) → Arial / Helvetica 互換
- * - Liberation Serif (SIL OFL) → Times New Roman 互換
- * - Noto Sans JP (SIL OFL) → 日本語フォント全般
+ * - Carlito (SIL OFL) → Calibri compatible
+ * - Liberation Sans (SIL OFL) → Arial / Helvetica compatible
+ * - Liberation Serif (SIL OFL) → Times New Roman compatible
+ * - Noto Sans JP (SIL OFL) → general Japanese fonts
  */
 
 export interface FontMetrics {
@@ -185,8 +185,8 @@ const metricsData: Record<string, FontMetrics> = {
 };
 
 /**
- * PPTX フォント名 → メトリクスデータキーのマッピング。
- * 大文字小文字両方を登録して高速ルックアップを可能にする。
+ * Mapping from PPTX font names to metric data keys.
+ * Registers both uppercase and lowercase forms for fast lookup.
  */
 const fontNameMap: Record<string, string> = {
   // Calibri → Carlito
@@ -200,7 +200,7 @@ const fontNameMap: Record<string, string> = {
   // Times New Roman → Liberation Serif
   "Times New Roman": "LiberationSerif",
   "times new roman": "LiberationSerif",
-  // 日本語フォント → Noto Sans JP
+  // Japanese fonts -> Noto Sans JP
   "MS PGothic": "NotoSansJP",
   "MS Pゴシック": "NotoSansJP",
   "MS Gothic": "NotoSansJP",
@@ -218,8 +218,8 @@ const fontNameMap: Record<string, string> = {
 };
 
 /**
- * メトリクスキー → 実際の OSS フォント名。
- * SVG の font-family フォールバックに使用する。
+ * Metric key -> actual OSS font name.
+ * Used for SVG font-family fallback.
  */
 const metricsKeyToFontName: Record<string, string> = {
   Carlito: "Carlito",
@@ -229,8 +229,8 @@ const metricsKeyToFontName: Record<string, string> = {
 };
 
 /**
- * フォント名からメトリクスデータを取得する。
- * マッピングに存在しないフォントの場合は null を返す。
+ * Internal note.
+ * Internal note.
  */
 export function getFontMetrics(fontFamily: string | null | undefined): FontMetrics | null {
   if (!fontFamily) return null;
@@ -242,9 +242,9 @@ export function getFontMetrics(fontFamily: string | null | undefined): FontMetri
 }
 
 /**
- * PPTX フォント名に対応するメトリクス互換 OSS フォント名を返す。
- * SVG の font-family フォールバックリストに追加することで、
- * 計測と描画のフォント一致度を上げる。
+ * Internal note.
+ * Adding it to the SVG font-family fallback list
+ * improves consistency between measurement and rendering fonts.
  */
 export function getMetricsFallbackFont(fontFamily: string | null | undefined): string | null {
   if (!fontFamily) return null;

@@ -1,7 +1,7 @@
 /**
- * VRT (Visual Regression Testing) 用 PPTX フィクスチャ生成スクリプト
+ * VRT fixture note.
  *
- * 使い方: npx tsx vrt/snapshot/create-fixtures.ts
+ * VRT fixture note.
  */
 import { mkdirSync, writeFileSync } from "fs";
 import JSZip from "jszip";
@@ -1658,7 +1658,7 @@ async function createCustomGeometryFixture(): Promise<void> {
   </p:spPr>
 </p:sp>`;
 
-  // quadBezTo: 2次ベジェ曲線
+  // VRT fixture note.
   const customShape3 = `<p:sp>
   <p:nvSpPr><p:cNvPr id="4" name="QuadBez"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
   <p:spPr>
@@ -1682,7 +1682,7 @@ async function createCustomGeometryFixture(): Promise<void> {
   </p:spPr>
 </p:sp>`;
 
-  // arcTo: 楕円弧 (半円)
+  // VRT fixture note.
   const customShape4 = `<p:sp>
   <p:nvSpPr><p:cNvPr id="5" name="ArcShape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
   <p:spPr>
@@ -1703,7 +1703,7 @@ async function createCustomGeometryFixture(): Promise<void> {
   </p:spPr>
 </p:sp>`;
 
-  // adjustValues: ガイド値による動的座標
+  // VRT fixture note.
   const customShape5 = `<p:sp>
   <p:nvSpPr><p:cNvPr id="6" name="AdjustShape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
   <p:spPr>
@@ -3471,7 +3471,7 @@ async function createEffectsFixture(): Promise<void> {
   let id = 2;
   const shapes: string[] = [];
 
-  // Outer shadow (下方向)
+  // VRT fixture note.
   const pos0 = gridPosition(0, 0, 3, 2);
   shapes.push(
     shapeXml(id++, "OuterShadow", {
@@ -3485,7 +3485,7 @@ async function createEffectsFixture(): Promise<void> {
     }),
   );
 
-  // Outer shadow (右下方向、大きめ)
+  // VRT fixture note.
   const pos1 = gridPosition(1, 0, 3, 2);
   shapes.push(
     shapeXml(id++, "OuterShadow-Large", {
@@ -3879,7 +3879,7 @@ async function createSmartArtFixture(): Promise<void> {
   const diagramW = SLIDE_W - margin * 2;
   const diagramH = SLIDE_H - margin * 2;
 
-  // SmartArt の drawing XML: 3つの角丸矩形と2つの矢印を横に配置するプロセス型
+  // VRT fixture note.
   const drawingXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <dsp:drawing xmlns:dsp="http://schemas.microsoft.com/office/drawing/2008/diagram"
              xmlns:a="${NS.a}">
@@ -3971,7 +3971,7 @@ async function createSmartArtFixture(): Promise<void> {
   <Relationship Id="rId1" Type="http://schemas.microsoft.com/office/2007/relationships/diagramDrawing" Target="drawing1.xml"/>
 </Relationships>`;
 
-  // mc:AlternateContent でラップした SmartArt graphicFrame
+  // VRT fixture note.
   const smartArtXml = `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                                             xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram">
     <mc:Choice Requires="dgm">
@@ -4059,7 +4059,7 @@ async function createThemeFontFixture(): Promise<void> {
   </a:themeElements>
 </a:theme>`;
 
-  // テーマフォント参照を使用するテキスト
+  // VRT fixture note.
   const shapes = [
     // +mj-lt (major latin)
     shapeXml(2, "MajorLatin", {
@@ -4193,7 +4193,7 @@ async function createThemeFontFixture(): Promise<void> {
 // Text Style Inheritance
 // ============================================================
 async function createTextStyleInheritanceFixture(): Promise<void> {
-  // スライドマスター: txStyles (titleStyle: 36pt+白, bodyStyle: 24pt+白, otherStyle: 14pt+白)
+  // VRT fixture note.
   const customSlideMaster = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sldMaster xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}">
   <p:cSld>
@@ -4218,7 +4218,7 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
   </p:txStyles>
 </p:sldMaster>`;
 
-  // defaultTextStyle: lvl1pPr の defRPr に 12pt
+  // VRT fixture note.
   const defaultTextStyleXml = `<a:lvl1pPr><a:defRPr sz="1200"/></a:lvl1pPr>`;
 
   const slideRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -4226,7 +4226,7 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
   <Relationship Id="rId1" Type="${REL_TYPES.slideLayout}" Target="../slideLayouts/slideLayout1.xml"/>
 </Relationships>`;
 
-  // Shape 1: title プレースホルダー (fontSize なし → txStyles.titleStyle から 36pt)
+  // VRT fixture note.
   const shape1 = `<p:sp>
   <p:nvSpPr><p:cNvPr id="2" name="Title"/><p:cNvSpPr/><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>
   <p:spPr>
@@ -4239,7 +4239,7 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
   </p:txBody>
 </p:sp>`;
 
-  // Shape 2: body プレースホルダー (fontSize なし → txStyles.bodyStyle から 24pt)
+  // VRT fixture note.
   const shape2 = `<p:sp>
   <p:nvSpPr><p:cNvPr id="3" name="Body"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr>
   <p:spPr>
@@ -4252,7 +4252,7 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
   </p:txBody>
 </p:sp>`;
 
-  // Shape 3: 通常シェイプ (fontSize なし → txStyles.otherStyle から 14pt)
+  // VRT fixture note.
   const shape3 = `<p:sp>
   <p:nvSpPr><p:cNvPr id="4" name="Other"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
   <p:spPr>
@@ -4266,7 +4266,7 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
   </p:txBody>
 </p:sp>`;
 
-  // Shape 4: title プレースホルダーで rPr に fontSize 直接指定 (20pt, txStyles より優先)
+  // VRT fixture note.
   const shape4 = `<p:sp>
   <p:nvSpPr><p:cNvPr id="5" name="Title Direct"/><p:cNvSpPr/><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>
   <p:spPr>
@@ -4279,7 +4279,7 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
   </p:txBody>
 </p:sp>`;
 
-  // Shape 5: body レベル1 (fontSize なし → txStyles.bodyStyle.lvl2pPr から 20pt)
+  // VRT fixture note.
   const shape5 = `<p:sp>
   <p:nvSpPr><p:cNvPr id="6" name="Body Level2"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="2"/></p:nvPr></p:nvSpPr>
   <p:spPr>
@@ -4293,7 +4293,7 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
   </p:txBody>
 </p:sp>`;
 
-  // Shape 6: body プレースホルダーで rPr に色直接指定 (赤, txStyles の白より優先)
+  // VRT fixture note.
   const shape6 = `<p:sp>
   <p:nvSpPr><p:cNvPr id="7" name="Body Direct Color"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="3"/></p:nvPr></p:nvSpPr>
   <p:spPr>
@@ -4333,7 +4333,7 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
 
 // --- Z-order mixed (cross-type element ordering) ---
 async function createZOrderMixedFixture(): Promise<void> {
-  // 画像を生成（青のグラデーション）
+  // VRT fixture note.
   const imgSize = 100;
   const pixels = Buffer.alloc(imgSize * imgSize * 4);
   for (let y = 0; y < imgSize; y++) {
@@ -4351,10 +4351,10 @@ async function createZOrderMixedFixture(): Promise<void> {
     .png()
     .toBuffer();
 
-  // Slide 1: sp → pic → sp (画像が2つの図形の間に挟まる)
-  // 正しい Z-order: 赤矩形(最背面) → 画像(中間) → 緑矩形(最前面)
+  // VRT fixture note.
+  // VRT fixture note.
   const spTreeContent1 = [
-    // 1. 赤矩形 (最背面, Z=1)
+    // VRT fixture note.
     shapeXml(2, "back-rect", {
       preset: "rect",
       x: 500000,
@@ -4371,7 +4371,7 @@ async function createZOrderMixedFixture(): Promise<void> {
         align: "l",
       }),
     }),
-    // 2. 画像 (中間, Z=2)
+    // VRT fixture note.
     `<p:pic>
   <p:nvPicPr><p:cNvPr id="3" name="Image 1"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>
   <p:blipFill>
@@ -4383,7 +4383,7 @@ async function createZOrderMixedFixture(): Promise<void> {
     <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
   </p:spPr>
 </p:pic>`,
-    // 3. 緑矩形 (最前面, Z=3)
+    // VRT fixture note.
     shapeXml(4, "front-rect", {
       preset: "roundRect",
       x: 3000000,
@@ -4405,9 +4405,9 @@ async function createZOrderMixedFixture(): Promise<void> {
     { id: "rId2", type: REL_TYPES.image, target: "../media/image1.png" },
   ]);
 
-  // Slide 2: cxnSp → sp → pic → sp (コネクタも混在)
+  // VRT fixture note.
   const spTreeContent2 = [
-    // 1. コネクタ (最背面)
+    // VRT fixture note.
     `<p:cxnSp>
   <p:nvCxnSpPr><p:cNvPr id="2" name="Connector 1"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
   <p:spPr>
@@ -4416,7 +4416,7 @@ async function createZOrderMixedFixture(): Promise<void> {
     <a:ln w="50800"><a:solidFill><a:srgbClr val="FF6600"/></a:solidFill></a:ln>
   </p:spPr>
 </p:cxnSp>`,
-    // 2. 黄色矩形
+    // VRT fixture note.
     shapeXml(3, "yellow-rect", {
       preset: "rect",
       x: 1000000,
@@ -4432,7 +4432,7 @@ async function createZOrderMixedFixture(): Promise<void> {
         anchor: "t",
       }),
     }),
-    // 3. 画像
+    // VRT fixture note.
     `<p:pic>
   <p:nvPicPr><p:cNvPr id="4" name="Image 2"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>
   <p:blipFill>
@@ -4444,7 +4444,7 @@ async function createZOrderMixedFixture(): Promise<void> {
     <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
   </p:spPr>
 </p:pic>`,
-    // 4. 紫矩形 (最前面)
+    // VRT fixture note.
     shapeXml(5, "purple-rect", {
       preset: "ellipse",
       x: 5000000,
@@ -4466,9 +4466,9 @@ async function createZOrderMixedFixture(): Promise<void> {
     { id: "rId2", type: REL_TYPES.image, target: "../media/image1.png" },
   ]);
 
-  // Slide 3: 全5要素タイプ混在 (cxnSp → grpSp → pic → graphicFrame(table) → sp)
+  // VRT fixture note.
   const spTreeContent3 = [
-    // 1. cxnSp (最背面, Z=1)
+    // VRT fixture note.
     `<p:cxnSp>
   <p:nvCxnSpPr><p:cNvPr id="10" name="Connector BG"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
   <p:spPr>
@@ -4542,7 +4542,7 @@ async function createZOrderMixedFixture(): Promise<void> {
     </a:tr>
   </a:tbl>`,
     ),
-    // 5. sp (最前面, Z=5)
+    // VRT fixture note.
     shapeXml(16, "front-shape", {
       preset: "ellipse",
       x: 5000000,
@@ -4948,7 +4948,7 @@ async function createTextAdvancedFixture(): Promise<void> {
   let id = 2;
   const shapes: string[] = [];
 
-  // Shape 1: Field code (slide number) - テキストラン + フィールドコードの混在
+  // VRT fixture note.
   const pos1 = gridPosition(0, 0, 3, 3);
   shapes.push(
     shapeXml(id++, "field-slidenum", {
@@ -5229,7 +5229,7 @@ async function createShrinkToFitFixture(): Promise<void> {
   let id = 2;
   const shapes: string[] = [];
 
-  // 1. normAutofit (fontScale なし) — テキストがはみ出すケース → 動的縮小
+  // VRT fixture note.
   const pos1 = gridPosition(0, 0, 3, 2);
   shapes.push(
     shapeXml(id++, "shrink-overflow", {
@@ -5256,7 +5256,7 @@ async function createShrinkToFitFixture(): Promise<void> {
     }),
   );
 
-  // 2. normAutofit (fontScale なし) — テキストが収まるケース → 縮小なし
+  // VRT fixture note.
   const pos2 = gridPosition(1, 0, 3, 2);
   shapes.push(
     shapeXml(id++, "shrink-fits", {
@@ -5283,7 +5283,7 @@ async function createShrinkToFitFixture(): Promise<void> {
     }),
   );
 
-  // 3. normAutofit + fontSize 未指定 — デフォルトフォントサイズでの縮小
+  // VRT fixture note.
   const pos3 = gridPosition(2, 0, 3, 2);
   shapes.push(
     shapeXml(id++, "shrink-default-fontsize", {
@@ -5310,7 +5310,7 @@ async function createShrinkToFitFixture(): Promise<void> {
     }),
   );
 
-  // 4. noAutofit — テキストがはみ出してもそのまま
+  // VRT fixture note.
   const pos4 = gridPosition(0, 1, 3, 2);
   shapes.push(
     shapeXml(id++, "no-autofit-overflow", {
@@ -5337,7 +5337,7 @@ async function createShrinkToFitFixture(): Promise<void> {
     }),
   );
 
-  // 5. normAutofit + 複数段落
+  // VRT fixture note.
   const pos5 = gridPosition(1, 1, 3, 2);
   shapes.push(
     shapeXml(id++, "shrink-multi-para", {
@@ -5382,7 +5382,7 @@ async function createShrinkToFitFixture(): Promise<void> {
     }),
   );
 
-  // 6. normAutofit + fontScale 事前設定 — さらに動的縮小が必要なケース
+  // VRT fixture note.
   const pos6 = gridPosition(2, 1, 3, 2);
   shapes.push(
     shapeXml(id++, "shrink-with-fontscale", {
@@ -5419,7 +5419,7 @@ async function createSpAutofitFixture(): Promise<void> {
   let id = 2;
   const shapes: string[] = [];
 
-  // 1. spAutofit — テキストがはみ出すケース → 図形が拡大される
+  // VRT fixture note.
   const pos1 = gridPosition(0, 0, 2, 2);
   shapes.push(
     shapeXml(id++, "sp-autofit-overflow", {
@@ -5446,7 +5446,7 @@ async function createSpAutofitFixture(): Promise<void> {
     }),
   );
 
-  // 2. spAutofit — テキストが収まるケース → 図形はそのまま
+  // VRT fixture note.
   const pos2 = gridPosition(1, 0, 2, 2);
   shapes.push(
     shapeXml(id++, "sp-autofit-fits", {
@@ -5473,7 +5473,7 @@ async function createSpAutofitFixture(): Promise<void> {
     }),
   );
 
-  // 3. spAutofit + 複数段落
+  // VRT fixture note.
   const pos3 = gridPosition(0, 1, 2, 2);
   shapes.push(
     shapeXml(id++, "sp-autofit-multi-para", {
@@ -5974,7 +5974,7 @@ async function createVerticalTextFixture(): Promise<void> {
   let id = 2;
   const shapes: string[] = [];
 
-  // 1. vert="vert" (90° CW) — 基本的な縦書き
+  // VRT fixture note.
   const pos1 = gridPosition(0, 0, 3, 2);
   shapes.push(
     shapeXml(id++, "vert-text-90cw", {
@@ -6066,7 +6066,7 @@ async function createVerticalTextFixture(): Promise<void> {
     }),
   );
 
-  // 4. vert="vert" + anchor="ctr" (中央揃え)
+  // VRT fixture note.
   const pos4 = gridPosition(0, 1, 3, 2);
   shapes.push(
     shapeXml(id++, "vert-text-center", {
@@ -6093,7 +6093,7 @@ async function createVerticalTextFixture(): Promise<void> {
     }),
   );
 
-  // 5. vert="vert" + 複数行のテキスト折り返し
+  // VRT fixture note.
   const pos5 = gridPosition(1, 1, 3, 2);
   shapes.push(
     shapeXml(id++, "vert-text-wrap", {
@@ -6120,7 +6120,7 @@ async function createVerticalTextFixture(): Promise<void> {
     }),
   );
 
-  // 6. vert="vert" + anchor="b" (下揃え)
+  // VRT fixture note.
   const pos6 = gridPosition(2, 1, 3, 2);
   shapes.push(
     shapeXml(id++, "vert-text-bottom", {
@@ -6745,7 +6745,7 @@ async function createTableStyleBorderFixture(): Promise<void> {
 }
 
 async function createPlaceholderGeometryInheritanceFixture(): Promise<void> {
-  // スライドレイアウトにプレースホルダーの位置・サイズを定義
+  // VRT fixture note.
   const layoutXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sldLayout xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}" type="obj">
   <p:cSld>
@@ -6792,7 +6792,7 @@ async function createPlaceholderGeometryInheritanceFixture(): Promise<void> {
   </p:cSld>
 </p:sldLayout>`;
 
-  // スライドのプレースホルダー図形は spPr が空（レイアウトから継承）
+  // VRT fixture note.
   const slide1 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}">
   <p:cSld>
@@ -6839,11 +6839,11 @@ async function createPlaceholderGeometryInheritanceFixture(): Promise<void> {
 }
 
 // --- Empty slide placeholders ---
-// テンプレート PPTX では、ユーザーがテキストを入力しなかった placeholder が
-// 空のまま slide に残る。PowerPoint はこれを完全に非表示にするので
-// pptx-glimpse も同じ挙動になっていることを確認する。
+// VRT fixture note.
+// VRT fixture note.
+// VRT fixture note.
 async function createPlaceholderEmptyOnSlideFixture(): Promise<void> {
-  // Layout 側はジオメトリを持つ普通の placeholder 定義（slide 側で継承される）。
+  // VRT fixture note.
   const layoutXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sldLayout xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}" type="obj">
   <p:cSld>
@@ -6886,8 +6886,8 @@ async function createPlaceholderEmptyOnSlideFixture(): Promise<void> {
   </p:cSld>
 </p:sldLayout>`;
 
-  // Slide 1: title はテキスト入力済み、body は空のまま（=非表示になるべき）。
-  // 加えて装飾用の非 placeholder 図形を 1 つ置いて、これは描画されることを確認する。
+  // VRT fixture note.
+  // VRT fixture note.
   const slide1Xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}">
   <p:cSld>
@@ -7001,7 +7001,7 @@ const FIXTURE_CREATORS: Record<string, () => Promise<void>> = {
 };
 
 // --- Interleaved bullet pPr ---
-// 単一 <a:p> 内に複数 <a:pPr> と <a:r> が交互配置される非標準XML
+// VRT fixture note.
 async function createInterleavedBulletPprFixture(): Promise<void> {
   const bulletItems = [
     { label: "Product", desc: "AI dashboard beta release" },
@@ -7010,7 +7010,7 @@ async function createInterleavedBulletPprFixture(): Promise<void> {
     { label: "Partners", desc: "3 new contracts" },
   ];
 
-  // 交互 pPr/r パターン: buChar pPr + bold r + buNone pPr + normal r (with \n)
+  // VRT fixture note.
   const interleavedRuns = bulletItems
     .map((item, i) => {
       const trailingNewline = i < bulletItems.length - 1 ? "\n" : "";

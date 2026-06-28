@@ -1,23 +1,23 @@
 /**
- * PptxComputedView から renderer model への core-owned adapter。
+ * Core-owned adapter from PptxComputedView to the renderer model.
  *
- * `@pptx-glimpse/document` は source/computed document semantics を所有し、
- * `@pptx-glimpse/renderer` は SVG/PNG generation 向けの display-oriented model
- * を所有する。この adapter は両者を統合せず、computed view の provenance-rich
- * effective values を renderer の render-ready contract へ写す境界である。
+ * `@pptx-glimpse/document` owns source/computed document semantics, while
+ * `@pptx-glimpse/renderer` owns the display-oriented model for SVG/PNG generation. This
+ * adapter is the boundary that maps provenance-rich computed values to the renderer's
+ * render-ready contract without merging the two layers.
  *
- * Adapter 側では renderer-specific defaults、missing transform fallback、
- * `null` fill/outline/background convention、base64 media payload、computed
- * chart data から renderer ChartData への薄い mapping、SmartArt diagram drawing
- * fallback、raw element/fill/background warning policy を扱う。これらは
- * writer/editor/round-trip に必要な PptxSourceModel semantics ではないため
- * document package に戻さない。
+ * The adapter handles renderer-specific defaults, missing transform fallback,
+ * `null` fill/outline/background conventions, base64 media payloads, the thin mapping
+ * from computed chart data to renderer ChartData, SmartArt diagram drawing fallback, and
+ * raw element/fill/background warning policy. These are not PptxSourceModel semantics
+ * needed by writer/editor/round-trip workflows, so they do not move back into the
+ * document package.
  *
- * Font discovery/fallback、text measurement/wrapping、text-to-path、SVG/PNG output
- * choices は renderer/core 側に残す。ComputedSlide/ComputedElement の part path、
- * source layer、source node、relationships、theme context は diagnostics と
- * fallback conversion の入力として使い、renderer model へは必要な render contract
- * だけを渡す。
+ * Font discovery/fallback, text measurement/wrapping, text-to-path, and SVG/PNG output
+ * choices remain in renderer/core. ComputedSlide/ComputedElement part paths, source
+ * layers, source nodes, relationships, and theme context are used as inputs for
+ * diagnostics and fallback conversion; only the required render contract is passed to
+ * the renderer model.
  */
 
 import type {

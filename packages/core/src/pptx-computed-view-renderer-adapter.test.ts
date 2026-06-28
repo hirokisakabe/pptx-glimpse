@@ -22,7 +22,7 @@ import { adaptComputedViewToRendererModel } from "./pptx-computed-view-renderer-
 import { unsafeFixtureAssertion } from "./unsafe-type-assertion.js";
 
 describe("adaptComputedViewToRendererModel", () => {
-  it("slide size / background / effective element ordering を renderer model に変換する", () => {
+  it("covers pptx-computed-view-renderer-adapter behavior 1", () => {
     const result = adaptComputedViewToRendererModel(createComputedView(buildSource()));
 
     expect(result.slideSize).toEqual({ width: 9144000, height: 5143500 });
@@ -43,7 +43,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("simple shape / text / image と theme-resolved fill / outline を変換する", () => {
+  it("covers pptx-computed-view-renderer-adapter behavior 2", () => {
     const result = adaptComputedViewToRendererModel(createComputedView(buildSource()));
     const slide = result.slides[0];
     const title = findElementByAltText(slide.elements, "Slide title");
@@ -123,7 +123,7 @@ describe("adaptComputedViewToRendererModel", () => {
     });
   });
 
-  it("complex fill を renderer fill model に変換する", () => {
+  it("covers pptx-computed-view-renderer-adapter behavior 3", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
         buildSource({
@@ -205,7 +205,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("shape effects と image blip effects を renderer model に変換する", () => {
+  it("covers pptx-computed-view-renderer-adapter behavior 4", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
         buildSource({
@@ -285,7 +285,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("table を renderer model に変換する", () => {
+  it("covers pptx-computed-view-renderer-adapter behavior 5", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
         buildSource({
@@ -409,7 +409,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("connector / group / custom geometry を renderer model に変換する", () => {
+  it("covers pptx-computed-view-renderer-adapter behavior 6", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
         buildSource({
@@ -496,7 +496,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("document media content types を current parser 互換の image mime に正規化する", () => {
+  it("covers pptx-computed-view-renderer-adapter behavior 7", () => {
     const source = buildSource({
       extraSlideShapes: [
         shape("EMF fill", {
@@ -527,7 +527,7 @@ describe("adaptComputedViewToRendererModel", () => {
     });
   });
 
-  it("unknown image MIME type を renderer contract の既定値へ正規化する", () => {
+  it("covers pptx-computed-view-renderer-adapter behavior 8", () => {
     const source = buildSource();
     const sourceWithUnknownMedia: PptxSourceModel = {
       ...source,
@@ -554,7 +554,7 @@ describe("adaptComputedViewToRendererModel", () => {
     );
   });
 
-  it("unknown rectangle alignment token を renderer contract の既定値へ正規化する", () => {
+  it("covers pptx-computed-view-renderer-adapter behavior 9", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
         buildSource({
@@ -608,7 +608,7 @@ describe("adaptComputedViewToRendererModel", () => {
     );
   });
 
-  it("chart と SmartArt fallback を renderer model に変換する", () => {
+  it("covers pptx-computed-view-renderer-adapter behavior 10", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(buildSourceWithChartAndSmartArt()),
     );
@@ -691,7 +691,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("document computed chart data を renderer ChartData に変換する", () => {
+  it("covers pptx-computed-view-renderer-adapter behavior 11", () => {
     const result = adaptComputedViewToRendererModel(buildComputedViewWithChartData());
     const chart = result.slides[0].elements.find((element) => element.type === "chart");
 
@@ -722,7 +722,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("SmartArt fallback の diagram drawing skip diagnostic を返す", () => {
+  it("covers pptx-computed-view-renderer-adapter behavior 12", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
         buildSourceWithChartAndSmartArt({
@@ -744,7 +744,7 @@ describe("adaptComputedViewToRendererModel", () => {
     );
   });
 
-  it("unsupported raw elements を diagnostic として扱い renderer model に漏らさない", () => {
+  it("covers pptx-computed-view-renderer-adapter behavior 13", () => {
     const source = buildSource({
       extraSlideShapes: [
         {
@@ -773,7 +773,7 @@ describe("adaptComputedViewToRendererModel", () => {
     );
   });
 
-  it("fallback が必要な unsupported subset を diagnostic に残す", () => {
+  it("covers pptx-computed-view-renderer-adapter behavior 14", () => {
     const source = buildSource({
       slideBackground: { kind: "raw", raw: rawSidecar("raw-bg", "p:bg") },
       extraSlideShapes: [

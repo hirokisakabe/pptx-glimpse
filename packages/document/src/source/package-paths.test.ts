@@ -11,7 +11,7 @@ import {
 } from "./package-paths.js";
 
 describe("package path helpers", () => {
-  it("relationship part path と owner part path を相互に解決する", () => {
+  it("covers package-paths behavior 1", () => {
     expect(relationshipsPartPath(asPartPath(""))).toBe("_rels/.rels");
     expect(relationshipsPartPath(asPartPath("ppt/presentation.xml"))).toBe(
       "ppt/_rels/presentation.xml.rels",
@@ -29,13 +29,13 @@ describe("package path helpers", () => {
     );
   });
 
-  it("relationship part を判定する", () => {
+  it("covers package-paths behavior 2", () => {
     expect(isRelationshipPart("_rels/.rels")).toBe(true);
     expect(isRelationshipPart("ppt/slides/_rels/slide1.xml.rels")).toBe(true);
     expect(isRelationshipPart("ppt/slides/slide1.xml")).toBe(false);
   });
 
-  it("relationship target を source part 基準で正規化する", () => {
+  it("covers package-paths behavior 3", () => {
     expect(resolveRelationshipTarget("ppt/slides/slide1.xml", "../media/image1.png")).toBe(
       "ppt/media/image1.png",
     );
@@ -48,7 +48,7 @@ describe("package path helpers", () => {
     );
   });
 
-  it("internal relationship target と target mode を parse する", () => {
+  it("covers package-paths behavior 4", () => {
     expect(
       resolveInternalRelationshipTarget(asPartPath("ppt/slides/slide1.xml"), {
         id: "rId1",

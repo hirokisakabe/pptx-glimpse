@@ -157,18 +157,18 @@ function makeBulletTextBody(
   };
 }
 
-// 16:9 スライドサイズ (EMU)
+// 16:9 Slide size (EMU)
 const SLIDE_WIDTH = 9144000;
 const SLIDE_HEIGHT = 5143500;
 
 describe("renderTextBody", () => {
-  it("テキストがない場合は空文字列を返す", () => {
+  it("covers text-renderer behavior 1", () => {
     const textBody = makeTextBody([""]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toBe("");
   });
 
-  it("短いテキストを正しくレンダリングする", () => {
+  it("covers text-renderer behavior 2", () => {
     const textBody = makeTextBody(["Hello"]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain("<text");
@@ -176,22 +176,22 @@ describe("renderTextBody", () => {
     expect(result).toContain("<tspan");
   });
 
-  it("wrap=square の場合、長いテキストが複数の tspan に折り返される", () => {
+  it("covers text-renderer behavior 3", () => {
     const textBody = makeTextBody(
       ["The quick brown fox jumps over the lazy dog and continues with more words"],
       { wrap: "square" },
     );
-    // 狭い幅のテキストボックス
+    // Test note.
     const transform = makeTransform(2000000, 2000000); // ~209px width
     const result = renderTextBody(textBody, transform);
 
-    // 複数の x 属性を持つ tspan が存在する (= 複数行)
+    // Test note.
     const xMatches = result.match(/x="/g);
     expect(xMatches).not.toBeNull();
     expect(xMatches!.length).toBeGreaterThan(1);
   });
 
-  it("wrap=none の場合、テキストは折り返されない", () => {
+  it("covers text-renderer behavior 4", () => {
     const textBody = makeTextBody(
       ["The quick brown fox jumps over the lazy dog and continues with more words"],
       { wrap: "none" },
@@ -199,30 +199,30 @@ describe("renderTextBody", () => {
     const transform = makeTransform(2000000, 2000000);
     const result = renderTextBody(textBody, transform);
 
-    // x 属性を持つ tspan は1つだけ (text 要素の x を除く)
+    // Test note.
     const tspanXMatches = result.match(/<tspan[^>]*x="/g);
     expect(tspanXMatches).toHaveLength(1);
   });
 
-  it("中央揃えの場合 text-anchor=middle が設定される", () => {
+  it("covers text-renderer behavior 5", () => {
     const textBody = makeTextBody(["Center"], { alignment: "ctr" });
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain('text-anchor="middle"');
   });
 
-  it("右揃えの場合 text-anchor=end が設定される", () => {
+  it("covers text-renderer behavior 6", () => {
     const textBody = makeTextBody(["Right"], { alignment: "r" });
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain('text-anchor="end"');
   });
 
-  it("左揃えの場合 text-anchor=start が設定される", () => {
+  it("covers text-renderer behavior 7", () => {
     const textBody = makeTextBody(["Left"], { alignment: "l" });
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain('text-anchor="start"');
   });
 
-  it("複数段落を正しくレンダリングする", () => {
+  it("covers text-renderer behavior 8", () => {
     const textBody: TextBody = {
       bodyProperties: {
         anchor: "t",
@@ -283,26 +283,26 @@ describe("renderTextBody", () => {
     expect(result).toContain("Second");
   });
 
-  it("font-size 属性が正しく設定される", () => {
+  it("covers text-renderer behavior 9", () => {
     const textBody = makeTextBody(["Test"], { fontSize: 24 });
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain('font-size="24pt"');
   });
 
-  it("fontScale が適用されるとフォントサイズが縮小される", () => {
+  it("covers text-renderer behavior 10", () => {
     const textBody = makeTextBody(["Test"], { fontSize: 24, fontScale: 0.625 });
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     // 24 * 0.625 = 15
     expect(result).toContain('font-size="15pt"');
   });
 
-  it("fontScale=1 の場合はフォントサイズが変わらない", () => {
+  it("covers text-renderer behavior 11", () => {
     const textBody = makeTextBody(["Test"], { fontSize: 24, fontScale: 1 });
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain('font-size="24pt"');
   });
 
-  it("CJK テキストの折り返しが動作する", () => {
+  it("covers text-renderer behavior 12", () => {
     const textBody = makeTextBody(["本日は晴天なり今日もいい天気です素晴らしい一日"], {
       wrap: "square",
     });
@@ -313,7 +313,7 @@ describe("renderTextBody", () => {
     expect(xMatches!.length).toBeGreaterThan(1);
   });
 
-  it("上付き文字に baseline-shift=super が設定される", () => {
+  it("covers text-renderer behavior 13", () => {
     const textBody: TextBody = {
       bodyProperties: {
         anchor: "t",
@@ -382,7 +382,7 @@ describe("renderTextBody", () => {
     expect(result).toContain('baseline-shift="super"');
   });
 
-  it("下付き文字に baseline-shift=sub が設定される", () => {
+  it("covers text-renderer behavior 14", () => {
     const textBody: TextBody = {
       bodyProperties: {
         anchor: "t",
@@ -451,14 +451,14 @@ describe("renderTextBody", () => {
     expect(result).toContain('baseline-shift="sub"');
   });
 
-  it("baseline=0 の場合は baseline-shift が設定されない", () => {
+  it("covers text-renderer behavior 15", () => {
     const textBody = makeTextBody(["Normal"]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).not.toContain("baseline-shift");
   });
 });
 
-describe("段落間隔 (spaceBefore / spaceAfter)", () => {
+describe("renderer/text-renderer.test behavior", () => {
   function makeRunProps(fontSize: number = 18) {
     return {
       fontSize,
@@ -505,7 +505,7 @@ describe("段落間隔 (spaceBefore / spaceAfter)", () => {
     return [...matches].map((m) => parseFloat(m[1]));
   }
 
-  it("spaceBefore (pts) が段落間隔に反映される", () => {
+  it("covers text-renderer behavior 16", () => {
     const withSpacing = makeSpacingTextBody([
       { text: "First" },
       { text: "Second", spaceBefore: { type: "pts", value: 1200 } }, // 12pt
@@ -519,11 +519,11 @@ describe("段落間隔 (spaceBefore / spaceAfter)", () => {
       renderTextBody(withoutSpacing, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
     );
 
-    // spaceBefore が設定されている場合、2番目の段落の dy が大きくなる
+    // Test note.
     expect(dyWith[1]).toBeGreaterThan(dyWithout[1]);
   });
 
-  it("spaceAfter (pts) が次の段落との間隔に反映される", () => {
+  it("covers text-renderer behavior 17", () => {
     const withSpaceAfter = makeSpacingTextBody([
       { text: "First", spaceAfter: { type: "pts", value: 1200 } }, // 12pt
       { text: "Second" },
@@ -537,11 +537,11 @@ describe("段落間隔 (spaceBefore / spaceAfter)", () => {
       renderTextBody(withoutSpacing, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
     );
 
-    // spaceAfter が設定されている場合、2番目の段落の dy が大きくなる
+    // Test note.
     expect(dyWith[1]).toBeGreaterThan(dyWithout[1]);
   });
 
-  it("spaceAfter と spaceBefore の大きい方が適用される", () => {
+  it("covers text-renderer behavior 18", () => {
     const spaceAfterOnly = makeSpacingTextBody([
       { text: "First", spaceAfter: { type: "pts", value: 2000 } }, // 20pt
       { text: "Second", spaceBefore: { type: "pts", value: 500 } }, // 5pt
@@ -558,11 +558,11 @@ describe("段落間隔 (spaceBefore / spaceAfter)", () => {
       renderTextBody(spaceBeforeOnly, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
     );
 
-    // 両方とも 20pt 分の間隔が適用される（max が使われるため同じ dy になる）
+    // Test note.
     expect(dyAfter[1]).toBeCloseTo(dyBefore[1], 1);
   });
 
-  it("spaceBefore (pct) がフォントサイズに基づいて計算される", () => {
+  it("covers text-renderer behavior 19", () => {
     const withPct = makeSpacingTextBody([
       { text: "First" },
       { text: "Second", spaceBefore: { type: "pct", value: 100000 } }, // 100%
@@ -576,15 +576,15 @@ describe("段落間隔 (spaceBefore / spaceAfter)", () => {
       renderTextBody(withoutSpacing, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
     );
 
-    // 100% = フォントサイズ(18pt)分の追加間隔
+    // Test note.
     expect(dyWith[1]).toBeGreaterThan(dyWithout[1]);
-    // 追加間隔は 18pt * (96/72) = 24px
+    // Test note.
     const diff = dyWith[1] - dyWithout[1];
     expect(diff).toBeCloseTo(18 * (96 / 72), 1);
   });
 });
 
-describe("行送り (lnSpc)", () => {
+describe("renderer/text-renderer.test behavior", () => {
   function makeLineSpacingTextBody(
     lineSpacing: SpacingValue | null,
     fontSize: number = 14,
@@ -632,11 +632,11 @@ describe("行送り (lnSpc)", () => {
     return [...matches].map((m) => parseFloat(m[1]));
   }
 
-  // 2行以上に折り返す狭いテキストボックス (~209px width)
+  // Test note.
   const NARROW_TRANSFORM = makeTransform(2000000, 2000000);
 
-  it("spcPts (固定行送り) では baseline 間隔がフォントサイズ非依存の固定値になる", () => {
-    // 21pt 固定 = 28px @96dpi
+  it("covers text-renderer behavior 20", () => {
+    // Test note.
     const textBody = makeLineSpacingTextBody({ type: "pts", value: 2100 });
     const dyValues = extractDyValues(renderTextBody(textBody, NARROW_TRANSFORM));
 
@@ -646,7 +646,7 @@ describe("行送り (lnSpc)", () => {
     }
   });
 
-  it("spcPct (倍率) では行送りがフォントサイズに比例する", () => {
+  it("covers text-renderer behavior 21", () => {
     const dy100 = extractDyValues(
       renderTextBody(makeLineSpacingTextBody({ type: "pct", value: 100000 }), NARROW_TRANSFORM),
     );
@@ -659,7 +659,7 @@ describe("行送り (lnSpc)", () => {
     expect(dy200[1]).toBeCloseTo(dy100[1] * 2, 1);
   });
 
-  it("空段落にも spcPts (固定行送り) が適用される", () => {
+  it("covers text-renderer behavior 22", () => {
     const makeParagraph = (text: string, lineSpacing: SpacingValue | null): Paragraph => ({
       runs: text
         ? [
@@ -705,12 +705,12 @@ describe("行送り (lnSpc)", () => {
       renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
     );
 
-    // 空段落 (2番目) の行送りが 21pt = 28px 固定になる
+    // Test note.
     expect(dyValues).toHaveLength(3);
     expect(dyValues[1]).toBeCloseTo(28, 1);
   });
 
-  it("lnSpc なしの場合はデフォルト行送りになる (spcPct 100% と一致)", () => {
+  it("covers text-renderer behavior 23", () => {
     const dyDefault = extractDyValues(
       renderTextBody(makeLineSpacingTextBody(null), NARROW_TRANSFORM),
     );
@@ -723,8 +723,8 @@ describe("行送り (lnSpc)", () => {
   });
 });
 
-describe("箇条書き記号レンダリング", () => {
-  it("buChar の箇条書き記号が SVG に含まれる", () => {
+describe("renderer/text-renderer.test behavior", () => {
+  it("covers text-renderer behavior 24", () => {
     const textBody = makeBulletTextBody([
       { text: "Item 1", bullet: { type: "char", char: "\u2022" } },
       { text: "Item 2", bullet: { type: "char", char: "\u2022" } },
@@ -735,7 +735,7 @@ describe("箇条書き記号レンダリング", () => {
     expect(result).toContain("Item 2");
   });
 
-  it("buAutoNum (arabicPeriod) で正しい番号が描画される", () => {
+  it("covers text-renderer behavior 25", () => {
     const textBody = makeBulletTextBody([
       { text: "First", bullet: { type: "autoNum", scheme: "arabicPeriod", startAt: 1 } },
       { text: "Second", bullet: { type: "autoNum", scheme: "arabicPeriod", startAt: 1 } },
@@ -747,16 +747,16 @@ describe("箇条書き記号レンダリング", () => {
     expect(result).toContain("3.");
   });
 
-  it("buNone の場合は記号が描画されない", () => {
+  it("covers text-renderer behavior 26", () => {
     const textBody = makeBulletTextBody([{ text: "No bullet", bullet: { type: "none" } }]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain("No bullet");
-    // bullet tspan が1つも入らない（テキスト用 tspan のみ）
+    // Test note.
     const tspanCount = (result.match(/<tspan/g) ?? []).length;
     expect(tspanCount).toBe(1);
   });
 
-  it("bullet=null (未指定) の場合は記号が描画されない", () => {
+  it("covers text-renderer behavior 27", () => {
     const textBody = makeBulletTextBody([{ text: "Plain text", bullet: null }]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain("Plain text");
@@ -764,7 +764,7 @@ describe("箇条書き記号レンダリング", () => {
     expect(tspanCount).toBe(1);
   });
 
-  it("marginLeft によるインデントが x 座標に反映される", () => {
+  it("covers text-renderer behavior 28", () => {
     const noIndent = makeBulletTextBody([
       { text: "No indent", bullet: null, marginLeft: 0, indent: 0 },
     ]);
@@ -775,13 +775,13 @@ describe("箇条書き記号レンダリング", () => {
     const resultNoIndent = renderTextBody(noIndent, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     const resultIndent = renderTextBody(withIndent, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
 
-    // tspan の x 属性を取得（<text> の x ではなく）
+    // Test note.
     const xNoIndent = resultNoIndent.match(/<tspan[^>]*x="([^"]+)"/)?.[1];
     const xIndent = resultIndent.match(/<tspan[^>]*x="([^"]+)"/)?.[1];
     expect(Number(xIndent)).toBeGreaterThan(Number(xNoIndent));
   });
 
-  it("buAutoNum の startAt が反映される", () => {
+  it("covers text-renderer behavior 29", () => {
     const textBody = makeBulletTextBody([
       { text: "Item", bullet: { type: "autoNum", scheme: "arabicPeriod", startAt: 5 } },
     ]);
@@ -838,8 +838,8 @@ describe("formatAutoNum", () => {
   });
 });
 
-describe("latin/ea フォント切り替え", () => {
-  it("fontFamily と fontFamilyEa が異なる場合、スクリプト境界で tspan が分割される", () => {
+describe("renderer/text-renderer.test behavior", () => {
+  it("covers text-renderer behavior 30", () => {
     const textBody: TextBody = {
       bodyProperties: {
         anchor: "t",
@@ -877,8 +877,8 @@ describe("latin/ea フォント切り替え", () => {
       ],
     };
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
-    // Latin セグメントは Calibri が先頭、EA セグメントは Meiryo が先頭のフォールバックリスト
-    // メトリクス互換 OSS フォントも含まれる
+    // Test note.
+    // Test note.
     expect(result).toContain(
       "font-family=\"Calibri, Carlito, Meiryo, 'Noto Sans JP', sans-serif\"",
     );
@@ -890,7 +890,7 @@ describe("latin/ea フォント切り替え", () => {
     expect(result).toContain("Test");
   });
 
-  it("fontFamily と fontFamilyEa が同じ場合は分割されない", () => {
+  it("covers text-renderer behavior 31", () => {
     const textBody: TextBody = {
       bodyProperties: {
         anchor: "t",
@@ -928,13 +928,13 @@ describe("latin/ea フォント切り替え", () => {
       ],
     };
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
-    // 分割されないので tspan は1つだけ
+    // Test note.
     const tspanCount = (result.match(/<tspan/g) ?? []).length;
     expect(tspanCount).toBe(1);
     expect(result).toContain("Hello世界");
   });
 
-  it("fontFamilyEa が null の場合は fontFamily のみで分割されない", () => {
+  it("covers text-renderer behavior 32", () => {
     const textBody: TextBody = {
       bodyProperties: {
         anchor: "t",
@@ -979,31 +979,31 @@ describe("latin/ea フォント切り替え", () => {
 });
 
 describe("buildFontFamilyValue", () => {
-  it("単一フォント + メトリクスフォールバック + 汎用ファミリを返す", () => {
+  it("covers text-renderer behavior 33", () => {
     expect(buildFontFamilyValue(["Calibri"])).toBe("Calibri, Carlito, sans-serif");
   });
 
-  it("latin と ea の両方をフォールバックリストに含める", () => {
+  it("covers text-renderer behavior 34", () => {
     expect(buildFontFamilyValue(["Calibri", "Meiryo"])).toBe(
       "Calibri, Carlito, Meiryo, 'Noto Sans JP', sans-serif",
     );
   });
 
-  it("重複するフォント名を除去する", () => {
+  it("covers text-renderer behavior 35", () => {
     expect(buildFontFamilyValue(["Calibri", "Calibri"])).toBe("Calibri, Carlito, sans-serif");
   });
 
-  it("null を含むリストでも正しく動作する", () => {
+  it("covers text-renderer behavior 36", () => {
     expect(buildFontFamilyValue(["Calibri", null])).toBe("Calibri, Carlito, sans-serif");
     expect(buildFontFamilyValue([null, "Meiryo"])).toBe("Meiryo, 'Noto Sans JP', sans-serif");
   });
 
-  it("すべて null の場合は null を返す", () => {
+  it("covers text-renderer behavior 37", () => {
     expect(buildFontFamilyValue([null, null])).toBeNull();
     expect(buildFontFamilyValue([])).toBeNull();
   });
 
-  it("スペースを含むフォント名をシングルクォートで囲む", () => {
+  it("covers text-renderer behavior 38", () => {
     expect(buildFontFamilyValue(["Times New Roman"])).toBe(
       "'Times New Roman', Tinos, 'Liberation Serif', serif",
     );
@@ -1012,7 +1012,7 @@ describe("buildFontFamilyValue", () => {
     );
   });
 
-  it("serif 系フォントの汎用ファミリが serif になる", () => {
+  it("covers text-renderer behavior 39", () => {
     expect(buildFontFamilyValue(["Times New Roman"])).toBe(
       "'Times New Roman', Tinos, 'Liberation Serif', serif",
     );
@@ -1024,46 +1024,46 @@ describe("buildFontFamilyValue", () => {
     );
   });
 
-  it("sans-serif 系フォントの汎用ファミリが sans-serif になる", () => {
+  it("covers text-renderer behavior 40", () => {
     expect(buildFontFamilyValue(["Arial"])).toBe("Arial, Arimo, 'Liberation Sans', sans-serif");
     expect(buildFontFamilyValue(["Meiryo"])).toBe("Meiryo, 'Noto Sans JP', sans-serif");
   });
 
-  it("フォールバックフォントが元フォントと同じ場合は重複しない", () => {
+  it("covers text-renderer behavior 41", () => {
     expect(buildFontFamilyValue(["Noto Sans JP"])).toBe("'Noto Sans JP', sans-serif");
   });
 
-  it("未知のフォントにはフォールバックが追加されない", () => {
+  it("covers text-renderer behavior 42", () => {
     expect(buildFontFamilyValue(["UnknownFont"])).toBe("UnknownFont, sans-serif");
   });
 });
 
-describe("shrinkToFit (normAutofit 動的縮小)", () => {
-  it("normAutofit でテキストがはみ出す場合にフォントサイズが自動縮小される", () => {
-    // 小さいテキストボックスに大きなテキストを入れる
+describe("renderer/text-renderer.test behavior", () => {
+  it("covers text-renderer behavior 43", () => {
+    // Test note.
     const textBody = makeTextBody(
       ["This is a long text that should overflow the small text box and be shrunk to fit"],
       { fontSize: 36, autoFit: "normAutofit" },
     );
-    // 非常に小さい図形 (約100x50px)
+    // Test note.
     const smallTransform = makeTransform(960000, 480000);
     const result = renderTextBody(textBody, smallTransform);
-    // フォントサイズが36ptより小さくなっているはず
+    // Test note.
     expect(result).not.toContain('font-size="36pt"');
     expect(result).toContain("font-size=");
-    // font-size の値を抽出して36未満であることを確認
+    // Test note.
     const fontSizeMatch = result.match(/font-size="([0-9.]+)pt"/);
     expect(fontSizeMatch).not.toBeNull();
     expect(Number(fontSizeMatch![1])).toBeLessThan(36);
   });
 
-  it("normAutofit でテキストが収まる場合はフォントサイズが変わらない", () => {
+  it("covers text-renderer behavior 44", () => {
     const textBody = makeTextBody(["Hi"], { fontSize: 12, autoFit: "normAutofit" });
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain('font-size="12pt"');
   });
 
-  it("noAutofit の場合はテキストがはみ出してもフォントサイズが変わらない", () => {
+  it("covers text-renderer behavior 45", () => {
     const textBody = makeTextBody(
       ["This is a long text that should overflow the small text box but NOT be shrunk"],
       { fontSize: 36, autoFit: "noAutofit" },
@@ -1073,9 +1073,9 @@ describe("shrinkToFit (normAutofit 動的縮小)", () => {
     expect(result).toContain('font-size="36pt"');
   });
 
-  it("normAutofit で run に fontSize が未指定の場合でも正しく縮小される", () => {
-    // fontSize を undefined にして defaultFontSize へのフォールバックを検証
-    // fontSize 指定ありのケースと dy 値が一致することで二重スケーリングがないことを確認
+  it("covers text-renderer behavior 46", () => {
+    // Test note.
+    // Test note.
     const longText =
       "This is a long text without explicit fontSize that should be shrunk to fit inside the box";
 
@@ -1117,12 +1117,12 @@ describe("shrinkToFit (normAutofit 動的縮小)", () => {
     });
 
     const smallTransform = makeTransform(960000, 480000);
-    // fontSize=18 (デフォルト値と同じ) を明示したケース
+    // Test note.
     const resultExplicit = renderTextBody(makeBodyWithFontSize(18), smallTransform);
-    // fontSize=undefined でデフォルト値にフォールバックするケース
+    // Test note.
     const resultImplicit = renderTextBody(makeBodyWithFontSize(undefined), smallTransform);
 
-    // 両者の dy 値が一致すること（二重スケーリングがなければ同じ結果になる）
+    // Test note.
     const dyExplicit = resultExplicit.match(/dy="([0-9.]+)"/g);
     const dyImplicit = resultImplicit.match(/dy="([0-9.]+)"/g);
     expect(dyExplicit).not.toBeNull();
@@ -1130,22 +1130,22 @@ describe("shrinkToFit (normAutofit 動的縮小)", () => {
     expect(dyImplicit).toEqual(dyExplicit);
   });
 
-  it("normAutofit で既存の fontScale が設定されている場合でもさらに縮小される", () => {
+  it("covers text-renderer behavior 47", () => {
     const textBody = makeTextBody(
       ["This is a long text that should overflow even with fontScale 0.8 applied"],
       { fontSize: 36, fontScale: 0.8, autoFit: "normAutofit" },
     );
     const smallTransform = makeTransform(960000, 480000);
     const result = renderTextBody(textBody, smallTransform);
-    // 36 * 0.8 = 28.8 よりさらに小さくなっているはず
+    // Test note.
     const fontSizeMatch = result.match(/font-size="([0-9.]+)pt"/);
     expect(fontSizeMatch).not.toBeNull();
     expect(Number(fontSizeMatch![1])).toBeLessThan(28.8);
   });
 });
 
-describe("spAutofit (図形サイズ自動拡大)", () => {
-  it("spAutofit でテキストがはみ出す場合にフォントサイズは変わらない", () => {
+describe("renderer/text-renderer.test behavior", () => {
+  it("covers text-renderer behavior 48", () => {
     const textBody = makeTextBody(
       ["This is a long text that should overflow the small text box but font size stays the same"],
       { fontSize: 36, autoFit: "spAutofit" },
@@ -1155,13 +1155,13 @@ describe("spAutofit (図形サイズ自動拡大)", () => {
     expect(result).toContain('font-size="36pt"');
   });
 
-  it("spAutofit でテキストが収まる場合は null を返す", () => {
+  it("covers text-renderer behavior 49", () => {
     const textBody = makeTextBody(["Hi"], { fontSize: 12, autoFit: "spAutofit" });
     const result = computeSpAutofitHeight(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toBeNull();
   });
 
-  it("spAutofit でテキストがはみ出す場合に必要な高さを返す", () => {
+  it("covers text-renderer behavior 50", () => {
     const textBody = makeTextBody(
       ["This is a long text that should overflow the small text box and require more height"],
       { fontSize: 36, autoFit: "spAutofit" },
@@ -1172,15 +1172,15 @@ describe("spAutofit (図形サイズ自動拡大)", () => {
     expect(result!).toBeGreaterThan(480000);
   });
 
-  it("テキストがない場合は null を返す", () => {
+  it("covers text-renderer behavior 51", () => {
     const textBody = makeTextBody([""], { autoFit: "spAutofit" });
     const result = computeSpAutofitHeight(textBody, makeTransform(960000, 480000));
     expect(result).toBeNull();
   });
 });
 
-describe("縦書きテキスト (vertical text)", () => {
-  it("vert='vert' の場合、<g> でラップされ rotate(90) 変換が適用される", () => {
+describe("renderer/text-renderer.test behavior", () => {
+  it("covers text-renderer behavior 52", () => {
     const textBody = makeTextBody(["Vertical"], { vert: "vert" });
     const result = renderTextBody(textBody, makeTransform(4000000, 2000000));
     expect(result).toContain("<g transform=");
@@ -1188,7 +1188,7 @@ describe("縦書きテキスト (vertical text)", () => {
     expect(result).toContain("Vertical");
   });
 
-  it("vert='vert270' の場合、rotate(-90) 変換が適用される", () => {
+  it("covers text-renderer behavior 53", () => {
     const textBody = makeTextBody(["Vertical270"], { vert: "vert270" });
     const result = renderTextBody(textBody, makeTransform(4000000, 2000000));
     expect(result).toContain("<g transform=");
@@ -1196,21 +1196,21 @@ describe("縦書きテキスト (vertical text)", () => {
     expect(result).toContain("Vertical270");
   });
 
-  it("vert='eaVert' の場合、vert と同様に rotate(90) が適用される", () => {
+  it("covers text-renderer behavior 54", () => {
     const textBody = makeTextBody(["EAVertical"], { vert: "eaVert" });
     const result = renderTextBody(textBody, makeTransform(4000000, 2000000));
     expect(result).toContain("<g transform=");
     expect(result).toContain("rotate(90)");
   });
 
-  it("vert='horz' (デフォルト) の場合、<g> ラッピングなし", () => {
+  it("covers text-renderer behavior 55", () => {
     const textBody = makeTextBody(["Horizontal"]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).not.toContain("<g transform=");
     expect(result).toMatch(/^<text/);
   });
 
-  it("vert='vert' で translate にシェイプの幅が使われる", () => {
+  it("covers text-renderer behavior 56", () => {
     const widthEmu = 4000000;
     const textBody = makeTextBody(["Test"], { vert: "vert" });
     const result = renderTextBody(textBody, makeTransform(widthEmu, 2000000));
@@ -1218,7 +1218,7 @@ describe("縦書きテキスト (vertical text)", () => {
     expect(result).toContain(`translate(${widthPx}, 0)`);
   });
 
-  it("vert='vert270' で translate にシェイプの高さが使われる", () => {
+  it("covers text-renderer behavior 57", () => {
     const heightEmu = 2000000;
     const textBody = makeTextBody(["Test"], { vert: "vert270" });
     const result = renderTextBody(textBody, makeTransform(4000000, heightEmu));
@@ -1228,7 +1228,7 @@ describe("縦書きテキスト (vertical text)", () => {
 });
 
 // ============================================================
-// テキスト→パス変換（path モード）
+// Test note.
 // ============================================================
 
 function createMockFont(name: string): OpentypeFullFont {
@@ -1254,7 +1254,7 @@ describe("renderTextBody (path mode)", () => {
     resetTextPathFontResolver();
   });
 
-  it("フォントリゾルバーが設定されている場合、<path> 要素を生成する", () => {
+  it("covers text-renderer behavior 58", () => {
     setupPathMode();
     const textBody = makeTextBody(["Hello"]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
@@ -1264,7 +1264,7 @@ describe("renderTextBody (path mode)", () => {
     expect(result).not.toContain("<tspan");
   });
 
-  it("テキスト色が path の fill 属性に反映される", () => {
+  it("covers text-renderer behavior 59", () => {
     setupPathMode();
     const textBody: TextBody = {
       bodyProperties: {
@@ -1306,7 +1306,7 @@ describe("renderTextBody (path mode)", () => {
     expect(result).toContain('fill="#FF0000"');
   });
 
-  it("透明度が fill-opacity に反映される", () => {
+  it("covers text-renderer behavior 60", () => {
     setupPathMode();
     const textBody: TextBody = {
       bodyProperties: {
@@ -1349,7 +1349,7 @@ describe("renderTextBody (path mode)", () => {
     expect(result).toContain('fill-opacity="0.5"');
   });
 
-  it("ハイパーリンクが <a> タグで包まれる", () => {
+  it("covers text-renderer behavior 61", () => {
     setupPathMode();
     const textBody: TextBody = {
       bodyProperties: {
@@ -1393,7 +1393,7 @@ describe("renderTextBody (path mode)", () => {
     expect(result).toContain("</a>");
   });
 
-  it("下線が <line> 要素として描画される", () => {
+  it("covers text-renderer behavior 62", () => {
     setupPathMode();
     const textBody: TextBody = {
       bodyProperties: {
@@ -1436,7 +1436,7 @@ describe("renderTextBody (path mode)", () => {
     expect(result).toContain("stroke=");
   });
 
-  it("取り消し線が <line> 要素として描画される", () => {
+  it("covers text-renderer behavior 63", () => {
     setupPathMode();
     const textBody: TextBody = {
       bodyProperties: {
@@ -1478,14 +1478,14 @@ describe("renderTextBody (path mode)", () => {
     expect(result).toContain("<line");
   });
 
-  it("空のテキストでは空文字列を返す", () => {
+  it("covers text-renderer behavior 64", () => {
     setupPathMode();
     const textBody = makeTextBody([""]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toBe("");
   });
 
-  it("縦書き (vert) で rotate(90) が適用される", () => {
+  it("covers text-renderer behavior 65", () => {
     setupPathMode();
     const textBody = makeTextBody(["Vertical"], { vert: "vert" });
     const result = renderTextBody(textBody, makeTransform(4000000, 2000000));
@@ -1494,7 +1494,7 @@ describe("renderTextBody (path mode)", () => {
     expect(result).not.toContain("<text");
   });
 
-  it("縦書き (vert270) で rotate(-90) が適用される", () => {
+  it("covers text-renderer behavior 66", () => {
     setupPathMode();
     const textBody = makeTextBody(["Vert270"], { vert: "vert270" });
     const result = renderTextBody(textBody, makeTransform(4000000, 2000000));
@@ -1502,7 +1502,7 @@ describe("renderTextBody (path mode)", () => {
     expect(result).toContain("<path");
   });
 
-  it("bulletFont が null の場合、テキストランのフォントで箇条書き記号がレンダリングされる", () => {
+  it("covers text-renderer behavior 67", () => {
     const notoFont = createMockFont("Noto Sans JP");
     const defaultFont = createMockFont("DefaultFont");
     const fonts = new Map([
@@ -1554,13 +1554,13 @@ describe("renderTextBody (path mode)", () => {
     };
 
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
-    // 箇条書き記号がパスとして描画される（Noto Sans JP のモックフォントが使われる）
+    // Test note.
     expect(result).toContain("<path");
     expect(result).toContain("Noto Sans JP");
   });
 
-  it("フォントリゾルバーが null の場合は tspan レンダリングにフォールバック", () => {
-    // setupPathMode() を呼ばない → fontResolver は null
+  it("covers text-renderer behavior 68", () => {
+    // Test note.
     const textBody = makeTextBody(["Fallback"]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain("<text");
@@ -1568,9 +1568,9 @@ describe("renderTextBody (path mode)", () => {
     expect(result).not.toContain("<path");
   });
 
-  it("path モードの中央揃えで getAdvanceWidth() に基づいた x 位置が使われる", () => {
-    // 幅がデフォルトモック (0.6倍) と異なる font (1.0倍) を使って
-    // measureLineWidth が getAdvanceWidth() に切り替わっていることを確認する
+  it("covers text-renderer behavior 69", () => {
+    // Test note.
+    // Test note.
     const wideFont: OpentypeFullFont = {
       unitsPerEm: 1000,
       ascender: 800,
@@ -1593,7 +1593,7 @@ describe("renderTextBody (path mode)", () => {
     expect(result).toContain("<path");
   });
 
-  it("path モードの右揃えで getAdvanceWidth() に基づいた x 位置が使われる", () => {
+  it("covers text-renderer behavior 70", () => {
     const wideFont: OpentypeFullFont = {
       unitsPerEm: 1000,
       ascender: 800,
@@ -1615,7 +1615,7 @@ describe("renderTextBody (path mode)", () => {
     expect(result).toContain("<path");
   });
 
-  it("endParaRunProperties の fontSize が空段落の高さ計算に使用される", () => {
+  it("covers text-renderer behavior 71", () => {
     const defaultRunProps: RunProperties = {
       fontSize: null,
       fontFamily: null,
@@ -1646,13 +1646,13 @@ describe("renderTextBody (path mode)", () => {
       },
       paragraphs: [
         {
-          // 空段落（スペーサー）: endParaRPr で 3pt を指定
+          // Test note.
           runs: [{ text: "", properties: { ...defaultRunProps } }],
           properties: defaultParagraphProperties(),
           endParaRunProperties: { ...defaultRunProps, fontSize: 3 },
         },
         {
-          // 実際のテキスト段落: 12pt
+          // Test note.
           runs: [{ text: "テスト", properties: { ...defaultRunProps, fontSize: 12 } }],
           properties: defaultParagraphProperties(),
         },
@@ -1660,20 +1660,20 @@ describe("renderTextBody (path mode)", () => {
     };
 
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
-    // 空段落の dy が endParaRunProperties の fontSize (3pt) ベースで計算される
-    // デフォルト (12pt) を使った場合とは異なる値になる
+    // Test note.
+    // Test note.
     const dyMatches = result.match(/dy="([^"]+)"/g) ?? [];
-    // 少なくとも 2 つの tspan が出力される
+    // Test note.
     expect(dyMatches.length).toBeGreaterThanOrEqual(2);
 
-    // endParaRunProperties なしの場合と比較
+    // Test note.
     const textBodyNoEndPara: TextBody = {
       ...textBody,
       paragraphs: [
         {
           runs: [{ text: "", properties: { ...defaultRunProps } }],
           properties: defaultParagraphProperties(),
-          // endParaRunProperties なし → デフォルトサイズ
+          // Test note.
         },
         {
           runs: [{ text: "テスト", properties: { ...defaultRunProps, fontSize: 12 } }],
@@ -1685,8 +1685,8 @@ describe("renderTextBody (path mode)", () => {
       textBodyNoEndPara,
       makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT),
     );
-    // endParaRunProperties がある場合はスペーサー段落が小さいため、
-    // テキストの位置が異なるはず
+    // Test note.
+    // Test note.
     expect(result).not.toEqual(resultNoEndPara);
   });
 });

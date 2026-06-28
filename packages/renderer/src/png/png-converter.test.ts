@@ -29,7 +29,7 @@ import { svgToPng } from "./png-converter.js";
 const MINIMAL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"></svg>';
 
 describe("svgToPng", () => {
-  it("fontBuffers 未指定のとき font オプションを Resvg に渡さない", async () => {
+  it("covers png-converter behavior 1", async () => {
     mocks.MockResvg.mockClear();
     await svgToPng(MINIMAL_SVG);
     const opts = unsafeFixtureAssertion<Record<string, unknown> | undefined>(
@@ -38,7 +38,7 @@ describe("svgToPng", () => {
     expect(opts?.font).toBeUndefined();
   });
 
-  it("fontBuffers が空配列のとき font オプションを Resvg に渡さない", async () => {
+  it("covers png-converter behavior 2", async () => {
     mocks.MockResvg.mockClear();
     await svgToPng(MINIMAL_SVG, { fontBuffers: [] });
     const opts = unsafeFixtureAssertion<Record<string, unknown> | undefined>(
@@ -47,7 +47,7 @@ describe("svgToPng", () => {
     expect(opts?.font).toBeUndefined();
   });
 
-  it("fontBuffers を指定すると font: { fontBuffers } として Resvg に渡る", async () => {
+  it("covers png-converter behavior 3", async () => {
     const fontBuffers = [new Uint8Array([1, 2, 3])];
     mocks.MockResvg.mockClear();
     await svgToPng(MINIMAL_SVG, { fontBuffers });

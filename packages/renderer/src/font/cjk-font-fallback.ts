@@ -1,25 +1,25 @@
 /**
- * CJK フォントの二次フォールバックチェーン。
- * マッピング先フォント (e.g., Noto Sans JP) がシステムに存在しない場合に
- * OS プリインストールの CJK フォントにフォールバックする。
+ * Internal note.
+ * Internal note.
+ * falls back to OS-preinstalled CJK fonts.
  */
 import { platform } from "node:os";
 
 type CjkFallbackMap = Readonly<Record<string, readonly string[]>>;
 
 const MACOS_FALLBACKS: CjkFallbackMap = {
-  // ゴシック系
+  // Gothic family
   "Noto Sans JP": ["Hiragino Sans", "Hiragino Kaku Gothic ProN"],
   "Noto Sans CJK JP": ["Hiragino Sans", "Hiragino Kaku Gothic ProN"],
-  // 明朝系
+  // Mincho family
   "Noto Serif CJK JP": ["Hiragino Mincho ProN"],
 };
 
 const WINDOWS_FALLBACKS: CjkFallbackMap = {
-  // ゴシック系
+  // Gothic family
   "Noto Sans JP": ["Yu Gothic", "Meiryo", "MS Gothic"],
   "Noto Sans CJK JP": ["Yu Gothic", "Meiryo", "MS Gothic"],
-  // 明朝系
+  // Mincho family
   "Noto Serif CJK JP": ["Yu Mincho", "MS Mincho"],
 };
 
@@ -42,14 +42,14 @@ function getFallbackMap(): CjkFallbackMap {
 }
 
 /**
- * マッピング先フォント名に対する OS 固有の CJK フォールバックチェーンを返す。
- * フォールバックが定義されていない場合は空配列を返す。
+ * Internal note.
+ * Internal note.
  */
 export function getCjkFallbackFonts(mappedFontName: string): readonly string[] {
   return getFallbackMap()[mappedFontName] ?? EMPTY;
 }
 
-/** テスト用: キャッシュをクリアする */
+/** Test-only: clear cache */
 export function _resetCjkFallbackCache(): void {
   cachedFallbacks = null;
 }

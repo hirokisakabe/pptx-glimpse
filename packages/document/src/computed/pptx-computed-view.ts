@@ -1,27 +1,26 @@
 /**
- * PptxSourceModel computed view の型。
+ * PptxSourceModel computed view types.
  *
- * source model を mutation せず、slide / layout / master / theme cascade から
- * consumer が使う effective document value を派生させる。source は各 package
- * part の authored state と raw preservation hooks を保持し、この view は
- * presentation order、slide size、per-slide layout/master/theme chain、
- * relationship targets、background fallback、theme color map/color scheme、
- * placeholder match、text style cascade、showMasterSp visibility、computed
- * element ordering を決定論的に解決する。
+ * This view derives effective document values from the slide / layout / master / theme
+ * cascade without mutating the source model. The source keeps each package part's
+ * authored state and raw preservation hooks, while this view deterministically resolves
+ * presentation order, slide size, the per-slide layout/master/theme chain, relationship
+ * targets, background fallback, theme color maps and schemes, placeholder matches, text
+ * style cascades, showMasterSp visibility, and computed element ordering.
  *
- * Computed view は document semantics の projection であり、editable source of
- * truth ではない。source provenance と diagnostics に必要な part path /
- * source node / source layer は保持するが、renderer contract へ都合のよい
- * required defaults や `null` fallback をここで materialize しない。
- * Chart XML の type / series / categories / legend などは OOXML document
- * semantics として解析済み chart data に射影するが、renderer 固有の描画補完や
- * pixel layout decision は adapter / renderer に残す。
+ * The computed view is a projection of document semantics, not an editable source of
+ * truth. It keeps the part path, source node, and source layer needed for source
+ * provenance and diagnostics, but it does not materialize renderer-contract-friendly
+ * required defaults or `null` fallbacks here. Chart XML type, series, categories,
+ * legend, and similar data are projected into parsed chart data as OOXML document
+ * semantics, while renderer-specific drawing completion and pixel layout decisions
+ * remain in the adapter / renderer.
  *
- * Renderer-specific pixel conversion、system font discovery、font fallback、
- * text measurement / wrapping、text-to-path、SVG/PNG output decision、renderer
- * warning policy は core adapter または renderer の責務に残す。raw elements /
- * raw fills / raw backgrounds は preservation and diagnostics のために保持し、
- * direct rendering policy は adapter が決める。
+ * Renderer-specific pixel conversion, system font discovery, font fallback, text
+ * measurement / wrapping, text-to-path, SVG/PNG output decisions, and renderer warning
+ * policy remain the responsibility of the core adapter or renderer. Raw elements, raw
+ * fills, and raw backgrounds are kept for preservation and diagnostics, and the adapter
+ * decides direct rendering policy.
  */
 
 import type {
@@ -57,9 +56,9 @@ import type {
 } from "../source/index.js";
 
 export interface CreateComputedViewOptions {
-  /** 1-based slide numbers. 未指定時は presentation order の全 slide。 */
+  /** 1-based slide numbers. When omitted, all slides in presentation order are used. */
   readonly slides?: readonly number[];
-  /** `p:sld@showMasterSp` / `p:sldLayout@showMasterSp` を反映する。既定 true。 */
+  /** Applies `p:sld@showMasterSp` / `p:sldLayout@showMasterSp`. Defaults to true. */
   readonly applyMasterVisibility?: boolean;
 }
 
@@ -392,7 +391,7 @@ export interface ComputedColorChangeEffect {
 export interface ComputedColor {
   /** `#rrggbb`。 */
   readonly hex: string;
-  /** 0-1 の正規化 opacity。 */
+  /** Normalized opacity in the 0-1 range. */
   readonly alpha: number;
 }
 

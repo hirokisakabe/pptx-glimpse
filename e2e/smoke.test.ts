@@ -2,10 +2,10 @@ import { readFileSync } from "fs";
 import { join } from "path";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-// macOS 上では `/System/Library/Fonts` 等から数百個のフォントを parse すると
-// worker メモリが膨れ上がり OOM する。ここでは構造ベースのアサーション
-// (`<text|<path>` のいずれかが出ること、`<image>`/`<rect>` が出ること) のみを
-// 検証しているので、`DefaultTextMeasurer` フォールバックで十分。
+// Test note.
+// Test note.
+// Test note.
+// Test note.
 vi.mock("../packages/renderer/src/font/system-font-loader.js", () => ({
   collectFontFilePaths: vi.fn(() => []),
   getSystemFontDirs: vi.fn(() => []),
@@ -38,7 +38,7 @@ describe("Real PPTX E2E smoke tests", () => {
       const results = await convertPptxToSvg(input);
       const slide1 = results[0].svg;
 
-      // タイトルとサブタイトルのテキスト（<text> or <path> via opentype）
+      // Test note.
       expect(slide1).toMatch(/<text|<path/);
     });
 
@@ -47,11 +47,11 @@ describe("Real PPTX E2E smoke tests", () => {
       const results = await convertPptxToSvg(input);
       const slide2 = results[1].svg;
 
-      // テーブル（<rect>でセルが描画される）
+      // Test note.
       expect(slide2).toContain("<rect");
-      // 画像
+      // Test note.
       expect(slide2).toContain("<image");
-      // テキスト
+      // Test note.
       expect(slide2).toMatch(/<text|<path/);
     });
 
@@ -87,7 +87,7 @@ describe("Real PPTX E2E smoke tests", () => {
       const results = await convertPptxToSvg(input);
       const slide = results[0].svg;
 
-      // タイトルやボタンなどのテキスト（<text> or <path> via opentype）
+      // Test note.
       expect(slide).toMatch(/<text|<path/);
     });
 
@@ -96,7 +96,7 @@ describe("Real PPTX E2E smoke tests", () => {
       const results = await convertPptxToSvg(input);
       const slide = results[0].svg;
 
-      // カード・ボタン等の角丸矩形やアイコン用の楕円
+      // Test note.
       expect(slide).toContain("<rect");
       expect(slide).toContain("<ellipse");
     });
@@ -141,7 +141,7 @@ describe("Real PPTX E2E smoke tests", () => {
       const input = readFileSync(join(FIXTURE_DIR, "real-financial-report.pptx"));
       const results = await convertPptxToSvg(input);
 
-      // チャートはスライド2以降に含まれる（graphicFrame → <rect> / <path> で描画）
+      // Test note.
       const chartSlides = results.slice(1);
       for (const result of chartSlides) {
         expect(result.svg).toMatch(/<rect|<path/);

@@ -1,5 +1,5 @@
-// 実際の公開面 (`@pptx-glimpse/document`) 経由で import し、
-// root entry point の re-export ごと検証する。
+// Test note.
+// Test note.
 import { describe, expect, it } from "vitest";
 
 import {

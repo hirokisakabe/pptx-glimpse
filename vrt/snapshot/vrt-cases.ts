@@ -1,13 +1,13 @@
 /**
- * VRT テストケース定義（共通）
+ * VRT fixture note.
  *
- * create-fixtures.ts と regression.test.ts の両方から参照される。
- * 新しいフィクスチャを追加する際はここに追記すること。
+ * VRT fixture note.
+ * VRT fixture note.
  */
 
 /**
- * shared-fixtures/ にある実アプリ作成 PPTX を使った VRT ケース。
- * フィクスチャは事前にコミット済みなので create-fixtures.ts での生成は不要。
+ * VRT fixture note.
+ * VRT fixture note.
  */
 export const SHARED_FIXTURE_CASES = [
   { name: "real-basic-theme", fixture: "real-basic-theme.pptx" },

@@ -1,7 +1,7 @@
 /**
- * テスト用: 複数の TTF ArrayBuffer から TTC バイナリを構築するヘルパー。
+ * Test-only: Helper for building a TTC binary from multiple TTF ArrayBuffers.
  *
- * 各 TTF 内のテーブルオフセットを TTC 全体の絶対アドレスに書き換える。
+ * Rewrites table offsets in each TTF to absolute addresses in the whole TTC.
  */
 export function buildTtcFromTtfs(ttfBuffers: ArrayBuffer[]): ArrayBuffer {
   const fontInfos: {

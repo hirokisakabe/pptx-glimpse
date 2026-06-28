@@ -13,7 +13,7 @@ import type {
   SourceSmartArt,
   SourceTable,
 } from "../index.js";
-// 実際の公開面 (`@pptx-glimpse/document`) 経由で import する。
+// Test note.
 import { readPptx } from "../index.js";
 import { unsafeFixtureAssertion } from "../unsafe-type-assertion.js";
 
@@ -33,7 +33,7 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
   const product = readPptx(fixture("real-product-page.pptx"));
   const basic = readPptx(fixture("real-basic-theme.pptx"));
 
-  it("slide → layout → master → theme の chain を typed に辿る", () => {
+  it("covers slide-reader behavior 1", () => {
     const [slide] = product.slides;
     expect(slide.partPath).toBe("ppt/slides/slide1.xml");
     expect(slide.layoutPartPath).toBe("ppt/slideLayouts/slideLayout1.xml");
@@ -48,7 +48,7 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
     expect(product.themes.map((t) => t.partPath)).toContain(master?.themePartPath);
   });
 
-  it("simple p:sp を transform / geometry / fill 付きの source node として読む", () => {
+  it("covers slide-reader behavior 2", () => {
     const shape = firstShape(product, "Text 0");
     expect(shape.kind).toBe("shape");
     expect(shape.nodeId).toBe("2");
@@ -63,12 +63,12 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
     expect(shape.fill).toEqual({ kind: "solid", color: { kind: "srgb", hex: "DBEAFE" } });
   });
 
-  it("noFill の shape は fill kind=none として読む", () => {
+  it("covers slide-reader behavior 3", () => {
     const shape = firstShape(product, "Text 1");
     expect(shape.fill).toEqual({ kind: "none" });
   });
 
-  it("plain text の paragraph / run と basic run properties を読む", () => {
+  it("covers slide-reader behavior 4", () => {
     const shape = firstShape(product, "Text 0");
     const body = shape.textBody;
     expect(body?.properties?.anchor).toBe("middle");
@@ -89,14 +89,14 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
     });
   });
 
-  it("複数 paragraph を持つ text body を読み、先頭空白を保持する", () => {
+  it("covers slide-reader behavior 5", () => {
     const shape = firstShape(product, "Text 2");
     expect(shape.textBody?.paragraphs).toHaveLength(2);
     const secondParagraphText = shape.textBody!.paragraphs[1].runs[0].text;
     expect(secondParagraphText.startsWith("      From onboarding")).toBe(true);
   });
 
-  it("placeholder の type / index metadata を保持する", () => {
+  it("covers slide-reader behavior 6", () => {
     const title = firstShape(basic, "Google Shape;86;p13");
     expect(title.placeholder).toEqual({ type: "ctrTitle" });
 
@@ -104,7 +104,7 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
     expect(subtitle.placeholder).toEqual({ type: "subTitle", index: 1 });
   });
 
-  it("embedded raster p:pic を relationship 参照付きで読み、media へ解決できる", () => {
+  it("covers slide-reader behavior 7", () => {
     const slide2 = basic.slides.find((s) => s.partPath === "ppt/slides/slide2.xml");
     const image = slide2!.shapes.find((s): s is SourceImage => s.kind === "image");
     expect(image?.nodeId).toBe("98");
@@ -116,7 +116,7 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
       height: 1201300,
     });
 
-    // blip relationship → target → media part bytes を package graph 経由で解決する。
+    // Test note.
     const slideRels = basic.packageGraph.relationships.find(
       (rel) => rel.sourcePartPath === "ppt/slides/slide2.xml",
     );
@@ -126,21 +126,21 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
     expect(media && media.bytes.length).toBeGreaterThan(0);
   });
 
-  it("table graphicFrame を typed table node として保持する", () => {
+  it("covers slide-reader behavior 8", () => {
     const slide2 = basic.slides.find((s) => s.partPath === "ppt/slides/slide2.xml");
     const table = slide2!.shapes.find((s): s is SourceTable => s.kind === "table");
     expect(table?.table.columns.length).toBeGreaterThan(0);
     expect(table?.table.rows.length).toBeGreaterThan(0);
   });
 
-  it("typed shape effects と未対応子要素を保持する", () => {
+  it("covers slide-reader behavior 9", () => {
     const shadowed = firstShape(product, "Shape 3");
     expect(shadowed.effects?.outerShadow?.blurRadius).toBeGreaterThan(0);
     expect(shadowed.effects?.outerShadow?.color).toBeDefined();
     const names = shadowed.rawSidecars?.map((sidecar) => sidecar.node.name) ?? [];
     expect(names).not.toContain("a:effectLst");
 
-    // run property の `a:ea` / `a:cs` は typed source property として保持する。
+    // Test note.
     const run = firstShape(product, "Text 0").textBody!.paragraphs[0].runs[0];
     expect(run.properties).toMatchObject({
       typefaceEa: "Noto Sans JP",
@@ -150,7 +150,7 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
     expect(runSidecarNames).not.toContain("a:ea");
     expect(runSidecarNames).not.toContain("a:cs");
 
-    // 画像の default `a:stretch` は typed に解釈し、未対応の blip 子は保持する。
+    // Test note.
     const slide2 = basic.slides.find((s) => s.partPath === "ppt/slides/slide2.xml");
     const image = slide2!.shapes.find((s): s is SourceImage => s.kind === "image");
     const imageSidecarNames = image?.rawSidecars?.map((sidecar) => sidecar.node.name) ?? [];
@@ -158,7 +158,7 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
     expect(imageSidecarNames).toContain("a:alphaModFix");
   });
 
-  it("master の clrMap と theme の color / font scheme を読む", () => {
+  it("covers slide-reader behavior 10", () => {
     const master = product.slideMasters[0];
     expect(master.colorMap?.mapping.bg1).toBe("lt1");
     expect(master.colorMap?.mapping.tx1).toBe("dk1");
@@ -170,8 +170,8 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
 });
 
 /**
- * 色変換 / 線 / 回転 / gradient fill / 未対応属性など、real fixture では
- * 揃わない構造を決定的に検証するための合成 PPTX。
+ * Test note.
+ * Test note.
  */
 function buildSyntheticPptx(slideSpTree: string): Uint8Array {
   const files: Record<string, Uint8Array> = {
@@ -209,7 +209,7 @@ function buildSyntheticPptx(slideSpTree: string): Uint8Array {
 }
 
 describe("readPptx — typed shape detail (synthetic)", () => {
-  it("scheme color + lumMod transform / outline width+color / rotation+flip を読む", () => {
+  it("covers slide-reader behavior 11", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:sp><p:nvSpPr><p:cNvPr id="10" name="Themed"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
@@ -248,7 +248,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     });
   });
 
-  it("bodyPr autofit / wrap / vert と ea/cs run fonts を typed source property として読む", () => {
+  it("covers slide-reader behavior 12", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:sp><p:nvSpPr><p:cNvPr id="14" name="Text props"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
@@ -277,7 +277,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     });
   });
 
-  it("interleaved bullet pPr の分割時も br / fld run を保持する", () => {
+  it("covers slide-reader behavior 13", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:sp><p:nvSpPr><p:cNvPr id="17" name="Interleaved text"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
@@ -306,7 +306,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(new Set(paragraphs.map((paragraph) => paragraph.handle.nodeId)).size).toBe(3);
   });
 
-  it("spAutoFit を typed source body property として読む", () => {
+  it("covers slide-reader behavior 14", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:sp><p:nvSpPr><p:cNvPr id="15" name="Sp autofit"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
@@ -320,7 +320,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(shape.textBody?.properties).toMatchObject({ autoFit: "spAutofit" });
   });
 
-  it("noAutofit を typed source body property として読む", () => {
+  it("covers slide-reader behavior 15", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:sp><p:nvSpPr><p:cNvPr id="16" name="No autofit"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
@@ -338,7 +338,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     });
   });
 
-  it("gradient fill を typed source fill、custom geometry を raw として保持する", () => {
+  it("covers slide-reader behavior 16", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:sp><p:nvSpPr><p:cNvPr id="11" name="Grad"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
@@ -354,12 +354,12 @@ describe("readPptx — typed shape detail (synthetic)", () => {
       gradientType: "linear",
       stops: [{ position: 0, color: { kind: "srgb", hex: "000000" } }],
     });
-    // custGeom は raw sidecar として保持する。
+    // Test note.
     const names = shape.rawSidecars?.map((sidecar) => sidecar.node.name) ?? [];
     expect(names).toContain("a:custGeom");
   });
 
-  it("direct effectLst を typed source effects として読む", () => {
+  it("covers slide-reader behavior 17", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:sp><p:nvSpPr><p:cNvPr id="12" name="Ext"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
@@ -401,7 +401,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(shape.rawSidecars?.map((sidecar) => sidecar.node.name) ?? []).toContain("a:reflection");
   });
 
-  it("unknown rectangle alignment token は source field ごとの既定値に fallback する", () => {
+  it("covers slide-reader behavior 18", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:sp><p:nvSpPr><p:cNvPr id="13" name="Shadow"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
@@ -421,7 +421,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(image.tile?.align).toBe("tl");
   });
 
-  it("image shape effects と blip effects を typed source effects として読む", () => {
+  it("covers slide-reader behavior 19", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:pic><p:nvPicPr><p:cNvPr id="13" name="Pic"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
@@ -455,7 +455,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(image.rawSidecars?.map((sidecar) => sidecar.node.name) ?? []).toContain("a:alphaModFix");
   });
 
-  it("graphicFrame table を typed source node として読む", () => {
+  it("covers slide-reader behavior 20", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:graphicFrame>` +
@@ -528,7 +528,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     });
   });
 
-  it("graphicFrame chart と AlternateContent 内 SmartArt を typed source node として読む", () => {
+  it("covers slide-reader behavior 21", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:graphicFrame>` +
@@ -577,7 +577,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(connector).toMatchObject({ kind: "connector", nodeId: "32", name: "Connector" });
   });
 
-  it("AlternateContent の connector branch を typed source node として読む", () => {
+  it("covers slide-reader behavior 22", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">` +
@@ -602,7 +602,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     );
   });
 
-  it("group / connector / custom geometry を typed source node として読み、異種タグ順序を保持する", () => {
+  it("covers slide-reader behavior 23", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:cxnSp>` +
@@ -665,7 +665,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     });
   });
 
-  it("Strict OOXML の chart graphicData URI を chart source node として読む", () => {
+  it("covers slide-reader behavior 24", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:graphicFrame>` +
@@ -686,7 +686,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     });
   });
 
-  it("AlternateContent の Choice が raw のみなら supported Fallback branch を読む", () => {
+  it("covers slide-reader behavior 25", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">` +

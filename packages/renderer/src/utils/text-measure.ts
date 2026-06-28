@@ -2,25 +2,25 @@ import { type FontMetrics, getFontMetrics } from "../data/font-metrics.js";
 
 type CharCategory = "narrow" | "normal" | "wide";
 
-// フォントメトリクスが無い場合のヒューリスティック幅比率 (対 fontSize)。
-// 実測ベースの近似値。
+// Internal note.
+// measurement-based approximations。
 const WIDTH_RATIO: Record<CharCategory, number> = {
-  narrow: 0.3, // i, l, 1, 句読点等
-  normal: 0.6, // ラテン文字の平均的な幅
-  wide: 1.0, // CJK 文字 (全角)
+  narrow: 0.3, // Internal note.
+  normal: 0.6, // Internal note.
+  wide: 1.0, // Internal note.
 };
 
 const BOLD_FACTOR = 1.05;
 const PX_PER_PT = 96 / 72;
-// OpenType メトリクスが無いフォントの行高さフォールバック (CSS 既定値相当)
+// Line-height fallback for fonts without OpenType metrics (CSS default equivalent)
 const DEFAULT_LINE_HEIGHT_RATIO = 1.2;
-// OpenType メトリクスが無いフォントの ascender 比率フォールバック
+// Internal note.
 const DEFAULT_ASCENDER_RATIO = 1.0;
 
 /**
- * フォントの自然な行高さ比率を返す。
- * (ascender + |descender|) / unitsPerEm で計算。
- * メトリクスが見つからない場合はフォールバック値 (1.2) を返す。
+ * Natural font line-height ratio.
+ * (ascender + |descender|) / unitsPerEm calculated as。
+ * Internal note.
  */
 export function getLineHeightRatio(
   fontFamily?: string | null,
@@ -32,11 +32,11 @@ export function getLineHeightRatio(
 }
 
 /**
- * フォントの ascender 比率を返す。
- * ascender / unitsPerEm で計算。
- * SVG の `<text y="...">` はベースライン位置を指定するため、
- * 1行目のベースラインオフセットには行高さ比率ではなくこの値を使う。
- * メトリクスが見つからない場合はフォールバック値 (1.0) を返す。
+ * Font ascender ratio.
+ * ascender / unitsPerEm calculated as。
+ * Internal note.
+ * the first-line baseline offsetuses this value rather than the line-height ratio。
+ * Internal note.
  */
 export function getAscenderRatio(fontFamily?: string | null, fontFamilyEa?: string | null): number {
   const metrics = getFontMetrics(fontFamily) ?? getFontMetrics(fontFamilyEa);
@@ -44,23 +44,23 @@ export function getAscenderRatio(fontFamily?: string | null, fontFamilyEa?: stri
   return metrics.ascender / metrics.unitsPerEm;
 }
 
-// CJK 文字判定 (Unicode Standard に基づくコードポイント範囲)
+// Internal note.
 export function isCjkCodePoint(codePoint: number): boolean {
   return (
-    (codePoint >= 0x3000 && codePoint <= 0x9fff) || // CJK 記号・ひらがな・カタカナ・統合漢字
-    (codePoint >= 0xf900 && codePoint <= 0xfaff) || // CJK 互換漢字
-    (codePoint >= 0xff01 && codePoint <= 0xff60) || // 全角英数・記号
-    (codePoint >= 0x20000 && codePoint <= 0x2a6df) // CJK 統合漢字拡張 B
+    (codePoint >= 0x3000 && codePoint <= 0x9fff) || // Internal note.
+    (codePoint >= 0xf900 && codePoint <= 0xfaff) || // Internal note.
+    (codePoint >= 0xff01 && codePoint <= 0xff60) || // Internal note.
+    (codePoint >= 0x20000 && codePoint <= 0x2a6df) // Internal note.
   );
 }
 
 function categorizeChar(codePoint: number): CharCategory {
-  // CJK 統合漢字、ひらがな、カタカナ、CJK 記号、全角英数
+  // CJK unified ideographs, hiragana, katakana, CJK symbols, and full-width alphanumerics
   if (isCjkCodePoint(codePoint)) {
     return "wide";
   }
 
-  // 狭い文字
+  // Narrow characters
   if (
     codePoint === 0x20 || // space
     codePoint === 0x21 || // !
@@ -108,9 +108,9 @@ function measureCharMetrics(
 }
 
 /**
- * テキストの推定幅を計算する (ピクセル単位)。
- * fontFamily が指定され、対応するメトリクスが存在する場合はメトリクスベースで計算する。
- * それ以外はヒューリスティック (文字カテゴリ別の固定比率) にフォールバックする。
+ * Calculates estimated text width (in pixels)。
+ * Internal note.
+ * Internal note.
  */
 export function measureTextWidth(
   text: string,

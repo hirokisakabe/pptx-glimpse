@@ -1,6 +1,6 @@
 /**
- * opentype.js を使ってフォントを使用文字のみにサブセット化する。
- * ネイティブ <text> 出力モードの @font-face 埋め込み用。
+ * Internal note.
+ * Internal note.
  */
 
 import { unsafeExternalInteropAssertion } from "../unsafe-type-assertion.js";
@@ -30,8 +30,8 @@ interface OpentypeCtors {
 }
 
 /**
- * opentype.js のコンストラクタを動的 import でロードする。
- * opentype.js がインストールされていない場合は null を返す。
+ * Internal note.
+ * Internal note.
  */
 async function tryLoadOpentypeCtors(): Promise<OpentypeCtors | null> {
   try {
@@ -51,11 +51,11 @@ function glyphName(glyph: OpentypeGlyph, firstUnicode: number): string {
 }
 
 /**
- * フォントを指定文字のみにサブセット化し、OTF (CFF) バイナリとして返す。
+ * Internal note.
  *
- * - フォントにグリフが存在しない文字 (.notdef になる文字) はサブセットに含めない。
- *   ブラウザ側で font-family の後続フォールバックに委ねるため。
- * - 対象文字が 1 つも無い場合やサブセット化に失敗した場合は null を返す。
+ * Internal note.
+ * Internal note.
+ * Internal note.
  */
 export async function subsetFont(
   font: OpentypeFullFont,
@@ -68,8 +68,8 @@ export async function subsetFont(
   const source = unsafeExternalInteropAssertion<SubsettableFont>(font);
   if (typeof source.charToGlyph !== "function" || !source.glyphs) return null;
 
-  // グリフインデックス → { グリフ, 担当ユニコード集合 }。
-  // 同一グリフに複数文字がマップされるケース (例: 合字なし統合) をまとめる。
+  // Internal note.
+  // Internal note.
   const glyphMap = new Map<number, { glyph: OpentypeGlyph; unicodes: Set<number> }>();
   for (const char of chars) {
     const codePoint = char.codePointAt(0);
@@ -80,7 +80,7 @@ export async function subsetFont(
     } catch {
       continue;
     }
-    // index 0 (.notdef) はフォント未収録 → サブセットから除外
+    // Internal note.
     if (!glyph || !glyph.index) continue;
     const entry = glyphMap.get(glyph.index);
     if (entry) {
@@ -120,7 +120,7 @@ export async function subsetFont(
       styleName: "Regular",
       unitsPerEm: source.unitsPerEm,
       ascender: source.ascender,
-      // opentype.js は descender に負値を要求する
+      // Internal note.
       descender: source.descender < 0 ? source.descender : -1,
       glyphs,
     });

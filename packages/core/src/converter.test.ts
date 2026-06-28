@@ -281,7 +281,7 @@ async function createTestPptx(): Promise<Buffer> {
 let testPptx: Buffer;
 
 beforeAll(async () => {
-  // 同一 worker 内で先に動いた他テストが残したフォントキャッシュを破棄する。
+  // Test note.
   clearFontCache();
   testPptx = await createTestPptx();
 });

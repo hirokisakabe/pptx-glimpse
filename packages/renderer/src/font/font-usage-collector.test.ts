@@ -8,7 +8,7 @@ import {
 } from "./font-usage-collector.js";
 
 describe("FontUsageCollector", () => {
-  it("フォント名先頭をキーに文字を収集する", () => {
+  it("covers font-usage-collector behavior 1", () => {
     const collector = new FontUsageCollector();
     collector.record(["Arial", null], "AB");
     collector.record(["Arial", "Noto Sans JP"], "BC");
@@ -17,32 +17,32 @@ describe("FontUsageCollector", () => {
     expect(usages.size).toBe(1);
     const usage = usages.get("Arial")!;
     expect([...usage.chars].sort()).toEqual(["A", "B", "C"]);
-    // 最初に記録された fonts リストが保持される
+    // Test note.
     expect(usage.fonts).toEqual(["Arial", null]);
   });
 
-  it("先頭の null をスキップして最初の非 null フォント名をキーにする", () => {
+  it("covers font-usage-collector behavior 2", () => {
     const collector = new FontUsageCollector();
     collector.record([null, "Noto Sans JP"], "あ");
 
     expect(collector.getUsages().has("Noto Sans JP")).toBe(true);
   });
 
-  it("フォント名がすべて null の場合は記録しない", () => {
+  it("covers font-usage-collector behavior 3", () => {
     const collector = new FontUsageCollector();
     collector.record([null, null], "A");
 
     expect(collector.getUsages().size).toBe(0);
   });
 
-  it("空文字列は記録しない", () => {
+  it("covers font-usage-collector behavior 4", () => {
     const collector = new FontUsageCollector();
     collector.record(["Arial"], "");
 
     expect(collector.getUsages().size).toBe(0);
   });
 
-  it("サロゲートペアを 1 文字として収集する", () => {
+  it("covers font-usage-collector behavior 5", () => {
     const collector = new FontUsageCollector();
     collector.record(["Test"], "𠮷野");
 
@@ -52,7 +52,7 @@ describe("FontUsageCollector", () => {
     expect(usage.chars.size).toBe(2);
   });
 
-  it("reset で収集内容をクリアする", () => {
+  it("covers font-usage-collector behavior 6", () => {
     const collector = new FontUsageCollector();
     collector.record(["Arial"], "A");
     collector.reset();
@@ -66,7 +66,7 @@ describe("font usage collector context", () => {
     resetFontUsageCollector();
   });
 
-  it("set / get / reset でコンテキストを管理できる", () => {
+  it("covers font-usage-collector behavior 7", () => {
     expect(getFontUsageCollector()).toBeNull();
 
     const collector = new FontUsageCollector();

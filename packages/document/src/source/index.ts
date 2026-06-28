@@ -1,5 +1,5 @@
 /**
- * PptxSourceModel source model 型の barrel re-export。
+ * Internal note.
  */
 
 export type { Diagnostic, DiagnosticSeverity } from "./diagnostics.js";

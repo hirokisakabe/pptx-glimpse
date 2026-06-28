@@ -1,9 +1,9 @@
-// OOXML テーマカラー解決 (ECMA-376 §20.1.6)
-// 色の種類:
-//   srgbClr — sRGB 直接指定 (e.g. "FF0000")
-//   schemeClr — テーマカラー参照 (dk1, lt1, accent1-6, hlink, folHlink)
-//     → colorMap でキーを変換 → colorScheme から実際の色を取得
-//   sysClr — システムカラー (@_lastClr で保存された直近値を使用)
+// OOXML theme color resolution (ECMA-376 §20.1.6)
+// Color kinds:
+//   srgbClr — sRGB direct value (e.g. "FF0000")
+//   schemeClr — theme color reference (dk1, lt1, accent1-6, hlink, folHlink)
+// Internal note.
+// Internal note.
 
 import type { ResolvedColor } from "@pptx-glimpse/renderer";
 import type { ColorMap, ColorScheme, ColorSchemeKey } from "@pptx-glimpse/renderer";

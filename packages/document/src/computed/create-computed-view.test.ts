@@ -26,7 +26,7 @@ import {
 } from "../index.js";
 
 describe("createComputedView", () => {
-  it("slide size / order / relationships を computed view に反映する", () => {
+  it("covers create-computed-view behavior 1", () => {
     const source = buildSource();
     const computed = createComputedView(source);
 
@@ -51,7 +51,7 @@ describe("createComputedView", () => {
     expect(image?.media?.bytes).toEqual(new Uint8Array([1, 2, 3]));
   });
 
-  it("chart / SmartArt の relationship と source XML part を解決する", () => {
+  it("covers create-computed-view behavior 2", () => {
     const source = buildSourceWithChartAndSmartArt();
     const slide = getSlide(createComputedView(source).slides, 0);
     const chart = slide.elements.find((element) => element.kind === "chart");
@@ -104,7 +104,7 @@ describe("createComputedView", () => {
     });
   });
 
-  it("SmartArt diagram drawing の shape tree が無い場合は computed diagnostic に provenance を残す", () => {
+  it("covers create-computed-view behavior 3", () => {
     const source = buildSourceWithChartAndSmartArt({
       smartArtDrawingXml: `<dsp:drawing xmlns:dsp="http://schemas.microsoft.com/office/drawing/2008/diagram"/>`,
     });
@@ -124,7 +124,7 @@ describe("createComputedView", () => {
     ]);
   });
 
-  it("Strict OOXML の chart relationship type でも chart XML part を解決する", () => {
+  it("covers create-computed-view behavior 4", () => {
     const source = buildSourceWithChartAndSmartArt({
       chartRelationshipType: "http://purl.oclc.org/ooxml/officeDocument/relationships/chart",
     });
@@ -139,7 +139,7 @@ describe("createComputedView", () => {
     expect(chart.chartXml).toContain("<c:barChart");
   });
 
-  it("chart XML を document computed chart data として解析する", () => {
+  it("covers create-computed-view behavior 5", () => {
     const source = buildSourceWithChartAndSmartArt({ chartXml: chartDataXml() });
     const slide = getSlide(createComputedView(source).slides, 0);
     const chart = slide.elements.find((element) => element.kind === "chart");
@@ -162,7 +162,7 @@ describe("createComputedView", () => {
     });
   });
 
-  it("literal cache の chart values / categories を computed chart data に反映する", () => {
+  it("covers create-computed-view behavior 6", () => {
     const source = buildSourceWithChartAndSmartArt({ chartXml: chartLiteralDataXml() });
     const slide = getSlide(createComputedView(source).slides, 0);
     const chart = slide.elements.find((element) => element.kind === "chart");
@@ -183,11 +183,11 @@ describe("createComputedView", () => {
     });
   });
 
-  it("theme color resolution と background fallback を解決する", () => {
+  it("covers create-computed-view behavior 7", () => {
     const computed = createComputedView(buildSource());
     const slide = getSlide(computed.slides, 0);
 
-    // layout clrMapOvr が accent1 -> accent2 に差し替えるため、theme accent2 へ解決される。
+    // Test note.
     expect(slide.colorMap.accent1).toBe("accent2");
     expect(slide.background?.kind).toBe("fill");
     expect(slide.background?.sourceLayer).toBe("master");
@@ -223,7 +223,7 @@ describe("createComputedView", () => {
     );
   });
 
-  it("placeholder matching と basic text style inheritance を解決する", () => {
+  it("covers create-computed-view behavior 8", () => {
     const computed = createComputedView(buildSource());
     const slideTitle = findShape(getSlide(computed.slides, 0).elements, "Slide title");
 
@@ -251,7 +251,7 @@ describe("createComputedView", () => {
     });
   });
 
-  it("theme font token と text body autofit properties を解決する", () => {
+  it("covers create-computed-view behavior 9", () => {
     const source = withSlide2Shapes(buildSource(), [
       shape("Theme fonts", {
         transform: transform(20, 21, 22, 23),
@@ -303,7 +303,7 @@ describe("createComputedView", () => {
     });
   });
 
-  it("local sp/no autofit で inherited normAutofit の scale 値をリセットする", () => {
+  it("covers create-computed-view behavior 10", () => {
     const source = buildSource();
     const sourceWithAutofitPlaceholders: PptxSourceModel = {
       ...source,
@@ -370,7 +370,7 @@ describe("createComputedView", () => {
     });
   });
 
-  it("table の cell fill / text color / style default border を解決する", () => {
+  it("covers create-computed-view behavior 11", () => {
     const computed = createComputedView(buildSource());
     const table = findTable(getSlide(computed.slides, 0).elements, "Metrics table");
     const [cell] = table.table.rows[0].cells;
@@ -408,7 +408,7 @@ describe("createComputedView", () => {
     });
   });
 
-  it("complex fill と shape style reference を computed fill/outline に解決する", () => {
+  it("covers create-computed-view behavior 12", () => {
     const source = withSlide2Shapes(buildSource(), [
       shape("Gradient fill", {
         transform: transform(30, 31, 32, 33),
@@ -541,7 +541,7 @@ describe("createComputedView", () => {
     });
   });
 
-  it("direct shape effects と image blip effects を computed view に解決する", () => {
+  it("covers create-computed-view behavior 13", () => {
     const source = withSlide2Shapes(buildSource(), [
       shape("Direct effect", {
         transform: transform(70, 71, 72, 73),
@@ -628,7 +628,7 @@ describe("createComputedView", () => {
     });
   });
 
-  it("inline table borders が table style default border より優先される", () => {
+  it("covers create-computed-view behavior 14", () => {
     const table = findTable(
       getSlide(createComputedView(buildSource()).slides, 0).elements,
       "Inline table",
@@ -642,7 +642,7 @@ describe("createComputedView", () => {
     expect(cell.borders?.top).toBeUndefined();
   });
 
-  it("showMasterSp visibility と effective element ordering を解決する", () => {
+  it("covers create-computed-view behavior 15", () => {
     const computed = createComputedView(buildSource());
 
     expect(elementNames(getSlide(computed.slides, 0).elements)).toEqual([
@@ -655,7 +655,7 @@ describe("createComputedView", () => {
       "Inline table",
     ]);
 
-    // slide1 は showMasterSp=false なので master decoration が落ちる。
+    // Test note.
     expect(getSlide(computed.slides, 1).showMasterShapes).toBe(false);
     expect(getSlide(computed.slides, 1).layoutShowMasterShapes).toBe(true);
     expect(elementNames(getSlide(computed.slides, 1).elements)).toEqual([
@@ -673,7 +673,7 @@ describe("createComputedView", () => {
     ]);
   });
 
-  it("connector / group / custom geometry を computed element として保持する", () => {
+  it("covers create-computed-view behavior 16", () => {
     const source = buildSource();
     const slidePath = asPartPath("ppt/slides/slide2.xml");
     const extended: PptxSourceModel = {
@@ -747,7 +747,7 @@ describe("createComputedView", () => {
     });
   });
 
-  it("source model を in-place mutation しない", () => {
+  it("covers create-computed-view behavior 17", () => {
     const source = buildSource();
     const before = structuredClone(source);
 
@@ -756,7 +756,7 @@ describe("createComputedView", () => {
     expect(source).toEqual(before);
   });
 
-  it("target slide selection を presentation order の slide number で適用する", () => {
+  it("covers create-computed-view behavior 18", () => {
     const computed = createComputedView(buildSource(), { slides: [2] });
 
     expect(computed.slides.map((slide) => slide.partPath)).toEqual(["ppt/slides/slide1.xml"]);

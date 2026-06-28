@@ -35,8 +35,8 @@ function isVert270Text(vert: TextVerticalType): boolean {
 }
 
 /**
- * 縦書き時の次元・マージン入れ替えを行う。
- * 回転変換後にテキストが正しい位置に表示されるよう、レイアウト空間を構成する。
+ * Internal note.
+ * Internal note.
  */
 function resolveTextDimensions(
   bodyProperties: BodyProperties,
@@ -53,7 +53,7 @@ function resolveTextDimensions(
   const vert = bodyProperties.vert;
 
   if (isVerticalText(vert)) {
-    // vert (90° CW): レイアウト空間は H×W、マージンを回転に合わせて入れ替え
+    // Internal note.
     return {
       width: originalHeight,
       height: originalWidth,
@@ -65,7 +65,7 @@ function resolveTextDimensions(
   }
 
   if (isVert270Text(vert)) {
-    // vert270 (90° CCW): レイアウト空間は H×W、マージンを逆方向に入れ替え
+    // Internal note.
     return {
       width: originalHeight,
       height: originalWidth,
@@ -76,7 +76,7 @@ function resolveTextDimensions(
     };
   }
 
-  // 水平テキスト
+  // Internal note.
   return {
     width: originalWidth,
     height: originalHeight,
@@ -112,7 +112,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
   let fontScale = bodyProperties.fontScale;
   const lnSpcReduction = bodyProperties.lnSpcReduction;
 
-  // normAutofit: テキストが図形からはみ出す場合に fontScale を動的に縮小
+  // Internal note.
   if (bodyProperties.autoFit === "normAutofit" && shouldWrap) {
     const availableHeight = height - marginTopPx - marginBottomPx;
     fontScale = computeShrinkToFitScale(
@@ -127,7 +127,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
 
   const scaledDefaultFontSizePt = defaultFontSize * fontScale;
 
-  // デフォルトフォントの行高さ比率
+  // Internal note.
   const defaultLineHeightRatio = getDefaultLineHeightRatio(paragraphs);
   const defaultAscenderRatio = getDefaultAscenderRatio(paragraphs);
   const defaultNaturalHeightPt = scaledDefaultFontSizePt * defaultLineHeightRatio;
@@ -135,19 +135,19 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
   const tspans: string[] = [];
   let isFirstLine = true;
 
-  // 連番管理用
+  // Internal note.
   const autoNumCounters = new Map<string, number>();
 
-  // 前の段落の spaceAfter（ピクセル解決済み）
+  // Internal note.
   let prevSpaceAfterPx = 0;
 
   for (const para of paragraphs) {
     const paraMarginLeft = emuToPixels(para.properties.marginLeft ?? asEmu(0));
     const paraIndent = emuToPixels(para.properties.indent ?? asEmu(0));
 
-    // テキスト開始位置 = bodyMarginLeft + paraMarginLeft
+    // Internal note.
     const textStartX = marginLeftPx + paraMarginLeft;
-    // 箇条書き記号位置 = textStartX + indent (indent は通常負値)
+    // Internal note.
     const bulletX = textStartX + paraIndent;
 
     const effectiveTextWidth = textWidth - paraMarginLeft;
@@ -162,7 +162,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
       marginRightPx,
     );
 
-    // 段落間隔の計算: max(前段落のspaceAfter, 現段落のspaceBefore)
+    // Internal note.
     const paraFontSizePt = getParagraphFontSize(para, defaultFontSize) * fontScale;
     const spaceBeforePx = resolveSpacingPx(para.properties.spaceBefore, paraFontSizePt);
     const paragraphGapPx = Math.max(prevSpaceAfterPx, spaceBeforePx);
@@ -201,7 +201,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
           continue;
         }
 
-        // 最初の行に箇条書き記号を挿入
+        // Internal note.
         if (lineIdx === 0 && bulletText) {
           const lineFontSize = getLineFontSize(line.segments, defaultFontSize) * fontScale;
           const lineNaturalHeightPt = computeLineNaturalHeight(
@@ -230,7 +230,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
           tspans.push(
             `<tspan x="${bulletX}" dy="${dy}" text-anchor="start" ${bulletStyles}>${escapeXml(bulletText)}</tspan>`,
           );
-          // 箇条書き記号の後にテキストを続ける（同じ行で x をテキスト開始位置に設定）
+          // Internal note.
           for (let segIdx = 0; segIdx < line.segments.length; segIdx++) {
             const seg = line.segments[segIdx];
             const prefix = segIdx === 0 ? `x="${xPos}" text-anchor="${anchorValue}" ` : "";
@@ -261,7 +261,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
         isFirstLine = false;
       }
     } else {
-      // wrap="none": 折り返しなし
+      // Internal note.
       let firstRunRendered = false;
       if (bulletText) {
         const firstRun = para.runs.find((r) => r.text.length > 0);
@@ -295,7 +295,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
 
         if (!firstRunRendered) {
           if (bulletText) {
-            // 箇条書きがある場合、テキストは x 位置を指定（dy なし、箇条書きと同じ行）
+            // Internal note.
             const prefix = `x="${xPos}" text-anchor="${anchorValue}" `;
             tspans.push(renderSegment(run.text, run.properties, fontScale, prefix));
           } else {
@@ -319,7 +319,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
     prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSizePt);
   }
 
-  // 垂直位置の計算
+  // Internal note.
   let yStart = marginTopPx;
   const totalTextHeight = estimateTextHeight(
     paragraphs,
@@ -435,8 +435,8 @@ function toAlpha(num: number): string {
 }
 
 /**
- * 箇条書き記号のフォントチェーンを構築する。
- * bulletFont 未指定時はテキストランのフォントにフォールバックする (パス描画と同じ規則)。
+ * Internal note.
+ * Internal note.
  */
 function buildBulletFontChain(
   props: ParagraphProperties,
@@ -471,8 +471,8 @@ function buildBulletStyleAttrs(
     }
   }
 
-  // fontScale が 1 でない場合、サイズ未指定なら textFontSizePt をそのまま使用
-  // (textFontSizePt は既に fontScale 適用済み)
+  // Internal note.
+  // Internal note.
   void fontScale;
 
   return styles.join(" ");
@@ -491,9 +491,9 @@ function getAlignmentInfo(
 }
 
 /**
- * 段落の 1 行分の高さ (px) を返す。
- * lnSpc が spcPts（固定行送り）ならフォントサイズ非依存の固定値、
- * spcPct（倍率）/ 未指定なら naturalHeightPt × 倍率で計算する。
+ * Internal note.
+ * Internal note.
+ * Internal note.
  */
 function getLineHeightPx(
   para: Paragraph,
@@ -513,7 +513,7 @@ function resolveSpacingPx(spacing: SpacingValue, fontSizePt: number): number {
   if (spacing.type === "pts") {
     return (spacing.value / 100) * PX_PER_PT;
   }
-  // pct: val / 100000 がフォントサイズに対する比率
+  // Internal note.
   return fontSizePt * (spacing.value / 100000) * PX_PER_PT;
 }
 
@@ -640,14 +640,14 @@ export function buildFontFamilyValue(fonts: (string | null)[]): string | null {
       seen.add(font);
       uniqueFonts.push(font);
 
-      // マッピングテーブルから OSS 代替フォントを追加
+      // Internal note.
       const mapped = getCurrentMappedFont(font);
       if (mapped && !seen.has(mapped)) {
         seen.add(mapped);
         uniqueFonts.push(mapped);
       }
 
-      // メトリクス互換 OSS フォントをフォールバックとして追加
+      // Internal note.
       const fallback = getMetricsFallbackFont(font);
       if (fallback && !seen.has(fallback)) {
         seen.add(fallback);
@@ -799,8 +799,8 @@ function getDefaultAscenderRatio(paragraphs: TextBody["paragraphs"]): number {
 }
 
 /**
- * spAutofit: テキスト量に応じた必要な図形の高さ (EMU) を計算する。
- * テキストが元の図形に収まる場合は null を返す。
+ * Internal note.
+ * Internal note.
  */
 export function computeSpAutofitHeight(textBody: TextBody, transform: Transform): Emu | null {
   const { bodyProperties, paragraphs } = textBody;
@@ -912,12 +912,12 @@ function estimateTextHeight(
 }
 
 // ============================================================
-// テキスト→パス変換 (Satori 方式)
+// Internal note.
 // ============================================================
 
 /**
- * alignment に基づいて行の開始 x 位置を計算する。
- * tspan レンダリングの text-anchor に代わるもの。
+ * Internal note.
+ * Internal note.
  */
 function computePathLineX(
   alignment: "l" | "ctr" | "r" | "just" | null,
@@ -933,8 +933,8 @@ function computePathLineX(
 }
 
 /**
- * 行内の全セグメントの幅合計を計測する。
- * fontResolver が与えられた場合は font.getAdvanceWidth() で正確な幅を使用する。
+ * Internal note.
+ * Internal note.
  */
 function measureLineWidth(
   segments: { text: string; properties: RunProperties }[],
@@ -970,7 +970,7 @@ function measureLineWidth(
 }
 
 /**
- * path 要素の fill 属性を構築する。
+ * Internal note.
  */
 function buildPathFillAttrs(props: RunProperties): string {
   const attrs: string[] = [];
@@ -986,7 +986,7 @@ function buildPathFillAttrs(props: RunProperties): string {
 }
 
 /**
- * 下線・取り消し線を SVG line 要素として描画する。
+ * Internal note.
  */
 function renderTextDecorations(
   x: number,
@@ -1019,7 +1019,7 @@ function renderTextDecorations(
 }
 
 /**
- * 単一テキストセグメントを path 要素にレンダリングし、幅を返す。
+ * Internal note.
  */
 function renderSegmentAsPath(
   text: string,
@@ -1036,10 +1036,10 @@ function renderSegmentAsPath(
   const parts: string[] = [];
   let totalWidth = 0;
 
-  // タブ→スペース変換
+  // Internal note.
   const processedText = text.replace(/\t/g, "    ");
 
-  // baseline-shift 処理
+  // Internal note.
   let yOffset = 0;
   if (props.baseline > 0) yOffset = -fontSizePx * 0.35;
   else if (props.baseline < 0) yOffset = fontSizePx * 0.2;
@@ -1075,7 +1075,7 @@ function renderSegmentAsPath(
       }
     }
 
-    // 下線・取り消し線
+    // Internal note.
     if (props.underline || props.strikethrough) {
       parts.push(...renderTextDecorations(x + totalWidth, effectiveY, segWidth, fontSizePx, props));
     }
@@ -1084,9 +1084,9 @@ function renderSegmentAsPath(
   };
 
   /**
-   * eaVert 時の CJK 文字直立レンダリング。
-   * 各 CJK 文字を個別にレンダリングし、-90° カウンター回転で
-   * グループの 90° CW 回転を打ち消して直立表示にする。
+   * Internal note.
+   * Internal note.
+   * Internal note.
    */
   const processCjkUpright = (
     segText: string,
@@ -1115,7 +1115,7 @@ function renderSegmentAsPath(
         const pathData = path.toPathData(2);
 
         if (pathData && pathData.length > 0) {
-          // 回転中心: 文字の中心点
+          // Internal note.
           const cx = charX + charWidth / 2;
           const cy =
             effectiveY - (fontSizePx * (font.ascender + font.descender)) / 2 / font.unitsPerEm;
@@ -1125,7 +1125,7 @@ function renderSegmentAsPath(
         }
       }
 
-      // 下線・取り消し線（カウンター回転の外側に配置）
+      // Internal note.
       if (props.underline || props.strikethrough) {
         parts.push(
           ...renderTextDecorations(x + totalWidth, effectiveY, charWidth, fontSizePx, props),
@@ -1136,7 +1136,7 @@ function renderSegmentAsPath(
     }
   };
 
-  // eaVert: CJK 文字は直立、非 CJK はグループ回転で 90° CW
+  // Internal note.
   if (vert === "eaVert") {
     const scriptParts = splitByScript(processedText);
     for (const part of scriptParts) {
@@ -1149,7 +1149,7 @@ function renderSegmentAsPath(
       }
     }
   } else if (needsScriptSplit(props)) {
-    // CJK/ラテンのスクリプト分割
+    // Internal note.
     const scriptParts = splitByScript(processedText);
     for (const part of scriptParts) {
       const ff = part.isEa ? props.fontFamilyEa : props.fontFamily;
@@ -1170,7 +1170,7 @@ function renderSegmentAsPath(
 }
 
 /**
- * 箇条書き記号をパスとしてレンダリングする。
+ * Internal note.
  */
 function renderBulletAsPath(
   bulletText: string,
@@ -1189,7 +1189,7 @@ function renderBulletAsPath(
   }
   const fontSizePx = bulletFontSize * PX_PER_PT;
 
-  // bulletFont が指定されている場合はそれを使用し、未指定の場合はテキストランのフォントにフォールバック
+  // Internal note.
   const font = paraProps.bulletFont
     ? fontResolver.resolveFont(paraProps.bulletFont, null)
     : fontResolver.resolveFont(runFontFamily ?? null, runFontFamilyEa ?? null);
@@ -1213,8 +1213,8 @@ function renderBulletAsPath(
 }
 
 /**
- * テキストを SVG path 要素として描画する（Satori 方式）。
- * フォントバッファが提供されている場合にのみ呼ばれる。
+ * Internal note.
+ * Internal note.
  */
 function renderTextBodyAsPath(
   textBody: TextBody,
@@ -1257,7 +1257,7 @@ function renderTextBodyAsPath(
   const defaultAscenderRatio = getDefaultAscenderRatio(paragraphs);
   const defaultNaturalHeightPt = scaledDefaultFontSizePt * defaultLineHeightRatio;
 
-  // 垂直位置の計算（既存ロジック再利用）
+  // Internal note.
   let yStart = marginTopPx;
   const totalTextHeight = estimateTextHeight(
     paragraphs,
@@ -1276,7 +1276,7 @@ function renderTextBodyAsPath(
   const firstLineBaselineOffsetPt = firstParaFontSizePt * defaultAscenderRatio;
   yStart += firstLineBaselineOffsetPt * PX_PER_PT;
 
-  // パスレンダリング
+  // Internal note.
   const elements: string[] = [];
   let currentY = yStart;
   let isFirstLine = true;
@@ -1296,7 +1296,7 @@ function renderTextBodyAsPath(
     const spaceBeforePx = resolveSpacingPx(para.properties.spaceBefore, paraFontSizePt);
     const paragraphGapPx = Math.max(prevSpaceAfterPx, spaceBeforePx);
 
-    // 空段落
+    // Internal note.
     if (para.runs.length === 0 || !para.runs.some((r) => r.text.length > 0)) {
       if (!isFirstLine) {
         const emptyParaHeightPt = paraFontSizePt > 0 ? paraFontSizePt : defaultNaturalHeightPt;
@@ -1327,7 +1327,7 @@ function renderTextBodyAsPath(
           continue;
         }
 
-        // 行の高さ計算と y 位置更新
+        // Internal note.
         const lineNaturalHeightPt = computeLineNaturalHeight(
           line.segments,
           defaultFontSize,
@@ -1337,7 +1337,7 @@ function renderTextBodyAsPath(
           currentY += getLineHeightPx(para, lineNaturalHeightPt, lnSpcReduction) + lineGapPx;
         }
 
-        // 行の幅を計測して alignment 用の x 位置を計算
+        // Internal note.
         const lineWidth = measureLineWidth(line.segments, defaultFontSize, fontScale, fontResolver);
         const lineStartX = computePathLineX(
           para.properties.alignment,
@@ -1350,7 +1350,7 @@ function renderTextBodyAsPath(
 
         let currentX = lineStartX;
 
-        // 箇条書き記号（最初の行のみ）
+        // Internal note.
         if (lineIdx === 0 && bulletText) {
           const lineFontSize = getLineFontSize(line.segments, defaultFontSize) * fontScale;
           const firstSeg = line.segments[0];
@@ -1369,7 +1369,7 @@ function renderTextBodyAsPath(
           );
         }
 
-        // 各セグメントをパスにレンダリング
+        // Internal note.
         for (const seg of line.segments) {
           const result = renderSegmentAsPath(
             seg.text,
@@ -1388,13 +1388,13 @@ function renderTextBodyAsPath(
         isFirstLine = false;
       }
     } else {
-      // wrap="none": 折り返しなし
+      // Internal note.
       const naturalHeightPt = computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
       if (!isFirstLine) {
         currentY += getLineHeightPx(para, naturalHeightPt, lnSpcReduction) + paragraphGapPx;
       }
 
-      // 行の幅を計測
+      // Internal note.
       const runsAsSegments = para.runs
         .filter((r) => r.text.length > 0)
         .map((r) => ({ text: r.text, properties: r.properties }));
@@ -1410,7 +1410,7 @@ function renderTextBodyAsPath(
 
       let currentX = lineStartX;
 
-      // 箇条書き記号
+      // Internal note.
       if (bulletText) {
         const firstRun = para.runs.find((r) => r.text.length > 0);
         const fontSize = (firstRun?.properties.fontSize ?? defaultFontSize) * fontScale;
@@ -1429,7 +1429,7 @@ function renderTextBodyAsPath(
         );
       }
 
-      // 各ランをパスにレンダリング
+      // Internal note.
       for (const run of para.runs) {
         if (run.text.length === 0) continue;
         const result = renderSegmentAsPath(
@@ -1464,7 +1464,7 @@ function renderTextBodyAsPath(
   return content;
 }
 
-/** デフォルトタブ幅（スペース数） */
+/** Internal note. */
 const TAB_SPACES = "    "; // 4 spaces
 
 function escapeXml(str: string): string {

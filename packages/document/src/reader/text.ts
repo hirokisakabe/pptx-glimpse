@@ -1,9 +1,9 @@
 /**
- * `p:txBody` を PptxSourceModel source の text body / paragraph / run へ読み取る。
+ * Internal note.
  *
- * 現在の typed subset は plain run text と basic run properties (太字 / 斜体 /
- * 下線 / フォントサイズ / typeface / solid color) を中心に表す。bullet / field /
- * line break 等の未対応ノードは raw sidecar として保持する。
+ * Internal note.
+ * Internal note.
+ * Internal note.
  */
 
 import type {
@@ -91,7 +91,7 @@ const VALID_AUTO_NUM_SCHEMES: ReadonlySet<SourceAutoNumScheme> = new Set([
   "arabicPlain",
 ]);
 
-/** `p:txBody` を読む。`txBody` が無い shape では undefined。 */
+/** Internal note. */
 export function parseTextBody(
   txBody: XmlNode | undefined,
   partPath: PartPath,
@@ -636,7 +636,7 @@ function parseRunProperties(rPr: XmlNode | undefined): SourceRunProperties | und
         : {}),
     ...(strike !== undefined ? { strikethrough: strike !== "noStrike" } : {}),
     ...(baseline !== undefined ? { baseline: baseline / 1000 } : {}),
-    // `a:rPr@sz` は 1/100 pt 単位。pt へ変換して保持する。
+    // Internal note.
     ...(size !== undefined ? { fontSize: asPt(size / 100) } : {}),
     ...(typeface !== undefined ? { typeface } : {}),
     ...(typefaceEa !== undefined ? { typefaceEa } : {}),
@@ -651,8 +651,8 @@ function parseRunProperties(rPr: XmlNode | undefined): SourceRunProperties | und
 }
 
 /**
- * run の未対応素材を sidecar に集める。run 直下 (`a:rPr` / `a:t` 以外) に加え、
- * `a:rPr` 内の未対応子要素 (`a:hlinkClick` / `a:ln` 等) も保持する。
+ * Internal note.
+ * Internal note.
  */
 function collectRunSidecars(
   r: XmlNode,

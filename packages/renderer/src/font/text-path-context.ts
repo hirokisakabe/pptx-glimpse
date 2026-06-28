@@ -1,6 +1,6 @@
 /**
- * テキスト→パス変換用のフォントリゾルバーコンテキスト。
- * opentype.js の getPath() メソッドを持つ Font オブジェクトへのアクセスを提供する。
+ * Font resolver context for text-to-path conversion.
+ * Internal note.
  */
 
 import { warn } from "../warning-logger.js";
@@ -55,7 +55,7 @@ export class DefaultTextPathFontResolver implements TextPathFontResolver {
       if (font) return font;
     }
 
-    // フォント未検出の警告
+    // Font-not-found warning
     for (const name of [fontFamily, fontFamilyEa, jpanFallback]) {
       if (name && !this.warnedFonts.has(name)) {
         this.warnedFonts.add(name);
@@ -70,13 +70,13 @@ export class DefaultTextPathFontResolver implements TextPathFontResolver {
     const direct = this.fonts.get(name);
     if (direct) return direct;
 
-    // フォントマッピングで OSS 代替名を試行
+    // Try OSS replacement names from font mapping
     const mapped = getCurrentMappedFont(name);
     if (mapped) {
       const mappedFont = this.fonts.get(mapped);
       if (mappedFont) return mappedFont;
 
-      // CJK フォールバックチェーン
+      // CJK fallback chain
       for (const fallback of getCjkFallbackFonts(mapped)) {
         const fallbackFont = this.fonts.get(fallback);
         if (fallbackFont) return fallbackFont;

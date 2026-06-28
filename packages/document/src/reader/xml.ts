@@ -28,11 +28,11 @@ const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",
   parseAttributeValue: false,
-  // prefix を保持する。理由はファイル冒頭コメント参照。
+  // Internal note.
   removeNSPrefix: false,
-  // text run (`a:t`) の先頭・末尾の有意な空白を保持するため trim しない。
-  // PPTX part は minify されており、tag 間の indentation 由来の空白テキストは
-  // 発生しないため、これによる spurious text node 混入は起きない。
+  // Internal note.
+  // Internal note.
+  // Internal note.
   trimValues: false,
 });
 
@@ -43,7 +43,7 @@ const orderedParser = new XMLParser({
   trimValues: false,
 });
 
-/** XML 文字列をパースして root オブジェクトを返す。 */
+/** Internal note. */
 export function parseXml(xml: string): XmlNode {
   return unsafeOoxmlBoundaryAssertion<XmlNode>(parser.parse(xml));
 }
@@ -66,15 +66,15 @@ export function navigateOrdered(
   return [...current];
 }
 
-/** `a:foo` のような qualified name から local part (`foo`) を取り出す。 */
+/** Internal note. */
 export function localName(key: string): string {
   const colon = key.indexOf(":");
   return colon === -1 ? key : key.slice(colon + 1);
 }
 
 /**
- * 子要素を local name で取得する (prefix は無視)。属性キー (`@_`) は対象外。
- * 同名要素が複数ある場合は最初の一致を返す。
+ * Internal note.
+ * Internal note.
  */
 export function getChild(node: XmlNode | undefined, name: string): XmlNode | undefined {
   if (!node) return undefined;
@@ -91,9 +91,9 @@ export function getChild(node: XmlNode | undefined, name: string): XmlNode | und
 }
 
 /**
- * 子要素が存在するかを local name で判定する。空要素 (`<a:noFill/>`) は値が
- * 空文字列となり falsy なため、`getChild` の戻り値では存在判定できない。存在
- * 自体に意味のある marker 要素の検出にはこちらを使う。
+ * Internal note.
+ * Internal note.
+ * Internal note.
  */
 export function hasChild(node: XmlNode | undefined, name: string): boolean {
   if (!node) return false;
@@ -104,7 +104,7 @@ export function hasChild(node: XmlNode | undefined, name: string): boolean {
   return false;
 }
 
-/** 子要素を local name で取得し、常に配列として返す。 */
+/** Internal note. */
 export function getChildArray(node: XmlNode | undefined, name: string): XmlNode[] {
   if (!node) return [];
   for (const key of Object.keys(node)) {
@@ -118,16 +118,16 @@ export function getChildArray(node: XmlNode | undefined, name: string): XmlNode[
   return [];
 }
 
-/** namespace 無しの属性 (`@_<name>`) を取得する。 */
+/** Internal note. */
 export function getAttr(node: XmlNode | undefined, name: string): string | undefined {
   if (!node) return undefined;
   return scalarToString(node[`@_${name}`]);
 }
 
 /**
- * namespace 付き属性 (`@_<prefix>:<localName>`) を取得する。`p:sldId` の
- * `r:id` のように、plain な `id` と区別して relationship 参照を取り出すために
- * 使う。prefix は問わず、local part が一致する最初の属性を返す。
+ * Internal note.
+ * Internal note.
+ * Internal note.
  */
 export function getNamespacedAttr(
   node: XmlNode | undefined,
@@ -147,8 +147,8 @@ export function getNamespacedAttr(
 }
 
 /**
- * 子要素の text content を local name で取得する。`<a:t>foo</a:t>` のような
- * テキストノード、属性付き要素の `#text`、空要素のいずれにも対応する。
+ * Internal note.
+ * Internal note.
  */
 export function getChildText(node: XmlNode | undefined, name: string): string | undefined {
   if (!node) return undefined;
@@ -168,8 +168,8 @@ export function getChildText(node: XmlNode | undefined, name: string): string | 
 }
 
 /**
- * 要素の全属性を `{ name: value }` の record として返す (`@_` prefix は除去)。
- * `p:clrMap` の logical-name マッピングのように属性集合を丸ごと保持する際に使う。
+ * Internal note.
+ * Internal note.
  */
 export function getAttrs(node: XmlNode | undefined): Record<string, string> {
   const result: Record<string, string> = {};
@@ -182,7 +182,7 @@ export function getAttrs(node: XmlNode | undefined): Record<string, string> {
   return result;
 }
 
-/** 属性値 (string/number/boolean) を文字列化する。object 等は undefined。 */
+/** Internal note. */
 function scalarToString(value: unknown): string | undefined {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);

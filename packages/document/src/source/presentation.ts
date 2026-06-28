@@ -1,9 +1,9 @@
 /**
- * Presentation hierarchy の source 型。slide / layout / master / theme の参照
- * 関係を part path で表す。各 part は分離したまま保持し、cascade (master →
- * layout → slide) の **解決** は computed view の責務とする。ただし解決に必要な
- * 素材 (background / clrMap / clrMapOvr / theme scheme / showMasterSp) は、source
- * が raw XML に戻らず保持できるよう source-local に置く。
+ * Internal note.
+ * Internal note.
+ * Internal note.
+ * Internal note.
+ * are kept source-local so they can be retained without returning to raw XML。
  */
 
 import type { PartPath, SourceHandle } from "./handles.js";
@@ -18,7 +18,7 @@ import type {
 } from "./shapes.js";
 import type { Emu } from "./units.js";
 
-/** スライドサイズ (`p:sldSz`)。EMU で保持する。 */
+/** Slide size (`p:sldSz`)。kept in EMUs。 */
 export interface SlideSize {
   readonly width: Emu;
   readonly height: Emu;
@@ -26,29 +26,29 @@ export interface SlideSize {
 
 /**
  * color map (`p:clrMap`) / color map override (`p:clrMapOvr`)。logical name
- * (`bg1` / `tx1` / `accent1` 等) から theme scheme slot (`dk1` / `lt1` 等) への
- * マッピングを未解決のまま保持する。
+ * Internal note.
+ * Internal note.
  */
 export interface SourceColorMap {
   readonly mapping: Readonly<Record<string, string>>;
 }
 
 /**
- * slide / layout / master の background (`p:bg`)。直接 fill (`p:bgPr`) か、
- * theme の style matrix 参照 (`p:bgRef`)、あるいは raw のいずれか。
+ * Internal note.
+ * Internal note.
  */
 export type SourceBackground =
   | { readonly kind: "fill"; readonly fill: SourceFill }
   | { readonly kind: "styleReference"; readonly index: number; readonly color: SourceColor }
   | { readonly kind: "raw"; readonly raw: RawSidecar };
 
-/** theme の color scheme (`a:clrScheme`)。slot 名 → 具体色の未変換マップ。 */
+/** Internal note. */
 export interface SourceThemeColorScheme {
   /** `dk1` / `lt1` / `dk2` / `lt2` / `accent1`..`accent6` / `hlink` / `folHlink`。 */
   readonly colors: Readonly<Record<string, SourceColor>>;
 }
 
-/** theme の font scheme (`a:fontScheme`) の最小 subset。 */
+/** Internal note. */
 export interface SourceThemeFontScheme {
   readonly majorLatin?: string;
   readonly minorLatin?: string;
@@ -60,7 +60,7 @@ export interface SourceThemeFontScheme {
   readonly minorJapanese?: string;
 }
 
-/** theme の format scheme (`a:fmtScheme`) のうち shape style ref 解決に使う subset。 */
+/** Internal note. */
 export interface SourceThemeFormatScheme {
   readonly fillStyles: readonly SourceFill[];
   readonly lineStyles: readonly SourceOutline[];
@@ -79,15 +79,15 @@ export interface SourceTheme {
   readonly rawSidecars?: readonly RawSidecar[];
 }
 
-/** slide master part。theme と配下 layout を参照する。 */
+/** Slide master part. References the theme and child layouts. */
 export interface SourceSlideMaster {
   readonly partPath: PartPath;
-  /** この master が参照する theme part。 */
+  /** Theme part referenced by this master. */
   readonly themePartPath?: PartPath;
-  /** この master に属する layout part 群。 */
+  /** Layout parts belonging to this master. */
   readonly layoutPartPaths: readonly PartPath[];
   readonly background?: SourceBackground;
-  /** master の `p:clrMap`。 */
+  /** Master `p:clrMap`。 */
   readonly colorMap?: SourceColorMap;
   readonly txStyles?: SourceMasterTextStyles;
   readonly shapes: readonly SourceShapeNode[];
@@ -101,44 +101,44 @@ export interface SourceMasterTextStyles {
   readonly otherStyle?: SourceTextStyle;
 }
 
-/** slide layout part。親 master を参照する。 */
+/** Slide layout part. References the parent master. */
 export interface SourceSlideLayout {
   readonly partPath: PartPath;
-  /** この layout の親 slide master part。 */
+  /** Parent slide master part for this layout. */
   readonly masterPartPath: PartPath;
   /** layout type (`p:sldLayout@type`)。 */
   readonly type?: string;
   readonly background?: SourceBackground;
-  /** layout の `p:clrMapOvr` (上書きする場合)。 */
+  /** Layout `p:clrMapOvr` (when overridden)。 */
   readonly colorMapOverride?: SourceColorMap;
-  /** `p:sldLayout@showMasterSp` (master 図形の表示可否)。 */
+  /** `p:sldLayout@showMasterSp` (master shape visibility)。 */
   readonly showMasterShapes?: boolean;
   readonly shapes: readonly SourceShapeNode[];
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
 }
 
-/** slide part。適用される layout を参照する。 */
+/** Slide part. References the applied layout. */
 export interface SourceSlide {
   readonly partPath: PartPath;
-  /** この slide が参照する layout part。 */
+  /** Layout part referenced by this slide. */
   readonly layoutPartPath: PartPath;
   readonly background?: SourceBackground;
-  /** slide の `p:clrMapOvr` (上書きする場合)。 */
+  /** Slide `p:clrMapOvr` (when overridden)。 */
   readonly colorMapOverride?: SourceColorMap;
-  /** `p:sld@showMasterSp` (master 図形の表示可否)。 */
+  /** `p:sld@showMasterSp` (master shape visibility)。 */
   readonly showMasterShapes?: boolean;
   readonly shapes: readonly SourceShapeNode[];
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
 }
 
-/** presentation part (`ppt/presentation.xml`)。slide の並び順を保持する。 */
+/** Internal note. */
 export interface SourcePresentation {
   readonly partPath: PartPath;
   readonly slideSize?: SlideSize;
   readonly defaultTextStyle?: SourceTextStyle;
-  /** `p:sldIdLst` の順序を反映した slide part path 列。 */
+  /** `p:sldIdLst` slide part paths reflecting the order of。 */
   readonly slidePartPaths: readonly PartPath[];
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
