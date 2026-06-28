@@ -76,8 +76,6 @@ function renderElement(element: SlideElement): RenderResult | null {
     case "table":
       result = renderTable(element);
       break;
-    default:
-      return null;
   }
 
   if (result && "altText" in element && element.altText) {

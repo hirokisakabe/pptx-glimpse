@@ -29,16 +29,12 @@ let cachedSkipSystemFonts: boolean | null = null;
 
 function getSystemFontDirs(): string[] {
   const os = platform();
-  switch (os) {
-    case "linux":
-      return ["/usr/share/fonts", "/usr/local/share/fonts"];
-    case "darwin":
-      return ["/System/Library/Fonts", "/Library/Fonts", join(homedir(), "Library/Fonts")];
-    case "win32":
-      return ["C:\\Windows\\Fonts"];
-    default:
-      return [];
+  if (os === "linux") return ["/usr/share/fonts", "/usr/local/share/fonts"];
+  if (os === "darwin") {
+    return ["/System/Library/Fonts", "/Library/Fonts", join(homedir(), "Library/Fonts")];
   }
+  if (os === "win32") return ["C:\\Windows\\Fonts"];
+  return [];
 }
 
 function isCjkTtc(name: string): boolean {

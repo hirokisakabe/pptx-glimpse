@@ -143,6 +143,12 @@ function collectFontsFromElements(
           }
         }
         break;
+      case "connector":
+      case "image":
+      case "chart":
+      case "smartArt":
+      case "raw":
+        break;
     }
   }
 }
@@ -175,6 +181,8 @@ function resolveThemeFontAlias(
   font: string | undefined,
   fontScheme: SourceThemeFontScheme,
 ): string | undefined {
+  if (font === undefined) return undefined;
+
   switch (font) {
     case "+mj-lt":
       return fontScheme.majorLatin;
@@ -189,6 +197,6 @@ function resolveThemeFontAlias(
     case "+mn-cs":
       return fontScheme.minorComplexScript;
     default:
-      return font?.startsWith("+mj-") || font?.startsWith("+mn-") ? undefined : font;
+      return font.startsWith("+mj-") || font.startsWith("+mn-") ? undefined : font;
   }
 }

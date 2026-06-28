@@ -393,8 +393,6 @@ export function formatAutoNum(scheme: AutoNumScheme, index: number): string {
       return `${toAlpha(index)})`;
     case "alphaLcParenR":
       return `${toAlpha(index).toLowerCase()})`;
-    default:
-      return `${index}.`;
   }
 }
 
@@ -487,14 +485,9 @@ function getAlignmentInfo(
   width: number,
   marginRightPx: number,
 ): { xPos: number; anchorValue: string } {
-  switch (alignment) {
-    case "ctr":
-      return { xPos: marginLeftPx + textWidth / 2, anchorValue: "middle" };
-    case "r":
-      return { xPos: width - marginRightPx, anchorValue: "end" };
-    default:
-      return { xPos: marginLeftPx, anchorValue: "start" };
-  }
+  if (alignment === "ctr") return { xPos: marginLeftPx + textWidth / 2, anchorValue: "middle" };
+  if (alignment === "r") return { xPos: width - marginRightPx, anchorValue: "end" };
+  return { xPos: marginLeftPx, anchorValue: "start" };
 }
 
 /**
@@ -934,14 +927,9 @@ function computePathLineX(
   marginRightPx: number,
   lineWidth: number,
 ): number {
-  switch (alignment) {
-    case "ctr":
-      return textStartX + (effectiveTextWidth - lineWidth) / 2;
-    case "r":
-      return width - marginRightPx - lineWidth;
-    default:
-      return textStartX;
-  }
+  if (alignment === "ctr") return textStartX + (effectiveTextWidth - lineWidth) / 2;
+  if (alignment === "r") return width - marginRightPx - lineWidth;
+  return textStartX;
 }
 
 /**

@@ -31,15 +31,12 @@ function getFallbackMap(): CjkFallbackMap {
   if (cachedFallbacks) return cachedFallbacks;
 
   const os = platform();
-  switch (os) {
-    case "darwin":
-      cachedFallbacks = MACOS_FALLBACKS;
-      break;
-    case "win32":
-      cachedFallbacks = WINDOWS_FALLBACKS;
-      break;
-    default:
-      cachedFallbacks = {};
+  if (os === "darwin") {
+    cachedFallbacks = MACOS_FALLBACKS;
+  } else if (os === "win32") {
+    cachedFallbacks = WINDOWS_FALLBACKS;
+  } else {
+    cachedFallbacks = {};
   }
   return cachedFallbacks;
 }

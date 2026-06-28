@@ -36,7 +36,6 @@ import type {
   SourceTransform,
 } from "../source/index.js";
 import { asEmu } from "../source/index.js";
-import { assertNever } from "../utils/assert-never.js";
 import { buildComputedColorScheme, buildEffectiveColorMap, resolveColor } from "./color.js";
 import { findPlaceholderMatch } from "./placeholders.js";
 import type {
@@ -262,8 +261,6 @@ function computeBackground(
     }
     case "raw":
       return { background: { kind: "raw", source: background, sourceLayer } };
-    default:
-      return assertNever(background);
   }
 }
 
@@ -311,8 +308,6 @@ function computeElement(
       return computeSmartArtElement(context, element, layer, partPath);
     case "raw":
       return { kind: "raw", sourceLayer: layer, sourcePartPath: partPath, sourceNode: element };
-    default:
-      return assertNever(element);
   }
 }
 
@@ -732,8 +727,6 @@ function computeFill(context: ComputeContext, fill: SourceFill, partPath: PartPa
         source: fill,
         color: resolveColor(context, fill.color) ?? { hex: "#000000", alpha: 1 },
       };
-    default:
-      return assertNever(fill);
   }
 }
 
