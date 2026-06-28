@@ -310,8 +310,8 @@ function convertOptions(extra?: Record<string, unknown>) {
 describe("textOutput: text SVG output", () => {
   it("Contains the <text> element and @font-face, but does not include the glyph outline path", async () => {
     const pptx = await createTestPptx("ABA AB");
-    const results = await convertPptxToSvg(pptx, convertOptions({ textOutput: "text" }));
-    const svg = results[0].svg;
+    const { slides } = await convertPptxToSvg(pptx, convertOptions({ textOutput: "text" }));
+    const svg = slides[0].svg;
 
     expect(svg).toContain("<text");
     expect(svg).toContain("@font-face");
@@ -325,8 +325,8 @@ describe("textOutput: text SVG output", () => {
 
   it("If there are only characters that are not included in the font, do not embed @font-face and output only <text>", async () => {
     const pptx = await createTestPptx("XYZ");
-    const results = await convertPptxToSvg(pptx, convertOptions({ textOutput: "text" }));
-    const svg = results[0].svg;
+    const { slides } = await convertPptxToSvg(pptx, convertOptions({ textOutput: "text" }));
+    const svg = slides[0].svg;
 
     expect(svg).toContain("<text");
     expect(svg).toContain("XYZ");
@@ -336,8 +336,8 @@ describe("textOutput: text SVG output", () => {
   it("embeds bullet glyphs using the text run font when buFont is omitted", async () => {
     // buChar="B" / no buFont. Bullet B is drawn and embedded in the run font (EmbedTestFont).
     const pptx = await createTestPptx("A", { pPr: '<a:pPr><a:buChar char="B"/></a:pPr>' });
-    const results = await convertPptxToSvg(pptx, convertOptions({ textOutput: "text" }));
-    const svg = results[0].svg;
+    const { slides } = await convertPptxToSvg(pptx, convertOptions({ textOutput: "text" }));
+    const svg = slides[0].svg;
 
     expect(svg).toContain("@font-face");
     // Bullet tspan's font-family includes run's font
@@ -353,8 +353,8 @@ describe("textOutput: text SVG output", () => {
     const pptx = await createTestPptx("A", {
       pPr: '<a:pPr><a:buFont typeface="BulletTestFont"/><a:buChar char="C"/></a:pPr>',
     });
-    const results = await convertPptxToSvg(pptx, convertOptions({ textOutput: "text" }));
-    const svg = results[0].svg;
+    const { slides } = await convertPptxToSvg(pptx, convertOptions({ textOutput: "text" }));
+    const svg = slides[0].svg;
 
     // Two @font-faces are embedded, one for runs and one for bullet points.
     expect(svg).toContain('font-family:"EmbedTestFont"');
@@ -367,14 +367,14 @@ describe("textOutput: text SVG output", () => {
 
   it("Fonts resolved with fontMapping are embedded with PPTX font names", async () => {
     const pptx = await createTestPptx("ABA", { typeface: "MappedCorpFont" });
-    const results = await convertPptxToSvg(
+    const { slides } = await convertPptxToSvg(
       pptx,
       convertOptions({
         textOutput: "text",
         fontMapping: { MappedCorpFont: "EmbedTestFont" },
       }),
     );
-    const svg = results[0].svg;
+    const svg = slides[0].svg;
 
     // @font-face is declared with the PPTX font name referenced by tspan
     expect(svg).toContain('font-family:"MappedCorpFont"');
@@ -388,8 +388,8 @@ describe("textOutput: text SVG output", () => {
 describe("textOutput: path SVG output", () => {
   it("omits @font-face from the default path output", async () => {
     const pptx = await createTestPptx("ABA AB");
-    const results = await convertPptxToSvg(pptx, convertOptions());
-    const svg = results[0].svg;
+    const { slides } = await convertPptxToSvg(pptx, convertOptions());
+    const svg = slides[0].svg;
 
     expect(svg).toContain("<path");
     expect(svg).not.toContain("<text");
@@ -398,8 +398,11 @@ describe("textOutput: path SVG output", () => {
 
   it('matches the default output when textOutput: "path" is specified explicitly', async () => {
     const pptx = await createTestPptx("ABA AB");
-    const defaultResults = await convertPptxToSvg(pptx, convertOptions());
-    const pathResults = await convertPptxToSvg(pptx, convertOptions({ textOutput: "path" }));
+    const { slides: defaultResults } = await convertPptxToSvg(pptx, convertOptions());
+    const { slides: pathResults } = await convertPptxToSvg(
+      pptx,
+      convertOptions({ textOutput: "path" }),
+    );
 
     expect(pathResults[0].svg).toBe(defaultResults[0].svg);
   });
@@ -408,11 +411,11 @@ describe("textOutput: path SVG output", () => {
 describe("textOutput: PNG conversion", () => {
   it('converts PNG through path output even when textOutput: "text" is specified', async () => {
     const pptx = await createTestPptx("ABA AB");
-    const results = await convertPptxToPng(pptx, convertOptions({ textOutput: "text" }));
+    const { slides } = await convertPptxToPng(pptx, convertOptions({ textOutput: "text" }));
 
-    expect(results).toHaveLength(1);
+    expect(slides).toHaveLength(1);
     // PNG magic bytes
-    expect(results[0].png[0]).toBe(0x89);
-    expect(results[0].png[1]).toBe(0x50);
+    expect(slides[0].png[0]).toBe(0x89);
+    expect(slides[0].png[1]).toBe(0x50);
   });
 });

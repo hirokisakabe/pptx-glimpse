@@ -1,8 +1,20 @@
 import { readFileSync, statSync } from "node:fs";
 
+import type {
+  ComputedElement,
+  ComputedSlide,
+  Diagnostic,
+  PptxComputedView,
+  SourceHandle,
+} from "@pptx-glimpse/document";
 import { createComputedView, readPptx } from "@pptx-glimpse/document";
-import type { FontMapping } from "@pptx-glimpse/renderer";
-import type { LogLevel } from "@pptx-glimpse/renderer";
+import type {
+  FontMapping,
+  LogLevel,
+  Slide,
+  SlideElement,
+  WarningEntry,
+} from "@pptx-glimpse/renderer";
 import {
   buildFontFaceStyle,
   collectFontFilePaths,
@@ -11,6 +23,7 @@ import {
   DEFAULT_OUTPUT_WIDTH,
   flushWarnings,
   FontUsageCollector,
+  getWarningEntries,
   initWarningLogger,
   renderSlideToSvg,
   resetFontMapping,
@@ -63,8 +76,10 @@ export interface ConvertOptions {
   /**
    * Warning log level for unsupported or approximated PPTX features.
    *
-   * Defaults to `"off"`. Use `"warn"` to collect and print summaries, or
-   * `"debug"` to print individual warning entries as they are recorded.
+   * Defaults to `"off"`. Diagnostics are always collected in the conversion
+   * report; this option only controls console output. Use `"warn"` to print
+   * summaries, or `"debug"` to print individual warning entries as they are
+   * recorded.
    */
   logLevel?: LogLevel;
   /**
@@ -141,16 +156,66 @@ export interface SlideImage {
   height: number;
 }
 
-type ConversionDiagnostic = RendererAdapterDiagnostic;
-
-interface SvgConversionResult {
-  readonly slides: readonly SlideSvg[];
-  readonly diagnostics: readonly ConversionDiagnostic[];
+export interface ConversionDiagnostic {
+  readonly source: "document" | "computed-view" | "renderer-adapter" | "renderer";
+  readonly severity: "info" | "warning" | "error";
+  readonly code: string;
+  readonly message: string;
+  readonly slideNumber?: number;
+  readonly sourcePartPath?: string;
+  readonly context?: string;
+  readonly handle?: SourceHandle;
 }
 
-interface PngConversionResult {
+export interface SupportCoverageCounts {
+  /**
+   * Number of PPTX source/computed elements considered for rendering.
+   */
+  readonly inputElements: number;
+  /**
+   * Number of renderer-model elements produced for SVG / PNG output.
+   */
+  readonly outputElements: number;
+  /**
+   * Elements or raw nodes skipped because they are outside the supported render subset.
+   */
+  readonly skippedElements: number;
+  /**
+   * Elements skipped because a referenced PPTX part or relationship could not be resolved.
+   */
+  readonly unresolvedElements: number;
+  /**
+   * Elements or properties rendered with a fallback or ignored unsupported property.
+   */
+  readonly fallbackElements: number;
+  /**
+   * Diagnostics with warning severity that affect support/renderability confidence.
+   */
+  readonly warnings: number;
+}
+
+export interface SlideSupportCoverage extends SupportCoverageCounts {
+  readonly slideNumber: number;
+}
+
+export interface SupportCoverage {
+  /**
+   * Support/renderability coverage summary. This is not a visual-match or pixel accuracy metric.
+   */
+  readonly overall: SupportCoverageCounts;
+  readonly slides: readonly SlideSupportCoverage[];
+}
+
+export interface SvgConversionReport {
+  readonly slides: readonly SlideSvg[];
+  readonly diagnostics: readonly ConversionDiagnostic[];
+  readonly supportCoverage: SupportCoverage;
+}
+
+export interface PngConversionReport {
   readonly slides: readonly SlideImage[];
   readonly diagnostics: readonly ConversionDiagnostic[];
+  readonly supportCoverage: SupportCoverage;
 }
 
 /**
@@ -159,7 +224,7 @@ interface PngConversionResult {
  * @param input PPTX binary data as a Node.js `Buffer` or `Uint8Array`.
  * @param options Conversion options. `slides` uses 1-based slide numbers; when
  * omitted, all slides are converted.
- * @returns One SVG result per converted slide, preserving original slide numbers.
+ * @returns A conversion report containing converted slides, diagnostics, and support coverage.
  *
  * Text is emitted as SVG paths by default for portable rendering. Set
  * `textOutput: "text"` to emit native `<text>` elements with embedded subset
@@ -169,9 +234,8 @@ interface PngConversionResult {
 export async function convertPptxToSvg(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
-): Promise<SlideSvg[]> {
-  const result = await convertPptxToSvgInternal(input, options);
-  return [...result.slides];
+): Promise<SvgConversionReport> {
+  return convertPptxToSvgReport(input, options);
 }
 
 /**
@@ -180,8 +244,7 @@ export async function convertPptxToSvg(
  * @param input PPTX binary data as a Node.js `Buffer` or `Uint8Array`.
  * @param options Conversion options. `slides` uses 1-based slide numbers; when
  * omitted, all slides are converted.
- * @returns One PNG result per converted slide, preserving original slide numbers
- * and reporting the actual rasterized image size.
+ * @returns A conversion report containing converted PNG slides, diagnostics, and support coverage.
  *
  * PNG conversion first renders each slide to SVG and then rasterizes it with
  * resvg. The `textOutput` option is intentionally ignored: PNG rendering always
@@ -192,16 +255,16 @@ export async function convertPptxToSvg(
 export async function convertPptxToPng(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
-): Promise<SlideImage[]> {
-  const result = await convertPptxToPngInternal(input, options);
-  return [...result.slides];
+): Promise<PngConversionReport> {
+  return convertPptxToPngReport(input, options);
 }
 
-async function convertPptxToSvgInternal(
+async function convertPptxToSvgReport(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
-): Promise<SvgConversionResult> {
+): Promise<SvgConversionReport> {
   const textOutput = options?.textOutput ?? "path";
+  const logLevel = options?.logLevel ?? "off";
   const setup = await createOpentypeSetupFromSystem(
     options?.fontDirs,
     options?.fontMapping,
@@ -221,7 +284,7 @@ async function convertPptxToSvgInternal(
   setFontMapping(createFontMapping(options?.fontMapping));
 
   try {
-    initWarningLogger(options?.logLevel ?? "off");
+    initWarningLogger(logLevel === "off" ? "warn" : logLevel);
 
     const source = readPptx(input);
     const scriptFontScheme = findScriptFontScheme(source);
@@ -235,7 +298,6 @@ async function convertPptxToSvgInternal(
 
     const computed = createComputedView(source, { slides: options?.slides });
     const adapted = adaptComputedViewToRendererModel(computed);
-    const diagnostics = adapted.diagnostics;
     const slideSize = adapted.slideSize;
     if (slideSize === undefined && adapted.slides.length > 0) {
       throw new Error("Converter requires a computed slide size");
@@ -255,9 +317,26 @@ async function convertPptxToSvgInternal(
       slides.push({ slideNumber: slide.slideNumber, svg });
     }
 
-    flushWarnings();
-    return { slides, diagnostics };
+    const rendererWarningEntries = [...getWarningEntries()];
+    if (logLevel === "off") {
+      initWarningLogger("off");
+    } else {
+      flushWarnings();
+    }
+
+    const diagnostics: ConversionDiagnostic[] = [
+      ...normalizeDocumentDiagnostics(source.diagnostics),
+      ...collectSmartArtComputedViewDiagnostics(computed),
+      ...normalizeRendererAdapterDiagnostics(adapted.diagnostics),
+      ...normalizeRendererWarningDiagnostics(rendererWarningEntries),
+    ];
+    const supportCoverage = buildSupportCoverage(computed, adapted.slides, diagnostics);
+
+    return { slides, diagnostics, supportCoverage };
   } finally {
+    if (logLevel === "off") {
+      initWarningLogger("off");
+    }
     resetTextMeasurer();
     resetTextPathFontResolver();
     resetFontUsageCollector();
@@ -276,11 +355,11 @@ function findScriptFontScheme(source: ReturnType<typeof readPptx>) {
   );
 }
 
-async function convertPptxToPngInternal(
+async function convertPptxToPngReport(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
-): Promise<PngConversionResult> {
-  const svgResult = await convertPptxToSvgInternal(input, {
+): Promise<PngConversionReport> {
+  const svgResult = await convertPptxToSvgReport(input, {
     ...options,
     textOutput: "path",
   });
@@ -299,7 +378,199 @@ async function convertPptxToPngInternal(
     });
   }
 
-  return { slides, diagnostics: svgResult.diagnostics };
+  return {
+    slides,
+    diagnostics: svgResult.diagnostics,
+    supportCoverage: svgResult.supportCoverage,
+  };
+}
+
+function normalizeDocumentDiagnostics(diagnostics: readonly Diagnostic[]): ConversionDiagnostic[] {
+  return diagnostics.map((diagnostic) => ({
+    source: "document",
+    severity: diagnostic.severity,
+    code: diagnostic.code,
+    message: diagnostic.message,
+    ...(diagnostic.handle !== undefined ? { handle: diagnostic.handle } : {}),
+    ...(diagnostic.handle?.partPath !== undefined
+      ? { sourcePartPath: diagnostic.handle.partPath }
+      : {}),
+  }));
+}
+
+function collectSmartArtComputedViewDiagnostics(
+  computed: PptxComputedView,
+): ConversionDiagnostic[] {
+  const diagnostics: ConversionDiagnostic[] = [];
+  for (const slide of computed.slides) {
+    for (const element of flattenComputedElements(slide.elements)) {
+      if (element.kind !== "smartArt" || element.diagramDrawing === undefined) continue;
+      for (const diagnostic of element.diagramDrawing.diagnostics) {
+        diagnostics.push({
+          source: "computed-view",
+          severity: diagnostic.severity,
+          code: diagnostic.code,
+          message: diagnostic.message,
+          slideNumber: slide.slideNumber,
+          sourcePartPath: diagnostic.sourcePartPath,
+        });
+      }
+    }
+  }
+  return diagnostics;
+}
+
+function normalizeRendererAdapterDiagnostics(
+  diagnostics: readonly RendererAdapterDiagnostic[],
+): ConversionDiagnostic[] {
+  return diagnostics.map((diagnostic) => ({
+    source: "renderer-adapter",
+    severity: diagnostic.severity,
+    code: diagnostic.code,
+    message: diagnostic.message,
+    ...(diagnostic.slideNumber !== undefined ? { slideNumber: diagnostic.slideNumber } : {}),
+    ...(diagnostic.sourcePartPath !== undefined
+      ? { sourcePartPath: diagnostic.sourcePartPath }
+      : {}),
+  }));
+}
+
+function normalizeRendererWarningDiagnostics(
+  warnings: readonly WarningEntry[],
+): ConversionDiagnostic[] {
+  return warnings.map((warning) => ({
+    source: "renderer",
+    severity: "warning",
+    code: `renderer.${warning.feature}`,
+    message: warning.message,
+    ...(warning.context !== undefined ? { context: warning.context } : {}),
+    ...slideNumberFromWarningContext(warning.context),
+  }));
+}
+
+function slideNumberFromWarningContext(context: string | undefined): { slideNumber?: number } {
+  const match = /^Slide\s+(\d+)$/.exec(context ?? "");
+  return match === null ? {} : { slideNumber: Number(match[1]) };
+}
+
+function buildSupportCoverage(
+  computed: PptxComputedView,
+  renderedSlides: readonly Slide[],
+  diagnostics: readonly ConversionDiagnostic[],
+): SupportCoverage {
+  const renderedBySlide = new Map(renderedSlides.map((slide) => [slide.slideNumber, slide]));
+  const slides = computed.slides.map((slide) => {
+    const counts = buildSlideSupportCoverage(
+      slide,
+      renderedBySlide.get(slide.slideNumber),
+      diagnostics,
+    );
+    return { slideNumber: slide.slideNumber, ...counts };
+  });
+  const slideTotals = slides.reduce<SupportCoverageCounts>(
+    (total, slide) => ({
+      inputElements: total.inputElements + slide.inputElements,
+      outputElements: total.outputElements + slide.outputElements,
+      skippedElements: total.skippedElements + slide.skippedElements,
+      unresolvedElements: total.unresolvedElements + slide.unresolvedElements,
+      fallbackElements: total.fallbackElements + slide.fallbackElements,
+      warnings: total.warnings + slide.warnings,
+    }),
+    emptySupportCoverageCounts(),
+  );
+
+  return {
+    overall: {
+      ...slideTotals,
+      warnings: diagnostics.filter((diagnostic) => diagnostic.severity === "warning").length,
+    },
+    slides,
+  };
+}
+
+function buildSlideSupportCoverage(
+  computedSlide: ComputedSlide,
+  renderedSlide: Slide | undefined,
+  diagnostics: readonly ConversionDiagnostic[],
+): SupportCoverageCounts {
+  const slideDiagnostics = diagnostics.filter(
+    (diagnostic) => diagnostic.slideNumber === computedSlide.slideNumber,
+  );
+  return {
+    inputElements: countComputedElements(computedSlide.elements),
+    outputElements: renderedSlide !== undefined ? countRenderedElements(renderedSlide.elements) : 0,
+    skippedElements: countDiagnosticsByCode(slideDiagnostics, isSkippedDiagnosticCode),
+    unresolvedElements: countDiagnosticsByCode(slideDiagnostics, isUnresolvedDiagnosticCode),
+    fallbackElements: countDiagnosticsByCode(slideDiagnostics, isFallbackDiagnosticCode),
+    warnings: slideDiagnostics.filter((diagnostic) => diagnostic.severity === "warning").length,
+  };
+}
+
+function emptySupportCoverageCounts(): SupportCoverageCounts {
+  return {
+    inputElements: 0,
+    outputElements: 0,
+    skippedElements: 0,
+    unresolvedElements: 0,
+    fallbackElements: 0,
+    warnings: 0,
+  };
+}
+
+function countDiagnosticsByCode(
+  diagnostics: readonly ConversionDiagnostic[],
+  predicate: (code: string) => boolean,
+): number {
+  return diagnostics.filter((diagnostic) => predicate(diagnostic.code)).length;
+}
+
+function isSkippedDiagnosticCode(code: string): boolean {
+  return code === "pptx-computed-view-adapter.raw-element-skipped";
+}
+
+function isUnresolvedDiagnosticCode(code: string): boolean {
+  return (
+    code === "pptx-computed-view-adapter.unresolved-chart-skipped" ||
+    code === "pptx-computed-view-adapter.unresolved-smartart-skipped" ||
+    code === "pptx-computed-view-adapter.unresolved-image-skipped"
+  );
+}
+
+function isFallbackDiagnosticCode(code: string): boolean {
+  return (
+    code === "pptx-computed-view-adapter.missing-transform" ||
+    code === "pptx-computed-view-adapter.raw-background-ignored" ||
+    code === "pptx-computed-view-adapter.raw-fill-ignored"
+  );
+}
+
+function countComputedElements(elements: readonly ComputedElement[]): number {
+  return flattenComputedElements(elements).length;
+}
+
+function flattenComputedElements(elements: readonly ComputedElement[]): ComputedElement[] {
+  const flattened: ComputedElement[] = [];
+  for (const element of elements) {
+    flattened.push(element);
+    if (element.kind === "group") {
+      flattened.push(...flattenComputedElements(element.children));
+    }
+    if (element.kind === "smartArt" && element.diagramDrawing !== undefined) {
+      flattened.push(...flattenComputedElements(element.diagramDrawing.children));
+    }
+  }
+  return flattened;
+}
+
+function countRenderedElements(elements: readonly SlideElement[]): number {
+  let count = 0;
+  for (const element of elements) {
+    count++;
+    if (element.type === "group") {
+      count += countRenderedElements(element.children);
+    }
+  }
+  return count;
 }
 
 function injectIntoSvgDefs(svg: string, content: string): string {

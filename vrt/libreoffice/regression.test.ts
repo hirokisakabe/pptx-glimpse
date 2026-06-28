@@ -71,12 +71,12 @@ describeOrSkip("LibreOffice Visual Regression Tests", { timeout: 60000 }, () => 
     describe(name, () => {
       itOrSkip("should match LibreOffice reference", async () => {
         const input = readFileSync(fixturePath);
-        const results = await convertPptxToPng(input);
+        const { slides } = await convertPptxToPng(input);
 
-        for (const result of results) {
-          const refPath = join(SNAPSHOT_DIR, `${name}-slide${result.slideNumber}.png`);
-          const diffPath = join(DIFF_DIR, `${name}-slide${result.slideNumber}-diff.png`);
-          const comparison = await compareImages(result.png, refPath, diffPath, {
+        for (const slide of slides) {
+          const refPath = join(SNAPSHOT_DIR, `${name}-slide${slide.slideNumber}.png`);
+          const diffPath = join(DIFF_DIR, `${name}-slide${slide.slideNumber}-diff.png`);
+          const comparison = await compareImages(slide.png, refPath, diffPath, {
             pixelThreshold: PIXEL_THRESHOLD,
             mismatchTolerance: tolerance,
             resizeRef: true,
@@ -84,14 +84,14 @@ describeOrSkip("LibreOffice Visual Regression Tests", { timeout: 60000 }, () => 
 
           // Always output measured values for tolerance adjustment.
           console.log(
-            `[lo-vrt] ${name} slide${result.slideNumber}: ` +
+            `[lo-vrt] ${name} slide${slide.slideNumber}: ` +
               `${(comparison.mismatchPercentage * 100).toFixed(3)}% ` +
               `(tolerance ${(tolerance * 100).toFixed(1)}%)`,
           );
 
           expect(
             comparison.passed,
-            `${name} slide ${result.slideNumber}: ` +
+            `${name} slide ${slide.slideNumber}: ` +
               `${(comparison.mismatchPercentage * 100).toFixed(2)}% pixels differ ` +
               `(${comparison.mismatchedPixels}/${comparison.totalPixels}). ` +
               `Tolerance: ${tolerance * 100}%`,

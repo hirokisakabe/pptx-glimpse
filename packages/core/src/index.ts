@@ -1,4 +1,14 @@
-export type { ConvertOptions, SlideImage, SlideSvg } from "./converter.js";
+export type {
+  ConversionDiagnostic,
+  ConvertOptions,
+  PngConversionReport,
+  SlideImage,
+  SlideSupportCoverage,
+  SlideSvg,
+  SupportCoverage,
+  SupportCoverageCounts,
+  SvgConversionReport,
+} from "./converter.js";
 export { convertPptxToPng, convertPptxToSvg } from "./converter.js";
 export type { UsedFonts } from "./font/font-collector.js";
 export { collectUsedFonts } from "./font/font-collector.js";

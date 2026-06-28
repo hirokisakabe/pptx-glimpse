@@ -95,18 +95,18 @@ TESTEOF
 
 cat > test-types.ts << 'TESTEOF'
 import { convertPptxToSvg, convertPptxToPng } from "pptx-glimpse";
-import type { ConvertOptions, SlideImage, SlideSvg } from "pptx-glimpse";
+import type { ConvertOptions, PngConversionReport, SvgConversionReport } from "pptx-glimpse";
 
 // Verify function signatures
-const _svgFn: (input: Buffer | Uint8Array, options?: ConvertOptions) => Promise<SlideSvg[]> =
+const _svgFn: (input: Buffer | Uint8Array, options?: ConvertOptions) => Promise<SvgConversionReport> =
   convertPptxToSvg;
-const _pngFn: (input: Buffer | Uint8Array, options?: ConvertOptions) => Promise<SlideImage[]> =
+const _pngFn: (input: Buffer | Uint8Array, options?: ConvertOptions) => Promise<PngConversionReport> =
   convertPptxToPng;
 
 // Verify SlideImage.png is Buffer
 async function _verifyPngType(input: Uint8Array) {
-  const results = await convertPptxToPng(input);
-  const _png: Buffer = results[0].png;
+  const { slides } = await convertPptxToPng(input);
+  const _png: Buffer = slides[0].png;
   void _png;
 }
 

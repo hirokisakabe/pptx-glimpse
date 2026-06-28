@@ -60,22 +60,32 @@ import { convertPptxToSvg, convertPptxToPng } from "pptx-glimpse";
 const pptx = readFileSync("presentation.pptx");
 
 // Convert to SVG
-const svgResults = await convertPptxToSvg(pptx);
+const { slides: svgResults } = await convertPptxToSvg(pptx);
 // [{ slideNumber: 1, svg: "<svg>...</svg>" }, ...]
 
 // Convert to PNG
-const pngResults = await convertPptxToPng(pptx);
+const { slides: pngResults } = await convertPptxToPng(pptx);
 // [{ slideNumber: 1, png: Buffer, width: 960, height: 540 }, ...]
 
 writeFileSync("slide1.png", pngResults[0].png);
 ```
+
+The conversion APIs return a report object:
+
+```typescript
+const { slides, diagnostics, supportCoverage } = await convertPptxToSvg(pptx);
+```
+
+- `slides` contains the converted SVG or PNG slide results.
+- `diagnostics` contains document reader, computed view, renderer adapter, and renderer warning diagnostics collected during conversion.
+- `supportCoverage` summarizes support/renderability counts such as input elements, output elements, skipped elements, unresolved elements, fallback elements, and warnings. It is not a PowerPoint visual-match or pixel-accuracy score.
 
 ### Options
 
 Both `convertPptxToSvg` and `convertPptxToPng` accept an optional `ConvertOptions` object.
 
 ```typescript
-const results = await convertPptxToPng(pptx, {
+const { slides } = await convertPptxToPng(pptx, {
   slides: [1, 3], // Convert only slides 1 and 3
   width: 1920, // Output width in pixels (default: 960)
   height: 1080, // Currently ignored by public conversion; width controls PNG size
@@ -96,7 +106,7 @@ With `textOutput: "text"`, `convertPptxToSvg` emits native `<text>` elements alo
 
 ```typescript
 // SVG only — convertPptxToPng always uses path output
-const svgResults = await convertPptxToSvg(pptx, { textOutput: "text" });
+const { slides: svgResults } = await convertPptxToSvg(pptx, { textOutput: "text" });
 ```
 
 Note: embedded fonts and `<text>` may not render as expected when the SVG is referenced via `<img src="...svg">` or sanitized. `convertPptxToPng` always uses path output regardless of this option.
@@ -189,7 +199,7 @@ Default mapping:
 You can customize the mapping via the `fontMapping` option:
 
 ```typescript
-const results = await convertPptxToSvg(pptx, {
+const { slides } = await convertPptxToSvg(pptx, {
   fontMapping: {
     "Custom Corp Font": "Noto Sans", // Add a new mapping
     Arial: "Inter", // Override the default

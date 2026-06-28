@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import * as document from "@pptx-glimpse/document";
-import { clearFontCache } from "@pptx-glimpse/renderer";
+import { clearFontCache, getWarningEntries, warn } from "@pptx-glimpse/renderer";
 import JSZip from "jszip";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -306,7 +306,7 @@ describe("public conversion orchestration", () => {
   it.each(SELECTED_SHARED_FIXTURES)(
     "renders selected slides from %s to SVG through the public converter",
     async (fixtureName) => {
-      const result = await convertPptxToSvg(readSharedFixture(fixtureName), {
+      const { slides: result } = await convertPptxToSvg(readSharedFixture(fixtureName), {
         slides: [1],
         textOutput: "text",
       });
@@ -319,7 +319,7 @@ describe("public conversion orchestration", () => {
   );
 
   it("connects the public SVG conversion to PNG conversion", async () => {
-    const result = await convertPptxToPng(readSharedFixture("real-basic-theme.pptx"), {
+    const { slides: result } = await convertPptxToPng(readSharedFixture("real-basic-theme.pptx"), {
       slides: [1],
       width: 240,
     });
@@ -337,7 +337,7 @@ describe("public conversion orchestration", () => {
     const readPptxSpy = vi.spyOn(document, "readPptx");
     const adapterSpy = vi.spyOn(adapterModule, "adaptComputedViewToRendererModel");
     const input = readSharedFixture("real-basic-theme.pptx");
-    const publicDefault = await convertPptxToSvg(input, {
+    const { slides: publicDefault } = await convertPptxToSvg(input, {
       slides: [1],
       textOutput: "text",
     });
@@ -352,7 +352,7 @@ describe("public conversion orchestration", () => {
     const readPptxSpy = vi.spyOn(document, "readPptx");
     const adapterSpy = vi.spyOn(adapterModule, "adaptComputedViewToRendererModel");
     const input = readSharedFixture("real-basic-theme.pptx");
-    const publicDefault = await convertPptxToPng(input, {
+    const { slides: publicDefault } = await convertPptxToPng(input, {
       slides: [1],
       width: 240,
     });
@@ -365,18 +365,90 @@ describe("public conversion orchestration", () => {
 });
 
 describe("convertPptxToSvg", () => {
-  it("converts a PPTX file to SVG", async () => {
-    const results = await convertPptxToSvg(testPptx);
+  it("returns a conversion report with slides, diagnostics, and support coverage", async () => {
+    const report = await convertPptxToSvg(testPptx);
 
-    expect(results).toHaveLength(1);
-    expect(results[0].slideNumber).toBe(1);
-    expect(results[0].svg).toContain("<svg");
-    expect(results[0].svg).toContain("</svg>");
+    expect(Array.isArray(report)).toBe(false);
+    expect(report.slides).toHaveLength(1);
+    expect(report.diagnostics).toEqual(expect.any(Array));
+    expect(typeof report.supportCoverage.overall.inputElements).toBe("number");
+    expect(typeof report.supportCoverage.overall.outputElements).toBe("number");
+    expect(typeof report.supportCoverage.overall.skippedElements).toBe("number");
+    expect(typeof report.supportCoverage.overall.unresolvedElements).toBe("number");
+    expect(typeof report.supportCoverage.overall.fallbackElements).toBe("number");
+    expect(typeof report.supportCoverage.overall.warnings).toBe("number");
+    expect(report.supportCoverage.slides[0]).toMatchObject({
+      slideNumber: 1,
+      inputElements: 3,
+      outputElements: 3,
+    });
+  });
+
+  it("integrates document reader diagnostics into the conversion report", async () => {
+    const report = await convertPptxToSvg(await createPptxWithInvalidSlideRelationship());
+
+    expect(report.slides).toHaveLength(0);
+    expect(report.diagnostics).toContainEqual(
+      expect.objectContaining({
+        source: "document",
+        severity: "warning",
+        code: "slide-relationship-invalid",
+        sourcePartPath: "ppt/presentation.xml",
+      }),
+    );
+  });
+
+  it("integrates renderer adapter diagnostics into diagnostics and support coverage", async () => {
+    const report = await convertPptxToSvg(await createPptxWithRawGraphicFrame());
+
+    expect(report.slides).toHaveLength(1);
+    expect(report.diagnostics).toContainEqual(
+      expect.objectContaining({
+        source: "renderer-adapter",
+        severity: "warning",
+        code: "pptx-computed-view-adapter.raw-element-skipped",
+        slideNumber: 1,
+      }),
+    );
+    expect(report.supportCoverage.slides[0]).toMatchObject({
+      slideNumber: 1,
+      inputElements: 4,
+      outputElements: 3,
+      skippedElements: 1,
+      warnings: 1,
+    });
+  });
+
+  it("integrates computed view diagnostics into the conversion report", async () => {
+    const report = await convertPptxToSvg(await createPptxWithSmartArtMissingShapeTree());
+
+    expect(report.diagnostics).toContainEqual(
+      expect.objectContaining({
+        source: "computed-view",
+        severity: "warning",
+        code: "diagram-drawing-shape-tree-missing",
+        slideNumber: 1,
+        sourcePartPath: "ppt/diagrams/drawing1.xml",
+      }),
+    );
+    expect(report.supportCoverage.slides[0]).toMatchObject({
+      skippedElements: 0,
+      unresolvedElements: 1,
+    });
+  });
+
+  it("converts a PPTX file to SVG", async () => {
+    const { slides } = await convertPptxToSvg(testPptx);
+
+    expect(slides).toHaveLength(1);
+    expect(slides[0].slideNumber).toBe(1);
+    expect(slides[0].svg).toContain("<svg");
+    expect(slides[0].svg).toContain("</svg>");
   });
 
   it("renders basic shapes", async () => {
-    const results = await convertPptxToSvg(testPptx);
-    const svg = results[0].svg;
+    const { slides } = await convertPptxToSvg(testPptx);
+    const svg = slides[0].svg;
 
     // Should contain rect (blue rectangle)
     expect(svg).toContain("<rect");
@@ -387,16 +459,16 @@ describe("convertPptxToSvg", () => {
   });
 
   it("has correct viewBox dimensions for 16:9", async () => {
-    const results = await convertPptxToSvg(testPptx);
-    const svg = results[0].svg;
+    const { slides } = await convertPptxToSvg(testPptx);
+    const svg = slides[0].svg;
 
     // 9144000 EMU = 960px, 5143500 EMU ≈ 540px
     expect(svg).toContain('viewBox="0 0 960');
   });
 
   it("applies fill colors", async () => {
-    const results = await convertPptxToSvg(testPptx);
-    const svg = results[0].svg;
+    const { slides } = await convertPptxToSvg(testPptx);
+    const svg = slides[0].svg;
 
     // Blue rectangle fill
     expect(svg.toLowerCase()).toContain("#4472c4");
@@ -405,16 +477,16 @@ describe("convertPptxToSvg", () => {
   });
 
   it("supports slide number filtering", async () => {
-    const results = await convertPptxToSvg(testPptx, { slides: [1] });
+    const { slides } = await convertPptxToSvg(testPptx, { slides: [1] });
 
-    expect(results).toHaveLength(1);
-    expect(results[0].slideNumber).toBe(1);
+    expect(slides).toHaveLength(1);
+    expect(slides[0].slideNumber).toBe(1);
   });
 
   it("returns empty for non-existent slide numbers", async () => {
-    const results = await convertPptxToSvg(testPptx, { slides: [99] });
+    const { slides } = await convertPptxToSvg(testPptx, { slides: [99] });
 
-    expect(results).toHaveLength(0);
+    expect(slides).toHaveLength(0);
   });
 });
 
@@ -422,26 +494,155 @@ function readSharedFixture(name: (typeof SELECTED_SHARED_FIXTURES)[number]): Buf
   return readFileSync(fileURLToPath(new URL(`../../../shared-fixtures/${name}`, import.meta.url)));
 }
 
-describe("convertPptxToPng", () => {
-  it("converts a PPTX file to PNG", async () => {
-    const results = await convertPptxToPng(testPptx);
+async function createPptxWithInvalidSlideRelationship(): Promise<Buffer> {
+  const invalidPresentationXml = presentationXml.replace(
+    '<p:sldId id="256" r:id="rId2"/>',
+    '<p:sldId id="256" r:id="rIdBogus"/>',
+  );
+  const invalidPresentationRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>
+  <Relationship Id="rIdBogus" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="notesMasters/notesMaster1.xml"/>
+</Relationships>`;
 
-    expect(results).toHaveLength(1);
-    expect(results[0].slideNumber).toBe(1);
-    expect(results[0].png).toBeInstanceOf(Uint8Array);
-    expect(results[0].png.length).toBeGreaterThan(0);
+  const zip = new JSZip();
+  zip.file("[Content_Types].xml", contentTypes);
+  zip.file("_rels/.rels", rootRels);
+  zip.file("ppt/presentation.xml", invalidPresentationXml);
+  zip.file("ppt/_rels/presentation.xml.rels", invalidPresentationRels);
+  zip.file("ppt/slideMasters/slideMaster1.xml", slideMaster1);
+  zip.file("ppt/slideMasters/_rels/slideMaster1.xml.rels", slideMaster1Rels);
+  zip.file("ppt/slideLayouts/slideLayout1.xml", slideLayout1);
+  zip.file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", slideLayout1Rels);
+  zip.file("ppt/theme/theme1.xml", theme1);
+  return zip.generateAsync({ type: "nodebuffer" });
+}
+
+async function createPptxWithRawGraphicFrame(): Promise<Buffer> {
+  const rawGraphicFrame = `
+      <p:graphicFrame>
+        <p:nvGraphicFramePr>
+          <p:cNvPr id="5" name="Unsupported Graphic"/>
+          <p:cNvGraphicFramePr/>
+          <p:nvPr/>
+        </p:nvGraphicFramePr>
+        <p:xfrm>
+          <a:off x="0" y="0"/>
+          <a:ext cx="914400" cy="914400"/>
+        </p:xfrm>
+        <a:graphic>
+          <a:graphicData uri="urn:pptx-glimpse:test:unsupported"/>
+        </a:graphic>
+      </p:graphicFrame>`;
+  const slideWithRawGraphicFrame = slide1Xml.replace(
+    "</p:spTree>",
+    `${rawGraphicFrame}
+    </p:spTree>`,
+  );
+
+  const zip = new JSZip();
+  zip.file("[Content_Types].xml", contentTypes);
+  zip.file("_rels/.rels", rootRels);
+  zip.file("ppt/presentation.xml", presentationXml);
+  zip.file("ppt/_rels/presentation.xml.rels", presentationRels);
+  zip.file("ppt/slides/slide1.xml", slideWithRawGraphicFrame);
+  zip.file("ppt/slides/_rels/slide1.xml.rels", slide1Rels);
+  zip.file("ppt/slideMasters/slideMaster1.xml", slideMaster1);
+  zip.file("ppt/slideMasters/_rels/slideMaster1.xml.rels", slideMaster1Rels);
+  zip.file("ppt/slideLayouts/slideLayout1.xml", slideLayout1);
+  zip.file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", slideLayout1Rels);
+  zip.file("ppt/theme/theme1.xml", theme1);
+  return zip.generateAsync({ type: "nodebuffer" });
+}
+
+async function createPptxWithSmartArtMissingShapeTree(): Promise<Buffer> {
+  const smartArtFrame = `
+      <p:graphicFrame>
+        <p:nvGraphicFramePr>
+          <p:cNvPr id="5" name="SmartArt"/>
+          <p:cNvGraphicFramePr/>
+          <p:nvPr/>
+        </p:nvGraphicFramePr>
+        <p:xfrm>
+          <a:off x="0" y="0"/>
+          <a:ext cx="914400" cy="914400"/>
+        </p:xfrm>
+        <a:graphic>
+          <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/diagram">
+            <dgm:relIds xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram" r:dm="rIdDiagramData"/>
+          </a:graphicData>
+        </a:graphic>
+      </p:graphicFrame>`;
+  const slideWithSmartArt = slide1Xml.replace(
+    "</p:spTree>",
+    `${smartArtFrame}
+    </p:spTree>`,
+  );
+  const slideRelsWithSmartArt = slide1Rels.replace(
+    "</Relationships>",
+    `  <Relationship Id="rIdDiagramData" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData" Target="../diagrams/data1.xml"/>
+</Relationships>`,
+  );
+  const diagramDataRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdDiagramDrawing" Type="http://schemas.microsoft.com/office/2007/relationships/diagramDrawing" Target="drawing1.xml"/>
+</Relationships>`;
+
+  const zip = new JSZip();
+  zip.file("[Content_Types].xml", contentTypes);
+  zip.file("_rels/.rels", rootRels);
+  zip.file("ppt/presentation.xml", presentationXml);
+  zip.file("ppt/_rels/presentation.xml.rels", presentationRels);
+  zip.file("ppt/slides/slide1.xml", slideWithSmartArt);
+  zip.file("ppt/slides/_rels/slide1.xml.rels", slideRelsWithSmartArt);
+  zip.file("ppt/slideMasters/slideMaster1.xml", slideMaster1);
+  zip.file("ppt/slideMasters/_rels/slideMaster1.xml.rels", slideMaster1Rels);
+  zip.file("ppt/slideLayouts/slideLayout1.xml", slideLayout1);
+  zip.file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", slideLayout1Rels);
+  zip.file("ppt/theme/theme1.xml", theme1);
+  zip.file("ppt/diagrams/data1.xml", `<dgm:dataModel/>`);
+  zip.file("ppt/diagrams/_rels/data1.xml.rels", diagramDataRels);
+  zip.file(
+    "ppt/diagrams/drawing1.xml",
+    `<dsp:drawing xmlns:dsp="http://schemas.microsoft.com/office/drawing/2008/diagram"/>`,
+  );
+  return zip.generateAsync({ type: "nodebuffer" });
+}
+
+describe("convertPptxToPng", () => {
+  it("returns a conversion report with PNG slides and SVG-path diagnostics", async () => {
+    const report = await convertPptxToPng(testPptx);
+
+    expect(Array.isArray(report)).toBe(false);
+    expect(report.slides).toHaveLength(1);
+    expect(report.slides[0]).toMatchObject({ slideNumber: 1 });
+    expect(report.diagnostics).toEqual(expect.any(Array));
+    expect(report.supportCoverage.slides[0]).toMatchObject({
+      slideNumber: 1,
+      inputElements: 3,
+      outputElements: 3,
+    });
+  });
+
+  it("converts a PPTX file to PNG", async () => {
+    const { slides } = await convertPptxToPng(testPptx);
+
+    expect(slides).toHaveLength(1);
+    expect(slides[0].slideNumber).toBe(1);
+    expect(slides[0].png).toBeInstanceOf(Uint8Array);
+    expect(slides[0].png.length).toBeGreaterThan(0);
     // PNG magic bytes
-    expect(results[0].png[0]).toBe(0x89);
-    expect(results[0].png[1]).toBe(0x50); // P
-    expect(results[0].png[2]).toBe(0x4e); // N
-    expect(results[0].png[3]).toBe(0x47); // G
+    expect(slides[0].png[0]).toBe(0x89);
+    expect(slides[0].png[1]).toBe(0x50); // P
+    expect(slides[0].png[2]).toBe(0x4e); // N
+    expect(slides[0].png[3]).toBe(0x47); // G
   });
 
   it("respects width option", async () => {
-    const results = await convertPptxToPng(testPptx, { width: 480 });
+    const { slides } = await convertPptxToPng(testPptx, { width: 480 });
 
-    expect(results[0].width).toBe(480);
-    expect(results[0].height).toBeGreaterThan(0);
+    expect(slides[0].width).toBe(480);
+    expect(slides[0].height).toBeGreaterThan(0);
   });
 });
 
@@ -600,8 +801,8 @@ describe("master placeholder text filtering", () => {
 
   it("does not render master placeholder shapes on actual slides", async () => {
     const pptx = await createPptxWithMasterPlaceholder();
-    const results = await convertPptxToSvg(pptx);
-    const svg = results[0].svg;
+    const { slides } = await convertPptxToSvg(pptx);
+    const svg = slides[0].svg;
 
     // Master has 3 shapes: title placeholder (id=2), body placeholder (id=3), decorative (id=4)
     // Only decorative (non-placeholder) should be rendered (red fill #FF0000)
@@ -815,8 +1016,8 @@ describe("layout placeholder text filtering", () => {
 
   it("does not render layout placeholder shapes on actual slides", async () => {
     const pptx = await createPptxWithLayoutPlaceholder();
-    const results = await convertPptxToSvg(pptx);
-    const svg = results[0].svg;
+    const { slides } = await convertPptxToSvg(pptx);
+    const svg = slides[0].svg;
 
     // Layout has 5 shapes: ctrTitle, subTitle, dt, ftr (all placeholders), decorative (non-placeholder)
     // Only decorative (non-placeholder) should be rendered (blue fill #0000FF)
@@ -925,8 +1126,8 @@ describe("slide placeholder text filtering", () => {
 
   it("does not render empty placeholder shapes on the slide itself", async () => {
     const pptx = await createPptxWithSlidePlaceholders(emptyPlaceholderSlide);
-    const results = await convertPptxToSvg(pptx);
-    const svg = results[0].svg;
+    const { slides } = await convertPptxToSvg(pptx);
+    const svg = slides[0].svg;
 
     // Decorative (non-placeholder) shape with magenta fill should remain.
     expect(svg.toLowerCase()).toContain("#ff00ff");
@@ -946,8 +1147,8 @@ describe("slide placeholder text filtering", () => {
     );
 
     const pptx = await createPptxWithSlidePlaceholders(filledSlide);
-    const results = await convertPptxToSvg(pptx);
-    const svg = results[0].svg;
+    const { slides } = await convertPptxToSvg(pptx);
+    const svg = slides[0].svg;
 
     // Filled title placeholder is kept (green fill renders).
     expect(svg.toLowerCase()).toContain("#00ff00");
@@ -1006,9 +1207,38 @@ describe("presentation.noSlides warning", () => {
 
   it("returns empty array for PPTX with no slides", async () => {
     const pptx = await createEmptyPptx();
-    const results = await convertPptxToSvg(pptx);
+    const report = await convertPptxToSvg(pptx);
 
-    expect(results).toHaveLength(0);
+    expect(report.slides).toHaveLength(0);
+    expect(report.supportCoverage.overall).toMatchObject({
+      inputElements: 0,
+      outputElements: 0,
+    });
+  });
+
+  it('collects renderer warnings in diagnostics even when logLevel is "off"', async () => {
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const pptx = await createEmptyPptx();
+    const report = await convertPptxToSvg(pptx, { logLevel: "off" });
+
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(report.diagnostics).toContainEqual(
+      expect.objectContaining({
+        source: "renderer",
+        severity: "warning",
+        code: "renderer.presentation.noSlides",
+      }),
+    );
+    expect(report.supportCoverage.overall.warnings).toBe(1);
+  });
+
+  it('restores the warning logger when logLevel is "off" and conversion throws', async () => {
+    await expect(convertPptxToSvg(Buffer.from("not a pptx"), { logLevel: "off" })).rejects.toThrow(
+      /zip|pptx|invalid/i,
+    );
+
+    warn("test.afterFailure", "should not be collected");
+    expect(getWarningEntries()).toHaveLength(0);
   });
 
   it("emits presentation.noSlides warning for empty PPTX", async () => {
