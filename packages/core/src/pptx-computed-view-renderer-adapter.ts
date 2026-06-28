@@ -191,8 +191,6 @@ function adaptBackground(
         slide,
       );
       return null;
-    default:
-      return assertNever(background);
   }
 }
 
@@ -231,8 +229,6 @@ function adaptElement(
         element.sourcePartPath,
       );
       return [];
-    default:
-      return assertNever(element);
   }
 }
 
@@ -669,8 +665,6 @@ function adaptFill(
         slide,
       );
       return null;
-    default:
-      return assertNever(fill);
   }
 }
 
@@ -863,8 +857,4 @@ function pushAdapterWarning(
     slideNumber: slide.slideNumber,
     ...(sourcePartPath !== undefined ? { sourcePartPath } : {}),
   });
-}
-
-function assertNever(value: never): never {
-  throw new Error(`Unexpected computed view union member: ${JSON.stringify(value)}`);
 }

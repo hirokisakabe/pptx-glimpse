@@ -80,6 +80,14 @@ export default tseslint.config(
         "error",
         { argsIgnorePattern: "^_" },
       ],
+      "@typescript-eslint/switch-exhaustiveness-check": [
+        "error",
+        {
+          allowDefaultCaseForExhaustiveSwitch: false,
+          considerDefaultExhaustiveForUnions: false,
+          requireDefaultForNonUnion: false,
+        },
+      ],
       "@typescript-eslint/no-unsafe-argument": "error",
       "@typescript-eslint/no-unsafe-assignment": "error",
       "@typescript-eslint/no-unsafe-call": "error",

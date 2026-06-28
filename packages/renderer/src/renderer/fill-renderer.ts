@@ -343,7 +343,7 @@ function buildMarkerDef(
       path = `M 0 0 L ${mw} ${mh / 2} L 0 ${mh}`;
       fillAttr = `fill="none" stroke="${color}" stroke-width="1"`;
       break;
-    default:
+    case "none":
       return null;
   }
 

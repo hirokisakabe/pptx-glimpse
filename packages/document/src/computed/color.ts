@@ -4,7 +4,6 @@ import type {
   SourceColorTransform,
   SourceTheme,
 } from "../source/index.js";
-import { assertNever } from "../utils/assert-never.js";
 import type { ComputedColor } from "./pptx-computed-view.js";
 
 const DEFAULT_COLOR_MAP: Readonly<Record<string, string>> = {
@@ -95,8 +94,6 @@ function resolveBaseHex(
         ? resolveColor(context, schemeColor, new Set([...visited, mappedName]))?.hex
         : FALLBACK_SCHEME_COLORS[mappedName];
     }
-    default:
-      return assertNever(color);
   }
 }
 
@@ -131,8 +128,6 @@ function applyColorTransforms(
       case "alpha":
         alpha = Number(transform.value) / 100000;
         break;
-      default:
-        assertNever(transform.kind);
     }
   }
 
