@@ -1,5 +1,6 @@
 import type { Emu } from "../utils/unit-types.js";
 import type { ResolvedColor } from "./fill.js";
+import type { RectangleAlignment } from "./tokens.js";
 
 export interface EffectList {
   outerShadow: OuterShadow | null;
@@ -13,7 +14,7 @@ export interface OuterShadow {
   distance: Emu;
   direction: number;
   color: ResolvedColor;
-  alignment: string;
+  alignment: RectangleAlignment;
   rotateWithShape: boolean;
 }
 

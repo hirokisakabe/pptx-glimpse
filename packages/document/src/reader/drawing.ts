@@ -27,6 +27,7 @@ import type {
   SourceLineJoin,
   SourceLumEffect,
   SourceOutline,
+  SourceRectangleAlignment,
   SourceTransform,
 } from "../source/index.js";
 import { asEmu, asOoxmlAngle, asOoxmlPercent, asRelationshipId } from "../source/index.js";
@@ -42,6 +43,18 @@ import {
   localName,
   type XmlNode,
 } from "./xml.js";
+
+const RECTANGLE_ALIGNMENT_TOKENS: ReadonlySet<SourceRectangleAlignment> = new Set([
+  "tl",
+  "t",
+  "tr",
+  "l",
+  "ctr",
+  "r",
+  "bl",
+  "b",
+  "br",
+]);
 
 const COLOR_TRANSFORM_KINDS: ReadonlySet<SourceColorTransform["kind"]> = new Set([
   "lumMod",
@@ -156,7 +169,7 @@ function parseOuterShadow(node: XmlNode | undefined): SourceEffectList["outerSha
     distance: asEmu(numericAttr(node, "dist") ?? 0),
     direction: asOoxmlAngle(numericAttr(node, "dir") ?? 0),
     color,
-    alignment: getAttr(node, "algn") ?? "b",
+    alignment: parseRectangleAlignment(getAttr(node, "algn"), "b"),
     rotateWithShape: getAttr(node, "rotWithShape") !== "0",
   };
 }
@@ -362,8 +375,15 @@ export function parseImageFillTile(tile: XmlNode | undefined): SourceImageFillTi
     sx: (numericAttr(tile, "sx") ?? 100000) / 100000,
     sy: (numericAttr(tile, "sy") ?? 100000) / 100000,
     flip: flip === "x" || flip === "y" || flip === "xy" ? flip : "none",
-    align: getAttr(tile, "algn") ?? "tl",
+    align: parseRectangleAlignment(getAttr(tile, "algn"), "tl"),
   };
+}
+
+export function parseRectangleAlignment(
+  value: string | undefined,
+  fallback: SourceRectangleAlignment,
+): SourceRectangleAlignment {
+  return parseEnumValueWithDefault(value, RECTANGLE_ALIGNMENT_TOKENS, fallback);
 }
 
 function parsePatternFill(pattern: XmlNode): SourceFill | undefined {

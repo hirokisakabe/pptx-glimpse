@@ -54,9 +54,11 @@ import type {
   Geometry,
   GroupElement,
   ImageElement,
+  ImageMimeType,
   Outline,
   Paragraph,
   ParagraphProperties,
+  RectangleAlignment,
   ResolvedColor,
   RunProperties,
   Slide,
@@ -88,6 +90,8 @@ export interface RendererAdapterDiagnostic {
     | "pptx-computed-view-adapter.raw-element-skipped"
     | "pptx-computed-view-adapter.raw-background-ignored"
     | "pptx-computed-view-adapter.raw-fill-ignored"
+    | "pptx-computed-view-adapter.unsupported-image-mime-type"
+    | "pptx-computed-view-adapter.unsupported-rectangle-alignment"
     | "pptx-computed-view-adapter.unresolved-chart-skipped"
     | "pptx-computed-view-adapter.unresolved-smartart-skipped"
     | "pptx-computed-view-adapter.unresolved-image-skipped";
@@ -243,7 +247,10 @@ function adaptConnector(
     geometry: adaptGeometry(connector.geometry),
     outline:
       connector.outline !== undefined ? adaptOutline(connector.outline, slide, diagnostics) : null,
-    effects: connector.effects !== undefined ? adaptEffects(connector.effects) : null,
+    effects:
+      connector.effects !== undefined
+        ? adaptEffects(connector.effects, slide, diagnostics, connector.sourcePartPath)
+        : null,
     ...(connector.sourceNode.name !== undefined ? { altText: connector.sourceNode.name } : {}),
   };
 }
@@ -270,7 +277,10 @@ function adaptGroup(
             flipV: false,
           },
     children: group.children.flatMap((child) => adaptElement(child, slide, diagnostics)),
-    effects: group.effects !== undefined ? adaptEffects(group.effects) : null,
+    effects:
+      group.effects !== undefined
+        ? adaptEffects(group.effects, slide, diagnostics, group.sourcePartPath)
+        : null,
     ...(group.sourceNode.name !== undefined ? { altText: group.sourceNode.name } : {}),
   };
 }
@@ -434,7 +444,10 @@ function adaptShape(
     fill: shape.fill !== undefined ? adaptFill(shape.fill, slide, diagnostics) : null,
     outline: shape.outline !== undefined ? adaptOutline(shape.outline, slide, diagnostics) : null,
     textBody: shape.textBody !== undefined ? adaptTextBody(shape.textBody) : null,
-    effects: shape.effects !== undefined ? adaptEffects(shape.effects) : null,
+    effects:
+      shape.effects !== undefined
+        ? adaptEffects(shape.effects, slide, diagnostics, shape.sourcePartPath)
+        : null,
     ...(shape.sourceNode.placeholder !== undefined
       ? { placeholderType: shape.sourceNode.placeholder.type ?? "body" }
       : {}),
@@ -445,7 +458,12 @@ function adaptShape(
   };
 }
 
-function adaptEffects(effects: ComputedEffectList): EffectList {
+function adaptEffects(
+  effects: ComputedEffectList,
+  slide: ComputedSlide,
+  diagnostics: DiagnosticSink,
+  sourcePartPath?: string,
+): EffectList {
   return {
     outerShadow:
       effects.outerShadow !== undefined
@@ -454,7 +472,13 @@ function adaptEffects(effects: ComputedEffectList): EffectList {
             distance: toRendererEmu(effects.outerShadow.distance),
             direction: effects.outerShadow.direction,
             color: adaptColor(effects.outerShadow.color),
-            alignment: effects.outerShadow.alignment,
+            alignment: adaptRectangleAlignment(
+              effects.outerShadow.alignment,
+              "b",
+              diagnostics,
+              slide,
+              sourcePartPath,
+            ),
             rotateWithShape: effects.outerShadow.rotateWithShape,
           }
         : null,
@@ -503,8 +527,16 @@ function adaptImage(
     type: "image",
     transform: adaptTransform(image.transform, slide, diagnostics, image.sourcePartPath),
     imageData: uint8ArrayToBase64(image.media.bytes),
-    mimeType: normalizeImageMimeType(image.media.contentType),
-    effects: image.effects !== undefined ? adaptEffects(image.effects) : null,
+    mimeType: normalizeImageMimeType(
+      image.media.contentType,
+      diagnostics,
+      slide,
+      image.sourcePartPath,
+    ),
+    effects:
+      image.effects !== undefined
+        ? adaptEffects(image.effects, slide, diagnostics, image.sourcePartPath)
+        : null,
     blipEffects: image.blipEffects !== undefined ? adaptBlipEffects(image.blipEffects) : null,
     srcRect: image.sourceNode.crop
       ? {
@@ -524,7 +556,13 @@ function adaptImage(
             sx: image.sourceNode.tile.sx,
             sy: image.sourceNode.tile.sy,
             flip: image.sourceNode.tile.flip,
-            align: image.sourceNode.tile.align,
+            align: adaptRectangleAlignment(
+              image.sourceNode.tile.align,
+              "tl",
+              diagnostics,
+              slide,
+              image.sourcePartPath,
+            ),
           }
         : null,
   };
@@ -636,7 +674,7 @@ function adaptFill(
         return {
           type: "image",
           imageData: uint8ArrayToBase64(fill.media.bytes),
-          mimeType: normalizeImageMimeType(fill.media.contentType),
+          mimeType: normalizeImageMimeType(fill.media.contentType, diagnostics, slide),
           tile:
             fill.tile !== undefined
               ? {
@@ -645,7 +683,7 @@ function adaptFill(
                   sx: fill.tile.sx,
                   sy: fill.tile.sy,
                   flip: fill.tile.flip,
-                  align: fill.tile.align,
+                  align: adaptRectangleAlignment(fill.tile.align, "tl", diagnostics, slide),
                 }
               : null,
         };
@@ -837,10 +875,77 @@ function toRendererPt(value: number): NonNullable<RunProperties["fontSize"]> {
   return unsafeBrandAssertion<NonNullable<RunProperties["fontSize"]>>(Number(value));
 }
 
-function normalizeImageMimeType(contentType: string): string {
-  if (contentType === "image/x-emf") return "image/emf";
-  if (contentType === "image/x-wmf") return "image/wmf";
-  return contentType;
+function normalizeImageMimeType(
+  contentType: string,
+  diagnostics: DiagnosticSink,
+  slide: ComputedSlide,
+  sourcePartPath?: string,
+): ImageMimeType {
+  switch (contentType) {
+    case "image/png":
+    case "image/jpeg":
+    case "image/gif":
+    case "image/bmp":
+    case "image/tiff":
+    case "image/svg+xml":
+    case "image/webp":
+    case "image/x-icon":
+      return contentType;
+    case "image/jpg":
+      return "image/jpeg";
+    case "image/x-emf":
+      return "image/emf";
+    case "image/x-wmf":
+      return "image/wmf";
+    default:
+      pushAdapterWarning(
+        diagnostics,
+        "pptx-computed-view-adapter.unsupported-image-mime-type",
+        `Unsupported image MIME type '${contentType}' was normalized to image/png.`,
+        slide,
+        sourcePartPath,
+      );
+      return "image/png";
+  }
+}
+
+function adaptRectangleAlignment(
+  alignment: string | undefined,
+  fallback: RectangleAlignment,
+  diagnostics: DiagnosticSink,
+  slide: ComputedSlide,
+  sourcePartPath?: string,
+): RectangleAlignment {
+  switch (alignment) {
+    case "tl":
+    case "t":
+    case "tr":
+    case "l":
+    case "ctr":
+    case "r":
+    case "bl":
+    case "b":
+    case "br":
+      return alignment;
+    case undefined:
+      pushAdapterWarning(
+        diagnostics,
+        "pptx-computed-view-adapter.unsupported-rectangle-alignment",
+        `Unsupported rectangle alignment '' was normalized to ${fallback}.`,
+        slide,
+        sourcePartPath,
+      );
+      return fallback;
+    default:
+      pushAdapterWarning(
+        diagnostics,
+        "pptx-computed-view-adapter.unsupported-rectangle-alignment",
+        `Unsupported rectangle alignment '${alignment ?? ""}' was normalized to ${fallback}.`,
+        slide,
+        sourcePartPath,
+      );
+      return fallback;
+  }
 }
 
 function pushAdapterWarning(

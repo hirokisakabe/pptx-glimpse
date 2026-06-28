@@ -84,6 +84,7 @@ export type {
   SourcePlaceholder,
   SourcePresetGeometry,
   SourceRawShapeNode,
+  SourceRectangleAlignment,
   SourceRunProperties,
   SourceShape,
   SourceShapeNode,

@@ -1,6 +1,7 @@
 import type { Emu } from "../utils/unit-types.js";
 import type { BlipEffects, EffectList } from "./effect.js";
 import type { Transform } from "./shape.js";
+import type { ImageMimeType, RectangleAlignment } from "./tokens.js";
 
 export interface SrcRect {
   left: number;
@@ -22,14 +23,14 @@ export interface TileInfo {
   sx: number;
   sy: number;
   flip: "none" | "x" | "y" | "xy";
-  align: string;
+  align: RectangleAlignment;
 }
 
 export interface ImageElement {
   type: "image";
   transform: Transform;
   imageData: string;
-  mimeType: string;
+  mimeType: ImageMimeType;
   effects: EffectList | null;
   blipEffects: BlipEffects | null;
   srcRect: SrcRect | null;

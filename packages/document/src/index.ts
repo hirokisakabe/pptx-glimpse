@@ -123,6 +123,7 @@ export type {
   SourcePresentation,
   SourcePresetGeometry,
   SourceRawShapeNode,
+  SourceRectangleAlignment,
   SourceRunProperties,
   SourceShape,
   SourceShapeNode,

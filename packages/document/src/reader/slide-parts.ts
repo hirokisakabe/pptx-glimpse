@@ -29,7 +29,14 @@ import {
   type SourceFill,
   type SourceMasterTextStyles,
 } from "../source/index.js";
-import { isTrue, numericAttr, parseColorElement, parseFill, parseLine } from "./drawing.js";
+import {
+  isTrue,
+  numericAttr,
+  parseColorElement,
+  parseFill,
+  parseLine,
+  parseRectangleAlignment,
+} from "./drawing.js";
 import { makeSidecar } from "./raw-node.js";
 import { parseShapeTree } from "./shape-tree.js";
 import { parseTextStyle } from "./text.js";
@@ -363,7 +370,7 @@ function parseOuterShadow(node: XmlNode | undefined): SourceEffectList["outerSha
     distance: asEmu(numericAttr(node, "dist") ?? 0),
     direction: asOoxmlAngle(numericAttr(node, "dir") ?? 0),
     color,
-    alignment: getAttr(node, "algn") ?? "b",
+    alignment: parseRectangleAlignment(getAttr(node, "algn"), "b"),
     rotateWithShape: getAttr(node, "rotWithShape") !== "0",
   };
 }
