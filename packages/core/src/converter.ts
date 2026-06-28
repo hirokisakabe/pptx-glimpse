@@ -4,7 +4,7 @@ import type { LogLevel } from "@pptx-glimpse/renderer";
 import {
   convertPptxToPngViaDocumentPath,
   convertPptxToSvgViaDocumentPath,
-} from "./experimental-document-renderer.js";
+} from "./document-path-renderer.js";
 
 export interface ConvertOptions {
   /** 変換対象のスライド番号 (1始まり)。未指定で全スライド */

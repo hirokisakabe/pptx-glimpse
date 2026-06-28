@@ -5,8 +5,8 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
-      "@pptx-glimpse/document/experimental": fileURLToPath(
-        new URL("./packages/document/src/experimental.ts", import.meta.url),
+      "@pptx-glimpse/document": fileURLToPath(
+        new URL("./packages/document/src/index.ts", import.meta.url),
       ),
     },
   },

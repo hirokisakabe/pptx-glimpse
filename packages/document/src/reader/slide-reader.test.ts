@@ -12,9 +12,9 @@ import type {
   SourceShape,
   SourceSmartArt,
   SourceTable,
-} from "../experimental.js";
-// 実際の公開面 (`@pptx-glimpse/document/experimental`) 経由で import する。
-import { readPptx } from "../experimental.js";
+} from "../index.js";
+// 実際の公開面 (`@pptx-glimpse/document`) 経由で import する。
+import { readPptx } from "../index.js";
 import { unsafeFixtureAssertion } from "../unsafe-type-assertion.js";
 
 const encoder = new TextEncoder();

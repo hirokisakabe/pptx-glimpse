@@ -3,7 +3,7 @@
   "compilerOptions": {
     "baseUrl": "../..",
     "paths": {
-      "@pptx-glimpse/document/experimental": ["packages/document/dist/experimental.d.ts"],
+      "@pptx-glimpse/document": ["packages/document/dist/index.d.ts"],
       "@pptx-glimpse/renderer": ["packages/renderer/dist/index.d.ts"]
     },
     "rootDir": "./src",

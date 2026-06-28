@@ -1,7 +1,7 @@
+// 実際の公開面 (`@pptx-glimpse/document`) 経由で import し、
+// root entry point の re-export ごと検証する。
 import { describe, expect, it } from "vitest";
 
-// 実際の公開面 (`@pptx-glimpse/document/experimental`) 経由で import し、
-// experimental entry point の re-export ごと検証する。
 import {
   asEmu,
   asOoxmlAngle,
@@ -15,7 +15,7 @@ import {
   type SourceImage,
   type SourceShape,
   type SourceTextRun,
-} from "../experimental.js";
+} from "../index.js";
 
 describe("PptxSourceModel source model types", () => {
   it("can build a minimal PptxSourceModel value", () => {

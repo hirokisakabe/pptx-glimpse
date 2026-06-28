@@ -6,9 +6,7 @@ import tseslint from "typescript-eslint";
 import prettier from "eslint-config-prettier";
 
 const repoRoot = dirname(fileURLToPath(import.meta.url));
-const documentExperimentalSource = fileURLToPath(
-  new URL("./packages/document/src/experimental.ts", import.meta.url),
-);
+const documentSource = fileURLToPath(new URL("./packages/document/src/index.ts", import.meta.url));
 
 export default tseslint.config(
   {
@@ -39,7 +37,7 @@ export default tseslint.config(
             ".js": [".ts", ".js"],
           },
           alias: {
-            "@pptx-glimpse/document/experimental": [documentExperimentalSource],
+            "@pptx-glimpse/document": [documentSource],
           },
           mainFields: ["module", "main"],
         }),

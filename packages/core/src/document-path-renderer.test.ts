@@ -1,14 +1,14 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import * as documentExperimental from "@pptx-glimpse/document/experimental";
+import * as document from "@pptx-glimpse/document";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { convertPptxToPng, convertPptxToSvg } from "./converter.js";
 import {
   convertPptxToPngViaDocumentPath,
   convertPptxToSvgViaDocumentPath,
-} from "./experimental-document-renderer.js";
+} from "./document-path-renderer.js";
 import * as adapterModule from "./pptx-computed-view-renderer-adapter.js";
 
 const SELECTED_SHARED_FIXTURES = ["real-basic-theme.pptx", "real-product-page.pptx"] as const;
@@ -28,7 +28,7 @@ const DOCUMENT_RENDER_UNSUPPORTED_SUBSET = [
   "elements missing computed transforms",
 ] as const;
 
-describe("experimental document render path", () => {
+describe("document render path", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -100,7 +100,7 @@ describe("experimental document render path", () => {
   });
 
   it("uses the document path as the public SVG converter default", async () => {
-    const readPptxSpy = vi.spyOn(documentExperimental, "readPptx");
+    const readPptxSpy = vi.spyOn(document, "readPptx");
     const adapterSpy = vi.spyOn(adapterModule, "adaptComputedViewToRendererModel");
     const input = readFixture("real-basic-theme.pptx");
     const publicDefault = await convertPptxToSvg(input, {
@@ -116,7 +116,7 @@ describe("experimental document render path", () => {
   });
 
   it("uses the document path as the public PNG converter default", async () => {
-    const readPptxSpy = vi.spyOn(documentExperimental, "readPptx");
+    const readPptxSpy = vi.spyOn(document, "readPptx");
     const adapterSpy = vi.spyOn(adapterModule, "adaptComputedViewToRendererModel");
     const input = readFixture("real-basic-theme.pptx");
     const publicDefault = await convertPptxToPng(input, {

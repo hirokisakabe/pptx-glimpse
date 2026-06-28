@@ -12,7 +12,7 @@ import {
   type SourceShape,
   type SourceTextRun,
   writePptx,
-} from "@pptx-glimpse/document/experimental";
+} from "@pptx-glimpse/document";
 import { renderSlideToSvg } from "@pptx-glimpse/renderer";
 import { unzipSync } from "fflate";
 import { describe, expect, it } from "vitest";

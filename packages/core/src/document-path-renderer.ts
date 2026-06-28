@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 
-import { createComputedView, readPptx } from "@pptx-glimpse/document/experimental";
+import { createComputedView, readPptx } from "@pptx-glimpse/document";
 import {
   buildFontFaceStyle,
   collectFontFilePaths,
@@ -127,8 +127,8 @@ function findScriptFontScheme(source: ReturnType<typeof readPptx>) {
 }
 
 /**
- * Internal / experimental PNG path layered on top of the PptxSourceModel SVG path and
- * the existing renderer PNG conversion.
+ * PNG path layered on top of the PptxSourceModel SVG path and the existing
+ * renderer PNG conversion.
  */
 export async function convertPptxToPngViaDocumentPath(
   input: Buffer | Uint8Array,
