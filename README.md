@@ -78,7 +78,7 @@ Both `convertPptxToSvg` and `convertPptxToPng` accept an optional `ConvertOption
 const results = await convertPptxToPng(pptx, {
   slides: [1, 3], // Convert only slides 1 and 3
   width: 1920, // Output width in pixels (default: 960)
-  height: 1080, // Output height in pixels (width takes priority if both set)
+  height: 1080, // Currently ignored by public conversion; width controls PNG size
   logLevel: "warn", // Warning log level: "off" | "warn" | "debug"
   fontDirs: ["/custom/fonts"], // Additional font directories to search
   skipSystemFonts: true, // Skip OS system font directories; use fontDirs only

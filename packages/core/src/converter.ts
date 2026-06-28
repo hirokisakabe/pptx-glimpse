@@ -46,16 +46,18 @@ export interface ConvertOptions {
   /**
    * Output width in pixels.
    *
-   * SVG output uses this as the viewport width. PNG output rasterizes to this
-   * width while preserving the slide aspect ratio unless `height` is used alone.
-   * Defaults to 960.
+   * PNG output rasterizes to this width while preserving the slide aspect
+   * ratio. Defaults to 960. SVG output keeps the slide's native pixel size from
+   * the PPTX slide dimensions and does not use this option.
    */
   width?: number;
   /**
    * Output height in pixels.
    *
-   * When `width` is also specified, `width` takes precedence and this value is
-   * ignored by PNG rasterization.
+   * PNG rasterization currently always uses `width`, either the provided value
+   * or the default width, so this option is ignored by the public conversion
+   * APIs. SVG output keeps the slide's native pixel size and does not use this
+   * option.
    */
   height?: number;
   /**
