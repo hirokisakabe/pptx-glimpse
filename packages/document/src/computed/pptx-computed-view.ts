@@ -10,6 +10,7 @@ import type {
   Emu,
   MediaPart,
   PartPath,
+  RawPackagePart,
   Relationship,
   RelationshipId,
   SourceBackground,
@@ -133,6 +134,7 @@ export interface ComputedGroupElement extends ComputedElementBase {
   readonly sourceNode: SourceGroup;
   readonly transform?: SourceTransform;
   readonly childTransform?: SourceTransform;
+  readonly fill?: ComputedFill;
   readonly effects?: ComputedEffectList;
   readonly children: readonly ComputedElement[];
 }
@@ -162,6 +164,26 @@ export interface ComputedSmartArtElement extends ComputedElementBase {
   readonly drawingXml?: string;
   readonly drawingRelationships: readonly ComputedRelationship[];
   readonly media: readonly MediaPart[];
+  readonly diagramDrawing?: ComputedDiagramDrawing;
+}
+
+export interface ComputedDiagramDrawing {
+  readonly sourcePartPath: PartPath;
+  readonly rawXml: string;
+  readonly rawPart?: RawPackagePart;
+  readonly rawHandle: { readonly partPath: PartPath };
+  readonly relationships: readonly ComputedRelationship[];
+  readonly media: readonly MediaPart[];
+  readonly childTransform?: SourceTransform;
+  readonly children: readonly ComputedElement[];
+  readonly diagnostics: readonly ComputedDiagramDrawingDiagnostic[];
+}
+
+export interface ComputedDiagramDrawingDiagnostic {
+  readonly severity: "warning";
+  readonly code: "diagram-drawing-shape-tree-missing";
+  readonly message: string;
+  readonly sourcePartPath: PartPath;
 }
 
 export interface ComputedTableData {

@@ -298,8 +298,9 @@ export function parseFill(
   }
 
   for (const name of RAW_FILL_LOCAL_NAMES) {
-    const node = getChild(parent, name);
-    if (node) return { kind: "raw", raw: makeSidecar(`a:${name}`, node, nextId) };
+    if (hasChild(parent, name)) {
+      return { kind: "raw", raw: makeSidecar(`a:${name}`, getChild(parent, name) ?? {}, nextId) };
+    }
   }
 
   return undefined;

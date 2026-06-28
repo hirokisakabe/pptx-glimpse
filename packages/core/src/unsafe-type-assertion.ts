@@ -8,11 +8,6 @@ export function unsafeFixtureAssertion<T>(value: unknown): T {
   return value as T;
 }
 
-export function unsafeAdapterBoundaryAssertion<T>(value: unknown): T {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Core adapter boundaries narrow computed/document interop values behind this named helper.
-  return value as T;
-}
-
 export function unsafeBrandAssertion<T>(value: unknown): T {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- Core branded value constructors narrow primitive values behind this named helper.
   return value as T;

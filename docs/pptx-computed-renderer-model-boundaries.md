@@ -38,7 +38,7 @@ import renderer types.
 | `SourceTable`, `SourceTableCell`, table source styles                                                                                | `ComputedTableData`, `ComputedTableCell`, computed cell borders/fills/text                                                                                                                          | `TableElement`, `TableData`, `TableCell`, `CellBorders`                                            | Mixed. Table structure and merge state duplicate by design today; future table style/source contracts can reduce adapter-only shape conversions without moving renderer table rendering into `document`.          |
 | `SourceEffectList`, source blip effects                                                                                              | `ComputedEffectList`, `ComputedBlipEffects`                                                                                                                                                         | `EffectList`, `BlipEffects`                                                                        | Intentional boundary. Computed resolves colors in effects; renderer uses `null` defaults and render-ready effect objects.                                                                                         |
 | `SourceChart` plus chart relationship/package data                                                                                   | `ComputedChartElement` with resolved chart XML                                                                                                                                                      | `ChartElement`, `ChartData`                                                                        | Intentional renderer-specific fallback. Chart XML to renderer `ChartData` conversion stays outside `document` until a document-owned chart source/computed contract exists.                                       |
-| `SourceSmartArt` plus diagram data/drawing package data                                                                              | `ComputedSmartArtElement` with resolved raw drawing XML and media                                                                                                                                   | Renderer `GroupElement` produced through adapter fallback                                          | Temporary bridge. The current parser-backed fallback is intentionally scoped and tracked by [#535](https://github.com/hirokisakabe/pptx-glimpse/issues/535).                                                      |
+| `SourceSmartArt` plus diagram data/drawing package data                                                                              | `ComputedSmartArtElement` with `ComputedDiagramDrawing` ordered children, drawing relationships, media, raw handles, and diagnostics                                                                 | Renderer `GroupElement` produced through adapter fallback                                          | Intentional bridge. The old parser-backed fallback was replaced by the document computed diagram drawing contract in [#535](https://github.com/hirokisakabe/pptx-glimpse/issues/535).                              |
 | `SourceRawShapeNode`, raw sidecars, raw backgrounds/fills                                                                            | `ComputedRawElement`, raw computed background/fill variants                                                                                                                                         | No direct renderer equivalent; adapter warning and skip/ignore behavior                            | Intentional boundary. Raw material is for preservation and diagnostics, not direct SVG/PNG output.                                                                                                                |
 
 ## `ComputedSlide` vs renderer `Slide`
@@ -170,12 +170,13 @@ Renderer `ChartData` should not be moved into `document`.
 
 ### SmartArt and raw elements
 
-SmartArt is currently a raw-resolved fallback. `ComputedSmartArtElement`
-provides the resolved diagram drawing XML, drawing relationships, and media.
-The adapter combines that element data with the surrounding `ComputedSlide`
-color context and maps it into a renderer `GroupElement` using the temporary
-`parseShapeTree` bridge documented in
-[smartart-fallback-contract.md](./smartart-fallback-contract.md).
+SmartArt is currently a computed diagram drawing fallback.
+`ComputedSmartArtElement` provides the resolved diagram drawing XML for
+compatibility/provenance, plus `diagramDrawing` with ordered computed children,
+drawing relationships, media references, raw handles, root child transform, and
+diagnostics. The adapter maps that computed view into a renderer `GroupElement`
+without importing the legacy parser subsystem. The detailed contract is recorded
+in [smartart-fallback-contract.md](./smartart-fallback-contract.md).
 
 Raw elements, raw backgrounds, and raw fills have no renderer model equivalent.
 The adapter warns and skips or ignores them because raw OOXML preservation is a

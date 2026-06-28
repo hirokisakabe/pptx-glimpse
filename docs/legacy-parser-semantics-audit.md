@@ -23,9 +23,9 @@ the old `cleandoc-renderer-adapter.ts` reference is now
 The SmartArt fallback contract requested by
 [#528](https://github.com/hirokisakabe/pptx-glimpse/issues/528) is recorded in
 [smartart-fallback-contract.md](./smartart-fallback-contract.md). That note
-lists the current `parseShapeTree` helper dependencies, the raw resolved input
-contract from `PptxComputedView`, the renderer `GroupElement` output contract,
-and the conditions for removing the old parser dependency.
+records the current computed diagram drawing contract, the renderer
+`GroupElement` output contract, and the removal status for the old
+`parseShapeTree` SmartArt fallback dependency.
 
 This is the current-state companion to the historical migration plan. The
 default switch tracked by [#481](https://github.com/hirokisakabe/pptx-glimpse/issues/481)
@@ -82,7 +82,7 @@ These remain in core or renderer by design:
 | Warning setup, font setup, SVG text-output mode, PNG sizing                  | `packages/core/src/experimental-document-renderer.ts`          | Renderer environment setup and runtime conversion options are core concerns                                                                                               |
 | PptxSourceModel computed view to renderer model mapping                      | `packages/core/src/pptx-computed-view-renderer-adapter.ts`     | The renderer model is a display-oriented compatibility target, not the PptxSourceModel source model                                                                       |
 | Chart XML to renderer chart model mapping                                    | `packages/core/src/renderer-chart-data-converter.ts`           | Chart rendering model is still renderer-specific; move only after a chart source/computed contract exists                                                                 |
-| SmartArt drawing XML fallback to renderer shape tree                         | Adapter calling parser `parseShapeTree`                        | This is a rendering fallback for resolved diagram drawing XML, not canonical document semantics yet; see [smartart-fallback-contract.md](./smartart-fallback-contract.md) |
+| SmartArt computed diagram drawing fallback                                   | Document computed view + core adapter                          | The diagram drawing package contract is document-owned, while renderer `GroupElement` mapping remains a core adapter concern; see [smartart-fallback-contract.md](./smartart-fallback-contract.md) |
 | Font discovery, font mapping, text measurement, text-to-path, SVG/PNG output | `@pptx-glimpse/renderer`                                       | Renderer-specific behavior per `document-boundaries.md`                                                                                                                   |
 
 ## Remaining legacy parser call-site inventory
@@ -102,8 +102,8 @@ conversion orchestration.
 | `packages/core/src/dual-reader-structural-comparison.test.ts`              | Imports `parsePptxData`, `parseSlideWithLayout`, and `buildEffectiveSlideElements`                                                                                                                                                          | `structural comparison`      | Compares a focused supported subset of the old parser render model against the PptxSourceModel document path and core adapter output.              | Retire after VRT and public regressions fully cover the parser oracle's value.     |
 | `bench/conversion.bench.ts`                                                | Imports and calls `parsePptxData` / `parseSlideWithLayout` from `packages/core/src/pptx-data-parser.ts`                                                                                                                                     | `parser oracle`              | Benchmarks the old parser pipeline as an explicit baseline beside the public document-path conversion APIs.                                        | Remove or retarget with `pptx-data-parser.ts` retirement.                          |
 | `packages/core/src/pptx-computed-view-renderer-adapter.ts` `adaptChart`    | Calls `convertChartXmlToRendererChartData` from `packages/core/src/renderer-chart-data-converter.ts`                                                                                                                                        | `renderer-specific fallback` | Maps resolved chart XML from PptxSourceModel into the current renderer chart model until a document-owned chart source/computed contract exists.   | Replace after chart source/computed contracts are designed.                        |
-| `packages/core/src/pptx-computed-view-renderer-adapter.ts` `adaptSmartArt` | Imports `navigateOrdered` / `parseShapeTree` from `packages/core/src/parser/slide-parser.ts` and XML helpers from `packages/core/src/parser/`; the detailed contract is in [smartart-fallback-contract.md](./smartart-fallback-contract.md) | `renderer-specific fallback` | Turns resolved SmartArt diagram drawing XML into the current renderer group/shape model as a visual fallback, not as canonical document semantics. | Replace after a document-owned diagram drawing source/computed contract exists.    |
-| `packages/core/src/parse-render.integration.test.ts`                       | Imports `parseShapeTree` and parser XML/archive relationship types                                                                                                                                                                          | `renderer-specific fallback` | Keeps direct coverage for old parser shape-tree output that the renderer and SmartArt fallback still consume.                                      | Remove or move when adapter fallback use of `parseShapeTree` is replaced.          |
+| `packages/core/src/pptx-computed-view-renderer-adapter.ts` `adaptSmartArt` | No old parser import; consumes `ComputedSmartArtElement.diagramDrawing` from `@pptx-glimpse/document`                                                                                                                                       | `renderer-specific fallback` | Turns document computed diagram drawing children into the current renderer `GroupElement` model.                                                   | Keep as core adapter mapping until renderer/model ownership changes.               |
+| `packages/core/src/parse-render.integration.test.ts`                       | Imports `parseShapeTree` and parser XML/archive relationship types                                                                                                                                                                          | `parser oracle`              | Keeps direct coverage for old parser shape-tree output while parser oracle consumers remain.                                                       | Remove or move with the parser oracle, not with SmartArt fallback.                 |
 | `packages/core/src/parser-path-oracle.test.ts`                             | Imports `buildEffectiveSlideElements` and `ParsedSlide` from `packages/core/src/pptx-data-parser.ts`                                                                                                                                        | `parser oracle`              | Protects oracle-only effective element merging semantics after that logic moved out of `converter.ts`.                                             | Remove with `parser-path-oracle.ts`.                                               |
 | `packages/core/src/text-style-resolver.ts`                                 | Imports `resolveThemeFont` from `packages/core/src/parser/text-style-parser.ts`                                                                                                                                                             | `parser oracle`              | Supports old parser text-style inheritance used by `packages/core/src/pptx-data-parser.ts`; public font collection no longer depends on it.        | Remove or narrow with `pptx-data-parser.ts` retirement.                            |
 | `packages/core/src/text-style-resolver.test.ts`                            | Imports `applyTextStyleInheritance` and `TextStyleContext` from `packages/core/src/text-style-resolver.ts`                                                                                                                                  | `parser oracle`              | Protects the old parser text-style inheritance helper while `pptx-data-parser.ts` still consumes it.                                               | Remove or narrow with `text-style-resolver.ts` retirement.                         |
@@ -131,7 +131,7 @@ deleted:
 | `packages/core/src/parser-path-oracle.test.ts`                | Unit-tests `buildEffectiveSlideElements`.                                                                              | Protects oracle-only master/layout/slide ordering and placeholder filtering while VRT still depends on the oracle.     | Delete with `parser-path-oracle.ts` once no remaining test/VRT imports that helper.                                               |
 | `bench/conversion.bench.ts`                                   | Benchmarks `parsePptxData` / `parseSlideWithLayout` as the old-parser baseline.                                        | Keeps performance comparisons with the historical parser path explicit.                                                | Remove the parser benchmark lane or retarget it to a document-path-only baseline when parser performance is no longer tracked.    |
 | `packages/core/src/text-style-resolver.ts` and its unit test  | Supports text inheritance consumed by `pptx-data-parser.ts`.                                                           | Remains needed only because the parser oracle still assembles old-parser render models.                                | Remove or narrow after `pptx-data-parser.ts` no longer exists or no longer consumes this helper.                                  |
-| Parser subsystem unit tests under `packages/core/src/parser/` | Protect parser helpers still reached by `pptx-data-parser.ts` and by the SmartArt adapter fallback's `parseShapeTree`. | Some parser helpers still serve the oracle; `parseShapeTree` also serves a separate renderer fallback.                 | Split by consumer: delete oracle-only tests with the oracle, keep or move `parseShapeTree` coverage until #535 replaces it.       |
+| Parser subsystem unit tests under `packages/core/src/parser/` | Protect parser helpers still reached by `pptx-data-parser.ts` and parser-oracle tests.                                   | Parser helpers still serve the explicit oracle, but not the public SmartArt fallback.                                  | Delete or narrow with the parser oracle once no remaining oracle consumer imports them.                                            |
 
 `parser-path-oracle.ts` itself can be removed only after no VRT, unit test,
 benchmark, or adapter fallback imports `convertPptxToPngViaParserPath`,
@@ -222,8 +222,8 @@ deleted when all of these are true:
    moved into `@pptx-glimpse/document` / adapter tests or are explicitly removed
    as obsolete behavior.
 4. Parser subsystem tests have been split by remaining consumer: oracle-only
-   render-model tests are deleted, while parser helpers still needed by the
-   SmartArt fallback stay covered until the #535 replacement lands.
+   render-model tests are deleted when the parser oracle is deleted, while
+   SmartArt fallback coverage lives in document/computed and adapter tests.
 5. Public conversion tests, package verification, and VRT prove that
    `convertPptxToSvg` / `convertPptxToPng` remain document-path-only after the
    deletion.
@@ -247,16 +247,17 @@ Some duplication intentionally remains:
 
 - `pptx-data-parser.ts` still assembles slide/layout/master render models. Keep
   it until the parser oracle is no longer needed for zero-diff gates.
-- Parser unit tests under `packages/core/src/parser/` still protect the
-  old oracle and adapter fallback helpers. Delete or narrow them only after the
-  corresponding oracle role is removed.
+- Parser unit tests under `packages/core/src/parser/` still protect the old
+  oracle helpers. Delete or narrow them only after the corresponding oracle role
+  is removed.
 - `pptx-computed-view-renderer-adapter.ts` still calls renderer-specific fallback
-  helpers for chart parsing and SmartArt fallback rendering. Chart XML conversion
-  is isolated in `renderer-chart-data-converter.ts`; keep the renderer `ChartData`
-  adapter outside `document` unless it is replaced by a renderer-owned contract.
-  Split follow-up issues should define document-owned chart/diagram source
-  contracts only after chart data, style/color parts, embedded workbook
-  references, and compatibility expectations are covered.
+  helpers for chart parsing. SmartArt now consumes the document computed diagram
+  drawing contract, while the final mapping to renderer `GroupElement` remains
+  in core. Chart XML conversion is isolated in `renderer-chart-data-converter.ts`;
+  keep the renderer `ChartData` adapter outside `document` unless it is replaced
+  by a renderer-owned contract. Split follow-up issues should define
+  document-owned chart source contracts only after chart data, style/color parts,
+  embedded workbook references, and compatibility expectations are covered.
 - Comments in `packages/document/src/computed/create-computed-view.ts`
   that mention current-parser compatibility are retained as parity signposts.
   They should be removed only when the document path intentionally owns a
@@ -264,14 +265,10 @@ Some duplication intentionally remains:
 
 Suggested follow-up slices:
 
-1. Replace adapter SmartArt fallback use of `parseShapeTree` after introducing
-   the document-owned diagram drawing source/computed contract described in
-   [smartart-fallback-contract.md](./smartart-fallback-contract.md); this is
-   tracked by [#535](https://github.com/hirokisakabe/pptx-glimpse/issues/535).
-2. Introduce a chart source/computed contract in `document`, then replace or
+1. Introduce a chart source/computed contract in `document`, then replace or
    narrow `renderer-chart-data-converter.ts` from the core/renderer side without
    moving renderer `ChartData` ownership into `document`.
-3. Retire `dual-reader-structural-comparison.test.ts` after VRT and public
+2. Retire `dual-reader-structural-comparison.test.ts` after VRT and public
    regression tests fully cover the parser oracle's remaining value.
 4. Remove `pptx-data-parser.ts` and parser render-model tests after the explicit
    parser-path oracle is no longer used by VRT/CI.

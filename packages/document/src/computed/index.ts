@@ -7,6 +7,8 @@ export type {
   ComputedColor,
   ComputedColorChangeEffect,
   ComputedConnectorElement,
+  ComputedDiagramDrawing,
+  ComputedDiagramDrawingDiagnostic,
   ComputedDuotoneEffect,
   ComputedEffectList,
   ComputedElement,

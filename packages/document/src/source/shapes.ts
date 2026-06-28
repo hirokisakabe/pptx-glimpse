@@ -389,6 +389,7 @@ export interface SourceGroup {
   readonly name?: string;
   readonly transform?: SourceTransform;
   readonly childTransform?: SourceTransform;
+  readonly fill?: SourceFill;
   readonly effects?: SourceEffectList;
   readonly children: readonly SourceShapeNode[];
   readonly handle?: SourceHandle;

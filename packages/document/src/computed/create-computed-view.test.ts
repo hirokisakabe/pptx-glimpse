@@ -71,6 +71,51 @@ describe("createComputedView", () => {
     expect(smartArt.drawingPartPath).toBe("ppt/diagrams/drawing1.xml");
     expect(smartArt.drawingXml).toContain("<dsp:drawing");
     expect(smartArt.drawingRelationships).toHaveLength(0);
+    expect(smartArt.diagramDrawing).toMatchObject({
+      sourcePartPath: "ppt/diagrams/drawing1.xml",
+      rawHandle: { partPath: "ppt/diagrams/drawing1.xml" },
+      relationships: [],
+      media: source.packageGraph.media,
+      childTransform: {
+        offsetX: 100,
+        offsetY: 110,
+        width: 420,
+        height: 430,
+      },
+      diagnostics: [],
+    });
+    expect(smartArt.diagramDrawing?.children.map((child) => child.kind)).toEqual(["shape"]);
+    expect(smartArt.diagramDrawing?.children[0]).toMatchObject({
+      kind: "shape",
+      sourcePartPath: "ppt/diagrams/drawing1.xml",
+      sourceNode: {
+        name: "Diagram step",
+        handle: {
+          partPath: "ppt/diagrams/drawing1.xml",
+          orderingSlot: 0,
+        },
+      },
+    });
+  });
+
+  it("SmartArt diagram drawing の shape tree が無い場合は computed diagnostic に provenance を残す", () => {
+    const source = buildSourceWithChartAndSmartArt({
+      smartArtDrawingXml: `<dsp:drawing xmlns:dsp="http://schemas.microsoft.com/office/drawing/2008/diagram"/>`,
+    });
+    const slide = getSlide(createComputedView(source).slides, 0);
+    const smartArt = slide.elements.find((element) => element.kind === "smartArt");
+
+    expect(smartArt?.kind).toBe("smartArt");
+    if (smartArt?.kind !== "smartArt") throw new Error("SmartArt element not found");
+    expect(smartArt.diagramDrawing?.children).toEqual([]);
+    expect(smartArt.diagramDrawing?.diagnostics).toEqual([
+      {
+        severity: "warning",
+        code: "diagram-drawing-shape-tree-missing",
+        message: "diagram drawing part 'ppt/diagrams/drawing1.xml' has no shape tree",
+        sourcePartPath: "ppt/diagrams/drawing1.xml",
+      },
+    ]);
   });
 
   it("Strict OOXML の chart relationship type でも chart XML part を解決する", () => {
@@ -936,6 +981,7 @@ function buildSource(): PptxSourceModel {
 function buildSourceWithChartAndSmartArt(
   options: {
     readonly chartRelationshipType?: string;
+    readonly smartArtDrawingXml?: string;
   } = {},
 ): PptxSourceModel {
   const source = buildSource();
@@ -986,7 +1032,11 @@ function buildSourceWithChartAndSmartArt(
           `<c:chartSpace><c:chart><c:plotArea><c:barChart/></c:plotArea></c:chart></c:chartSpace>`,
         ),
         rawXmlPart("ppt/diagrams/data1.xml", `<dgm:dataModel/>`),
-        rawXmlPart("ppt/diagrams/drawing1.xml", `<dsp:drawing><dsp:spTree/></dsp:drawing>`),
+        rawXmlPart(
+          "ppt/diagrams/drawing1.xml",
+          options.smartArtDrawingXml ??
+            `<dsp:drawing xmlns:dsp="http://schemas.microsoft.com/office/drawing/2008/diagram" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><dsp:spTree><dsp:grpSpPr><a:xfrm><a:off x="700" y="710"/><a:ext cx="720" cy="730"/><a:chOff x="100" y="110"/><a:chExt cx="420" cy="430"/></a:xfrm></dsp:grpSpPr><p:sp><p:nvSpPr><p:cNvPr id="1" name="Diagram step"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="10" y="20"/><a:ext cx="30" cy="40"/></a:xfrm></p:spPr></p:sp></dsp:spTree></dsp:drawing>`,
+        ),
       ],
     },
     slides: source.slides.map((slide) =>

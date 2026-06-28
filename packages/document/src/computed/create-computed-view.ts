@@ -1,3 +1,14 @@
+import { parseTransform } from "../reader/drawing.js";
+import { createSidecarIdFactory } from "../reader/raw-node.js";
+import { parseShapeTree } from "../reader/shape-tree.js";
+import {
+  getChild,
+  localName,
+  navigateOrdered,
+  parseXml,
+  parseXmlOrdered,
+  type XmlNode,
+} from "../reader/xml.js";
 import type {
   PartPath,
   PptxSourceModel,
@@ -22,6 +33,7 @@ import type {
   SourceTextBody,
   SourceTextStyle,
   SourceTheme,
+  SourceTransform,
 } from "../source/index.js";
 import { asEmu } from "../source/index.js";
 import { assertNever } from "../utils/assert-never.js";
@@ -33,6 +45,8 @@ import type {
   ComputedCellBorders,
   ComputedChartElement,
   ComputedConnectorElement,
+  ComputedDiagramDrawing,
+  ComputedDiagramDrawingDiagnostic,
   ComputedEffectList,
   ComputedElement,
   ComputedElementLayer,
@@ -183,6 +197,7 @@ interface ComputeContext {
   readonly theme?: SourceTheme;
   readonly colorMap: Readonly<Record<string, string>>;
   readonly relationships: readonly ComputedRelationship[];
+  readonly groupFill?: ComputedFill;
 }
 
 interface TextStyleChainEntry {
@@ -336,8 +351,10 @@ function computeGroupElement(
   layer: ComputedElementLayer,
   partPath: PartPath,
 ): ComputedGroupElement {
+  const fill = group.fill !== undefined ? computeFill(context, group.fill, partPath) : undefined;
   const effects =
     group.effects !== undefined ? computeEffectList(context, group.effects) : undefined;
+  const childContext = fill !== undefined ? { ...context, groupFill: fill } : context;
   return {
     kind: "group",
     sourceLayer: layer,
@@ -345,8 +362,9 @@ function computeGroupElement(
     sourceNode: group,
     ...(group.transform !== undefined ? { transform: group.transform } : {}),
     ...(group.childTransform !== undefined ? { childTransform: group.childTransform } : {}),
+    ...(fill !== undefined ? { fill } : {}),
     ...(effects !== undefined ? { effects } : {}),
-    children: group.children.map((child) => computeElement(context, child, layer, partPath)),
+    children: group.children.map((child) => computeElement(childContext, child, layer, partPath)),
   };
 }
 
@@ -502,6 +520,14 @@ function computeSmartArtElement(
   const drawingPartPath = drawingRelationship?.targetPartPath;
   const drawingXml =
     drawingPartPath !== undefined ? readRawPackageText(context.source, drawingPartPath) : undefined;
+  const drawingRelationships =
+    drawingPartPath !== undefined
+      ? resolveComputedRelationships(context.source, drawingPartPath)
+      : [];
+  const diagramDrawing =
+    drawingPartPath !== undefined && drawingXml !== undefined
+      ? computeDiagramDrawing(context, drawingPartPath, drawingXml, drawingRelationships, layer)
+      : undefined;
 
   return {
     kind: "smartArt",
@@ -513,11 +539,85 @@ function computeSmartArtElement(
     ...(drawingRelationship !== undefined ? { drawingRelationship } : {}),
     ...(drawingPartPath !== undefined ? { drawingPartPath } : {}),
     ...(drawingXml !== undefined ? { drawingXml } : {}),
-    drawingRelationships:
-      drawingPartPath !== undefined
-        ? resolveComputedRelationships(context.source, drawingPartPath)
-        : [],
+    drawingRelationships,
     media: context.source.packageGraph.media,
+    ...(diagramDrawing !== undefined ? { diagramDrawing } : {}),
+  };
+}
+
+function computeDiagramDrawing(
+  context: ComputeContext,
+  drawingPartPath: PartPath,
+  drawingXml: string,
+  drawingRelationships: readonly ComputedRelationship[],
+  layer: ComputedElementLayer,
+): ComputedDiagramDrawing {
+  const rawPart = context.source.packageGraph.rawParts?.find(
+    (part) => part.partPath === drawingPartPath,
+  );
+  const parsed = parseXml(drawingXml);
+  const drawing = getChild(parsed, "drawing");
+  const spTree = getChild(drawing, "spTree");
+  const diagnostics: ComputedDiagramDrawingDiagnostic[] = [];
+
+  if (spTree === undefined) {
+    diagnostics.push({
+      severity: "warning",
+      code: "diagram-drawing-shape-tree-missing",
+      message: `diagram drawing part '${drawingPartPath}' has no shape tree`,
+      sourcePartPath: drawingPartPath,
+    });
+  }
+
+  const orderedSpTree =
+    spTree !== undefined
+      ? navigateOrdered(parseXmlOrdered(drawingXml), ["drawing", "spTree"])
+      : undefined;
+  const sourceChildren =
+    spTree !== undefined
+      ? parseShapeTree(
+          spTree,
+          drawingPartPath,
+          createSidecarIdFactory(drawingPartPath),
+          orderedSpTree,
+        )
+      : [];
+  const diagramContext: ComputeContext = {
+    ...context,
+    relationships: drawingRelationships,
+  };
+
+  return {
+    sourcePartPath: drawingPartPath,
+    rawXml: drawingXml,
+    ...(rawPart !== undefined ? { rawPart } : {}),
+    rawHandle: { partPath: drawingPartPath },
+    relationships: drawingRelationships,
+    media: context.source.packageGraph.media,
+    ...(spTree !== undefined ? { childTransform: parseDiagramChildTransform(spTree) } : {}),
+    children: sourceChildren.map((child) =>
+      computeElement(diagramContext, child, layer, drawingPartPath),
+    ),
+    diagnostics,
+  };
+}
+
+function parseDiagramChildTransform(spTree: XmlNode): SourceTransform | undefined {
+  const groupProperties = getChild(spTree, "grpSpPr");
+  const fallback = parseTransform(groupProperties);
+  const xfrm = getChild(groupProperties, "xfrm");
+  const childOff = getChild(xfrm, "chOff");
+  const childExt = getChild(xfrm, "chExt");
+  const offsetX = numericAttr(childOff, "x") ?? 0;
+  const offsetY = numericAttr(childOff, "y") ?? 0;
+  const width = numericAttr(childExt, "cx") ?? fallback?.width;
+  const height = numericAttr(childExt, "cy") ?? fallback?.height;
+  if (width === undefined || height === undefined) return undefined;
+  return {
+    offsetX: asEmu(offsetX),
+    offsetY: asEmu(offsetY),
+    width: asEmu(width),
+    height: asEmu(height),
   };
 }
 
@@ -585,6 +685,9 @@ function computeFill(context: ComputeContext, fill: SourceFill, partPath: PartPa
     case "none":
       return { kind: "none", source: fill };
     case "raw":
+      if (localName(fill.raw.node.name) === "grpFill" && context.groupFill !== undefined) {
+        return context.groupFill;
+      }
       return { kind: "raw", source: fill };
     case "gradient":
       return {
@@ -1091,6 +1194,14 @@ function readRawPackageText(source: PptxSourceModel, partPath: PartPath): string
   const rawPart = source.packageGraph.rawParts?.find((part) => part.partPath === partPath);
   if (rawPart?.kind === "binary") return textDecoder.decode(rawPart.bytes);
   return undefined;
+}
+
+function numericAttr(node: XmlNode | undefined, attrName: string): number | undefined {
+  if (node === undefined) return undefined;
+  const value = node[`@_${attrName}`];
+  if (value === undefined || value === null) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function omitColor(properties: SourceRunProperties): Omit<SourceRunProperties, "color"> {

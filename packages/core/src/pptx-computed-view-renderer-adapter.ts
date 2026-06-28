@@ -51,11 +51,8 @@ import type {
 import { asEmu, asHundredthPt, uint8ArrayToBase64 } from "@pptx-glimpse/renderer";
 
 import { ColorResolver } from "./color/color-resolver.js";
-import type { Relationship } from "./parser/relationship-parser.js";
-import { navigateOrdered, parseShapeTree } from "./parser/slide-parser.js";
-import { parseXml, parseXmlOrdered, type XmlNode } from "./parser/xml-parser.js";
 import { convertChartXmlToRendererChartData } from "./renderer-chart-data-converter.js";
-import { unsafeAdapterBoundaryAssertion, unsafeBrandAssertion } from "./unsafe-type-assertion.js";
+import { unsafeBrandAssertion } from "./unsafe-type-assertion.js";
 
 interface RendererAdapterResult {
   readonly slideSize?: SlideSize;
@@ -301,65 +298,42 @@ function adaptSmartArt(
   slide: ComputedSlide,
   diagnostics: DiagnosticSink,
 ): GroupElement | undefined {
-  if (smartArt.drawingXml === undefined || smartArt.drawingPartPath === undefined) {
+  if (smartArt.diagramDrawing === undefined) {
     pushAdapterWarning(
       diagnostics,
       "pptx-computed-view-adapter.unresolved-smartart-skipped",
-      "PptxSourceModel SmartArt element has no resolved diagram drawing XML.",
+      "PptxSourceModel SmartArt element has no computed diagram drawing view.",
       slide,
       smartArt.sourcePartPath,
     );
     return undefined;
   }
 
-  const parsed = parseXml(smartArt.drawingXml);
-  const drawing = unsafeAdapterBoundaryAssertion<XmlNode | undefined>(parsed.drawing);
-  const spTree = unsafeAdapterBoundaryAssertion<XmlNode | undefined>(drawing?.spTree);
-  if (spTree === undefined) {
+  if (smartArt.diagramDrawing.diagnostics.length > 0) {
     pushAdapterWarning(
       diagnostics,
       "pptx-computed-view-adapter.unresolved-smartart-skipped",
-      "PptxSourceModel SmartArt diagram drawing XML has no shape tree.",
+      smartArt.diagramDrawing.diagnostics[0]?.message ??
+        "PptxSourceModel SmartArt diagram drawing could not be computed.",
       slide,
-      smartArt.sourcePartPath,
+      smartArt.diagramDrawing.sourcePartPath,
     );
     return undefined;
   }
 
-  const rels = new Map<string, Relationship>(
-    smartArt.drawingRelationships.map((rel) => [
-      rel.id,
-      {
-        id: rel.id,
-        type: rel.type,
-        target: rel.source.target,
-        ...(rel.targetMode !== undefined ? { targetMode: rel.targetMode } : {}),
-      },
-    ]),
+  const children = smartArt.diagramDrawing.children.flatMap((child) =>
+    adaptElement(child, slide, diagnostics),
   );
-  const archive = {
-    files: {
-      get: (path: string) => (path === smartArt.drawingPartPath ? smartArt.drawingXml : undefined),
-      has: (path: string) => path === smartArt.drawingPartPath,
-    },
-    media: {
-      get: (path: string) => smartArt.media.find((media) => media.partPath === path)?.bytes,
-    },
-  };
-  const orderedParsed = parseXmlOrdered(smartArt.drawingXml);
-  const orderedSpTree = navigateOrdered(orderedParsed, ["drawing", "spTree"]);
-  const children = parseShapeTree(
-    spTree,
-    rels,
-    smartArt.drawingPartPath,
-    archive,
-    createColorResolver(slide),
-    undefined,
-    { rels, archive, basePath: smartArt.drawingPartPath },
-    undefined,
-    orderedSpTree,
-  );
-  if (children.length === 0) return undefined;
+  if (children.length === 0) {
+    pushAdapterWarning(
+      diagnostics,
+      "pptx-computed-view-adapter.unresolved-smartart-skipped",
+      "PptxSourceModel SmartArt computed diagram drawing has no renderer-supported children.",
+      slide,
+      smartArt.diagramDrawing.sourcePartPath,
+    );
+    return undefined;
+  }
 
   const groupTransform = adaptTransform(
     smartArt.transform,
@@ -367,7 +341,23 @@ function adaptSmartArt(
     diagnostics,
     smartArt.sourcePartPath,
   );
-  const childTransform = adaptSmartArtChildTransform(spTree, groupTransform);
+  const childTransform =
+    smartArt.diagramDrawing.childTransform !== undefined
+      ? adaptTransform(
+          smartArt.diagramDrawing.childTransform,
+          slide,
+          diagnostics,
+          smartArt.diagramDrawing.sourcePartPath,
+        )
+      : {
+          offsetX: asEmu(0),
+          offsetY: asEmu(0),
+          extentWidth: groupTransform.extentWidth,
+          extentHeight: groupTransform.extentHeight,
+          rotation: 0,
+          flipH: false,
+          flipV: false,
+        };
 
   return {
     type: "group",
@@ -376,24 +366,6 @@ function adaptSmartArt(
     children,
     effects: null,
     ...(smartArt.sourceNode.name !== undefined ? { altText: smartArt.sourceNode.name } : {}),
-  };
-}
-
-function adaptSmartArtChildTransform(spTree: XmlNode, groupTransform: Transform): Transform {
-  const xfrm = unsafeAdapterBoundaryAssertion<XmlNode | undefined>(
-    unsafeAdapterBoundaryAssertion<XmlNode | undefined>(spTree.grpSpPr)?.xfrm,
-  );
-  const chOff = unsafeAdapterBoundaryAssertion<XmlNode | undefined>(xfrm?.chOff);
-  const chExt = unsafeAdapterBoundaryAssertion<XmlNode | undefined>(xfrm?.chExt);
-
-  return {
-    offsetX: asEmu(Number(chOff?.["@_x"] ?? 0)),
-    offsetY: asEmu(Number(chOff?.["@_y"] ?? 0)),
-    extentWidth: asEmu(Number(chExt?.["@_cx"] ?? groupTransform.extentWidth)),
-    extentHeight: asEmu(Number(chExt?.["@_cy"] ?? groupTransform.extentHeight)),
-    rotation: 0,
-    flipH: false,
-    flipV: false,
   };
 }
 
