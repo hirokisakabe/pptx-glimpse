@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import * as document from "@pptx-glimpse/document";
-import { clearFontCache } from "@pptx-glimpse/renderer";
+import { clearFontCache, getWarningEntries, warn } from "@pptx-glimpse/renderer";
 import JSZip from "jszip";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
@@ -431,6 +431,10 @@ describe("convertPptxToSvg", () => {
         sourcePartPath: "ppt/diagrams/drawing1.xml",
       }),
     );
+    expect(report.supportCoverage.slides[0]).toMatchObject({
+      skippedElements: 0,
+      unresolvedElements: 1,
+    });
   });
 
   it("converts a PPTX file to SVG", async () => {
@@ -1225,6 +1229,16 @@ describe("presentation.noSlides warning", () => {
         code: "renderer.presentation.noSlides",
       }),
     );
+    expect(report.supportCoverage.overall.warnings).toBe(1);
+  });
+
+  it('restores the warning logger when logLevel is "off" and conversion throws', async () => {
+    await expect(convertPptxToSvg(Buffer.from("not a pptx"), { logLevel: "off" })).rejects.toThrow(
+      /zip|pptx|invalid/i,
+    );
+
+    warn("test.afterFailure", "should not be collected");
+    expect(getWarningEntries()).toHaveLength(0);
   });
 
   it("emits presentation.noSlides warning for empty PPTX", async () => {

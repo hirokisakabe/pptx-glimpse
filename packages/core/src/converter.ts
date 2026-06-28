@@ -224,7 +224,7 @@ export interface PngConversionReport {
  * @param input PPTX binary data as a Node.js `Buffer` or `Uint8Array`.
  * @param options Conversion options. `slides` uses 1-based slide numbers; when
  * omitted, all slides are converted.
- * @returns One SVG result per converted slide, preserving original slide numbers.
+ * @returns A conversion report containing converted slides, diagnostics, and support coverage.
  *
  * Text is emitted as SVG paths by default for portable rendering. Set
  * `textOutput: "text"` to emit native `<text>` elements with embedded subset
@@ -244,8 +244,7 @@ export async function convertPptxToSvg(
  * @param input PPTX binary data as a Node.js `Buffer` or `Uint8Array`.
  * @param options Conversion options. `slides` uses 1-based slide numbers; when
  * omitted, all slides are converted.
- * @returns One PNG result per converted slide, preserving original slide numbers
- * and reporting the actual rasterized image size.
+ * @returns A conversion report containing converted PNG slides, diagnostics, and support coverage.
  *
  * PNG conversion first renders each slide to SVG and then rasterizes it with
  * resvg. The `textOutput` option is intentionally ignored: PNG rendering always
@@ -335,6 +334,9 @@ async function convertPptxToSvgReport(
 
     return { slides, diagnostics, supportCoverage };
   } finally {
+    if (logLevel === "off") {
+      initWarningLogger("off");
+    }
     resetTextMeasurer();
     resetTextPathFontResolver();
     resetFontUsageCollector();
@@ -463,19 +465,23 @@ function buildSupportCoverage(
     );
     return { slideNumber: slide.slideNumber, ...counts };
   });
+  const slideTotals = slides.reduce<SupportCoverageCounts>(
+    (total, slide) => ({
+      inputElements: total.inputElements + slide.inputElements,
+      outputElements: total.outputElements + slide.outputElements,
+      skippedElements: total.skippedElements + slide.skippedElements,
+      unresolvedElements: total.unresolvedElements + slide.unresolvedElements,
+      fallbackElements: total.fallbackElements + slide.fallbackElements,
+      warnings: total.warnings + slide.warnings,
+    }),
+    emptySupportCoverageCounts(),
+  );
 
   return {
-    overall: slides.reduce<SupportCoverageCounts>(
-      (total, slide) => ({
-        inputElements: total.inputElements + slide.inputElements,
-        outputElements: total.outputElements + slide.outputElements,
-        skippedElements: total.skippedElements + slide.skippedElements,
-        unresolvedElements: total.unresolvedElements + slide.unresolvedElements,
-        fallbackElements: total.fallbackElements + slide.fallbackElements,
-        warnings: total.warnings + slide.warnings,
-      }),
-      emptySupportCoverageCounts(),
-    ),
+    overall: {
+      ...slideTotals,
+      warnings: diagnostics.filter((diagnostic) => diagnostic.severity === "warning").length,
+    },
     slides,
   };
 }
@@ -491,7 +497,10 @@ function buildSlideSupportCoverage(
   return {
     inputElements: countComputedElements(computedSlide.elements),
     outputElements: renderedSlide !== undefined ? countRenderedElements(renderedSlide.elements) : 0,
-    skippedElements: countDiagnosticsByCode(slideDiagnostics, (code) => code.includes("skipped")),
+    skippedElements: countDiagnosticsByCode(
+      slideDiagnostics,
+      (code) => code.includes("skipped") && !code.includes("unresolved"),
+    ),
     unresolvedElements: countDiagnosticsByCode(slideDiagnostics, (code) =>
       code.includes("unresolved"),
     ),
