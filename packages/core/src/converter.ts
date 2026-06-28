@@ -326,7 +326,7 @@ async function convertPptxToSvgReport(
 
     const diagnostics: ConversionDiagnostic[] = [
       ...normalizeDocumentDiagnostics(source.diagnostics),
-      ...collectComputedViewDiagnostics(computed),
+      ...collectSmartArtComputedViewDiagnostics(computed),
       ...normalizeRendererAdapterDiagnostics(adapted.diagnostics),
       ...normalizeRendererWarningDiagnostics(rendererWarningEntries),
     ];
@@ -398,7 +398,9 @@ function normalizeDocumentDiagnostics(diagnostics: readonly Diagnostic[]): Conve
   }));
 }
 
-function collectComputedViewDiagnostics(computed: PptxComputedView): ConversionDiagnostic[] {
+function collectSmartArtComputedViewDiagnostics(
+  computed: PptxComputedView,
+): ConversionDiagnostic[] {
   const diagnostics: ConversionDiagnostic[] = [];
   for (const slide of computed.slides) {
     for (const element of flattenComputedElements(slide.elements)) {
@@ -497,17 +499,9 @@ function buildSlideSupportCoverage(
   return {
     inputElements: countComputedElements(computedSlide.elements),
     outputElements: renderedSlide !== undefined ? countRenderedElements(renderedSlide.elements) : 0,
-    skippedElements: countDiagnosticsByCode(
-      slideDiagnostics,
-      (code) => code.includes("skipped") && !code.includes("unresolved"),
-    ),
-    unresolvedElements: countDiagnosticsByCode(slideDiagnostics, (code) =>
-      code.includes("unresolved"),
-    ),
-    fallbackElements: countDiagnosticsByCode(
-      slideDiagnostics,
-      (code) => code.includes("missing-transform") || code.includes("ignored"),
-    ),
+    skippedElements: countDiagnosticsByCode(slideDiagnostics, isSkippedDiagnosticCode),
+    unresolvedElements: countDiagnosticsByCode(slideDiagnostics, isUnresolvedDiagnosticCode),
+    fallbackElements: countDiagnosticsByCode(slideDiagnostics, isFallbackDiagnosticCode),
     warnings: slideDiagnostics.filter((diagnostic) => diagnostic.severity === "warning").length,
   };
 }
@@ -528,6 +522,26 @@ function countDiagnosticsByCode(
   predicate: (code: string) => boolean,
 ): number {
   return diagnostics.filter((diagnostic) => predicate(diagnostic.code)).length;
+}
+
+function isSkippedDiagnosticCode(code: string): boolean {
+  return code === "pptx-computed-view-adapter.raw-element-skipped";
+}
+
+function isUnresolvedDiagnosticCode(code: string): boolean {
+  return (
+    code === "pptx-computed-view-adapter.unresolved-chart-skipped" ||
+    code === "pptx-computed-view-adapter.unresolved-smartart-skipped" ||
+    code === "pptx-computed-view-adapter.unresolved-image-skipped"
+  );
+}
+
+function isFallbackDiagnosticCode(code: string): boolean {
+  return (
+    code === "pptx-computed-view-adapter.missing-transform" ||
+    code === "pptx-computed-view-adapter.raw-background-ignored" ||
+    code === "pptx-computed-view-adapter.raw-fill-ignored"
+  );
 }
 
 function countComputedElements(elements: readonly ComputedElement[]): number {
