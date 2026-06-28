@@ -6840,7 +6840,7 @@ async function createPlaceholderGeometryInheritanceFixture(): Promise<void> {
 
 // --- Empty slide placeholders ---
 // In the template PPTX, the placeholder where the user did not enter any text is
-// The slide remains empty. PowerPoint hides this completely.
+// left empty on the slide. PowerPoint hides it completely.
 // Confirm that pptx-glimpse has the same behavior.
 async function createPlaceholderEmptyOnSlideFixture(): Promise<void> {
   // The layout side is a normal placeholder definition with geometry (inherited on the slide side).

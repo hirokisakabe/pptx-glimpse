@@ -1,17 +1,18 @@
 /**
- * Raw OOXML escape hatch related types.
+ * Types for the raw OOXML escape hatch.
  *
- * PptxSourceModel expresses supported semantics as a typed field, while also expressing unsupported/partially supported semantics as a typed field.
- * Keep the XML as raw sidecar and the unedited part as raw package part,
- * enabling structural round trips. Byte equality is not a goal.
+ * PptxSourceModel represents supported semantics as typed fields, while preserving
+ * unsupported or partially supported XML as raw sidecars and unedited parts as raw
+ * package parts. This enables structural round-tripping; byte equality is not a goal.
  */
 
 import type { PartPath, RawSidecarId } from "./handles.js";
 
 /**
  * Partially parsed raw OOXML node. It preserves the namespace-prefixed qualified name,
- * Preserve attributes, child nodes, and text. Elements that PptxSourceModel does not represent as typed
- * (vendor extension / `mc:AlternateContent` / unknown DrawingML, etc.).
+ * attributes, child nodes, and text for elements that PptxSourceModel does not represent
+ * as typed fields, such as vendor extensions, `mc:AlternateContent`, and unknown
+ * DrawingML.
  */
 export interface RawOoxmlNode {
   /** Element name including the namespace prefix (Example: `a:extLst`). */
@@ -34,9 +35,9 @@ export interface RawSidecar {
 }
 
 /**
- * Raw fallback for writing an unedited package part back as-is. It keeps either bytes (binary
- * asset) or an XML tree as a discriminated union. Having both /
- * having neither is ruled out by the type.
+ * Raw fallback for writing an unedited package part back as-is. It keeps either bytes
+ * for binary assets or an XML tree as a discriminated union. The type rules out invalid
+ * states with both or neither representation.
  */
 export type RawPackagePart =
   | {

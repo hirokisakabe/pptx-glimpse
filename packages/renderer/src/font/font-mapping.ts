@@ -48,12 +48,8 @@ export function createFontMapping(userMapping?: FontMapping): FontMapping {
 }
 
 /**
- * Get the OSS alternative font name from the mapping table.
- * Looks up without case sensitivity.
- */
-/**
  * Normalizes full-width alphanumerics and symbols to half-width.
- * Full-width characters may be used in PPTX themes, such as "MS P Gothic."
+ * PPTX themes may use full-width spellings such as "\uFF2D\uFF33 \uFF30\u30B4\u30B7\u30C3\u30AF".
  */
 function normalizeFullWidth(s: string): string {
   return s
@@ -61,6 +57,10 @@ function normalizeFullWidth(s: string): string {
     .replace(/\u3000/g, " ");
 }
 
+/**
+ * Get the OSS alternative font name from the mapping table.
+ * Looks up without case sensitivity.
+ */
 export function getMappedFont(
   fontFamily: string | null | undefined,
   mapping: FontMapping,

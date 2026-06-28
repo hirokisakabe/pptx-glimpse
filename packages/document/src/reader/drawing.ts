@@ -1,9 +1,11 @@
 /**
- * Helper that reads DrawingML color, fill, line, and coordinate conversion to PptxSourceModel source type.
+ * Helpers that read DrawingML colors, fills, lines, and coordinates into
+ * PptxSourceModel source types.
  *
- * The theme color / relationship is kept unresolved in source. lumMod/tint
- * It is saved as is without applying conversions such as, and the computed view is responsible for solving it.
- * Unsupported fills (gradient / pattern / picture fill) are saved as raw sidecars.
+ * Theme colors and relationships stay unresolved in source. Transformations such as
+ * lumMod and tint are kept unapplied, and the computed view is responsible for resolving
+ * them. Unsupported fills such as gradient, pattern, and picture fills are preserved as
+ * raw sidecars.
  */
 
 import type {

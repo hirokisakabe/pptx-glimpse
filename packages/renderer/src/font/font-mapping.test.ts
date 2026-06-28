@@ -87,7 +87,7 @@ describe("getMappedFont", () => {
 
   it("Normalize full-width alphanumeric characters to half-width and match", () => {
     const fullMapping = createFontMapping();
-    // MS P Gothic (full-width P) -> Match MS P Gothic (half-width P)
+    // Full-width "\uFF2D\uFF33 \uFF30..." matches half-width "MS P...".
     expect(getMappedFont("ＭＳ Ｐゴシック", fullMapping)).toBe("Noto Sans JP");
     // MS P Mincho (full-width P) -> Match MS P Mincho (half-width P)
     expect(getMappedFont("ＭＳ Ｐ明朝", fullMapping)).toBe("Noto Serif CJK JP");

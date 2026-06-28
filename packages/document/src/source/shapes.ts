@@ -1,10 +1,10 @@
 /**
- * Simple shape / text run / image  source node types.
+ * Source node types for simple shapes, text runs, and images.
  *
- * Drawings centered around the current supported subset (simple shapes / text / images
- * nodes) to typed. theme color and relationship are unresolved references in source
- * cascade resolution is the responsibility of the computed view. Unsupported nodes are raw
- * Save with escape hatch.
+ * The current supported drawing subset, centered on simple shapes, text, and images, is
+ * represented as typed nodes. Theme colors and relationships stay as unresolved source
+ * references, and cascade resolution is handled by the computed view. Unsupported nodes
+ * are preserved through the raw escape hatch.
  */
 
 import type { RelationshipId, SourceHandle, SourceNodeId } from "./handles.js";
@@ -43,9 +43,9 @@ export interface SourceCustomGeometry {
 export type SourceGeometry = SourcePresetGeometry | SourceCustomGeometry;
 
 /**
- * Unresolved source color reference. `schemeClr` is kept as the scheme name and computed
- * Resolve to concrete color via `clrMap` / `colorScheme` in view. `srgbClr` /
- * `sysClr` is a concrete value, but any transformations (lumMod, etc.) are retained before being applied.
+ * Unresolved source color reference. `schemeClr` keeps the scheme name and resolves to a
+ * concrete color through `clrMap` / `colorScheme` in the computed view. `srgbClr` and
+ * `sysClr` hold concrete values, but transformations such as lumMod are kept unapplied.
  */
 export type SourceColor =
   | {
@@ -62,7 +62,7 @@ export type SourceColor =
       readonly kind: "system";
       /** `a:sysClr@val` (Example: `windowText`). */
       readonly value: string;
-      /** Resolved fallback hex for `a:sysClr@lastClr`, if it has one. */
+      /** Resolved fallback hex for `a:sysClr@lastClr`, when present. */
       readonly lastColor?: string;
       readonly transforms?: readonly SourceColorTransform[];
     };
@@ -238,7 +238,7 @@ export interface SourceRunProperties {
   readonly underline?: boolean;
   readonly strikethrough?: boolean;
   readonly baseline?: number;
-  /** font size. In OOXML-domain, it is stored as pt. */
+  /** Font size. Stored as pt in the OOXML domain. */
   readonly fontSize?: Pt;
   /** latin typeface name (kept unresolved including theme token). */
   readonly typeface?: string;
@@ -288,7 +288,7 @@ export interface SourceTabStop {
 /** Minimum subset of paragraph properties (`a:pPr`) of paragraph (`a:p`). */
 export interface SourceParagraphProperties {
   readonly align?: SourceTextAlign;
-  /** indentation level (`a:pPr@lvl`). */
+  /** Indentation level (`a:pPr@lvl`). */
   readonly level?: number;
   readonly lineSpacing?: SourceSpacingValue;
   readonly spaceBefore?: SourceSpacingValue;
@@ -326,7 +326,7 @@ export type SourceTextVerticalType =
 
 export type SourceTextAutoFit = "noAutofit" | "normAutofit" | "spAutofit";
 
-/** Minimal subset of text body properties (`a:bodyPr`). inset and vertical anchor. */
+/** Minimal subset of text body properties (`a:bodyPr`): insets and vertical anchor. */
 export interface SourceTextBodyProperties {
   readonly marginLeft?: Emu;
   readonly marginRight?: Emu;
@@ -419,7 +419,7 @@ export interface SourceImage {
   readonly nodeId?: SourceNodeId;
   readonly name?: string;
   readonly transform?: SourceTransform;
-  /** Relationship id of `a:blip@r:embed`. media part is solved by computed view. */
+  /** Relationship id of `a:blip@r:embed`. The media part is resolved by the computed view. */
   readonly blipRelationshipId?: RelationshipId;
   readonly crop?: SourceImageCrop;
   readonly stretch?: SourceImageStretch;
@@ -478,7 +478,7 @@ export interface SourceChart {
   readonly nodeId?: SourceNodeId;
   readonly name?: string;
   readonly transform?: SourceTransform;
-  /** Relationship id of `c:chart@r:id`. Chart parts are resolved with computed views. */
+  /** Relationship id of `c:chart@r:id`. The chart part is resolved by the computed view. */
   readonly chartRelationshipId?: RelationshipId;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
@@ -489,7 +489,7 @@ export interface SourceSmartArt {
   readonly nodeId?: SourceNodeId;
   readonly name?: string;
   readonly transform?: SourceTransform;
-  /** Relationship id of `dgm:relIds@r:dm`. Diagram data/drawing part is solved by computed view. */
+  /** Relationship id of `dgm:relIds@r:dm`. Diagram data/drawing parts are resolved by the computed view. */
   readonly dataRelationshipId?: RelationshipId;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];

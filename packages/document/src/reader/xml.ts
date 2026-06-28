@@ -91,9 +91,10 @@ export function getChild(node: XmlNode | undefined, name: string): XmlNode | und
 }
 
 /**
- * Determine whether a child element exists using local name. An empty element (`<a:noFill/>`) has a value of
- * Since it is an empty string and falsy, its existence cannot be determined by the return value of `getChild`. existence
- * Use this to detect marker elements that have meaning in themselves.
+ * Determines whether a child element exists by local name.
+ *
+ * Empty elements such as `<a:noFill/>` can parse as an empty string, so truthiness of
+ * `getChild` is not enough. Use this for marker elements whose presence is meaningful.
  */
 export function hasChild(node: XmlNode | undefined, name: string): boolean {
   if (!node) return false;
