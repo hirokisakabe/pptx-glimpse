@@ -17,14 +17,6 @@ type VrtRenderOptions = Pick<ConvertOptions, "fontDirs" | "skipSystemFonts">;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-// Document-path parity VRT compares the parser and document renderers at zero
-// tolerance. Keep it fontless so the gate remains focused on adapter parity
-// while still avoiding local system-font scans; standard snapshot VRT uses the
-// subset fonts below for text-path visual coverage.
-export const DOCUMENT_PATH_VRT_RENDER_OPTIONS = {
-  skipSystemFonts: true,
-} as const satisfies Pick<ConvertOptions, "skipSystemFonts">;
-
 const VRT_FONT_GENERATOR_VERSION = 7;
 const VRT_FONT_DIR = join(tmpdir(), `pptx-glimpse-vrt-fonts-v${VRT_FONT_GENERATOR_VERSION}`);
 const VRT_FONT_SOURCE_DIR = join(

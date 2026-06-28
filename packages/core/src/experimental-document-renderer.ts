@@ -45,7 +45,7 @@ interface DocumentPathPngResult {
 
 /**
  * PptxSourceModel document-path render orchestration used by the public converter
- * default. Parser-path helpers remain available for parity checks.
+ * default.
  */
 export async function convertPptxToSvgViaDocumentPath(
   input: Buffer | Uint8Array,

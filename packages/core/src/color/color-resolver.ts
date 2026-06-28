@@ -9,7 +9,7 @@ import type { ResolvedColor } from "@pptx-glimpse/renderer";
 import type { ColorMap, ColorScheme, ColorSchemeKey } from "@pptx-glimpse/renderer";
 import { debug } from "@pptx-glimpse/renderer";
 
-import type { XmlNode } from "../parser/xml-parser.js";
+import type { XmlNode } from "../ooxml/xml-parser.js";
 import { unsafeXmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import { applyColorTransforms } from "./color-transforms.js";
 

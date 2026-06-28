@@ -6,11 +6,10 @@
 
 このディレクトリのファイルは複数のテストスイートから共有される:
 
-| テスト                   | ファイル                                        | 目的                                                                                    |
-| ------------------------ | ----------------------------------------------- | --------------------------------------------------------------------------------------- |
-| E2E スモークテスト       | `e2e/smoke.test.ts`                             | エラーなく変換できること・主要要素の SVG 出力確認                                       |
-| スナップショット VRT     | `vrt/snapshot/regression.test.ts`               | レンダリング結果のリグレッション検出                                                    |
-| document path parity VRT | `vrt/snapshot/document-path-regression.test.ts` | PptxSourceModel document path と parser path oracle の zero-diff / zero-diagnostic 確認 |
+| テスト               | ファイル                          | 目的                                              |
+| -------------------- | --------------------------------- | ------------------------------------------------- |
+| E2E スモークテスト   | `e2e/smoke.test.ts`               | エラーなく変換できること・主要要素の SVG 出力確認 |
+| スナップショット VRT | `vrt/snapshot/regression.test.ts` | レンダリング結果のリグレッション検出              |
 
 ## プログラム合成フィクスチャとの違い
 
@@ -39,7 +38,6 @@
 2. `e2e/smoke.test.ts` にスモークテストを追加する
 3. `vrt/snapshot/vrt-cases.ts` の `SHARED_FIXTURE_CASES` にエントリを追加する
 4. `npm run vrt:snapshot:update` でスナップショットを生成する
-5. document path parity VRT では、`vrt/snapshot/document-path-cases.ts` の `DOCUMENT_PATH_VRT_SHARED_CASES` に同じ fixture を追加し、zero tolerance で parser path oracle と比較される状態にする
 
 ファイルサイズはリポジトリサイズへの影響を抑えるため **1ファイルあたり 500KB 以下** を目安とする。
 ライセンス上問題のない PPTX のみ追加すること（自作または OSSテンプレート）。

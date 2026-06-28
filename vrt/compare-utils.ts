@@ -32,7 +32,7 @@ export async function compareImages(
   return compareImageBuffers(actualPng, readFileSync(referencePath), diffPath, options);
 }
 
-export async function compareImageBuffers(
+async function compareImageBuffers(
   actualPng: Uint8Array | Buffer,
   referencePng: Uint8Array | Buffer,
   diffPath: string,

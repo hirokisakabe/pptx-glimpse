@@ -35,7 +35,7 @@ CI consists of 4 jobs:
 
 Data flow: **PPTX binary → PptxSourceModel reader → Computed view → Renderer model adapter → Renderer (SVG generation) → PNG conversion (optional)**
 
-The legacy parser path remains available internally as an explicit parser-path oracle for parity checks and VRT, but public `convertPptxToSvg` / `convertPptxToPng` default to the PptxSourceModel document path.
+Public `convertPptxToSvg` / `convertPptxToPng` use the PptxSourceModel document path. VRT baselines are committed document-path snapshots rather than an in-memory legacy parser oracle.
 
 ソースは pnpm workspaces (`packages/*`) で分割されている。root は private な workspace orchestration 専用で、公開 npm package `pptx-glimpse` は `packages/core` から publish する。`pptx-glimpse` パッケージは build-time workspace dependency として `@pptx-glimpse/document` / `@pptx-glimpse/renderer` を参照し、公開 tarball には bundle された成果物を含める。
 
@@ -43,13 +43,12 @@ The legacy parser path remains available internally as an explicit parser-path o
 
 `packages/document/src/` — experimental `@pptx-glimpse/document` パッケージ。PptxSourceModel / OOXML document foundation の下位基盤として追加されており、public conversion path の default reader / computed view として参照される。`@pptx-glimpse/document/experimental` は後続の source model / reader / writer 実装を積むための experimental entry point。
 
-`packages/core/src/` — 公開パッケージ `pptx-glimpse` の実装（パーサー + 公開 API）
+`packages/core/src/` — 公開パッケージ `pptx-glimpse` の実装（document path orchestration + 公開 API）
 
-- `parser/` — Builds intermediate model from PPTX via ZIP extraction (`fflate`) and XML parsing (`fast-xml-parser`)
+- `ooxml/` — Core-local OOXML utilities such as XML parsing for adapter helpers
 - `color/` — Theme color resolution (schemeClr → colorMap → colorScheme) and color transformations (lumMod/tint/shade)
 - `font/font-collector.ts` — PPTX から使用フォント名を収集する公開 API (`collectUsedFonts`)
 - `converter.ts` — `convertPptxToSvg` / `convertPptxToPng` の実装
-- `pptx-data-parser.ts`, `text-style-resolver.ts` — パーサー共通ヘルパー
 - `index.ts` — 公開エントリポイント
 
 `packages/renderer/src/` — 内部 renderer パッケージ `@pptx-glimpse/renderer`（private; 親 issue #340 決定）
@@ -111,13 +110,11 @@ Snapshots are generated inside a Docker container (Node.js + sharp + fonts) to e
 Snapshot VRT uses `vrt/snapshot/render-options.ts` to build a small deterministic
 font directory from pinned real font files. The script downloads source fonts into a
 temp cache, verifies their SHA256 hashes, subsets them to the glyphs used by the VRT
-fixtures, and passes only those subset fonts with `skipSystemFonts: true`. Document-path
-parity VRT also uses that module, but keeps its zero-diff gate fontless while setting
-`skipSystemFonts: true` so it remains focused on parser/document adapter parity without
-scanning local system fonts. This keeps local runs from scanning and parsing every
-system font on macOS while still rendering readable Latin/CJK glyphs in standard
-snapshot VRT. The Docker image still fixes the runtime and rendering toolchain; the VRT
-intentionally does not depend on each developer machine's full OS font inventory.
+fixtures, and passes only those subset fonts with `skipSystemFonts: true`. This keeps
+local runs from scanning and parsing every system font on macOS while still rendering
+readable Latin/CJK glyphs in standard snapshot VRT. The Docker image still fixes the
+runtime and rendering toolchain; the VRT intentionally does not depend on each
+developer machine's full OS font inventory.
 
 #### Setup
 
@@ -192,4 +189,4 @@ Changes that do NOT require a changeset: docs-only updates, CI config, test-only
 - Prettier: double quotes, semicolons, trailing commas, printWidth 100
 - ESLint: unused variables with `_` prefix are allowed
 - ESM (`"type": "module"`) — imports require `.js` extension
-- Tests are colocated with source files (`packages/core/src/parser/slide-parser.test.ts`, etc.)
+- Tests are colocated with source files (`packages/core/src/converter.test.ts`, etc.)

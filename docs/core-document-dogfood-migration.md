@@ -81,10 +81,8 @@ PPTX Buffer | Uint8Array
   -> svgToPng(svg, options) for PNG output
 ```
 
-The old parser path remains only as an explicit internal oracle for parity
-checks and adapter fallbacks documented in
-[legacy-parser-semantics-audit.md](./legacy-parser-semantics-audit.md). It is
-not the public default.
+The old parser path was retired after the document path became the public
+default and VRT moved to committed document-path snapshots.
 
 ## Target Flow Through `document`
 
@@ -119,8 +117,8 @@ does not need to know PptxSourceModel directly.
 ## Historical Parallel Reader Period
 
 This section records the temporary parallel reader period that #481 has now
-completed. It remains useful as historical context for why parser-path oracle
-tests still exist.
+completed. It remains useful as historical context for the temporary
+parser-path oracle tests that were later retired by #543.
 
 The first `document` reader was introduced behind internal or experimental
 paths and compared against the then-current parser path. During that historical
@@ -181,16 +179,16 @@ computed-view fields can be simplified in separate, rendering-focused PRs.
 
 Dogfood should be verified at multiple levels instead of relying on only VRT:
 
-| Level                      | Purpose                                                                       | Suggested checks                                                                                                                          |
-| -------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| Document reader unit tests | Ensure OOXML parts become PptxSourceModel source nodes with stable references | minimal PPTX fixtures, relationship graph assertions, raw sidecar preservation assertions                                                 |
-| Computed view unit tests   | Ensure document semantics are resolved outside the renderer                   | theme/color map resolution, background fallback, placeholder matching, text style cascade, unit conversion                                |
-| Adapter tests              | Ensure PptxSourceModel computed view maps to the current renderer contract    | compare adapter output with selected current parser model snapshots or focused structural assertions, including `showMasterSp` visibility |
-| Core dual-reader tests     | Ensure public conversion can dogfood `document` without changing behavior     | run both paths on shared fixtures and compare selected render model fields, slide selection, warnings, and result shapes                  |
-| Public API behavior tests  | Ensure public conversion options remain compatible                            | verify `slides` filtering, warning/log behavior, `convertPptxToPng` path-text forcing, and returned object shapes                         |
-| Snapshot VRT               | Catch visual regressions once fixtures are opted into the document path       | existing `vrt/snapshot` cases and shared real PPTX fixtures                                                                               |
-| LibreOffice VRT            | Compare generated output against external rendering references where useful   | existing `vrt/libreoffice` cases after the document path affects rendering                                                                |
-| Package verification       | Ensure the published API shape remains compatible                             | existing build, typecheck, package verification, and API import smoke tests                                                               |
+| Level                      | Purpose                                                                       | Suggested checks                                                                                                  |
+| -------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| Document reader unit tests | Ensure OOXML parts become PptxSourceModel source nodes with stable references | minimal PPTX fixtures, relationship graph assertions, raw sidecar preservation assertions                         |
+| Computed view unit tests   | Ensure document semantics are resolved outside the renderer                   | theme/color map resolution, background fallback, placeholder matching, text style cascade, unit conversion        |
+| Adapter tests              | Ensure PptxSourceModel computed view maps to the current renderer contract    | focused structural assertions for adapter output, including `showMasterSp` visibility                             |
+| Public converter tests     | Ensure public conversion keeps using the document path without behavior drift | run shared fixtures through the public API and assert slide selection, warning behavior, and result shapes        |
+| Public API behavior tests  | Ensure public conversion options remain compatible                            | verify `slides` filtering, warning/log behavior, `convertPptxToPng` path-text forcing, and returned object shapes |
+| Snapshot VRT               | Catch visual regressions once fixtures are opted into the document path       | existing `vrt/snapshot` cases and shared real PPTX fixtures                                                       |
+| LibreOffice VRT            | Compare generated output against external rendering references where useful   | existing `vrt/libreoffice` cases after the document path affects rendering                                        |
+| Package verification       | Ensure the published API shape remains compatible                             | existing build, typecheck, package verification, and API import smoke tests                                       |
 
 For early PRs, unit and adapter tests are more important than snapshot churn.
 VRT snapshots should only be updated when the public render output intentionally

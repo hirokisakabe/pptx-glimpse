@@ -250,7 +250,8 @@ function parseFontScheme(fontScheme: XmlNode | undefined): SourceThemeFontScheme
     ...(isNonEmpty(minorLatin) ? { minorLatin } : {}),
     ...(isNonEmpty(majorEastAsian) ? { majorEastAsian } : {}),
     ...(isNonEmpty(minorEastAsian) ? { minorEastAsian } : {}),
-    // Preserve explicit empty complex script fonts; parser path resolves +mn-cs to "" for them.
+    // Preserve explicit empty complex script fonts so scheme references can
+    // resolve distinctly from missing values.
     ...(majorComplexScript !== undefined ? { majorComplexScript } : {}),
     ...(minorComplexScript !== undefined ? { minorComplexScript } : {}),
     ...(isNonEmpty(majorJapanese) ? { majorJapanese } : {}),

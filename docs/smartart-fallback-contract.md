@@ -8,8 +8,7 @@
 This note records the SmartArt fallback boundary after public SVG/PNG conversion
 moved to the PptxSourceModel document path and after the adapter stopped calling
 the old parser `parseShapeTree` helper for resolved diagram drawing XML. It
-complements [legacy-parser-semantics-audit.md](./legacy-parser-semantics-audit.md)
-and the package/source/computed boundaries in
+complements the package/source/computed boundaries in
 [document-boundaries.md](./document-boundaries.md) and
 [pptx-source-model-computed-view.md](./pptx-source-model-computed-view.md).
 
@@ -33,14 +32,11 @@ master cascade.
 
 ## Parser Dependency Status
 
-`packages/core/src/pptx-computed-view-renderer-adapter.ts` no longer imports
-`packages/core/src/parser/*` for SmartArt fallback. The old adapter dependency
-on parser XML helpers, parser relationship maps, `navigateOrdered`, and
+`packages/core/src/pptx-computed-view-renderer-adapter.ts` does not import the
+retired core render parser for SmartArt fallback. The old adapter dependency on
+parser XML helpers, parser relationship maps, `navigateOrdered`, and
 `parseShapeTree` was replaced by a document-owned computed diagram drawing
 contract.
-
-The old parser still exists for the explicit parser oracle and parser tests, but
-SmartArt fallback no longer depends on that subsystem.
 
 ## Input Contract
 
@@ -143,5 +139,5 @@ these remain true:
    or any intentional change is covered by VRT updates in a separate rendering
    PR.
 
-Parser shape-tree tests may still exist for the parser oracle. Their role is no
-longer SmartArt fallback coverage for the public document path.
+The old parser shape-tree tests were removed with the parser oracle. SmartArt
+fallback coverage now lives in focused document/core adapter tests plus VRT.
