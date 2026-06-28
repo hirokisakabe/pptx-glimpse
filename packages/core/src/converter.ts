@@ -235,34 +235,6 @@ export async function convertPptxToSvg(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
 ): Promise<SvgConversionReport> {
-  return convertPptxToSvgReport(input, options);
-}
-
-/**
- * Convert a PPTX file to PNG images.
- *
- * @param input PPTX binary data as a Node.js `Buffer` or `Uint8Array`.
- * @param options Conversion options. `slides` uses 1-based slide numbers; when
- * omitted, all slides are converted.
- * @returns A conversion report containing converted PNG slides, diagnostics, and support coverage.
- *
- * PNG conversion first renders each slide to SVG and then rasterizes it with
- * resvg. The `textOutput` option is intentionally ignored: PNG rendering always
- * uses path-based text output because resvg does not interpret the embedded
- * `@font-face` rules used by SVG text mode. Font directories and font mapping
- * options are still used to resolve glyph outlines and text metrics.
- */
-export async function convertPptxToPng(
-  input: Buffer | Uint8Array,
-  options?: ConvertOptions,
-): Promise<PngConversionReport> {
-  return convertPptxToPngReport(input, options);
-}
-
-async function convertPptxToSvgReport(
-  input: Buffer | Uint8Array,
-  options?: ConvertOptions,
-): Promise<SvgConversionReport> {
   const textOutput = options?.textOutput ?? "path";
   const logLevel = options?.logLevel ?? "off";
   const setup = await createOpentypeSetupFromSystem(
@@ -355,11 +327,25 @@ function findScriptFontScheme(source: ReturnType<typeof readPptx>) {
   );
 }
 
-async function convertPptxToPngReport(
+/**
+ * Convert a PPTX file to PNG images.
+ *
+ * @param input PPTX binary data as a Node.js `Buffer` or `Uint8Array`.
+ * @param options Conversion options. `slides` uses 1-based slide numbers; when
+ * omitted, all slides are converted.
+ * @returns A conversion report containing converted PNG slides, diagnostics, and support coverage.
+ *
+ * PNG conversion first renders each slide to SVG and then rasterizes it with
+ * resvg. The `textOutput` option is intentionally ignored: PNG rendering always
+ * uses path-based text output because resvg does not interpret the embedded
+ * `@font-face` rules used by SVG text mode. Font directories and font mapping
+ * options are still used to resolve glyph outlines and text metrics.
+ */
+export async function convertPptxToPng(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
 ): Promise<PngConversionReport> {
-  const svgResult = await convertPptxToSvgReport(input, {
+  const svgResult = await convertPptxToSvg(input, {
     ...options,
     textOutput: "path",
   });
