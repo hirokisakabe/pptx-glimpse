@@ -8,7 +8,7 @@ import { convertPptxToPng, convertPptxToSvg } from "./converter.js";
 import {
   convertPptxToPngViaDocumentPath,
   convertPptxToSvgViaDocumentPath,
-} from "./experimental-document-renderer.js";
+} from "./document-path-renderer.js";
 import * as adapterModule from "./pptx-computed-view-renderer-adapter.js";
 
 const SELECTED_SHARED_FIXTURES = ["real-basic-theme.pptx", "real-product-page.pptx"] as const;
@@ -28,7 +28,7 @@ const DOCUMENT_RENDER_UNSUPPORTED_SUBSET = [
   "elements missing computed transforms",
 ] as const;
 
-describe("experimental document render path", () => {
+describe("document render path", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
