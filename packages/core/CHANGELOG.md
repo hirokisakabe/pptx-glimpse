@@ -1,5 +1,16 @@
 # pptx-glimpse
 
+## 2.0.0
+
+### Major Changes
+
+- 6fe6cd6: Change `convertPptxToSvg` and `convertPptxToPng` to return conversion report objects with `slides`, `diagnostics`, and `supportCoverage` instead of returning slide arrays directly.
+
+### Patch Changes
+
+- 08ceb6a: Replace the SmartArt fallback's legacy parser shape-tree dependency with the document computed diagram drawing contract.
+- 2098d03: Narrow renderer/document image MIME and rectangle alignment token fields to explicit union types.
+
 ## 1.1.2
 
 ### Patch Changes
