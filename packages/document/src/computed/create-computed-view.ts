@@ -3,6 +3,7 @@ import { createSidecarIdFactory } from "../reader/raw-node.js";
 import { parseShapeTree } from "../reader/shape-tree.js";
 import {
   getChild,
+  localName,
   navigateOrdered,
   parseXml,
   parseXmlOrdered,
@@ -196,6 +197,7 @@ interface ComputeContext {
   readonly theme?: SourceTheme;
   readonly colorMap: Readonly<Record<string, string>>;
   readonly relationships: readonly ComputedRelationship[];
+  readonly groupFill?: ComputedFill;
 }
 
 interface TextStyleChainEntry {
@@ -349,8 +351,10 @@ function computeGroupElement(
   layer: ComputedElementLayer,
   partPath: PartPath,
 ): ComputedGroupElement {
+  const fill = group.fill !== undefined ? computeFill(context, group.fill, partPath) : undefined;
   const effects =
     group.effects !== undefined ? computeEffectList(context, group.effects) : undefined;
+  const childContext = fill !== undefined ? { ...context, groupFill: fill } : context;
   return {
     kind: "group",
     sourceLayer: layer,
@@ -358,8 +362,9 @@ function computeGroupElement(
     sourceNode: group,
     ...(group.transform !== undefined ? { transform: group.transform } : {}),
     ...(group.childTransform !== undefined ? { childTransform: group.childTransform } : {}),
+    ...(fill !== undefined ? { fill } : {}),
     ...(effects !== undefined ? { effects } : {}),
-    children: group.children.map((child) => computeElement(context, child, layer, partPath)),
+    children: group.children.map((child) => computeElement(childContext, child, layer, partPath)),
   };
 }
 
@@ -680,6 +685,9 @@ function computeFill(context: ComputeContext, fill: SourceFill, partPath: PartPa
     case "none":
       return { kind: "none", source: fill };
     case "raw":
+      if (localName(fill.raw.node.name) === "grpFill" && context.groupFill !== undefined) {
+        return context.groupFill;
+      }
       return { kind: "raw", source: fill };
     case "gradient":
       return {

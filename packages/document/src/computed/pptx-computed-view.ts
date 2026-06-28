@@ -134,6 +134,7 @@ export interface ComputedGroupElement extends ComputedElementBase {
   readonly sourceNode: SourceGroup;
   readonly transform?: SourceTransform;
   readonly childTransform?: SourceTransform;
+  readonly fill?: ComputedFill;
   readonly effects?: ComputedEffectList;
   readonly children: readonly ComputedElement[];
 }

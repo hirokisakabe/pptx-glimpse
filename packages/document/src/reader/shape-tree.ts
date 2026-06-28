@@ -383,6 +383,7 @@ function parseGroup(
   const grpSpPr = getChild(grpSp, "grpSpPr");
   const transform = parseTransform(grpSpPr);
   const childTransform = parseChildTransform(grpSpPr, transform);
+  const fill = parseFill(grpSpPr, nextId);
   const effects = parseEffectList(getChild(grpSpPr, "effectLst"));
   const rawSidecars = [
     ...collectUnknownSidecars(grpSp, KNOWN_GROUP_CHILDREN, nextId),
@@ -396,6 +397,7 @@ function parseGroup(
     ...(name !== undefined ? { name } : {}),
     ...(transform !== undefined ? { transform } : {}),
     ...(childTransform !== undefined ? { childTransform } : {}),
+    ...(fill !== undefined ? { fill } : {}),
     ...(effects !== undefined ? { effects } : {}),
     children: parseShapeTree(grpSp, partPath, nextId, orderedChildren),
     handle: { partPath, ...(nodeId !== undefined ? { nodeId } : {}), orderingSlot },

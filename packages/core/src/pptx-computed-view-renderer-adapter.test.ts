@@ -973,10 +973,10 @@ function smartArtDrawingXml(): string {
     </p:pic>
     <p:grpSp>
       <p:nvGrpSpPr><p:cNvPr id="4" name="Diagram group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
-      <p:grpSpPr><a:xfrm><a:off x="200" y="201"/><a:ext cx="202" cy="203"/><a:chOff x="210" y="220"/><a:chExt cx="230" cy="240"/></a:xfrm></p:grpSpPr>
+      <p:grpSpPr><a:xfrm><a:off x="200" y="201"/><a:ext cx="202" cy="203"/><a:chOff x="210" y="220"/><a:chExt cx="230" cy="240"/></a:xfrm><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></p:grpSpPr>
       <p:sp>
         <p:nvSpPr><p:cNvPr id="5" name="Grouped shape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
-        <p:spPr><a:xfrm><a:off x="21" y="22"/><a:ext cx="23" cy="24"/></a:xfrm><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></p:spPr>
+        <p:spPr><a:xfrm><a:off x="21" y="22"/><a:ext cx="23" cy="24"/></a:xfrm><a:grpFill/></p:spPr>
       </p:sp>
     </p:grpSp>
     <p:sp>
