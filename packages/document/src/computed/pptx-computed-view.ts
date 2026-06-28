@@ -168,6 +168,46 @@ export interface ComputedChartElement extends ComputedElementBase {
   readonly transform?: SourceTransform;
   readonly relationship?: ComputedRelationship;
   readonly chartXml?: string;
+  readonly chartData?: ComputedChartData;
+}
+
+export type ComputedChartType =
+  | "bar"
+  | "line"
+  | "pie"
+  | "doughnut"
+  | "scatter"
+  | "bubble"
+  | "area"
+  | "radar"
+  | "stock"
+  | "surface"
+  | "ofPie";
+
+export interface ComputedChartData {
+  readonly chartType: ComputedChartType;
+  readonly title: string | null;
+  readonly series: readonly ComputedChartSeries[];
+  readonly categories: readonly string[];
+  readonly barDirection?: "col" | "bar";
+  readonly holeSize?: number;
+  readonly radarStyle?: "standard" | "marker" | "filled";
+  readonly ofPieType?: "pie" | "bar";
+  readonly secondPieSize?: number;
+  readonly splitPos?: number;
+  readonly legend: ComputedChartLegend | null;
+}
+
+export interface ComputedChartSeries {
+  readonly name: string | null;
+  readonly values: readonly number[];
+  readonly xValues?: readonly number[];
+  readonly bubbleSizes?: readonly number[];
+  readonly color: ComputedColor;
+}
+
+export interface ComputedChartLegend {
+  readonly position: "b" | "t" | "l" | "r" | "tr";
 }
 
 export interface ComputedSmartArtElement extends ComputedElementBase {
