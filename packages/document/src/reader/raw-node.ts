@@ -2,9 +2,9 @@
  * Raw OOXML escape hatch のための変換ヘルパー。
  *
  * PptxSourceModel が typed に表現しない要素 (未対応の fill / effect / extension 等) を
- * `RawOoxmlNode` / `RawSidecar` として保存し、structural round-trip を成立させる
- * (`docs/raw-ooxml-round-trip.md`)。fast-xml-parser が生成した plain object を
- * qualified name を保ったまま raw tree へ写し取る。
+ * `RawOoxmlNode` / `RawSidecar` として保存し、structural round-trip を成立させる。
+ * fast-xml-parser が生成した plain object を qualified name を保ったまま raw tree
+ * へ写し取る。
  */
 
 import type { RawOoxmlNode, RawSidecar, RawSidecarId } from "../source/index.js";

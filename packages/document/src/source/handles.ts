@@ -7,7 +7,7 @@ import { unsafeBrandAssertion } from "../unsafe-type-assertion.js";
  * ために「どの package part のどのノードから来たか」を stable な handle として
  * 保持する。handle は直接の mutable pointer ではなく、安定した参照
  * (part path / relationship id / node id / 兄弟内の順序 / raw sidecar 参照) で
- * 構成する (`docs/raw-ooxml-round-trip.md` の Raw Preservation Granularity 参照)。
+ * 構成する。
  */
 
 declare const PartPathBrand: unique symbol;

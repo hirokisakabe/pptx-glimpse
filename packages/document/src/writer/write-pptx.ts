@@ -1,11 +1,19 @@
 /**
  * `writePptx(source)` — PptxSourceModel source writer の最初の round-trip slice。
  *
- * この writer は structural round-trip を目的に、reader が保持した raw package
- * material / media bytes / package bookkeeping を PPTX ZIP として再構成する。
- * one plain text-run edit では dirty slide XML part を再シリアライズし、対象
- * run の `a:t` 値だけを stable source handle で差し替える。汎用的な edited
- * writer behavior や node-level XML splicing は後続 slice の責務。
+ * writer の目標は byte equality ではなく structural round-trip preservation。
+ * XML attribute order、namespace prefix placement、ZIP metadata、defaulted OOXML
+ * values まで一致させる package patcher にはしない。Content types と
+ * relationships は `packageGraph` から構造的に再生成し、media bytes / unknown
+ * parts / non-bookkeeping raw parts は reader が保持した raw package material を
+ * 優先して書き戻す。Dirty scope だけを supported PptxSourceModel operation に
+ * 従って更新する。
+ *
+ * 現在の slice は one plain text-run edit を support し、dirty slide XML part を
+ * 再シリアライズして対象 run の `a:t` 値だけを stable source handle で差し替える。
+ * Node-level XML splicing、unsupported raw sidecar の精密な invalidation、package
+ * topology rewrite は後続 writer slice の責務だが、API と dirty-scope tracking は
+ * その方向へ拡張できる形を保つ。
  */
 
 import { XMLBuilder } from "fast-xml-parser";

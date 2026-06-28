@@ -1,10 +1,10 @@
 /**
  * Simple shape / text run / image の source node 型。
  *
- * PoC scope の最小 subset (simple shapes / text / images) のみを typed に表す。
- * theme color や relationship は source では未解決の参照のまま保持し
- * (`docs/pptx-source-model-computed-view.md`)、cascade 解決は computed view の
- * 責務とする。未対応ノードは raw escape hatch で保存する。
+ * 現在の supported subset (simple shapes / text / images を中心とする drawing
+ * nodes) を typed に表す。theme color や relationship は source では未解決の参照
+ * のまま保持し、cascade 解決は computed view の責務とする。未対応ノードは raw
+ * escape hatch で保存する。
  */
 
 import type { RelationshipId, SourceHandle, SourceNodeId } from "./handles.js";

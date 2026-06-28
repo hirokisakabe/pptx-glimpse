@@ -1,7 +1,6 @@
 /**
  * Diagnostics の型。document の正しさ (round-trip / preservation / 参照解決) に
- * 関する診断であり、rendering fidelity や UI 挙動の警告ではない
- * (`docs/document-boundaries.md`)。
+ * 関する診断であり、rendering fidelity や UI 挙動の警告ではない。
  */
 
 import type { SourceHandle } from "./handles.js";

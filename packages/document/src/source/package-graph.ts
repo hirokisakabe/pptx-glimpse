@@ -1,7 +1,6 @@
 /**
  * Package graph の型。package part / relationship / content type / media を
- * source-model data として表す (`docs/raw-ooxml-round-trip.md` の Package
- * Bookkeeping)。
+ * source-model data として表す。
  */
 
 import type { PartPath, RelationshipId } from "./handles.js";
