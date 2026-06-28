@@ -5,9 +5,6 @@ import { unsafeXmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 /** fast-xml-parser が返す XML ノードの型エイリアス */
 export type XmlNode = Record<string, unknown>;
 
-/** preserveOrder: true で返される順序付き XML ノード */
-export type XmlOrderedNode = Record<string, unknown>;
-
 // OOXML XML で単一要素でも配列として扱う必要があるタグ。
 // fast-xml-parser は子要素が 1 つだとオブジェクト、複数だと配列を返すため、
 // スライド上に図形が 1 つだけの場合などにパース結果が不安定になる。
@@ -52,48 +49,6 @@ const standardParser = new XMLParser({
   },
 });
 
-const orderedParser = new XMLParser({
-  preserveOrder: true,
-  removeNSPrefix: true,
-  ignoreAttributes: true,
-});
-
-// 変換単位のパース結果キャッシュ。
-// 同一 XML 文字列（マスター・レイアウト等）の重複パースを回避する。
-let xmlCache: Map<string, Record<string, unknown>> | null = null;
-let xmlOrderedCache: Map<string, XmlOrderedNode[]> | null = null;
-
-/** 変換開始時にキャッシュを有効化する */
-export function enableXmlCache(): void {
-  xmlCache = new Map();
-  xmlOrderedCache = new Map();
-}
-
-/** 変換完了時にキャッシュをクリアする（メモリリーク防止） */
-export function clearXmlCache(): void {
-  xmlCache = null;
-  xmlOrderedCache = null;
-}
-
 export function parseXml(xml: string): Record<string, unknown> {
-  if (xmlCache) {
-    const cached = xmlCache.get(xml);
-    if (cached) return cached;
-  }
-  const result = unsafeXmlBoundaryAssertion<Record<string, unknown>>(standardParser.parse(xml));
-  xmlCache?.set(xml, result);
-  return result;
-}
-
-// preserveOrder: true で子要素の出現順序を保持するパーサー。
-// spTree 内の異なる要素タイプ（sp, pic, cxnSp 等）の Z-order を正しく復元するために使用。
-// データ取得には既存の parseXml を使い、本関数は順序情報のみに使用する。
-export function parseXmlOrdered(xml: string): XmlOrderedNode[] {
-  if (xmlOrderedCache) {
-    const cached = xmlOrderedCache.get(xml);
-    if (cached) return cached;
-  }
-  const result = unsafeXmlBoundaryAssertion<XmlOrderedNode[]>(orderedParser.parse(xml));
-  xmlOrderedCache?.set(xml, result);
-  return result;
+  return unsafeXmlBoundaryAssertion<Record<string, unknown>>(standardParser.parse(xml));
 }

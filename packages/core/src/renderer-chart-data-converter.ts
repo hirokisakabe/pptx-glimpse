@@ -2,7 +2,7 @@ import type { ChartData, ChartLegend, ChartSeries, ChartType } from "@pptx-glimp
 import type { ResolvedColor } from "@pptx-glimpse/renderer";
 
 import type { ColorResolver } from "./color/color-resolver.js";
-import { parseXml, type XmlNode } from "./parser/xml-parser.js";
+import { parseXml, type XmlNode } from "./ooxml/xml-parser.js";
 import { unsafeXmlBoundaryAssertion } from "./unsafe-type-assertion.js";
 
 const ACCENT_KEYS = ["accent1", "accent2", "accent3", "accent4", "accent5", "accent6"] as const;

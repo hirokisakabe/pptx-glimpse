@@ -29,8 +29,8 @@ The related core dogfood migration decision is recorded in
 [core-document-dogfood-migration.md](./core-document-dogfood-migration.md). In
 short, the public SVG/PNG conversion path now routes through a computed view and
 a core-owned adapter after the [#481](https://github.com/hirokisakabe/pptx-glimpse/issues/481)
-default switch. The old parser remains only as an explicit internal parity
-oracle and targeted fallback source.
+default switch. The temporary parser oracle was retired by
+[#543](https://github.com/hirokisakabe/pptx-glimpse/issues/543).
 
 The current PptxComputedView-to-renderer-model duplication boundary is recorded
 in
@@ -261,9 +261,8 @@ computed-view behaviors:
   filters template placeholders.
 
 Under the two-layer design, these behaviors moved behind explicit computed-view
-generation APIs for public conversion. Any remaining old-parser overlap is
-scoped to the parser oracle or renderer-specific adapter fallbacks rather than
-the public default path.
+generation APIs for public conversion. Renderer-specific defaults and
+diagnostics remain outside `document` in the core adapter or renderer.
 
 ## Schema Normalization Scope
 

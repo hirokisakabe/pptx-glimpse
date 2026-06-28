@@ -18,8 +18,7 @@ ends with a #445-ready conclusion.
 > Current-state note, 2026-06-27: this is a historical PoC-scope decision. The
 > public conversion default switch tracked by
 > [#481](https://github.com/hirokisakabe/pptx-glimpse/issues/481) is complete,
-> and parser comparisons now refer to the explicit internal parser oracle rather
-> than the public default conversion path.
+> and the temporary parser oracle comparisons were retired by #543.
 
 The PoC is not a full PPTX implementation. It is the smallest slice that can
 prove the intended architecture end to end:
@@ -116,7 +115,7 @@ The PoC should type enough text to verify source editing and render parity:
 - Text box body properties that affect current rendering for the selected
   fixtures, including margins and vertical anchor when present.
 - Text style inheritance from slide, layout, master, theme, and presentation
-  defaults in the computed view where the current parser already depends on it.
+  defaults in the computed view where rendering compatibility depends on it.
 
 The first text-edit API should edit one existing run's plain text while
 preserving its run and paragraph properties.
@@ -191,8 +190,8 @@ Recommended checks:
    placeholder matching, text style inheritance, `showMasterSp` visibility, and
    effective element ordering.
 6. Adapt the computed view into the current renderer model in core.
-7. Compare the adapter output with the current parser output for the supported
-   subset using structural assertions.
+7. Compare the adapter output with focused expected structures for the supported
+   subset.
 8. Render the adapted output and verify SVG generation succeeds with no intended
    public output change.
 
@@ -298,8 +297,7 @@ to:
    placeholder matching, text style inheritance, and `showMasterSp` visibility.
 6. Add a core-owned PptxSourceModel computed-view-to-current-renderer-model adapter for
    the supported subset.
-7. Add dual-reader structural comparison tests against the current parser for
-   selected shared fixtures.
+7. Add focused adapter/computed-view assertions for selected shared fixtures.
 8. Implement no-edit writer output that preserves untouched package material and
    can be re-read.
 9. Implement one-run text edit and dirty-slide writer behavior with diagnostics
@@ -329,7 +327,6 @@ transitions, notes, complex geometry/effects/text, group editing, and broad raw
 OOXML editing APIs remain outside the first PoC.
 
 Success is measured by structural source assertions, computed-view assertions,
-adapter parity against the current parser for the supported subset, successful
-SVG rendering with no intended public output change, no-edit structural
-round-trip, and one text-run edit round-trip. Byte equality is explicitly not a
-goal.
+adapter assertions for the supported subset, successful SVG rendering with no
+intended public output change, no-edit structural round-trip, and one text-run
+edit round-trip. Byte equality is explicitly not a goal.

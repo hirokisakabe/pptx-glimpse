@@ -2,9 +2,9 @@ import JSZip from "jszip";
 import { beforeAll, bench, describe } from "vitest";
 
 import { convertPptxToPng, convertPptxToSvg } from "../packages/core/src/converter.js";
-import { parsePptxData, parseSlideWithLayout } from "../packages/core/src/pptx-data-parser.js";
+import { adaptComputedViewToRendererModel } from "../packages/core/src/pptx-computed-view-renderer-adapter.js";
+import { createComputedView, readPptx } from "../packages/document/src/experimental.js";
 import type { SlideSize } from "../packages/renderer/src/model/presentation.js";
-import type { SlideElement } from "../packages/renderer/src/model/shape.js";
 import type { Slide } from "../packages/renderer/src/model/slide.js";
 import { renderSlideToSvg } from "../packages/renderer/src/renderer/svg-renderer.js";
 
@@ -365,39 +365,20 @@ function createMultiSlideEntries(count: number): SlideEntry[] {
 }
 
 // ---------------------------------------------------------------------------
-// Parse pipeline helper (uses the real parse pipeline from pptx-data-parser.ts)
+// Document-path model preparation helper.
 // ---------------------------------------------------------------------------
 
-function filterPlaceholders(elements: SlideElement[]): SlideElement[] {
-  return elements.filter((el) => {
-    if (el.type !== "shape") return true;
-    return !el.placeholderType;
-  });
-}
-
-function parsePptxFull(input: Buffer): { slides: Slide[]; slideSize: SlideSize } {
-  const data = parsePptxData(input);
-
-  const slides: Slide[] = [];
-  for (const { slideNumber, path } of data.slidePaths) {
-    const parsed = parseSlideWithLayout(slideNumber, path, data);
-    if (!parsed) continue;
-
-    const { slide, layoutElements, layoutShowMasterSp } = parsed;
-
-    // Merge shapes: master → layout → slide (same as converter.ts)
-    const effectiveMasterElements =
-      slide.showMasterSp && layoutShowMasterSp ? data.masterElements : [];
-    slide.elements = [
-      ...filterPlaceholders(effectiveMasterElements),
-      ...filterPlaceholders(layoutElements),
-      ...slide.elements,
-    ];
-
-    slides.push(slide);
+function prepareDocumentPathRendererModel(input: Buffer): {
+  slides: readonly Slide[];
+  slideSize: SlideSize;
+} {
+  const source = readPptx(input);
+  const computed = createComputedView(source);
+  const adapted = adaptComputedViewToRendererModel(computed);
+  if (adapted.slideSize === undefined) {
+    throw new Error("Document path benchmark requires a computed slide size");
   }
-
-  return { slides, slideSize: data.presInfo.slideSize };
+  return { slides: adapted.slides, slideSize: adapted.slideSize };
 }
 
 // ---------------------------------------------------------------------------
@@ -422,11 +403,11 @@ beforeAll(async () => {
   ]);
 
   // Pre-parse slides for renderer-only benchmarks
-  const simpleResult = parsePptxFull(simplePptx);
+  const simpleResult = prepareDocumentPathRendererModel(simplePptx);
   parsedSimpleSlide = simpleResult.slides[0];
   slideSize = simpleResult.slideSize;
 
-  const complexResult = parsePptxFull(complexPptx);
+  const complexResult = prepareDocumentPathRendererModel(complexPptx);
   parsedComplexSlide = complexResult.slides[0];
 });
 
@@ -462,13 +443,13 @@ describe("PNG conversion", () => {
   });
 });
 
-describe("parser standalone", () => {
-  bench("parse simple slide", () => {
-    parsePptxFull(simplePptx);
+describe("document path standalone", () => {
+  bench("prepare simple slide renderer model", () => {
+    prepareDocumentPathRendererModel(simplePptx);
   });
 
-  bench("parse complex slide", () => {
-    parsePptxFull(complexPptx);
+  bench("prepare complex slide renderer model", () => {
+    prepareDocumentPathRendererModel(complexPptx);
   });
 });
 

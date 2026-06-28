@@ -7,7 +7,7 @@
 
 import type { ResolvedColor } from "@pptx-glimpse/renderer";
 
-import type { XmlNode } from "../parser/xml-parser.js";
+import type { XmlNode } from "../ooxml/xml-parser.js";
 import { unsafeXmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 
 export function applyColorTransforms(color: ResolvedColor, node: XmlNode): ResolvedColor {

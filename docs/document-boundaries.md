@@ -172,11 +172,12 @@ OOXML package
 This lets `document` preserve enough structure for writer/editor/round-trip
 work, while `renderer` keeps a purpose-built shape for visual output.
 
-Historical migration note: the short-term parser-to-renderer public path has
-been replaced by the PptxSourceModel document path as part of
-[#481](https://github.com/hirokisakabe/pptx-glimpse/issues/481). The old parser
-path remains only as an explicit internal oracle for parity checks and targeted
-adapter fallbacks. The migration path was:
+Historical migration note: the short-term parser-to-renderer public path was
+replaced by the PptxSourceModel document path as part of
+[#481](https://github.com/hirokisakabe/pptx-glimpse/issues/481), and the
+temporary parser oracle was retired by
+[#543](https://github.com/hirokisakabe/pptx-glimpse/issues/543). The migration
+path was:
 
 1. Introduce PptxSourceModel types in `@pptx-glimpse/document`.
 2. Add a reader path that builds PptxSourceModel from OOXML.

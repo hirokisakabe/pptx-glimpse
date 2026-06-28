@@ -85,9 +85,8 @@ const DIAGRAM_DRAWING_REL_TYPES: ReadonlySet<string> = new Set([
 
 const textDecoder = new TextDecoder();
 
-// Current parser path treats any tableStyleId as black 1pt cell borders when
-// a cell has no inline border definition. Keep this compatibility approximation
-// until tableStyles.xml is modeled explicitly.
+// Preserve the existing renderer-compatibility default for table styles until
+// tableStyles.xml is modeled explicitly.
 const DEFAULT_TABLE_STYLE_BORDERS: SourceCellBorders = {
   top: {
     width: asEmu(12700),
@@ -756,8 +755,8 @@ function resolveFillReference(
   partPath: PartPath,
 ): ComputedFill | undefined {
   if (ref.index === 0) return undefined;
-  // Match the current parser oracle in style-reference-resolver.ts: idx >= 1000
-  // is routed to bgFillStyleLst, with idx=1000 resolving to no template.
+  // OOXML style references route idx >= 1000 to bgFillStyleLst, with idx=1000
+  // resolving to no template.
   const list =
     ref.index >= 1000
       ? context.theme?.formatScheme?.backgroundFillStyles
@@ -807,8 +806,8 @@ function resolveEffectReference(
   context: ComputeContext,
   ref: SourceStyleReference,
 ): ComputedEffectList | undefined {
-  // Match the current parser oracle in style-reference-resolver.ts, where
-  // effectStyleLst is indexed directly by effectRef@idx.
+  // effectStyleLst is indexed directly by effectRef@idx for renderer
+  // compatibility with existing snapshots.
   const template = context.theme?.formatScheme?.effectStyles[ref.index];
   return template !== undefined ? computeEffectList(context, template) : undefined;
 }
@@ -914,8 +913,8 @@ function computeTextBody(
     placeholderType,
     includeInheritedStyleChain,
   );
-  // Current parser path does not inherit placeholder bodyPr; keep computed output
-  // aligned until the document path intentionally owns that behavior.
+  // Keep placeholder bodyPr inheritance disabled until the document path
+  // intentionally owns that behavior.
   const properties = mergeTextBodyProperties(undefined, textBody.properties);
   return {
     ...(properties !== undefined ? { properties } : {}),

@@ -81,10 +81,8 @@ PPTX Buffer | Uint8Array
   -> svgToPng(svg, options) for PNG output
 ```
 
-The old parser path remains only as an explicit internal oracle for parity
-checks and adapter fallbacks documented in
-[legacy-parser-semantics-audit.md](./legacy-parser-semantics-audit.md). It is
-not the public default.
+The old parser path was retired after the document path became the public
+default and VRT moved to committed document-path snapshots.
 
 ## Target Flow Through `document`
 
@@ -119,8 +117,8 @@ does not need to know PptxSourceModel directly.
 ## Historical Parallel Reader Period
 
 This section records the temporary parallel reader period that #481 has now
-completed. It remains useful as historical context for why parser-path oracle
-tests still exist.
+completed. It remains useful as historical context for the temporary
+parser-path oracle tests that were later retired by #543.
 
 The first `document` reader was introduced behind internal or experimental
 paths and compared against the then-current parser path. During that historical
