@@ -2,41 +2,41 @@ import { XMLParser } from "fast-xml-parser";
 
 import { unsafeXmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 
-/** fast-xml-parser が返す XML ノードの型エイリアス */
+/** Type alias for XML nodes returned by fast-xml-parser */
 export type XmlNode = Record<string, unknown>;
 
-// OOXML XML で単一要素でも配列として扱う必要があるタグ。
-// fast-xml-parser は子要素が 1 つだとオブジェクト、複数だと配列を返すため、
-// スライド上に図形が 1 つだけの場合などにパース結果が不安定になる。
-// isArray で常に配列化することで、下流コードを統一的に記述できる。
+// Tags that require even a single element to be treated as an array in OOXML XML.
+// fast-xml-parser returns an object if there is one child element, and an array if there are multiple child elements, so
+// Parsing results become unstable when there is only one shape on the slide.
+// By always using isArray to create an array, you can write downstream code in a unified manner.
 const ARRAY_TAGS = new Set([
-  "sp", // 図形 (Shape)
-  "pic", // 画像 (Picture)
-  "cxnSp", // コネクタ (Connector)
-  "grpSp", // グループ (Group Shape)
-  "graphicFrame", // テーブル・チャート等のフレーム
-  "p", // テキスト段落 (Paragraph)
-  "r", // テキストラン (Run)
-  "br", // 改行 (Break)
-  "fld", // フィールドコード (Field)
-  "Relationship", // リレーションシップ
-  "sldId", // スライド ID
-  "gs", // グラデーションストップ (Gradient Stop)
-  "gridCol", // テーブル列定義
-  "tr", // テーブル行 (Table Row)
-  "tc", // テーブルセル (Table Cell)
-  "ser", // チャートデータ系列 (Series)
-  "pt", // チャートデータポイント (Point)
-  "gd", // ガイド定義 (Guide Definition)
-  "ds", // カスタムダッシュセグメント (Custom Dash Segment)
-  "AlternateContent", // mc:AlternateContent (SmartArt 等)
-  "embeddedFont", // 埋め込みフォント (Embedded Font)
-  "effectStyle", // エフェクトスタイル (Effect Style)
-  "font", // スクリプトベースフォント定義 (Script-based Font)
+  "sp", // Shape
+  "pic", // Picture
+  "cxnSp", // Connector
+  "grpSp", // Group (Group Shape)
+  "graphicFrame", // Frames for tables, charts, etc.
+  "p", // Text paragraph (Paragraph)
+  "r", // Text run (Run)
+  "br", // Line break (Break)
+  "fld", // Field code (Field)
+  "Relationship", // relationship
+  "sldId", // Slide ID
+  "gs", // Gradient Stop
+  "gridCol", // table column definition
+  "tr", // Table Row
+  "tc", // Table Cell
+  "ser", // Chart data series (Series)
+  "pt", // Chart data point (Point)
+  "gd", // Guide Definition
+  "ds", // Custom Dash Segment
+  "AlternateContent", // mc:AlternateContent (SmartArt etc.)
+  "embeddedFont", // Embedded Font
+  "effectStyle", // Effect Style
+  "font", // Script-based Font definition
 ]);
 
-// シングルトンパーサーインスタンス。
-// XMLParser.parse() はステートレスなため、安全に再利用できる。
+// Singleton parser instance.
+// XMLParser.parse() is stateless and can be safely reused.
 const standardParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",

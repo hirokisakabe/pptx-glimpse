@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-LibreOffice VRT 用の PPTX フィクスチャを python-pptx で生成する。
+Generate PPTX fixtures for LibreOffice VRT with python-pptx.
 
 Usage:
     python3 vrt/libreoffice/create_fixtures.py
@@ -18,7 +18,7 @@ from pptx.util import Emu, Inches, Pt
 
 
 def make_element(tag, **attribs):
-    """OOXML 要素を作成する (e.g., make_element("a:gradFill"))"""
+    """Create an OOXML element (e.g., make_element("a:gradFill"))"""
     element = etree.SubElement(etree.Element("dummy"), qn(tag))
     element.getparent().remove(element)
     for key, val in attribs.items():
@@ -36,7 +36,7 @@ SLIDE_HEIGHT_4_3 = 6858000
 
 
 def new_presentation():
-    """スライドサイズを固定した新しいプレゼンテーションを生成する。"""
+    """Generate a new presentation with fixed slide sizes."""
     prs = Presentation()
     prs.slide_width = Emu(SLIDE_WIDTH)
     prs.slide_height = Emu(SLIDE_HEIGHT)
@@ -44,7 +44,7 @@ def new_presentation():
 
 
 def new_presentation_4_3():
-    """4:3 スライドサイズの新しいプレゼンテーションを生成する。"""
+    """Generate a new presentation with 4:3 slide size."""
     prs = Presentation()
     prs.slide_width = Emu(SLIDE_WIDTH_4_3)
     prs.slide_height = Emu(SLIDE_HEIGHT_4_3)
@@ -52,7 +52,7 @@ def new_presentation_4_3():
 
 
 def create_basic_shapes():
-    """基本図形: rect, ellipse, roundRect (ソリッド塗り + 枠線)"""
+    """Basic shapes: rect, ellipse, roundRect (solid fill + border)"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])  # blank layout
 
@@ -83,7 +83,7 @@ def create_basic_shapes():
 
 
 def create_text_formatting():
-    """テキスト書式: 太字、イタリック、フォントサイズ、色、配置"""
+    """Text formatting: bold, italic, font size, color, alignment"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -134,7 +134,7 @@ def create_text_formatting():
 
 
 def create_fill_and_lines():
-    """塗りと線: ソリッド塗り各色 + 枠線スタイル"""
+    """Fill and Stroke: Solid fill colors + border style"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -155,7 +155,7 @@ def create_fill_and_lines():
         shape.line.color.rgb = RGBColor(0x33, 0x33, 0x33)
         shape.line.width = Pt(2)
 
-    # 枠線のみの図形（塗りなし）
+    # Shape with only a border (no fill)
     no_fill_shapes = [
         (MSO_SHAPE.RECTANGLE, Inches(0.5), Inches(3), Inches(2.5), Inches(2),
          RGBColor(0x44, 0x72, 0xC4), Pt(1)),
@@ -176,7 +176,7 @@ def create_fill_and_lines():
 
 
 def create_gradient_fills():
-    """グラデーション塗り: 水平/垂直/対角/3色/枠線付き/暗色"""
+    """Gradient fill: horizontal/vertical/diagonal/3 colors/with border/dark color"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -231,9 +231,9 @@ def create_gradient_fills():
         )
         shape.fill.background()
 
-        # XML でグラデーション塗りを設定
+        # Set gradient fill in XML
         spPr = shape._element.spPr
-        # noFill を削除
+        # Remove noFill
         for child in list(spPr):
             tag = etree.QName(child.tag).localname
             if tag in ("noFill", "solidFill"):
@@ -265,7 +265,7 @@ def create_gradient_fills():
 
 
 def create_dash_lines():
-    """線のダッシュスタイル: solid, dash, dot, dashDot, lgDash, lgDashDot"""
+    """Line dash style: solid, dash, dot, dashDot, lgDash, lgDashDot"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -291,13 +291,13 @@ def create_dash_lines():
         shape.line.color.rgb = RGBColor(0x44, 0x72, 0xC4)
         shape.line.width = Pt(2.5)
 
-        # XML でダッシュスタイルを設定
+        # Set dash style with XML
         ln = shape.line._ln
         prstDash = make_element("a:prstDash")
         prstDash.set("val", dash_val)
         ln.append(prstDash)
 
-        # ラベルテキスト
+        # label text
         tf = shape.text_frame
         tf.word_wrap = True
         p = tf.paragraphs[0]
@@ -313,7 +313,7 @@ def create_dash_lines():
 
 
 def create_text_decoration():
-    """テキスト装飾: 下線、取り消し線、太字+下線、イタリック+取り消し線、複数行、上付き"""
+    """Text decorations: underline, strikethrough, bold+underline, italic+strikeout, multiline, superscript"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -360,7 +360,7 @@ def create_text_decoration():
             run = p.runs[0]
             run.font.name = "Liberation Sans"
             run.font.size = Pt(20)
-            # 上付き文字を追加
+            # add superscript
             sup_run = p.add_run()
             sup_run.text = t["sup_text"]
             sup_run.font.name = "Liberation Sans"
@@ -389,7 +389,7 @@ def create_text_decoration():
 
 
 def create_tables():
-    """テーブル: ヘッダ行 + データ行 (交互背景色)"""
+    """Table: header row + data row (alternating background color)"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -409,7 +409,7 @@ def create_tables():
         ["Gamma", "Type C", "300"],
     ]
 
-    # ヘッダ行
+    # header row
     for j, header in enumerate(headers):
         cell = table.cell(0, j)
         cell.text = header
@@ -423,7 +423,7 @@ def create_tables():
         run.font.bold = True
         run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
 
-    # データ行
+    # data row
     for i, row_data in enumerate(data):
         bg = RGBColor(0xF2, 0xF2, 0xF2) if i % 2 == 0 else RGBColor(0xFF, 0xFF, 0xFF)
         for j, value in enumerate(row_data):
@@ -441,7 +441,7 @@ def create_tables():
 
 
 def create_bullets():
-    """箇条書き・番号付きリスト: buChar (丸/ダッシュ) + buAutoNum (数字/アルファベット)"""
+    """Bulleted/numbered list: buChar (circle/dash) + buAutoNum (number/alphabet)"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -489,7 +489,7 @@ def create_bullets():
         tf = shape.text_frame
         tf.word_wrap = True
 
-        # タイトル行
+        # title line
         p = tf.paragraphs[0]
         p.text = config["title"]
         run = p.runs[0]
@@ -498,7 +498,7 @@ def create_bullets():
         run.font.bold = True
         run.font.color.rgb = RGBColor(0x44, 0x72, 0xC4)
 
-        # 箇条書き項目
+        # bulleted items
         for item_text in config["items"]:
             p = tf.add_paragraph()
             p.text = item_text
@@ -528,7 +528,7 @@ def create_bullets():
 
 
 def create_transforms():
-    """回転・フリップ: 45度/90度回転、水平/垂直フリップ、組み合わせ"""
+    """Rotation/Flip: 45 degree/90 degree rotation, horizontal/vertical flip, combination"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -569,12 +569,12 @@ def create_transforms():
 
 
 def create_groups():
-    """グループ図形: 2グループ (各2図形)"""
+    """Group shapes: 2 groups (2 shapes each)"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
-    # python-pptx でのグループ作成は XML 操作が必要
-    # グループ1: 青矩形 + オレンジ楕円
+    # Group creation in python-pptx requires XML operations
+    # Group 1: Blue rectangle + orange oval
     group_shapes = [
         {
             "group_left": Inches(0.5),
@@ -627,12 +627,12 @@ def create_groups():
     ]
 
     for group_def in group_shapes:
-        # グループ図形を XML で構築
+        # Build group shapes in XML
         spTree = slide.shapes._spTree
 
         grpSp = make_element("p:grpSp")
 
-        # grpSpPr (グループの位置・サイズ)
+        # grpSpPr (group position/size)
         grpSpPr = make_element("p:grpSpPr")
         xfrm = make_element("a:xfrm")
         off = make_element("a:off")
@@ -666,7 +666,7 @@ def create_groups():
         nvGrpSpPr.append(nvPr)
         grpSp.insert(0, nvGrpSpPr)
 
-        # 子図形を追加
+        # Add child shape
         for ci, child in enumerate(group_def["children"]):
             sp = make_element("p:sp")
 
@@ -695,7 +695,7 @@ def create_groups():
             childXfrm.append(childExt)
             spPr.append(childXfrm)
 
-            # prstGeom (プリセット図形)
+            # prstGeom (preset shape)
             prstGeom = make_element("a:prstGeom")
             shape_map = {
                 MSO_SHAPE.RECTANGLE: "rect",
@@ -716,7 +716,7 @@ def create_groups():
             solidFill.append(srgbClr)
             spPr.append(solidFill)
 
-            # ln (枠線)
+            # ln (border)
             ln = make_element("a:ln")
             ln.set("w", str(int(Pt(1.5))))
             lnFill = make_element("a:solidFill")
@@ -736,17 +736,17 @@ def create_groups():
 
 
 def create_slide_background():
-    """スライド背景: ソリッドカラー背景 + 白テキストボックス + 枠線のみ図形"""
+    """Slide background: solid color background + white text box + border only shape"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
-    # スライド背景色を設定
+    # Set slide background color
     background = slide.background
     fill = background.fill
     fill.solid()
     fill.fore_color.rgb = RGBColor(0x44, 0x72, 0xC4)
 
-    # 白い矩形 + テキスト
+    # white rectangle + text
     shape1 = slide.shapes.add_shape(
         MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1), Inches(1), Inches(3.5), Inches(1.5)
     )
@@ -764,7 +764,7 @@ def create_slide_background():
     run.font.size = Pt(24)
     run.font.bold = True
 
-    # 黄色い矩形
+    # yellow rectangle
     shape2 = slide.shapes.add_shape(
         MSO_SHAPE.ROUNDED_RECTANGLE, Inches(5.5), Inches(1), Inches(3.5), Inches(1.5)
     )
@@ -781,7 +781,7 @@ def create_slide_background():
     run2.font.size = Pt(24)
     run2.font.bold = True
 
-    # 枠線のみの図形 (白枠)
+    # Shape with only a border (white frame)
     shape3 = slide.shapes.add_shape(
         MSO_SHAPE.OVAL, Inches(2.5), Inches(3), Inches(5), Inches(1.8)
     )
@@ -794,7 +794,7 @@ def create_slide_background():
 
 
 def create_flowchart_shapes():
-    """フローチャート図形: 8つのフローチャートプリセット (ソリッド塗り + 枠線)"""
+    """Flowchart shapes: 8 flowchart presets (solid fill + border)"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -826,7 +826,7 @@ def create_flowchart_shapes():
 
 
 def create_arrows_stars():
-    """矢印と星形図形: MSO_SHAPE presets"""
+    """Arrow and star shapes: MSO_SHAPE presets"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -866,7 +866,7 @@ def create_arrows_stars():
 
 
 def create_callouts_arcs():
-    """吹き出しとアーク図形"""
+    """Speech bubbles and arc shapes"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -907,7 +907,7 @@ def create_callouts_arcs():
 
 
 def create_math_other():
-    """数式記号とその他の図形"""
+    """Mathematical symbols and other shapes"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -950,7 +950,7 @@ def create_math_other():
 
 
 def create_image():
-    """画像埋め込み: Pillow で動的生成した画像を配置"""
+    """Image embedding: Place dynamically generated images with Pillow"""
     import shutil
     import tempfile
 
@@ -962,7 +962,7 @@ def create_image():
     temp_dir = tempfile.mkdtemp()
 
     try:
-        # 画像1: カラーグラデーション
+        # Image 1: Color gradation
         img1 = Image.new("RGB", (200, 200))
         pixels = img1.load()
         for y in range(200):
@@ -971,7 +971,7 @@ def create_image():
         img1_path = os.path.join(temp_dir, "gradient.png")
         img1.save(img1_path)
 
-        # 画像2: チェッカーボード
+        # Image 2: Checkerboard
         img2 = Image.new("RGB", (200, 200), "white")
         draw2 = ImageDraw.Draw(img2)
         for row in range(10):
@@ -982,7 +982,7 @@ def create_image():
         img2_path = os.path.join(temp_dir, "checker.png")
         img2.save(img2_path)
 
-        # 画像3: 円パターン
+        # Image 3: Circle pattern
         img3 = Image.new("RGB", (200, 200), "white")
         draw3 = ImageDraw.Draw(img3)
         draw3.ellipse([10, 10, 190, 190], fill=(68, 114, 196), outline=(51, 51, 51))
@@ -1001,7 +1001,7 @@ def create_image():
 
 
 def create_charts():
-    """チャート: 縦棒、折れ線、円、横棒、散布図"""
+    """Charts: vertical bar, line, pie, horizontal bar, scatter plot"""
     from pptx.chart.data import CategoryChartData, XyChartData
     from pptx.enum.chart import XL_CHART_TYPE
 
@@ -1009,7 +1009,7 @@ def create_charts():
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
     # Row 1: 3 charts
-    # 縦棒グラフ
+    # vertical bar graph
     chart_data1 = CategoryChartData()
     chart_data1.categories = ["Q1", "Q2", "Q3", "Q4"]
     chart_data1.add_series("Sales", (19.2, 21.4, 16.7, 20.8))
@@ -1019,7 +1019,7 @@ def create_charts():
         chart_data1,
     )
 
-    # 折れ線グラフ
+    # line graph
     chart_data2 = CategoryChartData()
     chart_data2.categories = ["Jan", "Feb", "Mar", "Apr"]
     chart_data2.add_series("Revenue", (30, 35, 32, 40))
@@ -1030,7 +1030,7 @@ def create_charts():
         chart_data2,
     )
 
-    # 円グラフ
+    # pie chart
     chart_data3 = CategoryChartData()
     chart_data3.categories = ["Red", "Green", "Blue"]
     chart_data3.add_series("Share", (40, 35, 25))
@@ -1041,7 +1041,7 @@ def create_charts():
     )
 
     # Row 2: 2 charts
-    # 横棒グラフ
+    # horizontal bar graph
     chart_data4 = CategoryChartData()
     chart_data4.categories = ["Alpha", "Beta", "Gamma"]
     chart_data4.add_series("Values", (50, 65, 45))
@@ -1051,7 +1051,7 @@ def create_charts():
         chart_data4,
     )
 
-    # 散布図
+    # scatter plot
     chart_data5 = XyChartData()
     series = chart_data5.add_series("Points")
     series.add_data_point(1.0, 2.5)
@@ -1070,7 +1070,7 @@ def create_charts():
 
 
 def create_connectors():
-    """コネクタ線: XML 直接操作で p:cxnSp を生成"""
+    """Connector line: Generate p:cxnSp with direct XML manipulation"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -1165,7 +1165,7 @@ def create_connectors():
 
 
 def _build_custom_path(path_elem, commands):
-    """カスタムジオメトリのパスコマンドを構築するヘルパー"""
+    """Helper to build path commands for custom geometry"""
     for cmd in commands:
         if cmd[0] == "moveTo":
             moveTo = make_element("a:moveTo")
@@ -1194,7 +1194,7 @@ def _build_custom_path(path_elem, commands):
 
 
 def create_custom_geometry():
-    """カスタムジオメトリ: a:custGeom でカスタムパスを定義"""
+    """Custom geometry: define a custom path with a:custGeom"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -1304,17 +1304,17 @@ def create_custom_geometry():
 
 
 def create_slide_size_4_3():
-    """4:3 スライドサイズ: 基本図形 + テキスト + 背景色を 1 スライドに配置"""
+    """4:3 slide size: basic shapes + text + background color placed on one slide"""
     prs = new_presentation_4_3()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
-    # スライド背景色
+    # slide background color
     background = slide.background
     fill_bg = background.fill
     fill_bg.solid()
     fill_bg.fore_color.rgb = RGBColor(0xF0, 0xF4, 0xF8)
 
-    # 上段: 基本図形 3 つ
+    # Top row: 3 basic shapes
     shapes_def = [
         (MSO_SHAPE.RECTANGLE, Inches(0.3), Inches(0.3), Inches(2.8), Inches(2.5),
          RGBColor(0x44, 0x72, 0xC4)),
@@ -1331,7 +1331,7 @@ def create_slide_size_4_3():
         shape.line.color.rgb = RGBColor(0x33, 0x33, 0x33)
         shape.line.width = Pt(1.5)
 
-    # 中段: テキストボックス 2 つ
+    # Middle row: 2 text boxes
     left_box = slide.shapes.add_shape(
         MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.3), Inches(3.1), Inches(4.5), Inches(2.2)
     )
@@ -1368,7 +1368,7 @@ def create_slide_size_4_3():
     run_r.font.italic = True
     run_r.font.color.rgb = RGBColor(0x33, 0x33, 0x33)
 
-    # 下段: フッターバー
+    # Bottom: Footer bar
     footer = slide.shapes.add_shape(
         MSO_SHAPE.RECTANGLE, Inches(0.3), Inches(5.6), Inches(9.2), Inches(1.6)
     )
@@ -1390,7 +1390,7 @@ def create_slide_size_4_3():
 
 
 def create_word_wrap():
-    """テキスト折り返し: 長文、ナロー、no-wrap、日本語、CJK混合、複数サイズ"""
+    """Text wrapping: long, narrow, no-wrap, Japanese, mixed CJK, multiple sizes"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -1464,7 +1464,7 @@ def create_word_wrap():
 
 
 def create_background_blipfill():
-    """画像ベース背景: Pillow で画像を生成し、スライド背景に blipFill で設定"""
+    """Image-based background: Generate an image with Pillow and set it as the slide background with blipFill"""
     import shutil
     import tempfile
 
@@ -1476,7 +1476,7 @@ def create_background_blipfill():
     temp_dir = tempfile.mkdtemp()
 
     try:
-        # グラデーション画像を生成
+        # Generate gradient image
         img = Image.new("RGB", (200, 200))
         pixels = img.load()
         for y in range(200):
@@ -1488,17 +1488,17 @@ def create_background_blipfill():
         img_path = os.path.join(temp_dir, "bg-gradient.png")
         img.save(img_path)
 
-        # ダミーの画像を追加して rId を取得し、その後削除
+        # Add a dummy image to get the rId and then delete it
         pic = slide.shapes.add_picture(img_path, 0, 0, Inches(1), Inches(1))
         blip_elem = pic._element.find(".//" + qn("a:blip"))
         rId = blip_elem.get(qn("r:embed"))
         spTree = slide.shapes._spTree
         spTree.remove(pic._element)
 
-        # スライド背景に blipFill を設定 (p:cSld > p:bg > p:bgPr)
+        # Set blipFill to slide background (p:cSld > p:bg > p:bgPr)
         cSld = slide._element.find(qn("p:cSld"))
 
-        # 既存の p:bg があれば削除
+        # Delete existing p:bg if there is one
         existing_bg = cSld.find(qn("p:bg"))
         if existing_bg is not None:
             cSld.remove(existing_bg)
@@ -1518,21 +1518,21 @@ def create_background_blipfill():
         bgPr.append(effectLst)
         bg.append(bgPr)
 
-        # p:bg を p:spTree の前に挿入
+        # Insert p:bg before p:spTree
         spTree_idx = list(cSld).index(spTree)
         cSld.insert(spTree_idx, bg)
 
-        # 半透明の白い矩形 + テキストをオーバーレイ
+        # Transparent white rectangle + overlay text
         overlay = slide.shapes.add_shape(
             MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1), Inches(1), Inches(8), Inches(3)
         )
-        # 半透明の白塗り (XML で alpha を設定)
+        # Transparent white fill (set alpha in XML)
         overlay.fill.solid()
         overlay.fill.fore_color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
         solidFill = overlay._element.spPr.find(qn("a:solidFill"))
         srgbClr = solidFill.find(qn("a:srgbClr"))
         alpha = make_element("a:alpha")
-        alpha.set("val", "70000")  # 70% 不透明
+        alpha.set("val", "70000")  # 70% opaque
         srgbClr.append(alpha)
 
         overlay.line.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
@@ -1556,11 +1556,11 @@ def create_background_blipfill():
 
 
 def create_composite():
-    """複合テスト: 非矩形図形+テキスト、グラデーション+回転+半透明の組み合わせ"""
+    """Combined test: combination of non-rectangular shape + text, gradient + rotation + translucency"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
-    # 非矩形図形にテキストを配置
+    # Place text on non-rectangular shape
     text_shapes = [
         (MSO_SHAPE.OVAL, Inches(0.3), Inches(0.3), Inches(2.8), Inches(2.2),
          RGBColor(0x44, 0x72, 0xC4), "Ellipse Text", PP_ALIGN.CENTER),
@@ -1587,7 +1587,7 @@ def create_composite():
         run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
         run.font.bold = True
 
-    # グラデーション + 回転 + 半透明の組み合わせ
+    # Gradient + rotation + translucent combination
     combo_shapes = [
         {
             "shape": MSO_SHAPE.HEXAGON,
@@ -1672,7 +1672,7 @@ def create_composite():
 
 
 def create_effects():
-    """シェイプエフェクト: ドロップシャドウ、インナーシャドウ、グロー、ソフトエッジ"""
+    """Shape effects: drop shadow, inner shadow, glow, soft edge"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -1760,7 +1760,7 @@ def create_effects():
         shape.line.color.rgb = RGBColor(0x33, 0x33, 0x33)
         shape.line.width = Pt(1.5)
 
-        # エフェクトを XML で追加
+        # Add effects as XML
         effectLst = etree.fromstring(e["effect_xml"])
         spPr = shape._element.spPr
         spPr.append(effectLst)
@@ -1770,7 +1770,7 @@ def create_effects():
 
 
 def create_hyperlinks():
-    """ハイパーリンク: テキスト内のハイパーリンク"""
+    """Hyperlink: Hyperlink in text"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -1878,7 +1878,7 @@ def create_hyperlinks():
 
 
 def create_chart_legend_position():
-    """凡例位置 r (右) の棒グラフ — pptxgenjs のデフォルト位置を検証する"""
+    """Bar graph at legend position r (right) - verify default position in pptxgenjs"""
     from pptx.chart.data import CategoryChartData
     from pptx.enum.chart import XL_CHART_TYPE, XL_LEGEND_POSITION
 

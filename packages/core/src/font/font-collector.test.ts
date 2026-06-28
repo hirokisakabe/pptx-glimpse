@@ -299,7 +299,7 @@ beforeAll(async () => {
 });
 
 describe("collectUsedFonts", () => {
-  it("テーマフォント情報を返す", () => {
+  it("Return theme font information", () => {
     const result = collectUsedFonts(testPptx);
 
     expect(result.theme.majorFont).toBe("Calibri Light");
@@ -310,24 +310,24 @@ describe("collectUsedFonts", () => {
     expect(result.theme.minorFontCs).toBe("Arial");
   });
 
-  it("テキストランのフォント名を収集する", () => {
+  it("Collect font names for text runs", () => {
     const result = collectUsedFonts(testPptx);
 
-    // テキストランで指定されたフォント
+    // font specified in text run
     expect(result.fonts).toContain("Arial");
     expect(result.fonts).toContain("MS PGothic");
     expect(result.fonts).toContain("Times New Roman");
     expect(result.fonts).toContain("Yu Gothic");
   });
 
-  it("テーマフォント名も fonts 一覧に含まれる", () => {
+  it("Theme font names are also included in the fonts list.", () => {
     const result = collectUsedFonts(testPptx);
 
     expect(result.fonts).toContain("Calibri Light");
     expect(result.fonts).toContain("Calibri");
   });
 
-  it("テーマフォント alias を解決して収集する", async () => {
+  it("Resolve and collect theme font aliases", async () => {
     const pptx = await createTestPptx({ slideXml: slideWithThemeAliases });
     const result = collectUsedFonts(pptx);
 
@@ -344,7 +344,7 @@ describe("collectUsedFonts", () => {
     expect(result.fonts).not.toContain("+mn-cs");
   });
 
-  it("解決できない theme regional alias は fonts 一覧へ漏らさない", async () => {
+  it("Do not leak unresolvable theme regional aliases to the fonts list", async () => {
     const pptx = await createTestPptx({
       slideXml: slideWithThemeAliases,
       themeXml: themeWithoutRegionalFonts,
@@ -363,7 +363,7 @@ describe("collectUsedFonts", () => {
     expect(result.fonts).not.toContain("+mn-cs");
   });
 
-  it("スライドごとの theme font alias を各 slide の theme で解決する", async () => {
+  it("Resolve per-slide theme font alias with each slide's theme", async () => {
     const pptx = await createTestPptx({
       contentTypesXml: contentTypesWithSecondSlide,
       presentationXmlOverride: presentationWithTwoSlidesXml,
@@ -393,14 +393,14 @@ describe("collectUsedFonts", () => {
     expect(result.fonts).not.toContain("+mn-cs");
   });
 
-  it("フォント名は重複なしでソート済み", () => {
+  it("Font names are sorted without duplicates", () => {
     const result = collectUsedFonts(testPptx);
 
-    // 重複がないことを確認
+    // Make sure there are no duplicates
     const unique = [...new Set(result.fonts)];
     expect(result.fonts).toEqual(unique);
 
-    // ソートされていることを確認
+    // Make sure it's sorted
     const sorted = [...result.fonts].sort();
     expect(result.fonts).toEqual(sorted);
   });

@@ -13,9 +13,9 @@ interface CompareResult {
 interface CompareOptions {
   pixelThreshold: number;
   mismatchTolerance: number;
-  /** 参照画像を actual のサイズにリサイズして比較する (LibreOffice VRT 用) */
+  /** Resize reference image to actual size and compare (for LibreOffice VRT) */
   resizeRef?: boolean;
-  /** true のとき anti-alias 判定による差分除外を行わない */
+  /** When true, do not exclude differences based on anti-alias judgment */
   includeAntiAliased?: boolean;
 }
 

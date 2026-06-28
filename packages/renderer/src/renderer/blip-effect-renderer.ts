@@ -84,7 +84,7 @@ export function renderBlipEffects(blipEffects: BlipEffects | null): BlipEffectRe
     // Pixels matching clrFrom (where R+G+B ≈ Rf+Gf+Bf) get alpha near 0.
     // This is an approximation: near-clrFrom colors become semi-transparent,
     // and colors darker than clrFrom may also lose alpha. Works well for the
-    // common "white → transparent" case. Exact per-pixel color keying is not
+    // common "white -> transparent" case. Exact per-pixel color keying is not
     // achievable with SVG filters alone.
     // Only alpha=0 targets are supported; general color replacement is not.
     const { clrFrom } = blipEffects.clrChange;

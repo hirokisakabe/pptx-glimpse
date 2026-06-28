@@ -9,7 +9,7 @@ import {
 import { buildTtcFromTtfs } from "./ttc-test-helper.js";
 
 /**
- * opentype.js を使って最小限の有効な TTF バッファを作成する。
+ * Create a minimally valid TTF buffer using opentype.js.
  */
 async function createTestFontBuffer(familyName: string): Promise<ArrayBuffer> {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -63,58 +63,58 @@ async function createTestFontBuffer(familyName: string): Promise<ArrayBuffer> {
 }
 
 describe("createOpentypeTextMeasurerFromBuffers", () => {
-  it("空配列で null を返す", async () => {
+  it("Return null on empty array", async () => {
     const result = await createOpentypeTextMeasurerFromBuffers([]);
     expect(result).toBeNull();
   });
 
-  it("不正バッファで null を返す", async () => {
+  it("Return null on bad buffer", async () => {
     const result = await createOpentypeTextMeasurerFromBuffers([
       { name: "Invalid", data: new Uint8Array([0, 0, 0, 0]) },
     ]);
     expect(result).toBeNull();
   });
 
-  it("フォントバッファから OpentypeTextMeasurer を構築する", async () => {
+  it("Construct OpentypeTextMeasurer from font buffer", async () => {
     const buffer = await createTestFontBuffer("TestFont");
     const measurer = await createOpentypeTextMeasurerFromBuffers([
       { name: "TestFont", data: buffer },
     ]);
     expect(measurer).not.toBeNull();
 
-    // "A" の幅を計測（advanceWidth=600, unitsPerEm=1000）
+    // Measure the width of "A" (advanceWidth=600, unitsPerEm=1000)
     const width = measurer!.measureTextWidth("A", 18, false, "TestFont");
     const expected = (600 / 1000) * 18 * (96 / 72);
     expect(width).toBeCloseTo(expected, 1);
   });
 
-  it("行高さを正しく計算する", async () => {
+  it("Calculate row height correctly", async () => {
     const buffer = await createTestFontBuffer("TestFont");
     const measurer = await createOpentypeTextMeasurerFromBuffers([
       { name: "TestFont", data: buffer },
     ]);
     expect(measurer).not.toBeNull();
 
-    // ascender=800, descender=-200 → (800+200)/1000 = 1.0
+    // ascender=800, descender=-200 -> (800+200)/1000 = 1.0
     const ratio = measurer!.getLineHeightRatio("TestFont");
     expect(ratio).toBeCloseTo(1.0, 5);
   });
 
-  it("フォントマッピング逆引きで PPTX 名でも解決できる", async () => {
+  it("Font mapping reverse lookup can also resolve PPTX name", async () => {
     const buffer = await createTestFontBuffer("Carlito");
     const measurer = await createOpentypeTextMeasurerFromBuffers([
       { name: "Carlito", data: buffer },
     ]);
     expect(measurer).not.toBeNull();
 
-    // デフォルトマッピング: Calibri → Carlito
-    // 逆引きで "Calibri" でも Carlito のフォントが使える
+    // Default mapping: Calibri -> Carlito
+    // Carlito fonts can be used for "Calibri" with reverse lookup.
     const widthByOss = measurer!.measureTextWidth("A", 18, false, "Carlito");
     const widthByPptx = measurer!.measureTextWidth("A", 18, false, "Calibri");
     expect(widthByPptx).toBe(widthByOss);
   });
 
-  it("カスタムフォントマッピングで逆引きが機能する", async () => {
+  it("Reverse lookup works with custom font mapping", async () => {
     const buffer = await createTestFontBuffer("MyFont");
     const measurer = await createOpentypeTextMeasurerFromBuffers(
       [{ name: "MyFont", data: buffer }],
@@ -127,18 +127,18 @@ describe("createOpentypeTextMeasurerFromBuffers", () => {
     expect(widthByCustom).toBe(widthByOss);
   });
 
-  it("name なしのバッファは defaultFont として使われる", async () => {
+  it("Buffer without name is used as defaultFont", async () => {
     const buffer = await createTestFontBuffer("Unnamed");
     const measurer = await createOpentypeTextMeasurerFromBuffers([{ data: buffer }]);
     expect(measurer).not.toBeNull();
 
-    // 未知のフォント名でも defaultFont が使われるため opentype ベースの計算になる
+    // Even if the font name is unknown, the defaultFont is used, resulting in an opentype-based calculation.
     const width = measurer!.measureTextWidth("A", 18, false, "UnknownFont");
     const expected = (600 / 1000) * 18 * (96 / 72);
     expect(width).toBeCloseTo(expected, 1);
   });
 
-  it("Uint8Array バッファでも動作する", async () => {
+  it("Also works with Uint8Array buffers", async () => {
     const arrayBuffer = await createTestFontBuffer("TestFont");
     const uint8 = new Uint8Array(arrayBuffer);
     const measurer = await createOpentypeTextMeasurerFromBuffers([
@@ -150,7 +150,7 @@ describe("createOpentypeTextMeasurerFromBuffers", () => {
     expect(width).toBeGreaterThan(0);
   });
 
-  it("複数フォントを登録できる", async () => {
+  it("Multiple fonts can be registered", async () => {
     const buffer1 = await createTestFontBuffer("Font1");
     const buffer2 = await createTestFontBuffer("Font2");
     const measurer = await createOpentypeTextMeasurerFromBuffers([
@@ -167,7 +167,7 @@ describe("createOpentypeTextMeasurerFromBuffers", () => {
 });
 
 describe("createOpentypeSetupFromBuffers (TTC)", () => {
-  it("TTC バッファから OpentypeTextMeasurer を構築できる", async () => {
+  it("Can construct OpentypeTextMeasurer from TTC buffer", async () => {
     const ttf1 = await createTestFontBuffer("FontAlpha");
     const ttf2 = await createTestFontBuffer("FontBeta");
     const ttc = buildTtcFromTtfs([ttf1, ttf2]);
@@ -176,7 +176,7 @@ describe("createOpentypeSetupFromBuffers (TTC)", () => {
     expect(measurer).not.toBeNull();
   });
 
-  it("TTC 内の各フォント名で幅計測ができる", async () => {
+  it("You can measure the width of each font name in TTC.", async () => {
     const ttf1 = await createTestFontBuffer("FontAlpha");
     const ttf2 = await createTestFontBuffer("FontBeta");
     const ttc = buildTtcFromTtfs([ttf1, ttf2]);
@@ -190,7 +190,7 @@ describe("createOpentypeSetupFromBuffers (TTC)", () => {
     expect(widthBeta).toBeGreaterThan(0);
   });
 
-  it("TTC と通常 TTF を混在して渡せる", async () => {
+  it("TTC and normal TTF can be mixed and passed", async () => {
     const ttfSingle = await createTestFontBuffer("SingleFont");
     const ttf1 = await createTestFontBuffer("TtcFont1");
     const ttf2 = await createTestFontBuffer("TtcFont2");
@@ -207,7 +207,7 @@ describe("createOpentypeSetupFromBuffers (TTC)", () => {
     expect(measurer!.measureTextWidth("A", 18, false, "TtcFont2")).toBeGreaterThan(0);
   });
 
-  it("TTC バッファで fontResolver も構築される", async () => {
+  it("A fontResolver is also constructed in the TTC buffer.", async () => {
     const ttf1 = await createTestFontBuffer("FontAlpha");
     const ttc = buildTtcFromTtfs([ttf1]);
 
@@ -219,28 +219,28 @@ describe("createOpentypeSetupFromBuffers (TTC)", () => {
     expect(font).not.toBeNull();
   });
 
-  it("TTC 内のフォントにフォントマッピング逆引きが適用される", async () => {
+  it("Font mapping reverse applied to fonts in TTC", async () => {
     const ttf = await createTestFontBuffer("Carlito");
     const ttc = buildTtcFromTtfs([ttf]);
 
     const measurer = await createOpentypeTextMeasurerFromBuffers([{ data: ttc }]);
     expect(measurer).not.toBeNull();
 
-    // Calibri → Carlito マッピングの逆引き
+    // Reverse Calibri -> Carlito mapping
     const widthByOss = measurer!.measureTextWidth("A", 18, false, "Carlito");
     const widthByPptx = measurer!.measureTextWidth("A", 18, false, "Calibri");
     expect(widthByPptx).toBe(widthByOss);
   });
 });
 
-describe("createOpentypeSetupFromSystem キャッシュ", () => {
+describe("createOpentypeSetupFromSystem cache", () => {
   let testFontDir: string | null = null;
   let testFontPath: string | null = null;
 
   /**
-   * テスト用の一時フォントファイルを作成し、そのパスを返す。
-   * collectFontFilePaths をモックしてこのファイルのみを返すようにすることで、
-   * システムフォントの全読み込みによる OOM を防ぐ。
+   * Create a temporary font file for testing and return its path.
+   * By mocking collectFontFilePaths to only return this file:
+   * Prevent OOM due to full loading of system fonts.
    */
   async function setupTestFont(): Promise<void> {
     const { mkdtemp, writeFile } = await import("node:fs/promises");
@@ -264,25 +264,25 @@ describe("createOpentypeSetupFromSystem キャッシュ", () => {
   });
 
   /**
-   * collectFontFilePaths をモックしてテスト用フォントのみ返すようにする。
+   * Mock collectFontFilePaths to return only test fonts.
    */
   async function mockCollectFontFilePaths(): Promise<void> {
     const systemFontLoader = await import("./system-font-loader.js");
     vi.spyOn(systemFontLoader, "collectFontFilePaths").mockReturnValue([testFontPath!]);
   }
 
-  it("同じ引数での2回目の呼び出しはキャッシュを返す", async () => {
+  it("Second call with same arguments returns cache", async () => {
     await setupTestFont();
     await mockCollectFontFilePaths();
 
     const setup1 = await createOpentypeSetupFromSystem();
     const setup2 = await createOpentypeSetupFromSystem();
     expect(setup1).not.toBeNull();
-    // キャッシュが効いていれば同一オブジェクト参照
+    // If caching is enabled, refer to the same object
     expect(setup1).toBe(setup2);
   });
 
-  it("fontDirs が異なる場合はキャッシュを無効化する", async () => {
+  it("Invalidate cache if fontDirs are different", async () => {
     await setupTestFont();
     await mockCollectFontFilePaths();
 
@@ -290,11 +290,11 @@ describe("createOpentypeSetupFromSystem キャッシュ", () => {
     const setup2 = await createOpentypeSetupFromSystem(["/some-dir"]);
     expect(setup1).not.toBeNull();
     expect(setup2).not.toBeNull();
-    // fontDirs が異なるのでキャッシュキーが変わり別オブジェクト
+    // Since the fontDirs are different, the cache key is different and it is a different object.
     expect(setup1).not.toBe(setup2);
   });
 
-  it("fontMapping が異なる場合はキャッシュを無効化する", async () => {
+  it("Invalidate cache if fontMapping is different", async () => {
     await setupTestFont();
     await mockCollectFontFilePaths();
 
@@ -305,7 +305,7 @@ describe("createOpentypeSetupFromSystem キャッシュ", () => {
     expect(setup1).not.toBe(setup2);
   });
 
-  it("clearFontCache() でキャッシュがクリアされる", async () => {
+  it("clearFontCache() clears the cache", async () => {
     await setupTestFont();
     await mockCollectFontFilePaths();
 
@@ -314,25 +314,25 @@ describe("createOpentypeSetupFromSystem キャッシュ", () => {
     const setup2 = await createOpentypeSetupFromSystem();
     expect(setup1).not.toBeNull();
     expect(setup2).not.toBeNull();
-    // クリア後は再構築されるので別オブジェクト
+    // After clearing, it will be rebuilt, so it will be a separate object.
     expect(setup1).not.toBe(setup2);
   });
 
-  it("キャッシュにより collectFontFilePaths が再呼び出しされない", async () => {
+  it("cache prevents collectFontFilePaths from being recalled", async () => {
     await setupTestFont();
     const systemFontLoader = await import("./system-font-loader.js");
     const spy = vi.spyOn(systemFontLoader, "collectFontFilePaths").mockReturnValue([testFontPath!]);
 
-    // 1回目: collectFontFilePaths が呼ばれる
+    // 1st time: collectFontFilePaths is called
     await createOpentypeSetupFromSystem();
     expect(spy).toHaveBeenCalledTimes(1);
 
-    // 2回目: キャッシュが効いて collectFontFilePaths が呼ばれない
+    // Second time: caching is enabled and collectFontFilePaths is not called
     await createOpentypeSetupFromSystem();
     expect(spy).toHaveBeenCalledTimes(1);
   });
 
-  it("skipSystemFonts が異なる場合はキャッシュを無効化する", async () => {
+  it("Invalidate cache if skipSystemFonts is different", async () => {
     await setupTestFont();
     await mockCollectFontFilePaths();
 
@@ -340,11 +340,11 @@ describe("createOpentypeSetupFromSystem キャッシュ", () => {
     const setup2 = await createOpentypeSetupFromSystem(undefined, undefined, true);
     expect(setup1).not.toBeNull();
     expect(setup2).not.toBeNull();
-    // skipSystemFonts が異なるのでキャッシュキーが変わり別オブジェクト
+    // Since skipSystemFonts is different, the cache key is different and it is a different object.
     expect(setup1).not.toBe(setup2);
   });
 
-  it("skipSystemFonts が collectFontFilePaths に正しく伝播する", async () => {
+  it("skipSystemFonts propagates correctly to collectFontFilePaths", async () => {
     await setupTestFont();
     const systemFontLoader = await import("./system-font-loader.js");
     const spy = vi.spyOn(systemFontLoader, "collectFontFilePaths").mockReturnValue([testFontPath!]);

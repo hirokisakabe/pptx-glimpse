@@ -1,18 +1,20 @@
 /**
- * `readPptx(input)` — PptxSourceModel source reader の最初の slice。
+ * `readPptx(input)` - initial slice of the PptxSourceModel source reader.
  *
- * PPTX ZIP package を読み、package graph (content types / relationships /
- * media) と presentation metadata (slide size / slide order) を PptxSourceModel source
- * として返す。さらに presentation order の各 slide から layout → master → theme
- * の chain を辿り、simple shape / text / image を typed source node として読む。
- * 未編集・未対応の part / 子要素は raw package material / raw sidecar として
- * 保持し、structural round-trip の土台にする。
+ * Reads the PPTX ZIP package, package graph (content types, relationships, and media),
+ * and presentation metadata (slide size and slide order), then returns them as a
+ * PptxSourceModel source. For each slide in presentation order, it follows the
+ * slide -> layout -> master -> theme chain and reads simple shapes, text, and images as
+ * typed source nodes. Unedited or unsupported parts and child elements are retained as
+ * raw package material or raw sidecars and used as the basis for structural round-trip
+ * preservation.
  *
- * typed node を持つ slide/layout/master/theme part も、未編集 part の忠実な
- * 書き戻しのために `packageGraph.rawParts` 経由で元バイト列を併せて保持する
- * (typed model は編集・computed view 用、raw part は round-trip 用の二重表現)。
+ * Slide, layout, master, and theme parts that contain typed nodes also keep their
+ * original bytes through `packageGraph.rawParts` for writeback when the part is
+ * untouched. The typed model is for editing and computed views; the raw part is for
+ * round-tripping.
  *
- * Computed view 生成と writer 出力は reader から分離した module の責務。
+ * Computed view generation and writer output are responsibilities of modules separate from the reader.
  */
 
 import { unzipSync } from "fflate";
@@ -58,7 +60,7 @@ import {
   type XmlOrderedNode,
 } from "./xml.js";
 
-/** `readPptx` の入力。`Buffer` は `Uint8Array` のサブクラスとして受け付ける。 */
+/** Input for `readPptx`. `Buffer` is accepted as a subclass of `Uint8Array`. */
 export type ReadPptxInput = Uint8Array;
 
 const CONTENT_TYPES_PART = "[Content_Types].xml";
@@ -78,9 +80,9 @@ const PRESENTATION_CONTENT_TYPE =
 const textDecoder = new TextDecoder();
 
 /**
- * PPTX バイト列を読み、PptxSourceModel source を返す。
+ * Reads a PPTX byte string and returns a PptxSourceModel source.
  *
- * @throws presentation part が見つからない (= 有効な PPTX ではない) 場合。
+ * @throws If presentation part is not found (= not a valid PPTX).
  */
 export function readPptx(input: ReadPptxInput): PptxSourceModel {
   const entries = unzipPackage(input);
@@ -103,13 +105,13 @@ export function readPptx(input: ReadPptxInput): PptxSourceModel {
       continue;
     }
 
-    // content types / relationships は structural data として
-    // `contentTypes` / `relationships` から再構成できるため raw には含めない。
+    // content types / relationships as structural data
+    // It can be reconstructed from `contentTypes` / `relationships`, so it is not included in raw.
     if (isRelationshipPart(path)) continue;
 
-    // 本 slice では typed に解釈しない part をすべて元バイト列で保持する。
-    // byte 一致は目標にしないが、untouched part は原バイトのまま書き戻すのが
-    // 最も忠実な structural round-trip になる。
+    // In this slice, all parts that are not interpreted as typed are retained in the original byte sequence.
+    // Byte equality is not a goal, but writing untouched parts back as original bytes
+    // is the most faithful structural round trip.
     rawParts.push({ kind: "binary", partPath: asPartPath(path), contentType, bytes });
   }
 
@@ -147,9 +149,9 @@ interface SlideHierarchy {
 }
 
 /**
- * presentation order の各 slide から layout → master → theme を辿り、到達可能な
- * part を typed source node として読む。layout / master / theme は重複排除しつつ
- * 発見順に収集する。
+ * Follow layout -> master -> theme from each slide in presentation order, and reachable
+ * Read part as a typed source node. layout / master / theme is deduplicated
+ * and collected in discovery order.
  */
 function readSlideHierarchy(
   entries: Map<string, Uint8Array>,
@@ -240,7 +242,7 @@ interface ParsedPartRoot {
   readonly orderedRoot: readonly XmlOrderedNode[];
 }
 
-/** part のバイト列をパースして指定 local name の root 要素を返す。 */
+/** Parses the byte string of part and returns the root element of the specified local name. */
 function parsePartRoot(
   entries: Map<string, Uint8Array>,
   partPath: PartPath,
@@ -275,7 +277,7 @@ function parsePartRoot(
   return { root, orderedRoot };
 }
 
-/** 指定 source part の relationship のうち、内部 (非 External) の最初の一致を解決する。 */
+/** Resolves the first internal (non-External) match in the relationship for the specified source part. */
 function resolveSingleRel(
   relationships: readonly PartRelationships[],
   sourcePart: PartPath,
@@ -287,7 +289,7 @@ function resolveSingleRel(
   return resolveInternalRelationshipTarget(sourcePart, match);
 }
 
-/** 指定 source part の relationship のうち、内部の該当 type をすべて解決する。 */
+/** Resolve all applicable internal types among the relationships of the specified source part. */
 function resolveAllRels(
   relationships: readonly PartRelationships[],
   sourcePart: PartPath,
@@ -302,7 +304,7 @@ function resolveAllRels(
     });
 }
 
-/** 挿入順を保ちつつ part path を重複排除する小さな集合。 */
+/** Small set that deduplicates part paths while preserving insertion order. */
 class OrderedPathSet {
   private readonly seen = new Set<string>();
   private readonly order: PartPath[] = [];
@@ -318,12 +320,12 @@ class OrderedPathSet {
   }
 }
 
-/** ZIP を展開し、ディレクトリエントリを除いた part path → bytes の Map を返す。 */
+/** Unzips the ZIP and returns a Map of part path -> bytes excluding directory entries. */
 function unzipPackage(input: ReadPptxInput): Map<string, Uint8Array> {
   const unzipped = unzipSync(input);
   const entries = new Map<string, Uint8Array>();
   for (const [path, bytes] of Object.entries(unzipped)) {
-    if (path.endsWith("/")) continue; // ディレクトリエントリは無視。
+    if (path.endsWith("/")) continue; // Directory entries are ignored.
     entries.set(path, bytes);
   }
   return entries;
@@ -408,8 +410,8 @@ function readPresentation(
   const presentationPartPath = asPartPath(presentationPath);
   const root = getChild(parseXml(textDecoder.decode(bytes)), "presentation");
   if (root === undefined) {
-    // 解決した part が `<p:presentation>` でない (relationship / content type が
-    // 別 part を指している等) 場合に、壊れた package を「読めた」ように見せない。
+    // If the resolved part is `<p:presentation>` not (relationship / content type
+    // (e.g. pointing to a different part), it does not make a broken package appear ``readable''.
     throw new Error(
       `readPptx: part '${presentationPath}' is not a presentation part (missing p:presentation root)`,
     );
@@ -437,8 +439,8 @@ function readPresentation(
       });
       continue;
     }
-    // sldId が指す relationship は slide 内部参照のはず。type / targetMode が
-    // 一致しないものを slidePartPaths に混ぜると契約が壊れるため除外する。
+    // A relationship referenced by sldId should be an internal slide reference. If type / targetMode
+    // does not match, exclude it to avoid breaking the slidePartPaths contract.
     if (relationship.type !== SLIDE_REL_TYPE || relationship.targetMode === "External") {
       diagnostics.push({
         severity: "warning",
@@ -474,8 +476,8 @@ function readSlideSize(presentationRoot: XmlNode | undefined): SlideSize | undef
 }
 
 /**
- * presentation part path を解決する。root relationship (officeDocument 型) を
- * 優先し、無ければ content type override から探す。
+ * Resolve presentation part path. root relationship (officeDocument type)
+ * and falls back to searching content type overrides.
  */
 function locatePresentationPart(
   relationships: readonly PartRelationships[],

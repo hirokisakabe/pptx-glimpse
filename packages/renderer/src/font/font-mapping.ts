@@ -1,14 +1,14 @@
 /**
- * PPTX フォント名 → OSS 代替フォント (Google Fonts) のマッピング。
- * ユーザーが拡張・上書き可能。
+ * PPTX font name -> OSS alternative font (Google Fonts) mapping.
+ * Users can extend or override it.
  */
 
-/** フォントマッピングテーブルの型 */
+/** Font mapping table type */
 export type FontMapping = Record<string, string>;
 
-/** デフォルトのフォントマッピングテーブル */
+/** Default font mapping table */
 export const DEFAULT_FONT_MAPPING: Readonly<FontMapping> = {
-  // ラテン文字フォント
+  // Latin fonts
   Calibri: "Carlito",
   "Calibri Light": "Carlito",
   Arial: "Arimo",
@@ -16,10 +16,10 @@ export const DEFAULT_FONT_MAPPING: Readonly<FontMapping> = {
   "Courier New": "Cousine",
   Cambria: "Caladea",
 
-  // 日本語ゴシック系 → Noto Sans JP
-  // "Noto Sans CJK JP" ではなく "Noto Sans JP" を使用する。
-  // NotoSansCJK TTC は最初の1フォントのみ抽出するため JP バリアントが取れるとは限らず、
-  // Docker 環境でダウンロードする standalone NotoSansJP.ttf のフォント名に合わせている。
+  // Japanese Gothic fonts -> Noto Sans JP
+  // Use "Noto Sans JP" instead of "Noto Sans CJK JP".
+  // NotoSansCJK TTC extracts only the first font, so it may not always be possible to obtain the JP variant.
+  // The font name matches the standalone NotoSansJP.ttf downloaded in the Docker environment.
   メイリオ: "Noto Sans JP",
   Meiryo: "Noto Sans JP",
   游ゴシック: "Noto Sans JP",
@@ -29,7 +29,7 @@ export const DEFAULT_FONT_MAPPING: Readonly<FontMapping> = {
   "MS Pゴシック": "Noto Sans JP",
   "MS PGothic": "Noto Sans JP",
 
-  // 日本語明朝系 → Noto Serif CJK JP
+  // Japanese Mincho fonts -> Noto Serif CJK JP
   "MS 明朝": "Noto Serif CJK JP",
   "MS Mincho": "Noto Serif CJK JP",
   "MS P明朝": "Noto Serif CJK JP",
@@ -39,8 +39,8 @@ export const DEFAULT_FONT_MAPPING: Readonly<FontMapping> = {
 };
 
 /**
- * デフォルトマッピングとユーザーマッピングをマージしたテーブルを生成する。
- * ユーザー指定が優先される。
+ * Generate a table that merges default mapping and user mapping.
+ * User-specified entries take precedence.
  */
 export function createFontMapping(userMapping?: FontMapping): FontMapping {
   if (!userMapping) return { ...DEFAULT_FONT_MAPPING };
@@ -48,12 +48,8 @@ export function createFontMapping(userMapping?: FontMapping): FontMapping {
 }
 
 /**
- * マッピングテーブルから OSS 代替フォント名を取得する。
- * 大文字小文字を区別せずにルックアップする。
- */
-/**
- * 全角英数字・記号を半角に正規化する。
- * PPTX テーマでは「ＭＳ Ｐゴシック」のように全角が使われることがある。
+ * Normalizes full-width alphanumerics and symbols to half-width.
+ * PPTX themes may use full-width spellings such as "\uFF2D\uFF33 \uFF30\u30B4\u30B7\u30C3\u30AF".
  */
 function normalizeFullWidth(s: string): string {
   return s
@@ -61,6 +57,10 @@ function normalizeFullWidth(s: string): string {
     .replace(/\u3000/g, " ");
 }
 
+/**
+ * Get the OSS alternative font name from the mapping table.
+ * Looks up without case sensitivity.
+ */
 export function getMappedFont(
   fontFamily: string | null | undefined,
   mapping: FontMapping,
@@ -72,13 +72,13 @@ export function getMappedFont(
 
   const normalized = normalizeFullWidth(fontFamily);
 
-  // 正規化後の完全一致
+  // Exact match after normalization
   if (normalized !== fontFamily) {
     const directNormalized = mapping[normalized];
     if (directNormalized !== undefined) return directNormalized;
   }
 
-  // 大文字小文字を無視したフォールバック
+  // Case-insensitive fallback
   const lower = normalized.toLowerCase();
   for (const key of Object.keys(mapping)) {
     if (normalizeFullWidth(key).toLowerCase() === lower) {

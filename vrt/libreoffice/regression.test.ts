@@ -10,15 +10,17 @@ const SNAPSHOT_DIR = join(__dirname, "snapshots");
 const DIFF_DIR = join(__dirname, "diffs");
 const FIXTURE_DIR = join(__dirname, "fixtures");
 
-// LibreOffice と pptx-glimpse の比較は高い許容度が必要
-// フォントレンダリングやアンチエイリアスの差異を許容する
+// Comparing LibreOffice and pptx-glimpse requires high tolerance
+// Allow for differences in font rendering and anti-aliasing
 const PIXEL_THRESHOLD = 0.3;
-// 新規ケース用のフォールバック。CI で実測値を確認したら個別の tolerance を設定すること
+// Fallback for new cases. Set individual tolerances after checking measured CI values.
 const MISMATCH_TOLERANCE = 0.02;
 
-// tolerance: CI 上の実測 mismatch 率 × 1.2 を 0.1pt 単位で切り上げ（下限 0.3%）
-// 実測値はテスト実行時の [lo-vrt] ログで確認できる。
-// LibreOffice や CI ランナーのフォント更新で実測値が変わったら、同じ方針で再設定する
+// tolerance: actual mismatch rate on CI x 1.2, rounded up to the nearest 0.1pt
+// with a 0.3% lower bound.
+// Actual measured values are printed in [lo-vrt] logs during test execution.
+// If LibreOffice or CI runner font updates change the measured values, recalibrate
+// with the same policy.
 const LO_VRT_CASES = [
   { name: "basic-shapes", fixture: "basic-shapes.pptx", tolerance: 0.008 },
   { name: "text-formatting", fixture: "text-formatting.pptx", tolerance: 0.018 },
@@ -48,7 +50,7 @@ const LO_VRT_CASES = [
   { name: "hyperlinks", fixture: "hyperlinks.pptx", tolerance: 0.009 },
 ] as const;
 
-// フィクスチャとスナップショットの両方が存在する場合のみ実行
+// Run only if both fixture and snapshot exist
 const hasFixtures =
   existsSync(FIXTURE_DIR) && LO_VRT_CASES.some((c) => existsSync(join(FIXTURE_DIR, c.fixture)));
 const hasSnapshots =
@@ -61,7 +63,7 @@ describeOrSkip("LibreOffice Visual Regression Tests", { timeout: 60000 }, () => 
   for (const testCase of LO_VRT_CASES) {
     const { name, fixture } = testCase;
     const tolerance = "tolerance" in testCase ? testCase.tolerance : MISMATCH_TOLERANCE;
-    // フィクスチャまたはスナップショットが存在しないケースはスキップ
+    // Skip cases where fixtures or snapshots do not exist
     const fixturePath = join(FIXTURE_DIR, fixture);
     const snapshotPath = join(SNAPSHOT_DIR, `${name}-slide1.png`);
     const itOrSkip = existsSync(fixturePath) && existsSync(snapshotPath) ? it : it.skip;
@@ -80,7 +82,7 @@ describeOrSkip("LibreOffice Visual Regression Tests", { timeout: 60000 }, () => 
             resizeRef: true,
           });
 
-          // tolerance 調整用に実測値を常に出力する
+          // Always output measured values for tolerance adjustment.
           console.log(
             `[lo-vrt] ${name} slide${result.slideNumber}: ` +
               `${(comparison.mismatchPercentage * 100).toFixed(3)}% ` +

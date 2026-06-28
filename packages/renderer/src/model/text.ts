@@ -2,7 +2,7 @@ import type { Emu, HundredthPt, Pt } from "../utils/unit-types.js";
 import type { ResolvedColor } from "./fill.js";
 import type { Geometry, Transform } from "./shape.js";
 
-/** defRPr に対応するデフォルトランプロパティ */
+/** Default run properties corresponding to defRPr */
 export interface DefaultRunProperties {
   fontSize?: Pt;
   fontFamily?: string | null;
@@ -15,7 +15,7 @@ export interface DefaultRunProperties {
   color?: ResolvedColor;
 }
 
-/** defaultTextStyle の各レベルに対応するデフォルト段落プロパティ */
+/** Default paragraph properties for each level of defaultTextStyle */
 export interface DefaultParagraphLevelProperties {
   alignment?: "l" | "ctr" | "r" | "just";
   marginLeft?: Emu;
@@ -27,20 +27,20 @@ export interface DefaultParagraphLevelProperties {
   defaultRunProperties?: DefaultRunProperties;
 }
 
-/** presentation.xml の defaultTextStyle / slideMaster の titleStyle・bodyStyle・otherStyle */
+/** defaultTextStyle of presentation.xml / titleStyle, bodyStyle, otherStyle of slideMaster */
 export interface DefaultTextStyle {
   defaultParagraph?: DefaultParagraphLevelProperties;
   levels: (DefaultParagraphLevelProperties | undefined)[]; // index 0 = lvl1pPr, ... index 8 = lvl9pPr
 }
 
-/** slideMaster の txStyles */
+/** slideMaster's txStyles */
 export interface TxStyles {
   titleStyle?: DefaultTextStyle;
   bodyStyle?: DefaultTextStyle;
   otherStyle?: DefaultTextStyle;
 }
 
-/** プレースホルダーに紐づくスタイル情報（テキスト・位置・ジオメトリ） */
+/** Style information associated with a placeholder(text, position, and geometry) */
 export interface PlaceholderStyleInfo {
   placeholderType: string;
   placeholderIdx?: number;
@@ -98,12 +98,12 @@ export type BulletType =
   | { type: "char"; char: string }
   | { type: "autoNum"; scheme: AutoNumScheme; startAt: number };
 
-/** 段落間隔の値（ポイント指定またはパーセント指定） */
+/** Paragraph spacing value (points or percentage) */
 export type SpacingValue =
-  | { type: "pts"; value: HundredthPt } // 1/100 ポイント単位 (spcPts)
-  | { type: "pct"; value: number }; // 1/1000 パーセント単位 (spcPct, 50000 = 50%)
+  | { type: "pts"; value: HundredthPt } // 1/100 point unit (spcPts)
+  | { type: "pct"; value: number }; // 1/1000 percent (spcPct, 50000 = 50%)
 
-/** タブストップ定義 */
+/** Tab stop definition */
 export interface TabStop {
   position: Emu;
   alignment: "l" | "ctr" | "r" | "dec";

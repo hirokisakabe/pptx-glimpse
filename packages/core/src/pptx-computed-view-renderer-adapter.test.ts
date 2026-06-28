@@ -22,7 +22,7 @@ import { adaptComputedViewToRendererModel } from "./pptx-computed-view-renderer-
 import { unsafeFixtureAssertion } from "./unsafe-type-assertion.js";
 
 describe("adaptComputedViewToRendererModel", () => {
-  it("slide size / background / effective element ordering を renderer model に変換する", () => {
+  it("Convert slide size / background / effective element ordering to renderer model", () => {
     const result = adaptComputedViewToRendererModel(createComputedView(buildSource()));
 
     expect(result.slideSize).toEqual({ width: 9144000, height: 5143500 });
@@ -43,7 +43,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("simple shape / text / image と theme-resolved fill / outline を変換する", () => {
+  it("Convert between simple shape/text/image and theme-resolved fill/outline", () => {
     const result = adaptComputedViewToRendererModel(createComputedView(buildSource()));
     const slide = result.slides[0];
     const title = findElementByAltText(slide.elements, "Slide title");
@@ -123,7 +123,7 @@ describe("adaptComputedViewToRendererModel", () => {
     });
   });
 
-  it("complex fill を renderer fill model に変換する", () => {
+  it("Convert complex fill to renderer fill model", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
         buildSource({
@@ -205,7 +205,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("shape effects と image blip effects を renderer model に変換する", () => {
+  it("Convert shape effects and image blip effects to renderer model", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
         buildSource({
@@ -285,7 +285,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("table を renderer model に変換する", () => {
+  it("Convert table to renderer model", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
         buildSource({
@@ -409,7 +409,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("connector / group / custom geometry を renderer model に変換する", () => {
+  it("Convert connector / group / custom geometry to renderer model", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
         buildSource({
@@ -496,7 +496,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("document media content types を current parser 互換の image mime に正規化する", () => {
+  it("Normalize document media content types to current parser compatible image mime", () => {
     const source = buildSource({
       extraSlideShapes: [
         shape("EMF fill", {
@@ -527,7 +527,7 @@ describe("adaptComputedViewToRendererModel", () => {
     });
   });
 
-  it("unknown image MIME type を renderer contract の既定値へ正規化する", () => {
+  it("Normalize unknown image MIME type to default value of renderer contract", () => {
     const source = buildSource();
     const sourceWithUnknownMedia: PptxSourceModel = {
       ...source,
@@ -554,7 +554,7 @@ describe("adaptComputedViewToRendererModel", () => {
     );
   });
 
-  it("unknown rectangle alignment token を renderer contract の既定値へ正規化する", () => {
+  it("Normalize unknown rectangle alignment token to default value of renderer contract", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
         buildSource({
@@ -608,7 +608,7 @@ describe("adaptComputedViewToRendererModel", () => {
     );
   });
 
-  it("chart と SmartArt fallback を renderer model に変換する", () => {
+  it("Convert chart and SmartArt fallback to renderer model", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(buildSourceWithChartAndSmartArt()),
     );
@@ -691,7 +691,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("document computed chart data を renderer ChartData に変換する", () => {
+  it("Convert document computed chart data to renderer ChartData", () => {
     const result = adaptComputedViewToRendererModel(buildComputedViewWithChartData());
     const chart = result.slides[0].elements.find((element) => element.type === "chart");
 
@@ -722,7 +722,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("SmartArt fallback の diagram drawing skip diagnostic を返す", () => {
+  it("Return SmartArt fallback diagram drawing skip diagnostic", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
         buildSourceWithChartAndSmartArt({
@@ -744,7 +744,7 @@ describe("adaptComputedViewToRendererModel", () => {
     );
   });
 
-  it("unsupported raw elements を diagnostic として扱い renderer model に漏らさない", () => {
+  it("Treat unsupported raw elements as diagnostic and do not leak them to the renderer model", () => {
     const source = buildSource({
       extraSlideShapes: [
         {
@@ -773,7 +773,7 @@ describe("adaptComputedViewToRendererModel", () => {
     );
   });
 
-  it("fallback が必要な unsupported subset を diagnostic に残す", () => {
+  it("Leave unsupported subset in diagnostic that requires fallback", () => {
     const source = buildSource({
       slideBackground: { kind: "raw", raw: rawSidecar("raw-bg", "p:bg") },
       extraSlideShapes: [

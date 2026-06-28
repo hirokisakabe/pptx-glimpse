@@ -11,7 +11,7 @@ describe("applyColorTransforms", () => {
   // --- lumMod / lumOff ---
 
   it("applies lumMod to darken color (50%)", () => {
-    // #808080 → HSL(0, 0, 0.502) → lumMod 50% → l=0.251 → ~#404040
+    // #808080 -> HSL(0, 0, 0.502) -> lumMod 50% -> l=0.251 -> ~#404040
     const result = applyColorTransforms(
       { hex: "#808080", alpha: 1 },
       { lumMod: { "@_val": "50000" } },
@@ -29,7 +29,7 @@ describe("applyColorTransforms", () => {
   });
 
   it("applies lumOff to brighten black", () => {
-    // #000000 → HSL(0, 0, 0) → lumOff +50% → l=0.5 → #808080
+    // #000000 -> HSL(0, 0, 0) -> lumOff +50% -> l=0.5 -> #808080
     const result = applyColorTransforms(
       { hex: "#000000", alpha: 1 },
       { lumOff: { "@_val": "50000" } },
@@ -38,12 +38,12 @@ describe("applyColorTransforms", () => {
   });
 
   it("applies lumMod + lumOff together", () => {
-    // #808080 → l=0.502 → lumMod 75% + lumOff 25% → l = 0.502*0.75 + 0.25 = 0.6265
+    // #808080 -> l=0.502 -> lumMod 75% + lumOff 25% -> l = 0.502*0.75 + 0.25 = 0.6265
     const result = applyColorTransforms(
       { hex: "#808080", alpha: 1 },
       { lumMod: { "@_val": "75000" }, lumOff: { "@_val": "25000" } },
     );
-    // 結果が元より明るくなっている
+    // The result is brighter than the original
     expect(result.hex).not.toBe("#808080");
     expect(result.alpha).toBe(1);
   });
@@ -61,10 +61,10 @@ describe("applyColorTransforms", () => {
     expect(result.hex).toBe("#000000");
   });
 
-  // --- tint (白方向ブレンド) ---
+  // --- tint (white direction blend) ---
 
   it("applies tint 50% to red", () => {
-    // #FF0000 → tint 50% → r=255+(255-255)*0.5=255, g=0+(255-0)*0.5=128, b=0+128=128
+    // #FF0000 -> tint 50% -> r=255+(255-255)*0.5=255, g=0+(255-0)*0.5=128, b=0+128=128
     const result = applyColorTransforms(
       { hex: "#FF0000", alpha: 1 },
       { tint: { "@_val": "50000" } },
@@ -93,10 +93,10 @@ describe("applyColorTransforms", () => {
     expect(result.hex).toBe("#ffffff");
   });
 
-  // --- shade (黒方向ブレンド) ---
+  // --- shade (black direction blend) ---
 
   it("applies shade 50% to red", () => {
-    // #FF0000 → shade 50% → r=255*0.5=128, g=0, b=0
+    // #FF0000 -> shade 50% -> r=255*0.5=128, g=0, b=0
     const result = applyColorTransforms(
       { hex: "#FF0000", alpha: 1 },
       { shade: { "@_val": "50000" } },
@@ -149,7 +149,7 @@ describe("applyColorTransforms", () => {
     expect(result.alpha).toBe(1);
   });
 
-  // --- 複合変換 ---
+  // --- Composite transformation ---
 
   it("applies multiple transforms in sequence", () => {
     const result = applyColorTransforms(
@@ -164,7 +164,7 @@ describe("applyColorTransforms", () => {
     expect(result.hex).toBeTruthy();
   });
 
-  // --- HSL往復変換の精度 ---
+  // --- Accuracy of HSL round trip conversion ---
 
   it("preserves red through lumMod 100%", () => {
     const result = applyColorTransforms(

@@ -1,8 +1,8 @@
 #!/bin/bash
 set -euo pipefail
 
-# LibreOffice VRT 参照画像を生成するスクリプト。
-# Docker コンテナ内で実行されることを想定。
+# Script to generate LibreOffice VRT reference images.
+# Assumed to be executed inside a Docker container.
 #
 # Usage:
 #   bash vrt/libreoffice/update_snapshots.sh
@@ -25,18 +25,18 @@ for pptx_file in "$FIXTURE_DIR"/*.pptx; do
 
     echo "Rendering: $pptx_file"
 
-    # LibreOffice headless で PNG に変換
+    # Convert to PNG with LibreOffice headless
     libreoffice --headless --convert-to png \
         --outdir "$TEMP_DIR" "$pptx_file" 2>/dev/null
 
-    # 出力ファイルを探す
+    # Find output file
     png_file="$TEMP_DIR/${basename}.png"
     if [ ! -f "$png_file" ]; then
         echo "  WARNING: No PNG output for $pptx_file"
         continue
     fi
 
-    # Pillow で 960px 幅にリサイズして保存
+    # Resize to 960px width with Pillow and save
     python3 -c "
 from PIL import Image
 import sys

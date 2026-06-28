@@ -9,10 +9,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { convertPptxToPng, convertPptxToSvg } from "./converter.js";
 
 /**
- * textOutput オプション (ネイティブ <text> + 埋め込みフォント出力モード) の統合テスト。
+ * Integration test for textOutput option (native <text> + embedded font output mode).
  *
- * テスト用フォント (EmbedTestFont: A, B, space / BulletTestFont: C, space) を
- * 一時ディレクトリに書き出し、fontDirs + skipSystemFonts で環境非依存にフォントを解決させる。
+ * Test font (EmbedTestFont: A, B, space / BulletTestFont: C, space)
+ * Export to a temporary directory and use fontDirs + skipSystemFonts to resolve fonts independently of the environment.
  */
 
 const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -217,7 +217,7 @@ async function loadOpentype(): Promise<OpentypeTestModule> {
 }
 
 /**
- * 指定した文字 (+ space) のグリフのみを持つテスト用 TTF を生成する。
+ * Generates a test TTF with only glyphs of the specified character (+space).
  */
 async function createTestFontBuffer(familyName: string, letters: string[]): Promise<ArrayBuffer> {
   const opentype = await loadOpentype();
@@ -267,7 +267,7 @@ async function createTestFontBuffer(familyName: string, letters: string[]): Prom
 }
 
 /**
- * SVG の @font-face から指定ファミリー名の埋め込みフォントを取り出してパースする。
+ * Extracts and parses the embedded font of the specified family name from @font-face in SVG.
  */
 async function parseEmbeddedFont(
   svg: string,
@@ -307,8 +307,8 @@ function convertOptions(extra?: Record<string, unknown>) {
   return { fontDirs: [fontDir], skipSystemFonts: true, ...extra } as const;
 }
 
-describe('textOutput: "text" (ネイティブ <text> + 埋め込みフォント)', () => {
-  it("<text> 要素と @font-face を含み、グリフのアウトラインパスを含まない", async () => {
+describe("textOutput: text SVG output", () => {
+  it("Contains the <text> element and @font-face, but does not include the glyph outline path", async () => {
     const pptx = await createTestPptx("ABA AB");
     const results = await convertPptxToSvg(pptx, convertOptions({ textOutput: "text" }));
     const svg = results[0].svg;
@@ -317,13 +317,13 @@ describe('textOutput: "text" (ネイティブ <text> + 埋め込みフォント)
     expect(svg).toContain("@font-face");
     expect(svg).toContain('font-family:"EmbedTestFont"');
     expect(svg).toContain("data:font/otf;base64,");
-    // テキスト内容がそのまま含まれる (アウトライン化されていない)
+    // Contains the text content as is (not outlined)
     expect(svg).toContain("ABA AB");
-    // グリフのアウトラインパスが含まれない (スライド上の図形は rect のみ)
+    // Glyph outline path not included (shapes on slide are rect only)
     expect(svg).not.toContain("<path");
   });
 
-  it("フォント未収録の文字のみの場合は @font-face を埋め込まず <text> のみ出力する", async () => {
+  it("If there are only characters that are not included in the font, do not embed @font-face and output only <text>", async () => {
     const pptx = await createTestPptx("XYZ");
     const results = await convertPptxToSvg(pptx, convertOptions({ textOutput: "text" }));
     const svg = results[0].svg;
@@ -333,30 +333,30 @@ describe('textOutput: "text" (ネイティブ <text> + 埋め込みフォント)
     expect(svg).not.toContain("@font-face");
   });
 
-  it("bulletFont 未指定の箇条書きはテキストランのフォントにフォールバックして埋め込まれる", async () => {
-    // buChar="B" / buFont なし。箇条書き記号 B はランのフォント (EmbedTestFont) で描画・埋め込みされる
+  it("embeds bullet glyphs using the text run font when buFont is omitted", async () => {
+    // buChar="B" / no buFont. Bullet B is drawn and embedded in the run font (EmbedTestFont).
     const pptx = await createTestPptx("A", { pPr: '<a:pPr><a:buChar char="B"/></a:pPr>' });
     const results = await convertPptxToSvg(pptx, convertOptions({ textOutput: "text" }));
     const svg = results[0].svg;
 
     expect(svg).toContain("@font-face");
-    // 箇条書き tspan の font-family にランのフォントが含まれる
+    // Bullet tspan's font-family includes run's font
     expect(svg).toMatch(/<tspan[^>]*text-anchor="start"[^>]*font-family="EmbedTestFont/);
 
-    // 埋め込みサブセットに箇条書き記号 B のグリフが含まれる
+    // Embedded subset contains bullet B glyph
     const embedded = await parseEmbeddedFont(svg, "EmbedTestFont");
     expect(embedded.charToGlyph("B").index).toBeGreaterThan(0);
     expect(embedded.charToGlyph("A").index).toBeGreaterThan(0);
   });
 
-  it("buFont 指定の箇条書きは指定フォントで埋め込まれる", async () => {
+  it("embeds bullet glyphs using the specified buFont", async () => {
     const pptx = await createTestPptx("A", {
       pPr: '<a:pPr><a:buFont typeface="BulletTestFont"/><a:buChar char="C"/></a:pPr>',
     });
     const results = await convertPptxToSvg(pptx, convertOptions({ textOutput: "text" }));
     const svg = results[0].svg;
 
-    // ラン用と箇条書き用で 2 つの @font-face が埋め込まれる
+    // Two @font-faces are embedded, one for runs and one for bullet points.
     expect(svg).toContain('font-family:"EmbedTestFont"');
     expect(svg).toContain('font-family:"BulletTestFont"');
     expect(svg).toMatch(/<tspan[^>]*font-family="BulletTestFont/);
@@ -365,7 +365,7 @@ describe('textOutput: "text" (ネイティブ <text> + 埋め込みフォント)
     expect(bulletFont.charToGlyph("C").index).toBeGreaterThan(0);
   });
 
-  it("fontMapping で解決されたフォントが PPTX フォント名で埋め込まれる", async () => {
+  it("Fonts resolved with fontMapping are embedded with PPTX font names", async () => {
     const pptx = await createTestPptx("ABA", { typeface: "MappedCorpFont" });
     const results = await convertPptxToSvg(
       pptx,
@@ -376,7 +376,7 @@ describe('textOutput: "text" (ネイティブ <text> + 埋め込みフォント)
     );
     const svg = results[0].svg;
 
-    // @font-face は tspan が参照する PPTX フォント名で宣言される
+    // @font-face is declared with the PPTX font name referenced by tspan
     expect(svg).toContain('font-family:"MappedCorpFont"');
     expect(svg).toMatch(/<tspan[^>]*font-family="MappedCorpFont/);
 
@@ -385,8 +385,8 @@ describe('textOutput: "text" (ネイティブ <text> + 埋め込みフォント)
   });
 });
 
-describe("textOutput デフォルト (パス出力)", () => {
-  it("デフォルトでは従来どおりパス出力で @font-face を含まない", async () => {
+describe("textOutput: path SVG output", () => {
+  it("omits @font-face from the default path output", async () => {
     const pptx = await createTestPptx("ABA AB");
     const results = await convertPptxToSvg(pptx, convertOptions());
     const svg = results[0].svg;
@@ -396,7 +396,7 @@ describe("textOutput デフォルト (パス出力)", () => {
     expect(svg).not.toContain("@font-face");
   });
 
-  it('textOutput: "path" 明示指定でも同じ出力になる', async () => {
+  it('matches the default output when textOutput: "path" is specified explicitly', async () => {
     const pptx = await createTestPptx("ABA AB");
     const defaultResults = await convertPptxToSvg(pptx, convertOptions());
     const pathResults = await convertPptxToSvg(pptx, convertOptions({ textOutput: "path" }));
@@ -405,8 +405,8 @@ describe("textOutput デフォルト (パス出力)", () => {
   });
 });
 
-describe("convertPptxToPng と textOutput", () => {
-  it('textOutput: "text" を指定しても PNG 変換はパス出力で行われ成功する', async () => {
+describe("textOutput: PNG conversion", () => {
+  it('converts PNG through path output even when textOutput: "text" is specified', async () => {
     const pptx = await createTestPptx("ABA AB");
     const results = await convertPptxToPng(pptx, convertOptions({ textOutput: "text" }));
 

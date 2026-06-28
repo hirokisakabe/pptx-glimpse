@@ -24,28 +24,28 @@ afterEach(() => {
 });
 
 describe("collectFontFilePaths skipSystemFonts", () => {
-  it("skipSystemFonts=true のとき additionalDirs のファイルのみ返す", () => {
+  it("When skipSystemFonts=true, only return files in additionalDirs", () => {
     const { dir, fontPath } = makeTempFontDir();
     const result = collectFontFilePaths([dir], true);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe(fontPath);
   });
 
-  it("skipSystemFonts=true かつ fontDirs 未指定のとき空配列を返す", () => {
+  it("Returns an empty array when skipSystemFonts=true and fontDirs is unspecified", () => {
     const result = collectFontFilePaths([], true);
     expect(result).toEqual([]);
   });
 
-  it("skipSystemFonts=false のとき additionalDirs のファイルが含まれる", () => {
+  it("When skipSystemFonts=false, additionalDirs files are included", () => {
     const { dir, fontPath } = makeTempFontDir();
     const result = collectFontFilePaths([dir], false);
     expect(result).toContain(fontPath);
   });
 
-  it("skipSystemFonts=false は skipSystemFonts=true と同数以上のファイルを返す", () => {
+  it("skipSystemFonts=false returns as many or more files as skipSystemFonts=true", () => {
     const { dir } = makeTempFontDir();
     const skipSystem = collectFontFilePaths([dir], true);
-    // 同じ dir で false を呼ぶ (dirsKey は同じだが skipSystemFonts が異なるためキャッシュミス)
+    // Call false on the same dir (dirsKey is the same but skipSystemFonts is different, so cache miss)
     const withSystem = collectFontFilePaths([dir], false);
     expect(withSystem.length).toBeGreaterThanOrEqual(skipSystem.length);
   });

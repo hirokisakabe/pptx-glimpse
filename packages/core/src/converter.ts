@@ -33,27 +33,30 @@ import {
 } from "./pptx-computed-view-renderer-adapter.js";
 
 export interface ConvertOptions {
-  /** 変換対象のスライド番号 (1始まり)。未指定で全スライド */
+  /** Target slide numbers (1-based). When omitted, all slides are converted. */
   slides?: number[];
-  /** 出力画像の幅 (ピクセル)。デフォルト: 960 */
+  /** Output image width in pixels. Defaults to 960. */
   width?: number;
-  /** 出力画像の高さ (ピクセル)。widthと同時指定時はwidthが優先 */
+  /** Output image height in pixels. When width is also specified, width takes precedence. */
   height?: number;
-  /** 警告ログレベル。デフォルト: "off" */
+  /** Warning log level. Defaults to "off". */
   logLevel?: LogLevel;
-  /** 追加のフォントディレクトリパス。システムフォントに加えて検索する */
+  /** Additional font directory paths searched alongside system fonts. */
   fontDirs?: string[];
-  /** PPTX フォント名 → OSS 代替フォントのカスタムマッピング。デフォルトマッピングにマージされる */
+  /** Custom PPTX font name -> OSS replacement font mapping merged into the default mapping. */
   fontMapping?: FontMapping;
-  /** true のとき OS のシステムフォントをスキャンせず fontDirs のみを使用する */
+  /** When true, skips OS system font scanning and only uses fontDirs. */
   skipSystemFonts?: boolean;
   /**
-   * SVG でのテキスト出力方式。デフォルト: "path"
-   * - "path": グリフをアウトライン化した <path> として出力する。フォント環境に依存しない
-   * - "text": ネイティブ <text> 要素 + サブセット化フォントの @font-face (data URI) 埋め込みで出力する。
-   *   ブラウザでのインライン表示時にネイティブテキスト描画 (ヒンティング等) が効き、テキスト選択も可能になる。
-   *   <img src="...svg"> 参照やサニタイズ環境では期待どおり描画されないことがある。
-   *   convertPptxToPng では無視され、常に "path" で変換される (resvg は @font-face を解釈しないため)
+   * Text output mode for SVG. Defaults to "path".
+   * - "path": outputs glyph outlines as <path> elements and does not depend on fonts
+   *   being available in the viewing environment.
+   * - "text": outputs native <text> elements plus subset-font @font-face data URIs.
+   *   This enables native browser text rendering and text selection for inline SVG, but
+   *   may not render as expected through <img src="...svg"> references or sanitized SVG
+   *   environments.
+   *   convertPptxToPng ignores this option and always uses "path" because resvg does not
+   *   interpret @font-face.
    */
   textOutput?: "path" | "text";
 }

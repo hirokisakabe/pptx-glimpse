@@ -1,5 +1,5 @@
 /**
- * opentype.js を使ってフォントを読み込み OpentypeTextMeasurer を構築するヘルパー。
+ * Helper that reads fonts and builds an OpentypeTextMeasurer using opentype.js.
  */
 import { readFile } from "node:fs/promises";
 
@@ -13,7 +13,7 @@ import type { OpentypeFullFont, TextPathFontResolver } from "./text-path-context
 import { DefaultTextPathFontResolver } from "./text-path-context.js";
 import { extractTtcFonts, isTtcBuffer } from "./ttc-parser.js";
 
-/** フォントバッファの入力形式 */
+/** Font buffer input format */
 export interface FontBuffer {
   name?: string;
   data: ArrayBuffer | Uint8Array;
@@ -27,8 +27,8 @@ interface OpentypeFontWithNames extends OpentypeFont {
 }
 
 /**
- * opentype.js を動的 import でロードする。
- * opentype.js がインストールされていない場合は null を返す。
+ * Load opentype.js with dynamic import.
+ * Returns null if opentype.js is not installed.
  */
 async function tryLoadOpentype(): Promise<{
   parse: (buffer: ArrayBuffer) => OpentypeFontWithNames;
@@ -47,9 +47,9 @@ async function tryLoadOpentype(): Promise<{
 }
 
 /**
- * フォントマッピングの逆引きテーブルを構築する。
- * OSS フォント名 → PPTX フォント名[] のマッピング。
- * 例: "Carlito" → ["Calibri"]
+ * Build a reverse lookup table for font mapping.
+ * Mapping of OSS font name -> PPTX font name[].
+ * Example: "Carlito" -> ["Calibri"]
  */
 function buildReverseMapping(mapping: FontMapping): Map<string, string[]> {
   const reverse = new Map<string, string[]>();
@@ -62,8 +62,8 @@ function buildReverseMapping(mapping: FontMapping): Map<string, string[]> {
 }
 
 /**
- * ArrayBuffer | Uint8Array → ArrayBuffer に変換する。
- * Uint8Array の場合は slice で独立した ArrayBuffer を取得する。
+ * ArrayBuffer | Convert from Uint8Array to ArrayBuffer.
+ * For Uint8Array, use slice to obtain an independent ArrayBuffer.
  */
 function toArrayBuffer(data: ArrayBuffer | Uint8Array): ArrayBuffer {
   if (data instanceof ArrayBuffer) return data;
@@ -73,22 +73,22 @@ function toArrayBuffer(data: ArrayBuffer | Uint8Array): ArrayBuffer {
 }
 
 /**
- * バッファ (TTF/OTF または TTC) からパース済みフォント配列を返す。
- * TTC の場合はメモリ消費を抑えるため最初の1フォントのみ抽出してパースする。
+ * Returns a parsed font array from a buffer (TTF/OTF or TTC).
+ * In the case of TTC, only the first font is extracted and parsed to reduce memory consumption.
  */
 function parseFontBuffer(
   arrayBuffer: ArrayBuffer,
   opentype: { parse: (buffer: ArrayBuffer) => OpentypeFontWithNames },
 ): OpentypeFontWithNames[] {
   if (isTtcBuffer(arrayBuffer)) {
-    // TTC からは最初の1フォントのみ抽出する。
-    // CJK TTC (NotoSansCJK 等) は全フォント展開すると数百MBのメモリを消費するため。
+    // Only the first font is extracted from TTC.
+    // CJK TTC (such as NotoSansCJK) consumes hundreds of MB of memory when all fonts are expanded.
     const fonts = extractTtcFonts(arrayBuffer);
     if (fonts.length > 0) {
       try {
         return [opentype.parse(fonts[0])];
       } catch {
-        // パース失敗はスキップ
+        // Skip parse failure
       }
     }
     return [];
@@ -97,10 +97,10 @@ function parseFontBuffer(
 }
 
 /**
- * フォントバッファ配列から OpentypeTextMeasurer を構築する。
+ * Construct an OpentypeTextMeasurer from a font buffer array.
  *
- * 内部で opentype.js を動的 import してフォントをパースする。
- * opentype.js が利用不可な場合は null を返す。
+ * Dynamically import opentype.js internally to parse the font.
+ * Returns null if opentype.js is not available.
  */
 export async function createOpentypeTextMeasurerFromBuffers(
   fontBuffers: FontBuffer[],
@@ -116,10 +116,10 @@ export interface OpentypeSetup {
 }
 
 /**
- * フォントバッファ配列から OpentypeTextMeasurer と TextPathFontResolver を同時に構築する。
+ * Construct OpentypeTextMeasurer and TextPathFontResolver simultaneously from the font buffer array.
  *
- * opentype.parse() が返すオブジェクトは OpentypeFont と OpentypeFullFont の両方を満たすため、
- * 同じ Font オブジェクトを measurer と fontResolver の両方に渡す。
+ * The object returned by opentype.parse() satisfies both OpentypeFont and OpentypeFullFont, so
+ * Pass the same Font object to both measurer and fontResolver.
  */
 export async function createOpentypeSetupFromBuffers(
   fontBuffers: FontBuffer[],
@@ -149,7 +149,7 @@ export async function createOpentypeSetupFromBuffers(
           firstResolverFont = unsafeExternalInteropAssertion<OpentypeFullFont>(font);
 
         if (isTtc) {
-          // TTC: names テーブルからフォント名を取得して登録
+          // TTC: Get and register font name from names table
           for (const name of collectFontNames(font)) {
             registerFont(name, font, reverseMap, measurerFonts, resolverFonts);
           }
@@ -158,7 +158,7 @@ export async function createOpentypeSetupFromBuffers(
         }
       }
     } catch {
-      // パース失敗のフォントはスキップ
+      // Skip fonts that fail parsing
     }
   }
 
@@ -186,7 +186,7 @@ function registerFont(
     resolverFonts.set(name, fullFont);
   }
 
-  // 逆引きで PPTX フォント名も登録
+  // Also register PPTX font name by reverse lookup
   const pptxNames = reverseMap.get(name);
   if (pptxNames) {
     for (const pptxName of pptxNames) {
@@ -199,10 +199,10 @@ function registerFont(
 }
 
 /**
- * フォントの names テーブルからフォント名のセットを収集する。
- * fontFamily と preferredFamily の両方を含める。
- * Variable Font では fontFamily が "Noto Sans JP Thin" のように
- * インスタンス名になるため、preferredFamily ("Noto Sans JP") も登録する。
+ * Gather a set of font names from the font's names table.
+ * Include both fontFamily and preferredFamily.
+ * For Variable Font, fontFamily is like "Noto Sans JP Thin"
+ * Since this is the instance name, also register preferredFamily ("Noto Sans JP").
  */
 function collectFontNames(font: OpentypeFontWithNames): Set<string> {
   const names = new Set<string>();
@@ -220,7 +220,7 @@ function collectFontNames(font: OpentypeFontWithNames): Set<string> {
 }
 
 /**
- * キャッシュキーを生成する。fontDirs と fontMapping の組み合わせで一意に識別する。
+ * Generate a cache key. Uniquely identified by the combination of fontDirs and fontMapping.
  */
 function buildCacheKey(
   additionalFontDirs?: string[],
@@ -234,14 +234,14 @@ function buildCacheKey(
   return `${dirsKey}\n${mappingKey}\n${skipSystemFonts}`;
 }
 
-/** パース済み Font オブジェクトのキャッシュ */
+/** Caching parsed Font objects */
 let cachedSetup: OpentypeSetup | null = null;
 let cachedSetupKey: string | null = null;
 
 /**
- * フォントオブジェクトキャッシュをクリアする。
- * 通常は呼び出す必要はないが、フォントのインストール/アンインストール後に
- * 強制的に再読み込みしたい場合に使用する。
+ * Clear the font object cache.
+ * Normally there is no need to call it, but after installing/uninstalling a font
+ * Use this when you want to force reload.
  */
 export function clearFontCache(): void {
   cachedSetup = null;
@@ -249,14 +249,14 @@ export function clearFontCache(): void {
 }
 
 /**
- * システムフォント + 追加ディレクトリから OpentypeTextMeasurer と TextPathFontResolver を構築する。
+ * Build OpentypeTextMeasurer and TextPathFontResolver from system fonts + additional directories.
  *
- * 1. collectFontFilePaths() でフォントファイルパスを収集
- * 2. 各ファイルを readFile + opentype.parse でパース
- * 3. フォント名をキーとしてマップに登録（逆引きマッピング含む）
+ * 1. Collect font file paths with collectFontFilePaths()
+ * 2. Parse each file with readFile + opentype.parse
+ * 3. Register the font name in the map as a key (including reverse mapping)
  *
- * パース済みの Font オブジェクトはモジュールレベルでキャッシュされ、
- * 同じ fontDirs / fontMapping での 2 回目以降の呼び出しではキャッシュを返す。
+ * Parsed Font objects are cached at the module level and
+ * Subsequent calls with the same fontDirs / fontMapping return the cache.
  */
 export async function createOpentypeSetupFromSystem(
   additionalFontDirs?: string[],
@@ -292,13 +292,13 @@ export async function createOpentypeSetupFromSystem(
         if (!firstResolverFont)
           firstResolverFont = unsafeExternalInteropAssertion<OpentypeFullFont>(font);
 
-        // names テーブルからフォント名を取得して登録
+        // Get the font name from the names table and register it
         for (const name of collectFontNames(font)) {
           registerFont(name, font, reverseMap, measurerFonts, resolverFonts);
         }
       }
     } catch {
-      // パース失敗のフォントはスキップ
+      // Skip fonts that fail parsing
     }
   }
 

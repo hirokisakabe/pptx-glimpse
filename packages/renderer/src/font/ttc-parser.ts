@@ -1,15 +1,15 @@
 /**
- * TTC (TrueType Collection) バイナリの解析・分割モジュール。
+ * Module for parsing and splitting TTC (TrueType Collection) binaries.
  *
- * TTC ファイルから個別の TTF/OTF バッファを抽出し、
- * opentype.js でパースできる形式にする。
+ * Extracts individual TTF/OTF buffers from a TTC file
+ * opentype.js and makes them parseable by opentype.js.
  */
 
 const TTC_TAG = 0x74746366; // "ttcf"
 
 /**
- * バッファが TTC (TrueType Collection) 形式かどうかを判定する。
- * 先頭 4 バイトが "ttcf" であれば TTC と判定する。
+ * Determines whether the buffer is in TTC (TrueType Collection) format.
+ * The first 4 bytes "ttcf" indicate TTC.
  */
 export function isTtcBuffer(data: ArrayBuffer | Uint8Array): boolean {
   const view = toDataView(data);
@@ -18,12 +18,12 @@ export function isTtcBuffer(data: ArrayBuffer | Uint8Array): boolean {
 }
 
 /**
- * TTC バッファから個別の TTF/OTF バッファを抽出する。
+ * Extracts individual TTF/OTF buffers from a TTC buffer.
  *
- * 各フォントの OffsetTable + テーブルデータを独立した TTF/OTF バッファに再パックする。
- * TTC 内でテーブルが共有されている場合、各フォントがそれぞれコピーを持つことになる。
+ * Repacks each font's OffsetTable + table data into an independent TTF/OTF buffer.
+ * If the table is shared within the TTC, each font will have its own copy.
  *
- * @returns 抽出されたフォントバッファの配列。TTC でないか解析に失敗した場合は空配列。
+ * @returns Array of extracted font buffers. Empty array if not TTC or parsing failed.
  */
 export function extractTtcFonts(data: ArrayBuffer | Uint8Array): ArrayBuffer[] {
   const view = toDataView(data);
@@ -46,7 +46,7 @@ export function extractTtcFonts(data: ArrayBuffer | Uint8Array): ArrayBuffer[] {
       const extracted = extractSingleFont(view, bytes, fontOffset);
       if (extracted) results.push(extracted);
     } catch {
-      // 個別フォントの抽出失敗はスキップ
+      // Skip failures when extracting individual fonts
     }
   }
 
@@ -54,7 +54,7 @@ export function extractTtcFonts(data: ArrayBuffer | Uint8Array): ArrayBuffer[] {
 }
 
 /**
- * TTC 内の単一フォントを独立した TTF/OTF バッファとして再パックする。
+ * Repack a single font in TTC as a separate TTF/OTF buffer.
  */
 function extractSingleFont(
   view: DataView,
@@ -72,14 +72,14 @@ function extractSingleFont(
   const tableRecordsEnd = tableRecordsStart + numTables * 16;
   if (tableRecordsEnd > view.byteLength) return null;
 
-  // テーブル情報を読み取り、境界チェック
+  // Read table information and check bounds
   const tables: { tag: number; checkSum: number; offset: number; length: number }[] = [];
   for (let i = 0; i < numTables; i++) {
     const recOffset = tableRecordsStart + i * 16;
     const tableOffset = view.getUint32(recOffset + 8);
     const tableLength = view.getUint32(recOffset + 12);
 
-    // テーブルデータがバッファ範囲外の場合はフォント全体を無効とする
+    // If table data is outside the buffer range, invalidate the entire font
     if (tableOffset > view.byteLength || tableLength > view.byteLength - tableOffset) {
       return null;
     }
@@ -92,7 +92,7 @@ function extractSingleFont(
     });
   }
 
-  // 出力サイズを計算
+  // Calculate output size
   const headerSize = 12 + numTables * 16;
   let dataSize = 0;
   for (const table of tables) {
@@ -100,34 +100,34 @@ function extractSingleFont(
   }
   const totalSize = headerSize + dataSize;
 
-  // 出力バッファを構築
+  // Build output buffer
   const output = new ArrayBuffer(totalSize);
   const outView = new DataView(output);
   const outBytes = new Uint8Array(output);
 
-  // OffsetTable ヘッダーを書き込み
+  // OffsetTable Write header
   outView.setUint32(0, sfVersion);
   outView.setUint16(4, numTables);
 
-  // searchRange, entrySelector, rangeShift を計算
+  // searchRange, entrySelector, rangeShift calculate
   const { searchRange, entrySelector, rangeShift } = calcOffsetTableFields(numTables);
   outView.setUint16(6, searchRange);
   outView.setUint16(8, entrySelector);
   outView.setUint16(10, rangeShift);
 
-  // テーブルレコードとデータを書き込み
+  // Write table records and data
   let currentDataOffset = headerSize;
   for (let i = 0; i < numTables; i++) {
     const table = tables[i];
     const recOffset = 12 + i * 16;
 
-    // テーブルレコード
+    // Table record
     outView.setUint32(recOffset, table.tag);
     outView.setUint32(recOffset + 4, table.checkSum);
     outView.setUint32(recOffset + 8, currentDataOffset);
     outView.setUint32(recOffset + 12, table.length);
 
-    // テーブルデータをコピー
+    // Copy table data
     outBytes.set(bytes.subarray(table.offset, table.offset + table.length), currentDataOffset);
 
     currentDataOffset += alignTo4(table.length);
@@ -136,12 +136,12 @@ function extractSingleFont(
   return output;
 }
 
-/** 4 バイト境界にアラインする */
+/** Aligns to a 4-byte boundary */
 function alignTo4(n: number): number {
   return (n + 3) & ~3;
 }
 
-/** OffsetTable の searchRange, entrySelector, rangeShift を計算する */
+/** Calculate searchRange, entrySelector, rangeShift of OffsetTable */
 function calcOffsetTableFields(numTables: number): {
   searchRange: number;
   entrySelector: number;

@@ -1,6 +1,6 @@
 /**
- * テーマのスクリプトベースフォント（Jpan）をモジュールレベルで保持する。
- * CJK テキストレンダリング時のフォールバックとして使用される。
+ * Keep the theme's script-based font (Japan) at the module level.
+ * Used as a fallback when rendering CJK text.
  */
 
 let jpanMajorFont: string | null = null;
@@ -17,8 +17,8 @@ export function resetScriptFonts(): void {
 }
 
 /**
- * CJK テキストのフォールバック用 Jpan フォントを返す。
- * major/minor の区別が不要な場合は major を優先する。
+ * Returns the Japan font for fallback for CJK text.
+ * If major/minor distinction is not necessary, major takes precedence.
  */
 export function getJpanFallbackFont(): string | null {
   return jpanMajorFont ?? jpanMinorFont;

@@ -14,30 +14,30 @@ afterEach(() => {
 });
 
 describe("DefaultTextMeasurer", () => {
-  it("measureTextWidth は既存関数と同じ結果を返す", () => {
+  it("measureTextWidth returns the same result as the existing function", () => {
     const measurer = new DefaultTextMeasurer();
     expect(measurer.measureTextWidth("Hello", 18, false, "Calibri")).toBe(
       measureTextWidth("Hello", 18, false, "Calibri"),
     );
   });
 
-  it("getLineHeightRatio は既存関数と同じ結果を返す", () => {
+  it("getLineHeightRatio returns the same result as the existing function", () => {
     const measurer = new DefaultTextMeasurer();
     expect(measurer.getLineHeightRatio("Calibri")).toBe(getLineHeightRatio("Calibri"));
   });
 
-  it("getAscenderRatio は既存関数と同じ結果を返す", () => {
+  it("getAscenderRatio returns the same result as the existing function", () => {
     const measurer = new DefaultTextMeasurer();
     expect(measurer.getAscenderRatio("Calibri")).toBe(getAscenderRatio("Calibri"));
   });
 });
 
 describe("setTextMeasurer / getTextMeasurer / resetTextMeasurer", () => {
-  it("デフォルトでは DefaultTextMeasurer が使われる", () => {
+  it("DefaultTextMeasurer is used by default", () => {
     expect(getTextMeasurer()).toBeInstanceOf(DefaultTextMeasurer);
   });
 
-  it("setTextMeasurer でカスタム実装に差し替えられる", () => {
+  it("Can be replaced with a custom implementation using setTextMeasurer", () => {
     const custom: TextMeasurer = {
       measureTextWidth: () => 42,
       getLineHeightRatio: () => 1.5,
@@ -49,7 +49,7 @@ describe("setTextMeasurer / getTextMeasurer / resetTextMeasurer", () => {
     expect(getTextMeasurer().getAscenderRatio()).toBe(0.9);
   });
 
-  it("resetTextMeasurer でデフォルトに戻る", () => {
+  it("Return to default with resetTextMeasurer", () => {
     const custom: TextMeasurer = {
       measureTextWidth: () => 42,
       getLineHeightRatio: () => 1.5,

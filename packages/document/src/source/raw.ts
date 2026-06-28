@@ -1,55 +1,56 @@
 /**
- * Raw OOXML escape hatch 関連の型。
+ * Types for the raw OOXML escape hatch.
  *
- * PptxSourceModel は supported semantics を typed field で表しつつ、未対応・部分対応の
- * XML を raw sidecar として、未編集の part を raw package part として保持し、
- * structural round-trip を成立させる。byte 一致は目標にしない。
+ * PptxSourceModel represents supported semantics as typed fields, while preserving
+ * unsupported or partially supported XML as raw sidecars and unedited parts as raw
+ * package parts. This enables structural round-tripping; byte equality is not a goal.
  */
 
 import type { PartPath, RawSidecarId } from "./handles.js";
 
 /**
- * 部分的にパースされた raw OOXML ノード。namespace prefix 付きの qualified name、
- * 属性、子ノード、テキストを保持する。PptxSourceModel が typed に表現しない要素
- * (vendor extension / `mc:AlternateContent` / 未知の DrawingML 等) の保存に使う。
+ * Partially parsed raw OOXML node. It preserves the namespace-prefixed qualified name,
+ * attributes, child nodes, and text for elements that PptxSourceModel does not represent
+ * as typed fields, such as vendor extensions, `mc:AlternateContent`, and unknown
+ * DrawingML.
  */
 export interface RawOoxmlNode {
-  /** namespace prefix を含む要素名 (例: `a:extLst`)。 */
+  /** Element name including the namespace prefix (Example: `a:extLst`). */
   readonly name: string;
   readonly attributes?: Readonly<Record<string, string>>;
   readonly children?: readonly RawOoxmlNode[];
-  /** 要素の text content (持つ場合)。 */
+  /** Element text content (when present). */
   readonly text?: string;
 }
 
 /**
- * PptxSourceModel source node に付随する raw XML sidecar。最も近い source node に
- * 紐づけ、親要素内での順序メタデータを保持して書き戻し時の順序を復元する。
+ * Raw XML sidecar associated with a PptxSourceModel source node. It is attached to the nearest source node
+ * and keeps ordering metadata within the parent element to restore order during write-back.
  */
 export interface RawSidecar {
   readonly id: RawSidecarId;
   readonly node: RawOoxmlNode;
-  /** 所有要素の子並びにおける順序スロット。 */
+  /** Ordering slot within the owning element's child sequence. */
   readonly orderingSlot?: number;
 }
 
 /**
- * 未編集の package part をそのまま書き戻すための raw fallback。bytes (binary
- * asset) もしくは XML tree の **いずれか一方** で保持する判別共用体。両持ち /
- * 両欠の不正状態を型で排除する。
+ * Raw fallback for writing an unedited package part back as-is. It keeps either bytes
+ * for binary assets or an XML tree as a discriminated union. The type rules out invalid
+ * states with both or neither representation.
  */
 export type RawPackagePart =
   | {
       readonly kind: "binary";
       readonly partPath: PartPath;
       readonly contentType: string;
-      /** binary part (画像・埋め込みワークブック等) の元バイト列。 */
+      /** Original byte string of binary part (image, embedded workbook, etc.). */
       readonly bytes: Uint8Array;
     }
   | {
       readonly kind: "xml";
       readonly partPath: PartPath;
       readonly contentType: string;
-      /** XML part を tree として保持する場合の root ノード。 */
+      /** The root node when storing the XML part as a tree. */
       readonly xml: RawOoxmlNode;
     };

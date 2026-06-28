@@ -1,9 +1,11 @@
 /**
- * DrawingML の色・塗り・線・座標変換を PptxSourceModel source 型へ読み取るヘルパー。
+ * Helpers that read DrawingML colors, fills, lines, and coordinates into
+ * PptxSourceModel source types.
  *
- * source では theme color / relationship を未解決のまま保持する。lumMod / tint
- * 等の変換は適用せずそのまま保存し、解決は computed view の責務とする。
- * 未対応の塗り (gradient / pattern / picture fill) は raw sidecar として保存する。
+ * Theme colors and relationships stay unresolved in source. Transformations such as
+ * lumMod and tint are kept unapplied, and the computed view is responsible for resolving
+ * them. Unsupported fills such as gradient, pattern, and picture fills are preserved as
+ * raw sidecars.
  */
 
 import type {
@@ -64,7 +66,7 @@ const COLOR_TRANSFORM_KINDS: ReadonlySet<SourceColorTransform["kind"]> = new Set
   "alpha",
 ]);
 
-/** typed に解釈しない fill 要素。raw fill 判定で除外するために使う。 */
+/** fill elements that do not interpret typed. Used to exclude raw fill judgment. */
 const RAW_FILL_LOCAL_NAMES = ["grpFill"] as const;
 const PRESET_COLOR_HEX: Readonly<Record<string, string>> = {
   black: "000000",
@@ -78,8 +80,8 @@ const PRESET_COLOR_HEX: Readonly<Record<string, string>> = {
 };
 
 /**
- * 色保持要素 (`a:solidFill` / `a:bgRef` / `a:rPr` 等) の直下にある色要素
- * (`a:srgbClr` / `a:schemeClr` / `a:sysClr`) を `SourceColor` に変換する。
+ * Color elements directly below color preserving elements (`a:solidFill` / `a:bgRef` / `a:rPr`, etc.)
+ * Convert (`a:srgbClr` / `a:schemeClr` / `a:sysClr`) to `SourceColor`.
  */
 export function parseColorElement(parent: XmlNode | undefined): SourceColor | undefined {
   if (!parent) return undefined;
@@ -274,8 +276,8 @@ function parsePresetColor(node: XmlNode): SourceColor | undefined {
 }
 
 /**
- * `a:spPr` / `a:ln` / `p:bgPr` 等の直下にある塗りを読む。`a:solidFill` /
- * `a:noFill` を typed に、gradient / pattern / picture fill を raw に変換する。
+ * Read the fill immediately below `a:spPr` / `a:ln` / `p:bgPr` etc. `a:solidFill` /
+ * Convert `a:noFill` to typed and gradient / pattern / picture fill to raw.
  */
 export function parseFill(
   parent: XmlNode | undefined,
@@ -398,7 +400,7 @@ function parsePatternFill(pattern: XmlNode): SourceFill | undefined {
   };
 }
 
-/** `a:ln` を読む。幅 (EMU) と solid line color のみの最小表現。 */
+/** Read `a:ln`. Minimal representation of width (EMU) and solid line color only. */
 export function parseOutline(
   spPr: XmlNode | undefined,
   nextId: () => RawSidecarId,
@@ -407,7 +409,7 @@ export function parseOutline(
   return parseLine(ln, nextId);
 }
 
-/** `a:ln` / `a:lnL` / `a:lnR` 等の line node を読む。 */
+/** Read line nodes such as `a:ln` / `a:lnL` / `a:lnR`. */
 export function parseLine(
   ln: XmlNode | undefined,
   nextId: () => RawSidecarId,
@@ -434,7 +436,7 @@ export function parseLine(
   };
 }
 
-/** `a:xfrm` を読み、offset / extent / rotation / flip を `SourceTransform` に。 */
+/** Read `a:xfrm` and set offset / extent / rotation / flip to `SourceTransform`. */
 export function parseTransform(spPr: XmlNode | undefined): SourceTransform | undefined {
   const xfrm = getChild(spPr, "xfrm");
   if (!xfrm) return undefined;
@@ -491,7 +493,7 @@ function withTransforms(base: SourceColor, colorNode: XmlNode): SourceColor {
   return transforms.length > 0 ? { ...base, transforms } : base;
 }
 
-/** 数値属性を取り出す。欠落・非数値は undefined。 */
+/** Extract numeric attributes. Missing/non-numeric values are undefined. */
 export function numericAttr(node: XmlNode | undefined, name: string): number | undefined {
   const raw = getAttr(node, name);
   if (raw === undefined) return undefined;
@@ -499,7 +501,7 @@ export function numericAttr(node: XmlNode | undefined, name: string): number | u
   return Number.isFinite(value) ? value : undefined;
 }
 
-/** OOXML boolean 属性 (`1` / `0` / `true` / `false`) を判定する。 */
+/** Determine OOXML boolean attribute (`1` / `0` / `true` / `false`). */
 export function isTrue(value: string | undefined): boolean {
   return value === "1" || value === "true";
 }

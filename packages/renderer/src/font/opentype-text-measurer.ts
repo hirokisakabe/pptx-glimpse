@@ -27,8 +27,8 @@ export class OpentypeTextMeasurer implements TextMeasurer {
   private warnedFonts = new Set<string>();
 
   /**
-   * @param fonts - フォント名 → opentype.js Font オブジェクトのマップ
-   * @param defaultFont - フォールバックフォント（省略可）
+   * @param fonts - font name -> opentype.js Map of Font objects
+   * @param defaultFont - fallback font (optional)
    */
   constructor(fonts: Map<string, OpentypeFont>, defaultFont?: OpentypeFont) {
     this.fonts = fonts;
@@ -49,13 +49,13 @@ export class OpentypeTextMeasurer implements TextMeasurer {
       return defaultMeasureTextWidth(text, fontSizePt, bold, fontFamily, fontFamilyEa);
     }
     const fontSizePx = fontSizePt * PX_PER_PT;
-    // CJK 文字は東アジアフォントを優先、ラテン文字はラテンフォントを優先
+    // CJK characters prefer East Asian fonts, Latin characters prefer Latin fonts.
     const latinFontResolved = latinFont ?? fallbackFont;
     const eaFontResolved = eaFont ?? fallbackFont;
     const boldLatinFont = bold ? this.resolveBoldFont(fontFamily) : null;
 
-    // ユニーク文字ごとにキャッシュして stringToGlyphs 呼び出しを削減
-    // full-text 一括呼び出しは GSUB リガチャでグリフ数が変わるため使用不可
+    // Cache each unique character to reduce stringToGlyphs calls
+    // Full-text bulk calls cannot be used because the number of glyphs changes with the GSUB ligature.
     const latinGlyphCache = new Map<string, OpentypeGlyph | undefined>();
     const eaGlyphCache =
       eaFontResolved !== latinFontResolved
@@ -106,7 +106,7 @@ export class OpentypeTextMeasurer implements TextMeasurer {
 
   private resolveBoldFont(name: string | null | undefined): OpentypeFont | null {
     if (!name) return null;
-    // 元の名前とフォントマッピング後の OSS 代替名の両方で Bold バリアントを探す
+    // Look for Bold variants by both the original name and the OSS alternate name after font mapping
     const bases = [name];
     const mappedBase = getCurrentMappedFont(name);
     if (mappedBase && mappedBase !== name) bases.push(mappedBase);
@@ -129,20 +129,20 @@ export class OpentypeTextMeasurer implements TextMeasurer {
     const direct = this.fonts.get(name);
     if (direct) return direct;
 
-    // フォントマッピングで OSS 代替名を試行
+    // Try OSS replacement names from font mapping
     const mapped = getCurrentMappedFont(name);
     if (mapped) {
       const mappedFont = this.fonts.get(mapped);
       if (mappedFont) return mappedFont;
 
-      // CJK フォールバックチェーン
+      // CJK fallback chain
       for (const fallback of getCjkFallbackFonts(mapped)) {
         const fallbackFont = this.fonts.get(fallback);
         if (fallbackFont) return fallbackFont;
       }
     }
 
-    // フォント未検出の警告
+    // Font-not-found warning
     if (!this.warnedFonts.has(name)) {
       this.warnedFonts.add(name);
       warn("font.notFound", `Font not found: "${name}"`);

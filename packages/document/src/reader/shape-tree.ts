@@ -1,15 +1,15 @@
 /**
- * `p:spTree` を PptxSourceModel source の shape node 列へ読み取る。
+ * Read `p:spTree` into the shape node column of PptxSourceModel source.
  *
  * simple autoshape (`p:sp`), embedded raster image (`p:pic`), connector
- * (`p:cxnSp`), and group (`p:grpSp`) を typed に表す。graphicFrame は table /
- * chart / SmartArt の supported subset を typed 化し、それ以外の未対応ノードは
- * raw shape node として保存する。typed node 内でも、未対応の子要素・属性は raw
- * sidecar として保持する。
+ * (`p:cxnSp`), and group (`p:grpSp`) are represented in typed. graphicFrame is table /
+ * Convert supported subset of chart/SmartArt to typed, and other unsupported nodes
+ * Save as raw shape node. Even within a typed node, unsupported child elements/attributes are raw
+ * sidecar .
  *
- * `orderedChildren` が渡された場合は preserve-order XML parse 結果を使い、異種
- * タグ間の z-order を維持する。未指定時は従来通りタグ種別ごとの順序に fallback
- * する。
+ * If `orderedChildren` is passed, use preserve-order XML parse result and
+ * z-order between tags.when omitted, falls back to the legacy per-tag ordering
+ * do.
  */
 
 import type {
@@ -112,9 +112,9 @@ const KNOWN_TABLE_CELL_PROPERTIES_CHILDREN: ReadonlySet<string> = new Set([
   "pattFill",
   "grpFill",
 ]);
-// `a:spPr` のうち typed に解釈する子。これ以外 (custGeom / effectLst / scene3d /
-// extLst 等) は raw sidecar として保持する。fill 系は parseFill が typed/raw を
-// 判別するため known 扱いにして二重計上を防ぐ。
+// Children of `a:spPr` interpreted as typed data. Everything else (custGeom / effectLst / scene3d /
+// extLst etc.) are retained as raw sidecars. For the fill type, parseFill uses typed/raw.
+// decides typed/raw handling and this prevents double-counting.
 const KNOWN_SP_PR_CHILDREN: ReadonlySet<string> = new Set([
   "xfrm",
   "prstGeom",
@@ -145,7 +145,7 @@ const SMARTART_DIAGRAM_URIS: ReadonlySet<string> = new Set([
   "http://purl.oclc.org/ooxml/drawingml/diagram",
 ]);
 
-/** `p:spTree` を読み、shape node 列を返す。 */
+/** Read `p:spTree` and return the shape node column. */
 export function parseShapeTree(
   spTree: XmlNode | undefined,
   partPath: PartPath,
@@ -163,7 +163,7 @@ export function parseShapeTree(
     if (key.startsWith("@_")) continue;
     if (key === "#text") continue;
     const local = localName(key);
-    // group 自身の非可視プロパティはノードではないため除外する。
+    // The group's own non-visual properties are not nodes, so exclude them.
     if (local === "nvGrpSpPr" || local === "grpSpPr") continue;
 
     const value = spTree[key];
@@ -431,7 +431,7 @@ function parseImage(
     ...collectUnknownSidecars(pic, KNOWN_PICTURE_CHILDREN, nextId),
     ...collectUnknownSidecars(spPr, KNOWN_SP_PR_CHILDREN, nextId),
     ...collectEffectSidecars(spPr, effects, nextId),
-    // `a:stretch` / `a:tile` 等の fill mode と blip 配下の recolor 操作を保持する。
+    // Retains fill mode such as `a:stretch` / `a:tile` and recolor operation under blip.
     ...collectUnknownSidecars(blipFill, KNOWN_BLIP_FILL_CHILDREN, nextId),
     ...collectBlipEffectSidecars(blip, blipEffects, nextId),
   ];

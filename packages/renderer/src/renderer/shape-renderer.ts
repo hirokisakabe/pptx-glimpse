@@ -10,7 +10,7 @@ import { buildTransformAttr } from "./transform.js";
 export function renderShape(shape: ShapeElement): RenderResult {
   const { transform, geometry, fill, outline, textBody, effects } = shape;
 
-  // spAutofit: テキスト量に応じて図形の高さを拡大
+  // spAutofit: expand shape height according to text amount
   let effectiveTransform = transform;
   if (textBody?.bodyProperties.autoFit === "spAutofit") {
     const requiredHeightEmu = computeSpAutofitHeight(textBody, transform);

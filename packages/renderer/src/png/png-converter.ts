@@ -13,9 +13,9 @@ function resolveWasmPath(): string {
 }
 
 /**
- * resvg-wasm の WASM モジュールを初期化する。
- * 明示的に呼び出さなくても、初回の PNG 変換時に自動的に初期化される。
- * アプリケーション起動時に初期化しておきたい場合に使用する。
+ * Initializes the resvg-wasm WASM module.
+ * Even when not called explicitly, it is initialized automatically on the first PNG conversion.
+ * Use this when you want to initialize the application when it starts.
  */
 export async function initResvgWasm(): Promise<void> {
   if (!wasmInitPromise) {
@@ -31,7 +31,7 @@ export async function initResvgWasm(): Promise<void> {
 interface PngConvertOptions {
   width?: number;
   height?: number;
-  /** SVG <text> 要素のレンダリングに使用するフォントバッファのリスト */
+  /** Font buffers used to render SVG <text> elements */
   fontBuffers?: Uint8Array[];
 }
 

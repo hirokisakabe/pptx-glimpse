@@ -792,7 +792,7 @@ function renderSurfaceChart(chart: ChartData, x: number, y: number, w: number, h
 }
 
 function heatmapColor(t: number): string {
-  // Blue (cold) → Cyan → Green → Yellow → Red (hot)
+  // Blue (cold) -> Cyan -> Green -> Yellow -> Red (hot)
   const clamped = Math.max(0, Math.min(1, t));
   let r: number, g: number, b: number;
   if (clamped < 0.25) {
@@ -876,7 +876,7 @@ function renderOfPieChart(chart: ChartData, x: number, y: number, w: number, h: 
   const otherColor: ResolvedColor = { hex: "#D9D9D9", alpha: 1 };
 
   if (primaryValues.length === 0 && secondaryValues.length > 0) {
-    // All values go to secondary — draw full circle for "other"
+    // All values go to secondary - draw full circle for "other"
     parts.push(
       `<circle cx="${round(pieCx)}" cy="${round(pieCy)}" r="${round(pieR)}" ${fillAttr(otherColor)}/>`,
     );

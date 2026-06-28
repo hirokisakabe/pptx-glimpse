@@ -1,37 +1,37 @@
 /**
- * Package graph の型。package part / relationship / content type / media を
- * source-model data として表す。
+ * Package graph type. package part / relationship / content type / media
+ * Represented as source-model data.
  */
 
 import type { PartPath, RelationshipId } from "./handles.js";
 import type { RawPackagePart } from "./raw.js";
 
-/** relationship の target mode。 */
+/** target mode of relationship. */
 export type RelationshipTargetMode = "Internal" | "External";
 
-/** `_rels/*.rels` の 1 エントリ。 */
+/** 1 entry in `_rels/*.rels`. */
 export interface Relationship {
   readonly id: RelationshipId;
-  /** relationship type URI。 */
+  /** relationship type URI. */
   readonly type: string;
-  /** sourcePartPath からの相対 target、もしくは external URL。 */
+  /** Target relative to sourcePartPath, or an external URL. */
   readonly target: string;
   readonly targetMode?: RelationshipTargetMode;
 }
 
-/** ある source part が持つ relationship 群 (`<part>/_rels/<part>.rels`)。 */
+/** Relationships owned by a source part (`<part>/_rels/<part>.rels`). */
 export interface PartRelationships {
   readonly sourcePartPath: PartPath;
   readonly relationships: readonly Relationship[];
 }
 
-/** `[Content_Types].xml` の Default エントリ (拡張子 → content type)。 */
+/** Default entry in `[Content_Types].xml` (extension -> content type). */
 export interface ContentTypeDefault {
   readonly extension: string;
   readonly contentType: string;
 }
 
-/** `[Content_Types].xml` の Override エントリ (part 名 → content type)。 */
+/** Override entry (part name -> content type) in `[Content_Types].xml`. */
 export interface ContentTypeOverride {
   readonly partName: PartPath;
   readonly contentType: string;
@@ -42,13 +42,13 @@ export interface ContentTypes {
   readonly overrides: readonly ContentTypeOverride[];
 }
 
-/** package part の参照 (path + content type)。 */
+/** Package part reference (path + content type). */
 export interface PackagePartRef {
   readonly partPath: PartPath;
   readonly contentType: string;
 }
 
-/** media asset (画像・音声・動画等) の part。bytes をそのまま保持する。 */
+/** Part of a media asset (image, audio, video, etc.). Keep bytes as is. */
 export interface MediaPart {
   readonly partPath: PartPath;
   readonly contentType: string;
@@ -56,14 +56,14 @@ export interface MediaPart {
 }
 
 /**
- * package 全体の構造。content types / part 一覧 / part ごとの relationship /
- * media、および未編集 part の raw fallback を保持する。
+ * The overall structure of the package. content types / part list / relationship by part /
+ * media, and retain the raw fallback of the unedited part.
  */
 export interface PackageGraph {
   readonly contentTypes: ContentTypes;
   readonly parts: readonly PackagePartRef[];
   readonly relationships: readonly PartRelationships[];
   readonly media: readonly MediaPart[];
-  /** typed に表現しない / 未編集の part を書き戻すための raw fallback。 */
+  /** Raw fallback for writing back parts that are not typed / were not edited. */
   readonly rawParts?: readonly RawPackagePart[];
 }

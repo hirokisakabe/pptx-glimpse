@@ -5,19 +5,19 @@ import {
 } from "../utils/text-measure.js";
 
 /**
- * テキストの幅と行高さを計測するインターフェース。
- * デフォルトでは静的フォントメトリクスによる計測が使われる。
- * ユーザーが独自の実装を ConvertOptions.textMeasurer に渡すことで、
- * Canvas API や opentype.js など任意の計測バックエンドに差し替えられる。
+ * Interface for measuring text width and line height.
+ * By default, measurement uses static font metrics.
+ * Users can pass their own implementation to ConvertOptions.textMeasurer
+ * Can be replaced with any measurement backend such as Canvas API or opentype.js.
  */
 export interface TextMeasurer {
   /**
-   * テキストの推定幅をピクセル単位で返す。
-   * @param text - 計測対象のテキスト
-   * @param fontSizePt - フォントサイズ (ポイント)
-   * @param bold - 太字かどうか
-   * @param fontFamily - ラテン文字用フォントファミリー名
-   * @param fontFamilyEa - 東アジア文字用フォントファミリー名
+   * Returns the estimated width of the text in pixels.
+   * @param text - text to measure
+   * @param fontSizePt - font size (points)
+   * @param bold - whether the text is bold
+   * @param fontFamily - font family name for Latin text
+   * @param fontFamilyEa - font family name for East Asian text
    */
   measureTextWidth(
     text: string,
@@ -28,19 +28,19 @@ export interface TextMeasurer {
   ): number;
 
   /**
-   * フォントの自然な行高さ比率 (行高さ / フォントサイズ) を返す。
-   * メトリクスが不明な場合は 1.2 をフォールバック値として返す。
-   * @param fontFamily - ラテン文字用フォントファミリー名
-   * @param fontFamilyEa - 東アジア文字用フォントファミリー名
+   * Returns the font's natural line height ratio (line height / font size).
+   * Returns 1.2 as a fallback value if the metric is unknown.
+   * @param fontFamily - font family name for Latin text
+   * @param fontFamilyEa - font family name for East Asian text
    */
   getLineHeightRatio(fontFamily?: string | null, fontFamilyEa?: string | null): number;
 
   /**
-   * フォントの ascender 比率 (ascender / unitsPerEm) を返す。
-   * 1行目のベースラインオフセット計算に使用する。
-   * メトリクスが不明な場合は 1.0 をフォールバック値として返す。
-   * @param fontFamily - ラテン文字用フォントファミリー名
-   * @param fontFamilyEa - 東アジア文字用フォントファミリー名
+   * Font ascender ratio (ascender / unitsPerEm) .
+   * Used for baseline offset calculation in the first row.
+   * Returns 1.0 as a fallback value if the metric is unknown.
+   * @param fontFamily - font family name for Latin text
+   * @param fontFamilyEa - font family name for East Asian text
    */
   getAscenderRatio(fontFamily?: string | null, fontFamilyEa?: string | null): number;
 }

@@ -281,7 +281,7 @@ async function createTestPptx(): Promise<Buffer> {
 let testPptx: Buffer;
 
 beforeAll(async () => {
-  // 同一 worker 内で先に動いた他テストが残したフォントキャッシュを破棄する。
+  // Discards the font cache left by other tests that ran earlier within the same worker.
   clearFontCache();
   testPptx = await createTestPptx();
 });
@@ -610,7 +610,7 @@ describe("master placeholder text filtering", () => {
     // Decorative shape's red fill should appear
     expect(svg.toLowerCase()).toContain("#ff0000");
 
-    // Count shape groups — should have decorative master shape + slide shape = 2 groups
+    // Count shape groups - should have decorative master shape + slide shape = 2 groups
     const groupCount = (svg.match(/<g\b[^>]*transform="translate/g) || []).length;
     expect(groupCount).toBe(2);
   });
@@ -825,7 +825,7 @@ describe("layout placeholder text filtering", () => {
     // Decorative shape's blue fill should appear
     expect(svg.toLowerCase()).toContain("#0000ff");
 
-    // Count shape groups — should have decorative layout shape + slide shape = 2 groups
+    // Count shape groups - should have decorative layout shape + slide shape = 2 groups
     const groupCount = (svg.match(/<g\b[^>]*transform="translate/g) || []).length;
     expect(groupCount).toBe(2);
   });

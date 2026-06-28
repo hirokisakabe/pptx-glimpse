@@ -10,12 +10,12 @@ export function emuToPoints(emu: Emu): number {
   return emu / EMU_PER_POINT;
 }
 
-/** 1/60000度 → 度 */
+/** 1/60000degrees -> degrees */
 export function rotationToDegrees(rotation: number): number {
   return rotation / ROTATION_UNIT;
 }
 
-/** 1/100ポイント → ポイント */
+/** 1/100points -> points */
 export function hundredthPointToPoint(value: HundredthPt): Pt {
   return unsafeBrandAssertion<Pt>(value / 100);
 }
