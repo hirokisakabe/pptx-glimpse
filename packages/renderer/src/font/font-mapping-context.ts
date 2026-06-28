@@ -1,6 +1,6 @@
 /**
  * Keeps the font mapping table used during rendering at module level.
- * Internal note.
+ * Same as setTextMeasurer/resetTextMeasurer pattern in text-measurer.ts.
  */
 import type { FontMapping } from "./font-mapping.js";
 import { DEFAULT_FONT_MAPPING, getMappedFont } from "./font-mapping.js";

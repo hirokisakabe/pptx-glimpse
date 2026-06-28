@@ -1,16 +1,18 @@
 /**
- * `readPptx(input)` — PptxSourceModel source reader  initial slice.
+ * `readPptx(input)` - initial slice of the PptxSourceModel source reader.
  *
- * Reads the PPTX ZIP package、package graph (content types / relationships /
- * Internal note.
- * Internal note.
- * Internal note.
- * Internal note.
- * Internal note.
+ * Reads the PPTX ZIP package, package graph (content types, relationships, and media),
+ * and presentation metadata (slide size and slide order), then returns them as a
+ * PptxSourceModel source. For each slide in presentation order, it follows the
+ * slide -> layout -> master -> theme chain and reads simple shapes, text, and images as
+ * typed source nodes. Unedited or unsupported parts and child elements are retained as
+ * raw package material or raw sidecars and used as the basis for structural round-trip
+ * preservation.
  *
- * Internal note.
- * Internal note.
- * Internal note.
+ * Slide, layout, master, and theme parts that contain typed nodes also keep their
+ * original bytes through `packageGraph.rawParts` for writeback when the part is
+ * untouched. The typed model is for editing and computed views; the raw part is for
+ * round-tripping.
  *
  * Computed view generation and writer output are responsibilities of modules separate from the reader.
  */
@@ -58,7 +60,7 @@ import {
   type XmlOrderedNode,
 } from "./xml.js";
 
-/** Internal note. */
+/** Input for `readPptx`. `Buffer` is accepted as a subclass of `Uint8Array`. */
 export type ReadPptxInput = Uint8Array;
 
 const CONTENT_TYPES_PART = "[Content_Types].xml";
@@ -78,9 +80,9 @@ const PRESENTATION_CONTENT_TYPE =
 const textDecoder = new TextDecoder();
 
 /**
- * Internal note.
+ * Reads a PPTX byte string and returns a PptxSourceModel source.
  *
- * Internal note.
+ * @throws If presentation part is not found (= not a valid PPTX).
  */
 export function readPptx(input: ReadPptxInput): PptxSourceModel {
   const entries = unzipPackage(input);
@@ -103,11 +105,11 @@ export function readPptx(input: ReadPptxInput): PptxSourceModel {
       continue;
     }
 
-    // Internal note.
-    // Internal note.
+    // content types / relationships as structural data
+    // It can be reconstructed from `contentTypes` / `relationships`, so it is not included in raw.
     if (isRelationshipPart(path)) continue;
 
-    // Internal note.
+    // In this slice, all parts that are not interpreted as typed are retained in the original byte sequence.
     // Byte equality is not a goal, but writing untouched parts back as original bytes
     // is the most faithful structural round trip.
     rawParts.push({ kind: "binary", partPath: asPartPath(path), contentType, bytes });
@@ -147,8 +149,8 @@ interface SlideHierarchy {
 }
 
 /**
- * Internal note.
- * Internal note.
+ * Follow layout -> master -> theme from each slide in presentation order, and reachable
+ * Read part as a typed source node. layout / master / theme is deduplicated
  * and collected in discovery order.
  */
 function readSlideHierarchy(
@@ -240,7 +242,7 @@ interface ParsedPartRoot {
   readonly orderedRoot: readonly XmlOrderedNode[];
 }
 
-/** Internal note. */
+/** Parses the byte string of part and returns the root element of the specified local name. */
 function parsePartRoot(
   entries: Map<string, Uint8Array>,
   partPath: PartPath,
@@ -275,7 +277,7 @@ function parsePartRoot(
   return { root, orderedRoot };
 }
 
-/** Internal note. */
+/** Resolves the first internal (non-External) match in the relationship for the specified source part. */
 function resolveSingleRel(
   relationships: readonly PartRelationships[],
   sourcePart: PartPath,
@@ -287,7 +289,7 @@ function resolveSingleRel(
   return resolveInternalRelationshipTarget(sourcePart, match);
 }
 
-/** Internal note. */
+/** Resolve all applicable internal types among the relationships of the specified source part. */
 function resolveAllRels(
   relationships: readonly PartRelationships[],
   sourcePart: PartPath,
@@ -318,12 +320,12 @@ class OrderedPathSet {
   }
 }
 
-/** Internal note. */
+/** Unzips the ZIP and returns a Map of part path -> bytes excluding directory entries. */
 function unzipPackage(input: ReadPptxInput): Map<string, Uint8Array> {
   const unzipped = unzipSync(input);
   const entries = new Map<string, Uint8Array>();
   for (const [path, bytes] of Object.entries(unzipped)) {
-    if (path.endsWith("/")) continue; // Internal note.
+    if (path.endsWith("/")) continue; // Directory entries are ignored.
     entries.set(path, bytes);
   }
   return entries;
@@ -409,7 +411,7 @@ function readPresentation(
   const root = getChild(parseXml(textDecoder.decode(bytes)), "presentation");
   if (root === undefined) {
     // If the resolved part is `<p:presentation>` not (relationship / content type
-    // Internal note.
+    // (e.g. pointing to a different part), it does not make a broken package appear ``readable''.
     throw new Error(
       `readPptx: part '${presentationPath}' is not a presentation part (missing p:presentation root)`,
     );
@@ -474,7 +476,7 @@ function readSlideSize(presentationRoot: XmlNode | undefined): SlideSize | undef
 }
 
 /**
- * Internal note.
+ * Resolve presentation part path. root relationship (officeDocument type)
  * and falls back to searching content type overrides.
  */
 function locatePresentationPart(

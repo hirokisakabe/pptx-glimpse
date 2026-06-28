@@ -27,8 +27,8 @@ export class OpentypeTextMeasurer implements TextMeasurer {
   private warnedFonts = new Set<string>();
 
   /**
-   * Internal note.
-   * Internal note.
+   * @param fonts - font name -> opentype.js Map of Font objects
+   * @param defaultFont - fallback font (optional)
    */
   constructor(fonts: Map<string, OpentypeFont>, defaultFont?: OpentypeFont) {
     this.fonts = fonts;
@@ -49,13 +49,13 @@ export class OpentypeTextMeasurer implements TextMeasurer {
       return defaultMeasureTextWidth(text, fontSizePt, bold, fontFamily, fontFamilyEa);
     }
     const fontSizePx = fontSizePt * PX_PER_PT;
-    // Internal note.
+    // CJK characters prefer East Asian fonts, Latin characters prefer Latin fonts.
     const latinFontResolved = latinFont ?? fallbackFont;
     const eaFontResolved = eaFont ?? fallbackFont;
     const boldLatinFont = bold ? this.resolveBoldFont(fontFamily) : null;
 
-    // Internal note.
-    // Internal note.
+    // Cache each unique character to reduce stringToGlyphs calls
+    // Full-text bulk calls cannot be used because the number of glyphs changes with the GSUB ligature.
     const latinGlyphCache = new Map<string, OpentypeGlyph | undefined>();
     const eaGlyphCache =
       eaFontResolved !== latinFontResolved
@@ -106,7 +106,7 @@ export class OpentypeTextMeasurer implements TextMeasurer {
 
   private resolveBoldFont(name: string | null | undefined): OpentypeFont | null {
     if (!name) return null;
-    // Internal note.
+    // Look for Bold variants by both the original name and the OSS alternate name after font mapping
     const bases = [name];
     const mappedBase = getCurrentMappedFont(name);
     if (mappedBase && mappedBase !== name) bases.push(mappedBase);

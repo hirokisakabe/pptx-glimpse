@@ -107,7 +107,7 @@ describe("renderEffects", () => {
         },
       }),
     );
-    // 0 deg → cos(0)=1, sin(0)=0 → dx=96, dy=0
+    // 0 deg -> cos(0)=1, sin(0)=0 -> dx=96, dy=0
     expect(result.filterDefs).toContain('dx="96"');
     expect(result.filterDefs).toContain('dy="0"');
   });
@@ -125,7 +125,7 @@ describe("renderEffects", () => {
         },
       }),
     );
-    // 90 deg → cos(90)≈0, sin(90)=1 → dx≈0, dy=96
+    // 90 deg -> cos(90)≈0, sin(90)=1 -> dx≈0, dy=96
     expect(result.filterDefs).toContain('dx="0"');
     expect(result.filterDefs).toContain('dy="96"');
   });
@@ -143,7 +143,7 @@ describe("renderEffects", () => {
         },
       }),
     );
-    // 180 deg → cos(180)=-1, sin(180)≈0 → dx=-96, dy≈0
+    // 180 deg -> cos(180)=-1, sin(180)≈0 -> dx=-96, dy≈0
     expect(result.filterDefs).toContain('dx="-96"');
     expect(result.filterDefs).toContain('dy="0"');
   });
@@ -172,7 +172,7 @@ describe("renderEffects", () => {
     expect(result.filterDefs).toContain('operator="over"');
   });
 
-  // Test note.
+  // --- filter structure ---
 
   it("generates filter with correct structure", () => {
     const result = renderEffects(makeEffects({ softEdge: { radius: 63500 } }));
@@ -185,7 +185,7 @@ describe("renderEffects", () => {
     expect(result.filterDefs).toContain("</filter>");
   });
 
-  // Test note.
+  // --- Composite effect ---
 
   it("chains softEdge into glow", () => {
     const result = renderEffects(
@@ -195,9 +195,9 @@ describe("renderEffects", () => {
       }),
     );
 
-    // Test note.
+    // softEdge is applied first
     expect(result.filterDefs).toContain('result="softEdgeResult"');
-    // Test note.
+    // glow uses softEdgeResult as input
     expect(result.filterDefs).toContain('in="softEdgeResult"');
     expect(result.filterDefs).toContain('<feMergeNode in="softEdgeResult"/>');
   });

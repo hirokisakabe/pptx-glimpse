@@ -8,11 +8,11 @@ import {
  * Interface for measuring text width and line height.
  * By default, measurement uses static font metrics.
  * Users can pass their own implementation to ConvertOptions.textMeasurer
- * Internal note.
+ * Can be replaced with any measurement backend such as Canvas API or opentype.js.
  */
 export interface TextMeasurer {
   /**
-   * Internal note.
+   * Returns the estimated width of the text in pixels.
    * @param text - text to measure
    * @param fontSizePt - font size (points)
    * @param bold - whether the text is bold
@@ -28,8 +28,8 @@ export interface TextMeasurer {
   ): number;
 
   /**
-   * Internal note.
-   * Internal note.
+   * Returns the font's natural line height ratio (line height / font size).
+   * Returns 1.2 as a fallback value if the metric is unknown.
    * @param fontFamily - font family name for Latin text
    * @param fontFamilyEa - font family name for East Asian text
    */
@@ -37,8 +37,8 @@ export interface TextMeasurer {
 
   /**
    * Font ascender ratio (ascender / unitsPerEm) .
-   * Internal note.
-   * Internal note.
+   * Used for baseline offset calculation in the first row.
+   * Returns 1.0 as a fallback value if the metric is unknown.
    * @param fontFamily - font family name for Latin text
    * @param fontFamilyEa - font family name for East Asian text
    */

@@ -35,8 +35,8 @@ function isVert270Text(vert: TextVerticalType): boolean {
 }
 
 /**
- * Internal note.
- * Internal note.
+ * Replace dimensions and margins when writing vertically.
+ * Configure the layout space so that the text appears in the correct position after the rotation transformation.
  */
 function resolveTextDimensions(
   bodyProperties: BodyProperties,
@@ -53,7 +53,7 @@ function resolveTextDimensions(
   const vert = bodyProperties.vert;
 
   if (isVerticalText(vert)) {
-    // Internal note.
+    // vert (90° CW): Layout space is HxW, margins are swapped according to rotation
     return {
       width: originalHeight,
       height: originalWidth,
@@ -65,7 +65,7 @@ function resolveTextDimensions(
   }
 
   if (isVert270Text(vert)) {
-    // Internal note.
+    // vert270 (90° CCW): Layout space is HxW, margins are swapped in the opposite direction
     return {
       width: originalHeight,
       height: originalWidth,
@@ -76,7 +76,7 @@ function resolveTextDimensions(
     };
   }
 
-  // Internal note.
+  // horizontal text
   return {
     width: originalWidth,
     height: originalHeight,
@@ -112,7 +112,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
   let fontScale = bodyProperties.fontScale;
   const lnSpcReduction = bodyProperties.lnSpcReduction;
 
-  // Internal note.
+  // normAutofit: dynamically reduce fontScale if text extends off shape
   if (bodyProperties.autoFit === "normAutofit" && shouldWrap) {
     const availableHeight = height - marginTopPx - marginBottomPx;
     fontScale = computeShrinkToFitScale(
@@ -127,7 +127,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
 
   const scaledDefaultFontSizePt = defaultFontSize * fontScale;
 
-  // Internal note.
+  // Default font line height ratio
   const defaultLineHeightRatio = getDefaultLineHeightRatio(paragraphs);
   const defaultAscenderRatio = getDefaultAscenderRatio(paragraphs);
   const defaultNaturalHeightPt = scaledDefaultFontSizePt * defaultLineHeightRatio;
@@ -135,19 +135,19 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
   const tspans: string[] = [];
   let isFirstLine = true;
 
-  // Internal note.
+  // For serial number management
   const autoNumCounters = new Map<string, number>();
 
-  // Internal note.
+  // spaceAfter (pixel resolved) in previous paragraph
   let prevSpaceAfterPx = 0;
 
   for (const para of paragraphs) {
     const paraMarginLeft = emuToPixels(para.properties.marginLeft ?? asEmu(0));
     const paraIndent = emuToPixels(para.properties.indent ?? asEmu(0));
 
-    // Internal note.
+    // Text start position = bodyMarginLeft + paraMarginLeft
     const textStartX = marginLeftPx + paraMarginLeft;
-    // Internal note.
+    // Bullet point position = textStartX + indent (indent is usually a negative value)
     const bulletX = textStartX + paraIndent;
 
     const effectiveTextWidth = textWidth - paraMarginLeft;
@@ -162,7 +162,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
       marginRightPx,
     );
 
-    // Internal note.
+    // Paragraph spacing calculation: max(previous paragraph spaceAfter, current paragraph spaceBefore)
     const paraFontSizePt = getParagraphFontSize(para, defaultFontSize) * fontScale;
     const spaceBeforePx = resolveSpacingPx(para.properties.spaceBefore, paraFontSizePt);
     const paragraphGapPx = Math.max(prevSpaceAfterPx, spaceBeforePx);
@@ -201,7 +201,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
           continue;
         }
 
-        // Internal note.
+        // Insert bullet point on first line
         if (lineIdx === 0 && bulletText) {
           const lineFontSize = getLineFontSize(line.segments, defaultFontSize) * fontScale;
           const lineNaturalHeightPt = computeLineNaturalHeight(
@@ -230,7 +230,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
           tspans.push(
             `<tspan x="${bulletX}" dy="${dy}" text-anchor="start" ${bulletStyles}>${escapeXml(bulletText)}</tspan>`,
           );
-          // Internal note.
+          // Continue text after bullet point (set x to start text on same line)
           for (let segIdx = 0; segIdx < line.segments.length; segIdx++) {
             const seg = line.segments[segIdx];
             const prefix = segIdx === 0 ? `x="${xPos}" text-anchor="${anchorValue}" ` : "";
@@ -261,7 +261,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
         isFirstLine = false;
       }
     } else {
-      // Internal note.
+      // wrap="none": no wrapping
       let firstRunRendered = false;
       if (bulletText) {
         const firstRun = para.runs.find((r) => r.text.length > 0);
@@ -295,7 +295,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
 
         if (!firstRunRendered) {
           if (bulletText) {
-            // Internal note.
+            // If there is a bullet, the text specifies the x position (no dy, same line as the bullet)
             const prefix = `x="${xPos}" text-anchor="${anchorValue}" `;
             tspans.push(renderSegment(run.text, run.properties, fontScale, prefix));
           } else {
@@ -319,7 +319,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
     prevSpaceAfterPx = resolveSpacingPx(para.properties.spaceAfter, paraFontSizePt);
   }
 
-  // Internal note.
+  // Vertical position calculation
   let yStart = marginTopPx;
   const totalTextHeight = estimateTextHeight(
     paragraphs,
@@ -435,8 +435,8 @@ function toAlpha(num: number): string {
 }
 
 /**
- * Internal note.
- * Internal note.
+ * Build a font chain for bullet points.
+ * bulletFont If not specified, falls back to the text run font (same rules as path drawing).
  */
 function buildBulletFontChain(
   props: ParagraphProperties,
@@ -471,8 +471,8 @@ function buildBulletStyleAttrs(
     }
   }
 
-  // Internal note.
-  // Internal note.
+  // If fontScale is not 1, use textFontSizePt as is if size is not specified.
+  // (textFontSizePt already has fontScale applied)
   void fontScale;
 
   return styles.join(" ");
@@ -491,9 +491,9 @@ function getAlignmentInfo(
 }
 
 /**
- * Internal note.
- * Internal note.
- * Internal note.
+ * Returns the height of a paragraph in pixels.
+ * If lnSpc is spcPts (fixed line spacing), it is a fixed value independent of font size,
+ * spcPct (magnification)/If not specified, calculate by naturalHeightPt x magnification.
  */
 function getLineHeightPx(
   para: Paragraph,
@@ -513,7 +513,7 @@ function resolveSpacingPx(spacing: SpacingValue, fontSizePt: number): number {
   if (spacing.type === "pts") {
     return (spacing.value / 100) * PX_PER_PT;
   }
-  // Internal note.
+  // pct: val / 100000 is the ratio to the font size
   return fontSizePt * (spacing.value / 100000) * PX_PER_PT;
 }
 
@@ -640,14 +640,14 @@ export function buildFontFamilyValue(fonts: (string | null)[]): string | null {
       seen.add(font);
       uniqueFonts.push(font);
 
-      // Internal note.
+      // Add OSS alternative font from mapping table
       const mapped = getCurrentMappedFont(font);
       if (mapped && !seen.has(mapped)) {
         seen.add(mapped);
         uniqueFonts.push(mapped);
       }
 
-      // Internal note.
+      // Added metrics compatible OSS font as fallback
       const fallback = getMetricsFallbackFont(font);
       if (fallback && !seen.has(fallback)) {
         seen.add(fallback);
@@ -799,8 +799,8 @@ function getDefaultAscenderRatio(paragraphs: TextBody["paragraphs"]): number {
 }
 
 /**
- * Internal note.
- * Internal note.
+ * spAutofit: Calculates the required shape height (EMU) depending on the amount of text.
+ * Returns null if the text fits within the original shape.
  */
 export function computeSpAutofitHeight(textBody: TextBody, transform: Transform): Emu | null {
   const { bodyProperties, paragraphs } = textBody;
@@ -912,12 +912,12 @@ function estimateTextHeight(
 }
 
 // ============================================================
-// Internal note.
+// Text -> path conversion (Satori method)
 // ============================================================
 
 /**
- * Internal note.
- * Internal note.
+ * Calculates the starting x position of the line based on alignment.
+ * An alternative to text-anchor for tspan rendering.
  */
 function computePathLineX(
   alignment: "l" | "ctr" | "r" | "just" | null,
@@ -933,8 +933,8 @@ function computePathLineX(
 }
 
 /**
- * Internal note.
- * Internal note.
+ * Measures the total width of all segments in a row.
+ * If a fontResolver is given, use the correct width with font.getAdvanceWidth().
  */
 function measureLineWidth(
   segments: { text: string; properties: RunProperties }[],
@@ -970,7 +970,7 @@ function measureLineWidth(
 }
 
 /**
- * Internal note.
+ * Construct the fill attribute of the path element.
  */
 function buildPathFillAttrs(props: RunProperties): string {
   const attrs: string[] = [];
@@ -986,7 +986,7 @@ function buildPathFillAttrs(props: RunProperties): string {
 }
 
 /**
- * Internal note.
+ * Draw underlines and strikethroughs as SVG line elements.
  */
 function renderTextDecorations(
   x: number,
@@ -1019,7 +1019,7 @@ function renderTextDecorations(
 }
 
 /**
- * Internal note.
+ * Renders a single text segment to a path element and returns the width.
  */
 function renderSegmentAsPath(
   text: string,
@@ -1036,10 +1036,10 @@ function renderSegmentAsPath(
   const parts: string[] = [];
   let totalWidth = 0;
 
-  // Internal note.
+  // Tab -> Space conversion
   const processedText = text.replace(/\t/g, "    ");
 
-  // Internal note.
+  // baseline-shift processing
   let yOffset = 0;
   if (props.baseline > 0) yOffset = -fontSizePx * 0.35;
   else if (props.baseline < 0) yOffset = fontSizePx * 0.2;
@@ -1075,7 +1075,7 @@ function renderSegmentAsPath(
       }
     }
 
-    // Internal note.
+    // Underline/strikethrough
     if (props.underline || props.strikethrough) {
       parts.push(...renderTextDecorations(x + totalWidth, effectiveY, segWidth, fontSizePx, props));
     }
@@ -1084,9 +1084,9 @@ function renderSegmentAsPath(
   };
 
   /**
-   * Internal note.
-   * Internal note.
-   * Internal note.
+   * CJK character upright rendering during eaVert.
+   * Render each CJK character individually and with -90° counter rotation
+   * Cancels the 90° CW rotation of the group to make it appear upright.
    */
   const processCjkUpright = (
     segText: string,
@@ -1115,7 +1115,7 @@ function renderSegmentAsPath(
         const pathData = path.toPathData(2);
 
         if (pathData && pathData.length > 0) {
-          // Internal note.
+          // Rotation center: center point of the character
           const cx = charX + charWidth / 2;
           const cy =
             effectiveY - (fontSizePx * (font.ascender + font.descender)) / 2 / font.unitsPerEm;
@@ -1125,7 +1125,7 @@ function renderSegmentAsPath(
         }
       }
 
-      // Internal note.
+      // Underline/strikethrough (placed outside the counter rotation)
       if (props.underline || props.strikethrough) {
         parts.push(
           ...renderTextDecorations(x + totalWidth, effectiveY, charWidth, fontSizePx, props),
@@ -1136,7 +1136,7 @@ function renderSegmentAsPath(
     }
   };
 
-  // Internal note.
+  // eaVert: CJK characters upright, non-CJK 90° CW with group rotation
   if (vert === "eaVert") {
     const scriptParts = splitByScript(processedText);
     for (const part of scriptParts) {
@@ -1149,7 +1149,7 @@ function renderSegmentAsPath(
       }
     }
   } else if (needsScriptSplit(props)) {
-    // Internal note.
+    // CJK/Latin script split
     const scriptParts = splitByScript(processedText);
     for (const part of scriptParts) {
       const ff = part.isEa ? props.fontFamilyEa : props.fontFamily;
@@ -1170,7 +1170,7 @@ function renderSegmentAsPath(
 }
 
 /**
- * Internal note.
+ * Render bullet points as paths.
  */
 function renderBulletAsPath(
   bulletText: string,
@@ -1189,7 +1189,7 @@ function renderBulletAsPath(
   }
   const fontSizePx = bulletFontSize * PX_PER_PT;
 
-  // Internal note.
+  // Use bulletFont if specified, fallback to text run font if not specified
   const font = paraProps.bulletFont
     ? fontResolver.resolveFont(paraProps.bulletFont, null)
     : fontResolver.resolveFont(runFontFamily ?? null, runFontFamilyEa ?? null);
@@ -1213,8 +1213,8 @@ function renderBulletAsPath(
 }
 
 /**
- * Internal note.
- * Internal note.
+ * Draw text as an SVG path element (Satori method).
+ * Called only if a font buffer is provided.
  */
 function renderTextBodyAsPath(
   textBody: TextBody,
@@ -1257,7 +1257,7 @@ function renderTextBodyAsPath(
   const defaultAscenderRatio = getDefaultAscenderRatio(paragraphs);
   const defaultNaturalHeightPt = scaledDefaultFontSizePt * defaultLineHeightRatio;
 
-  // Internal note.
+  // Vertical position calculation (reusing existing logic)
   let yStart = marginTopPx;
   const totalTextHeight = estimateTextHeight(
     paragraphs,
@@ -1276,7 +1276,7 @@ function renderTextBodyAsPath(
   const firstLineBaselineOffsetPt = firstParaFontSizePt * defaultAscenderRatio;
   yStart += firstLineBaselineOffsetPt * PX_PER_PT;
 
-  // Internal note.
+  // path rendering
   const elements: string[] = [];
   let currentY = yStart;
   let isFirstLine = true;
@@ -1296,7 +1296,7 @@ function renderTextBodyAsPath(
     const spaceBeforePx = resolveSpacingPx(para.properties.spaceBefore, paraFontSizePt);
     const paragraphGapPx = Math.max(prevSpaceAfterPx, spaceBeforePx);
 
-    // Internal note.
+    // empty paragraph
     if (para.runs.length === 0 || !para.runs.some((r) => r.text.length > 0)) {
       if (!isFirstLine) {
         const emptyParaHeightPt = paraFontSizePt > 0 ? paraFontSizePt : defaultNaturalHeightPt;
@@ -1327,7 +1327,7 @@ function renderTextBodyAsPath(
           continue;
         }
 
-        // Internal note.
+        // Row height calculation and y position update
         const lineNaturalHeightPt = computeLineNaturalHeight(
           line.segments,
           defaultFontSize,
@@ -1337,7 +1337,7 @@ function renderTextBodyAsPath(
           currentY += getLineHeightPx(para, lineNaturalHeightPt, lnSpcReduction) + lineGapPx;
         }
 
-        // Internal note.
+        // Calculate x position for alignment by measuring line width
         const lineWidth = measureLineWidth(line.segments, defaultFontSize, fontScale, fontResolver);
         const lineStartX = computePathLineX(
           para.properties.alignment,
@@ -1350,7 +1350,7 @@ function renderTextBodyAsPath(
 
         let currentX = lineStartX;
 
-        // Internal note.
+        // Bullet mark (first line only)
         if (lineIdx === 0 && bulletText) {
           const lineFontSize = getLineFontSize(line.segments, defaultFontSize) * fontScale;
           const firstSeg = line.segments[0];
@@ -1369,7 +1369,7 @@ function renderTextBodyAsPath(
           );
         }
 
-        // Internal note.
+        // Render each segment into a path
         for (const seg of line.segments) {
           const result = renderSegmentAsPath(
             seg.text,
@@ -1388,13 +1388,13 @@ function renderTextBodyAsPath(
         isFirstLine = false;
       }
     } else {
-      // Internal note.
+      // wrap="none": no wrapping
       const naturalHeightPt = computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
       if (!isFirstLine) {
         currentY += getLineHeightPx(para, naturalHeightPt, lnSpcReduction) + paragraphGapPx;
       }
 
-      // Internal note.
+      // Measure line width
       const runsAsSegments = para.runs
         .filter((r) => r.text.length > 0)
         .map((r) => ({ text: r.text, properties: r.properties }));
@@ -1410,7 +1410,7 @@ function renderTextBodyAsPath(
 
       let currentX = lineStartX;
 
-      // Internal note.
+      // bullet point symbol
       if (bulletText) {
         const firstRun = para.runs.find((r) => r.text.length > 0);
         const fontSize = (firstRun?.properties.fontSize ?? defaultFontSize) * fontScale;
@@ -1429,7 +1429,7 @@ function renderTextBodyAsPath(
         );
       }
 
-      // Internal note.
+      // Render each run into a pass
       for (const run of para.runs) {
         if (run.text.length === 0) continue;
         const result = renderSegmentAsPath(
@@ -1464,7 +1464,7 @@ function renderTextBodyAsPath(
   return content;
 }
 
-/** Internal note. */
+/** Default tab width (number of spaces) */
 const TAB_SPACES = "    "; // 4 spaces
 
 function escapeXml(str: string): string {

@@ -13,7 +13,7 @@ import type {
   SourceSmartArt,
   SourceTable,
 } from "../index.js";
-// Test note.
+// Import via the actual public surface (`@pptx-glimpse/document`).
 import { readPptx } from "../index.js";
 import { unsafeFixtureAssertion } from "../unsafe-type-assertion.js";
 
@@ -29,11 +29,11 @@ function fixture(name: string): Uint8Array {
   );
 }
 
-describe("readPptx — typed slide reading (real fixtures)", () => {
+describe("readPptx - typed slide reading (real fixtures)", () => {
   const product = readPptx(fixture("real-product-page.pptx"));
   const basic = readPptx(fixture("real-basic-theme.pptx"));
 
-  it("covers slide-reader behavior 1", () => {
+  it("Follow the chain of slide -> layout -> master -> theme to typed", () => {
     const [slide] = product.slides;
     expect(slide.partPath).toBe("ppt/slides/slide1.xml");
     expect(slide.layoutPartPath).toBe("ppt/slideLayouts/slideLayout1.xml");
@@ -48,7 +48,7 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
     expect(product.themes.map((t) => t.partPath)).toContain(master?.themePartPath);
   });
 
-  it("covers slide-reader behavior 2", () => {
+  it("Read simple p:sp as source node with transform / geometry / fill", () => {
     const shape = firstShape(product, "Text 0");
     expect(shape.kind).toBe("shape");
     expect(shape.nodeId).toBe("2");
@@ -63,12 +63,12 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
     expect(shape.fill).toEqual({ kind: "solid", color: { kind: "srgb", hex: "DBEAFE" } });
   });
 
-  it("covers slide-reader behavior 3", () => {
+  it("noFill shape is read as fill kind=none", () => {
     const shape = firstShape(product, "Text 1");
     expect(shape.fill).toEqual({ kind: "none" });
   });
 
-  it("covers slide-reader behavior 4", () => {
+  it("Read plain text paragraph / run and basic run properties", () => {
     const shape = firstShape(product, "Text 0");
     const body = shape.textBody;
     expect(body?.properties?.anchor).toBe("middle");
@@ -89,14 +89,14 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
     });
   });
 
-  it("covers slide-reader behavior 5", () => {
+  it("Read text body with multiple paragraphs and preserve leading whitespace", () => {
     const shape = firstShape(product, "Text 2");
     expect(shape.textBody?.paragraphs).toHaveLength(2);
     const secondParagraphText = shape.textBody!.paragraphs[1].runs[0].text;
     expect(secondParagraphText.startsWith("      From onboarding")).toBe(true);
   });
 
-  it("covers slide-reader behavior 6", () => {
+  it("Preserve type/index metadata of placeholder", () => {
     const title = firstShape(basic, "Google Shape;86;p13");
     expect(title.placeholder).toEqual({ type: "ctrTitle" });
 
@@ -104,7 +104,7 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
     expect(subtitle.placeholder).toEqual({ type: "subTitle", index: 1 });
   });
 
-  it("covers slide-reader behavior 7", () => {
+  it("Embedded raster p:pic can be read with relationship reference and resolved to media", () => {
     const slide2 = basic.slides.find((s) => s.partPath === "ppt/slides/slide2.xml");
     const image = slide2!.shapes.find((s): s is SourceImage => s.kind === "image");
     expect(image?.nodeId).toBe("98");
@@ -116,7 +116,7 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
       height: 1201300,
     });
 
-    // Test note.
+    // Resolve blip relationship -> target -> media part bytes via package graph.
     const slideRels = basic.packageGraph.relationships.find(
       (rel) => rel.sourcePartPath === "ppt/slides/slide2.xml",
     );
@@ -126,21 +126,21 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
     expect(media && media.bytes.length).toBeGreaterThan(0);
   });
 
-  it("covers slide-reader behavior 8", () => {
+  it("Keep table graphicFrame as typed table node", () => {
     const slide2 = basic.slides.find((s) => s.partPath === "ppt/slides/slide2.xml");
     const table = slide2!.shapes.find((s): s is SourceTable => s.kind === "table");
     expect(table?.table.columns.length).toBeGreaterThan(0);
     expect(table?.table.rows.length).toBeGreaterThan(0);
   });
 
-  it("covers slide-reader behavior 9", () => {
+  it("Preserve typed shape effects and unsupported child elements", () => {
     const shadowed = firstShape(product, "Shape 3");
     expect(shadowed.effects?.outerShadow?.blurRadius).toBeGreaterThan(0);
     expect(shadowed.effects?.outerShadow?.color).toBeDefined();
     const names = shadowed.rawSidecars?.map((sidecar) => sidecar.node.name) ?? [];
     expect(names).not.toContain("a:effectLst");
 
-    // Test note.
+    // Run properties `a:ea` / `a:cs` are retained as typed source properties.
     const run = firstShape(product, "Text 0").textBody!.paragraphs[0].runs[0];
     expect(run.properties).toMatchObject({
       typefaceEa: "Noto Sans JP",
@@ -150,7 +150,7 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
     expect(runSidecarNames).not.toContain("a:ea");
     expect(runSidecarNames).not.toContain("a:cs");
 
-    // Test note.
+    // The image default `a:stretch` is interpreted as typed, and unsupported blip children are retained.
     const slide2 = basic.slides.find((s) => s.partPath === "ppt/slides/slide2.xml");
     const image = slide2!.shapes.find((s): s is SourceImage => s.kind === "image");
     const imageSidecarNames = image?.rawSidecars?.map((sidecar) => sidecar.node.name) ?? [];
@@ -158,7 +158,7 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
     expect(imageSidecarNames).toContain("a:alphaModFix");
   });
 
-  it("covers slide-reader behavior 10", () => {
+  it("Read master's clrMap and theme's color/font scheme", () => {
     const master = product.slideMasters[0];
     expect(master.colorMap?.mapping.bg1).toBe("lt1");
     expect(master.colorMap?.mapping.tx1).toBe("dk1");
@@ -170,8 +170,8 @@ describe("readPptx — typed slide reading (real fixtures)", () => {
 });
 
 /**
- * Test note.
- * Test note.
+ * Real fixtures such as color conversion / line / rotation / gradient fill / unsupported attributes, etc.
+ * Synthetic PPTX for definitive verification of misaligned structures.
  */
 function buildSyntheticPptx(slideSpTree: string): Uint8Array {
   const files: Record<string, Uint8Array> = {
@@ -208,8 +208,8 @@ function buildSyntheticPptx(slideSpTree: string): Uint8Array {
   return zipSync(files);
 }
 
-describe("readPptx — typed shape detail (synthetic)", () => {
-  it("covers slide-reader behavior 11", () => {
+describe("readPptx - typed shape detail (synthetic)", () => {
+  it("Read scheme color + lumMod transform / outline width+color / rotation+flip", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:sp><p:nvSpPr><p:cNvPr id="10" name="Themed"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
@@ -248,7 +248,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     });
   });
 
-  it("covers slide-reader behavior 12", () => {
+  it("Read bodyPr autofit / wrap / vert and ea/cs run fonts as typed source property", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:sp><p:nvSpPr><p:cNvPr id="14" name="Text props"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
@@ -277,7 +277,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     });
   });
 
-  it("covers slide-reader behavior 13", () => {
+  it("interleaved bullet Preserve br / fld run when splitting pPr", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:sp><p:nvSpPr><p:cNvPr id="17" name="Interleaved text"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
@@ -306,7 +306,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(new Set(paragraphs.map((paragraph) => paragraph.handle.nodeId)).size).toBe(3);
   });
 
-  it("covers slide-reader behavior 14", () => {
+  it("Reading spAutoFit as typed source body property", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:sp><p:nvSpPr><p:cNvPr id="15" name="Sp autofit"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
@@ -320,7 +320,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(shape.textBody?.properties).toMatchObject({ autoFit: "spAutofit" });
   });
 
-  it("covers slide-reader behavior 15", () => {
+  it("Read noAutofit as typed source body property", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:sp><p:nvSpPr><p:cNvPr id="16" name="No autofit"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
@@ -338,7 +338,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     });
   });
 
-  it("covers slide-reader behavior 16", () => {
+  it("Keep gradient fill as typed source fill and custom geometry as raw", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:sp><p:nvSpPr><p:cNvPr id="11" name="Grad"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
@@ -354,12 +354,12 @@ describe("readPptx — typed shape detail (synthetic)", () => {
       gradientType: "linear",
       stops: [{ position: 0, color: { kind: "srgb", hex: "000000" } }],
     });
-    // Test note.
+    // custGeom is kept as raw sidecar.
     const names = shape.rawSidecars?.map((sidecar) => sidecar.node.name) ?? [];
     expect(names).toContain("a:custGeom");
   });
 
-  it("covers slide-reader behavior 17", () => {
+  it("Read direct effectLst as typed source effects", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:sp><p:nvSpPr><p:cNvPr id="12" name="Ext"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
@@ -401,7 +401,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(shape.rawSidecars?.map((sidecar) => sidecar.node.name) ?? []).toContain("a:reflection");
   });
 
-  it("covers slide-reader behavior 18", () => {
+  it("unknown rectangle alignment token falls back to default value per source field", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:sp><p:nvSpPr><p:cNvPr id="13" name="Shadow"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
@@ -421,7 +421,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(image.tile?.align).toBe("tl");
   });
 
-  it("covers slide-reader behavior 19", () => {
+  it("Read image shape effects and blip effects as typed source effects", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:pic><p:nvPicPr><p:cNvPr id="13" name="Pic"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
@@ -455,7 +455,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(image.rawSidecars?.map((sidecar) => sidecar.node.name) ?? []).toContain("a:alphaModFix");
   });
 
-  it("covers slide-reader behavior 20", () => {
+  it("Read graphicFrame table as typed source node", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:graphicFrame>` +
@@ -528,7 +528,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     });
   });
 
-  it("covers slide-reader behavior 21", () => {
+  it("Read SmartArt in graphicFrame chart and AlternateContent as typed source node", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:graphicFrame>` +
@@ -577,7 +577,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     expect(connector).toMatchObject({ kind: "connector", nodeId: "32", name: "Connector" });
   });
 
-  it("covers slide-reader behavior 22", () => {
+  it("Read connector branch of AlternateContent as typed source node", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">` +
@@ -602,7 +602,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     );
   });
 
-  it("covers slide-reader behavior 23", () => {
+  it("Read group / connector / custom geometry as typed source node and preserve heterogeneous tag order", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:cxnSp>` +
@@ -665,7 +665,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     });
   });
 
-  it("covers slide-reader behavior 24", () => {
+  it("Read Strict OOXML chart graphicData URI as chart source node", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:graphicFrame>` +
@@ -686,7 +686,7 @@ describe("readPptx — typed shape detail (synthetic)", () => {
     });
   });
 
-  it("covers slide-reader behavior 25", () => {
+  it("If AlternateContent Choice is only raw, read supported Fallback branch", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">` +

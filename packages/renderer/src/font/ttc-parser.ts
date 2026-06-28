@@ -8,7 +8,7 @@
 const TTC_TAG = 0x74746366; // "ttcf"
 
 /**
- * Internal note.
+ * Determines whether the buffer is in TTC (TrueType Collection) format.
  * The first 4 bytes "ttcf" indicate TTC.
  */
 export function isTtcBuffer(data: ArrayBuffer | Uint8Array): boolean {
@@ -21,9 +21,9 @@ export function isTtcBuffer(data: ArrayBuffer | Uint8Array): boolean {
  * Extracts individual TTF/OTF buffers from a TTC buffer.
  *
  * Repacks each font's OffsetTable + table data into an independent TTF/OTF buffer.
- * Internal note.
+ * If the table is shared within the TTC, each font will have its own copy.
  *
- * Internal note.
+ * @returns Array of extracted font buffers. Empty array if not TTC or parsing failed.
  */
 export function extractTtcFonts(data: ArrayBuffer | Uint8Array): ArrayBuffer[] {
   const view = toDataView(data);
@@ -54,7 +54,7 @@ export function extractTtcFonts(data: ArrayBuffer | Uint8Array): ArrayBuffer[] {
 }
 
 /**
- * Internal note.
+ * Repack a single font in TTC as a separate TTF/OTF buffer.
  */
 function extractSingleFont(
   view: DataView,
@@ -79,7 +79,7 @@ function extractSingleFont(
     const tableOffset = view.getUint32(recOffset + 8);
     const tableLength = view.getUint32(recOffset + 12);
 
-    // Internal note.
+    // If table data is outside the buffer range, invalidate the entire font
     if (tableOffset > view.byteLength || tableLength > view.byteLength - tableOffset) {
       return null;
     }
@@ -141,7 +141,7 @@ function alignTo4(n: number): number {
   return (n + 3) & ~3;
 }
 
-/** Internal note. */
+/** Calculate searchRange, entrySelector, rangeShift of OffsetTable */
 function calcOffsetTableFields(numTables: number): {
   searchRange: number;
   entrySelector: number;

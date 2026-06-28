@@ -4,7 +4,7 @@ import { extractTtcFonts, isTtcBuffer } from "./ttc-parser.js";
 import { buildTtcFromTtfs } from "./ttc-test-helper.js";
 
 /**
- * Test note.
+ * Create a minimal valid TTF buffer with opentype.js.
  */
 async function createTestTtfBuffer(familyName: string): Promise<ArrayBuffer> {
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
@@ -58,27 +58,27 @@ async function createTestTtfBuffer(familyName: string): Promise<ArrayBuffer> {
 }
 
 describe("isTtcBuffer", () => {
-  it("covers ttc-parser behavior 1", () => {
+  it("Correctly determine TTC buffer", () => {
     const buf = new ArrayBuffer(12);
     const view = new DataView(buf);
     view.setUint32(0, 0x74746366); // "ttcf"
     expect(isTtcBuffer(buf)).toBe(true);
   });
 
-  it("covers ttc-parser behavior 2", async () => {
+  it("TTF buffer returns false", async () => {
     const ttf = await createTestTtfBuffer("TestFont");
     expect(isTtcBuffer(ttf)).toBe(false);
   });
 
-  it("covers ttc-parser behavior 3", () => {
+  it("Empty buffer returns false", () => {
     expect(isTtcBuffer(new ArrayBuffer(0))).toBe(false);
   });
 
-  it("covers ttc-parser behavior 4", () => {
+  it("Buffers less than 4 bytes return false", () => {
     expect(isTtcBuffer(new ArrayBuffer(3))).toBe(false);
   });
 
-  it("covers ttc-parser behavior 5", () => {
+  it("Works with Uint8Array input", () => {
     const buf = new ArrayBuffer(12);
     const view = new DataView(buf);
     view.setUint32(0, 0x74746366);
@@ -87,7 +87,7 @@ describe("isTtcBuffer", () => {
 });
 
 describe("extractTtcFonts", () => {
-  it("covers ttc-parser behavior 6", async () => {
+  it("Individual TTF can be extracted from TTC", async () => {
     const ttf1 = await createTestTtfBuffer("FontAlpha");
     const ttf2 = await createTestTtfBuffer("FontBeta");
     const ttc = buildTtcFromTtfs([ttf1, ttf2]);
@@ -96,7 +96,7 @@ describe("extractTtcFonts", () => {
     expect(extracted).toHaveLength(2);
   });
 
-  it("covers ttc-parser behavior 7", async () => {
+  it("The extracted TTF can be parsed with opentype.js", async () => {
     const ttf1 = await createTestTtfBuffer("FontAlpha");
     const ttf2 = await createTestTtfBuffer("FontBeta");
     const ttc = buildTtcFromTtfs([ttf1, ttf2]);
@@ -116,16 +116,16 @@ describe("extractTtcFonts", () => {
     expect(names2).toContain("FontBeta");
   });
 
-  it("covers ttc-parser behavior 8", async () => {
+  it("Non-TTC buffers return an empty array", async () => {
     const ttf = await createTestTtfBuffer("TestFont");
     expect(extractTtcFonts(ttf)).toEqual([]);
   });
 
-  it("covers ttc-parser behavior 9", () => {
+  it("Empty buffer returns empty array", () => {
     expect(extractTtcFonts(new ArrayBuffer(0))).toEqual([]);
   });
 
-  it("covers ttc-parser behavior 10", () => {
+  it("TTC with numFonts 0 returns empty array", () => {
     const buf = new ArrayBuffer(12);
     const view = new DataView(buf);
     view.setUint32(0, 0x74746366);
@@ -135,7 +135,7 @@ describe("extractTtcFonts", () => {
     expect(extractTtcFonts(buf)).toEqual([]);
   });
 
-  it("covers ttc-parser behavior 11", async () => {
+  it("Works with Uint8Array input", async () => {
     const ttf1 = await createTestTtfBuffer("FontAlpha");
     const ttc = buildTtcFromTtfs([ttf1]);
     const uint8 = new Uint8Array(ttc);
@@ -144,7 +144,7 @@ describe("extractTtcFonts", () => {
     expect(extracted).toHaveLength(1);
   });
 
-  it("covers ttc-parser behavior 12", async () => {
+  it("Works even with single font TTC", async () => {
     const ttf = await createTestTtfBuffer("SingleFont");
     const ttc = buildTtcFromTtfs([ttf]);
 
@@ -159,35 +159,35 @@ describe("extractTtcFonts", () => {
     expect(Object.values(font.names.fontFamily)).toContain("SingleFont");
   });
 
-  it("covers ttc-parser behavior 13", async () => {
+  it("Fonts with table offsets out of range are skipped", async () => {
     const ttf1 = await createTestTtfBuffer("GoodFont");
     const ttc = buildTtcFromTtfs([ttf1]);
 
-    // Test note.
+    // Rewrite offset of table record of first font in TTC to be out of range
     const view = new DataView(ttc);
-    const fontOffset = view.getUint32(12); // Test note.
-    const firstTableRecordOffset = fontOffset + 12; // Test note.
-    // Test note.
+    const fontOffset = view.getUint32(12); // first font offset
+    const firstTableRecordOffset = fontOffset + 12; // first table record
+    // Rewrite table offset to huge value
     view.setUint32(firstTableRecordOffset + 8, 0xffffffff);
 
     const extracted = extractTtcFonts(ttc);
-    // Test note.
+    // Empty array because invalid fonts will be skipped
     expect(extracted).toEqual([]);
   });
 
-  it("covers ttc-parser behavior 14", async () => {
+  it("Even if one out of two fonts is invalid, the normal font will be extracted.", async () => {
     const ttf1 = await createTestTtfBuffer("GoodFont");
     const ttf2 = await createTestTtfBuffer("BadFont");
     const ttc = buildTtcFromTtfs([ttf1, ttf2]);
 
-    // Test note.
+    // Rewrite table offset of second font to be out of range
     const view = new DataView(ttc);
-    const font2Offset = view.getUint32(16); // Test note.
+    const font2Offset = view.getUint32(16); // second font offset
     const firstTableRecordOffset = font2Offset + 12;
     view.setUint32(firstTableRecordOffset + 8, 0xffffffff);
 
     const extracted = extractTtcFonts(ttc);
-    // Test note.
+    // Extract only the first normal font
     expect(extracted).toHaveLength(1);
   });
 });

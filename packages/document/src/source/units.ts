@@ -1,13 +1,13 @@
 import { unsafeBrandAssertion } from "../unsafe-type-assertion.js";
 
 /**
- * Internal note.
+ * PptxSourceModel PPTX-native typed units used by source model.
  *
  * The source model does not perform pixel conversion and keeps the units defined by OOXML
- * Internal note.
+ * Hold as a type. The unit type on the renderer side (`@pptx-glimpse/renderer`) is
  * the lower-level foundation `@pptx-glimpse/document` cannot reference, so this module
- * Internal note.
- * Internal note.
+ * Define branded types independently. Zero runtime cost (JS output is
+ * (same as plain number).
  */
 
 declare const EmuBrand: unique symbol;
@@ -16,23 +16,23 @@ declare const HundredthPtBrand: unique symbol;
 declare const OoxmlPercentBrand: unique symbol;
 declare const OoxmlAngleBrand: unique symbol;
 
-/** Internal note. */
+/** English Metric Units (1 inch = 914,400 EMU). Used for coordinates and size. */
 export type Emu = number & { readonly [EmuBrand]: typeof EmuBrand };
 
-/** points (1 pt = 1/72 inch)。font size. */
+/** points (1 pt = 1/72 inch).font size. */
 export type Pt = number & { readonly [PtBrand]: typeof PtBrand };
 
-/** Internal note. */
+/** 1/100 point (ECMA-376 `a:spcPts` etc.). */
 export type HundredthPt = number & { readonly [HundredthPtBrand]: typeof HundredthPtBrand };
 
 /**
- * OOXML percentage (ST_Percentage)。Integer value where 1% = 1000.
+ * OOXML percentage (ST_Percentage).Integer value where 1% = 1000.
  * `a:spcPct` / `a:lumMod` / `a:tint` and similar transforms.
  */
 export type OoxmlPercent = number & { readonly [OoxmlPercentBrand]: typeof OoxmlPercentBrand };
 
 /**
- * OOXML angle (ST_Angle)。1 degree = 60,000.`a:xfrm@rot` and similar fields.
+ * OOXML angle (ST_Angle).1 degree = 60,000.`a:xfrm@rot` and similar fields.
  */
 export type OoxmlAngle = number & { readonly [OoxmlAngleBrand]: typeof OoxmlAngleBrand };
 

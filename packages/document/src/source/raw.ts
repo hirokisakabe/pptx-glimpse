@@ -1,8 +1,8 @@
 /**
- * Internal note.
+ * Raw OOXML escape hatch related types.
  *
- * Internal note.
- * Internal note.
+ * PptxSourceModel expresses supported semantics as a typed field, while also expressing unsupported/partially supported semantics as a typed field.
+ * Keep the XML as raw sidecar and the unedited part as raw package part,
  * enabling structural round trips. Byte equality is not a goal.
  */
 
@@ -10,15 +10,15 @@ import type { PartPath, RawSidecarId } from "./handles.js";
 
 /**
  * Partially parsed raw OOXML node. It preserves the namespace-prefixed qualified name,
- * Internal note.
- * Internal note.
+ * Preserve attributes, child nodes, and text. Elements that PptxSourceModel does not represent as typed
+ * (vendor extension / `mc:AlternateContent` / unknown DrawingML, etc.).
  */
 export interface RawOoxmlNode {
-  /** Element name including the namespace prefix (Example: `a:extLst`)。 */
+  /** Element name including the namespace prefix (Example: `a:extLst`). */
   readonly name: string;
   readonly attributes?: Readonly<Record<string, string>>;
   readonly children?: readonly RawOoxmlNode[];
-  /** Element text content (when present)。 */
+  /** Element text content (when present). */
   readonly text?: string;
 }
 
@@ -43,13 +43,13 @@ export type RawPackagePart =
       readonly kind: "binary";
       readonly partPath: PartPath;
       readonly contentType: string;
-      /** Internal note. */
+      /** Original byte string of binary part (image, embedded workbook, etc.). */
       readonly bytes: Uint8Array;
     }
   | {
       readonly kind: "xml";
       readonly partPath: PartPath;
       readonly contentType: string;
-      /** Internal note. */
+      /** The root node when storing the XML part as a tree. */
       readonly xml: RawOoxmlNode;
     };

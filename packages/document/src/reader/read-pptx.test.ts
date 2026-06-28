@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 import { zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 
-// Test note.
+// Import via the actual public surface (`@pptx-glimpse/document`).
 import { readPptx } from "../index.js";
 
 const encoder = new TextEncoder();
@@ -14,9 +14,9 @@ function xml(content: string): Uint8Array {
 }
 
 /**
- * Test note.
- * Test note.
- * Test note.
+ * Synthetic PPTX for precise validation of acceptance conditions. 2 slides (ordered by rId
+ * intentionally arranged in reverse), 1 media, unsupported part (docProps/custom.xml),
+ * external relationships, including relative targets containing `../`.
  */
 function buildSyntheticPptx(): Uint8Array {
   const files: Record<string, Uint8Array> = {
@@ -38,7 +38,7 @@ function buildSyntheticPptx(): Uint8Array {
     "ppt/presentation.xml": xml(
       `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
         `<p:sldIdLst>` +
-        // Test note.
+        // The order of sldIdLst (slide1 -> slide2) is the truth of slide order.
         `<p:sldId id="256" r:id="rIdSlide1"/>` +
         `<p:sldId id="257" r:id="rIdSlide2"/>` +
         `</p:sldIdLst>` +
@@ -55,7 +55,7 @@ function buildSyntheticPptx(): Uint8Array {
     "ppt/slides/slide2.xml": xml(`<p:sld xmlns:p="x"><p:cSld/></p:sld>`),
     "ppt/slides/_rels/slide1.xml.rels": xml(
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-        // Test note.
+        // Relative targets and external relationships that include `../`.
         `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>` +
         `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/" TargetMode="External"/>` +
         `</Relationships>`,
@@ -66,19 +66,19 @@ function buildSyntheticPptx(): Uint8Array {
   return zipSync(files);
 }
 
-describe("reader/read-pptx.test behavior", () => {
+describe("readPptx source model parsing", () => {
   const source = readPptx(buildSyntheticPptx());
 
-  it("covers read-pptx behavior 1", () => {
+  it("Returns a PptxSourceModel source containing presentation metadata", () => {
     expect(source.presentation.partPath).toBe("ppt/presentation.xml");
     expect(source.presentation.handle?.partPath).toBe("ppt/presentation.xml");
-    // Test note.
+    // slide is read typed according to presentation order (cSld is empty, so shapes is empty).
     expect(source.slides.map((slide) => slide.partPath)).toEqual([
       "ppt/slides/slide1.xml",
       "ppt/slides/slide2.xml",
     ]);
     expect(source.slides.every((slide) => slide.shapes.length === 0)).toBe(true);
-    // Test note.
+    // This composite fixture has no slideLayout relationship, so the chain cannot be followed.
     expect(source.slideLayouts).toEqual([]);
     expect(source.slideMasters).toEqual([]);
     expect(source.themes).toEqual([]);
@@ -87,7 +87,7 @@ describe("reader/read-pptx.test behavior", () => {
     );
   });
 
-  it("covers read-pptx behavior 2", () => {
+  it("Can get slide count / slide order / slide size", () => {
     expect(source.presentation.slidePartPaths).toEqual([
       "ppt/slides/slide1.xml",
       "ppt/slides/slide2.xml",
@@ -95,7 +95,7 @@ describe("reader/read-pptx.test behavior", () => {
     expect(source.presentation.slideSize).toEqual({ width: 9144000, height: 5143500 });
   });
 
-  it("covers read-pptx behavior 3", () => {
+  it("Can maintain relationship IDs / targets / target modes", () => {
     const slideRels = source.packageGraph.relationships.find(
       (rel) => rel.sourcePartPath === "ppt/slides/slide1.xml",
     );
@@ -113,24 +113,24 @@ describe("reader/read-pptx.test behavior", () => {
       },
     ]);
 
-    // Test note.
+    // Package root rels retains sourcePartPath as "".
     const rootRels = source.packageGraph.relationships.find((rel) => rel.sourcePartPath === "");
     expect(rootRels?.relationships[0]?.id).toBe("rId1");
   });
 
-  it("covers read-pptx behavior 4", () => {
+  it("Can maintain content type defaults / overrides", () => {
     expect(source.packageGraph.contentTypes.defaults).toContainEqual({
       extension: "png",
       contentType: "image/png",
     });
-    // Test note.
+    // The override PartName is normalized to PartPath by removing the leading slash.
     expect(source.packageGraph.contentTypes.overrides).toContainEqual({
       partName: "ppt/slides/slide1.xml",
       contentType: "application/vnd.openxmlformats-officedocument.presentationml.slide+xml",
     });
   });
 
-  it("covers read-pptx behavior 5", () => {
+  it("Can hold media bytes and part paths", () => {
     expect(source.packageGraph.media).toEqual([
       {
         partPath: "ppt/media/image1.png",
@@ -140,13 +140,13 @@ describe("reader/read-pptx.test behavior", () => {
     ]);
   });
 
-  it("covers read-pptx behavior 6", () => {
+  it("Can retain unsupported package parts as raw material", () => {
     const rawPaths = source.packageGraph.rawParts?.map((part) => part.partPath) ?? [];
-    // Test note.
+    // Unsupported parts/slides/presentations that are not converted to typed are retained as raw.
     expect(rawPaths).toContain("docProps/custom.xml");
     expect(rawPaths).toContain("ppt/slides/slide1.xml");
     expect(rawPaths).toContain("ppt/presentation.xml");
-    // Test note.
+    // Content types / rels / media are managed separately as structural data / media and are not included in raw.
     expect(rawPaths).not.toContain("[Content_Types].xml");
     expect(rawPaths).not.toContain("ppt/media/image1.png");
     expect(rawPaths.some((path) => path.endsWith(".rels"))).toBe(false);
@@ -158,7 +158,7 @@ describe("reader/read-pptx.test behavior", () => {
     expect(customPart?.contentType).toBe("application/xml");
   });
 
-  it("covers read-pptx behavior 7", () => {
+  it("part manifest lists all parts with content type", () => {
     const partMap = new Map(
       source.packageGraph.parts.map((part) => [part.partPath, part.contentType]),
     );
@@ -166,15 +166,15 @@ describe("reader/read-pptx.test behavior", () => {
     expect(partMap.get("ppt/slides/slide1.xml")).toBe(
       "application/vnd.openxmlformats-officedocument.presentationml.slide+xml",
     );
-    // Test note.
+    // rels part resolves content type with Default extension.
     expect(partMap.get("ppt/_rels/presentation.xml.rels")).toBe(
       "application/vnd.openxmlformats-package.relationships+xml",
     );
-    // Test note.
+    // Do not include [Content_Types].xml itself in the part manifest.
     expect(partMap.has("[Content_Types].xml")).toBe(false);
   });
 
-  it("covers read-pptx behavior 8", () => {
+  it("Throws an error if presentation part is missing", () => {
     const bogus = zipSync({
       "[Content_Types].xml": xml(
         `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>`,
@@ -183,7 +183,7 @@ describe("reader/read-pptx.test behavior", () => {
     expect(() => readPptx(bogus)).toThrow(/presentation part not found/);
   });
 
-  it("covers read-pptx behavior 9", () => {
+  it("Throws an error if officeDocument relationship points to something other than presentation", () => {
     const bogus = zipSync({
       "[Content_Types].xml": xml(
         `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -193,7 +193,7 @@ describe("reader/read-pptx.test behavior", () => {
       ),
       "_rels/.rels": xml(
         `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-          // Test note.
+          // officeDocument incorrectly points to another XML part.
           `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="docProps/app.xml"/>` +
           `</Relationships>`,
       ),
@@ -202,7 +202,7 @@ describe("reader/read-pptx.test behavior", () => {
     expect(() => readPptx(bogus)).toThrow(/not a presentation part/);
   });
 
-  it("covers read-pptx behavior 10", () => {
+  it("If p:sldId points to a relationship other than slide, exclude it and leave diagnostic", () => {
     const bogus = zipSync({
       "[Content_Types].xml": xml(
         `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -222,7 +222,7 @@ describe("reader/read-pptx.test behavior", () => {
       ),
       "ppt/_rels/presentation.xml.rels": xml(
         `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
-          // Test note.
+          // A relationship that points to notesMaster instead of slide.
           `<Relationship Id="rIdBogus" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="notesMasters/notesMaster1.xml"/>` +
           `</Relationships>`,
       ),
@@ -235,13 +235,13 @@ describe("reader/read-pptx.test behavior", () => {
   });
 });
 
-describe("readPptx — real fixture smoke test", () => {
+describe("readPptx - real fixture smoke test", () => {
   const fixturePath = fileURLToPath(
     new URL("../../../../shared-fixtures/real-basic-theme.pptx", import.meta.url),
   );
   const source = readPptx(readFileSync(fixturePath));
 
-  it("covers read-pptx behavior 11", () => {
+  it("Can read slide order / size / media from real-basic-theme", () => {
     expect(source.presentation.slidePartPaths).toEqual([
       "ppt/slides/slide1.xml",
       "ppt/slides/slide2.xml",
@@ -255,7 +255,7 @@ describe("readPptx — real fixture smoke test", () => {
     expect(image?.contentType).toBe("image/png");
     expect(image && image.bytes.length).toBeGreaterThan(0);
 
-    // Test note.
+    // All slide parts are kept as raw for round-trip.
     const rawPaths = source.packageGraph.rawParts?.map((part) => part.partPath) ?? [];
     expect(rawPaths).toContain("ppt/slides/slide1.xml");
     expect(rawPaths).toContain("ppt/slides/slide2.xml");

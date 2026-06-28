@@ -13,9 +13,9 @@ interface CompareResult {
 interface CompareOptions {
   pixelThreshold: number;
   mismatchTolerance: number;
-  /** VRT fixture note. */
+  /** Resize reference image to actual size and compare (for LibreOffice VRT) */
   resizeRef?: boolean;
-  /** VRT fixture note. */
+  /** When true, do not exclude differences based on anti-alias judgment */
   includeAntiAliased?: boolean;
 }
 

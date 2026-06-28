@@ -1,6 +1,6 @@
 /**
  * Font resolver context for text-to-path conversion.
- * Internal note.
+ * Provides access to a Font object with the opentype.js getPath() method.
  */
 
 import { warn } from "../warning-logger.js";

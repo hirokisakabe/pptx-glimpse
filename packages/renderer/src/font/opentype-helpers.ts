@@ -1,5 +1,5 @@
 /**
- * Internal note.
+ * Helper that reads fonts and builds an OpentypeTextMeasurer using opentype.js.
  */
 import { readFile } from "node:fs/promises";
 
@@ -13,7 +13,7 @@ import type { OpentypeFullFont, TextPathFontResolver } from "./text-path-context
 import { DefaultTextPathFontResolver } from "./text-path-context.js";
 import { extractTtcFonts, isTtcBuffer } from "./ttc-parser.js";
 
-/** Internal note. */
+/** Font buffer input format */
 export interface FontBuffer {
   name?: string;
   data: ArrayBuffer | Uint8Array;
@@ -27,8 +27,8 @@ interface OpentypeFontWithNames extends OpentypeFont {
 }
 
 /**
- * Internal note.
- * Internal note.
+ * Load opentype.js with dynamic import.
+ * Returns null if opentype.js is not installed.
  */
 async function tryLoadOpentype(): Promise<{
   parse: (buffer: ArrayBuffer) => OpentypeFontWithNames;
@@ -47,9 +47,9 @@ async function tryLoadOpentype(): Promise<{
 }
 
 /**
- * Internal note.
- * Internal note.
- * Example: "Carlito" → ["Calibri"]
+ * Build a reverse lookup table for font mapping.
+ * Mapping of OSS font name -> PPTX font name[].
+ * Example: "Carlito" -> ["Calibri"]
  */
 function buildReverseMapping(mapping: FontMapping): Map<string, string[]> {
   const reverse = new Map<string, string[]>();
@@ -62,8 +62,8 @@ function buildReverseMapping(mapping: FontMapping): Map<string, string[]> {
 }
 
 /**
- * Internal note.
- * Internal note.
+ * ArrayBuffer | Convert from Uint8Array to ArrayBuffer.
+ * For Uint8Array, use slice to obtain an independent ArrayBuffer.
  */
 function toArrayBuffer(data: ArrayBuffer | Uint8Array): ArrayBuffer {
   if (data instanceof ArrayBuffer) return data;
@@ -73,22 +73,22 @@ function toArrayBuffer(data: ArrayBuffer | Uint8Array): ArrayBuffer {
 }
 
 /**
- * Internal note.
- * Internal note.
+ * Returns a parsed font array from a buffer (TTF/OTF or TTC).
+ * In the case of TTC, only the first font is extracted and parsed to reduce memory consumption.
  */
 function parseFontBuffer(
   arrayBuffer: ArrayBuffer,
   opentype: { parse: (buffer: ArrayBuffer) => OpentypeFontWithNames },
 ): OpentypeFontWithNames[] {
   if (isTtcBuffer(arrayBuffer)) {
-    // Internal note.
-    // Internal note.
+    // Only the first font is extracted from TTC.
+    // CJK TTC (such as NotoSansCJK) consumes hundreds of MB of memory when all fonts are expanded.
     const fonts = extractTtcFonts(arrayBuffer);
     if (fonts.length > 0) {
       try {
         return [opentype.parse(fonts[0])];
       } catch {
-        // Internal note.
+        // Skip parse failure
       }
     }
     return [];
@@ -97,10 +97,10 @@ function parseFontBuffer(
 }
 
 /**
- * Internal note.
+ * Construct an OpentypeTextMeasurer from a font buffer array.
  *
- * Internal note.
- * Internal note.
+ * Dynamically import opentype.js internally to parse the font.
+ * Returns null if opentype.js is not available.
  */
 export async function createOpentypeTextMeasurerFromBuffers(
   fontBuffers: FontBuffer[],
@@ -116,10 +116,10 @@ export interface OpentypeSetup {
 }
 
 /**
- * Internal note.
+ * Construct OpentypeTextMeasurer and TextPathFontResolver simultaneously from the font buffer array.
  *
- * Internal note.
- * Internal note.
+ * The object returned by opentype.parse() satisfies both OpentypeFont and OpentypeFullFont, so
+ * Pass the same Font object to both measurer and fontResolver.
  */
 export async function createOpentypeSetupFromBuffers(
   fontBuffers: FontBuffer[],
@@ -149,7 +149,7 @@ export async function createOpentypeSetupFromBuffers(
           firstResolverFont = unsafeExternalInteropAssertion<OpentypeFullFont>(font);
 
         if (isTtc) {
-          // Internal note.
+          // TTC: Get and register font name from names table
           for (const name of collectFontNames(font)) {
             registerFont(name, font, reverseMap, measurerFonts, resolverFonts);
           }
@@ -158,7 +158,7 @@ export async function createOpentypeSetupFromBuffers(
         }
       }
     } catch {
-      // Internal note.
+      // Skip fonts that fail parsing
     }
   }
 
@@ -186,7 +186,7 @@ function registerFont(
     resolverFonts.set(name, fullFont);
   }
 
-  // Internal note.
+  // Also register PPTX font name by reverse lookup
   const pptxNames = reverseMap.get(name);
   if (pptxNames) {
     for (const pptxName of pptxNames) {
@@ -199,10 +199,10 @@ function registerFont(
 }
 
 /**
- * Internal note.
- * Internal note.
- * Internal note.
- * Internal note.
+ * Gather a set of font names from the font's names table.
+ * Include both fontFamily and preferredFamily.
+ * For Variable Font, fontFamily is like "Noto Sans JP Thin"
+ * Since this is the instance name, also register preferredFamily ("Noto Sans JP").
  */
 function collectFontNames(font: OpentypeFontWithNames): Set<string> {
   const names = new Set<string>();
@@ -220,7 +220,7 @@ function collectFontNames(font: OpentypeFontWithNames): Set<string> {
 }
 
 /**
- * Internal note.
+ * Generate a cache key. Uniquely identified by the combination of fontDirs and fontMapping.
  */
 function buildCacheKey(
   additionalFontDirs?: string[],
@@ -234,14 +234,14 @@ function buildCacheKey(
   return `${dirsKey}\n${mappingKey}\n${skipSystemFonts}`;
 }
 
-/** Internal note. */
+/** Caching parsed Font objects */
 let cachedSetup: OpentypeSetup | null = null;
 let cachedSetupKey: string | null = null;
 
 /**
- * Internal note.
- * Internal note.
- * Internal note.
+ * Clear the font object cache.
+ * Normally there is no need to call it, but after installing/uninstalling a font
+ * Use this when you want to force reload.
  */
 export function clearFontCache(): void {
   cachedSetup = null;
@@ -249,14 +249,14 @@ export function clearFontCache(): void {
 }
 
 /**
- * Internal note.
+ * Build OpentypeTextMeasurer and TextPathFontResolver from system fonts + additional directories.
  *
- * Internal note.
- * Internal note.
- * Internal note.
+ * 1. Collect font file paths with collectFontFilePaths()
+ * 2. Parse each file with readFile + opentype.parse
+ * 3. Register the font name in the map as a key (including reverse mapping)
  *
- * Internal note.
- * Internal note.
+ * Parsed Font objects are cached at the module level and
+ * Subsequent calls with the same fontDirs / fontMapping return the cache.
  */
 export async function createOpentypeSetupFromSystem(
   additionalFontDirs?: string[],
@@ -292,13 +292,13 @@ export async function createOpentypeSetupFromSystem(
         if (!firstResolverFont)
           firstResolverFont = unsafeExternalInteropAssertion<OpentypeFullFont>(font);
 
-        // Internal note.
+        // Get the font name from the names table and register it
         for (const name of collectFontNames(font)) {
           registerFont(name, font, reverseMap, measurerFonts, resolverFonts);
         }
       }
     } catch {
-      // Internal note.
+      // Skip fonts that fail parsing
     }
   }
 

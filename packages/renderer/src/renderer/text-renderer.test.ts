@@ -162,13 +162,13 @@ const SLIDE_WIDTH = 9144000;
 const SLIDE_HEIGHT = 5143500;
 
 describe("renderTextBody", () => {
-  it("covers text-renderer behavior 1", () => {
+  it("Returns an empty string if there is no text", () => {
     const textBody = makeTextBody([""]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toBe("");
   });
 
-  it("covers text-renderer behavior 2", () => {
+  it("Render short text correctly", () => {
     const textBody = makeTextBody(["Hello"]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain("<text");
@@ -176,22 +176,22 @@ describe("renderTextBody", () => {
     expect(result).toContain("<tspan");
   });
 
-  it("covers text-renderer behavior 3", () => {
+  it("If wrap=square, long text will be wrapped into multiple tspans", () => {
     const textBody = makeTextBody(
       ["The quick brown fox jumps over the lazy dog and continues with more words"],
       { wrap: "square" },
     );
-    // Test note.
+    // narrow text box
     const transform = makeTransform(2000000, 2000000); // ~209px width
     const result = renderTextBody(textBody, transform);
 
-    // Test note.
+    // There is a tspan with multiple x attributes (= multiple lines)
     const xMatches = result.match(/x="/g);
     expect(xMatches).not.toBeNull();
     expect(xMatches!.length).toBeGreaterThan(1);
   });
 
-  it("covers text-renderer behavior 4", () => {
+  it("If wrap=none, the text will not wrap", () => {
     const textBody = makeTextBody(
       ["The quick brown fox jumps over the lazy dog and continues with more words"],
       { wrap: "none" },
@@ -199,30 +199,30 @@ describe("renderTextBody", () => {
     const transform = makeTransform(2000000, 2000000);
     const result = renderTextBody(textBody, transform);
 
-    // Test note.
+    // Only one tspan has an x attribute (excluding x on the text element)
     const tspanXMatches = result.match(/<tspan[^>]*x="/g);
     expect(tspanXMatches).toHaveLength(1);
   });
 
-  it("covers text-renderer behavior 5", () => {
+  it("For center alignment text-anchor=middle is set", () => {
     const textBody = makeTextBody(["Center"], { alignment: "ctr" });
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain('text-anchor="middle"');
   });
 
-  it("covers text-renderer behavior 6", () => {
+  it("For right alignment, text-anchor=end is set.", () => {
     const textBody = makeTextBody(["Right"], { alignment: "r" });
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain('text-anchor="end"');
   });
 
-  it("covers text-renderer behavior 7", () => {
+  it("For left alignment, text-anchor=start is set.", () => {
     const textBody = makeTextBody(["Left"], { alignment: "l" });
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain('text-anchor="start"');
   });
 
-  it("covers text-renderer behavior 8", () => {
+  it("Render multiple paragraphs correctly", () => {
     const textBody: TextBody = {
       bodyProperties: {
         anchor: "t",
@@ -283,26 +283,26 @@ describe("renderTextBody", () => {
     expect(result).toContain("Second");
   });
 
-  it("covers text-renderer behavior 9", () => {
+  it("font-size attribute is set correctly", () => {
     const textBody = makeTextBody(["Test"], { fontSize: 24 });
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain('font-size="24pt"');
   });
 
-  it("covers text-renderer behavior 10", () => {
+  it("Font size is reduced when fontScale is applied", () => {
     const textBody = makeTextBody(["Test"], { fontSize: 24, fontScale: 0.625 });
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     // 24 * 0.625 = 15
     expect(result).toContain('font-size="15pt"');
   });
 
-  it("covers text-renderer behavior 11", () => {
+  it("If fontScale=1, the font size will not change", () => {
     const textBody = makeTextBody(["Test"], { fontSize: 24, fontScale: 1 });
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain('font-size="24pt"');
   });
 
-  it("covers text-renderer behavior 12", () => {
+  it("CJK text wrapping works", () => {
     const textBody = makeTextBody(["本日は晴天なり今日もいい天気です素晴らしい一日"], {
       wrap: "square",
     });
@@ -313,7 +313,7 @@ describe("renderTextBody", () => {
     expect(xMatches!.length).toBeGreaterThan(1);
   });
 
-  it("covers text-renderer behavior 13", () => {
+  it("Superscript is set to baseline-shift=super", () => {
     const textBody: TextBody = {
       bodyProperties: {
         anchor: "t",
@@ -382,7 +382,7 @@ describe("renderTextBody", () => {
     expect(result).toContain('baseline-shift="super"');
   });
 
-  it("covers text-renderer behavior 14", () => {
+  it("Baseline-shift=sub is set for subscripts", () => {
     const textBody: TextBody = {
       bodyProperties: {
         anchor: "t",
@@ -451,14 +451,14 @@ describe("renderTextBody", () => {
     expect(result).toContain('baseline-shift="sub"');
   });
 
-  it("covers text-renderer behavior 15", () => {
+  it("baseline-shift is not set if baseline=0", () => {
     const textBody = makeTextBody(["Normal"]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).not.toContain("baseline-shift");
   });
 });
 
-describe("renderer/text-renderer.test behavior", () => {
+describe("text renderer paragraph spacing", () => {
   function makeRunProps(fontSize: number = 18) {
     return {
       fontSize,
@@ -505,7 +505,7 @@ describe("renderer/text-renderer.test behavior", () => {
     return [...matches].map((m) => parseFloat(m[1]));
   }
 
-  it("covers text-renderer behavior 16", () => {
+  it("spaceBefore (pts) is reflected in paragraph spacing", () => {
     const withSpacing = makeSpacingTextBody([
       { text: "First" },
       { text: "Second", spaceBefore: { type: "pts", value: 1200 } }, // 12pt
@@ -519,11 +519,11 @@ describe("renderer/text-renderer.test behavior", () => {
       renderTextBody(withoutSpacing, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
     );
 
-    // Test note.
+    // If spaceBefore is set, the second paragraph's dy will be larger
     expect(dyWith[1]).toBeGreaterThan(dyWithout[1]);
   });
 
-  it("covers text-renderer behavior 17", () => {
+  it("spaceAfter (pts) is reflected in the spacing between next paragraph", () => {
     const withSpaceAfter = makeSpacingTextBody([
       { text: "First", spaceAfter: { type: "pts", value: 1200 } }, // 12pt
       { text: "Second" },
@@ -537,11 +537,11 @@ describe("renderer/text-renderer.test behavior", () => {
       renderTextBody(withoutSpacing, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
     );
 
-    // Test note.
+    // If spaceAfter is set, the second paragraph's dy will be larger
     expect(dyWith[1]).toBeGreaterThan(dyWithout[1]);
   });
 
-  it("covers text-renderer behavior 18", () => {
+  it("The larger of spaceAfter and spaceBefore is applied.", () => {
     const spaceAfterOnly = makeSpacingTextBody([
       { text: "First", spaceAfter: { type: "pts", value: 2000 } }, // 20pt
       { text: "Second", spaceBefore: { type: "pts", value: 500 } }, // 5pt
@@ -558,11 +558,11 @@ describe("renderer/text-renderer.test behavior", () => {
       renderTextBody(spaceBeforeOnly, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
     );
 
-    // Test note.
+    // A 20pt interval is applied to both (max is used, so the same dy)
     expect(dyAfter[1]).toBeCloseTo(dyBefore[1], 1);
   });
 
-  it("covers text-renderer behavior 19", () => {
+  it("spaceBefore (pct) is calculated based on font size", () => {
     const withPct = makeSpacingTextBody([
       { text: "First" },
       { text: "Second", spaceBefore: { type: "pct", value: 100000 } }, // 100%
@@ -576,15 +576,15 @@ describe("renderer/text-renderer.test behavior", () => {
       renderTextBody(withoutSpacing, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
     );
 
-    // Test note.
+    // 100% = additional interval for font size (18pt)
     expect(dyWith[1]).toBeGreaterThan(dyWithout[1]);
-    // Test note.
+    // Additional spacing is 18pt * (96/72) = 24px
     const diff = dyWith[1] - dyWithout[1];
     expect(diff).toBeCloseTo(18 * (96 / 72), 1);
   });
 });
 
-describe("renderer/text-renderer.test behavior", () => {
+describe("text renderer line spacing", () => {
   function makeLineSpacingTextBody(
     lineSpacing: SpacingValue | null,
     fontSize: number = 14,
@@ -632,11 +632,11 @@ describe("renderer/text-renderer.test behavior", () => {
     return [...matches].map((m) => parseFloat(m[1]));
   }
 
-  // Test note.
+  // Narrow text box that wraps to 2 or more lines (~209px width)
   const NARROW_TRANSFORM = makeTransform(2000000, 2000000);
 
-  it("covers text-renderer behavior 20", () => {
-    // Test note.
+  it("With spcPts (fixed leading), the baseline spacing is a fixed value independent of font size.", () => {
+    // 21pt fixed = 28px @96dpi
     const textBody = makeLineSpacingTextBody({ type: "pts", value: 2100 });
     const dyValues = extractDyValues(renderTextBody(textBody, NARROW_TRANSFORM));
 
@@ -646,7 +646,7 @@ describe("renderer/text-renderer.test behavior", () => {
     }
   });
 
-  it("covers text-renderer behavior 21", () => {
+  it("spcPct (magnification) makes line leading proportional to font size", () => {
     const dy100 = extractDyValues(
       renderTextBody(makeLineSpacingTextBody({ type: "pct", value: 100000 }), NARROW_TRANSFORM),
     );
@@ -659,7 +659,7 @@ describe("renderer/text-renderer.test behavior", () => {
     expect(dy200[1]).toBeCloseTo(dy100[1] * 2, 1);
   });
 
-  it("covers text-renderer behavior 22", () => {
+  it("spcPts (fixed leading) is applied even to empty paragraphs", () => {
     const makeParagraph = (text: string, lineSpacing: SpacingValue | null): Paragraph => ({
       runs: text
         ? [
@@ -705,12 +705,12 @@ describe("renderer/text-renderer.test behavior", () => {
       renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT)),
     );
 
-    // Test note.
+    // The leading of empty paragraph (2nd) is fixed at 21pt = 28px
     expect(dyValues).toHaveLength(3);
     expect(dyValues[1]).toBeCloseTo(28, 1);
   });
 
-  it("covers text-renderer behavior 23", () => {
+  it("Without lnSpc, default leading (matches spcPct 100%)", () => {
     const dyDefault = extractDyValues(
       renderTextBody(makeLineSpacingTextBody(null), NARROW_TRANSFORM),
     );
@@ -723,8 +723,8 @@ describe("renderer/text-renderer.test behavior", () => {
   });
 });
 
-describe("renderer/text-renderer.test behavior", () => {
-  it("covers text-renderer behavior 24", () => {
+describe("text renderer bullet output", () => {
+  it("buChar bullet points included in SVG", () => {
     const textBody = makeBulletTextBody([
       { text: "Item 1", bullet: { type: "char", char: "\u2022" } },
       { text: "Item 2", bullet: { type: "char", char: "\u2022" } },
@@ -735,7 +735,7 @@ describe("renderer/text-renderer.test behavior", () => {
     expect(result).toContain("Item 2");
   });
 
-  it("covers text-renderer behavior 25", () => {
+  it("buAutoNum (arabicPeriod) draws the correct number", () => {
     const textBody = makeBulletTextBody([
       { text: "First", bullet: { type: "autoNum", scheme: "arabicPeriod", startAt: 1 } },
       { text: "Second", bullet: { type: "autoNum", scheme: "arabicPeriod", startAt: 1 } },
@@ -747,16 +747,16 @@ describe("renderer/text-renderer.test behavior", () => {
     expect(result).toContain("3.");
   });
 
-  it("covers text-renderer behavior 26", () => {
+  it("If buNone, no symbol is drawn", () => {
     const textBody = makeBulletTextBody([{ text: "No bullet", bullet: { type: "none" } }]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain("No bullet");
-    // Test note.
+    // There is no bullet tspan (text tspan only)
     const tspanCount = (result.match(/<tspan/g) ?? []).length;
     expect(tspanCount).toBe(1);
   });
 
-  it("covers text-renderer behavior 27", () => {
+  it("No symbol is drawn if bullet=null (unspecified)", () => {
     const textBody = makeBulletTextBody([{ text: "Plain text", bullet: null }]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain("Plain text");
@@ -764,7 +764,7 @@ describe("renderer/text-renderer.test behavior", () => {
     expect(tspanCount).toBe(1);
   });
 
-  it("covers text-renderer behavior 28", () => {
+  it("Indentation by marginLeft is reflected in the x coordinate", () => {
     const noIndent = makeBulletTextBody([
       { text: "No indent", bullet: null, marginLeft: 0, indent: 0 },
     ]);
@@ -775,13 +775,13 @@ describe("renderer/text-renderer.test behavior", () => {
     const resultNoIndent = renderTextBody(noIndent, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     const resultIndent = renderTextBody(withIndent, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
 
-    // Test note.
+    // Get x attribute of tspan (instead of x of <text>)
     const xNoIndent = resultNoIndent.match(/<tspan[^>]*x="([^"]+)"/)?.[1];
     const xIndent = resultIndent.match(/<tspan[^>]*x="([^"]+)"/)?.[1];
     expect(Number(xIndent)).toBeGreaterThan(Number(xNoIndent));
   });
 
-  it("covers text-renderer behavior 29", () => {
+  it("startAt of buAutoNum is reflected", () => {
     const textBody = makeBulletTextBody([
       { text: "Item", bullet: { type: "autoNum", scheme: "arabicPeriod", startAt: 5 } },
     ]);
@@ -838,8 +838,8 @@ describe("formatAutoNum", () => {
   });
 });
 
-describe("renderer/text-renderer.test behavior", () => {
-  it("covers text-renderer behavior 30", () => {
+describe("text renderer mixed-script font spans", () => {
+  it("tspan splits at script boundaries if fontFamily and fontFamilyEa are different", () => {
     const textBody: TextBody = {
       bodyProperties: {
         anchor: "t",
@@ -877,8 +877,8 @@ describe("renderer/text-renderer.test behavior", () => {
       ],
     };
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
-    // Test note.
-    // Test note.
+    // Fallback list with Calibri at the top for the Latin segment and Meiryo at the top for the EA segment
+    // Also includes metrics-compatible OSS fonts
     expect(result).toContain(
       "font-family=\"Calibri, Carlito, Meiryo, 'Noto Sans JP', sans-serif\"",
     );
@@ -890,7 +890,7 @@ describe("renderer/text-renderer.test behavior", () => {
     expect(result).toContain("Test");
   });
 
-  it("covers text-renderer behavior 31", () => {
+  it("Not split if fontFamily and fontFamilyEa are the same", () => {
     const textBody: TextBody = {
       bodyProperties: {
         anchor: "t",
@@ -928,13 +928,13 @@ describe("renderer/text-renderer.test behavior", () => {
       ],
     };
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
-    // Test note.
+    // There is only one tspan because it is not divided.
     const tspanCount = (result.match(/<tspan/g) ?? []).length;
     expect(tspanCount).toBe(1);
     expect(result).toContain("Hello世界");
   });
 
-  it("covers text-renderer behavior 32", () => {
+  it("If fontFamilyEa is null, it will not be divided by fontFamily only", () => {
     const textBody: TextBody = {
       bodyProperties: {
         anchor: "t",
@@ -979,31 +979,31 @@ describe("renderer/text-renderer.test behavior", () => {
 });
 
 describe("buildFontFamilyValue", () => {
-  it("covers text-renderer behavior 33", () => {
+  it("Return single font + metrics fallback + generic family", () => {
     expect(buildFontFamilyValue(["Calibri"])).toBe("Calibri, Carlito, sans-serif");
   });
 
-  it("covers text-renderer behavior 34", () => {
+  it("Include both latin and ea in fallback list", () => {
     expect(buildFontFamilyValue(["Calibri", "Meiryo"])).toBe(
       "Calibri, Carlito, Meiryo, 'Noto Sans JP', sans-serif",
     );
   });
 
-  it("covers text-renderer behavior 35", () => {
+  it("Remove duplicate font names", () => {
     expect(buildFontFamilyValue(["Calibri", "Calibri"])).toBe("Calibri, Carlito, sans-serif");
   });
 
-  it("covers text-renderer behavior 36", () => {
+  it("Works correctly even with lists containing null", () => {
     expect(buildFontFamilyValue(["Calibri", null])).toBe("Calibri, Carlito, sans-serif");
     expect(buildFontFamilyValue([null, "Meiryo"])).toBe("Meiryo, 'Noto Sans JP', sans-serif");
   });
 
-  it("covers text-renderer behavior 37", () => {
+  it("Returns null if all are null", () => {
     expect(buildFontFamilyValue([null, null])).toBeNull();
     expect(buildFontFamilyValue([])).toBeNull();
   });
 
-  it("covers text-renderer behavior 38", () => {
+  it("Enclose font names with spaces in single quotes", () => {
     expect(buildFontFamilyValue(["Times New Roman"])).toBe(
       "'Times New Roman', Tinos, 'Liberation Serif', serif",
     );
@@ -1012,7 +1012,7 @@ describe("buildFontFamilyValue", () => {
     );
   });
 
-  it("covers text-renderer behavior 39", () => {
+  it("The general-purpose family of serif fonts becomes serif.", () => {
     expect(buildFontFamilyValue(["Times New Roman"])).toBe(
       "'Times New Roman', Tinos, 'Liberation Serif', serif",
     );
@@ -1024,46 +1024,46 @@ describe("buildFontFamilyValue", () => {
     );
   });
 
-  it("covers text-renderer behavior 40", () => {
+  it("The general-purpose family of sans-serif fonts is now sans-serif.", () => {
     expect(buildFontFamilyValue(["Arial"])).toBe("Arial, Arimo, 'Liberation Sans', sans-serif");
     expect(buildFontFamilyValue(["Meiryo"])).toBe("Meiryo, 'Noto Sans JP', sans-serif");
   });
 
-  it("covers text-renderer behavior 41", () => {
+  it("If the fallback font is the same as the original font, it will not overlap.", () => {
     expect(buildFontFamilyValue(["Noto Sans JP"])).toBe("'Noto Sans JP', sans-serif");
   });
 
-  it("covers text-renderer behavior 42", () => {
+  it("No fallback added for unknown fonts", () => {
     expect(buildFontFamilyValue(["UnknownFont"])).toBe("UnknownFont, sans-serif");
   });
 });
 
-describe("renderer/text-renderer.test behavior", () => {
-  it("covers text-renderer behavior 43", () => {
-    // Test note.
+describe("text renderer normal autofit", () => {
+  it("normAutofit automatically reduces font size when text overflows", () => {
+    // Put large text in small text box
     const textBody = makeTextBody(
       ["This is a long text that should overflow the small text box and be shrunk to fit"],
       { fontSize: 36, autoFit: "normAutofit" },
     );
-    // Test note.
+    // Very small shape (about 100x50px)
     const smallTransform = makeTransform(960000, 480000);
     const result = renderTextBody(textBody, smallTransform);
-    // Test note.
+    // The font size should be smaller than 36pt.
     expect(result).not.toContain('font-size="36pt"');
     expect(result).toContain("font-size=");
-    // Test note.
+    // Extract the value of font-size and make sure it is less than 36
     const fontSizeMatch = result.match(/font-size="([0-9.]+)pt"/);
     expect(fontSizeMatch).not.toBeNull();
     expect(Number(fontSizeMatch![1])).toBeLessThan(36);
   });
 
-  it("covers text-renderer behavior 44", () => {
+  it("font size does not change if text fits with normAutofit", () => {
     const textBody = makeTextBody(["Hi"], { fontSize: 12, autoFit: "normAutofit" });
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain('font-size="12pt"');
   });
 
-  it("covers text-renderer behavior 45", () => {
+  it("If noAutofit, the font size will not change even if the text extends", () => {
     const textBody = makeTextBody(
       ["This is a long text that should overflow the small text box but NOT be shrunk"],
       { fontSize: 36, autoFit: "noAutofit" },
@@ -1073,9 +1073,9 @@ describe("renderer/text-renderer.test behavior", () => {
     expect(result).toContain('font-size="36pt"');
   });
 
-  it("covers text-renderer behavior 46", () => {
-    // Test note.
-    // Test note.
+  it("normAutofit scales correctly even if fontSize is not specified in run", () => {
+    // Set fontSize to undefined and verify fallback to defaultFontSize
+    // Confirm that there is no double scaling by matching the dy value with the case with fontSize specified.
     const longText =
       "This is a long text without explicit fontSize that should be shrunk to fit inside the box";
 
@@ -1117,12 +1117,12 @@ describe("renderer/text-renderer.test behavior", () => {
     });
 
     const smallTransform = makeTransform(960000, 480000);
-    // Test note.
+    // Case where fontSize=18 (same as default value) is specified
     const resultExplicit = renderTextBody(makeBodyWithFontSize(18), smallTransform);
-    // Test note.
+    // Case of falling back to default value with fontSize=undefined
     const resultImplicit = renderTextBody(makeBodyWithFontSize(undefined), smallTransform);
 
-    // Test note.
+    // Both dy values must match (same result without double scaling)
     const dyExplicit = resultExplicit.match(/dy="([0-9.]+)"/g);
     const dyImplicit = resultImplicit.match(/dy="([0-9.]+)"/g);
     expect(dyExplicit).not.toBeNull();
@@ -1130,22 +1130,22 @@ describe("renderer/text-renderer.test behavior", () => {
     expect(dyImplicit).toEqual(dyExplicit);
   });
 
-  it("covers text-renderer behavior 47", () => {
+  it("normAutofit further reduces even if existing fontScale is set", () => {
     const textBody = makeTextBody(
       ["This is a long text that should overflow even with fontScale 0.8 applied"],
       { fontSize: 36, fontScale: 0.8, autoFit: "normAutofit" },
     );
     const smallTransform = makeTransform(960000, 480000);
     const result = renderTextBody(textBody, smallTransform);
-    // Test note.
+    // It should be even smaller than 36 * 0.8 = 28.8
     const fontSizeMatch = result.match(/font-size="([0-9.]+)pt"/);
     expect(fontSizeMatch).not.toBeNull();
     expect(Number(fontSizeMatch![1])).toBeLessThan(28.8);
   });
 });
 
-describe("renderer/text-renderer.test behavior", () => {
-  it("covers text-renderer behavior 48", () => {
+describe("text renderer shape autofit", () => {
+  it("Font size does not change when text extends with spAutofit", () => {
     const textBody = makeTextBody(
       ["This is a long text that should overflow the small text box but font size stays the same"],
       { fontSize: 36, autoFit: "spAutofit" },
@@ -1155,13 +1155,13 @@ describe("renderer/text-renderer.test behavior", () => {
     expect(result).toContain('font-size="36pt"');
   });
 
-  it("covers text-renderer behavior 49", () => {
+  it("spAutofit returns null if text fits", () => {
     const textBody = makeTextBody(["Hi"], { fontSize: 12, autoFit: "spAutofit" });
     const result = computeSpAutofitHeight(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toBeNull();
   });
 
-  it("covers text-renderer behavior 50", () => {
+  it("Returns the required height when text overflows with spAutofit", () => {
     const textBody = makeTextBody(
       ["This is a long text that should overflow the small text box and require more height"],
       { fontSize: 36, autoFit: "spAutofit" },
@@ -1172,15 +1172,15 @@ describe("renderer/text-renderer.test behavior", () => {
     expect(result!).toBeGreaterThan(480000);
   });
 
-  it("covers text-renderer behavior 51", () => {
+  it("Returns null if there is no text", () => {
     const textBody = makeTextBody([""], { autoFit: "spAutofit" });
     const result = computeSpAutofitHeight(textBody, makeTransform(960000, 480000));
     expect(result).toBeNull();
   });
 });
 
-describe("renderer/text-renderer.test behavior", () => {
-  it("covers text-renderer behavior 52", () => {
+describe("text renderer vertical text", () => {
+  it("If vert='vert', it will be wrapped in <g> and a rotate(90) transformation will be applied.", () => {
     const textBody = makeTextBody(["Vertical"], { vert: "vert" });
     const result = renderTextBody(textBody, makeTransform(4000000, 2000000));
     expect(result).toContain("<g transform=");
@@ -1188,7 +1188,7 @@ describe("renderer/text-renderer.test behavior", () => {
     expect(result).toContain("Vertical");
   });
 
-  it("covers text-renderer behavior 53", () => {
+  it("If vert='vert270', rotate(-90) transformation is applied", () => {
     const textBody = makeTextBody(["Vertical270"], { vert: "vert270" });
     const result = renderTextBody(textBody, makeTransform(4000000, 2000000));
     expect(result).toContain("<g transform=");
@@ -1196,21 +1196,21 @@ describe("renderer/text-renderer.test behavior", () => {
     expect(result).toContain("Vertical270");
   });
 
-  it("covers text-renderer behavior 54", () => {
+  it("If vert='eaVert', rotate(90) is applied like vert", () => {
     const textBody = makeTextBody(["EAVertical"], { vert: "eaVert" });
     const result = renderTextBody(textBody, makeTransform(4000000, 2000000));
     expect(result).toContain("<g transform=");
     expect(result).toContain("rotate(90)");
   });
 
-  it("covers text-renderer behavior 55", () => {
+  it("If vert='horz' (default), no <g> wrapping", () => {
     const textBody = makeTextBody(["Horizontal"]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).not.toContain("<g transform=");
     expect(result).toMatch(/^<text/);
   });
 
-  it("covers text-renderer behavior 56", () => {
+  it("vert='vert' uses the shape's width for translation", () => {
     const widthEmu = 4000000;
     const textBody = makeTextBody(["Test"], { vert: "vert" });
     const result = renderTextBody(textBody, makeTransform(widthEmu, 2000000));
@@ -1218,7 +1218,7 @@ describe("renderer/text-renderer.test behavior", () => {
     expect(result).toContain(`translate(${widthPx}, 0)`);
   });
 
-  it("covers text-renderer behavior 57", () => {
+  it("vert='vert270' uses shape height for translate", () => {
     const heightEmu = 2000000;
     const textBody = makeTextBody(["Test"], { vert: "vert270" });
     const result = renderTextBody(textBody, makeTransform(4000000, heightEmu));
@@ -1228,7 +1228,7 @@ describe("renderer/text-renderer.test behavior", () => {
 });
 
 // ============================================================
-// Test note.
+// Text -> path conversion (path mode)
 // ============================================================
 
 function createMockFont(name: string): OpentypeFullFont {
@@ -1254,7 +1254,7 @@ describe("renderTextBody (path mode)", () => {
     resetTextPathFontResolver();
   });
 
-  it("covers text-renderer behavior 58", () => {
+  it("Generate <path> element if font resolver is set", () => {
     setupPathMode();
     const textBody = makeTextBody(["Hello"]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
@@ -1264,7 +1264,7 @@ describe("renderTextBody (path mode)", () => {
     expect(result).not.toContain("<tspan");
   });
 
-  it("covers text-renderer behavior 59", () => {
+  it("The text color is reflected in the fill attribute of path", () => {
     setupPathMode();
     const textBody: TextBody = {
       bodyProperties: {
@@ -1306,7 +1306,7 @@ describe("renderTextBody (path mode)", () => {
     expect(result).toContain('fill="#FF0000"');
   });
 
-  it("covers text-renderer behavior 60", () => {
+  it("Transparency is reflected in fill-opacity", () => {
     setupPathMode();
     const textBody: TextBody = {
       bodyProperties: {
@@ -1349,7 +1349,7 @@ describe("renderTextBody (path mode)", () => {
     expect(result).toContain('fill-opacity="0.5"');
   });
 
-  it("covers text-renderer behavior 61", () => {
+  it("Hyperlinks are wrapped in <a> tags", () => {
     setupPathMode();
     const textBody: TextBody = {
       bodyProperties: {
@@ -1393,7 +1393,7 @@ describe("renderTextBody (path mode)", () => {
     expect(result).toContain("</a>");
   });
 
-  it("covers text-renderer behavior 62", () => {
+  it("Underline is drawn as a <line> element", () => {
     setupPathMode();
     const textBody: TextBody = {
       bodyProperties: {
@@ -1436,7 +1436,7 @@ describe("renderTextBody (path mode)", () => {
     expect(result).toContain("stroke=");
   });
 
-  it("covers text-renderer behavior 63", () => {
+  it("Strikethrough is drawn as a <line> element", () => {
     setupPathMode();
     const textBody: TextBody = {
       bodyProperties: {
@@ -1478,14 +1478,14 @@ describe("renderTextBody (path mode)", () => {
     expect(result).toContain("<line");
   });
 
-  it("covers text-renderer behavior 64", () => {
+  it("Returns empty string on empty text", () => {
     setupPathMode();
     const textBody = makeTextBody([""]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toBe("");
   });
 
-  it("covers text-renderer behavior 65", () => {
+  it("rotate(90) is applied in vertical writing (vert)", () => {
     setupPathMode();
     const textBody = makeTextBody(["Vertical"], { vert: "vert" });
     const result = renderTextBody(textBody, makeTransform(4000000, 2000000));
@@ -1494,7 +1494,7 @@ describe("renderTextBody (path mode)", () => {
     expect(result).not.toContain("<text");
   });
 
-  it("covers text-renderer behavior 66", () => {
+  it("rotate(-90) is applied in vertical writing (vert270)", () => {
     setupPathMode();
     const textBody = makeTextBody(["Vert270"], { vert: "vert270" });
     const result = renderTextBody(textBody, makeTransform(4000000, 2000000));
@@ -1502,7 +1502,7 @@ describe("renderTextBody (path mode)", () => {
     expect(result).toContain("<path");
   });
 
-  it("covers text-renderer behavior 67", () => {
+  it("If bulletFont is null, bullets are rendered in the text run's font.", () => {
     const notoFont = createMockFont("Noto Sans JP");
     const defaultFont = createMockFont("DefaultFont");
     const fonts = new Map([
@@ -1554,13 +1554,13 @@ describe("renderTextBody (path mode)", () => {
     };
 
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
-    // Test note.
+    // Bullet points are drawn as paths (using Noto Sans JP mock font)
     expect(result).toContain("<path");
     expect(result).toContain("Noto Sans JP");
   });
 
-  it("covers text-renderer behavior 68", () => {
-    // Test note.
+  it("Fallback to tspan rendering if font resolver is null", () => {
+    // Do not call setupPathMode() -> fontResolver is null
     const textBody = makeTextBody(["Fallback"]);
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
     expect(result).toContain("<text");
@@ -1568,9 +1568,9 @@ describe("renderTextBody (path mode)", () => {
     expect(result).not.toContain("<path");
   });
 
-  it("covers text-renderer behavior 69", () => {
-    // Test note.
-    // Test note.
+  it("Centering in path mode uses x position based on getAdvanceWidth()", () => {
+    // Using a font (1.0x) whose width is different from the default mock (0.6x)
+    // Make sure measureLineWidth is switched to getAdvanceWidth()
     const wideFont: OpentypeFullFont = {
       unitsPerEm: 1000,
       ascender: 800,
@@ -1593,7 +1593,7 @@ describe("renderTextBody (path mode)", () => {
     expect(result).toContain("<path");
   });
 
-  it("covers text-renderer behavior 70", () => {
+  it("Right alignment in path mode uses x position based on getAdvanceWidth()", () => {
     const wideFont: OpentypeFullFont = {
       unitsPerEm: 1000,
       ascender: 800,
@@ -1615,7 +1615,7 @@ describe("renderTextBody (path mode)", () => {
     expect(result).toContain("<path");
   });
 
-  it("covers text-renderer behavior 71", () => {
+  it("fontSize in endParaRunProperties is used to calculate the height of empty paragraphs", () => {
     const defaultRunProps: RunProperties = {
       fontSize: null,
       fontFamily: null,
@@ -1646,13 +1646,13 @@ describe("renderTextBody (path mode)", () => {
       },
       paragraphs: [
         {
-          // Test note.
+          // Empty paragraph (spacer): Specify 3pt with endParaRPr
           runs: [{ text: "", properties: { ...defaultRunProps } }],
           properties: defaultParagraphProperties(),
           endParaRunProperties: { ...defaultRunProps, fontSize: 3 },
         },
         {
-          // Test note.
+          // Actual text paragraph: 12pt
           runs: [{ text: "テスト", properties: { ...defaultRunProps, fontSize: 12 } }],
           properties: defaultParagraphProperties(),
         },
@@ -1660,20 +1660,20 @@ describe("renderTextBody (path mode)", () => {
     };
 
     const result = renderTextBody(textBody, makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT));
-    // Test note.
-    // Test note.
+    // dy of empty paragraph is calculated based on fontSize (3pt) of endParaRunProperties
+    // The value will be different from when using the default (12pt)
     const dyMatches = result.match(/dy="([^"]+)"/g) ?? [];
-    // Test note.
+    // At least two tspans are printed
     expect(dyMatches.length).toBeGreaterThanOrEqual(2);
 
-    // Test note.
+    // Compare with without endParaRunProperties
     const textBodyNoEndPara: TextBody = {
       ...textBody,
       paragraphs: [
         {
           runs: [{ text: "", properties: { ...defaultRunProps } }],
           properties: defaultParagraphProperties(),
-          // Test note.
+          // endParaRunProperties None -> default size
         },
         {
           runs: [{ text: "テスト", properties: { ...defaultRunProps, fontSize: 12 } }],
@@ -1685,8 +1685,8 @@ describe("renderTextBody (path mode)", () => {
       textBodyNoEndPara,
       makeTransform(SLIDE_WIDTH, SLIDE_HEIGHT),
     );
-    // Test note.
-    // Test note.
+    // If endParaRunProperties is present, the spacer paragraph is small, so
+    // The text position should be different
     expect(result).not.toEqual(resultNoEndPara);
   });
 });

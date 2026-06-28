@@ -2,41 +2,41 @@ import { XMLParser } from "fast-xml-parser";
 
 import { unsafeXmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 
-/** Internal note. */
+/** Type alias for XML nodes returned by fast-xml-parser */
 export type XmlNode = Record<string, unknown>;
 
-// Internal note.
-// Internal note.
-// Internal note.
-// Internal note.
+// Tags that require even a single element to be treated as an array in OOXML XML.
+// fast-xml-parser returns an object if there is one child element, and an array if there are multiple child elements, so
+// Parsing results become unstable when there is only one shape on the slide.
+// By always using isArray to create an array, you can write downstream code in a unified manner.
 const ARRAY_TAGS = new Set([
-  "sp", // Internal note.
-  "pic", // Internal note.
-  "cxnSp", // Internal note.
-  "grpSp", // Internal note.
-  "graphicFrame", // Internal note.
-  "p", // Internal note.
-  "r", // Internal note.
-  "br", // Internal note.
-  "fld", // Internal note.
-  "Relationship", // Internal note.
-  "sldId", // Internal note.
-  "gs", // Internal note.
-  "gridCol", // Internal note.
-  "tr", // Internal note.
-  "tc", // Internal note.
-  "ser", // Internal note.
-  "pt", // Internal note.
-  "gd", // Internal note.
-  "ds", // Internal note.
-  "AlternateContent", // Internal note.
-  "embeddedFont", // Internal note.
-  "effectStyle", // Internal note.
-  "font", // Internal note.
+  "sp", // Shape
+  "pic", // Picture
+  "cxnSp", // Connector
+  "grpSp", // Group (Group Shape)
+  "graphicFrame", // Frames for tables, charts, etc.
+  "p", // Text paragraph (Paragraph)
+  "r", // Text run (Run)
+  "br", // Line break (Break)
+  "fld", // Field code (Field)
+  "Relationship", // relationship
+  "sldId", // Slide ID
+  "gs", // Gradient Stop
+  "gridCol", // table column definition
+  "tr", // Table Row
+  "tc", // Table Cell
+  "ser", // Chart data series (Series)
+  "pt", // Chart data point (Point)
+  "gd", // Guide Definition
+  "ds", // Custom Dash Segment
+  "AlternateContent", // mc:AlternateContent (SmartArt etc.)
+  "embeddedFont", // Embedded Font
+  "effectStyle", // Effect Style
+  "font", // Script-based Font definition
 ]);
 
-// Internal note.
-// Internal note.
+// Singleton parser instance.
+// XMLParser.parse() is stateless and can be safely reused.
 const standardParser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",

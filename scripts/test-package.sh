@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# 一時ディレクトリを作成し、終了時にクリーンアップ
+# Create temporary directory and clean up on exit
 WORK_DIR=$(mktemp -d)
 trap 'rm -rf "$WORK_DIR"' EXIT
 
 echo "=== Package publish verification ==="
 echo "Working directory: $WORK_DIR"
 
-# npm pack で公開対象 package と document workspace package のタールボールを生成
+# Generate tarballs for publishing target package and document workspace package with npm pack
 TARBALL=$(cd packages/core && npm pack --pack-destination "$WORK_DIR" 2>/dev/null)
 TARBALL_PATH="$WORK_DIR/$TARBALL"
 DOCUMENT_TARBALL=$(cd packages/document && npm pack --pack-destination "$WORK_DIR" 2>/dev/null)
@@ -16,7 +16,7 @@ DOCUMENT_TARBALL_PATH="$WORK_DIR/$DOCUMENT_TARBALL"
 echo "Packed: $TARBALL"
 echo "Packed: $DOCUMENT_TARBALL"
 
-# core package のテスト用ディレクトリにインストール
+# Install in core package test directory
 TEST_DIR="$WORK_DIR/core-test-project"
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
@@ -25,7 +25,7 @@ npm install "$TARBALL_PATH" > /dev/null 2>&1
 
 echo ""
 
-# --- core CJS テスト ---
+# --- core CJS test ---
 echo "--- Test: pptx-glimpse CJS (require) ---"
 cat > test-cjs.cjs << 'TESTEOF'
 const pkg = require("pptx-glimpse");
@@ -48,7 +48,7 @@ node test-cjs.cjs
 
 echo ""
 
-# --- core ESM テスト ---
+# --- core ESM test ---
 echo "--- Test: pptx-glimpse ESM (import) ---"
 cat > test-esm.mjs << 'TESTEOF'
 import { convertPptxToSvg, convertPptxToPng } from "pptx-glimpse";
@@ -71,11 +71,11 @@ node test-esm.mjs
 
 echo ""
 
-# --- core TypeScript 型解決テスト ---
+# --- core TypeScript type resolution test ---
 echo "--- Test: pptx-glimpse TypeScript type resolution ---"
 npm install typescript@latest @types/node > /dev/null 2>&1
 
-# テスト用プロジェクトを ESM に設定 (pptx-glimpse は "type": "module")
+# Set test project to ESM (pptx-glimpse is "type": "module")
 npm pkg set type=module > /dev/null 2>&1
 
 cat > tsconfig.json << 'TESTEOF'
@@ -122,14 +122,14 @@ echo "TypeScript type resolution test passed!"
 
 echo ""
 
-# document package のテスト用ディレクトリにインストール
+# Install in the test directory of the document package
 DOCUMENT_TEST_DIR="$WORK_DIR/document-test-project"
 mkdir -p "$DOCUMENT_TEST_DIR"
 cd "$DOCUMENT_TEST_DIR"
 npm init -y > /dev/null 2>&1
 npm install "$DOCUMENT_TARBALL_PATH" > /dev/null 2>&1
 
-# --- document CJS テスト ---
+# --- document CJS test ---
 echo "--- Test: @pptx-glimpse/document CJS (require) ---"
 cat > test-document-cjs.cjs << 'TESTEOF'
 const documentPkg = require("@pptx-glimpse/document");
@@ -156,7 +156,7 @@ node test-document-cjs.cjs
 
 echo ""
 
-# --- document ESM テスト ---
+# --- document ESM test ---
 echo "--- Test: @pptx-glimpse/document ESM (import) ---"
 cat > test-document-esm.mjs << 'TESTEOF'
 import {
@@ -188,7 +188,7 @@ node test-document-esm.mjs
 
 echo ""
 
-# --- document TypeScript 型解決テスト ---
+# --- document TypeScript type resolution test ---
 echo "--- Test: @pptx-glimpse/document TypeScript type resolution ---"
 npm install typescript@latest @types/node > /dev/null 2>&1
 npm pkg set type=module > /dev/null 2>&1

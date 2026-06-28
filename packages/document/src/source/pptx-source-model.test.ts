@@ -1,5 +1,5 @@
-// Test note.
-// Test note.
+// Import via the actual public surface (`@pptx-glimpse/document`),
+// Verify each re-export of the root entry point.
 import { describe, expect, it } from "vitest";
 
 import {

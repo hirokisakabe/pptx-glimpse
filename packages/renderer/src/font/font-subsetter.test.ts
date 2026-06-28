@@ -27,8 +27,8 @@ async function loadOpentype(): Promise<OpentypeTestModule> {
 }
 
 /**
- * Test note.
- * Test note.
+ * Create, parse, and return a test TTF font using opentype.js.
+ * Glyph:.notdef, space, A, B (A and B are isomorphic triangles)
  */
 async function createParsedTestFont(): Promise<OpentypeFullFont> {
   const opentype = await loadOpentype();
@@ -91,7 +91,7 @@ async function parseSubsetBuffer(buffer: Uint8Array): Promise<ParsedFontForTest>
 }
 
 describe("subsetFont", () => {
-  it("covers font-subsetter behavior 1", async () => {
+  it("Generate a parsable OTF containing only used characters", async () => {
     const font = await createParsedTestFont();
     const buffer = await subsetFont(font, new Set(["A", " "]), "SubsetTestFont");
 
@@ -99,14 +99,14 @@ describe("subsetFont", () => {
 
     const parsed = await parseSubsetBuffer(buffer!);
 
-    // Test note.
+    // A and space are included, B is not included (.notdef + space + A = 3 glyphs)
     expect(parsed.charToGlyph("A").index).toBeGreaterThan(0);
     expect(parsed.charToGlyph(" ").index).toBeGreaterThan(0);
     expect(parsed.charToGlyph("B").index).toBe(0);
     expect(parsed.glyphs.length).toBe(3);
   });
 
-  it("covers font-subsetter behavior 2", async () => {
+  it("Characters not included in the font are not included in the subset.", async () => {
     const font = await createParsedTestFont();
     const buffer = await subsetFont(font, new Set(["A", "Z"]), "SubsetTestFont");
 
@@ -114,26 +114,26 @@ describe("subsetFont", () => {
 
     const parsed = await parseSubsetBuffer(buffer!);
 
-    // Test note.
+    // Since Z is not in the original font, it will not become.notdef and will be excluded.
     expect(parsed.charToGlyph("Z").index).toBe(0);
     expect(parsed.glyphs.length).toBe(2); // .notdef + A
   });
 
-  it("covers font-subsetter behavior 3", async () => {
+  it("Returns null if there are no characters included.", async () => {
     const font = await createParsedTestFont();
     const buffer = await subsetFont(font, new Set(["Z", "あ"]), "SubsetTestFont");
 
     expect(buffer).toBeNull();
   });
 
-  it("covers font-subsetter behavior 4", async () => {
+  it("return null on empty charset", async () => {
     const font = await createParsedTestFont();
     const buffer = await subsetFont(font, new Set(), "SubsetTestFont");
 
     expect(buffer).toBeNull();
   });
 
-  it("covers font-subsetter behavior 5", async () => {
+  it("Return null on objects that don't have charToGlyph", async () => {
     const fakeFont = unsafeFixtureAssertion<OpentypeFullFont>({ unitsPerEm: 1000 });
     const buffer = await subsetFont(fakeFont, new Set(["A"]), "Fake");
 

@@ -15,7 +15,7 @@ function resolveWasmPath(): string {
 /**
  * Initializes the resvg-wasm WASM module.
  * Even when not called explicitly, it is initialized automatically on the first PNG conversion.
- * Internal note.
+ * Use this when you want to initialize the application when it starts.
  */
 export async function initResvgWasm(): Promise<void> {
   if (!wasmInitPromise) {

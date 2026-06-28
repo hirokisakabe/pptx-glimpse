@@ -1,15 +1,15 @@
 /**
- * Internal note.
+ * Read `p:spTree` into the shape node column of PptxSourceModel source.
  *
  * simple autoshape (`p:sp`), embedded raster image (`p:pic`), connector
- * Internal note.
- * Internal note.
- * Internal note.
+ * (`p:cxnSp`), and group (`p:grpSp`) are represented in typed. graphicFrame is table /
+ * Convert supported subset of chart/SmartArt to typed, and other unsupported nodes
+ * Save as raw shape node. Even within a typed node, unsupported child elements/attributes are raw
  * sidecar .
  *
- * Internal note.
- * z-order between tags。when omitted, falls back to the legacy per-tag ordering
- * Internal note.
+ * If `orderedChildren` is passed, use preserve-order XML parse result and
+ * z-order between tags.when omitted, falls back to the legacy per-tag ordering
+ * do.
  */
 
 import type {
@@ -113,7 +113,7 @@ const KNOWN_TABLE_CELL_PROPERTIES_CHILDREN: ReadonlySet<string> = new Set([
   "grpFill",
 ]);
 // Children of `a:spPr` interpreted as typed data. Everything else (custGeom / effectLst / scene3d /
-// Internal note.
+// extLst etc.) are retained as raw sidecars. For the fill type, parseFill uses typed/raw.
 // decides typed/raw handling and this prevents double-counting.
 const KNOWN_SP_PR_CHILDREN: ReadonlySet<string> = new Set([
   "xfrm",
@@ -145,7 +145,7 @@ const SMARTART_DIAGRAM_URIS: ReadonlySet<string> = new Set([
   "http://purl.oclc.org/ooxml/drawingml/diagram",
 ]);
 
-/** Internal note. */
+/** Read `p:spTree` and return the shape node column. */
 export function parseShapeTree(
   spTree: XmlNode | undefined,
   partPath: PartPath,
@@ -431,7 +431,7 @@ function parseImage(
     ...collectUnknownSidecars(pic, KNOWN_PICTURE_CHILDREN, nextId),
     ...collectUnknownSidecars(spPr, KNOWN_SP_PR_CHILDREN, nextId),
     ...collectEffectSidecars(spPr, effects, nextId),
-    // Internal note.
+    // Retains fill mode such as `a:stretch` / `a:tile` and recolor operation under blip.
     ...collectUnknownSidecars(blipFill, KNOWN_BLIP_FILL_CHILDREN, nextId),
     ...collectBlipEffectSidecars(blip, blipEffects, nextId),
   ];

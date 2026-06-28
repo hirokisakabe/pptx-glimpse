@@ -1,11 +1,11 @@
 /**
- * Internal note.
+ * typed slide / slideLayout / slideMaster / theme part in PptxSourceModel source
  * node .
  *
- * Internal note.
- * Internal note.
- * Internal note.
- * source-locally。
+ * Keep each part separate, and solve the cascade (master -> layout -> slide).
+ * Responsible for computed view. This module contains materials necessary for solving (background / clrMap /
+ * clrMapOvr / theme scheme / showMasterSp) and shape tree to source-local
+ * source-locally.
  */
 
 import type {
@@ -219,7 +219,7 @@ function parseColorMap(clrMap: XmlNode | undefined): SourceColorMap | undefined 
 
 /**
  * Reads `p:clrMapOvr`. If `a:overrideClrMapping` exists, returns that mapping;
- * Internal note.
+ * In the case of `a:masterClrMapping` (= follows master's clrMap), without override
  * undefined .
  */
 function parseColorMapOverride(clrMapOvr: XmlNode | undefined): SourceColorMap | undefined {

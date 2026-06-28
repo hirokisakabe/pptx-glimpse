@@ -299,7 +299,7 @@ beforeAll(async () => {
 });
 
 describe("collectUsedFonts", () => {
-  it("covers font-collector behavior 1", () => {
+  it("Return theme font information", () => {
     const result = collectUsedFonts(testPptx);
 
     expect(result.theme.majorFont).toBe("Calibri Light");
@@ -310,24 +310,24 @@ describe("collectUsedFonts", () => {
     expect(result.theme.minorFontCs).toBe("Arial");
   });
 
-  it("covers font-collector behavior 2", () => {
+  it("Collect font names for text runs", () => {
     const result = collectUsedFonts(testPptx);
 
-    // Test note.
+    // font specified in text run
     expect(result.fonts).toContain("Arial");
     expect(result.fonts).toContain("MS PGothic");
     expect(result.fonts).toContain("Times New Roman");
     expect(result.fonts).toContain("Yu Gothic");
   });
 
-  it("covers font-collector behavior 3", () => {
+  it("Theme font names are also included in the fonts list.", () => {
     const result = collectUsedFonts(testPptx);
 
     expect(result.fonts).toContain("Calibri Light");
     expect(result.fonts).toContain("Calibri");
   });
 
-  it("covers font-collector behavior 4", async () => {
+  it("Resolve and collect theme font aliases", async () => {
     const pptx = await createTestPptx({ slideXml: slideWithThemeAliases });
     const result = collectUsedFonts(pptx);
 
@@ -344,7 +344,7 @@ describe("collectUsedFonts", () => {
     expect(result.fonts).not.toContain("+mn-cs");
   });
 
-  it("covers font-collector behavior 5", async () => {
+  it("Do not leak unresolvable theme regional aliases to the fonts list", async () => {
     const pptx = await createTestPptx({
       slideXml: slideWithThemeAliases,
       themeXml: themeWithoutRegionalFonts,
@@ -363,7 +363,7 @@ describe("collectUsedFonts", () => {
     expect(result.fonts).not.toContain("+mn-cs");
   });
 
-  it("covers font-collector behavior 6", async () => {
+  it("Resolve per-slide theme font alias with each slide's theme", async () => {
     const pptx = await createTestPptx({
       contentTypesXml: contentTypesWithSecondSlide,
       presentationXmlOverride: presentationWithTwoSlidesXml,
@@ -393,14 +393,14 @@ describe("collectUsedFonts", () => {
     expect(result.fonts).not.toContain("+mn-cs");
   });
 
-  it("covers font-collector behavior 7", () => {
+  it("Font names are sorted without duplicates", () => {
     const result = collectUsedFonts(testPptx);
 
-    // Test note.
+    // Make sure there are no duplicates
     const unique = [...new Set(result.fonts)];
     expect(result.fonts).toEqual(unique);
 
-    // Test note.
+    // Make sure it's sorted
     const sorted = [...result.fonts].sort();
     expect(result.fonts).toEqual(sorted);
   });

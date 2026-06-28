@@ -1,6 +1,6 @@
 /**
- * Internal note.
- * Internal note.
+ * Construct a <style> element with @font-face definition from font usage.
+ * Used to embed subsetted fonts in SVG in native <text> output mode.
  */
 
 import { Buffer } from "node:buffer";
@@ -12,7 +12,7 @@ import type { TextPathFontResolver } from "./text-path-context.js";
 
 /**
  * Escapes a font name for CSS string literals.
- * Internal note.
+ * Since the content of <style> is also an XML text node, XML special characters are represented using CSS hexadecimal escapes.
  */
 function escapeCssFamilyName(name: string): string {
   return name
@@ -21,8 +21,8 @@ function escapeCssFamilyName(name: string): string {
 }
 
 /**
- * Internal note.
- * Internal note.
+ * Subset the collected font usage and return <style> elements with @font-face definitions.
+ * If there are no embeddable fonts, an empty string is returned.
  */
 export async function buildFontFaceStyle(
   usages: Map<string, FontUsage>,

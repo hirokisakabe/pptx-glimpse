@@ -8,7 +8,7 @@ import {
 } from "./font-usage-collector.js";
 
 describe("FontUsageCollector", () => {
-  it("covers font-usage-collector behavior 1", () => {
+  it("Collect characters using the beginning of the font name as a key", () => {
     const collector = new FontUsageCollector();
     collector.record(["Arial", null], "AB");
     collector.record(["Arial", "Noto Sans JP"], "BC");
@@ -17,32 +17,32 @@ describe("FontUsageCollector", () => {
     expect(usages.size).toBe(1);
     const usage = usages.get("Arial")!;
     expect([...usage.chars].sort()).toEqual(["A", "B", "C"]);
-    // Test note.
+    // The first recorded fonts list is retained.
     expect(usage.fonts).toEqual(["Arial", null]);
   });
 
-  it("covers font-usage-collector behavior 2", () => {
+  it("Skip leading null and use first non-null font name as key", () => {
     const collector = new FontUsageCollector();
     collector.record([null, "Noto Sans JP"], "あ");
 
     expect(collector.getUsages().has("Noto Sans JP")).toBe(true);
   });
 
-  it("covers font-usage-collector behavior 3", () => {
+  it("Do not record if all font names are null", () => {
     const collector = new FontUsageCollector();
     collector.record([null, null], "A");
 
     expect(collector.getUsages().size).toBe(0);
   });
 
-  it("covers font-usage-collector behavior 4", () => {
+  it("Do not record empty strings", () => {
     const collector = new FontUsageCollector();
     collector.record(["Arial"], "");
 
     expect(collector.getUsages().size).toBe(0);
   });
 
-  it("covers font-usage-collector behavior 5", () => {
+  it("Collect surrogate pairs as one character", () => {
     const collector = new FontUsageCollector();
     collector.record(["Test"], "𠮷野");
 
@@ -52,7 +52,7 @@ describe("FontUsageCollector", () => {
     expect(usage.chars.size).toBe(2);
   });
 
-  it("covers font-usage-collector behavior 6", () => {
+  it("Clear the collected contents with reset", () => {
     const collector = new FontUsageCollector();
     collector.record(["Arial"], "A");
     collector.reset();
@@ -66,7 +66,7 @@ describe("font usage collector context", () => {
     resetFontUsageCollector();
   });
 
-  it("covers font-usage-collector behavior 7", () => {
+  it("Context can be managed with set / get / reset", () => {
     expect(getFontUsageCollector()).toBeNull();
 
     const collector = new FontUsageCollector();

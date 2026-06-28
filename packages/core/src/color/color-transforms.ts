@@ -1,7 +1,7 @@
 // OOXML color transforms (ECMA-376 §20.1.2.3)
 // lumMod/lumOff: HSL adjust the luminance channel in HSL color space
-// Internal note.
-// Internal note.
+// tint: Blend toward white (RGB each channel: c + (255 - c) * amount)
+// shade: Blend towards black (RGB each channel: c * amount)
 // alpha: opacity (100000 = 100%)
 // values use 100000 fractions (e.g. 50000 = 50%)
 
@@ -79,7 +79,7 @@ function rgbToHex(r: number, g: number, b: number): string {
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
 }
 
-// Internal note.
+// RGB ↔ HSL conversion: Compliant with W3C CSS Color Module Level 3 §4.2.4 algorithm
 function hexToHsl(hex: string): { h: number; s: number; l: number } {
   const { r: r255, g: g255, b: b255 } = hexToRgb(hex);
   const r = r255 / 255;

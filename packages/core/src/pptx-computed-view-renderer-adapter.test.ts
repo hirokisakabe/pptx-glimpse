@@ -22,7 +22,7 @@ import { adaptComputedViewToRendererModel } from "./pptx-computed-view-renderer-
 import { unsafeFixtureAssertion } from "./unsafe-type-assertion.js";
 
 describe("adaptComputedViewToRendererModel", () => {
-  it("covers pptx-computed-view-renderer-adapter behavior 1", () => {
+  it("Convert slide size / background / effective element ordering to renderer model", () => {
     const result = adaptComputedViewToRendererModel(createComputedView(buildSource()));
 
     expect(result.slideSize).toEqual({ width: 9144000, height: 5143500 });
@@ -43,7 +43,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("covers pptx-computed-view-renderer-adapter behavior 2", () => {
+  it("Convert between simple shape/text/image and theme-resolved fill/outline", () => {
     const result = adaptComputedViewToRendererModel(createComputedView(buildSource()));
     const slide = result.slides[0];
     const title = findElementByAltText(slide.elements, "Slide title");
@@ -123,7 +123,7 @@ describe("adaptComputedViewToRendererModel", () => {
     });
   });
 
-  it("covers pptx-computed-view-renderer-adapter behavior 3", () => {
+  it("Convert complex fill to renderer fill model", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
         buildSource({
@@ -205,7 +205,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("covers pptx-computed-view-renderer-adapter behavior 4", () => {
+  it("Convert shape effects and image blip effects to renderer model", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
         buildSource({
@@ -285,7 +285,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("covers pptx-computed-view-renderer-adapter behavior 5", () => {
+  it("Convert table to renderer model", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
         buildSource({
@@ -409,7 +409,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("covers pptx-computed-view-renderer-adapter behavior 6", () => {
+  it("Convert connector / group / custom geometry to renderer model", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
         buildSource({
@@ -496,7 +496,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("covers pptx-computed-view-renderer-adapter behavior 7", () => {
+  it("Normalize document media content types to current parser compatible image mime", () => {
     const source = buildSource({
       extraSlideShapes: [
         shape("EMF fill", {
@@ -527,7 +527,7 @@ describe("adaptComputedViewToRendererModel", () => {
     });
   });
 
-  it("covers pptx-computed-view-renderer-adapter behavior 8", () => {
+  it("Normalize unknown image MIME type to default value of renderer contract", () => {
     const source = buildSource();
     const sourceWithUnknownMedia: PptxSourceModel = {
       ...source,
@@ -554,7 +554,7 @@ describe("adaptComputedViewToRendererModel", () => {
     );
   });
 
-  it("covers pptx-computed-view-renderer-adapter behavior 9", () => {
+  it("Normalize unknown rectangle alignment token to default value of renderer contract", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
         buildSource({
@@ -608,7 +608,7 @@ describe("adaptComputedViewToRendererModel", () => {
     );
   });
 
-  it("covers pptx-computed-view-renderer-adapter behavior 10", () => {
+  it("Convert chart and SmartArt fallback to renderer model", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(buildSourceWithChartAndSmartArt()),
     );
@@ -691,7 +691,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("covers pptx-computed-view-renderer-adapter behavior 11", () => {
+  it("Convert document computed chart data to renderer ChartData", () => {
     const result = adaptComputedViewToRendererModel(buildComputedViewWithChartData());
     const chart = result.slides[0].elements.find((element) => element.type === "chart");
 
@@ -722,7 +722,7 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
-  it("covers pptx-computed-view-renderer-adapter behavior 12", () => {
+  it("Return SmartArt fallback diagram drawing skip diagnostic", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
         buildSourceWithChartAndSmartArt({
@@ -744,7 +744,7 @@ describe("adaptComputedViewToRendererModel", () => {
     );
   });
 
-  it("covers pptx-computed-view-renderer-adapter behavior 13", () => {
+  it("Treat unsupported raw elements as diagnostic and do not leak them to the renderer model", () => {
     const source = buildSource({
       extraSlideShapes: [
         {
@@ -773,7 +773,7 @@ describe("adaptComputedViewToRendererModel", () => {
     );
   });
 
-  it("covers pptx-computed-view-renderer-adapter behavior 14", () => {
+  it("Leave unsupported subset in diagnostic that requires fallback", () => {
     const source = buildSource({
       slideBackground: { kind: "raw", raw: rawSidecar("raw-bg", "p:bg") },
       extraSlideShapes: [

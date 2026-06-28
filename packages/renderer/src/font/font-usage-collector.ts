@@ -1,18 +1,18 @@
 /**
- * Internal note.
- * Internal note.
- * Internal note.
+ * Font usage collector for native <text> output mode.
+ * Collect "font name -> character set used" during rendering,
+ * Used for @font-face embedding of subsetted fonts.
  */
 
 export interface FontUsage {
-  /** Internal note. */
+  /** Priority list of font names to be passed to resolveFont (same order as tspan's font-family) */
   fonts: (string | null)[];
-  /** Internal note. */
+  /** the set of characters drawn with this font */
   chars: Set<string>;
 }
 
 export class FontUsageCollector {
-  /** Internal note. */
+  /** key: font name at the beginning of tspan's font-family list (= name declared with @font-face) */
   private usages = new Map<string, FontUsage>();
 
   record(fonts: (string | null)[], text: string): void {

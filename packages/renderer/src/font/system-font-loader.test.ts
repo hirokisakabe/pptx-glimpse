@@ -24,28 +24,28 @@ afterEach(() => {
 });
 
 describe("collectFontFilePaths skipSystemFonts", () => {
-  it("covers system-font-loader behavior 1", () => {
+  it("When skipSystemFonts=true, only return files in additionalDirs", () => {
     const { dir, fontPath } = makeTempFontDir();
     const result = collectFontFilePaths([dir], true);
     expect(result).toHaveLength(1);
     expect(result[0]).toBe(fontPath);
   });
 
-  it("covers system-font-loader behavior 2", () => {
+  it("Returns an empty array when skipSystemFonts=true and fontDirs is unspecified", () => {
     const result = collectFontFilePaths([], true);
     expect(result).toEqual([]);
   });
 
-  it("covers system-font-loader behavior 3", () => {
+  it("When skipSystemFonts=false, additionalDirs files are included", () => {
     const { dir, fontPath } = makeTempFontDir();
     const result = collectFontFilePaths([dir], false);
     expect(result).toContain(fontPath);
   });
 
-  it("covers system-font-loader behavior 4", () => {
+  it("skipSystemFonts=false returns as many or more files as skipSystemFonts=true", () => {
     const { dir } = makeTempFontDir();
     const skipSystem = collectFontFilePaths([dir], true);
-    // Test note.
+    // Call false on the same dir (dirsKey is the same but skipSystemFonts is different, so cache miss)
     const withSystem = collectFontFilePaths([dir], false);
     expect(withSystem.length).toBeGreaterThanOrEqual(skipSystem.length);
   });

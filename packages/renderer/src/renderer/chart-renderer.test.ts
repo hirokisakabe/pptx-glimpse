@@ -226,7 +226,7 @@ describe("renderChart", () => {
       const circles = result.content.match(/<circle[^>]*r="([^"]*)"[^>]*\/>/g);
       expect(circles).not.toBeNull();
       expect(circles!.length).toBe(2);
-      // Extract radii — larger bubble size should produce a larger radius
+      // Extract radii - larger bubble size should produce a larger radius
       const radii = circles!.map((c) => {
         const match = c.match(/r="([^"]*)"/);
         return Number(match![1]);
@@ -384,7 +384,7 @@ describe("renderChart", () => {
       expect(result.content).toContain("Alpha");
       expect(result.content).toContain("Beta");
 
-      // Chart: 4572000 EMU → 480px; margin.right=100 → plotW=330, x-axis x2=380
+      // Chart: 4572000 EMU -> 480px; margin.right=100 -> plotW=330, x-axis x2=380
       // x-axis line x2 must be 380 (plot right edge), not 480 (chart right edge)
       expect(result.content).toContain('x2="380"');
       // Legend rect starts at chartW - 100 + 5 = 385

@@ -389,7 +389,7 @@ export interface ComputedColorChangeEffect {
 }
 
 export interface ComputedColor {
-  /** `#rrggbb`。 */
+  /** `#rrggbb`. */
   readonly hex: string;
   /** Normalized opacity in the 0-1 range. */
   readonly alpha: number;

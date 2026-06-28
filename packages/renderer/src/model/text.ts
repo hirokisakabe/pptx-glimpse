@@ -15,7 +15,7 @@ export interface DefaultRunProperties {
   color?: ResolvedColor;
 }
 
-/** Internal note. */
+/** Default paragraph properties for each level of defaultTextStyle */
 export interface DefaultParagraphLevelProperties {
   alignment?: "l" | "ctr" | "r" | "just";
   marginLeft?: Emu;
@@ -27,20 +27,20 @@ export interface DefaultParagraphLevelProperties {
   defaultRunProperties?: DefaultRunProperties;
 }
 
-/** Internal note. */
+/** defaultTextStyle of presentation.xml / titleStyle, bodyStyle, otherStyle of slideMaster */
 export interface DefaultTextStyle {
   defaultParagraph?: DefaultParagraphLevelProperties;
   levels: (DefaultParagraphLevelProperties | undefined)[]; // index 0 = lvl1pPr, ... index 8 = lvl9pPr
 }
 
-/** Internal note. */
+/** slideMaster's txStyles */
 export interface TxStyles {
   titleStyle?: DefaultTextStyle;
   bodyStyle?: DefaultTextStyle;
   otherStyle?: DefaultTextStyle;
 }
 
-/** Style information associated with a placeholder（text, position, and geometry） */
+/** Style information associated with a placeholder(text, position, and geometry) */
 export interface PlaceholderStyleInfo {
   placeholderType: string;
   placeholderIdx?: number;
@@ -98,10 +98,10 @@ export type BulletType =
   | { type: "char"; char: string }
   | { type: "autoNum"; scheme: AutoNumScheme; startAt: number };
 
-/** Internal note. */
+/** Paragraph spacing value (points or percentage) */
 export type SpacingValue =
-  | { type: "pts"; value: HundredthPt } // Internal note.
-  | { type: "pct"; value: number }; // Internal note.
+  | { type: "pts"; value: HundredthPt } // 1/100 point unit (spcPts)
+  | { type: "pct"; value: number }; // 1/1000 percent (spcPct, 50000 = 50%)
 
 /** Tab stop definition */
 export interface TabStop {

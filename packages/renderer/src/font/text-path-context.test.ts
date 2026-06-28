@@ -27,18 +27,18 @@ describe("TextPathFontResolver context", () => {
     resetTextPathFontResolver();
   });
 
-  it("covers text-path-context behavior 1", () => {
+  it("Returns null in the initial state", () => {
     expect(getTextPathFontResolver()).toBeNull();
   });
 
-  it("covers text-path-context behavior 2", () => {
+  it("Can be obtained using get after set", () => {
     const fonts = new Map([["Arial", createMockFont("Arial")]]);
     const resolver = new DefaultTextPathFontResolver(fonts);
     setTextPathFontResolver(resolver);
     expect(getTextPathFontResolver()).toBe(resolver);
   });
 
-  it("covers text-path-context behavior 3", () => {
+  it("Returns to null after reset", () => {
     const fonts = new Map([["Arial", createMockFont("Arial")]]);
     const resolver = new DefaultTextPathFontResolver(fonts);
     setTextPathFontResolver(resolver);
@@ -48,34 +48,34 @@ describe("TextPathFontResolver context", () => {
 });
 
 describe("DefaultTextPathFontResolver", () => {
-  it("covers text-path-context behavior 4", () => {
+  it("Resolve fonts with fontFamily", () => {
     const arialFont = createMockFont("Arial");
     const fonts = new Map([["Arial", arialFont]]);
     const resolver = new DefaultTextPathFontResolver(fonts);
     expect(resolver.resolveFont("Arial", null)).toBe(arialFont);
   });
 
-  it("covers text-path-context behavior 5", () => {
+  it("If fontFamily is not found, resolve with fontFamilyEa", () => {
     const notoFont = createMockFont("Noto Sans JP");
     const fonts = new Map([["Noto Sans JP", notoFont]]);
     const resolver = new DefaultTextPathFontResolver(fonts);
     expect(resolver.resolveFont("Unknown", "Noto Sans JP")).toBe(notoFont);
   });
 
-  it("covers text-path-context behavior 6", () => {
+  it("If neither is found, fallback to defaultFont", () => {
     const defaultFont = createMockFont("Default");
     const fonts = new Map<string, OpentypeFullFont>();
     const resolver = new DefaultTextPathFontResolver(fonts, defaultFont);
     expect(resolver.resolveFont("Unknown", "AlsoUnknown")).toBe(defaultFont);
   });
 
-  it("covers text-path-context behavior 7", () => {
+  it("If there is none, return null", () => {
     const fonts = new Map<string, OpentypeFullFont>();
     const resolver = new DefaultTextPathFontResolver(fonts);
     expect(resolver.resolveFont("Unknown", null)).toBeNull();
   });
 
-  it("covers text-path-context behavior 8", () => {
+  it("If fontFamily is null, try fontFamilyEa", () => {
     const notoFont = createMockFont("Noto Sans JP");
     const fonts = new Map([["Noto Sans JP", notoFont]]);
     const resolver = new DefaultTextPathFontResolver(fonts);
@@ -83,14 +83,14 @@ describe("DefaultTextPathFontResolver", () => {
   });
 });
 
-describe("font/text-path-context.test behavior", () => {
+describe("DefaultTextPathFontResolver CJK fallback", () => {
   afterEach(() => {
     resetFontMapping();
     vi.restoreAllMocks();
   });
 
-  it("covers text-path-context behavior 9", async () => {
-    // Test note.
+  it("Attempt CJK fallback chain if no mapping is found", async () => {
+    // In Linux CI, the fallback chain is empty, so mock the macOS equivalent value.
     const mod = await import("./cjk-font-fallback.js");
     vi.spyOn(mod, "getCjkFallbackFonts").mockReturnValue([
       "Hiragino Sans",
@@ -104,8 +104,8 @@ describe("font/text-path-context.test behavior", () => {
     expect(resolver.resolveFont("Meiryo", null)).toBe(hiraginoFont);
   });
 
-  it("covers text-path-context behavior 10", async () => {
-    // Test note.
+  it("Returns the second font in the CJK fallback chain", async () => {
+    // In Linux CI, the fallback chain is empty, so mock the macOS equivalent value.
     const mod = await import("./cjk-font-fallback.js");
     vi.spyOn(mod, "getCjkFallbackFonts").mockReturnValue([
       "Hiragino Sans",
@@ -120,13 +120,13 @@ describe("font/text-path-context.test behavior", () => {
   });
 });
 
-describe("font/text-path-context.test behavior", () => {
+describe("DefaultTextPathFontResolver font warnings", () => {
   afterEach(() => {
     resetFontMapping();
     initWarningLogger("off");
   });
 
-  it("covers text-path-context behavior 11", () => {
+  it("Issue font.notFound warning if font is not found", () => {
     initWarningLogger("warn");
     const fonts = new Map<string, OpentypeFullFont>();
     const resolver = new DefaultTextPathFontResolver(fonts);
@@ -136,7 +136,7 @@ describe("font/text-path-context.test behavior", () => {
     expect(entries.some((e) => e.message.includes("UnknownFont"))).toBe(true);
   });
 
-  it("covers text-path-context behavior 12", () => {
+  it("Warnings with the same font name are not duplicated", () => {
     initWarningLogger("warn");
     const fonts = new Map<string, OpentypeFullFont>();
     const resolver = new DefaultTextPathFontResolver(fonts);
@@ -148,7 +148,7 @@ describe("font/text-path-context.test behavior", () => {
     expect(entries).toHaveLength(1);
   });
 
-  it("covers text-path-context behavior 13", () => {
+  it("Don't warn if font is found", () => {
     initWarningLogger("warn");
     const arialFont = createMockFont("Arial");
     const fonts = new Map([["Arial", arialFont]]);

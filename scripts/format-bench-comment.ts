@@ -1,11 +1,11 @@
 /**
- * Script note.
+ * Format the result of vitest bench --outputJson into markdown for PR comments.
  *
  * Usage:
  *   npx tsx scripts/format-bench-comment.ts <current.json> [baseline.json]
  *
- * Script note.
- * Script note.
+ * - If baseline.json is specified: generate comparison table
+ * - If baseline.json is missing: Display only current results
  */
 import { readFileSync } from "node:fs";
 

@@ -206,7 +206,7 @@ describe("renderOutlineAttrs", () => {
       headEnd: null,
       tailEnd: null,
     });
-    // Test note.
+    // customDash is applied (instead of prstDash)
     const widthPx = (12700 / 914400) * 96;
     expect(result.attrs).toContain(`stroke-dasharray="${3 * widthPx} ${1 * widthPx}"`);
   });

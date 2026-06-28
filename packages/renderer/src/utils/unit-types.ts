@@ -1,11 +1,11 @@
 import { unsafeBrandAssertion } from "../unsafe-type-assertion.js";
 
 /**
- * Internal note.
+ * Type safety of units with branded types
  *
- * Internal note.
- * Internal note.
- * Internal note.
+ * Multiple unit systems used internally in PPTX (EMU, pt, 1/100 pt)
+ * Distinguish at compile time to prevent unit mix-ups.
+ * Runtime cost is zero (JS output is the same as plain number).
  */
 
 declare const EmuBrand: unique symbol;
@@ -18,7 +18,7 @@ export type Emu = number & { readonly [EmuBrand]: typeof EmuBrand };
 /** points (1 pt = 1/72 inch) */
 export type Pt = number & { readonly [PtBrand]: typeof PtBrand };
 
-/** Internal note. */
+/** 1/100 point (ECMA-376 spcPts etc.) */
 export type HundredthPt = number & { readonly [HundredthPtBrand]: typeof HundredthPtBrand };
 
 export function asEmu(value: number): Emu {

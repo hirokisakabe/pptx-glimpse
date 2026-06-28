@@ -1,17 +1,17 @@
 /**
  * Simple shape / text run / image  source node types.
  *
- * Internal note.
- * Internal note.
- * Internal note.
- * Internal note.
+ * Drawings centered around the current supported subset (simple shapes / text / images
+ * nodes) to typed. theme color and relationship are unresolved references in source
+ * cascade resolution is the responsibility of the computed view. Unsupported nodes are raw
+ * Save with escape hatch.
  */
 
 import type { RelationshipId, SourceHandle, SourceNodeId } from "./handles.js";
 import type { RawSidecar } from "./raw.js";
 import type { Emu, HundredthPt, OoxmlAngle, OoxmlPercent, Pt } from "./units.js";
 
-/** Internal note. */
+/** Source transform from `a:xfrm`. Keep the coordinates and size as EMU. */
 export interface SourceTransform {
   readonly offsetX: Emu;
   readonly offsetY: Emu;
@@ -22,9 +22,9 @@ export interface SourceTransform {
   readonly flipVertical?: boolean;
 }
 
-/** Internal note. */
+/** Source reference for preset geometry (`a:prstGeom`). Keep only the preset name. */
 export interface SourcePresetGeometry {
-  /** Preset name (Example: `rect`, `roundRect`)。 */
+  /** Preset name (Example: `rect`, `roundRect`). */
   readonly preset: string;
   readonly adjustValues?: Readonly<Record<string, number>>;
 }
@@ -43,9 +43,9 @@ export interface SourceCustomGeometry {
 export type SourceGeometry = SourcePresetGeometry | SourceCustomGeometry;
 
 /**
- * Internal note.
- * Internal note.
- * Internal note.
+ * Unresolved source color reference. `schemeClr` is kept as the scheme name and computed
+ * Resolve to concrete color via `clrMap` / `colorScheme` in view. `srgbClr` /
+ * `sysClr` is a concrete value, but any transformations (lumMod, etc.) are retained before being applied.
  */
 export type SourceColor =
   | {
@@ -60,20 +60,20 @@ export type SourceColor =
     }
   | {
       readonly kind: "system";
-      /** `a:sysClr@val` (Example: `windowText`)。 */
+      /** `a:sysClr@val` (Example: `windowText`). */
       readonly value: string;
-      /** Internal note. */
+      /** Resolved fallback hex for `a:sysClr@lastClr`, if it has one. */
       readonly lastColor?: string;
       readonly transforms?: readonly SourceColorTransform[];
     };
 
-/** Internal note. */
+/** Color conversions such as lumMod / tint / shade (values are OOXML percentages). */
 export interface SourceColorTransform {
   readonly kind: "lumMod" | "lumOff" | "tint" | "shade" | "alpha";
   readonly value: OoxmlPercent;
 }
 
-/** Internal note. */
+/** shape fill (source level, minimum). Unsupported fills are saved as raw. */
 export type SourceFill =
   | { readonly kind: "none" }
   | { readonly kind: "solid"; readonly color: SourceColor }
@@ -194,7 +194,7 @@ export interface SourceColorChangeEffect {
   readonly to: SourceColor;
 }
 
-/** Internal note. */
+/** simple solid line outline (`a:ln`). Minimal representation of color and width only. */
 export interface SourceOutline {
   readonly width?: Emu;
   readonly fill?: SourceFill;
@@ -225,26 +225,26 @@ export type SourceDashStyle =
 export type SourceLineCap = "butt" | "round" | "square";
 export type SourceLineJoin = "miter" | "round" | "bevel";
 
-/** Internal note. */
+/** placeholder declaration (`p:ph`). Keep type / idx unresolved. */
 export interface SourcePlaceholder {
   readonly type?: string;
   readonly index?: number;
 }
 
-/** Internal note. */
+/** Minimal subset of run properties (`a:rPr`) of text run (`a:r`). */
 export interface SourceRunProperties {
   readonly bold?: boolean;
   readonly italic?: boolean;
   readonly underline?: boolean;
   readonly strikethrough?: boolean;
   readonly baseline?: number;
-  /** Internal note. */
+  /** font size. In OOXML-domain, it is stored as pt. */
   readonly fontSize?: Pt;
-  /** Internal note. */
+  /** latin typeface name (kept unresolved including theme token). */
   readonly typeface?: string;
-  /** Internal note. */
+  /** East Asian typeface name (kept unresolved including theme token). */
   readonly typefaceEa?: string;
-  /** Internal note. */
+  /** Complex script typeface name (kept unresolved including theme token). */
   readonly typefaceCs?: string;
   readonly color?: SourceColor;
 }
@@ -269,7 +269,7 @@ export type SourceSpacingValue =
   | { readonly type: "pts"; readonly value: HundredthPt }
   | { readonly type: "pct"; readonly value: number };
 
-/** text run (`a:r`)。 */
+/** text run (`a:r`). */
 export interface SourceTextRun {
   readonly kind: "textRun";
   readonly text: string;
@@ -285,10 +285,10 @@ export interface SourceTabStop {
   readonly alignment: "l" | "ctr" | "r" | "dec";
 }
 
-/** Internal note. */
+/** Minimum subset of paragraph properties (`a:pPr`) of paragraph (`a:p`). */
 export interface SourceParagraphProperties {
   readonly align?: SourceTextAlign;
-  /** indentation level (`a:pPr@lvl`)。 */
+  /** indentation level (`a:pPr@lvl`). */
   readonly level?: number;
   readonly lineSpacing?: SourceSpacingValue;
   readonly spaceBefore?: SourceSpacingValue;
@@ -303,7 +303,7 @@ export interface SourceParagraphProperties {
   readonly defaultRunProperties?: SourceRunProperties;
 }
 
-/** paragraph (`a:p`)。 */
+/** paragraph (`a:p`). */
 export interface SourceParagraph {
   readonly runs: readonly SourceTextRun[];
   readonly properties?: SourceParagraphProperties;
@@ -311,7 +311,7 @@ export interface SourceParagraph {
   readonly rawSidecars?: readonly RawSidecar[];
 }
 
-/** vertical anchor (`a:bodyPr@anchor`)。 */
+/** vertical anchor (`a:bodyPr@anchor`). */
 export type SourceVerticalAnchor = "top" | "middle" | "bottom";
 
 export type SourceTextWrap = "square" | "none";
@@ -326,7 +326,7 @@ export type SourceTextVerticalType =
 
 export type SourceTextAutoFit = "noAutofit" | "normAutofit" | "spAutofit";
 
-/** Internal note. */
+/** Minimal subset of text body properties (`a:bodyPr`). inset and vertical anchor. */
 export interface SourceTextBodyProperties {
   readonly marginLeft?: Emu;
   readonly marginRight?: Emu;
@@ -341,7 +341,7 @@ export interface SourceTextBodyProperties {
   readonly vert?: SourceTextVerticalType;
 }
 
-/** text body (`p:txBody`)。 */
+/** text body (`p:txBody`). */
 export interface SourceTextBody {
   readonly paragraphs: readonly SourceParagraph[];
   readonly properties?: SourceTextBodyProperties;
@@ -355,7 +355,7 @@ export interface SourceTextStyle {
   readonly levels: readonly (SourceParagraphProperties | undefined)[];
 }
 
-/** simple shape (`p:sp`)。 */
+/** simple shape (`p:sp`). */
 export interface SourceShape {
   readonly kind: "shape";
   readonly nodeId?: SourceNodeId;
@@ -398,7 +398,7 @@ export interface SourceGroup {
   readonly rawSidecars?: readonly RawSidecar[];
 }
 
-/** Internal note. */
+/** crop (`a:srcRect`) of image. Preserve insets on each edge as OOXML percentages. */
 export interface SourceImageCrop {
   readonly left?: OoxmlPercent;
   readonly top?: OoxmlPercent;
@@ -413,13 +413,13 @@ export interface SourceImageStretch {
   readonly bottom: number;
 }
 
-/** Internal note. */
+/** image (`p:pic`). The blip keeps the relationship id (`r:embed`) unresolved. */
 export interface SourceImage {
   readonly kind: "image";
   readonly nodeId?: SourceNodeId;
   readonly name?: string;
   readonly transform?: SourceTransform;
-  /** Internal note. */
+  /** Relationship id of `a:blip@r:embed`. media part is solved by computed view. */
   readonly blipRelationshipId?: RelationshipId;
   readonly crop?: SourceImageCrop;
   readonly stretch?: SourceImageStretch;
@@ -478,7 +478,7 @@ export interface SourceChart {
   readonly nodeId?: SourceNodeId;
   readonly name?: string;
   readonly transform?: SourceTransform;
-  /** Internal note. */
+  /** Relationship id of `c:chart@r:id`. Chart parts are resolved with computed views. */
   readonly chartRelationshipId?: RelationshipId;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
@@ -489,7 +489,7 @@ export interface SourceSmartArt {
   readonly nodeId?: SourceNodeId;
   readonly name?: string;
   readonly transform?: SourceTransform;
-  /** Internal note. */
+  /** Relationship id of `dgm:relIds@r:dm`. Diagram data/drawing part is solved by computed view. */
   readonly dataRelationshipId?: RelationshipId;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];

@@ -1,13 +1,13 @@
 /**
- * VRT fixture note.
+ * VRT test case definition (common)
  *
- * VRT fixture note.
- * VRT fixture note.
+ * Referenced by both create-fixtures.ts and regression.test.ts.
+ * When adding new fixtures, add them here.
  */
 
 /**
- * VRT fixture note.
- * VRT fixture note.
+ * A VRT case using PPTX created by an actual application in shared-fixtures/.
+ * The fixtures are already committed, so there is no need to create them using create-fixtures.ts.
  */
 export const SHARED_FIXTURE_CASES = [
   { name: "real-basic-theme", fixture: "real-basic-theme.pptx" },

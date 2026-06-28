@@ -6,7 +6,7 @@ const FONT_EXTENSIONS = new Set([".ttf", ".otf"]);
 
 /**
  * Known patterns for CJK TTC fonts.
- * Internal note.
+ * TTC files consume memory if they are large, so
  * so only fonts needed for CJK text are loaded selectively.
  */
 const CJK_TTC_PATTERNS = [
@@ -38,9 +38,9 @@ function getSystemFontDirs(): string[] {
 }
 
 function isCjkTtc(name: string): boolean {
-  // macOS (APFS) returns filenames as NFD (decomposed form) 、
+  // macOS (APFS) returns filenames as NFD (decomposed form) ,
   // Normalize to NFC before pattern matching.
-  // Internal note.
+  // Example: "Gi" may be decomposed into "Ki" + dakuten (U+3099).
   const lower = name.normalize("NFC").toLowerCase();
   return lower.endsWith(".ttc") && CJK_TTC_PATTERNS.some((p) => lower.includes(p.toLowerCase()));
 }
@@ -57,7 +57,7 @@ function walk(dir: string, result: string[]): void {
       }
     }
   } catch {
-    // Permission errors etc. — skip silently
+    // Permission errors etc. - skip silently
   }
 }
 
@@ -65,7 +65,7 @@ function walk(dir: string, result: string[]): void {
  * From OS system font directories plus additional directories,
  * .ttf / .otf collects .ttf / .otf file paths.
  *
- * Internal note.
+ * If skipSystemFonts is true, do not scan the system font directory.
  * additionalDirs only.
  *
  * Results are cached at module level, and repeated calls with the same arguments return immediately.

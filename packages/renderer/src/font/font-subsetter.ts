@@ -1,6 +1,6 @@
 /**
- * Internal note.
- * Internal note.
+ * Use opentype.js to subset the font to only used characters.
+ * For @font-face embedding in native <text> output mode.
  */
 
 import { unsafeExternalInteropAssertion } from "../unsafe-type-assertion.js";
@@ -30,8 +30,8 @@ interface OpentypeCtors {
 }
 
 /**
- * Internal note.
- * Internal note.
+ * Load the opentype.js constructor with dynamic import.
+ * Returns null if opentype.js is not installed.
  */
 async function tryLoadOpentypeCtors(): Promise<OpentypeCtors | null> {
   try {
@@ -51,11 +51,11 @@ function glyphName(glyph: OpentypeGlyph, firstUnicode: number): string {
 }
 
 /**
- * Internal note.
+ * Subsets the font to only the specified characters and returns it as an OTF (CFF) binary.
  *
- * Internal note.
- * Internal note.
- * Internal note.
+ * - Characters for which glyphs do not exist in the font (characters that become.notdef) are not included in the subset.
+ * To defer to subsequent fallbacks of font-family on the browser side.
+ * - Returns null if there is no target character or if subsetting fails.
  */
 export async function subsetFont(
   font: OpentypeFullFont,
@@ -68,8 +68,8 @@ export async function subsetFont(
   const source = unsafeExternalInteropAssertion<SubsettableFont>(font);
   if (typeof source.charToGlyph !== "function" || !source.glyphs) return null;
 
-  // Internal note.
-  // Internal note.
+  // glyph index -> { glyph, responsible unicode set }.
+  // Summarize cases where multiple characters are mapped to the same glyph (e.g. ligatureless merging).
   const glyphMap = new Map<number, { glyph: OpentypeGlyph; unicodes: Set<number> }>();
   for (const char of chars) {
     const codePoint = char.codePointAt(0);
@@ -80,7 +80,7 @@ export async function subsetFont(
     } catch {
       continue;
     }
-    // Internal note.
+    // index 0 (.notdef) is not included in the font -> excluded from the subset
     if (!glyph || !glyph.index) continue;
     const entry = glyphMap.get(glyph.index);
     if (entry) {
@@ -120,7 +120,7 @@ export async function subsetFont(
       styleName: "Regular",
       unitsPerEm: source.unitsPerEm,
       ascender: source.ascender,
-      // Internal note.
+      // opentype.js requires negative values for descender
       descender: source.descender < 0 ? source.descender : -1,
       glyphs,
     });

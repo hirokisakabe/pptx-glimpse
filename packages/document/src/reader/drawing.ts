@@ -1,9 +1,9 @@
 /**
- * Internal note.
+ * Helper that reads DrawingML color, fill, line, and coordinate conversion to PptxSourceModel source type.
  *
- * Internal note.
- * Internal note.
- * Internal note.
+ * The theme color / relationship is kept unresolved in source. lumMod/tint
+ * It is saved as is without applying conversions such as, and the computed view is responsible for solving it.
+ * Unsupported fills (gradient / pattern / picture fill) are saved as raw sidecars.
  */
 
 import type {
@@ -64,7 +64,7 @@ const COLOR_TRANSFORM_KINDS: ReadonlySet<SourceColorTransform["kind"]> = new Set
   "alpha",
 ]);
 
-/** Internal note. */
+/** fill elements that do not interpret typed. Used to exclude raw fill judgment. */
 const RAW_FILL_LOCAL_NAMES = ["grpFill"] as const;
 const PRESET_COLOR_HEX: Readonly<Record<string, string>> = {
   black: "000000",
@@ -78,8 +78,8 @@ const PRESET_COLOR_HEX: Readonly<Record<string, string>> = {
 };
 
 /**
- * Internal note.
- * Internal note.
+ * Color elements directly below color preserving elements (`a:solidFill` / `a:bgRef` / `a:rPr`, etc.)
+ * Convert (`a:srgbClr` / `a:schemeClr` / `a:sysClr`) to `SourceColor`.
  */
 export function parseColorElement(parent: XmlNode | undefined): SourceColor | undefined {
   if (!parent) return undefined;
@@ -274,8 +274,8 @@ function parsePresetColor(node: XmlNode): SourceColor | undefined {
 }
 
 /**
- * Internal note.
- * Internal note.
+ * Read the fill immediately below `a:spPr` / `a:ln` / `p:bgPr` etc. `a:solidFill` /
+ * Convert `a:noFill` to typed and gradient / pattern / picture fill to raw.
  */
 export function parseFill(
   parent: XmlNode | undefined,
@@ -398,7 +398,7 @@ function parsePatternFill(pattern: XmlNode): SourceFill | undefined {
   };
 }
 
-/** Internal note. */
+/** Read `a:ln`. Minimal representation of width (EMU) and solid line color only. */
 export function parseOutline(
   spPr: XmlNode | undefined,
   nextId: () => RawSidecarId,
@@ -407,7 +407,7 @@ export function parseOutline(
   return parseLine(ln, nextId);
 }
 
-/** Internal note. */
+/** Read line nodes such as `a:ln` / `a:lnL` / `a:lnR`. */
 export function parseLine(
   ln: XmlNode | undefined,
   nextId: () => RawSidecarId,
@@ -434,7 +434,7 @@ export function parseLine(
   };
 }
 
-/** Internal note. */
+/** Read `a:xfrm` and set offset / extent / rotation / flip to `SourceTransform`. */
 export function parseTransform(spPr: XmlNode | undefined): SourceTransform | undefined {
   const xfrm = getChild(spPr, "xfrm");
   if (!xfrm) return undefined;
@@ -491,7 +491,7 @@ function withTransforms(base: SourceColor, colorNode: XmlNode): SourceColor {
   return transforms.length > 0 ? { ...base, transforms } : base;
 }
 
-/** Internal note. */
+/** Extract numeric attributes. Missing/non-numeric values are undefined. */
 export function numericAttr(node: XmlNode | undefined, name: string): number | undefined {
   const raw = getAttr(node, name);
   if (raw === undefined) return undefined;
@@ -499,7 +499,7 @@ export function numericAttr(node: XmlNode | undefined, name: string): number | u
   return Number.isFinite(value) ? value : undefined;
 }
 
-/** Internal note. */
+/** Determine OOXML boolean attribute (`1` / `0` / `true` / `false`). */
 export function isTrue(value: string | undefined): boolean {
   return value === "1" || value === "true";
 }

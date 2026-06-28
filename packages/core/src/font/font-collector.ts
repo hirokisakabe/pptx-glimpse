@@ -1,5 +1,5 @@
 /**
- * Internal note.
+ * API to collect the used font name from PPTX.
  */
 import {
   type ComputedElement,
@@ -10,9 +10,9 @@ import {
   type SourceThemeFontScheme,
 } from "@pptx-glimpse/document";
 
-/** Internal note. */
+/** Font collection results */
 export interface UsedFonts {
-  /** Internal note. */
+  /** Fonts defined in the theme */
   theme: {
     majorFont: string;
     minorFont: string;
@@ -21,7 +21,7 @@ export interface UsedFonts {
     majorFontCs: string | null;
     minorFontCs: string | null;
   };
-  /** Internal note. */
+  /** List of font names used in text runs and themes (no duplicates, sorted) */
   fonts: string[];
 }
 
@@ -34,8 +34,8 @@ const DEFAULT_THEME_FONTS: ResolvedThemeFontScheme = {
 };
 
 /**
- * Internal note.
- * Internal note.
+ * Parse PPTX and collect the font name used.
+ * Lightweight because no rendering is performed.
  */
 export function collectUsedFonts(input: Buffer | Uint8Array): UsedFonts {
   const source = readPptx(input);

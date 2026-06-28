@@ -1,9 +1,9 @@
 // OOXML theme color resolution (ECMA-376 §20.1.6)
 // Color kinds:
-//   srgbClr — sRGB direct value (e.g. "FF0000")
-//   schemeClr — theme color reference (dk1, lt1, accent1-6, hlink, folHlink)
-// Internal note.
-// Internal note.
+//   srgbClr - sRGB direct value (e.g. "FF0000")
+//   schemeClr - theme color reference (dk1, lt1, accent1-6, hlink, folHlink)
+// -> Convert key with colorMap -> Get actual color from colorScheme
+// sysClr - system color (using the last value stored with @_lastClr)
 
 import type { ResolvedColor } from "@pptx-glimpse/renderer";
 import type { ColorMap, ColorScheme, ColorSchemeKey } from "@pptx-glimpse/renderer";

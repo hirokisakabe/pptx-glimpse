@@ -2,25 +2,25 @@ import { type FontMetrics, getFontMetrics } from "../data/font-metrics.js";
 
 type CharCategory = "narrow" | "normal" | "wide";
 
-// Internal note.
-// measurement-based approximations。
+// Heuristic width ratio (vs. fontSize) in the absence of font metrics.
+// Measurement-based approximations.
 const WIDTH_RATIO: Record<CharCategory, number> = {
-  narrow: 0.3, // Internal note.
-  normal: 0.6, // Internal note.
-  wide: 1.0, // Internal note.
+  narrow: 0.3, // i, l, 1, punctuation, etc.
+  normal: 0.6, // average width of latin letters
+  wide: 1.0, // CJK characters (full-width)
 };
 
 const BOLD_FACTOR = 1.05;
 const PX_PER_PT = 96 / 72;
 // Line-height fallback for fonts without OpenType metrics (CSS default equivalent)
 const DEFAULT_LINE_HEIGHT_RATIO = 1.2;
-// Internal note.
+// ascender ratio fallback for fonts without OpenType metrics
 const DEFAULT_ASCENDER_RATIO = 1.0;
 
 /**
  * Natural font line-height ratio.
- * (ascender + |descender|) / unitsPerEm calculated as。
- * Internal note.
+ * Calculated as (ascender + |descender|) / unitsPerEm.
+ * Returns fallback value (1.2) if metric is not found.
  */
 export function getLineHeightRatio(
   fontFamily?: string | null,
@@ -33,10 +33,10 @@ export function getLineHeightRatio(
 
 /**
  * Font ascender ratio.
- * ascender / unitsPerEm calculated as。
- * Internal note.
- * the first-line baseline offsetuses this value rather than the line-height ratio。
- * Internal note.
+ * Calculated as ascender / unitsPerEm.
+ * SVG's `<text y="...">` specifies the baseline position, so
+ * the first-line baseline offset uses this value rather than the line-height ratio.
+ * Returns a fallback value (1.0) if the metric is not found.
  */
 export function getAscenderRatio(fontFamily?: string | null, fontFamilyEa?: string | null): number {
   const metrics = getFontMetrics(fontFamily) ?? getFontMetrics(fontFamilyEa);
@@ -44,13 +44,13 @@ export function getAscenderRatio(fontFamily?: string | null, fontFamilyEa?: stri
   return metrics.ascender / metrics.unitsPerEm;
 }
 
-// Internal note.
+// CJK character determination (code point range based on Unicode Standard)
 export function isCjkCodePoint(codePoint: number): boolean {
   return (
-    (codePoint >= 0x3000 && codePoint <= 0x9fff) || // Internal note.
-    (codePoint >= 0xf900 && codePoint <= 0xfaff) || // Internal note.
-    (codePoint >= 0xff01 && codePoint <= 0xff60) || // Internal note.
-    (codePoint >= 0x20000 && codePoint <= 0x2a6df) // Internal note.
+    (codePoint >= 0x3000 && codePoint <= 0x9fff) || // CJK symbols, hiragana, katakana, integrated kanji
+    (codePoint >= 0xf900 && codePoint <= 0xfaff) || // CJK compatible kanji
+    (codePoint >= 0xff01 && codePoint <= 0xff60) || // Full-width alphanumeric characters/symbols
+    (codePoint >= 0x20000 && codePoint <= 0x2a6df) // CJK Integrated Kanji Expansion B
   );
 }
 
@@ -108,9 +108,9 @@ function measureCharMetrics(
 }
 
 /**
- * Calculates estimated text width (in pixels)。
- * Internal note.
- * Internal note.
+ * Calculates estimated text width in pixels.
+ * If fontFamily is specified and the corresponding metrics exist, calculate based on metrics.
+ * Otherwise, it falls back to a heuristic (fixed proportions by character category).
  */
 export function measureTextWidth(
   text: string,

@@ -1,6 +1,6 @@
 /**
- * Internal note.
- * Internal note.
+ * Keep the theme's script-based font (Japan) at the module level.
+ * Used as a fallback when rendering CJK text.
  */
 
 let jpanMajorFont: string | null = null;
@@ -17,8 +17,8 @@ export function resetScriptFonts(): void {
 }
 
 /**
- * Internal note.
- * Internal note.
+ * Returns the Japan font for fallback for CJK text.
+ * If major/minor distinction is not necessary, major takes precedence.
  */
 export function getJpanFallbackFont(): string | null {
   return jpanMajorFont ?? jpanMinorFont;

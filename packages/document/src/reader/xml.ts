@@ -28,11 +28,11 @@ const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",
   parseAttributeValue: false,
-  // Internal note.
+  // Retain prefix. See the comment at the beginning of the file for the reason.
   removeNSPrefix: false,
-  // Internal note.
-  // Internal note.
-  // Internal note.
+  // Do not trim text run (`a:t`) to preserve significant white space at the beginning and end.
+  // The PPTX part has been minified, and the blank text from the indentation between the tags is
+  // This does not cause spurious text node contamination.
   trimValues: false,
 });
 
@@ -43,7 +43,7 @@ const orderedParser = new XMLParser({
   trimValues: false,
 });
 
-/** Internal note. */
+/** Parse an XML string and return the root object. */
 export function parseXml(xml: string): XmlNode {
   return unsafeOoxmlBoundaryAssertion<XmlNode>(parser.parse(xml));
 }
@@ -66,15 +66,15 @@ export function navigateOrdered(
   return [...current];
 }
 
-/** Internal note. */
+/** Extracts the local part (`foo`) from a qualified name such as `a:foo`. */
 export function localName(key: string): string {
   const colon = key.indexOf(":");
   return colon === -1 ? key : key.slice(colon + 1);
 }
 
 /**
- * Internal note.
- * Internal note.
+ * Get child element by local name (ignoring prefix). Attribute keys (`@_`) are not applicable.
+ * If there are multiple elements with the same name, the first match is returned.
  */
 export function getChild(node: XmlNode | undefined, name: string): XmlNode | undefined {
   if (!node) return undefined;
@@ -91,9 +91,9 @@ export function getChild(node: XmlNode | undefined, name: string): XmlNode | und
 }
 
 /**
- * Internal note.
- * Internal note.
- * Internal note.
+ * Determine whether a child element exists using local name. An empty element (`<a:noFill/>`) has a value of
+ * Since it is an empty string and falsy, its existence cannot be determined by the return value of `getChild`. existence
+ * Use this to detect marker elements that have meaning in themselves.
  */
 export function hasChild(node: XmlNode | undefined, name: string): boolean {
   if (!node) return false;
@@ -104,7 +104,7 @@ export function hasChild(node: XmlNode | undefined, name: string): boolean {
   return false;
 }
 
-/** Internal note. */
+/** Get child elements by local name and always return them as an array. */
 export function getChildArray(node: XmlNode | undefined, name: string): XmlNode[] {
   if (!node) return [];
   for (const key of Object.keys(node)) {
@@ -118,16 +118,16 @@ export function getChildArray(node: XmlNode | undefined, name: string): XmlNode[
   return [];
 }
 
-/** Internal note. */
+/** Get an attribute without namespace (`@_<name>`). */
 export function getAttr(node: XmlNode | undefined, name: string): string | undefined {
   if (!node) return undefined;
   return scalarToString(node[`@_${name}`]);
 }
 
 /**
- * Internal note.
- * Internal note.
- * Internal note.
+ * Get namespaced attribute (`@_<prefix>:<localName>`). `p:sldId`
+ * To extract relationship references as distinct from plain `id`, such as `r:id`.
+ * use. Regardless of the prefix, returns the first attribute that matches the local part.
  */
 export function getNamespacedAttr(
   node: XmlNode | undefined,
@@ -147,8 +147,8 @@ export function getNamespacedAttr(
 }
 
 /**
- * Internal note.
- * Internal note.
+ * Get the text content of the child element by local name. Like `<a:t>foo</a:t>`
+ * It corresponds to text nodes, `#text` elements with attributes, and empty elements.
  */
 export function getChildText(node: XmlNode | undefined, name: string): string | undefined {
   if (!node) return undefined;
@@ -168,8 +168,8 @@ export function getChildText(node: XmlNode | undefined, name: string): string | 
 }
 
 /**
- * Internal note.
- * Internal note.
+ * Return all attributes of the element as a record of `{ name: value }` (remove the `@_` prefix).
+ * Used to store an entire attribute set like the logical-name mapping of `p:clrMap`.
  */
 export function getAttrs(node: XmlNode | undefined): Record<string, string> {
   const result: Record<string, string> = {};
@@ -182,7 +182,7 @@ export function getAttrs(node: XmlNode | undefined): Record<string, string> {
   return result;
 }
 
-/** Internal note. */
+/** Convert attribute value (string/number/boolean) into a string. object etc. are undefined. */
 function scalarToString(value: unknown): string | undefined {
   if (typeof value === "string") return value;
   if (typeof value === "number" || typeof value === "boolean") return String(value);

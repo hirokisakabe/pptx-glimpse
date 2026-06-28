@@ -1,5 +1,5 @@
 // OOXML unit system (ECMA-376 §20.1.2.1)
-// Internal note.
+// EMU (English Metric Units) is a coordinate unit within OOXML.
 // 16:9 slide = 9,144,000 × 5,143,500 EMU = 960 × 540 px (96 DPI)
 
 /** 1 inch = 914,400 EMU */

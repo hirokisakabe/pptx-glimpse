@@ -26,7 +26,7 @@ import {
 } from "../index.js";
 
 describe("createComputedView", () => {
-  it("covers create-computed-view behavior 1", () => {
+  it("Reflect slide size / order / relationships in computed view", () => {
     const source = buildSource();
     const computed = createComputedView(source);
 
@@ -51,7 +51,7 @@ describe("createComputedView", () => {
     expect(image?.media?.bytes).toEqual(new Uint8Array([1, 2, 3]));
   });
 
-  it("covers create-computed-view behavior 2", () => {
+  it("Resolve chart/SmartArt relationships and source XML parts", () => {
     const source = buildSourceWithChartAndSmartArt();
     const slide = getSlide(createComputedView(source).slides, 0);
     const chart = slide.elements.find((element) => element.kind === "chart");
@@ -104,7 +104,7 @@ describe("createComputedView", () => {
     });
   });
 
-  it("covers create-computed-view behavior 3", () => {
+  it("If there is no shape tree for SmartArt diagram drawing, leave provenance in computed diagnostic", () => {
     const source = buildSourceWithChartAndSmartArt({
       smartArtDrawingXml: `<dsp:drawing xmlns:dsp="http://schemas.microsoft.com/office/drawing/2008/diagram"/>`,
     });
@@ -124,7 +124,7 @@ describe("createComputedView", () => {
     ]);
   });
 
-  it("covers create-computed-view behavior 4", () => {
+  it("Resolve chart XML part even with Strict OOXML chart relationship type", () => {
     const source = buildSourceWithChartAndSmartArt({
       chartRelationshipType: "http://purl.oclc.org/ooxml/officeDocument/relationships/chart",
     });
@@ -139,7 +139,7 @@ describe("createComputedView", () => {
     expect(chart.chartXml).toContain("<c:barChart");
   });
 
-  it("covers create-computed-view behavior 5", () => {
+  it("Parse chart XML as document computed chart data", () => {
     const source = buildSourceWithChartAndSmartArt({ chartXml: chartDataXml() });
     const slide = getSlide(createComputedView(source).slides, 0);
     const chart = slide.elements.find((element) => element.kind === "chart");
@@ -162,7 +162,7 @@ describe("createComputedView", () => {
     });
   });
 
-  it("covers create-computed-view behavior 6", () => {
+  it("Reflect literal cache chart values/categories to computed chart data", () => {
     const source = buildSourceWithChartAndSmartArt({ chartXml: chartLiteralDataXml() });
     const slide = getSlide(createComputedView(source).slides, 0);
     const chart = slide.elements.find((element) => element.kind === "chart");
@@ -183,11 +183,11 @@ describe("createComputedView", () => {
     });
   });
 
-  it("covers create-computed-view behavior 7", () => {
+  it("Resolve theme color resolution and background fallback", () => {
     const computed = createComputedView(buildSource());
     const slide = getSlide(computed.slides, 0);
 
-    // Test note.
+    // Because layout clrMapOvr replaces accent1 -> accent2, it resolves to theme accent2.
     expect(slide.colorMap.accent1).toBe("accent2");
     expect(slide.background?.kind).toBe("fill");
     expect(slide.background?.sourceLayer).toBe("master");
@@ -223,7 +223,7 @@ describe("createComputedView", () => {
     );
   });
 
-  it("covers create-computed-view behavior 8", () => {
+  it("Resolving placeholder matching and basic text style inheritance", () => {
     const computed = createComputedView(buildSource());
     const slideTitle = findShape(getSlide(computed.slides, 0).elements, "Slide title");
 
@@ -251,7 +251,7 @@ describe("createComputedView", () => {
     });
   });
 
-  it("covers create-computed-view behavior 9", () => {
+  it("Resolve theme font token and text body autofit properties", () => {
     const source = withSlide2Shapes(buildSource(), [
       shape("Theme fonts", {
         transform: transform(20, 21, 22, 23),
@@ -303,7 +303,7 @@ describe("createComputedView", () => {
     });
   });
 
-  it("covers create-computed-view behavior 10", () => {
+  it("Reset the scale value of inherited normAutofit with local sp/no autofit", () => {
     const source = buildSource();
     const sourceWithAutofitPlaceholders: PptxSourceModel = {
       ...source,
@@ -370,7 +370,7 @@ describe("createComputedView", () => {
     });
   });
 
-  it("covers create-computed-view behavior 11", () => {
+  it("Resolve table cell fill / text color / style default border", () => {
     const computed = createComputedView(buildSource());
     const table = findTable(getSlide(computed.slides, 0).elements, "Metrics table");
     const [cell] = table.table.rows[0].cells;
@@ -408,7 +408,7 @@ describe("createComputedView", () => {
     });
   });
 
-  it("covers create-computed-view behavior 12", () => {
+  it("Resolve complex fill and shape style references to computed fill/outline", () => {
     const source = withSlide2Shapes(buildSource(), [
       shape("Gradient fill", {
         transform: transform(30, 31, 32, 33),
@@ -541,7 +541,7 @@ describe("createComputedView", () => {
     });
   });
 
-  it("covers create-computed-view behavior 13", () => {
+  it("Resolve direct shape effects and image blip effects to computed view", () => {
     const source = withSlide2Shapes(buildSource(), [
       shape("Direct effect", {
         transform: transform(70, 71, 72, 73),
@@ -628,7 +628,7 @@ describe("createComputedView", () => {
     });
   });
 
-  it("covers create-computed-view behavior 14", () => {
+  it("inline table borders takes precedence over table style default border", () => {
     const table = findTable(
       getSlide(createComputedView(buildSource()).slides, 0).elements,
       "Inline table",
@@ -642,7 +642,7 @@ describe("createComputedView", () => {
     expect(cell.borders?.top).toBeUndefined();
   });
 
-  it("covers create-computed-view behavior 15", () => {
+  it("Resolve showMasterSp visibility and effective element ordering", () => {
     const computed = createComputedView(buildSource());
 
     expect(elementNames(getSlide(computed.slides, 0).elements)).toEqual([
@@ -655,7 +655,7 @@ describe("createComputedView", () => {
       "Inline table",
     ]);
 
-    // Test note.
+    // Since slide1 has showMasterSp=false, master decoration is dropped.
     expect(getSlide(computed.slides, 1).showMasterShapes).toBe(false);
     expect(getSlide(computed.slides, 1).layoutShowMasterShapes).toBe(true);
     expect(elementNames(getSlide(computed.slides, 1).elements)).toEqual([
@@ -673,7 +673,7 @@ describe("createComputedView", () => {
     ]);
   });
 
-  it("covers create-computed-view behavior 16", () => {
+  it("Keep connector / group / custom geometry as computed element", () => {
     const source = buildSource();
     const slidePath = asPartPath("ppt/slides/slide2.xml");
     const extended: PptxSourceModel = {
@@ -747,7 +747,7 @@ describe("createComputedView", () => {
     });
   });
 
-  it("covers create-computed-view behavior 17", () => {
+  it("Do not in-place mutate the source model", () => {
     const source = buildSource();
     const before = structuredClone(source);
 
@@ -756,7 +756,7 @@ describe("createComputedView", () => {
     expect(source).toEqual(before);
   });
 
-  it("covers create-computed-view behavior 18", () => {
+  it("Apply target slide selection with presentation order slide number", () => {
     const computed = createComputedView(buildSource(), { slides: [2] });
 
     expect(computed.slides.map((slide) => slide.partPath)).toEqual(["ppt/slides/slide1.xml"]);

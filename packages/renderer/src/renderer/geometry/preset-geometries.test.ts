@@ -55,7 +55,7 @@ describe("getPresetGeometrySvg", () => {
       adj2: -5000,
     });
     expect(svg).toContain("<path");
-    // adj1 clamped to 50000 → r1=50, adj2 clamped to 0 → r2=0
+    // adj1 clamped to 50000 -> r1=50, adj2 clamped to 0 -> r2=0
     expect(svg).toContain("A 50 50");
     expect(svg).toContain("A 0 0");
   });

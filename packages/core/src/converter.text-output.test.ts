@@ -9,10 +9,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { convertPptxToPng, convertPptxToSvg } from "./converter.js";
 
 /**
- * Test note.
+ * Integration test for textOutput option (native <text> + embedded font output mode).
  *
- * Test note.
- * Test note.
+ * Test font (EmbedTestFont: A, B, space / BulletTestFont: C, space)
+ * Export to a temporary directory and use fontDirs + skipSystemFonts to resolve fonts independently of the environment.
  */
 
 const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -217,7 +217,7 @@ async function loadOpentype(): Promise<OpentypeTestModule> {
 }
 
 /**
- * Test note.
+ * Generates a test TTF with only glyphs of the specified character (+space).
  */
 async function createTestFontBuffer(familyName: string, letters: string[]): Promise<ArrayBuffer> {
   const opentype = await loadOpentype();
@@ -267,7 +267,7 @@ async function createTestFontBuffer(familyName: string, letters: string[]): Prom
 }
 
 /**
- * Test note.
+ * Extracts and parses the embedded font of the specified family name from @font-face in SVG.
  */
 async function parseEmbeddedFont(
   svg: string,
@@ -307,8 +307,8 @@ function convertOptions(extra?: Record<string, unknown>) {
   return { fontDirs: [fontDir], skipSystemFonts: true, ...extra } as const;
 }
 
-describe("converter.text-output.test behavior", () => {
-  it("covers converter.text-output behavior 1", async () => {
+describe("textOutput: text SVG output", () => {
+  it("Contains the <text> element and @font-face, but does not include the glyph outline path", async () => {
     const pptx = await createTestPptx("ABA AB");
     const results = await convertPptxToSvg(pptx, convertOptions({ textOutput: "text" }));
     const svg = results[0].svg;
@@ -317,13 +317,13 @@ describe("converter.text-output.test behavior", () => {
     expect(svg).toContain("@font-face");
     expect(svg).toContain('font-family:"EmbedTestFont"');
     expect(svg).toContain("data:font/otf;base64,");
-    // Test note.
+    // Contains the text content as is (not outlined)
     expect(svg).toContain("ABA AB");
-    // Test note.
+    // Glyph outline path not included (shapes on slide are rect only)
     expect(svg).not.toContain("<path");
   });
 
-  it("covers converter.text-output behavior 2", async () => {
+  it("If there are only characters that are not included in the font, do not embed @font-face and output only <text>", async () => {
     const pptx = await createTestPptx("XYZ");
     const results = await convertPptxToSvg(pptx, convertOptions({ textOutput: "text" }));
     const svg = results[0].svg;
@@ -333,30 +333,30 @@ describe("converter.text-output.test behavior", () => {
     expect(svg).not.toContain("@font-face");
   });
 
-  it("covers converter.text-output behavior 3", async () => {
-    // Test note.
+  it("embeds bullet glyphs using the text run font when buFont is omitted", async () => {
+    // buChar="B" / no buFont. Bullet B is drawn and embedded in the run font (EmbedTestFont).
     const pptx = await createTestPptx("A", { pPr: '<a:pPr><a:buChar char="B"/></a:pPr>' });
     const results = await convertPptxToSvg(pptx, convertOptions({ textOutput: "text" }));
     const svg = results[0].svg;
 
     expect(svg).toContain("@font-face");
-    // Test note.
+    // Bullet tspan's font-family includes run's font
     expect(svg).toMatch(/<tspan[^>]*text-anchor="start"[^>]*font-family="EmbedTestFont/);
 
-    // Test note.
+    // Embedded subset contains bullet B glyph
     const embedded = await parseEmbeddedFont(svg, "EmbedTestFont");
     expect(embedded.charToGlyph("B").index).toBeGreaterThan(0);
     expect(embedded.charToGlyph("A").index).toBeGreaterThan(0);
   });
 
-  it("covers converter.text-output behavior 4", async () => {
+  it("embeds bullet glyphs using the specified buFont", async () => {
     const pptx = await createTestPptx("A", {
       pPr: '<a:pPr><a:buFont typeface="BulletTestFont"/><a:buChar char="C"/></a:pPr>',
     });
     const results = await convertPptxToSvg(pptx, convertOptions({ textOutput: "text" }));
     const svg = results[0].svg;
 
-    // Test note.
+    // Two @font-faces are embedded, one for runs and one for bullet points.
     expect(svg).toContain('font-family:"EmbedTestFont"');
     expect(svg).toContain('font-family:"BulletTestFont"');
     expect(svg).toMatch(/<tspan[^>]*font-family="BulletTestFont/);
@@ -365,7 +365,7 @@ describe("converter.text-output.test behavior", () => {
     expect(bulletFont.charToGlyph("C").index).toBeGreaterThan(0);
   });
 
-  it("covers converter.text-output behavior 5", async () => {
+  it("Fonts resolved with fontMapping are embedded with PPTX font names", async () => {
     const pptx = await createTestPptx("ABA", { typeface: "MappedCorpFont" });
     const results = await convertPptxToSvg(
       pptx,
@@ -376,7 +376,7 @@ describe("converter.text-output.test behavior", () => {
     );
     const svg = results[0].svg;
 
-    // Test note.
+    // @font-face is declared with the PPTX font name referenced by tspan
     expect(svg).toContain('font-family:"MappedCorpFont"');
     expect(svg).toMatch(/<tspan[^>]*font-family="MappedCorpFont/);
 
@@ -385,8 +385,8 @@ describe("converter.text-output.test behavior", () => {
   });
 });
 
-describe("converter.text-output.test behavior", () => {
-  it("covers converter.text-output behavior 6", async () => {
+describe("textOutput: path SVG output", () => {
+  it("omits @font-face from the default path output", async () => {
     const pptx = await createTestPptx("ABA AB");
     const results = await convertPptxToSvg(pptx, convertOptions());
     const svg = results[0].svg;
@@ -396,7 +396,7 @@ describe("converter.text-output.test behavior", () => {
     expect(svg).not.toContain("@font-face");
   });
 
-  it("covers converter.text-output behavior 7", async () => {
+  it('matches the default output when textOutput: "path" is specified explicitly', async () => {
     const pptx = await createTestPptx("ABA AB");
     const defaultResults = await convertPptxToSvg(pptx, convertOptions());
     const pathResults = await convertPptxToSvg(pptx, convertOptions({ textOutput: "path" }));
@@ -405,8 +405,8 @@ describe("converter.text-output.test behavior", () => {
   });
 });
 
-describe("converter.text-output.test behavior", () => {
-  it("covers converter.text-output behavior 8", async () => {
+describe("textOutput: PNG conversion", () => {
+  it('converts PNG through path output even when textOutput: "text" is specified', async () => {
     const pptx = await createTestPptx("ABA AB");
     const results = await convertPptxToPng(pptx, convertOptions({ textOutput: "text" }));
 

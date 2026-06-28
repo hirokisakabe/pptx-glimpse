@@ -1,7 +1,7 @@
 /**
- * VRT fixture note.
+ * PPTX fixture generation script for VRT (Visual Regression Testing)
  *
- * VRT fixture note.
+ * Usage: npx tsx vrt/snapshot/create-fixtures.ts
  */
 import { mkdirSync, writeFileSync } from "fs";
 import JSZip from "jszip";
@@ -1658,7 +1658,7 @@ async function createCustomGeometryFixture(): Promise<void> {
   </p:spPr>
 </p:sp>`;
 
-  // VRT fixture note.
+  // quadBezTo: quadratic Bezier curve
   const customShape3 = `<p:sp>
   <p:nvSpPr><p:cNvPr id="4" name="QuadBez"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
   <p:spPr>
@@ -1682,7 +1682,7 @@ async function createCustomGeometryFixture(): Promise<void> {
   </p:spPr>
 </p:sp>`;
 
-  // VRT fixture note.
+  // arcTo: Elliptical arc (semicircle)
   const customShape4 = `<p:sp>
   <p:nvSpPr><p:cNvPr id="5" name="ArcShape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
   <p:spPr>
@@ -1703,7 +1703,7 @@ async function createCustomGeometryFixture(): Promise<void> {
   </p:spPr>
 </p:sp>`;
 
-  // VRT fixture note.
+  // adjustValues: dynamic coordinates with guide values
   const customShape5 = `<p:sp>
   <p:nvSpPr><p:cNvPr id="6" name="AdjustShape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
   <p:spPr>
@@ -2367,7 +2367,7 @@ async function createArrowsStarsFixture(): Promise<void> {
     let id = 2;
     const margin = 200000;
     const shapeW = SLIDE_W - margin * 2;
-    const shapeH = 650000; // ~68px — much shorter than wide
+    const shapeH = 650000; // ~68px - much shorter than wide
     const shapes = wideArrowPresets.map((preset, i) => {
       const y = margin + i * (shapeH + margin);
       return shapeXml(id++, preset, {
@@ -3471,7 +3471,7 @@ async function createEffectsFixture(): Promise<void> {
   let id = 2;
   const shapes: string[] = [];
 
-  // VRT fixture note.
+  // Outer shadow (downward)
   const pos0 = gridPosition(0, 0, 3, 2);
   shapes.push(
     shapeXml(id++, "OuterShadow", {
@@ -3485,7 +3485,7 @@ async function createEffectsFixture(): Promise<void> {
     }),
   );
 
-  // VRT fixture note.
+  // Outer shadow (bottom right, larger)
   const pos1 = gridPosition(1, 0, 3, 2);
   shapes.push(
     shapeXml(id++, "OuterShadow-Large", {
@@ -3879,7 +3879,7 @@ async function createSmartArtFixture(): Promise<void> {
   const diagramW = SLIDE_W - margin * 2;
   const diagramH = SLIDE_H - margin * 2;
 
-  // VRT fixture note.
+  // SmartArt drawing XML: process type with 3 rounded rectangles and 2 arrows placed horizontally
   const drawingXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <dsp:drawing xmlns:dsp="http://schemas.microsoft.com/office/drawing/2008/diagram"
              xmlns:a="${NS.a}">
@@ -3971,7 +3971,7 @@ async function createSmartArtFixture(): Promise<void> {
   <Relationship Id="rId1" Type="http://schemas.microsoft.com/office/2007/relationships/diagramDrawing" Target="drawing1.xml"/>
 </Relationships>`;
 
-  // VRT fixture note.
+  // SmartArt graphicFrame wrapped in mc:AlternateContent
   const smartArtXml = `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
                                             xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram">
     <mc:Choice Requires="dgm">
@@ -4059,7 +4059,7 @@ async function createThemeFontFixture(): Promise<void> {
   </a:themeElements>
 </a:theme>`;
 
-  // VRT fixture note.
+  // Text using theme font references
   const shapes = [
     // +mj-lt (major latin)
     shapeXml(2, "MajorLatin", {
@@ -4193,7 +4193,7 @@ async function createThemeFontFixture(): Promise<void> {
 // Text Style Inheritance
 // ============================================================
 async function createTextStyleInheritanceFixture(): Promise<void> {
-  // VRT fixture note.
+  // Slide master: txStyles (titleStyle: 36pt+white, bodyStyle: 24pt+white, otherStyle: 14pt+white)
   const customSlideMaster = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sldMaster xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}">
   <p:cSld>
@@ -4218,7 +4218,7 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
   </p:txStyles>
 </p:sldMaster>`;
 
-  // VRT fixture note.
+  // defaultTextStyle: 12pt to defRPr of lvl1pPr
   const defaultTextStyleXml = `<a:lvl1pPr><a:defRPr sz="1200"/></a:lvl1pPr>`;
 
   const slideRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -4226,7 +4226,7 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
   <Relationship Id="rId1" Type="${REL_TYPES.slideLayout}" Target="../slideLayouts/slideLayout1.xml"/>
 </Relationships>`;
 
-  // VRT fixture note.
+  // Shape 1: title placeholder (no fontSize -> 36pt from txStyles.titleStyle)
   const shape1 = `<p:sp>
   <p:nvSpPr><p:cNvPr id="2" name="Title"/><p:cNvSpPr/><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>
   <p:spPr>
@@ -4239,7 +4239,7 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
   </p:txBody>
 </p:sp>`;
 
-  // VRT fixture note.
+  // Shape 2: body placeholder (no fontSize -> 24pt from txStyles.bodyStyle)
   const shape2 = `<p:sp>
   <p:nvSpPr><p:cNvPr id="3" name="Body"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="1"/></p:nvPr></p:nvSpPr>
   <p:spPr>
@@ -4252,7 +4252,7 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
   </p:txBody>
 </p:sp>`;
 
-  // VRT fixture note.
+  // Shape 3: Normal shape (no fontSize -> 14pt from txStyles.otherStyle)
   const shape3 = `<p:sp>
   <p:nvSpPr><p:cNvPr id="4" name="Other"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
   <p:spPr>
@@ -4266,7 +4266,7 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
   </p:txBody>
 </p:sp>`;
 
-  // VRT fixture note.
+  // Shape 4: Specify fontSize directly in rPr with title placeholder (20pt, takes precedence over txStyles)
   const shape4 = `<p:sp>
   <p:nvSpPr><p:cNvPr id="5" name="Title Direct"/><p:cNvSpPr/><p:nvPr><p:ph type="title"/></p:nvPr></p:nvSpPr>
   <p:spPr>
@@ -4279,7 +4279,7 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
   </p:txBody>
 </p:sp>`;
 
-  // VRT fixture note.
+  // Shape 5: body level 1 (no fontSize -> 20pt from txStyles.bodyStyle.lvl2pPr)
   const shape5 = `<p:sp>
   <p:nvSpPr><p:cNvPr id="6" name="Body Level2"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="2"/></p:nvPr></p:nvSpPr>
   <p:spPr>
@@ -4293,7 +4293,7 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
   </p:txBody>
 </p:sp>`;
 
-  // VRT fixture note.
+  // Shape 6: Specify color directly to rPr with body placeholder (red, takes precedence over white of txStyles)
   const shape6 = `<p:sp>
   <p:nvSpPr><p:cNvPr id="7" name="Body Direct Color"/><p:cNvSpPr/><p:nvPr><p:ph type="body" idx="3"/></p:nvPr></p:nvSpPr>
   <p:spPr>
@@ -4333,7 +4333,7 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
 
 // --- Z-order mixed (cross-type element ordering) ---
 async function createZOrderMixedFixture(): Promise<void> {
-  // VRT fixture note.
+  // Generate image (blue gradient)
   const imgSize = 100;
   const pixels = Buffer.alloc(imgSize * imgSize * 4);
   for (let y = 0; y < imgSize; y++) {
@@ -4351,10 +4351,10 @@ async function createZOrderMixedFixture(): Promise<void> {
     .png()
     .toBuffer();
 
-  // VRT fixture note.
-  // VRT fixture note.
+  // Slide 1: sp -> pic -> sp (image is sandwiched between two shapes)
+  // Correct Z-order: Red rectangle (backmost) -> Image (middle) -> Green rectangle (frontmost)
   const spTreeContent1 = [
-    // VRT fixture note.
+    // 1. Red rectangle (backmost, Z=1)
     shapeXml(2, "back-rect", {
       preset: "rect",
       x: 500000,
@@ -4371,7 +4371,7 @@ async function createZOrderMixedFixture(): Promise<void> {
         align: "l",
       }),
     }),
-    // VRT fixture note.
+    // 2. Image (middle, Z=2)
     `<p:pic>
   <p:nvPicPr><p:cNvPr id="3" name="Image 1"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>
   <p:blipFill>
@@ -4383,7 +4383,7 @@ async function createZOrderMixedFixture(): Promise<void> {
     <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
   </p:spPr>
 </p:pic>`,
-    // VRT fixture note.
+    // 3. Green rectangle (frontmost, Z=3)
     shapeXml(4, "front-rect", {
       preset: "roundRect",
       x: 3000000,
@@ -4405,9 +4405,9 @@ async function createZOrderMixedFixture(): Promise<void> {
     { id: "rId2", type: REL_TYPES.image, target: "../media/image1.png" },
   ]);
 
-  // VRT fixture note.
+  // Slide 2: cxnSp -> sp -> pic -> sp (also includes connectors)
   const spTreeContent2 = [
-    // VRT fixture note.
+    // 1. Connector (backmost)
     `<p:cxnSp>
   <p:nvCxnSpPr><p:cNvPr id="2" name="Connector 1"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
   <p:spPr>
@@ -4416,7 +4416,7 @@ async function createZOrderMixedFixture(): Promise<void> {
     <a:ln w="50800"><a:solidFill><a:srgbClr val="FF6600"/></a:solidFill></a:ln>
   </p:spPr>
 </p:cxnSp>`,
-    // VRT fixture note.
+    // 2. Yellow rectangle
     shapeXml(3, "yellow-rect", {
       preset: "rect",
       x: 1000000,
@@ -4432,7 +4432,7 @@ async function createZOrderMixedFixture(): Promise<void> {
         anchor: "t",
       }),
     }),
-    // VRT fixture note.
+    // 3. Image
     `<p:pic>
   <p:nvPicPr><p:cNvPr id="4" name="Image 2"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>
   <p:blipFill>
@@ -4444,7 +4444,7 @@ async function createZOrderMixedFixture(): Promise<void> {
     <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
   </p:spPr>
 </p:pic>`,
-    // VRT fixture note.
+    // 4. Purple rectangle (frontmost)
     shapeXml(5, "purple-rect", {
       preset: "ellipse",
       x: 5000000,
@@ -4466,9 +4466,9 @@ async function createZOrderMixedFixture(): Promise<void> {
     { id: "rId2", type: REL_TYPES.image, target: "../media/image1.png" },
   ]);
 
-  // VRT fixture note.
+  // Slide 3: All 5 element types mixed (cxnSp -> grpSp -> pic -> graphicFrame(table) -> sp)
   const spTreeContent3 = [
-    // VRT fixture note.
+    // 1. cxnSp (backmost, Z=1)
     `<p:cxnSp>
   <p:nvCxnSpPr><p:cNvPr id="10" name="Connector BG"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>
   <p:spPr>
@@ -4542,7 +4542,7 @@ async function createZOrderMixedFixture(): Promise<void> {
     </a:tr>
   </a:tbl>`,
     ),
-    // VRT fixture note.
+    // 5. sp (frontmost, Z=5)
     shapeXml(16, "front-shape", {
       preset: "ellipse",
       x: 5000000,
@@ -4736,7 +4736,7 @@ async function createPlaceholderOverlapFixture(): Promise<void> {
   const slide1 = wrapSlideXml(slideShapes1);
   const rels1 = slideRelsXml();
 
-  // Slide 2: showMasterSp="0" — master shapes should be hidden
+  // Slide 2: showMasterSp="0" - master shapes should be hidden
   const slideShapes2 = [
     shapeXml(2, "SlideOnly", {
       preset: "rect",
@@ -4948,7 +4948,7 @@ async function createTextAdvancedFixture(): Promise<void> {
   let id = 2;
   const shapes: string[] = [];
 
-  // VRT fixture note.
+  // Shape 1: Field code (slide number) - Mix of text run + field code
   const pos1 = gridPosition(0, 0, 3, 3);
   shapes.push(
     shapeXml(id++, "field-slidenum", {
@@ -5229,7 +5229,7 @@ async function createShrinkToFitFixture(): Promise<void> {
   let id = 2;
   const shapes: string[] = [];
 
-  // VRT fixture note.
+  // 1. normAutofit (without fontScale) - Case where text protrudes -> dynamic reduction
   const pos1 = gridPosition(0, 0, 3, 2);
   shapes.push(
     shapeXml(id++, "shrink-overflow", {
@@ -5256,7 +5256,7 @@ async function createShrinkToFitFixture(): Promise<void> {
     }),
   );
 
-  // VRT fixture note.
+  // 2. normAutofit (without fontScale) - case where text fits -> no scaling
   const pos2 = gridPosition(1, 0, 3, 2);
   shapes.push(
     shapeXml(id++, "shrink-fits", {
@@ -5283,7 +5283,7 @@ async function createShrinkToFitFixture(): Promise<void> {
     }),
   );
 
-  // VRT fixture note.
+  // 3. normAutofit + fontSize unspecified - reduction at default font size
   const pos3 = gridPosition(2, 0, 3, 2);
   shapes.push(
     shapeXml(id++, "shrink-default-fontsize", {
@@ -5310,7 +5310,7 @@ async function createShrinkToFitFixture(): Promise<void> {
     }),
   );
 
-  // VRT fixture note.
+  // 4. noAutofit - Leave the text as it is even if it extends
   const pos4 = gridPosition(0, 1, 3, 2);
   shapes.push(
     shapeXml(id++, "no-autofit-overflow", {
@@ -5337,7 +5337,7 @@ async function createShrinkToFitFixture(): Promise<void> {
     }),
   );
 
-  // VRT fixture note.
+  // 5. normAutofit + multiple paragraphs
   const pos5 = gridPosition(1, 1, 3, 2);
   shapes.push(
     shapeXml(id++, "shrink-multi-para", {
@@ -5382,7 +5382,7 @@ async function createShrinkToFitFixture(): Promise<void> {
     }),
   );
 
-  // VRT fixture note.
+  // 6. normAutofit + fontScale preset - cases where further dynamic scaling is required
   const pos6 = gridPosition(2, 1, 3, 2);
   shapes.push(
     shapeXml(id++, "shrink-with-fontscale", {
@@ -5419,7 +5419,7 @@ async function createSpAutofitFixture(): Promise<void> {
   let id = 2;
   const shapes: string[] = [];
 
-  // VRT fixture note.
+  // 1. spAutofit - Case where the text extends -> the shape is enlarged
   const pos1 = gridPosition(0, 0, 2, 2);
   shapes.push(
     shapeXml(id++, "sp-autofit-overflow", {
@@ -5446,7 +5446,7 @@ async function createSpAutofitFixture(): Promise<void> {
     }),
   );
 
-  // VRT fixture note.
+  // 2. spAutofit - Case where text fits -> shape remains the same
   const pos2 = gridPosition(1, 0, 2, 2);
   shapes.push(
     shapeXml(id++, "sp-autofit-fits", {
@@ -5473,7 +5473,7 @@ async function createSpAutofitFixture(): Promise<void> {
     }),
   );
 
-  // VRT fixture note.
+  // 3. spAutofit + multiple paragraphs
   const pos3 = gridPosition(0, 1, 2, 2);
   shapes.push(
     shapeXml(id++, "sp-autofit-multi-para", {
@@ -5974,7 +5974,7 @@ async function createVerticalTextFixture(): Promise<void> {
   let id = 2;
   const shapes: string[] = [];
 
-  // VRT fixture note.
+  // 1. vert="vert" (90° CW) - basic vertical writing
   const pos1 = gridPosition(0, 0, 3, 2);
   shapes.push(
     shapeXml(id++, "vert-text-90cw", {
@@ -6066,7 +6066,7 @@ async function createVerticalTextFixture(): Promise<void> {
     }),
   );
 
-  // VRT fixture note.
+  // 4. vert="vert" + anchor="ctr" (center alignment)
   const pos4 = gridPosition(0, 1, 3, 2);
   shapes.push(
     shapeXml(id++, "vert-text-center", {
@@ -6093,7 +6093,7 @@ async function createVerticalTextFixture(): Promise<void> {
     }),
   );
 
-  // VRT fixture note.
+  // 5. vert="vert" + multiple line text wrapping
   const pos5 = gridPosition(1, 1, 3, 2);
   shapes.push(
     shapeXml(id++, "vert-text-wrap", {
@@ -6120,7 +6120,7 @@ async function createVerticalTextFixture(): Promise<void> {
     }),
   );
 
-  // VRT fixture note.
+  // 6. vert="vert" + anchor="b" (bottom alignment)
   const pos6 = gridPosition(2, 1, 3, 2);
   shapes.push(
     shapeXml(id++, "vert-text-bottom", {
@@ -6159,7 +6159,7 @@ async function createCharts3dFallbackFixture(): Promise<void> {
   const slides: SlideData[] = [];
   const margin = 300000;
 
-  // Slide 1: bar3DChart → bar fallback
+  // Slide 1: bar3DChart -> bar fallback
   const bar3D = chartXml("bar3DChart", {
     barDir: "col",
     title: "3D Bar (fallback)",
@@ -6184,7 +6184,7 @@ async function createCharts3dFallbackFixture(): Promise<void> {
     rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart1.xml" }]),
   });
 
-  // Slide 2: pie3DChart → pie fallback
+  // Slide 2: pie3DChart -> pie fallback
   const pie3D = chartXml("pie3DChart", {
     title: "3D Pie (fallback)",
     legendPos: "r",
@@ -6205,7 +6205,7 @@ async function createCharts3dFallbackFixture(): Promise<void> {
     rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart2.xml" }]),
   });
 
-  // Slide 3: line3DChart → line fallback
+  // Slide 3: line3DChart -> line fallback
   const line3D = chartXml("line3DChart", {
     title: "3D Line (fallback)",
     legendPos: "b",
@@ -6232,7 +6232,7 @@ async function createCharts3dFallbackFixture(): Promise<void> {
     rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart3.xml" }]),
   });
 
-  // Slide 4: area3DChart → area fallback
+  // Slide 4: area3DChart -> area fallback
   const area3D = chartXml("area3DChart", {
     title: "3D Area (fallback)",
     legendPos: "b",
@@ -6745,7 +6745,7 @@ async function createTableStyleBorderFixture(): Promise<void> {
 }
 
 async function createPlaceholderGeometryInheritanceFixture(): Promise<void> {
-  // VRT fixture note.
+  // Define placeholder position and size in slide layout
   const layoutXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sldLayout xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}" type="obj">
   <p:cSld>
@@ -6792,7 +6792,7 @@ async function createPlaceholderGeometryInheritanceFixture(): Promise<void> {
   </p:cSld>
 </p:sldLayout>`;
 
-  // VRT fixture note.
+  // Slide placeholder shapes have empty spPr (inherited from layout)
   const slide1 = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}">
   <p:cSld>
@@ -6839,11 +6839,11 @@ async function createPlaceholderGeometryInheritanceFixture(): Promise<void> {
 }
 
 // --- Empty slide placeholders ---
-// VRT fixture note.
-// VRT fixture note.
-// VRT fixture note.
+// In the template PPTX, the placeholder where the user did not enter any text is
+// The slide remains empty. PowerPoint hides this completely.
+// Confirm that pptx-glimpse has the same behavior.
 async function createPlaceholderEmptyOnSlideFixture(): Promise<void> {
-  // VRT fixture note.
+  // The layout side is a normal placeholder definition with geometry (inherited on the slide side).
   const layoutXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sldLayout xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}" type="obj">
   <p:cSld>
@@ -6886,8 +6886,8 @@ async function createPlaceholderEmptyOnSlideFixture(): Promise<void> {
   </p:cSld>
 </p:sldLayout>`;
 
-  // VRT fixture note.
-  // VRT fixture note.
+  // Slide 1: Title has text entered, body remains empty (= should be hidden).
+  // In addition, place one decorative non-placeholder shape and make sure it is drawn.
   const slide1Xml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}">
   <p:cSld>
@@ -7001,7 +7001,7 @@ const FIXTURE_CREATORS: Record<string, () => Promise<void>> = {
 };
 
 // --- Interleaved bullet pPr ---
-// VRT fixture note.
+// Non-standard XML with multiple <a:pPr> and <a:r> interleaved within a single <a:p>
 async function createInterleavedBulletPprFixture(): Promise<void> {
   const bulletItems = [
     { label: "Product", desc: "AI dashboard beta release" },
@@ -7010,7 +7010,7 @@ async function createInterleavedBulletPprFixture(): Promise<void> {
     { label: "Partners", desc: "3 new contracts" },
   ];
 
-  // VRT fixture note.
+  // Alternating pPr/r pattern: buChar pPr + bold r + buNone pPr + normal r (with \n)
   const interleavedRuns = bulletItems
     .map((item, i) => {
       const trailingNewline = i < bulletItems.length - 1 ? "\n" : "";

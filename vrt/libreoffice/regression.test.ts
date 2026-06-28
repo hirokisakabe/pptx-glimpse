@@ -10,15 +10,17 @@ const SNAPSHOT_DIR = join(__dirname, "snapshots");
 const DIFF_DIR = join(__dirname, "diffs");
 const FIXTURE_DIR = join(__dirname, "fixtures");
 
-// Test note.
-// Test note.
+// Comparing LibreOffice and pptx-glimpse requires high tolerance
+// Allow for differences in font rendering and anti-aliasing
 const PIXEL_THRESHOLD = 0.3;
-// Test note.
+// Fallback for new cases. Set individual tolerances after checking measured CI values.
 const MISMATCH_TOLERANCE = 0.02;
 
-// Test note.
-// Test note.
-// Test note.
+// tolerance: actual mismatch rate on CI x 1.2, rounded up to the nearest 0.1pt
+// with a 0.3% lower bound.
+// Actual measured values are printed in [lo-vrt] logs during test execution.
+// If LibreOffice or CI runner font updates change the measured values, recalibrate
+// with the same policy.
 const LO_VRT_CASES = [
   { name: "basic-shapes", fixture: "basic-shapes.pptx", tolerance: 0.008 },
   { name: "text-formatting", fixture: "text-formatting.pptx", tolerance: 0.018 },
@@ -48,7 +50,7 @@ const LO_VRT_CASES = [
   { name: "hyperlinks", fixture: "hyperlinks.pptx", tolerance: 0.009 },
 ] as const;
 
-// Test note.
+// Run only if both fixture and snapshot exist
 const hasFixtures =
   existsSync(FIXTURE_DIR) && LO_VRT_CASES.some((c) => existsSync(join(FIXTURE_DIR, c.fixture)));
 const hasSnapshots =
@@ -61,7 +63,7 @@ describeOrSkip("LibreOffice Visual Regression Tests", { timeout: 60000 }, () => 
   for (const testCase of LO_VRT_CASES) {
     const { name, fixture } = testCase;
     const tolerance = "tolerance" in testCase ? testCase.tolerance : MISMATCH_TOLERANCE;
-    // Test note.
+    // Skip cases where fixtures or snapshots do not exist
     const fixturePath = join(FIXTURE_DIR, fixture);
     const snapshotPath = join(SNAPSHOT_DIR, `${name}-slide1.png`);
     const itOrSkip = existsSync(fixturePath) && existsSync(snapshotPath) ? it : it.skip;
@@ -80,7 +82,7 @@ describeOrSkip("LibreOffice Visual Regression Tests", { timeout: 60000 }, () => 
             resizeRef: true,
           });
 
-          // Test note.
+          // Always output measured values for tolerance adjustment.
           console.log(
             `[lo-vrt] ${name} slide${result.slideNumber}: ` +
               `${(comparison.mismatchPercentage * 100).toFixed(3)}% ` +

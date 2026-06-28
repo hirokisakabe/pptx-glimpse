@@ -21,10 +21,10 @@ interface Token {
 const DEFAULT_FONT_SIZE = 18;
 
 /**
- * Internal note.
- * Internal note.
- * Internal note.
- * Internal note.
+ * Wrapping tolerance to absorb approximation errors in font metrics.
+ * Specify as a ratio to availableWidth.
+ * Width overestimation by alternative font metrics (e.g. Meiryo -> Noto Sans JP)
+ * Alleviates the problem where the last character of text that would normally fit on one line is sent to the next line.
  */
 const WRAP_TOLERANCE_RATIO = 0.02;
 
@@ -42,10 +42,10 @@ function isWhitespace(codePoint: number): boolean {
 }
 
 /**
- * Internal note.
- * Internal note.
- * Internal note.
- * Internal note.
+ * Split text into breakable units.
+ * - Blank: Individual token (breakable)
+ * - CJK characters: one character at a time (breakable)
+ * - Sequence of Latin characters: 1 word (breakable except at the beginning)
  */
 function splitTextIntoFragments(text: string): { fragment: string; breakable: boolean }[] {
   const fragments: { fragment: string; breakable: boolean }[] = [];
@@ -70,12 +70,12 @@ function splitTextIntoFragments(text: string): { fragment: string; breakable: bo
         });
         current = "";
       }
-      // Internal note.
+      // Each CJK character is an independent token.
       fragments.push({ fragment: char, breakable: true });
       currentType = "cjk";
       current = "";
     } else {
-      // Internal note.
+      // latin letters
       if (current && currentType !== "latin") {
         fragments.push({ fragment: current, breakable: currentType === "space" });
         current = "";
@@ -106,12 +106,12 @@ function tokenizeRuns(
   for (const run of runs) {
     if (run.text.length === 0) continue;
 
-    // Internal note.
+    // Runs containing \n are split and forced newline tokens are inserted.
     if (run.text.includes("\n")) {
       const parts = run.text.split("\n");
       for (let pi = 0; pi < parts.length; pi++) {
         if (pi > 0) {
-          // Internal note.
+          // forced line break token
           tokens.push({
             text: "",
             properties: run.properties,
@@ -187,7 +187,7 @@ function isSpaceOnly(text: string): boolean {
 }
 
 /**
- * Internal note.
+ * Forcibly split long tokens by character
  */
 function splitTokenByChars(
   token: Token,
@@ -287,7 +287,7 @@ function layoutTokensIntoLines(
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i];
 
-    // Internal note.
+    // Force newline token: immediately end the line
     if (token.forceBreak) {
       const segments = trimTrailingSpaces(mergeSegments(currentLine));
       lines.push({ segments: segments.length > 0 ? segments : [] });
@@ -300,9 +300,9 @@ function layoutTokensIntoLines(
       currentLine.push(token);
       currentWidth += token.width;
     } else if (currentLine.length === 0) {
-      // Internal note.
+      // The line is empty and doesn't even contain a single token -> Forced division by character
       if (isSpaceOnly(token.text)) {
-        // Internal note.
+        // Skip blank tokens
         continue;
       }
       const splitLines = splitTokenByChars(token, availableWidth, defaultFontSize, fontScale);
@@ -311,18 +311,18 @@ function layoutTokensIntoLines(
           const segments = trimTrailingSpaces(mergeSegments(splitLines[j]));
           if (segments.length > 0) lines.push({ segments });
         } else {
-          // Internal note.
+          // the last chunk becomes the beginning of the next line
           currentLine = splitLines[j];
           currentWidth = splitLines[j].reduce((sum, t) => sum + t.width, 0);
         }
       }
     } else if (token.breakable) {
-      // Internal note.
+      // Line breaks at possible line breaks
       const segments = trimTrailingSpaces(mergeSegments(currentLine));
       if (segments.length > 0) lines.push({ segments });
 
       if (isSpaceOnly(token.text)) {
-        // Internal note.
+        // Skip leading spaces
         currentLine = [];
         currentWidth = 0;
       } else {
@@ -330,7 +330,7 @@ function layoutTokensIntoLines(
         currentWidth = token.width;
       }
     } else {
-      // Internal note.
+      // Not breakable but does not fit on the line -> Break the line in front and move this token to the next line
       const segments = trimTrailingSpaces(mergeSegments(currentLine));
       if (segments.length > 0) lines.push({ segments });
       currentLine = [token];
@@ -347,7 +347,7 @@ function layoutTokensIntoLines(
 }
 
 /**
- * Internal note.
+ * Convert a run of paragraphs to a wrapped line array
  */
 export function wrapParagraph(
   paragraph: Paragraph,

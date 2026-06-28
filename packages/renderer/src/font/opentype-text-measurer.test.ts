@@ -22,7 +22,7 @@ function createMockFont(opts: {
 }
 
 describe("OpentypeTextMeasurer", () => {
-  it("covers opentype-text-measurer behavior 1", () => {
+  it("Measure width using registered font", () => {
     const font = createMockFont({
       unitsPerEm: 1000,
       ascender: 800,
@@ -36,7 +36,7 @@ describe("OpentypeTextMeasurer", () => {
     expect(width).toBeCloseTo(expected, 1);
   });
 
-  it("covers opentype-text-measurer behavior 2", () => {
+  it("BOLD applies BOLD_FACTOR", () => {
     const font = createMockFont({
       unitsPerEm: 1000,
       ascender: 800,
@@ -50,7 +50,7 @@ describe("OpentypeTextMeasurer", () => {
     expect(boldWidth).toBeCloseTo(normalWidth * 1.05, 1);
   });
 
-  it("covers opentype-text-measurer behavior 3", () => {
+  it("Use real glyph width if bold font (${fontFamily} Bold) is present", () => {
     const regularFont = createMockFont({
       unitsPerEm: 1000,
       ascender: 800,
@@ -72,12 +72,12 @@ describe("OpentypeTextMeasurer", () => {
     const boldWidth = measurer.measureTextWidth("A", 18, true, "TestFont");
     const expectedBoldWidth = (720 / 1000) * 18 * pxPerPt;
     expect(boldWidth).toBeCloseTo(expectedBoldWidth, 1);
-    // Test note.
+    // Check that the width is different from the width when BOLD_FACTOR is applied.
     const expectedWithFactor = (600 / 1000) * 18 * pxPerPt * 1.05;
     expect(boldWidth).not.toBeCloseTo(expectedWithFactor, 1);
   });
 
-  it("covers opentype-text-measurer behavior 4", () => {
+  it("Use real glyph width if bold font (${fontFamily}-Bold) is present", () => {
     const regularFont = createMockFont({
       unitsPerEm: 1000,
       ascender: 800,
@@ -101,7 +101,7 @@ describe("OpentypeTextMeasurer", () => {
     expect(boldWidth).toBeCloseTo(expectedBoldWidth, 1);
   });
 
-  it("covers opentype-text-measurer behavior 5", () => {
+  it("Does not apply to CJK characters even if bold font exists", () => {
     const regularFont = createMockFont({
       unitsPerEm: 1000,
       ascender: 800,
@@ -124,7 +124,7 @@ describe("OpentypeTextMeasurer", () => {
     expect(boldWidth).toBeCloseTo(normalWidth, 5);
   });
 
-  it("covers opentype-text-measurer behavior 6", () => {
+  it("Do not apply BOLD_FACTOR to CJK characters even if they are bold", () => {
     const font = createMockFont({
       unitsPerEm: 1000,
       ascender: 800,
@@ -138,7 +138,7 @@ describe("OpentypeTextMeasurer", () => {
     expect(boldWidth).toBeCloseTo(normalWidth, 5);
   });
 
-  it("covers opentype-text-measurer behavior 7", () => {
+  it("BOLD_FACTOR only applies to Latin characters in bold mixed text", () => {
     const font = createMockFont({
       unitsPerEm: 1000,
       ascender: 800,
@@ -153,13 +153,13 @@ describe("OpentypeTextMeasurer", () => {
     expect(mixedBold).toBeCloseTo(latinNormal * 1.05 + cjkNormal, 1);
   });
 
-  it("covers opentype-text-measurer behavior 8", () => {
+  it("Fallback to default implementation if font not found", () => {
     const measurer = new OpentypeTextMeasurer(new Map());
     const width = measurer.measureTextWidth("A", 18, false, "Unknown");
     expect(width).toBeGreaterThan(0);
   });
 
-  it("covers opentype-text-measurer behavior 9", () => {
+  it("Calculate getLineHeightRatio", () => {
     const font = createMockFont({
       unitsPerEm: 1000,
       ascender: 800,
@@ -171,12 +171,12 @@ describe("OpentypeTextMeasurer", () => {
     expect(measurer.getLineHeightRatio("TestFont")).toBeCloseTo(1.0, 5);
   });
 
-  it("covers opentype-text-measurer behavior 10", () => {
+  it("Returns 1.2 if font is not found", () => {
     const measurer = new OpentypeTextMeasurer(new Map());
     expect(measurer.getLineHeightRatio("Unknown")).toBe(1.2);
   });
 
-  it("covers opentype-text-measurer behavior 11", () => {
+  it("Calculate getAscenderRatio", () => {
     const font = createMockFont({
       unitsPerEm: 1000,
       ascender: 800,
@@ -188,12 +188,12 @@ describe("OpentypeTextMeasurer", () => {
     expect(measurer.getAscenderRatio("TestFont")).toBeCloseTo(0.8, 5);
   });
 
-  it("covers opentype-text-measurer behavior 12", () => {
+  it("getAscenderRatio returns 1.0 if font is not found", () => {
     const measurer = new OpentypeTextMeasurer(new Map());
     expect(measurer.getAscenderRatio("Unknown")).toBe(1.0);
   });
 
-  it("covers opentype-text-measurer behavior 13", () => {
+  it("Use defaultFont as a fallback", () => {
     const font = createMockFont({
       unitsPerEm: 1000,
       ascender: 800,
@@ -206,18 +206,18 @@ describe("OpentypeTextMeasurer", () => {
     expect(width).toBeCloseTo(expected, 1);
   });
 
-  it("covers opentype-text-measurer behavior 14", () => {
+  it("Mixed strings use fontFamilyEa for CJK and fontFamily for Latin", () => {
     const latinFont = createMockFont({
       unitsPerEm: 1000,
       ascender: 800,
       descender: -200,
-      glyphWidths: { A: 500, 漢: 300 }, // Test note.
+      glyphWidths: { A: 500, 漢: 300 }, // CJK width for Latin fonts is inaccurate
     });
     const eaFont = createMockFont({
       unitsPerEm: 1000,
       ascender: 800,
       descender: -200,
-      glyphWidths: { A: 400, 漢: 1000 }, // Test note.
+      glyphWidths: { A: 400, 漢: 1000 }, // CJK width of EA fonts is accurate
     });
     const fonts = new Map<string, OpentypeFont>([
       ["Latin", latinFont],
@@ -226,14 +226,14 @@ describe("OpentypeTextMeasurer", () => {
     const measurer = new OpentypeTextMeasurer(fonts);
     const pxPerPt = 96 / 72;
 
-    // Test note.
+    // "AkanA" -> A is latinFont(500), Kan is eaFont(1000), A is latinFont(500)
     const width = measurer.measureTextWidth("A漢A", 18, false, "Latin", "EA");
     const expectedLatin = (500 / 1000) * 18 * pxPerPt;
     const expectedEa = (1000 / 1000) * 18 * pxPerPt;
     expect(width).toBeCloseTo(expectedLatin + expectedEa + expectedLatin, 1);
   });
 
-  it("covers opentype-text-measurer behavior 15", () => {
+  it("If fontFamilyEa can solve the problem, use it", () => {
     const font = createMockFont({
       unitsPerEm: 1000,
       ascender: 800,
@@ -248,14 +248,14 @@ describe("OpentypeTextMeasurer", () => {
   });
 });
 
-describe("font/opentype-text-measurer.test behavior", () => {
+describe("OpentypeTextMeasurer CJK fallback", () => {
   afterEach(() => {
     resetFontMapping();
     vi.restoreAllMocks();
   });
 
-  it("covers opentype-text-measurer behavior 16", async () => {
-    // Test note.
+  it("Attempt CJK fallback chain if no mapping is found", async () => {
+    // In Linux CI, the fallback chain is empty, so mock the macOS equivalent value.
     const mod = await import("./cjk-font-fallback.js");
     vi.spyOn(mod, "getCjkFallbackFonts").mockReturnValue([
       "Hiragino Sans",
@@ -277,12 +277,12 @@ describe("font/opentype-text-measurer.test behavior", () => {
   });
 });
 
-describe("font/opentype-text-measurer.test behavior", () => {
+describe("OpentypeTextMeasurer font mapping", () => {
   afterEach(() => {
     resetFontMapping();
   });
 
-  it("covers opentype-text-measurer behavior 17", () => {
+  it("Resolving OSS bold fonts via font mapping", () => {
     const regularFont = createMockFont({
       unitsPerEm: 1000,
       ascender: 800,
@@ -308,13 +308,13 @@ describe("font/opentype-text-measurer.test behavior", () => {
   });
 });
 
-describe("font/opentype-text-measurer.test behavior", () => {
+describe("OpentypeTextMeasurer font warnings", () => {
   afterEach(() => {
     resetFontMapping();
     initWarningLogger("off");
   });
 
-  it("covers opentype-text-measurer behavior 18", () => {
+  it("Issue font.notFound warning if font is not found", () => {
     initWarningLogger("warn");
     const measurer = new OpentypeTextMeasurer(new Map());
     measurer.measureTextWidth("A", 18, false, "UnknownFont");
@@ -323,7 +323,7 @@ describe("font/opentype-text-measurer.test behavior", () => {
     expect(entries.some((e) => e.message.includes("UnknownFont"))).toBe(true);
   });
 
-  it("covers opentype-text-measurer behavior 19", () => {
+  it("Warnings with the same font name are not duplicated", () => {
     initWarningLogger("warn");
     const measurer = new OpentypeTextMeasurer(new Map());
     measurer.measureTextWidth("A", 18, false, "UnknownFont");
@@ -334,7 +334,7 @@ describe("font/opentype-text-measurer.test behavior", () => {
     expect(entries).toHaveLength(1);
   });
 
-  it("covers opentype-text-measurer behavior 20", () => {
+  it("Don't warn if font is found", () => {
     initWarningLogger("warn");
     const font = createMockFont({
       unitsPerEm: 1000,

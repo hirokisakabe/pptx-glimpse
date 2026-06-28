@@ -1,9 +1,9 @@
 /**
- * Internal note.
+ * Read `p:txBody` into text body / paragraph / run of PptxSourceModel source.
  *
- * Internal note.
- * Internal note.
- * Internal note.
+ * The current typed subset is plain run text and basic run properties (bold/italic/
+ * Underline / font size / typeface / solid color). bullet / field /
+ * Unsupported nodes such as line breaks are retained as raw sidecars.
  */
 
 import type {
@@ -91,7 +91,7 @@ const VALID_AUTO_NUM_SCHEMES: ReadonlySet<SourceAutoNumScheme> = new Set([
   "arabicPlain",
 ]);
 
-/** Internal note. */
+/** Read `p:txBody`. Undefined for shapes without `txBody`. */
 export function parseTextBody(
   txBody: XmlNode | undefined,
   partPath: PartPath,
@@ -636,7 +636,7 @@ function parseRunProperties(rPr: XmlNode | undefined): SourceRunProperties | und
         : {}),
     ...(strike !== undefined ? { strikethrough: strike !== "noStrike" } : {}),
     ...(baseline !== undefined ? { baseline: baseline / 1000 } : {}),
-    // Internal note.
+    // `a:rPr@sz` is in 1/100 pt unit. Convert to pt and save.
     ...(size !== undefined ? { fontSize: asPt(size / 100) } : {}),
     ...(typeface !== undefined ? { typeface } : {}),
     ...(typefaceEa !== undefined ? { typefaceEa } : {}),
@@ -651,8 +651,8 @@ function parseRunProperties(rPr: XmlNode | undefined): SourceRunProperties | und
 }
 
 /**
- * Internal note.
- * Internal note.
+ * Collect unsupported run materials in sidecar. In addition to directly under run (other than `a:rPr` / `a:t`),
+ * Unsupported child elements in `a:rPr` (`a:hlinkClick` / `a:ln`, etc.) are also retained.
  */
 function collectRunSidecars(
   r: XmlNode,

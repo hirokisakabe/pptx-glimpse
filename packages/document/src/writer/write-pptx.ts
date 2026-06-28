@@ -1,5 +1,5 @@
 /**
- * `writePptx(source)` — the first round-trip slice of the PptxSourceModel source writer.
+ * `writePptx(source)` - the first round-trip slice of the PptxSourceModel source writer.
  *
  * The writer targets structural round-trip preservation rather than byte equality. It is
  * not a package patcher that preserves XML attribute order, namespace prefix placement,

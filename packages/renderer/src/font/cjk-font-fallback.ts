@@ -1,6 +1,6 @@
 /**
- * Internal note.
- * Internal note.
+ * Secondary fallback chain for CJK fonts.
+ * When the mapped font (e.g., Noto Sans JP) does not exist on the system.
  * falls back to OS-preinstalled CJK fonts.
  */
 import { platform } from "node:os";
@@ -42,8 +42,8 @@ function getFallbackMap(): CjkFallbackMap {
 }
 
 /**
- * Internal note.
- * Internal note.
+ * Returns the OS-specific CJK fallback chain for the mapped font name.
+ * Returns an empty array if no fallback is defined.
  */
 export function getCjkFallbackFonts(mappedFontName: string): readonly string[] {
   return getFallbackMap()[mappedFontName] ?? EMPTY;

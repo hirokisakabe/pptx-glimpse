@@ -2,10 +2,10 @@
  * Font metrics data.
  * Extracted by scripts/extract-font-metrics.ts from OSS metric-compatible fonts.
  *
- * - Carlito (SIL OFL) → Calibri compatible
- * - Liberation Sans (SIL OFL) → Arial / Helvetica compatible
- * - Liberation Serif (SIL OFL) → Times New Roman compatible
- * - Noto Sans JP (SIL OFL) → general Japanese fonts
+ * - Carlito (SIL OFL) -> Calibri compatible
+ * - Liberation Sans (SIL OFL) -> Arial / Helvetica compatible
+ * - Liberation Serif (SIL OFL) -> Times New Roman compatible
+ * - Noto Sans JP (SIL OFL) -> general Japanese fonts
  */
 
 export interface FontMetrics {
@@ -189,15 +189,15 @@ const metricsData: Record<string, FontMetrics> = {
  * Registers both uppercase and lowercase forms for fast lookup.
  */
 const fontNameMap: Record<string, string> = {
-  // Calibri → Carlito
+  // Calibri -> Carlito
   Calibri: "Carlito",
   calibri: "Carlito",
-  // Arial / Helvetica → Liberation Sans
+  // Arial / Helvetica -> Liberation Sans
   Arial: "LiberationSans",
   arial: "LiberationSans",
   Helvetica: "LiberationSans",
   helvetica: "LiberationSans",
-  // Times New Roman → Liberation Serif
+  // Times New Roman -> Liberation Serif
   "Times New Roman": "LiberationSerif",
   "times new roman": "LiberationSerif",
   // Japanese fonts -> Noto Sans JP
@@ -229,8 +229,8 @@ const metricsKeyToFontName: Record<string, string> = {
 };
 
 /**
- * Internal note.
- * Internal note.
+ * Get metrics data from font name.
+ * Returns null if the font does not exist in the mapping.
  */
 export function getFontMetrics(fontFamily: string | null | undefined): FontMetrics | null {
   if (!fontFamily) return null;
@@ -242,7 +242,7 @@ export function getFontMetrics(fontFamily: string | null | undefined): FontMetri
 }
 
 /**
- * Internal note.
+ * Returns the metrics-compatible OSS font name corresponding to a PPTX font name.
  * Adding it to the SVG font-family fallback list
  * improves consistency between measurement and rendering fonts.
  */

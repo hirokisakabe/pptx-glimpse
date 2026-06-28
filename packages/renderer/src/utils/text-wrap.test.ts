@@ -32,7 +32,7 @@ function makeParagraph(texts: string[], props?: Partial<RunProperties>): Paragra
 }
 
 describe("wrapParagraph", () => {
-  it("covers text-wrap behavior 1", () => {
+  it("Do not wrap short text", () => {
     const para = makeParagraph(["Hi"]);
     const lines = wrapParagraph(para, 500, 18);
     expect(lines).toHaveLength(1);
@@ -40,38 +40,38 @@ describe("wrapParagraph", () => {
     expect(lines[0].segments[0].text).toBe("Hi");
   });
 
-  it("covers text-wrap behavior 2", () => {
+  it("Wrap long English text at word boundaries", () => {
     const para = makeParagraph(["The quick brown fox jumps over the lazy dog"]);
-    // Test note.
+    // Narrow the width to cause wrapping
     const lines = wrapParagraph(para, 100, 18);
     expect(lines.length).toBeGreaterThan(1);
-    // Test note.
+    // Each line starts with a word in uppercase or lowercase
     for (const line of lines) {
       expect(line.segments.length).toBeGreaterThan(0);
     }
   });
 
-  it("covers text-wrap behavior 3", () => {
+  it("Wrap long CJK text at character boundaries", () => {
     const para = makeParagraph(["本日は晴天なり今日もいい天気です"]);
     const lines = wrapParagraph(para, 100, 18);
     expect(lines.length).toBeGreaterThan(1);
   });
 
-  it("covers text-wrap behavior 4", () => {
+  it("Empty paragraphs return empty lines", () => {
     const para = makeParagraph([]);
     const lines = wrapParagraph(para, 500, 18);
     expect(lines).toHaveLength(1);
     expect(lines[0].segments).toHaveLength(0);
   });
 
-  it("covers text-wrap behavior 5", () => {
+  it("Paragraphs with only runs of empty text return empty lines", () => {
     const para = makeParagraph([""]);
     const lines = wrapParagraph(para, 500, 18);
     expect(lines).toHaveLength(1);
     expect(lines[0].segments).toHaveLength(0);
   });
 
-  it("covers text-wrap behavior 6", () => {
+  it("Multiple TextRuns are correctly segmented", () => {
     const boldProps = makeRunProps({ bold: true });
     const normalProps = makeRunProps({ bold: false });
     const para: Paragraph = {
@@ -89,12 +89,12 @@ describe("wrapParagraph", () => {
     };
     const lines = wrapParagraph(para, 500, 18);
     expect(lines).toHaveLength(1);
-    // Test note.
+    // bold and normal result in at least two segments or are not merged
     const allText = lines[0].segments.map((s) => s.text).join("");
     expect(allText).toBe("Bold Normal");
   });
 
-  it("covers text-wrap behavior 7", () => {
+  it("Wrapping across TextRun boundaries with different styles", () => {
     const boldProps = makeRunProps({ bold: true });
     const normalProps = makeRunProps({ bold: false });
     const para: Paragraph = {
@@ -112,8 +112,8 @@ describe("wrapParagraph", () => {
     };
     const lines = wrapParagraph(para, 150, 18);
     expect(lines.length).toBeGreaterThan(1);
-    // Test note.
-    // Test note.
+    // Join each line with a space to ensure all text is preserved
+    // (The spaces at the end of the line are trimmed, so the spaces between the lines are supplemented and combined)
     const allText = lines.map((l) => l.segments.map((s) => s.text).join("")).join(" ");
     expect(allText).toContain("First part");
     expect(allText).toContain("bold and");
@@ -121,7 +121,7 @@ describe("wrapParagraph", () => {
     expect(allText).toContain("normal text");
   });
 
-  it("covers text-wrap behavior 8", () => {
+  it("Place at least one character even if availableWidth is very small", () => {
     const para = makeParagraph(["AB"]);
     const lines = wrapParagraph(para, 1, 18);
     expect(lines.length).toBeGreaterThanOrEqual(1);
@@ -129,9 +129,9 @@ describe("wrapParagraph", () => {
     expect(allText).toBe("AB");
   });
 
-  it("covers text-wrap behavior 9", () => {
+  it("Whitespace at the end of the line is trimmed", () => {
     const para = makeParagraph(["Hello World"]);
-    // Test note.
+    // Wrap at Hello(~60px) + space(~7px) = ~67px
     const lines = wrapParagraph(para, 80, 18);
     expect(lines.length).toBeGreaterThanOrEqual(1);
     for (const line of lines) {
@@ -142,9 +142,9 @@ describe("wrapParagraph", () => {
     }
   });
 
-  it("covers text-wrap behavior 10", () => {
-    // Test note.
-    // Test note.
+  it("fontScale is applied to run-specific fontSize", () => {
+    // Set explicit fontSize=36 in run and measure width with fontScale=0.5
+    // After applying fontScale, it will be equivalent to fontSize=18, so the wrapping result should be the same as fontSize=18.
     const para = makeParagraph(["The quick brown fox jumps over the lazy dog"], {
       fontSize: 36,
     });
@@ -156,9 +156,9 @@ describe("wrapParagraph", () => {
     expect(linesWithScale.length).toBe(linesSmall.length);
   });
 
-  it("covers text-wrap behavior 11", () => {
-    // Test note.
-    // Test note.
+  it("Do not wrap CJK text that slightly protrudes due to font metrics error", () => {
+    // Measurement width of "ABC system" ≈ 135.74px (Carlito ABC + NotoSansJP CJKx4, 18pt)
+    // availableWidth=134 -> Extrusion 1.74px, tolerance=134*0.02=2.68px -> Fits in one line
     const props = makeRunProps({
       fontFamily: "Calibri",
       fontFamilyEa: "Meiryo",
@@ -179,9 +179,9 @@ describe("wrapParagraph", () => {
     expect(lines[0].segments.map((s) => s.text).join("")).toBe("ABCシステム");
   });
 
-  it("covers text-wrap behavior 12", () => {
-    // Test note.
-    // Test note.
+  it("Wraps correctly when width exceeds tolerance", () => {
+    // Measurement width of "ABC system" ≈ 135.74px
+    // availableWidth=120 -> Extrusion 15.74px, tolerance=120*0.02=2.4px -> Wrapped
     const props = makeRunProps({
       fontFamily: "Calibri",
       fontFamilyEa: "Meiryo",
@@ -201,10 +201,10 @@ describe("wrapParagraph", () => {
     expect(lines.length).toBeGreaterThan(1);
   });
 
-  it("covers text-wrap behavior 13", () => {
+  it("When fontScale is 1, run's fontSize is used as is.", () => {
     const para = makeParagraph(["Hello World"], { fontSize: 36 });
     const linesNoScale = wrapParagraph(para, 200, 18, 1);
-    // Test note.
+    // fontSize=36 is wider than fontSize=18 so it should wrap to more lines
     const paraSmall = makeParagraph(["Hello World"], { fontSize: 18 });
     const linesSmall = wrapParagraph(paraSmall, 200, 18, 1);
     expect(linesNoScale.length).toBeGreaterThanOrEqual(linesSmall.length);

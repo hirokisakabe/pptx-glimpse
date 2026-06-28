@@ -1,5 +1,5 @@
 /**
- * Internal note.
+ * PPTX font name -> OSS alternative font (Google Fonts) mapping.
  * Users can extend or override it.
  */
 
@@ -16,10 +16,10 @@ export const DEFAULT_FONT_MAPPING: Readonly<FontMapping> = {
   "Courier New": "Cousine",
   Cambria: "Caladea",
 
-  // Japanese Gothic fonts → Noto Sans JP
-  // "Noto Sans CJK JP" instead of "Noto Sans JP" .
-  // Internal note.
-  // Internal note.
+  // Japanese Gothic fonts -> Noto Sans JP
+  // Use "Noto Sans JP" instead of "Noto Sans CJK JP".
+  // NotoSansCJK TTC extracts only the first font, so it may not always be possible to obtain the JP variant.
+  // The font name matches the standalone NotoSansJP.ttf downloaded in the Docker environment.
   メイリオ: "Noto Sans JP",
   Meiryo: "Noto Sans JP",
   游ゴシック: "Noto Sans JP",
@@ -29,7 +29,7 @@ export const DEFAULT_FONT_MAPPING: Readonly<FontMapping> = {
   "MS Pゴシック": "Noto Sans JP",
   "MS PGothic": "Noto Sans JP",
 
-  // Japanese Mincho fonts → Noto Serif CJK JP
+  // Japanese Mincho fonts -> Noto Serif CJK JP
   "MS 明朝": "Noto Serif CJK JP",
   "MS Mincho": "Noto Serif CJK JP",
   "MS P明朝": "Noto Serif CJK JP",
@@ -39,7 +39,7 @@ export const DEFAULT_FONT_MAPPING: Readonly<FontMapping> = {
 };
 
 /**
- * Internal note.
+ * Generate a table that merges default mapping and user mapping.
  * User-specified entries take precedence.
  */
 export function createFontMapping(userMapping?: FontMapping): FontMapping {
@@ -48,12 +48,12 @@ export function createFontMapping(userMapping?: FontMapping): FontMapping {
 }
 
 /**
- * Internal note.
+ * Get the OSS alternative font name from the mapping table.
  * Looks up without case sensitivity.
  */
 /**
  * Normalizes full-width alphanumerics and symbols to half-width.
- * Internal note.
+ * Full-width characters may be used in PPTX themes, such as "MS P Gothic."
  */
 function normalizeFullWidth(s: string): string {
   return s

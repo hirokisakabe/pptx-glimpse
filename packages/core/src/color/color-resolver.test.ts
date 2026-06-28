@@ -47,12 +47,12 @@ describe("ColorResolver", () => {
     expect(result).toEqual({ hex: "#4472C4", alpha: 1 });
   });
 
-  it("resolves schemeClr via colorMap (tx1 → dk1)", () => {
+  it("resolves schemeClr via colorMap (tx1 -> dk1)", () => {
     const result = resolver.resolve({ schemeClr: { "@_val": "tx1" } });
     expect(result).toEqual({ hex: "#000000", alpha: 1 });
   });
 
-  it("resolves schemeClr via colorMap (bg1 → lt1)", () => {
+  it("resolves schemeClr via colorMap (bg1 -> lt1)", () => {
     const result = resolver.resolve({ schemeClr: { "@_val": "bg1" } });
     expect(result).toEqual({ hex: "#FFFFFF", alpha: 1 });
   });
