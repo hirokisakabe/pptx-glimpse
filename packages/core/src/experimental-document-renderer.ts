@@ -1,6 +1,6 @@
 import { readFileSync, statSync } from "node:fs";
 
-import { createComputedView, readPptx } from "@pptx-glimpse/document/experimental";
+import { createComputedView, readPptx } from "@pptx-glimpse/document";
 import {
   buildFontFaceStyle,
   collectFontFilePaths,

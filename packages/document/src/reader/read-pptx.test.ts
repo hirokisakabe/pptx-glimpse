@@ -4,8 +4,8 @@ import { fileURLToPath } from "node:url";
 import { zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 
-// 実際の公開面 (`@pptx-glimpse/document/experimental`) 経由で import する。
-import { readPptx } from "../experimental.js";
+// 実際の公開面 (`@pptx-glimpse/document`) 経由で import する。
+import { readPptx } from "../index.js";
 
 const encoder = new TextEncoder();
 

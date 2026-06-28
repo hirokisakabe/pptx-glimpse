@@ -8,7 +8,7 @@ import {
   type PptxSourceModel,
   readPptx,
   type SourceThemeFontScheme,
-} from "@pptx-glimpse/document/experimental";
+} from "@pptx-glimpse/document";
 
 /** フォント収集結果 */
 export interface UsedFonts {

@@ -3,7 +3,7 @@ import { beforeAll, bench, describe } from "vitest";
 
 import { convertPptxToPng, convertPptxToSvg } from "../packages/core/src/converter.js";
 import { adaptComputedViewToRendererModel } from "../packages/core/src/pptx-computed-view-renderer-adapter.js";
-import { createComputedView, readPptx } from "../packages/document/src/experimental.js";
+import { createComputedView, readPptx } from "../packages/document/src/index.js";
 import type { SlideSize } from "../packages/renderer/src/model/presentation.js";
 import type { Slide } from "../packages/renderer/src/model/slide.js";
 import { renderSlideToSvg } from "../packages/renderer/src/renderer/svg-renderer.js";

@@ -14,7 +14,7 @@ import type {
   SourceShapeNode,
   SourceTable,
   SourceTextBody,
-} from "../experimental.js";
+} from "../index.js";
 import {
   asEmu,
   asOoxmlAngle,
@@ -23,7 +23,7 @@ import {
   asPt,
   asRelationshipId,
   createComputedView,
-} from "../experimental.js";
+} from "../index.js";
 
 describe("createComputedView", () => {
   it("slide size / order / relationships を computed view に反映する", () => {

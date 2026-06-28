@@ -1,8 +1,4 @@
-import type {
-  PptxSourceModel,
-  SourceShape,
-  SourceTable,
-} from "@pptx-glimpse/document/experimental";
+import type { PptxSourceModel, SourceShape, SourceTable } from "@pptx-glimpse/document";
 import {
   asEmu,
   asOoxmlAngle,
@@ -12,7 +8,7 @@ import {
   asRawSidecarId,
   asRelationshipId,
   createComputedView,
-} from "@pptx-glimpse/document/experimental";
+} from "@pptx-glimpse/document";
 import type { SlideElement } from "@pptx-glimpse/renderer";
 import { describe, expect, it } from "vitest";
 

@@ -19,7 +19,7 @@ import type {
   ComputedTableElement,
   ComputedTextBody,
   PptxComputedView,
-} from "@pptx-glimpse/document/experimental";
+} from "@pptx-glimpse/document";
 import type {
   Background,
   BlipEffects,

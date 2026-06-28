@@ -2,7 +2,7 @@
   "name": "@pptx-glimpse/document",
   "version": "0.0.0",
   "private": true,
-  "description": "Experimental PptxSourceModel and OOXML document foundation for pptx-glimpse.",
+  "description": "PptxSourceModel and OOXML document foundation for pptx-glimpse.",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -12,11 +12,6 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
-    },
-    "./experimental": {
-      "types": "./dist/experimental.d.ts",
-      "import": "./dist/experimental.js",
-      "require": "./dist/experimental.cjs"
     }
   },
   "scripts": {

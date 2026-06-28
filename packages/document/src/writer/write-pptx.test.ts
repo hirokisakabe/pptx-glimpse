@@ -4,13 +4,9 @@ import { fileURLToPath } from "node:url";
 import { unzipSync, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 
-// 実際の公開面 (`@pptx-glimpse/document/experimental`) 経由で import する。
-import { readPptx, writePptx } from "../experimental.js";
-import {
-  findTextRunBySourceHandle,
-  replaceTextRunPlainText,
-  type SourceShape,
-} from "../experimental.js";
+// 実際の公開面 (`@pptx-glimpse/document`) 経由で import する。
+import { readPptx, writePptx } from "../index.js";
+import { findTextRunBySourceHandle, replaceTextRunPlainText, type SourceShape } from "../index.js";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();

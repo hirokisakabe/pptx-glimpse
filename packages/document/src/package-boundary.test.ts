@@ -4,7 +4,13 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
-import { documentExperimentalApi } from "./experimental.js";
+import {
+  createComputedView,
+  findTextRunBySourceHandle,
+  readPptx,
+  replaceTextRunPlainText,
+  writePptx,
+} from "./index.js";
 import { unsafeFixtureAssertion } from "./unsafe-type-assertion.js";
 
 interface PackageJson {
@@ -84,18 +90,20 @@ function parsePackageJson(text: string): PackageJson {
 }
 
 describe("@pptx-glimpse/document package boundary", () => {
-  it("exposes the experimental entry point", async () => {
+  it("exposes the root entry point", async () => {
     const packageJson = parsePackageJson(await readFile(PACKAGE_JSON, "utf8"));
 
-    expect(documentExperimentalApi).toEqual({
-      packageName: "@pptx-glimpse/document",
-      status: "experimental",
+    expect(typeof createComputedView).toBe("function");
+    expect(typeof findTextRunBySourceHandle).toBe("function");
+    expect(typeof readPptx).toBe("function");
+    expect(typeof replaceTextRunPlainText).toBe("function");
+    expect(typeof writePptx).toBe("function");
+    expect(packageJson.exports?.["."]).toEqual({
+      types: "./dist/index.d.ts",
+      import: "./dist/index.js",
+      require: "./dist/index.cjs",
     });
-    expect(packageJson.exports?.["./experimental"]).toEqual({
-      types: "./dist/experimental.d.ts",
-      import: "./dist/experimental.js",
-      require: "./dist/experimental.cjs",
-    });
+    expect(packageJson.exports?.["./experimental"]).toBeUndefined();
   });
 
   it("does not declare dependencies on higher-level packages", async () => {

@@ -17,9 +17,6 @@
     "baseUrl": ".",
     "paths": {
       "@pptx-glimpse/document": ["packages/document/src/index.ts"],
-      "@pptx-glimpse/document/experimental": [
-        "packages/document/src/experimental.ts"
-      ],
       "@pptx-glimpse/renderer": ["packages/renderer/src/index.ts"]
     }
   },

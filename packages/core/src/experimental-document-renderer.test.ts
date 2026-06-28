@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
-import * as documentExperimental from "@pptx-glimpse/document/experimental";
+import * as document from "@pptx-glimpse/document";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { convertPptxToPng, convertPptxToSvg } from "./converter.js";
@@ -100,7 +100,7 @@ describe("experimental document render path", () => {
   });
 
   it("uses the document path as the public SVG converter default", async () => {
-    const readPptxSpy = vi.spyOn(documentExperimental, "readPptx");
+    const readPptxSpy = vi.spyOn(document, "readPptx");
     const adapterSpy = vi.spyOn(adapterModule, "adaptComputedViewToRendererModel");
     const input = readFixture("real-basic-theme.pptx");
     const publicDefault = await convertPptxToSvg(input, {
@@ -116,7 +116,7 @@ describe("experimental document render path", () => {
   });
 
   it("uses the document path as the public PNG converter default", async () => {
-    const readPptxSpy = vi.spyOn(documentExperimental, "readPptx");
+    const readPptxSpy = vi.spyOn(document, "readPptx");
     const adapterSpy = vi.spyOn(adapterModule, "adaptComputedViewToRendererModel");
     const input = readFixture("real-basic-theme.pptx");
     const publicDefault = await convertPptxToPng(input, {
