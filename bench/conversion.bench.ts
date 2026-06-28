@@ -365,10 +365,10 @@ function createMultiSlideEntries(count: number): SlideEntry[] {
 }
 
 // ---------------------------------------------------------------------------
-// Document-path model preparation helper.
+// Source-model pipeline preparation helper.
 // ---------------------------------------------------------------------------
 
-function prepareDocumentPathRendererModel(input: Buffer): {
+function prepareSourceModelRendererModel(input: Buffer): {
   slides: readonly Slide[];
   slideSize: SlideSize;
 } {
@@ -376,7 +376,7 @@ function prepareDocumentPathRendererModel(input: Buffer): {
   const computed = createComputedView(source);
   const adapted = adaptComputedViewToRendererModel(computed);
   if (adapted.slideSize === undefined) {
-    throw new Error("Document path benchmark requires a computed slide size");
+    throw new Error("Source-model benchmark requires a computed slide size");
   }
   return { slides: adapted.slides, slideSize: adapted.slideSize };
 }
@@ -403,11 +403,11 @@ beforeAll(async () => {
   ]);
 
   // Pre-parse slides for renderer-only benchmarks
-  const simpleResult = prepareDocumentPathRendererModel(simplePptx);
+  const simpleResult = prepareSourceModelRendererModel(simplePptx);
   parsedSimpleSlide = simpleResult.slides[0];
   slideSize = simpleResult.slideSize;
 
-  const complexResult = prepareDocumentPathRendererModel(complexPptx);
+  const complexResult = prepareSourceModelRendererModel(complexPptx);
   parsedComplexSlide = complexResult.slides[0];
 });
 
@@ -443,13 +443,13 @@ describe("PNG conversion", () => {
   });
 });
 
-describe("document path standalone", () => {
+describe("source model pipeline standalone", () => {
   bench("prepare simple slide renderer model", () => {
-    prepareDocumentPathRendererModel(simplePptx);
+    prepareSourceModelRendererModel(simplePptx);
   });
 
   bench("prepare complex slide renderer model", () => {
-    prepareDocumentPathRendererModel(complexPptx);
+    prepareSourceModelRendererModel(complexPptx);
   });
 });
 

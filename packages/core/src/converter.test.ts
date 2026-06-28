@@ -1,3 +1,7 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+
+import * as document from "@pptx-glimpse/document";
 import { clearFontCache } from "@pptx-glimpse/renderer";
 import JSZip from "jszip";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
@@ -6,12 +10,23 @@ import {
   convertPptxToPng as convertPptxToPngBase,
   convertPptxToSvg as convertPptxToSvgBase,
 } from "./converter.js";
+import * as adapterModule from "./pptx-computed-view-renderer-adapter.js";
 
 const convertPptxToSvg: typeof convertPptxToSvgBase = (input, options) =>
   convertPptxToSvgBase(input, { skipSystemFonts: true, ...options });
 
 const convertPptxToPng: typeof convertPptxToPngBase = (input, options) =>
   convertPptxToPngBase(input, { skipSystemFonts: true, ...options });
+
+const SELECTED_SHARED_FIXTURES = ["real-basic-theme.pptx", "real-product-page.pptx"] as const;
+
+const CONVERTER_TEST_SCOPE = [
+  "readPptx source model",
+  "createComputedView cascade projection",
+  "PptxSourceModel computed-view to current renderer model adapter",
+  "existing SVG renderer",
+  "existing SVG to PNG conversion",
+] as const;
 
 const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -271,6 +286,84 @@ beforeAll(async () => {
   testPptx = await createTestPptx();
 });
 
+describe("public conversion orchestration", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("documents the intentionally focused dogfood scope", () => {
+    expect(CONVERTER_TEST_SCOPE).toMatchInlineSnapshot(`
+      [
+        "readPptx source model",
+        "createComputedView cascade projection",
+        "PptxSourceModel computed-view to current renderer model adapter",
+        "existing SVG renderer",
+        "existing SVG to PNG conversion",
+      ]
+    `);
+  });
+
+  it.each(SELECTED_SHARED_FIXTURES)(
+    "renders selected slides from %s to SVG through the public converter",
+    async (fixtureName) => {
+      const result = await convertPptxToSvg(readSharedFixture(fixtureName), {
+        slides: [1],
+        textOutput: "text",
+      });
+
+      expect(result.map((slide) => slide.slideNumber)).toEqual([1]);
+      expect(result[0]?.svg).toContain("<svg");
+      expect(result[0]?.svg).toMatch(/viewBox="0 0 \d+ \d+"/);
+      expect(result[0]?.svg).toContain("</svg>");
+    },
+  );
+
+  it("connects the public SVG conversion to PNG conversion", async () => {
+    const result = await convertPptxToPng(readSharedFixture("real-basic-theme.pptx"), {
+      slides: [1],
+      width: 240,
+    });
+
+    expect(result.map((slide) => slide.slideNumber)).toEqual([1]);
+    const pngSlide = result[0];
+    expect(pngSlide).toMatchObject({ width: 240 });
+    if (pngSlide === undefined) {
+      throw new Error("Expected one PNG slide from the public converter");
+    }
+    expect([...pngSlide.png.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+  });
+
+  it("uses the source model reader and renderer adapter for SVG conversion", async () => {
+    const readPptxSpy = vi.spyOn(document, "readPptx");
+    const adapterSpy = vi.spyOn(adapterModule, "adaptComputedViewToRendererModel");
+    const input = readSharedFixture("real-basic-theme.pptx");
+    const publicDefault = await convertPptxToSvg(input, {
+      slides: [1],
+      textOutput: "text",
+    });
+
+    expect(publicDefault.map((slide) => slide.slideNumber)).toEqual([1]);
+    expect(publicDefault[0]?.svg).toContain("<svg");
+    expect(readPptxSpy).toHaveBeenCalledOnce();
+    expect(adapterSpy).toHaveBeenCalledOnce();
+  });
+
+  it("uses the source model reader and renderer adapter for PNG conversion", async () => {
+    const readPptxSpy = vi.spyOn(document, "readPptx");
+    const adapterSpy = vi.spyOn(adapterModule, "adaptComputedViewToRendererModel");
+    const input = readSharedFixture("real-basic-theme.pptx");
+    const publicDefault = await convertPptxToPng(input, {
+      slides: [1],
+      width: 240,
+    });
+
+    expect(publicDefault.map((slide) => slide.slideNumber)).toEqual([1]);
+    expect(publicDefault[0]).toMatchObject({ width: 240 });
+    expect(readPptxSpy).toHaveBeenCalledOnce();
+    expect(adapterSpy).toHaveBeenCalledOnce();
+  });
+});
+
 describe("convertPptxToSvg", () => {
   it("converts a PPTX file to SVG", async () => {
     const results = await convertPptxToSvg(testPptx);
@@ -324,6 +417,10 @@ describe("convertPptxToSvg", () => {
     expect(results).toHaveLength(0);
   });
 });
+
+function readSharedFixture(name: (typeof SELECTED_SHARED_FIXTURES)[number]): Buffer {
+  return readFileSync(fileURLToPath(new URL(`../../../shared-fixtures/${name}`, import.meta.url)));
+}
 
 describe("convertPptxToPng", () => {
   it("converts a PPTX file to PNG", async () => {
