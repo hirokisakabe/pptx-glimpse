@@ -3,10 +3,11 @@
  *
  * writer の目標は byte equality ではなく structural round-trip preservation。
  * XML attribute order、namespace prefix placement、ZIP metadata、defaulted OOXML
- * values まで一致させる package patcher にはしない。未編集 package parts、
- * relationships、content types、media bytes、unknown parts は reader が保持した
- * raw package material を優先して書き戻し、dirty scope だけを supported
- * PptxSourceModel operation に従って更新する。
+ * values まで一致させる package patcher にはしない。Content types と
+ * relationships は `packageGraph` から構造的に再生成し、media bytes / unknown
+ * parts / non-bookkeeping raw parts は reader が保持した raw package material を
+ * 優先して書き戻す。Dirty scope だけを supported PptxSourceModel operation に
+ * 従って更新する。
  *
  * 現在の slice は one plain text-run edit を support し、dirty slide XML part を
  * 再シリアライズして対象 run の `a:t` 値だけを stable source handle で差し替える。

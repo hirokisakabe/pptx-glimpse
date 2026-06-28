@@ -4,8 +4,9 @@
  * `@pptx-glimpse/document` が所有する canonical な PPTX document 表現で、OOXML
  * package parts をそのまま公開 API にする代わりに、presentation / slides /
  * layouts / masters / themes / relationships / media / content types を source
- * semantics として束ねる。core、editor-core、renderer、pom はこの package を
- * consume できるが、document からそれらへ依存してはいけない。
+ * semantics として束ねる。core、editor-core、pom などの上位層はこの package を
+ * consume できるが、document からそれらへ依存してはいけない。renderer は core
+ * adapter の出力を consume し、PptxSourceModel を直接知らない。
  *
  * この model は writer / editor / round-trip の source of truth であり、source
  * local な値、relationship id、part path、element ordering、typed PPTX-domain
