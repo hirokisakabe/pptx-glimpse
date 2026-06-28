@@ -106,7 +106,7 @@ function parseChartTypeAndData(
 
     const holeSize =
       chartType === "doughnut"
-        ? Number(getAttr(getChild(chartNode, "holeSize"), "val") ?? 50)
+        ? parseNumberAttribute(getChild(chartNode, "holeSize"), "val", 50)
         : undefined;
 
     const radarStyle =
@@ -121,12 +121,12 @@ function parseChartTypeAndData(
 
     const secondPieSize =
       chartType === "ofPie"
-        ? Number(getAttr(getChild(chartNode, "secondPieSize"), "val") ?? 75)
+        ? parseNumberAttribute(getChild(chartNode, "secondPieSize"), "val", 75)
         : undefined;
 
     const splitPos =
       chartType === "ofPie"
-        ? Number(getAttr(getChild(chartNode, "splitPos"), "val") ?? 2)
+        ? parseNumberAttribute(getChild(chartNode, "splitPos"), "val", 2)
         : undefined;
 
     return {
@@ -177,8 +177,8 @@ function parseSeriesName(tx: XmlNode | undefined): string | null {
 }
 
 function parseNumericData(valNode: XmlNode | undefined): number[] {
-  const numCache = getChild(getChild(valNode, "numRef"), "numCache");
-  return indexedPointTexts(numCache).map((value) => Number(value ?? 0));
+  const numCache = getChild(getChild(valNode, "numRef"), "numCache") ?? getChild(valNode, "numLit");
+  return indexedPointTexts(numCache).map(parseNumericPointValue);
 }
 
 function extractCategories(serList: readonly XmlNode[]): string[] {
@@ -186,13 +186,17 @@ function extractCategories(serList: readonly XmlNode[]): string[] {
     const cat = getChild(ser, "cat");
     if (cat === undefined) continue;
 
-    const strCache =
+    const categoryCache =
       getChild(getChild(cat, "strRef"), "strCache") ??
-      getChild(getChild(cat, "numRef"), "numCache");
-    const values = indexedPointTexts(strCache).map((value) => String(value ?? ""));
+      getChild(cat, "strLit") ??
+      getChild(getChild(cat, "numRef"), "numCache") ??
+      getChild(cat, "numLit");
+    const values = indexedPointTexts(categoryCache).map((value) => String(value ?? ""));
     if (values.length > 0) return values;
 
-    const multiCache = getChild(getChild(cat, "multiLvlStrRef"), "multiLvlStrCache");
+    const multiCache =
+      getChild(getChild(cat, "multiLvlStrRef"), "multiLvlStrCache") ??
+      getChild(cat, "multiLvlStrLit");
     const firstLevel = getChildArray(multiCache, "lvl")[0];
     const multiValues = indexedPointTexts(firstLevel).map((value) => String(value ?? ""));
     if (multiValues.length > 0) return multiValues;
@@ -209,6 +213,20 @@ function indexedPointTexts(cache: XmlNode | undefined): string[] {
 
 function firstIndexedPointText(cache: XmlNode | undefined): string | undefined {
   return indexedPointTexts(cache)[0];
+}
+
+function parseNumericPointValue(value: string | undefined): number {
+  const parsed = Number(value ?? 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseNumberAttribute(
+  node: XmlNode | undefined,
+  attrName: string,
+  fallback: number,
+): number {
+  const parsed = Number(getAttr(node, attrName) ?? fallback);
+  return Number.isFinite(parsed) ? parsed : fallback;
 }
 
 function resolveSeriesColor(

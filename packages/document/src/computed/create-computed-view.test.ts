@@ -162,6 +162,27 @@ describe("createComputedView", () => {
     });
   });
 
+  it("literal cache の chart values / categories を computed chart data に反映する", () => {
+    const source = buildSourceWithChartAndSmartArt({ chartXml: chartLiteralDataXml() });
+    const slide = getSlide(createComputedView(source).slides, 0);
+    const chart = slide.elements.find((element) => element.kind === "chart");
+
+    expect(chart?.kind).toBe("chart");
+    if (chart?.kind !== "chart") throw new Error("chart element not found");
+    expect(chart.chartData).toMatchObject({
+      chartType: "bubble",
+      categories: ["East", "West"],
+      series: [
+        {
+          name: "Literal",
+          values: [5, 0],
+          xValues: [1, 2],
+          bubbleSizes: [10, 20],
+        },
+      ],
+    });
+  });
+
   it("theme color resolution と background fallback を解決する", () => {
     const computed = createComputedView(buildSource());
     const slide = getSlide(computed.slides, 0);
@@ -1109,6 +1130,22 @@ function chartDataXml(): string {
       </c:ser>
     </c:barChart></c:plotArea>
     <c:legend><c:legendPos val="b"/></c:legend>
+  </c:chart>
+</c:chartSpace>`;
+}
+
+function chartLiteralDataXml(): string {
+  return `<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+  <c:chart>
+    <c:plotArea><c:bubbleChart>
+      <c:ser>
+        <c:tx><c:v>Literal</c:v></c:tx>
+        <c:cat><c:strLit><c:pt idx="0"><c:v>East</c:v></c:pt><c:pt idx="1"><c:v>West</c:v></c:pt></c:strLit></c:cat>
+        <c:xVal><c:numLit><c:pt idx="0"><c:v>1</c:v></c:pt><c:pt idx="1"><c:v>2</c:v></c:pt></c:numLit></c:xVal>
+        <c:yVal><c:numLit><c:pt idx="0"><c:v>5</c:v></c:pt><c:pt idx="1"><c:v>#N/A</c:v></c:pt></c:numLit></c:yVal>
+        <c:bubbleSize><c:numLit><c:pt idx="0"><c:v>10</c:v></c:pt><c:pt idx="1"><c:v>20</c:v></c:pt></c:numLit></c:bubbleSize>
+      </c:ser>
+    </c:bubbleChart></c:plotArea>
   </c:chart>
 </c:chartSpace>`;
 }
