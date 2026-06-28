@@ -27,7 +27,7 @@ describe("PptxSourceModel PoC end-to-end round-trip", () => {
   it.each(SHARED_FIXTURES)(
     "renders %s through read -> computed view -> adapter -> SVG",
     (fixtureName) => {
-      const rendered = renderDocumentPath(readFixture(fixtureName));
+      const rendered = renderSourceModelPipeline(readFixture(fixtureName));
 
       expect(rendered.source.presentation.slidePartPaths.length).toBeGreaterThan(0);
       expect(rendered.computed.slides).toHaveLength(
@@ -70,8 +70,8 @@ describe("PptxSourceModel PoC end-to-end round-trip", () => {
       expect(outputEntries[partPath]).toEqual(inputEntries[partPath]);
     }
 
-    const originalRendered = renderDocumentPath(input).svgs;
-    const roundTrippedRendered = renderDocumentPath(output).svgs;
+    const originalRendered = renderSourceModelPipeline(input).svgs;
+    const roundTrippedRendered = renderSourceModelPipeline(output).svgs;
     expect(roundTrippedRendered).toEqual(originalRendered);
   });
 
@@ -103,7 +103,7 @@ describe("PptxSourceModel PoC end-to-end round-trip", () => {
       expect(outputEntries[partPath]).toEqual(inputEntries[partPath]);
     }
 
-    const rendered = renderDocumentPath(output);
+    const rendered = renderSourceModelPipeline(output);
     expect(rendered.svgs.some(({ svg }) => svg.includes(EDITED_TEXT))).toBe(true);
   });
 
@@ -155,7 +155,7 @@ describe("PptxSourceModel PoC end-to-end round-trip", () => {
 
 const textDecoder = new TextDecoder();
 
-interface RenderedDocumentPath {
+interface RenderedSourceModelPipeline {
   readonly source: PptxSourceModel;
   readonly computed: ReturnType<typeof createComputedView>;
   readonly adapted: ReturnType<typeof adaptComputedViewToRendererModel>;
@@ -166,7 +166,7 @@ function readFixture(name: (typeof SHARED_FIXTURES)[number]): Buffer {
   return readFileSync(fileURLToPath(new URL(`../../../shared-fixtures/${name}`, import.meta.url)));
 }
 
-function renderDocumentPath(input: Uint8Array): RenderedDocumentPath {
+function renderSourceModelPipeline(input: Uint8Array): RenderedSourceModelPipeline {
   const source = readPptx(input);
   const computed = createComputedView(source);
   const adapted = adaptComputedViewToRendererModel(computed);
