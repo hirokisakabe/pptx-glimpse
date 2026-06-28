@@ -25,8 +25,8 @@ async function main() {
   console.log(`Output dir: ${outputDir}`);
   console.log("");
 
-  const svgResults = await convertPptxToSvg(input, { logLevel: "warn" });
-  const pngResults = await convertPptxToPng(input);
+  const { slides: svgResults } = await convertPptxToSvg(input, { logLevel: "warn" });
+  const { slides: pngResults } = await convertPptxToPng(input);
 
   for (const svg of svgResults) {
     const svgPath = join(outputDir, `${name}-slide${svg.slideNumber}.svg`);

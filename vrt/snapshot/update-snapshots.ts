@@ -16,7 +16,7 @@ const CONCURRENCY = 4;
 async function processFixture(fixturePath: string, name: string): Promise<number> {
   const input = readFileSync(fixturePath);
   console.log(`Processing: ${name}`);
-  const results = await convertPptxToPng(input, await getVrtRenderOptions());
+  const { slides: results } = await convertPptxToPng(input, await getVrtRenderOptions());
   let count = 0;
 
   for (const result of results) {

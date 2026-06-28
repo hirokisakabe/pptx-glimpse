@@ -111,15 +111,15 @@ describe("PptxSourceModel PoC end-to-end round-trip", () => {
     const input = readFixture("real-basic-theme.pptx");
     const noEditOutput = writePptx(readPptx(input));
 
-    const originalSvgResults = await convertPptxToSvg(input, {
+    const { slides: originalSvgResults } = await convertPptxToSvg(input, {
       textOutput: "text",
       skipSystemFonts: true,
     });
-    const roundTrippedSvgResults = await convertPptxToSvg(noEditOutput, {
+    const { slides: roundTrippedSvgResults } = await convertPptxToSvg(noEditOutput, {
       textOutput: "text",
       skipSystemFonts: true,
     });
-    const pngResults = await convertPptxToPng(noEditOutput, {
+    const { slides: pngResults } = await convertPptxToPng(noEditOutput, {
       width: 240,
       skipSystemFonts: true,
     });
@@ -139,7 +139,7 @@ describe("PptxSourceModel PoC end-to-end round-trip", () => {
     const editedOutput = writePptx(
       replaceTextRunPlainText(editedSource, editable.run.handle, EDITED_TEXT),
     );
-    const editedSvgResults = await convertPptxToSvg(editedOutput, {
+    const { slides: editedSvgResults } = await convertPptxToSvg(editedOutput, {
       slides: [editable.slideNumber],
       textOutput: "text",
       skipSystemFonts: true,

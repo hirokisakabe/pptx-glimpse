@@ -9,7 +9,7 @@ async function main(): Promise<void> {
   }
 
   const input = readFileSync(pptxPath);
-  const slides = await convertPptxToSvg(input, { logLevel: "warn" });
+  const { slides } = await convertPptxToSvg(input, { logLevel: "warn" });
 
   process.stdout.write(JSON.stringify(slides));
 }

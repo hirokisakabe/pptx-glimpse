@@ -32,7 +32,7 @@ describe("Visual Regression Tests", { timeout: 60000 }, () => {
         }
 
         const input = readFileSync(fixturePath);
-        const results = await convertPptxToPng(input, await getVrtRenderOptions());
+        const { slides: results } = await convertPptxToPng(input, await getVrtRenderOptions());
 
         for (const result of results) {
           const refPath = join(SNAPSHOT_DIR, `${name}-slide${result.slideNumber}.png`);
@@ -62,7 +62,7 @@ describe("Visual Regression Tests (shared fixtures)", { timeout: 60000 }, () => 
         }
 
         const input = readFileSync(fixturePath);
-        const results = await convertPptxToPng(input, await getVrtRenderOptions());
+        const { slides: results } = await convertPptxToPng(input, await getVrtRenderOptions());
 
         for (const result of results) {
           const refPath = join(SNAPSHOT_DIR, `${name}-slide${result.slideNumber}.png`);

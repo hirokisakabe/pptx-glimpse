@@ -71,7 +71,7 @@ describeOrSkip("LibreOffice Visual Regression Tests", { timeout: 60000 }, () => 
     describe(name, () => {
       itOrSkip("should match LibreOffice reference", async () => {
         const input = readFileSync(fixturePath);
-        const results = await convertPptxToPng(input);
+        const { slides: results } = await convertPptxToPng(input);
 
         for (const result of results) {
           const refPath = join(SNAPSHOT_DIR, `${name}-slide${result.slideNumber}.png`);
