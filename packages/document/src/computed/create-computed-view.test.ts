@@ -62,6 +62,12 @@ describe("createComputedView", () => {
     expect(chart.relationship?.id).toBe("rIdChart");
     expect(chart.relationship?.targetPartPath).toBe("ppt/charts/chart1.xml");
     expect(chart.chartXml).toContain("<c:barChart");
+    expect(chart.chartData).toMatchObject({
+      chartType: "bar",
+      categories: [],
+      series: [],
+      legend: null,
+    });
 
     expect(smartArt?.kind).toBe("smartArt");
     if (smartArt?.kind !== "smartArt") throw new Error("SmartArt element not found");
@@ -131,6 +137,50 @@ describe("createComputedView", () => {
       "http://purl.oclc.org/ooxml/officeDocument/relationships/chart",
     );
     expect(chart.chartXml).toContain("<c:barChart");
+  });
+
+  it("chart XML を document computed chart data として解析する", () => {
+    const source = buildSourceWithChartAndSmartArt({ chartXml: chartDataXml() });
+    const slide = getSlide(createComputedView(source).slides, 0);
+    const chart = slide.elements.find((element) => element.kind === "chart");
+
+    expect(chart?.kind).toBe("chart");
+    if (chart?.kind !== "chart") throw new Error("chart element not found");
+    expect(chart.chartData).toMatchObject({
+      chartType: "bar",
+      title: "Revenue",
+      categories: ["Q1", "Q2"],
+      barDirection: "bar",
+      legend: { position: "b" },
+      series: [
+        {
+          name: "Sales",
+          values: [4, 7],
+          color: { hex: "#336699", alpha: 1 },
+        },
+      ],
+    });
+  });
+
+  it("literal cache の chart values / categories を computed chart data に反映する", () => {
+    const source = buildSourceWithChartAndSmartArt({ chartXml: chartLiteralDataXml() });
+    const slide = getSlide(createComputedView(source).slides, 0);
+    const chart = slide.elements.find((element) => element.kind === "chart");
+
+    expect(chart?.kind).toBe("chart");
+    if (chart?.kind !== "chart") throw new Error("chart element not found");
+    expect(chart.chartData).toMatchObject({
+      chartType: "bubble",
+      categories: ["East", "West"],
+      series: [
+        {
+          name: "Literal",
+          values: [5, 0],
+          xValues: [1, 2],
+          bubbleSizes: [10, 20],
+        },
+      ],
+    });
   });
 
   it("theme color resolution と background fallback を解決する", () => {
@@ -981,6 +1031,7 @@ function buildSource(): PptxSourceModel {
 function buildSourceWithChartAndSmartArt(
   options: {
     readonly chartRelationshipType?: string;
+    readonly chartXml?: string;
     readonly smartArtDrawingXml?: string;
   } = {},
 ): PptxSourceModel {
@@ -1029,7 +1080,8 @@ function buildSourceWithChartAndSmartArt(
       rawParts: [
         rawXmlPart(
           "ppt/charts/chart1.xml",
-          `<c:chartSpace><c:chart><c:plotArea><c:barChart/></c:plotArea></c:chart></c:chartSpace>`,
+          options.chartXml ??
+            `<c:chartSpace><c:chart><c:plotArea><c:barChart/></c:plotArea></c:chart></c:chartSpace>`,
         ),
         rawXmlPart("ppt/diagrams/data1.xml", `<dgm:dataModel/>`),
         rawXmlPart(
@@ -1062,6 +1114,40 @@ function buildSourceWithChartAndSmartArt(
         : slide,
     ),
   };
+}
+
+function chartDataXml(): string {
+  return `<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <c:chart>
+    <c:title><c:tx><c:rich><a:p><a:r><a:t>Revenue</a:t></a:r></a:p></c:rich></c:tx></c:title>
+    <c:plotArea><c:barChart>
+      <c:barDir val="bar"/>
+      <c:ser>
+        <c:tx><c:strRef><c:strCache><c:pt idx="0"><c:v>Sales</c:v></c:pt></c:strCache></c:strRef></c:tx>
+        <c:spPr><a:solidFill><a:schemeClr val="accent2"/></a:solidFill></c:spPr>
+        <c:cat><c:strRef><c:strCache><c:pt idx="0"><c:v>Q1</c:v></c:pt><c:pt idx="1"><c:v>Q2</c:v></c:pt></c:strCache></c:strRef></c:cat>
+        <c:val><c:numRef><c:numCache><c:pt idx="0"><c:v>4</c:v></c:pt><c:pt idx="1"><c:v>7</c:v></c:pt></c:numCache></c:numRef></c:val>
+      </c:ser>
+    </c:barChart></c:plotArea>
+    <c:legend><c:legendPos val="b"/></c:legend>
+  </c:chart>
+</c:chartSpace>`;
+}
+
+function chartLiteralDataXml(): string {
+  return `<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+  <c:chart>
+    <c:plotArea><c:bubbleChart>
+      <c:ser>
+        <c:tx><c:v>Literal</c:v></c:tx>
+        <c:cat><c:strLit><c:pt idx="0"><c:v>East</c:v></c:pt><c:pt idx="1"><c:v>West</c:v></c:pt></c:strLit></c:cat>
+        <c:xVal><c:numLit><c:pt idx="0"><c:v>1</c:v></c:pt><c:pt idx="1"><c:v>2</c:v></c:pt></c:numLit></c:xVal>
+        <c:yVal><c:numLit><c:pt idx="0"><c:v>5</c:v></c:pt><c:pt idx="1"><c:v>#N/A</c:v></c:pt></c:numLit></c:yVal>
+        <c:bubbleSize><c:numLit><c:pt idx="0"><c:v>10</c:v></c:pt><c:pt idx="1"><c:v>20</c:v></c:pt></c:numLit></c:bubbleSize>
+      </c:ser>
+    </c:bubbleChart></c:plotArea>
+  </c:chart>
+</c:chartSpace>`;
 }
 
 function rawXmlPart(partPath: string, xml: string) {

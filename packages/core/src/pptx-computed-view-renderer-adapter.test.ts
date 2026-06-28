@@ -1,4 +1,10 @@
-import type { PptxSourceModel, SourceShape, SourceTable } from "@pptx-glimpse/document";
+import type {
+  PptxComputedView,
+  PptxSourceModel,
+  SourceChart,
+  SourceShape,
+  SourceTable,
+} from "@pptx-glimpse/document";
 import {
   asEmu,
   asOoxmlAngle,
@@ -685,6 +691,37 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it("document computed chart data を renderer ChartData に変換する", () => {
+    const result = adaptComputedViewToRendererModel(buildComputedViewWithChartData());
+    const chart = result.slides[0].elements.find((element) => element.type === "chart");
+
+    expect(chart).toMatchObject({
+      type: "chart",
+      transform: {
+        offsetX: 10,
+        offsetY: 20,
+        extentWidth: 300,
+        extentHeight: 200,
+      },
+      chart: {
+        chartType: "bubble",
+        title: "Pipeline",
+        categories: ["A", "B"],
+        series: [
+          {
+            name: "Weighted",
+            values: [4, 8],
+            xValues: [1, 2],
+            bubbleSizes: [10, 20],
+            color: { hex: "#336699", alpha: 0.75 },
+          },
+        ],
+        legend: { position: "tr" },
+      },
+    });
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it("SmartArt fallback の diagram drawing skip diagnostic を返す", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
@@ -1035,6 +1072,50 @@ function chartXml(): string {
     </c:ser>
   </c:barChart></c:plotArea></c:chart>
 </c:chartSpace>`;
+}
+
+function buildComputedViewWithChartData(): PptxComputedView {
+  const sourceNode: SourceChart = {
+    kind: "chart",
+    name: "Pipeline chart",
+  };
+  return {
+    slides: [
+      {
+        slideNumber: 1,
+        partPath: asPartPath("ppt/slides/slide1.xml"),
+        relationships: [],
+        colorMap: {},
+        colorScheme: {},
+        showMasterShapes: true,
+        layoutShowMasterShapes: true,
+        elements: [
+          {
+            kind: "chart",
+            sourceLayer: "slide",
+            sourcePartPath: asPartPath("ppt/slides/slide1.xml"),
+            sourceNode,
+            transform: transform(10, 20, 300, 200),
+            chartData: {
+              chartType: "bubble",
+              title: "Pipeline",
+              categories: ["A", "B"],
+              series: [
+                {
+                  name: "Weighted",
+                  values: [4, 8],
+                  xValues: [1, 2],
+                  bubbleSizes: [10, 20],
+                  color: { hex: "#336699", alpha: 0.75 },
+                },
+              ],
+              legend: { position: "tr" },
+            },
+          },
+        ],
+      },
+    ],
+  };
 }
 
 function smartArtDrawingXml(): string {

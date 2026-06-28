@@ -36,6 +36,7 @@ import type {
   SourceTransform,
 } from "../source/index.js";
 import { asEmu } from "../source/index.js";
+import { parseComputedChartData } from "./chart-data.js";
 import { buildComputedColorScheme, buildEffectiveColorMap, resolveColor } from "./color.js";
 import { findPlaceholderMatch } from "./placeholders.js";
 import type {
@@ -484,6 +485,7 @@ function computeChartElement(
     relationship?.targetPartPath !== undefined
       ? readRawPackageText(context.source, relationship.targetPartPath)
       : undefined;
+  const chartData = chartXml !== undefined ? parseComputedChartData(chartXml, context) : undefined;
   return {
     kind: "chart",
     sourceLayer: layer,
@@ -492,6 +494,7 @@ function computeChartElement(
     ...(chart.transform !== undefined ? { transform: chart.transform } : {}),
     ...(relationship !== undefined ? { relationship } : {}),
     ...(chartXml !== undefined ? { chartXml } : {}),
+    ...(chartData !== undefined ? { chartData } : {}),
   };
 }
 

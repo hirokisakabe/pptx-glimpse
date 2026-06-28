@@ -7,10 +7,11 @@
  * effective values を renderer の render-ready contract へ写す境界である。
  *
  * Adapter 側では renderer-specific defaults、missing transform fallback、
- * `null` fill/outline/background convention、base64 media payload、chart XML to
- * renderer ChartData conversion、SmartArt diagram drawing fallback、raw
- * element/fill/background warning policy を扱う。これらは writer/editor/round-trip
- * に必要な PptxSourceModel semantics ではないため document package に戻さない。
+ * `null` fill/outline/background convention、base64 media payload、computed
+ * chart data から renderer ChartData への薄い mapping、SmartArt diagram drawing
+ * fallback、raw element/fill/background warning policy を扱う。これらは
+ * writer/editor/round-trip に必要な PptxSourceModel semantics ではないため
+ * document package に戻さない。
  *
  * Font discovery/fallback、text measurement/wrapping、text-to-path、SVG/PNG output
  * choices は renderer/core 側に残す。ComputedSlide/ComputedElement の part path、
@@ -22,6 +23,7 @@
 import type {
   ComputedBackground,
   ComputedBlipEffects,
+  ComputedChartData,
   ComputedChartElement,
   ComputedColor,
   ComputedConnectorElement,
@@ -45,9 +47,8 @@ import type {
   Background,
   BlipEffects,
   BodyProperties,
+  ChartData,
   ChartElement,
-  ColorMap,
-  ColorScheme,
   ConnectorElement,
   EffectList,
   Fill,
@@ -73,8 +74,6 @@ import type {
 } from "@pptx-glimpse/renderer";
 import { asEmu, asHundredthPt, uint8ArrayToBase64 } from "@pptx-glimpse/renderer";
 
-import { ColorResolver } from "./color/color-resolver.js";
-import { convertChartXmlToRendererChartData } from "./renderer-chart-data-converter.js";
 import { unsafeBrandAssertion } from "./unsafe-type-assertion.js";
 
 interface RendererAdapterResult {
@@ -111,36 +110,6 @@ const ZERO_TRANSFORM: Transform = {
   rotation: 0,
   flipH: false,
   flipV: false,
-};
-
-const DEFAULT_COLOR_SCHEME: ColorScheme = {
-  dk1: "#000000",
-  lt1: "#ffffff",
-  dk2: "#44546a",
-  lt2: "#e7e6e6",
-  accent1: "#4472c4",
-  accent2: "#ed7d31",
-  accent3: "#a5a5a5",
-  accent4: "#ffc000",
-  accent5: "#5b9bd5",
-  accent6: "#70ad47",
-  hlink: "#0563c1",
-  folHlink: "#954f72",
-};
-
-const DEFAULT_COLOR_MAP: ColorMap = {
-  bg1: "lt1",
-  tx1: "dk1",
-  bg2: "lt2",
-  tx2: "dk2",
-  accent1: "accent1",
-  accent2: "accent2",
-  accent3: "accent3",
-  accent4: "accent4",
-  accent5: "accent5",
-  accent6: "accent6",
-  hlink: "hlink",
-  folHlink: "folHlink",
 };
 
 export function adaptComputedViewToRendererModel(
@@ -290,23 +259,11 @@ function adaptChart(
   slide: ComputedSlide,
   diagnostics: DiagnosticSink,
 ): ChartElement | undefined {
-  if (chart.chartXml === undefined) {
+  if (chart.chartData === undefined) {
     pushAdapterWarning(
       diagnostics,
       "pptx-computed-view-adapter.unresolved-chart-skipped",
-      "PptxSourceModel chart element has no resolved chart XML.",
-      slide,
-      chart.sourcePartPath,
-    );
-    return undefined;
-  }
-
-  const chartData = convertChartXmlToRendererChartData(chart.chartXml, createColorResolver(slide));
-  if (chartData === null) {
-    pushAdapterWarning(
-      diagnostics,
-      "pptx-computed-view-adapter.unresolved-chart-skipped",
-      "PptxSourceModel chart XML could not be parsed into the renderer chart model.",
+      "PptxSourceModel chart element has no computed chart data.",
       slide,
       chart.sourcePartPath,
     );
@@ -316,7 +273,34 @@ function adaptChart(
   return {
     type: "chart",
     transform: adaptTransform(chart.transform, slide, diagnostics, chart.sourcePartPath),
-    chart: chartData,
+    chart: adaptChartData(chart.chartData),
+  };
+}
+
+function adaptChartData(chartData: ComputedChartData): ChartData {
+  return {
+    chartType: chartData.chartType,
+    title: chartData.title,
+    series: chartData.series.map((series) => ({
+      name: series.name,
+      values: [...series.values],
+      ...(series.xValues !== undefined ? { xValues: [...series.xValues] } : {}),
+      ...(series.bubbleSizes !== undefined ? { bubbleSizes: [...series.bubbleSizes] } : {}),
+      color: adaptColor(series.color),
+    })),
+    categories: [...chartData.categories],
+    ...(chartData.barDirection !== undefined ? { barDirection: chartData.barDirection } : {}),
+    ...(chartData.holeSize !== undefined ? { holeSize: chartData.holeSize } : {}),
+    ...(chartData.radarStyle !== undefined ? { radarStyle: chartData.radarStyle } : {}),
+    ...(chartData.ofPieType !== undefined ? { ofPieType: chartData.ofPieType } : {}),
+    ...(chartData.secondPieSize !== undefined ? { secondPieSize: chartData.secondPieSize } : {}),
+    ...(chartData.splitPos !== undefined ? { splitPos: chartData.splitPos } : {}),
+    legend:
+      chartData.legend !== null
+        ? {
+            position: chartData.legend.position,
+          }
+        : null,
   };
 }
 
@@ -851,16 +835,6 @@ function adaptColor(color: ComputedColor): ResolvedColor {
     hex: color.hex,
     alpha: color.alpha,
   };
-}
-
-function createColorResolver(slide: ComputedSlide): ColorResolver {
-  return new ColorResolver(
-    { ...DEFAULT_COLOR_SCHEME, ...slide.colorScheme },
-    {
-      ...DEFAULT_COLOR_MAP,
-      ...slide.colorMap,
-    },
-  );
 }
 
 function ooxmlPercentToRatio(value: number | undefined): number {
