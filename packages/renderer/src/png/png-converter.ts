@@ -13,9 +13,11 @@ function resolveWasmPath(): string {
 }
 
 /**
- * Initializes the resvg-wasm WASM module.
- * Even when not called explicitly, it is initialized automatically on the first PNG conversion.
- * Use this when you want to initialize the application when it starts.
+ * Initialize the resvg-wasm module used for PNG conversion.
+ *
+ * Calling this is optional because `convertPptxToPng` initializes resvg-wasm on
+ * first use. Applications may call it during startup to pay the WASM loading
+ * cost before handling the first conversion request.
  */
 export async function initResvgWasm(): Promise<void> {
   if (!wasmInitPromise) {

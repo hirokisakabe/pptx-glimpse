@@ -1,6 +1,3 @@
-/**
- * API to collect the used font name from PPTX.
- */
 import {
   type ComputedElement,
   type ComputedTextBody,
@@ -10,18 +7,42 @@ import {
   type SourceThemeFontScheme,
 } from "@pptx-glimpse/document";
 
-/** Font collection results */
+/**
+ * Font names discovered in a PPTX file.
+ */
 export interface UsedFonts {
-  /** Fonts defined in the theme */
+  /**
+   * Theme font slots resolved from the presentation's default theme.
+   */
   theme: {
+    /**
+     * Major Latin theme font.
+     */
     majorFont: string;
+    /**
+     * Minor Latin theme font.
+     */
     minorFont: string;
+    /**
+     * Major East Asian theme font, when present.
+     */
     majorFontEa: string | null;
+    /**
+     * Minor East Asian theme font, when present.
+     */
     minorFontEa: string | null;
+    /**
+     * Major complex-script theme font, when present.
+     */
     majorFontCs: string | null;
+    /**
+     * Minor complex-script theme font, when present.
+     */
     minorFontCs: string | null;
   };
-  /** List of font names used in text runs and themes (no duplicates, sorted) */
+  /**
+   * Unique sorted font names used by text runs, bullets, and theme font slots.
+   */
   fonts: string[];
 }
 
@@ -34,8 +55,15 @@ const DEFAULT_THEME_FONTS: ResolvedThemeFontScheme = {
 };
 
 /**
- * Parse PPTX and collect the font name used.
- * Lightweight because no rendering is performed.
+ * Parse a PPTX file and collect the font names it references.
+ *
+ * This is a lightweight preflight helper: it reads the document model and text
+ * styles but does not render slides or load font files. Use it to decide which
+ * fonts should be installed, bundled, or mapped before calling the conversion
+ * APIs.
+ *
+ * @param input PPTX binary data as a Node.js `Buffer` or `Uint8Array`.
+ * @returns Theme font slots and a unique sorted list of referenced font names.
  */
 export function collectUsedFonts(input: Buffer | Uint8Array): UsedFonts {
   const source = readPptx(input);

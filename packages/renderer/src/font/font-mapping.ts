@@ -1,12 +1,19 @@
 /**
- * PPTX font name -> OSS alternative font (Google Fonts) mapping.
- * Users can extend or override it.
+ * Mapping from PPTX font family names to replacement font family names.
+ *
+ * Keys are font names found in PPTX files. Values are font names that should be
+ * present in the rendering environment, commonly open-source alternatives to
+ * proprietary Microsoft Office fonts.
  */
-
-/** Font mapping table type */
 export type FontMapping = Record<string, string>;
 
-/** Default font mapping table */
+/**
+ * Default replacement mapping for common Microsoft Office fonts.
+ *
+ * The table maps fonts such as Calibri, Arial, Meiryo, and MS Gothic to
+ * open-source alternatives used during text measurement, SVG path generation,
+ * and font lookup.
+ */
 export const DEFAULT_FONT_MAPPING: Readonly<FontMapping> = {
   // Latin fonts
   Calibri: "Carlito",
@@ -39,8 +46,11 @@ export const DEFAULT_FONT_MAPPING: Readonly<FontMapping> = {
 };
 
 /**
- * Generate a table that merges default mapping and user mapping.
- * User-specified entries take precedence.
+ * Create a font mapping table by merging defaults with user overrides.
+ *
+ * @param userMapping Custom PPTX font name to replacement font name entries.
+ * User-specified entries take precedence over `DEFAULT_FONT_MAPPING`.
+ * @returns A new mutable mapping object.
  */
 export function createFontMapping(userMapping?: FontMapping): FontMapping {
   if (!userMapping) return { ...DEFAULT_FONT_MAPPING };
@@ -58,8 +68,14 @@ function normalizeFullWidth(s: string): string {
 }
 
 /**
- * Get the OSS alternative font name from the mapping table.
- * Looks up without case sensitivity.
+ * Look up the replacement font for a PPTX font family.
+ *
+ * Matching is case-insensitive and normalizes full-width alphanumeric
+ * characters used by some Japanese Office font names.
+ *
+ * @param fontFamily PPTX font family name to resolve.
+ * @param mapping Mapping table, usually from `createFontMapping`.
+ * @returns The replacement font name, or `null` when no mapping exists.
  */
 export function getMappedFont(
   fontFamily: string | null | undefined,

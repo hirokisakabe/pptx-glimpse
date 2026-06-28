@@ -32,44 +32,112 @@ import {
   type RendererAdapterDiagnostic,
 } from "./pptx-computed-view-renderer-adapter.js";
 
+/**
+ * Options shared by PPTX-to-SVG and PPTX-to-PNG conversion.
+ */
 export interface ConvertOptions {
-  /** Target slide numbers (1-based). When omitted, all slides are converted. */
+  /**
+   * Target slide numbers to convert, using PowerPoint-style 1-based numbering.
+   *
+   * When omitted, every slide in the presentation is converted. Missing or
+   * out-of-range slide numbers produce no output for those entries.
+   */
   slides?: number[];
-  /** Output image width in pixels. Defaults to 960. */
+  /**
+   * Output width in pixels.
+   *
+   * PNG output rasterizes to this width while preserving the slide aspect
+   * ratio. Defaults to 960. SVG output keeps the slide's native pixel size from
+   * the PPTX slide dimensions and does not use this option.
+   */
   width?: number;
-  /** Output image height in pixels. When width is also specified, width takes precedence. */
+  /**
+   * Output height in pixels.
+   *
+   * PNG rasterization currently always uses `width`, either the provided value
+   * or the default width, so this option is ignored by the public conversion
+   * APIs. SVG output keeps the slide's native pixel size and does not use this
+   * option.
+   */
   height?: number;
-  /** Warning log level. Defaults to "off". */
+  /**
+   * Warning log level for unsupported or approximated PPTX features.
+   *
+   * Defaults to `"off"`. Use `"warn"` to collect and print summaries, or
+   * `"debug"` to print individual warning entries as they are recorded.
+   */
   logLevel?: LogLevel;
-  /** Additional font directory paths searched alongside system fonts. */
+  /**
+   * Additional directories that are scanned for font files.
+   *
+   * These directories are searched in addition to system font directories unless
+   * `skipSystemFonts` is true.
+   */
   fontDirs?: string[];
-  /** Custom PPTX font name -> OSS replacement font mapping merged into the default mapping. */
+  /**
+   * Custom PPTX font name to replacement font name mapping.
+   *
+   * Entries are merged with `DEFAULT_FONT_MAPPING`; user-provided entries take
+   * precedence. This is useful when a PPTX references proprietary or corporate
+   * fonts that should render with installed alternatives.
+   */
   fontMapping?: FontMapping;
-  /** When true, skips OS system font scanning and only uses fontDirs. */
+  /**
+   * Skip OS system font directories and only scan `fontDirs`.
+   *
+   * This is useful in containers or serverless environments where bundled fonts
+   * should be the only fonts used.
+   */
   skipSystemFonts?: boolean;
   /**
-   * Text output mode for SVG. Defaults to "path".
-   * - "path": outputs glyph outlines as <path> elements and does not depend on fonts
-   *   being available in the viewing environment.
-   * - "text": outputs native <text> elements plus subset-font @font-face data URIs.
-   *   This enables native browser text rendering and text selection for inline SVG, but
-   *   may not render as expected through <img src="...svg"> references or sanitized SVG
-   *   environments.
-   *   convertPptxToPng ignores this option and always uses "path" because resvg does not
-   *   interpret @font-face.
+   * Text output mode for SVG conversion.
+   *
+   * Defaults to `"path"`, which emits glyph outlines as `<path>` elements and
+   * does not require fonts in the SVG viewing environment. `"text"` emits native
+   * `<text>` elements with subset-font `@font-face` data URIs, enabling browser
+   * text selection and native text rendering for inline SVG.
+   *
+   * Embedded fonts and native text may not render as expected when the SVG is
+   * loaded through `<img src="...svg">` or sanitized. `convertPptxToPng` ignores
+   * this option and always renders with `"path"` output because resvg does not
+   * interpret the embedded `@font-face` rules used by SVG text output.
    */
   textOutput?: "path" | "text";
 }
 
+/**
+ * SVG conversion result for one slide.
+ */
 export interface SlideSvg {
+  /**
+   * Original slide number in the PPTX file, using 1-based numbering.
+   */
   slideNumber: number;
+  /**
+   * Complete SVG document string for the slide.
+   */
   svg: string;
 }
 
+/**
+ * PNG conversion result for one slide.
+ */
 export interface SlideImage {
+  /**
+   * Original slide number in the PPTX file, using 1-based numbering.
+   */
   slideNumber: number;
+  /**
+   * PNG image bytes for the rendered slide.
+   */
   png: Buffer;
+  /**
+   * Actual output image width in pixels after rasterization.
+   */
   width: number;
+  /**
+   * Actual output image height in pixels after rasterization.
+   */
   height: number;
 }
 
@@ -85,6 +153,19 @@ interface PngConversionResult {
   readonly diagnostics: readonly ConversionDiagnostic[];
 }
 
+/**
+ * Convert a PPTX file to SVG documents.
+ *
+ * @param input PPTX binary data as a Node.js `Buffer` or `Uint8Array`.
+ * @param options Conversion options. `slides` uses 1-based slide numbers; when
+ * omitted, all slides are converted.
+ * @returns One SVG result per converted slide, preserving original slide numbers.
+ *
+ * Text is emitted as SVG paths by default for portable rendering. Set
+ * `textOutput: "text"` to emit native `<text>` elements with embedded subset
+ * fonts for inline browser SVG use. Font directories and font mapping options
+ * control how PPTX font names are resolved for text measurement and text output.
+ */
 export async function convertPptxToSvg(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
@@ -93,6 +174,21 @@ export async function convertPptxToSvg(
   return [...result.slides];
 }
 
+/**
+ * Convert a PPTX file to PNG images.
+ *
+ * @param input PPTX binary data as a Node.js `Buffer` or `Uint8Array`.
+ * @param options Conversion options. `slides` uses 1-based slide numbers; when
+ * omitted, all slides are converted.
+ * @returns One PNG result per converted slide, preserving original slide numbers
+ * and reporting the actual rasterized image size.
+ *
+ * PNG conversion first renders each slide to SVG and then rasterizes it with
+ * resvg. The `textOutput` option is intentionally ignored: PNG rendering always
+ * uses path-based text output because resvg does not interpret the embedded
+ * `@font-face` rules used by SVG text mode. Font directories and font mapping
+ * options are still used to resolve glyph outlines and text metrics.
+ */
 export async function convertPptxToPng(
   input: Buffer | Uint8Array,
   options?: ConvertOptions,
