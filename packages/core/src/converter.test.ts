@@ -419,6 +419,20 @@ describe("convertPptxToSvg", () => {
     });
   });
 
+  it("integrates computed view diagnostics into the conversion report", async () => {
+    const report = await convertPptxToSvg(await createPptxWithSmartArtMissingShapeTree());
+
+    expect(report.diagnostics).toContainEqual(
+      expect.objectContaining({
+        source: "computed-view",
+        severity: "warning",
+        code: "diagram-drawing-shape-tree-missing",
+        slideNumber: 1,
+        sourcePartPath: "ppt/diagrams/drawing1.xml",
+      }),
+    );
+  });
+
   it("converts a PPTX file to SVG", async () => {
     const { slides: results } = await convertPptxToSvg(testPptx);
 
@@ -534,6 +548,60 @@ async function createPptxWithRawGraphicFrame(): Promise<Buffer> {
   zip.file("ppt/slideLayouts/slideLayout1.xml", slideLayout1);
   zip.file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", slideLayout1Rels);
   zip.file("ppt/theme/theme1.xml", theme1);
+  return zip.generateAsync({ type: "nodebuffer" });
+}
+
+async function createPptxWithSmartArtMissingShapeTree(): Promise<Buffer> {
+  const smartArtFrame = `
+      <p:graphicFrame>
+        <p:nvGraphicFramePr>
+          <p:cNvPr id="5" name="SmartArt"/>
+          <p:cNvGraphicFramePr/>
+          <p:nvPr/>
+        </p:nvGraphicFramePr>
+        <p:xfrm>
+          <a:off x="0" y="0"/>
+          <a:ext cx="914400" cy="914400"/>
+        </p:xfrm>
+        <a:graphic>
+          <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/diagram">
+            <dgm:relIds xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram" r:dm="rIdDiagramData"/>
+          </a:graphicData>
+        </a:graphic>
+      </p:graphicFrame>`;
+  const slideWithSmartArt = slide1Xml.replace(
+    "</p:spTree>",
+    `${smartArtFrame}
+    </p:spTree>`,
+  );
+  const slideRelsWithSmartArt = slide1Rels.replace(
+    "</Relationships>",
+    `  <Relationship Id="rIdDiagramData" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/diagramData" Target="../diagrams/data1.xml"/>
+</Relationships>`,
+  );
+  const diagramDataRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rIdDiagramDrawing" Type="http://schemas.microsoft.com/office/2007/relationships/diagramDrawing" Target="drawing1.xml"/>
+</Relationships>`;
+
+  const zip = new JSZip();
+  zip.file("[Content_Types].xml", contentTypes);
+  zip.file("_rels/.rels", rootRels);
+  zip.file("ppt/presentation.xml", presentationXml);
+  zip.file("ppt/_rels/presentation.xml.rels", presentationRels);
+  zip.file("ppt/slides/slide1.xml", slideWithSmartArt);
+  zip.file("ppt/slides/_rels/slide1.xml.rels", slideRelsWithSmartArt);
+  zip.file("ppt/slideMasters/slideMaster1.xml", slideMaster1);
+  zip.file("ppt/slideMasters/_rels/slideMaster1.xml.rels", slideMaster1Rels);
+  zip.file("ppt/slideLayouts/slideLayout1.xml", slideLayout1);
+  zip.file("ppt/slideLayouts/_rels/slideLayout1.xml.rels", slideLayout1Rels);
+  zip.file("ppt/theme/theme1.xml", theme1);
+  zip.file("ppt/diagrams/data1.xml", `<dgm:dataModel/>`);
+  zip.file("ppt/diagrams/_rels/data1.xml.rels", diagramDataRels);
+  zip.file(
+    "ppt/diagrams/drawing1.xml",
+    `<dsp:drawing xmlns:dsp="http://schemas.microsoft.com/office/drawing/2008/diagram"/>`,
+  );
   return zip.generateAsync({ type: "nodebuffer" });
 }
 
