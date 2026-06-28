@@ -7,6 +7,16 @@ import prettier from "eslint-config-prettier";
 
 const repoRoot = dirname(fileURLToPath(import.meta.url));
 const documentSource = fileURLToPath(new URL("./packages/document/src/index.ts", import.meta.url));
+const documentBoundaryRestrictedImportPattern = {
+  group: [
+    "@pptx-glimpse/renderer",
+    "@pptx-glimpse/renderer/*",
+    "pptx-glimpse",
+    "pptx-glimpse/*",
+  ],
+  message:
+    "@pptx-glimpse/document is the lower-level OOXML/PptxSourceModel foundation and must not import renderer or the public core package.",
+};
 
 export default tseslint.config(
   {
@@ -176,6 +186,20 @@ export default tseslint.config(
           includeInternal: true,
         },
       ],
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            documentBoundaryRestrictedImportPattern,
+            {
+              group: ["**/unsafe-type-assertion.js"],
+              importNames: ["unsafeFixtureAssertion"],
+              message:
+                "unsafeFixtureAssertion is test-only; production code must use a boundary-specific helper.",
+            },
+          ],
+        },
+      ],
     },
   },
   {
@@ -190,6 +214,12 @@ export default tseslint.config(
           packageDir: ["packages/document", "."],
           devDependencies: true,
           includeInternal: true,
+        },
+      ],
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [documentBoundaryRestrictedImportPattern],
         },
       ],
     },
