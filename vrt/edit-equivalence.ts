@@ -39,6 +39,7 @@ interface EditEquivalenceResult {
 const DEFAULT_COMPARE_OPTIONS = {
   pixelThreshold: 0,
   mismatchTolerance: 0,
+  includeAntiAliased: true,
 } as const satisfies CompareOptions;
 
 const DEFAULT_DIFF_DIR = join(tmpdir(), "pptx-glimpse-edit-equivalence-diffs");
