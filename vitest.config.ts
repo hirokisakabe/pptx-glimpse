@@ -8,6 +8,9 @@ export default defineConfig({
       "@pptx-glimpse/document": fileURLToPath(
         new URL("./packages/document/src/index.ts", import.meta.url),
       ),
+      "@pptx-glimpse/editor-core": fileURLToPath(
+        new URL("./packages/editor-core/src/index.ts", import.meta.url),
+      ),
     },
   },
   test: {
