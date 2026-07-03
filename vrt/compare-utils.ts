@@ -3,14 +3,14 @@ import { dirname } from "path";
 import pixelmatch from "pixelmatch";
 import sharp from "sharp";
 
-interface CompareResult {
+export interface CompareResult {
   totalPixels: number;
   mismatchedPixels: number;
   mismatchPercentage: number;
   passed: boolean;
 }
 
-interface CompareOptions {
+export interface CompareOptions {
   pixelThreshold: number;
   mismatchTolerance: number;
   /** Resize reference image to actual size and compare (for LibreOffice VRT) */
@@ -32,7 +32,7 @@ export async function compareImages(
   return compareImageBuffers(actualPng, readFileSync(referencePath), diffPath, options);
 }
 
-async function compareImageBuffers(
+export async function compareImageBuffers(
   actualPng: Uint8Array | Buffer,
   referencePng: Uint8Array | Buffer,
   diffPath: string,
