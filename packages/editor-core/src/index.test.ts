@@ -66,6 +66,31 @@ describe("EditorSession text-run commands", () => {
     expect(session.canRedo).toBe(false);
   });
 
+  it("keeps the latest edit when the same text run is edited repeatedly", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const handle = requireHandle(firstRun(source).handle);
+
+    expectApplied(
+      session.apply({
+        kind: "replaceTextRunPlainText",
+        handle,
+        text: "First edit",
+      }),
+    );
+    const edited = expectApplied(
+      session.apply({
+        kind: "replaceTextRunPlainText",
+        handle,
+        text: "Second edit",
+      }),
+    );
+    const reread = readPptx(writePptx(edited));
+
+    expect(firstRun(edited).text).toBe("Second edit");
+    expect(firstRun(reread).text).toBe("Second edit");
+  });
+
   it("rejects an invalid command without changing document state or undo history", async () => {
     const source = readPptx(await buildTextEditFixture());
     const session = createEditorSession(source);

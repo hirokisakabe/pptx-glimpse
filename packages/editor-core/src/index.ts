@@ -1,5 +1,7 @@
 import {
   type PptxSourceModel,
+  type PptxSourceModelEdit,
+  type PptxSourceModelTextRunEdit,
   replaceTextRunPlainText,
   type SourceHandle,
 } from "@pptx-glimpse/document";
@@ -35,7 +37,6 @@ export type EditorHistoryResult =
     };
 
 interface HistoryEntry {
-  readonly command: EditorCommand;
   readonly before: PptxSourceModel;
   readonly after: PptxSourceModel;
 }
@@ -74,7 +75,7 @@ export class EditorSession {
     let after: PptxSourceModel;
 
     try {
-      after = applyCommandToDocument(before, command);
+      after = normalizeEditorEdits(applyCommandToDocument(before, command));
     } catch (error) {
       return {
         ok: false,
@@ -85,7 +86,7 @@ export class EditorSession {
     }
 
     this.#document = after;
-    this.#undoStack.push({ command, before, after });
+    this.#undoStack.push({ before, after });
     this.#redoStack.length = 0;
 
     return { ok: true, document: after };
@@ -124,4 +125,34 @@ function applyCommandToDocument(
     case "replaceTextRunPlainText":
       return replaceTextRunPlainText(document, command.handle, command.text);
   }
+}
+
+function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
+  const edits = document.edits;
+  if (edits === undefined) return document;
+
+  const seenTextRuns = new Set<string>();
+  const normalizedReversed: PptxSourceModelEdit[] = [];
+
+  for (let index = edits.length - 1; index >= 0; index -= 1) {
+    const edit = edits[index];
+    if (edit.kind === "replaceTextRunPlainText") {
+      const key = textRunEditKey(edit);
+      if (seenTextRuns.has(key)) continue;
+      seenTextRuns.add(key);
+    }
+    normalizedReversed.push(edit);
+  }
+
+  if (normalizedReversed.length === edits.length) return document;
+  return {
+    ...document,
+    edits: normalizedReversed.reverse(),
+  };
+}
+
+function textRunEditKey(edit: PptxSourceModelTextRunEdit): string {
+  return [edit.handle.partPath, edit.handle.nodeId ?? "", edit.handle.relationshipId ?? ""].join(
+    "\u0000",
+  );
 }
