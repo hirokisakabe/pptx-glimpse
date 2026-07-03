@@ -244,6 +244,12 @@ describe("EditorSession xfrm commands", () => {
       width: asEmu(3000),
       height: asEmu(4000),
     });
+    const invalidExtentResult = session.apply({
+      kind: "resizeShape",
+      handle: requireHandle(firstShape(source).handle),
+      width: asEmu(0),
+      height: asEmu(Number.NaN),
+    });
 
     expect(noXfrmResult).toMatchObject({
       ok: false,
@@ -260,6 +266,14 @@ describe("EditorSession xfrm commands", () => {
     expect(missingHandleResult.ok).toBe(false);
     if (!missingHandleResult.ok) {
       expect(missingHandleResult.message).toMatch(/shape handle was not found/);
+    }
+    expect(invalidExtentResult).toMatchObject({
+      ok: false,
+      code: "invalid-command",
+    });
+    expect(invalidExtentResult.ok).toBe(false);
+    if (!invalidExtentResult.ok) {
+      expect(invalidExtentResult.message).toMatch(/finite positive EMU value/);
     }
     expect(session.document).toBe(before);
     expect(firstShape(session.document).transform).toMatchObject({

@@ -152,6 +152,9 @@ function applyCommandToDocument(
 }
 
 function moveShape(document: PptxSourceModel, command: MoveShapeCommand): PptxSourceModel {
+  requireFiniteEmu(command.offsetX, "moveShape", "offsetX");
+  requireFiniteEmu(command.offsetY, "moveShape", "offsetY");
+
   const current = requireEditableShapeTransform(document, command.handle, "moveShape");
   return updateShapeTransform(document, command.handle, {
     offsetX: command.offsetX,
@@ -162,6 +165,9 @@ function moveShape(document: PptxSourceModel, command: MoveShapeCommand): PptxSo
 }
 
 function resizeShape(document: PptxSourceModel, command: ResizeShapeCommand): PptxSourceModel {
+  requirePositiveFiniteEmu(command.width, "resizeShape", "width");
+  requirePositiveFiniteEmu(command.height, "resizeShape", "height");
+
   const current = requireEditableShapeTransform(document, command.handle, "resizeShape");
   return updateShapeTransform(document, command.handle, {
     offsetX: current.offsetX,
@@ -184,6 +190,26 @@ function requireEditableShapeTransform(
     throw new Error(`${commandName}: shape handle does not reference a shape with xfrm`);
   }
   return shape.transform;
+}
+
+function requireFiniteEmu(
+  value: Emu,
+  commandName: "moveShape" | "resizeShape",
+  fieldName: string,
+): void {
+  if (!Number.isFinite(value)) {
+    throw new Error(`${commandName}: ${fieldName} must be a finite EMU value`);
+  }
+}
+
+function requirePositiveFiniteEmu(
+  value: Emu,
+  commandName: "moveShape" | "resizeShape",
+  fieldName: string,
+): void {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${commandName}: ${fieldName} must be a finite positive EMU value`);
+  }
 }
 
 function hasTransform(shape: SourceShapeNode): shape is SourceShapeNode & {
