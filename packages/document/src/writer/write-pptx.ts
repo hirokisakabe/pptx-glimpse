@@ -31,6 +31,7 @@ import type {
   PartRelationships,
   PptxSourceModel,
   PptxSourceModelEdit,
+  PptxSourceModelShapeTransformEdit,
   PptxSourceModelTextRunEdit,
   RawOoxmlNode,
   RawPackagePart,
@@ -65,7 +66,10 @@ const xmlBuilder = new XMLBuilder({
  */
 export function writePptx(source: PptxSourceModel): WritePptxOutput {
   const textRunEdits = source.edits?.filter(isTextRunEdit) ?? [];
-  const dirtyPartPaths = new Set(textRunEdits.map((edit) => edit.handle.partPath));
+  const shapeTransformEdits = source.edits?.filter(isShapeTransformEdit) ?? [];
+  const dirtyPartPaths = new Set(
+    [...textRunEdits, ...shapeTransformEdits].map((edit) => edit.handle.partPath),
+  );
   const files: Record<string, Uint8Array> = {
     [CONTENT_TYPES_PART]: encodeXml(serializeContentTypes(source.packageGraph.contentTypes)),
   };
@@ -90,7 +94,7 @@ export function writePptx(source: PptxSourceModel): WritePptxOutput {
   }
 
   for (const partPath of dirtyPartPaths) {
-    files[partPath] = serializeDirtyXmlPart(source, partPath, textRunEdits);
+    files[partPath] = serializeDirtyXmlPart(source, partPath, textRunEdits, shapeTransformEdits);
     written.add(partPath);
   }
 
@@ -110,10 +114,17 @@ function isTextRunEdit(edit: PptxSourceModelEdit): edit is PptxSourceModelTextRu
   return edit.kind === "replaceTextRunPlainText";
 }
 
+function isShapeTransformEdit(
+  edit: PptxSourceModelEdit,
+): edit is PptxSourceModelShapeTransformEdit {
+  return edit.kind === "updateShapeTransform";
+}
+
 function serializeDirtyXmlPart(
   source: PptxSourceModel,
   partPath: PartPath,
   textRunEdits: readonly PptxSourceModelTextRunEdit[],
+  shapeTransformEdits: readonly PptxSourceModelShapeTransformEdit[],
 ): Uint8Array {
   const rawPart = source.packageGraph.rawParts?.find((part) => part.partPath === partPath);
   if (rawPart === undefined) {
@@ -124,9 +135,11 @@ function serializeDirtyXmlPart(
   }
 
   const root = parseXml(textDecoder.decode(rawPart.bytes));
-  const edits = textRunEdits.filter((edit) => edit.handle.partPath === partPath);
-  for (const edit of edits) {
+  for (const edit of textRunEdits.filter((edit) => edit.handle.partPath === partPath)) {
     applyTextRunEdit(root, edit);
+  }
+  for (const edit of shapeTransformEdits.filter((edit) => edit.handle.partPath === partPath)) {
+    applyShapeTransformEdit(root, edit);
   }
   return encodeXml(XML_DECLARATION + xmlBuilder.build(root));
 }
@@ -150,11 +163,50 @@ function applyTextRunEdit(root: XmlNode, edit: PptxSourceModelTextRunEdit): void
   setChildText(run, "t", edit.text);
 }
 
+function applyShapeTransformEdit(root: XmlNode, edit: PptxSourceModelShapeTransformEdit): void {
+  const locator = parseShapeLocator(edit.handle);
+  const slide = getChild(root, "sld");
+  const cSld = getChild(slide, "cSld");
+  const spTree = getChild(cSld, "spTree");
+  const shape = locateShapeTreeNode(spTree, locator);
+  const xfrm = getShapeTransformNode(shape);
+
+  if (xfrm === undefined) {
+    throw new Error(
+      `writePptx: shape transform handle '${String(
+        edit.handle.nodeId ?? edit.handle.orderingSlot ?? "",
+      )}' no longer matches source XML with xfrm`,
+    );
+  }
+
+  const off = getChild(xfrm, "off");
+  const ext = getChild(xfrm, "ext");
+  if (off === undefined || ext === undefined) {
+    throw new Error("writePptx: shape transform xfrm must contain off and ext");
+  }
+
+  off["@_x"] = String(edit.offsetX);
+  off["@_y"] = String(edit.offsetY);
+  ext["@_cx"] = String(edit.width);
+  ext["@_cy"] = String(edit.height);
+}
+
 interface TextRunLocator {
   readonly shapeNodeId?: string;
   readonly shapeOrderingSlot?: number;
   readonly paragraphIndex: number;
   readonly runIndex: number;
+}
+
+interface ShapeLocator {
+  readonly nodeId?: string;
+  readonly orderingSlot?: number;
+}
+
+function parseShapeLocator(handle: PptxSourceModelShapeTransformEdit["handle"]): ShapeLocator {
+  if (handle.nodeId !== undefined) return { nodeId: String(handle.nodeId) };
+  if (handle.orderingSlot !== undefined) return { orderingSlot: handle.orderingSlot };
+  throw new Error("writePptx: shape transform edit requires nodeId or orderingSlot in handle");
 }
 
 function parseTextRunLocator(
@@ -194,6 +246,29 @@ function locateShape(spTree: XmlNode | undefined, locator: TextRunLocator): XmlN
   return getShapeByOrderingSlot(spTree, locator.shapeOrderingSlot);
 }
 
+function locateShapeTreeNode(
+  spTree: XmlNode | undefined,
+  locator: ShapeLocator,
+): XmlNode | undefined {
+  const shapeKeys = new Set(["sp", "pic", "cxnSp", "graphicFrame", "grpSp"]);
+  if (!spTree) return undefined;
+  if (locator.nodeId !== undefined) {
+    for (const key of Object.keys(spTree)) {
+      if (key.startsWith("@_") || !shapeKeys.has(localName(key))) continue;
+      const value = spTree[key];
+      const items = Array.isArray(value) ? unsafeOoxmlBoundaryAssertion<unknown[]>(value) : [value];
+      const found = items.find(
+        (item) =>
+          getShapeTreeNodeId(unsafeOoxmlBoundaryAssertion<XmlNode>(item)) === locator.nodeId,
+      );
+      if (found !== undefined) return unsafeOoxmlBoundaryAssertion<XmlNode>(found);
+    }
+    return undefined;
+  }
+  if (locator.orderingSlot === undefined) return undefined;
+  return getShapeTreeNodeByOrderingSlot(spTree, locator.orderingSlot);
+}
+
 function getShapeByOrderingSlot(
   spTree: XmlNode | undefined,
   orderingSlot: number,
@@ -216,6 +291,47 @@ function getShapeByOrderingSlot(
     }
   }
   return undefined;
+}
+
+function getShapeTreeNodeByOrderingSlot(
+  spTree: XmlNode | undefined,
+  orderingSlot: number,
+): XmlNode | undefined {
+  if (!spTree) return undefined;
+
+  let currentSlot = 0;
+  for (const key of Object.keys(spTree)) {
+    if (key.startsWith("@_")) continue;
+    const local = localName(key);
+    if (local === "nvGrpSpPr" || local === "grpSpPr") continue;
+
+    const value = spTree[key];
+    const items = Array.isArray(value) ? value : [value];
+    for (const item of items) {
+      if (currentSlot === orderingSlot) return unsafeOoxmlBoundaryAssertion<XmlNode>(item);
+      currentSlot++;
+    }
+  }
+  return undefined;
+}
+
+function getShapeTreeNodeId(node: XmlNode): string | undefined {
+  const nonVisualProperties =
+    getChild(node, "nvSpPr") ??
+    getChild(node, "nvPicPr") ??
+    getChild(node, "nvCxnSpPr") ??
+    getChild(node, "nvGrpSpPr") ??
+    getChild(node, "nvGraphicFramePr");
+  return getAttr(getChild(nonVisualProperties, "cNvPr"), "id");
+}
+
+function getShapeTransformNode(shape: XmlNode | undefined): XmlNode | undefined {
+  if (shape === undefined) return undefined;
+  return (
+    getChild(getChild(shape, "spPr"), "xfrm") ??
+    getChild(getChild(shape, "grpSpPr"), "xfrm") ??
+    getChild(shape, "xfrm")
+  );
 }
 
 function setChildText(node: XmlNode, name: string, text: string): void {

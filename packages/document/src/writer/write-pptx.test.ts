@@ -5,8 +5,14 @@ import { unzipSync, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 
 // Import via the actual public surface (`@pptx-glimpse/document`).
-import { readPptx, writePptx } from "../index.js";
-import { findTextRunBySourceHandle, replaceTextRunPlainText, type SourceShape } from "../index.js";
+import { asEmu, asSourceNodeId, readPptx, writePptx } from "../index.js";
+import {
+  findShapeNodeBySourceHandle,
+  findTextRunBySourceHandle,
+  replaceTextRunPlainText,
+  type SourceShape,
+  updateShapeTransform,
+} from "../index.js";
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -340,6 +346,87 @@ describe("writePptx - one plain text-run edit", () => {
 
     const edited = replaceTextRunPlainText(source, run.handle!, "Edited via slot");
     expect(firstRun(readPptx(writePptx(edited))).text).toBe("Edited via slot");
+  });
+});
+
+describe("writePptx - shape xfrm edit", () => {
+  it("Apply offset and extent update to PptxSourceModel source and reflect in PPTX after write", () => {
+    const source = readPptx(buildTextEditFixture());
+    const shape = firstShape(source);
+    const handle = shape.handle!;
+
+    const edited = updateShapeTransform(source, handle, {
+      offsetX: asEmu(1111),
+      offsetY: asEmu(2222),
+      width: asEmu(3333),
+      height: asEmu(4444),
+    });
+    const reread = readPptx(writePptx(edited));
+    const editedShape = findShapeNodeBySourceHandle(reread, handle);
+
+    expect(firstShape(edited).transform).toMatchObject({
+      offsetX: 1111,
+      offsetY: 2222,
+      width: 3333,
+      height: 4444,
+    });
+    expect(editedShape?.transform).toMatchObject({
+      offsetX: 1111,
+      offsetY: 2222,
+      width: 3333,
+      height: 4444,
+    });
+  });
+
+  it("Preserves unrelated package material while replacing only dirty slide XML", () => {
+    const input = buildTextEditFixture();
+    const source = readPptx(input);
+    const edited = updateShapeTransform(source, firstShape(source).handle!, {
+      offsetX: asEmu(1111),
+      offsetY: asEmu(2222),
+      width: asEmu(3333),
+      height: asEmu(4444),
+    });
+    const output = writePptx(edited);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+
+    expect(slideXml).toContain('<a:off x="1111" y="2222"');
+    expect(slideXml).toContain('<a:ext cx="3333" cy="4444"');
+    expect(getEntry(output, "docProps/custom.xml")).toEqual(getEntry(input, "docProps/custom.xml"));
+    expect(getEntry(output, "ppt/media/image1.png")).toEqual(
+      getEntry(input, "ppt/media/image1.png"),
+    );
+  });
+
+  it("Rejects shape handles that do not have xfrm", () => {
+    const source = readPptx(buildSlotHandleTextEditFixture());
+    const shapeWithoutXfrm = firstShape(source);
+
+    expect(() =>
+      updateShapeTransform(source, shapeWithoutXfrm.handle!, {
+        offsetX: asEmu(1),
+        offsetY: asEmu(2),
+        width: asEmu(3),
+        height: asEmu(4),
+      }),
+    ).toThrow(/does not reference a shape with xfrm/);
+  });
+
+  it("Rejects nonexistent shape handles", () => {
+    const source = readPptx(buildTextEditFixture());
+    const handle = {
+      ...firstShape(source).handle!,
+      nodeId: asSourceNodeId("999"),
+    };
+
+    expect(() =>
+      updateShapeTransform(source, handle, {
+        offsetX: asEmu(1),
+        offsetY: asEmu(2),
+        width: asEmu(3),
+        height: asEmu(4),
+      }),
+    ).toThrow(/shape handle was not found/);
   });
 });
 

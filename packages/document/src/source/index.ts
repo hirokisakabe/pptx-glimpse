@@ -3,7 +3,13 @@
  */
 
 export type { Diagnostic, DiagnosticSeverity } from "./diagnostics.js";
-export { findTextRunBySourceHandle, replaceTextRunPlainText } from "./editing.js";
+export type { UpdateShapeTransformInput } from "./editing.js";
+export {
+  findShapeNodeBySourceHandle,
+  findTextRunBySourceHandle,
+  replaceTextRunPlainText,
+  updateShapeTransform,
+} from "./editing.js";
 export type {
   PartPath,
   RawSidecarId,
@@ -26,6 +32,7 @@ export type {
 export type {
   PptxSourceModel,
   PptxSourceModelEdit,
+  PptxSourceModelShapeTransformEdit,
   PptxSourceModelTextRunEdit,
 } from "./pptx-source-model.js";
 export type {

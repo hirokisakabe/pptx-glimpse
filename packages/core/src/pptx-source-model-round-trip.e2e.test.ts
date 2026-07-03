@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import {
+  asEmu,
   createComputedView,
+  findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
   type MediaPart,
   type PptxSourceModel,
@@ -10,7 +12,9 @@ import {
   replaceTextRunPlainText,
   type SourceParagraph,
   type SourceShape,
+  type SourceShapeNode,
   type SourceTextRun,
+  updateShapeTransform,
   writePptx,
 } from "@pptx-glimpse/document";
 import { renderSlideToSvg } from "@pptx-glimpse/renderer";
@@ -151,6 +155,39 @@ describe("PptxSourceModel PoC end-to-end round-trip", () => {
     // No-edit writer output is asserted to keep public SVG stable for the
     // selected shared fixture, so this e2e coverage does not need VRT snapshots.
   });
+
+  it("writes, re-reads, and renders one shape xfrm edit through convertPptxToSvg", async () => {
+    const input = readFixture("real-product-page.pptx");
+    const source = readPptx(input);
+    const editable = firstTransformShape(source);
+    const editedOutput = writePptx(
+      updateShapeTransform(source, editable.shape.handle, {
+        offsetX: asEmu(914400),
+        offsetY: asEmu(1828800),
+        width: asEmu(2743200),
+        height: asEmu(914400),
+      }),
+    );
+    const reread = readPptx(editedOutput);
+    const rereadShape = findShapeNodeBySourceHandle(reread, editable.shape.handle);
+
+    expect(rereadShape?.transform).toMatchObject({
+      offsetX: 914400,
+      offsetY: 1828800,
+      width: 2743200,
+      height: 914400,
+    });
+
+    const { slides } = await convertPptxToSvg(editedOutput, {
+      slides: [editable.slideNumber],
+      textOutput: "text",
+      skipSystemFonts: true,
+    });
+
+    expect(slides).toHaveLength(1);
+    expect(slides[0].svg).toContain('transform="translate(96, 192)"');
+    expect(slides[0].svg).toContain('width="288" height="96"');
+  });
 });
 
 const textDecoder = new TextDecoder();
@@ -230,6 +267,28 @@ function firstEditableRun(source: PptxSourceModel): {
     }
   }
   throw new Error("No editable text run found in selected PptxSourceModel fixture");
+}
+
+function firstTransformShape(source: PptxSourceModel): {
+  readonly slideNumber: number;
+  readonly shape: TransformEditableShape;
+} {
+  for (const slide of source.slides) {
+    const slideNumber = source.presentation.slidePartPaths.indexOf(slide.partPath) + 1;
+    if (slideNumber <= 0) continue;
+    const shape = slide.shapes.find(isTransformEditableShape);
+    if (shape !== undefined) return { slideNumber, shape };
+  }
+  throw new Error("No editable shape transform found in selected PptxSourceModel fixture");
+}
+
+type TransformEditableShape = SourceShapeNode & {
+  readonly handle: NonNullable<SourceShapeNode["handle"]>;
+  readonly transform: NonNullable<SourceShape["transform"]>;
+};
+
+function isTransformEditableShape(shape: SourceShapeNode): shape is TransformEditableShape {
+  return shape.kind !== "raw" && shape.handle !== undefined && shape.transform !== undefined;
 }
 
 type EditableTextRun = SourceTextRun & {

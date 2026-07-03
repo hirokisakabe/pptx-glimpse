@@ -32,6 +32,7 @@ import type {
   SourceSlideMaster,
   SourceTheme,
 } from "./presentation.js";
+import type { Emu } from "./units.js";
 
 export interface PptxSourceModel {
   /** Structure of package part / relationship / content type / media. */
@@ -47,10 +48,19 @@ export interface PptxSourceModel {
   readonly edits?: readonly PptxSourceModelEdit[];
 }
 
-export type PptxSourceModelEdit = PptxSourceModelTextRunEdit;
+export type PptxSourceModelEdit = PptxSourceModelTextRunEdit | PptxSourceModelShapeTransformEdit;
 
 export interface PptxSourceModelTextRunEdit {
   readonly kind: "replaceTextRunPlainText";
   readonly handle: SourceHandle;
   readonly text: string;
+}
+
+export interface PptxSourceModelShapeTransformEdit {
+  readonly kind: "updateShapeTransform";
+  readonly handle: SourceHandle;
+  readonly offsetX: Emu;
+  readonly offsetY: Emu;
+  readonly width: Emu;
+  readonly height: Emu;
 }

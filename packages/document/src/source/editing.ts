@@ -1,10 +1,14 @@
 import type {
+  Emu,
   PptxSourceModel,
   SourceHandle,
   SourceParagraph,
   SourceShape,
+  SourceShapeNode,
   SourceTextRun,
 } from "./index.js";
+
+type TransformableShapeNode = Exclude<SourceShapeNode, { readonly kind: "raw" }>;
 
 export function findTextRunBySourceHandle(
   source: PptxSourceModel,
@@ -69,6 +73,73 @@ export function replaceTextRunPlainText(
   };
 }
 
+export interface UpdateShapeTransformInput {
+  readonly offsetX: Emu;
+  readonly offsetY: Emu;
+  readonly width: Emu;
+  readonly height: Emu;
+}
+
+export function findShapeNodeBySourceHandle(
+  source: PptxSourceModel,
+  handle: SourceHandle,
+): SourceShapeNode | undefined {
+  for (const slide of source.slides) {
+    const shape = slide.shapes.find((node) => sourceHandlesEqual(node.handle, handle));
+    if (shape !== undefined) return shape;
+  }
+  return undefined;
+}
+
+export function updateShapeTransform(
+  source: PptxSourceModel,
+  handle: SourceHandle,
+  transform: UpdateShapeTransformInput,
+): PptxSourceModel {
+  let updated = false;
+
+  const slides = source.slides.map((slide) => ({
+    ...slide,
+    shapes: slide.shapes.map((shape) => {
+      if (!sourceHandlesEqual(shape.handle, handle)) return shape;
+      if (!hasEditableTransform(shape)) {
+        throw new Error("updateShapeTransform: shape handle does not reference a shape with xfrm");
+      }
+      updated = true;
+      return {
+        ...shape,
+        transform: {
+          ...shape.transform,
+          offsetX: transform.offsetX,
+          offsetY: transform.offsetY,
+          width: transform.width,
+          height: transform.height,
+        },
+      };
+    }),
+  }));
+
+  if (!updated) {
+    throw new Error("updateShapeTransform: shape handle was not found in PptxSourceModel source");
+  }
+
+  return {
+    ...source,
+    slides,
+    edits: [
+      ...(source.edits ?? []),
+      {
+        kind: "updateShapeTransform",
+        handle,
+        offsetX: transform.offsetX,
+        offsetY: transform.offsetY,
+        width: transform.width,
+        height: transform.height,
+      },
+    ],
+  };
+}
+
 function findTextRunInShape(shape: SourceShape, handle: SourceHandle): SourceTextRun | undefined {
   for (const paragraph of shape.textBody?.paragraphs ?? []) {
     for (const run of paragraph.runs) {
@@ -76,6 +147,12 @@ function findTextRunInShape(shape: SourceShape, handle: SourceHandle): SourceTex
     }
   }
   return undefined;
+}
+
+function hasEditableTransform(shape: SourceShapeNode): shape is TransformableShapeNode & {
+  readonly transform: NonNullable<TransformableShapeNode["transform"]>;
+} {
+  return shape.kind !== "raw" && shape.transform !== undefined;
 }
 
 function sourceHandlesEqual(left: SourceHandle | undefined, right: SourceHandle): boolean {
