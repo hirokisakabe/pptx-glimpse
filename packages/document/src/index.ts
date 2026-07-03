@@ -71,6 +71,7 @@ export type {
   PartRelationships,
   PptxSourceModel,
   PptxSourceModelEdit,
+  PptxSourceModelParagraphTextEdit,
   PptxSourceModelShapeTransformEdit,
   PptxSourceModelTextRunEdit,
   Pt,
@@ -163,8 +164,10 @@ export type {
   UpdateShapeTransformInput,
 } from "./source/index.js";
 export {
+  findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
+  replaceParagraphPlainText,
   replaceTextRunPlainText,
   updateShapeTransform,
 } from "./source/index.js";

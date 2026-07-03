@@ -48,10 +48,19 @@ export interface PptxSourceModel {
   readonly edits?: readonly PptxSourceModelEdit[];
 }
 
-export type PptxSourceModelEdit = PptxSourceModelTextRunEdit | PptxSourceModelShapeTransformEdit;
+export type PptxSourceModelEdit =
+  | PptxSourceModelTextRunEdit
+  | PptxSourceModelParagraphTextEdit
+  | PptxSourceModelShapeTransformEdit;
 
 export interface PptxSourceModelTextRunEdit {
   readonly kind: "replaceTextRunPlainText";
+  readonly handle: SourceHandle;
+  readonly text: string;
+}
+
+export interface PptxSourceModelParagraphTextEdit {
+  readonly kind: "replaceParagraphPlainText";
   readonly handle: SourceHandle;
   readonly text: string;
 }

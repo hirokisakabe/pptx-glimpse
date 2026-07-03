@@ -1,3 +1,4 @@
+import { asSourceNodeId } from "./handles.js";
 import type {
   Emu,
   PptxSourceModel,
@@ -19,6 +20,20 @@ export function findTextRunBySourceHandle(
       if (shape.kind !== "shape") continue;
       const run = findTextRunInShape(shape, handle);
       if (run !== undefined) return run;
+    }
+  }
+  return undefined;
+}
+
+export function findParagraphBySourceHandle(
+  source: PptxSourceModel,
+  handle: SourceHandle,
+): SourceParagraph | undefined {
+  for (const slide of source.slides) {
+    for (const shape of slide.shapes) {
+      if (shape.kind !== "shape") continue;
+      const paragraph = findParagraphInShape(shape, handle);
+      if (paragraph !== undefined) return paragraph;
     }
   }
   return undefined;
@@ -70,6 +85,63 @@ export function replaceTextRunPlainText(
     ...source,
     slides,
     edits: [...(source.edits ?? []), { kind: "replaceTextRunPlainText", handle, text }],
+  };
+}
+
+export function replaceParagraphPlainText(
+  source: PptxSourceModel,
+  handle: SourceHandle,
+  text: string,
+): PptxSourceModel {
+  let replaced = false;
+
+  const slides = source.slides.map((slide) => ({
+    ...slide,
+    shapes: slide.shapes.map((shape) => {
+      if (shape.kind !== "shape" || shape.textBody === undefined) return shape;
+
+      let shapeChanged = false;
+      const paragraphs = shape.textBody.paragraphs.map((paragraph) => {
+        if (!sourceHandlesEqual(paragraph.handle, handle)) return paragraph;
+        const replacementHandle = createReplacementRunHandle(paragraph);
+        replaced = true;
+        shapeChanged = true;
+        return {
+          ...paragraph,
+          runs: [
+            {
+              kind: "textRun",
+              text,
+              ...(paragraph.runs[0]?.properties !== undefined
+                ? { properties: paragraph.runs[0].properties }
+                : {}),
+              ...(replacementHandle !== undefined ? { handle: replacementHandle } : {}),
+            },
+          ],
+        } satisfies SourceParagraph;
+      });
+
+      if (!shapeChanged) return shape;
+      return {
+        ...shape,
+        textBody: {
+          ...shape.textBody,
+          paragraphs,
+        },
+      } satisfies SourceShape;
+    }),
+  }));
+
+  if (!replaced) {
+    throw new Error(
+      "replaceParagraphPlainText: paragraph handle was not found in PptxSourceModel source",
+    );
+  }
+
+  return {
+    ...source,
+    slides,
+    edits: [...(source.edits ?? []), { kind: "replaceParagraphPlainText", handle, text }],
   };
 }
 
@@ -157,6 +229,25 @@ function findTextRunInShape(shape: SourceShape, handle: SourceHandle): SourceTex
     }
   }
   return undefined;
+}
+
+function findParagraphInShape(
+  shape: SourceShape,
+  handle: SourceHandle,
+): SourceParagraph | undefined {
+  return shape.textBody?.paragraphs.find((paragraph) =>
+    sourceHandlesEqual(paragraph.handle, handle),
+  );
+}
+
+function createReplacementRunHandle(paragraph: SourceParagraph): SourceHandle | undefined {
+  if (paragraph.runs[0]?.handle !== undefined) return paragraph.runs[0].handle;
+  if (paragraph.handle?.nodeId === undefined) return undefined;
+  return {
+    ...paragraph.handle,
+    nodeId: asSourceNodeId(`${paragraph.handle.nodeId}:r:0`),
+    orderingSlot: 0,
+  };
 }
 
 function hasEditableTransform(shape: SourceShapeNode): shape is TransformableShapeNode & {
