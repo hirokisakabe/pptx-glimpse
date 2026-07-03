@@ -7,7 +7,7 @@ import { mkdirSync, writeFileSync } from "fs";
 import JSZip from "jszip";
 import { dirname, join } from "path";
 import sharp from "sharp";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 
 import { VRT_CASES } from "./vrt-cases.js";
 
@@ -143,7 +143,7 @@ function gridPosition(
   };
 }
 
-function shapeXml(
+export function shapeXml(
   id: number,
   name: string,
   opts: {
@@ -211,7 +211,7 @@ function outlineXml(
   return `<a:ln w="${width}"${capAttr}><a:solidFill><a:srgbClr val="${color}"/></a:solidFill>${dash}${joinXml}</a:ln>`;
 }
 
-function textBodyXmlHelper(
+export function textBodyXmlHelper(
   text: string,
   opts?: {
     bold?: boolean;
@@ -220,6 +220,7 @@ function textBodyXmlHelper(
     strikethrough?: boolean;
     fontSize?: number;
     color?: string;
+    typeface?: string;
     align?: string;
     anchor?: string;
     wrap?: string;
@@ -234,6 +235,7 @@ function textBodyXmlHelper(
   const u = opts?.underline ? ` u="sng"` : "";
   const strike = opts?.strikethrough ? ` strike="sngStrike"` : "";
   const fillColor = opts?.color ?? "000000";
+  const latin = opts?.typeface ? `<a:latin typeface="${escapeXmlAttribute(opts.typeface)}"/>` : "";
   const algn = opts?.align ? ` algn="${opts.align}"` : "";
   const anchor = opts?.anchor ?? "ctr";
   const wrap = opts?.wrap ? ` wrap="${opts.wrap}"` : "";
@@ -258,14 +260,23 @@ function textBodyXmlHelper(
     <a:r>
       <a:rPr lang="en-US"${sz}${b}${i}${u}${strike}>
         <a:solidFill><a:srgbClr val="${fillColor}"/></a:solidFill>
+        ${latin}
       </a:rPr>
-      <a:t>${text}</a:t>
+      <a:t>${escapeXmlText(text)}</a:t>
     </a:r>
   </a:p>
 </p:txBody>`;
 }
 
-function wrapSlideXml(spTreeContent: string, backgroundXml = ""): string {
+function escapeXmlText(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function escapeXmlAttribute(value: string): string {
+  return escapeXmlText(value).replace(/"/g, "&quot;");
+}
+
+export function wrapSlideXml(spTreeContent: string, backgroundXml = ""): string {
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:sld xmlns:a="${NS.a}" xmlns:r="${NS.r}" xmlns:p="${NS.p}">
   <p:cSld>
@@ -281,7 +292,7 @@ function wrapSlideXml(spTreeContent: string, backgroundXml = ""): string {
 </p:sld>`;
 }
 
-function slideRelsXml(
+export function slideRelsXml(
   extraRels: { id: string; type: string; target: string; targetMode?: string }[] = [],
 ): string {
   const extras = extraRels
@@ -315,7 +326,7 @@ interface PptxBuildOptions {
   defaultTextStyleXml?: string;
 }
 
-async function buildPptx(options: PptxBuildOptions): Promise<Buffer> {
+export async function buildPptx(options: PptxBuildOptions): Promise<Buffer> {
   const zip = new JSZip();
 
   // Content_Types
@@ -7100,4 +7111,6 @@ async function main(): Promise<void> {
   console.log("\nDone!");
 }
 
-main().catch(console.error);
+if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch(console.error);
+}
