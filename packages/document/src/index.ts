@@ -71,6 +71,7 @@ export type {
   PartRelationships,
   PptxSourceModel,
   PptxSourceModelEdit,
+  PptxSourceModelShapeTransformEdit,
   PptxSourceModelTextRunEdit,
   Pt,
   RawOoxmlNode,
@@ -159,8 +160,14 @@ export type {
   SourceThemeFormatScheme,
   SourceTransform,
   SourceVerticalAnchor,
+  UpdateShapeTransformInput,
 } from "./source/index.js";
-export { findTextRunBySourceHandle, replaceTextRunPlainText } from "./source/index.js";
+export {
+  findShapeNodeBySourceHandle,
+  findTextRunBySourceHandle,
+  replaceTextRunPlainText,
+  updateShapeTransform,
+} from "./source/index.js";
 export {
   asEmu,
   asHundredthPt,
