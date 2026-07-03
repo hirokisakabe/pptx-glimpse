@@ -1,5 +1,11 @@
+import { existsSync } from "node:fs";
+import { mkdir, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
+import type { ConvertOptions } from "../packages/core/src/converter.js";
 import { replaceTextRunPlainText } from "../packages/document/src/index.js";
 import {
   assertEditEquivalence,
@@ -14,6 +20,7 @@ import {
   textBodyXmlHelper,
   wrapSlideXml,
 } from "../vrt/snapshot/create-fixtures.js";
+import { unsafeVrtInteropAssertion } from "../vrt/unsafe-type-assertion.js";
 
 const originalTextRunFixture = textRunFixture("source text-run fixture", "Original text");
 const editedTextRunFixture = textRunFixture("expected edited text-run fixture", "Edited text");
@@ -21,6 +28,10 @@ const mismatchedTextRunFixture = textRunFixture(
   "mismatched expected text-run fixture",
   "Unexpected text",
 );
+
+const TEST_FONT_FAMILY = "Pptx Glimpse Edit Equivalence";
+const TEST_FONT_DIR = join(tmpdir(), "pptx-glimpse-edit-equivalence-font-v1");
+const TEST_FONT_PATH = join(TEST_FONT_DIR, "PptxGlimpseEditEquivalence-Regular.ttf");
 
 const replaceFirstRunWithEditedText = {
   name: "replace first text run with edited text",
@@ -40,6 +51,7 @@ defineEditEquivalenceTests([
     sourceFixture: originalTextRunFixture,
     operations: [replaceFirstRunWithEditedText],
     expectedFixture: editedTextRunFixture,
+    renderOptionsProvider: getTinyTestFontRenderOptions,
     renderOptions: { width: 480 },
   },
 ]);
@@ -52,6 +64,7 @@ describe("edit equivalence rendering oracle", { timeout: 60000 }, () => {
         sourceFixture: originalTextRunFixture,
         operations: [replaceFirstRunWithEditedText],
         expectedFixture: mismatchedTextRunFixture,
+        renderOptionsProvider: getTinyTestFontRenderOptions,
         renderOptions: { width: 480 },
       }),
     ).rejects.toThrow(/pixels differ/);
@@ -85,7 +98,92 @@ function textRunShapeXml(text: string): string {
     textBodyXml: textBodyXmlHelper(text, {
       fontSize: 28,
       color: "FFFFFF",
+      typeface: TEST_FONT_FAMILY,
       align: "ctr",
     }),
   });
+}
+
+let tinyTestFontDirPromise: Promise<string> | null = null;
+
+async function getTinyTestFontRenderOptions(): Promise<ConvertOptions> {
+  return {
+    fontDirs: [await ensureTinyTestFontDir()],
+    skipSystemFonts: true,
+  };
+}
+
+async function ensureTinyTestFontDir(): Promise<string> {
+  tinyTestFontDirPromise ??= createTinyTestFontDir();
+  return tinyTestFontDirPromise;
+}
+
+async function createTinyTestFontDir(): Promise<string> {
+  await mkdir(TEST_FONT_DIR, { recursive: true });
+  if (existsSync(TEST_FONT_PATH)) return TEST_FONT_DIR;
+
+  const opentype = unsafeVrtInteropAssertion<OpentypeModule>(await import("opentype.js"));
+  const glyphs = [
+    new opentype.Glyph({
+      name: ".notdef",
+      advanceWidth: 600,
+      path: createGlyphPath(opentype),
+    }),
+    ...Array.from(new Set("EditedOriginalUnexpected text")).map(
+      (char) =>
+        new opentype.Glyph({
+          name: char === " " ? "space" : char,
+          unicode: char.codePointAt(0),
+          advanceWidth: char === " " ? 300 : 600,
+          path: char === " " ? new opentype.Path() : createGlyphPath(opentype),
+        }),
+    ),
+  ];
+  const font = new opentype.Font({
+    familyName: TEST_FONT_FAMILY,
+    styleName: "Regular",
+    unitsPerEm: 1000,
+    ascender: 800,
+    descender: -200,
+    glyphs,
+  });
+
+  await writeFile(TEST_FONT_PATH, Buffer.from(font.toArrayBuffer()));
+  return TEST_FONT_DIR;
+}
+
+function createGlyphPath(opentype: OpentypeModule): OpentypePath {
+  const path = new opentype.Path();
+  path.moveTo(100, 0);
+  path.lineTo(500, 0);
+  path.lineTo(500, 700);
+  path.lineTo(100, 700);
+  path.close();
+  return path;
+}
+
+interface OpentypeModule {
+  readonly Font: new (options: {
+    familyName: string;
+    styleName: string;
+    unitsPerEm: number;
+    ascender: number;
+    descender: number;
+    glyphs: readonly unknown[];
+  }) => {
+    toArrayBuffer(): ArrayBuffer;
+  };
+  readonly Glyph: new (options: {
+    name: string;
+    unicode?: number;
+    advanceWidth: number;
+    path: OpentypePath;
+  }) => unknown;
+  readonly Path: new () => OpentypePath;
+}
+
+interface OpentypePath {
+  moveTo(x: number, y: number): void;
+  lineTo(x: number, y: number): void;
+  close(): void;
 }

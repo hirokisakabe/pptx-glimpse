@@ -220,6 +220,7 @@ export function textBodyXmlHelper(
     strikethrough?: boolean;
     fontSize?: number;
     color?: string;
+    typeface?: string;
     align?: string;
     anchor?: string;
     wrap?: string;
@@ -234,6 +235,7 @@ export function textBodyXmlHelper(
   const u = opts?.underline ? ` u="sng"` : "";
   const strike = opts?.strikethrough ? ` strike="sngStrike"` : "";
   const fillColor = opts?.color ?? "000000";
+  const latin = opts?.typeface ? `<a:latin typeface="${opts.typeface}"/>` : "";
   const algn = opts?.align ? ` algn="${opts.align}"` : "";
   const anchor = opts?.anchor ?? "ctr";
   const wrap = opts?.wrap ? ` wrap="${opts.wrap}"` : "";
@@ -258,6 +260,7 @@ export function textBodyXmlHelper(
     <a:r>
       <a:rPr lang="en-US"${sz}${b}${i}${u}${strike}>
         <a:solidFill><a:srgbClr val="${fillColor}"/></a:solidFill>
+        ${latin}
       </a:rPr>
       <a:t>${text}</a:t>
     </a:r>

@@ -25,6 +25,7 @@ interface EditEquivalenceCase {
   readonly sourceFixture: EditEquivalenceFixture;
   readonly operations: readonly EditEquivalenceOperation[];
   readonly expectedFixture: EditEquivalenceFixture;
+  readonly renderOptionsProvider?: () => MaybePromise<ConvertOptions>;
   readonly renderOptions?: ConvertOptions;
   readonly compareOptions?: Partial<CompareOptions>;
   readonly diffDir?: string;
@@ -51,7 +52,9 @@ const DEFAULT_DIFF_DIR = join(tmpdir(), "pptx-glimpse-edit-equivalence-diffs");
  * cannot detect damage to non-rendered PPTX content such as animations, notes,
  * comments, unsupported raw OOXML, or package relationships that do not affect the
  * rendered slide. Those concerns remain covered by writer structural-preservation
- * tests, not by this rendering-equivalence oracle.
+ * tests, not by this rendering-equivalence oracle. Cases use the deterministic VRT
+ * render options by default, but may inject lighter render options when the case does
+ * not need VRT font subsets.
  */
 export function defineEditEquivalenceTests(cases: readonly EditEquivalenceCase[]): void {
   describe("edit equivalence rendering", { timeout: 60000 }, () => {
@@ -79,8 +82,9 @@ export async function assertEditEquivalence(
     readSourceModel(source),
   );
   const editedPptx = writePptx(edited);
+  const baseRenderOptions = await (testCase.renderOptionsProvider?.() ?? getVrtRenderOptions());
   const renderOptions = {
-    ...(await getVrtRenderOptions()),
+    ...baseRenderOptions,
     ...testCase.renderOptions,
   };
   const [actualReport, expectedReport] = await Promise.all([
