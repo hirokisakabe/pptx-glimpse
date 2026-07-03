@@ -189,7 +189,8 @@ function applyParagraphTextEdit(root: XmlNode, edit: PptxSourceModelParagraphTex
   const cSld = getChild(slide, "cSld");
   const spTree = getChild(cSld, "spTree");
   const shape = locateShape(spTree, locator);
-  const paragraph = getChildArray(getChild(shape, "txBody"), "p")[locator.paragraphIndex];
+  const paragraphs = getChildArray(getChild(shape, "txBody"), "p");
+  const paragraph = locatePhysicalParagraphForTextEdit(paragraphs, locator, edit.handle.nodeId);
 
   if (paragraph === undefined) {
     throw new Error(
@@ -389,14 +390,35 @@ function setChildText(node: XmlNode, name: string, text: string): void {
 
 function replaceParagraphRunsWithSingleTextRun(paragraph: XmlNode, text: string): void {
   const firstRunProperties = getChild(getFirstRunLikeNode(paragraph), "rPr");
-  for (const key of Object.keys(paragraph)) {
-    if (key.startsWith("@_")) continue;
-    if (isRunLikeLocalName(localName(key))) delete paragraph[key];
-  }
-  paragraph["a:r"] = {
+  const replacementRun: XmlNode = {
     ...(firstRunProperties !== undefined ? { "a:rPr": cloneXmlNode(firstRunProperties) } : {}),
     "a:t": textRequiresPreserve(text) ? { "@_xml:space": "preserve", "#text": text } : text,
   };
+  const attrs: [string, unknown][] = [];
+  const paragraphProperties: [string, unknown][] = [];
+  const middleChildren: [string, unknown][] = [];
+  const endProperties: [string, unknown][] = [];
+
+  for (const [key, value] of Object.entries(paragraph)) {
+    if (key.startsWith("@_")) {
+      attrs.push([key, value]);
+      continue;
+    }
+
+    const local = localName(key);
+    if (isRunLikeLocalName(local)) continue;
+    if (local === "pPr") paragraphProperties.push([key, value]);
+    else if (local === "endParaRPr") endProperties.push([key, value]);
+    else middleChildren.push([key, value]);
+  }
+
+  replaceNodeEntries(paragraph, [
+    ...attrs,
+    ...paragraphProperties,
+    ["a:r", replacementRun],
+    ...middleChildren,
+    ...endProperties,
+  ]);
 }
 
 function getFirstRunLikeNode(paragraph: XmlNode): XmlNode | undefined {
@@ -413,6 +435,44 @@ function getFirstRunLikeNode(paragraph: XmlNode): XmlNode | undefined {
 
 function isRunLikeLocalName(name: string): boolean {
   return name === "r" || name === "fld" || name === "br";
+}
+
+function locatePhysicalParagraphForTextEdit(
+  paragraphs: readonly XmlNode[],
+  locator: ParagraphTextLocator,
+  handleNodeId: PptxSourceModelParagraphTextEdit["handle"]["nodeId"],
+): XmlNode | undefined {
+  let logicalParagraphIndex = 0;
+  for (const paragraph of paragraphs) {
+    const logicalCount = getLogicalParagraphCount(paragraph);
+    if (
+      locator.paragraphIndex >= logicalParagraphIndex &&
+      locator.paragraphIndex < logicalParagraphIndex + logicalCount
+    ) {
+      if (logicalCount > 1) {
+        throw new Error(
+          `writePptx: paragraph handle '${handleNodeId}' references an interleaved bullet paragraph split by the reader; paragraph replacement is not supported for this source XML`,
+        );
+      }
+      return paragraph;
+    }
+    logicalParagraphIndex += logicalCount;
+  }
+  return undefined;
+}
+
+function getLogicalParagraphCount(paragraph: XmlNode): number {
+  const bulletParagraphProperties = getChildArray(paragraph, "pPr").filter(
+    (properties) =>
+      getChild(properties, "buChar") !== undefined ||
+      getChild(properties, "buAutoNum") !== undefined,
+  );
+  return Math.max(1, bulletParagraphProperties.length);
+}
+
+function replaceNodeEntries(node: XmlNode, entries: readonly [string, unknown][]): void {
+  for (const key of Object.keys(node)) delete node[key];
+  for (const [key, value] of entries) node[key] = value;
 }
 
 function cloneXmlNode(node: XmlNode): XmlNode {

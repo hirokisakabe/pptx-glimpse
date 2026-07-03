@@ -449,6 +449,47 @@ describe("writePptx - paragraph text replacement", () => {
     expect(firstParagraph(reread).runs).toHaveLength(1);
     expect(firstRun(reread).text).toBe(" Trimmed ");
   });
+
+  it("Keeps replacement run before endParaRPr.", () => {
+    const source = readPptx(
+      buildTextEditFixtureFromSlide(
+        `<p:sp><p:nvSpPr><p:cNvPr id="60" name="End para props"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+          `<p:txBody><a:bodyPr/><a:lstStyle/>` +
+          `<a:p><a:pPr algn="ctr"/><a:r><a:t>Before</a:t></a:r><a:endParaRPr lang="ja-JP"/></a:p>` +
+          `</p:txBody></p:sp>`,
+      ),
+    );
+    const output = writePptx(
+      replaceParagraphPlainText(source, firstParagraph(source).handle!, "After"),
+    );
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+
+    expect(slideXml.indexOf("<a:r>")).toBeGreaterThan(-1);
+    expect(slideXml.indexOf("<a:endParaRPr")).toBeGreaterThan(-1);
+    expect(slideXml.indexOf("<a:r>")).toBeLessThan(slideXml.indexOf("<a:endParaRPr"));
+    expect(firstRun(readPptx(output)).text).toBe("After");
+  });
+
+  it("Rejects paragraph replacement for interleaved bullet paragraphs split by the reader.", () => {
+    const source = readPptx(
+      buildTextEditFixtureFromSlide(
+        `<p:sp><p:nvSpPr><p:cNvPr id="61" name="Interleaved bullets"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+          `<p:txBody><a:bodyPr/><a:lstStyle/>` +
+          `<a:p>` +
+          `<a:pPr><a:buChar char="&#x2022;"/></a:pPr><a:r><a:t>One</a:t></a:r><a:br/>` +
+          `<a:pPr><a:buChar char="&#x25E6;"/></a:pPr><a:r><a:t>Two</a:t></a:r>` +
+          `</a:p>` +
+          `</p:txBody></p:sp>`,
+      ),
+    );
+
+    expect(firstShape(source).textBody!.paragraphs).toHaveLength(2);
+    const edited = replaceParagraphPlainText(source, firstParagraph(source).handle!, "After");
+
+    expect(() => writePptx(edited)).toThrow(/interleaved bullet paragraph/);
+  });
 });
 
 describe("writePptx - shape xfrm edit", () => {
