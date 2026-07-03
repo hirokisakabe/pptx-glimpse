@@ -1,10 +1,13 @@
 import {
+  asEmu,
   asPartPath,
   asSourceNodeId,
+  findShapeNodeBySourceHandle,
   type PptxSourceModel,
   readPptx,
   type SourceHandle,
   type SourceShape,
+  type SourceShapeNode,
   writePptx,
 } from "@pptx-glimpse/document";
 import JSZip from "jszip";
@@ -125,6 +128,151 @@ describe("EditorSession text-run commands", () => {
   });
 });
 
+describe("EditorSession xfrm commands", () => {
+  it("applies move and resize edits and persists them through write/read round-trip", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const handle = requireHandle(firstShape(source).handle);
+
+    expectApplied(
+      session.apply({
+        kind: "moveShape",
+        handle,
+        offsetX: asEmu(914400),
+        offsetY: asEmu(1828800),
+      }),
+    );
+    const edited = expectApplied(
+      session.apply({
+        kind: "resizeShape",
+        handle,
+        width: asEmu(2743200),
+        height: asEmu(914400),
+      }),
+    );
+    const reread = readPptx(writePptx(edited));
+    const rereadShape = requireShape(findShapeNodeBySourceHandle(reread, handle));
+
+    expect(firstShape(source).transform).toMatchObject({
+      offsetX: 100,
+      offsetY: 200,
+      width: 300,
+      height: 400,
+    });
+    expect(requireShape(findShapeNodeBySourceHandle(edited, handle)).transform).toMatchObject({
+      offsetX: 914400,
+      offsetY: 1828800,
+      width: 2743200,
+      height: 914400,
+    });
+    expect(rereadShape.transform).toMatchObject({
+      offsetX: 914400,
+      offsetY: 1828800,
+      width: 2743200,
+      height: 914400,
+    });
+    expect(edited.edits?.filter((edit) => edit.kind === "updateShapeTransform")).toHaveLength(1);
+  });
+
+  it("undoes and redoes a move edit", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const handle = requireHandle(firstShape(source).handle);
+
+    expectApplied(
+      session.apply({
+        kind: "moveShape",
+        handle,
+        offsetX: asEmu(1000),
+        offsetY: asEmu(2000),
+      }),
+    );
+
+    const undone = expectHistory(session.undo());
+    const redone = expectHistory(session.redo());
+
+    expect(requireShape(findShapeNodeBySourceHandle(undone, handle)).transform).toMatchObject({
+      offsetX: 100,
+      offsetY: 200,
+      width: 300,
+      height: 400,
+    });
+    expect(
+      requireShape(findShapeNodeBySourceHandle(readPptx(writePptx(undone)), handle)).transform,
+    ).toMatchObject({
+      offsetX: 100,
+      offsetY: 200,
+      width: 300,
+      height: 400,
+    });
+    expect(requireShape(findShapeNodeBySourceHandle(redone, handle)).transform).toMatchObject({
+      offsetX: 1000,
+      offsetY: 2000,
+      width: 300,
+      height: 400,
+    });
+    expect(
+      requireShape(findShapeNodeBySourceHandle(readPptx(writePptx(redone)), handle)).transform,
+    ).toMatchObject({
+      offsetX: 1000,
+      offsetY: 2000,
+      width: 300,
+      height: 400,
+    });
+  });
+
+  it("rejects invalid xfrm commands without changing document state or undo history", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const before = session.document;
+    const noXfrmHandle = requireHandle(shapeWithoutTransform(source).handle);
+    const missingHandle = {
+      partPath: asPartPath("ppt/slides/slide1.xml"),
+      nodeId: asSourceNodeId("999"),
+      orderingSlot: 99,
+    } satisfies SourceHandle;
+
+    const noXfrmResult = session.apply({
+      kind: "moveShape",
+      handle: noXfrmHandle,
+      offsetX: asEmu(1000),
+      offsetY: asEmu(2000),
+    });
+    const missingHandleResult = session.apply({
+      kind: "resizeShape",
+      handle: missingHandle,
+      width: asEmu(3000),
+      height: asEmu(4000),
+    });
+
+    expect(noXfrmResult).toMatchObject({
+      ok: false,
+      code: "invalid-command",
+    });
+    expect(noXfrmResult.ok).toBe(false);
+    if (!noXfrmResult.ok) {
+      expect(noXfrmResult.message).toMatch(/does not reference a shape with xfrm/);
+    }
+    expect(missingHandleResult).toMatchObject({
+      ok: false,
+      code: "invalid-command",
+    });
+    expect(missingHandleResult.ok).toBe(false);
+    if (!missingHandleResult.ok) {
+      expect(missingHandleResult.message).toMatch(/shape handle was not found/);
+    }
+    expect(session.document).toBe(before);
+    expect(firstShape(session.document).transform).toMatchObject({
+      offsetX: 100,
+      offsetY: 200,
+      width: 300,
+      height: 400,
+    });
+    expect(session.undoDepth).toBe(0);
+    expect(session.redoDepth).toBe(0);
+  });
+});
+
 async function buildTextEditFixture(): Promise<Uint8Array> {
   const zip = new JSZip();
   zip.file(
@@ -173,6 +321,9 @@ async function buildTextEditFixture(): Promise<Uint8Array> {
         `<p:txBody><a:bodyPr/><a:lstStyle/>` +
         `<a:p><a:r><a:t>Original</a:t></a:r><a:r><a:t xml:space="preserve"> Keep </a:t></a:r></a:p>` +
         `</p:txBody></p:sp>` +
+        `<p:sp><p:nvSpPr><p:cNvPr id="11" name="No xfrm"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+        `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+        `<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>No xfrm</a:t></a:r></a:p></p:txBody></p:sp>` +
         `</p:spTree></p:cSld>` +
         `</p:sld>`,
     ),
@@ -203,6 +354,23 @@ function firstParagraph(source: PptxSourceModel) {
 
 function firstRun(source: PptxSourceModel) {
   return firstParagraph(source).runs[0];
+}
+
+function shapeWithoutTransform(source: PptxSourceModel): SourceShape {
+  const shape = source.slides[0].shapes.find(
+    (node): node is SourceShape => node.kind === "shape" && node.transform === undefined,
+  );
+  if (shape === undefined) throw new Error("shape without transform not found");
+  return shape;
+}
+
+function requireShape(shape: SourceShapeNode | undefined): SourceShapeNode & {
+  readonly transform: NonNullable<SourceShapeNode["transform"]>;
+} {
+  if (shape === undefined || shape.kind === "raw" || shape.transform === undefined) {
+    throw new Error("transform shape not found");
+  }
+  return shape;
 }
 
 function requireHandle(handle: SourceHandle | undefined): SourceHandle {
