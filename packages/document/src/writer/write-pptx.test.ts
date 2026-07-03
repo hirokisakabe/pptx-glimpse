@@ -399,7 +399,13 @@ describe("writePptx - shape xfrm edit", () => {
   });
 
   it("Rejects shape handles that do not have xfrm", () => {
-    const source = readPptx(buildSlotHandleTextEditFixture());
+    const source = readPptx(
+      buildTextEditFixtureFromSlide(
+        `<p:sp><p:nvSpPr><p:cNvPr id="50" name="No xfrm"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+          `<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Text</a:t></a:r></a:p></p:txBody></p:sp>`,
+      ),
+    );
     const shapeWithoutXfrm = firstShape(source);
 
     expect(() =>
@@ -410,6 +416,27 @@ describe("writePptx - shape xfrm edit", () => {
         height: asEmu(4),
       }),
     ).toThrow(/does not reference a shape with xfrm/);
+  });
+
+  it("Rejects shape transform handles without node ids", () => {
+    const source = readPptx(
+      buildTextEditFixtureFromSlide(
+        `<p:sp><p:nvSpPr><p:cNvPr name="No Id Shape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="1" y="2"/><a:ext cx="3" cy="4"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>` +
+          `<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Text</a:t></a:r></a:p></p:txBody></p:sp>`,
+      ),
+    );
+    const shape = firstShape(source);
+
+    expect(shape.handle?.nodeId).toBeUndefined();
+    expect(() =>
+      updateShapeTransform(source, shape.handle!, {
+        offsetX: asEmu(1),
+        offsetY: asEmu(2),
+        width: asEmu(3),
+        height: asEmu(4),
+      }),
+    ).toThrow(/requires a node id/);
   });
 
   it("Rejects nonexistent shape handles", () => {

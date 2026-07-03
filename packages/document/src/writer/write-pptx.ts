@@ -200,14 +200,12 @@ interface TextRunLocator {
 }
 
 interface ShapeLocator {
-  readonly nodeId?: string;
-  readonly orderingSlot?: number;
+  readonly nodeId: string;
 }
 
 function parseShapeLocator(handle: PptxSourceModelShapeTransformEdit["handle"]): ShapeLocator {
   if (handle.nodeId !== undefined) return { nodeId: String(handle.nodeId) };
-  if (handle.orderingSlot !== undefined) return { orderingSlot: handle.orderingSlot };
-  throw new Error("writePptx: shape transform edit requires nodeId or orderingSlot in handle");
+  throw new Error("writePptx: shape transform edit requires nodeId in handle");
 }
 
 function parseTextRunLocator(
@@ -253,21 +251,16 @@ function locateShapeTreeNode(
 ): XmlNode | undefined {
   const shapeKeys = new Set(["sp", "pic", "cxnSp", "graphicFrame", "grpSp"]);
   if (!spTree) return undefined;
-  if (locator.nodeId !== undefined) {
-    for (const key of Object.keys(spTree)) {
-      if (key.startsWith("@_") || !shapeKeys.has(localName(key))) continue;
-      const value = spTree[key];
-      const items = Array.isArray(value) ? unsafeOoxmlBoundaryAssertion<unknown[]>(value) : [value];
-      const found = items.find(
-        (item) =>
-          getShapeTreeNodeId(unsafeOoxmlBoundaryAssertion<XmlNode>(item)) === locator.nodeId,
-      );
-      if (found !== undefined) return unsafeOoxmlBoundaryAssertion<XmlNode>(found);
-    }
-    return undefined;
+  for (const key of Object.keys(spTree)) {
+    if (key.startsWith("@_") || !shapeKeys.has(localName(key))) continue;
+    const value = spTree[key];
+    const items = Array.isArray(value) ? unsafeOoxmlBoundaryAssertion<unknown[]>(value) : [value];
+    const found = items.find(
+      (item) => getShapeTreeNodeId(unsafeOoxmlBoundaryAssertion<XmlNode>(item)) === locator.nodeId,
+    );
+    if (found !== undefined) return unsafeOoxmlBoundaryAssertion<XmlNode>(found);
   }
-  if (locator.orderingSlot === undefined) return undefined;
-  return getShapeTreeNodeByOrderingSlot(spTree, locator.orderingSlot);
+  return undefined;
 }
 
 function getShapeByOrderingSlot(
@@ -288,28 +281,6 @@ function getShapeByOrderingSlot(
       if (currentSlot === orderingSlot) {
         return local === "sp" ? unsafeOoxmlBoundaryAssertion<XmlNode>(item) : undefined;
       }
-      currentSlot++;
-    }
-  }
-  return undefined;
-}
-
-function getShapeTreeNodeByOrderingSlot(
-  spTree: XmlNode | undefined,
-  orderingSlot: number,
-): XmlNode | undefined {
-  if (!spTree) return undefined;
-
-  let currentSlot = 0;
-  for (const key of Object.keys(spTree)) {
-    if (key.startsWith("@_")) continue;
-    const local = localName(key);
-    if (local === "nvGrpSpPr" || local === "grpSpPr") continue;
-
-    const value = spTree[key];
-    const items = Array.isArray(value) ? value : [value];
-    for (const item of items) {
-      if (currentSlot === orderingSlot) return unsafeOoxmlBoundaryAssertion<XmlNode>(item);
       currentSlot++;
     }
   }

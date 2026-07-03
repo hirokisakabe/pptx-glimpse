@@ -96,6 +96,10 @@ export function updateShapeTransform(
   handle: SourceHandle,
   transform: UpdateShapeTransformInput,
 ): PptxSourceModel {
+  if (handle.nodeId === undefined) {
+    throw new Error("updateShapeTransform: shape transform edit requires a node id");
+  }
+
   let updated = false;
 
   const slides = source.slides.map((slide) => ({
