@@ -1,9 +1,15 @@
 import {
+  type Emu,
+  findShapeNodeBySourceHandle,
   type PptxSourceModel,
   type PptxSourceModelEdit,
+  type PptxSourceModelShapeTransformEdit,
   type PptxSourceModelTextRunEdit,
   replaceTextRunPlainText,
   type SourceHandle,
+  type SourceShapeNode,
+  type SourceTransform,
+  updateShapeTransform,
 } from "@pptx-glimpse/document";
 
 export interface ReplaceTextRunPlainTextCommand {
@@ -12,7 +18,21 @@ export interface ReplaceTextRunPlainTextCommand {
   readonly text: string;
 }
 
-export type EditorCommand = ReplaceTextRunPlainTextCommand;
+export interface MoveShapeCommand {
+  readonly kind: "moveShape";
+  readonly handle: SourceHandle;
+  readonly offsetX: Emu;
+  readonly offsetY: Emu;
+}
+
+export interface ResizeShapeCommand {
+  readonly kind: "resizeShape";
+  readonly handle: SourceHandle;
+  readonly width: Emu;
+  readonly height: Emu;
+}
+
+export type EditorCommand = ReplaceTextRunPlainTextCommand | MoveShapeCommand | ResizeShapeCommand;
 
 export type EditorApplyCommandResult =
   | {
@@ -124,7 +144,78 @@ function applyCommandToDocument(
   switch (command.kind) {
     case "replaceTextRunPlainText":
       return replaceTextRunPlainText(document, command.handle, command.text);
+    case "moveShape":
+      return moveShape(document, command);
+    case "resizeShape":
+      return resizeShape(document, command);
   }
+}
+
+function moveShape(document: PptxSourceModel, command: MoveShapeCommand): PptxSourceModel {
+  requireFiniteEmu(command.offsetX, "moveShape", "offsetX");
+  requireFiniteEmu(command.offsetY, "moveShape", "offsetY");
+
+  const current = requireEditableShapeTransform(document, command.handle, "moveShape");
+  return updateShapeTransform(document, command.handle, {
+    offsetX: command.offsetX,
+    offsetY: command.offsetY,
+    width: current.width,
+    height: current.height,
+  });
+}
+
+function resizeShape(document: PptxSourceModel, command: ResizeShapeCommand): PptxSourceModel {
+  requirePositiveFiniteEmu(command.width, "resizeShape", "width");
+  requirePositiveFiniteEmu(command.height, "resizeShape", "height");
+
+  const current = requireEditableShapeTransform(document, command.handle, "resizeShape");
+  return updateShapeTransform(document, command.handle, {
+    offsetX: current.offsetX,
+    offsetY: current.offsetY,
+    width: command.width,
+    height: command.height,
+  });
+}
+
+function requireEditableShapeTransform(
+  document: PptxSourceModel,
+  handle: SourceHandle,
+  commandName: "moveShape" | "resizeShape",
+): SourceTransform {
+  const shape = findShapeNodeBySourceHandle(document, handle);
+  if (shape === undefined) {
+    throw new Error(`${commandName}: shape handle was not found in PptxSourceModel source`);
+  }
+  if (!hasTransform(shape)) {
+    throw new Error(`${commandName}: shape handle does not reference a shape with xfrm`);
+  }
+  return shape.transform;
+}
+
+function requireFiniteEmu(
+  value: Emu,
+  commandName: "moveShape" | "resizeShape",
+  fieldName: string,
+): void {
+  if (!Number.isFinite(value)) {
+    throw new Error(`${commandName}: ${fieldName} must be a finite EMU value`);
+  }
+}
+
+function requirePositiveFiniteEmu(
+  value: Emu,
+  commandName: "moveShape" | "resizeShape",
+  fieldName: string,
+): void {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${commandName}: ${fieldName} must be a finite positive EMU value`);
+  }
+}
+
+function hasTransform(shape: SourceShapeNode): shape is SourceShapeNode & {
+  readonly transform: SourceTransform;
+} {
+  return shape.kind !== "raw" && shape.transform !== undefined;
 }
 
 function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
@@ -132,14 +223,20 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
   if (edits === undefined) return document;
 
   const seenTextRuns = new Set<string>();
+  const seenShapeTransforms = new Set<string>();
   const normalizedReversed: PptxSourceModelEdit[] = [];
 
   for (let index = edits.length - 1; index >= 0; index -= 1) {
     const edit = edits[index];
     if (edit.kind === "replaceTextRunPlainText") {
-      const key = textRunEditKey(edit);
+      const key = editHandleNodeKey(edit);
       if (seenTextRuns.has(key)) continue;
       seenTextRuns.add(key);
+    }
+    if (edit.kind === "updateShapeTransform") {
+      const key = editHandleNodeKey(edit);
+      if (seenShapeTransforms.has(key)) continue;
+      seenShapeTransforms.add(key);
     }
     normalizedReversed.push(edit);
   }
@@ -151,7 +248,9 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
   };
 }
 
-function textRunEditKey(edit: PptxSourceModelTextRunEdit): string {
+function editHandleNodeKey(
+  edit: PptxSourceModelTextRunEdit | PptxSourceModelShapeTransformEdit,
+): string {
   return [edit.handle.partPath, edit.handle.nodeId ?? "", edit.handle.relationshipId ?? ""].join(
     "\u0000",
   );
