@@ -5,8 +5,10 @@
 export type { Diagnostic, DiagnosticSeverity } from "./diagnostics.js";
 export type { UpdateShapeTransformInput } from "./editing.js";
 export {
+  findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
+  replaceParagraphPlainText,
   replaceTextRunPlainText,
   updateShapeTransform,
 } from "./editing.js";
@@ -32,6 +34,7 @@ export type {
 export type {
   PptxSourceModel,
   PptxSourceModelEdit,
+  PptxSourceModelParagraphTextEdit,
   PptxSourceModelShapeTransformEdit,
   PptxSourceModelTextRunEdit,
 } from "./pptx-source-model.js";

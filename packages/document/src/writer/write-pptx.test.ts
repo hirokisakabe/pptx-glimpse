@@ -7,8 +7,10 @@ import { describe, expect, it } from "vitest";
 // Import via the actual public surface (`@pptx-glimpse/document`).
 import { asEmu, asSourceNodeId, readPptx, writePptx } from "../index.js";
 import {
+  findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
+  replaceParagraphPlainText,
   replaceTextRunPlainText,
   type SourceShape,
   updateShapeTransform,
@@ -82,6 +84,22 @@ function buildSlotHandleTextEditFixture(): Uint8Array {
       `<p:sp><p:nvSpPr><p:cNvPr name="No Id Shape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
       `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
       `<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Original</a:t></a:r></a:p></p:txBody></p:sp>`,
+  );
+}
+
+function buildMultipleTextEditFixture(): Uint8Array {
+  return buildTextEditFixtureFromSlide(
+    `<p:sp><p:nvSpPr><p:cNvPr id="10" name="First"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+      `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+      `<p:txBody><a:bodyPr/><a:lstStyle/>` +
+      `<a:p><a:r><a:t>First paragraph</a:t></a:r></a:p>` +
+      `<a:p><a:r><a:t>Second paragraph</a:t></a:r></a:p>` +
+      `</p:txBody></p:sp>` +
+      `<p:sp><p:nvSpPr><p:cNvPr id="11" name="Second"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+      `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+      `<p:txBody><a:bodyPr/><a:lstStyle/>` +
+      `<a:p><a:r><a:t>Other shape</a:t></a:r></a:p>` +
+      `</p:txBody></p:sp>`,
   );
 }
 
@@ -349,6 +367,131 @@ describe("writePptx - one plain text-run edit", () => {
   });
 });
 
+describe("writePptx - multiple text edits", () => {
+  it("Applies multiple text-run replacements across different shapes and paragraphs in one write.", () => {
+    const source = readPptx(buildMultipleTextEditFixture());
+    const firstShapeSecondParagraphRun = shapeAt(source, 0).textBody!.paragraphs[1].runs[0];
+    const secondShapeRun = shapeAt(source, 1).textBody!.paragraphs[0].runs[0];
+
+    const edited = replaceTextRunPlainText(
+      replaceTextRunPlainText(source, firstShapeSecondParagraphRun.handle!, "Edited paragraph"),
+      secondShapeRun.handle!,
+      "Edited other shape",
+    );
+    const reread = readPptx(writePptx(edited));
+
+    expect(shapeAt(reread, 0).textBody!.paragraphs[0].runs[0].text).toBe("First paragraph");
+    expect(shapeAt(reread, 0).textBody!.paragraphs[1].runs[0].text).toBe("Edited paragraph");
+    expect(shapeAt(reread, 1).textBody!.paragraphs[0].runs[0].text).toBe("Edited other shape");
+  });
+
+  it("Rejects conflicting duplicate edits for the same text run.", () => {
+    const source = readPptx(buildTextEditFixture());
+    const run = firstRun(source);
+    const edited = replaceTextRunPlainText(
+      replaceTextRunPlainText(source, run.handle!, "First edit"),
+      run.handle!,
+      "Second edit",
+    );
+
+    expect(() => writePptx(edited)).toThrow(/conflicting text run edits/);
+  });
+
+  it("Rejects conflicting text-run and paragraph replacements for the same paragraph.", () => {
+    const source = readPptx(buildTextEditFixture());
+    const paragraph = firstParagraph(source);
+    const edited = replaceParagraphPlainText(
+      replaceTextRunPlainText(source, paragraph.runs[0].handle!, "Run edit"),
+      paragraph.handle!,
+      "Paragraph edit",
+    );
+
+    expect(() => writePptx(edited)).toThrow(/conflicting text run and paragraph edits/);
+  });
+});
+
+describe("writePptx - paragraph text replacement", () => {
+  it("Normalizes a multi-run paragraph to one run using the first run properties.", () => {
+    const input = buildTextEditFixture();
+    const source = readPptx(input);
+    const paragraph = firstParagraph(source);
+
+    expect(findParagraphBySourceHandle(source, paragraph.handle!)).toBe(paragraph);
+
+    const edited = replaceParagraphPlainText(source, paragraph.handle!, "Paragraph replacement");
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+    const editedParagraph = firstParagraph(reread);
+
+    expect(firstParagraph(edited).runs).toHaveLength(1);
+    expect(editedParagraph.runs).toHaveLength(1);
+    expect(editedParagraph.runs[0].text).toBe("Paragraph replacement");
+    expect(editedParagraph.runs[0].properties).toMatchObject({
+      bold: true,
+      italic: true,
+      fontSize: 24,
+      typeface: "Aptos",
+      typefaceEa: "Noto Sans JP",
+      color: { kind: "srgb", hex: "FF0000" },
+    });
+    expect(decoder.decode(getEntry(output, "ppt/slides/slide1.xml"))).not.toContain(" Keep ");
+    expect(getEntry(output, "docProps/custom.xml")).toEqual(getEntry(input, "docProps/custom.xml"));
+    expect(getEntry(output, "ppt/media/image1.png")).toEqual(
+      getEntry(input, "ppt/media/image1.png"),
+    );
+  });
+
+  it("Round-trips paragraph replacement text with significant surrounding whitespace.", () => {
+    const source = readPptx(buildTextEditFixture());
+    const edited = replaceParagraphPlainText(source, firstParagraph(source).handle!, " Trimmed ");
+    const reread = readPptx(writePptx(edited));
+
+    expect(firstParagraph(reread).runs).toHaveLength(1);
+    expect(firstRun(reread).text).toBe(" Trimmed ");
+  });
+
+  it("Keeps replacement run before endParaRPr.", () => {
+    const source = readPptx(
+      buildTextEditFixtureFromSlide(
+        `<p:sp><p:nvSpPr><p:cNvPr id="60" name="End para props"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+          `<p:txBody><a:bodyPr/><a:lstStyle/>` +
+          `<a:p><a:pPr algn="ctr"/><a:r><a:t>Before</a:t></a:r><a:endParaRPr lang="ja-JP"/></a:p>` +
+          `</p:txBody></p:sp>`,
+      ),
+    );
+    const output = writePptx(
+      replaceParagraphPlainText(source, firstParagraph(source).handle!, "After"),
+    );
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+
+    expect(slideXml.indexOf("<a:r>")).toBeGreaterThan(-1);
+    expect(slideXml.indexOf("<a:endParaRPr")).toBeGreaterThan(-1);
+    expect(slideXml.indexOf("<a:r>")).toBeLessThan(slideXml.indexOf("<a:endParaRPr"));
+    expect(firstRun(readPptx(output)).text).toBe("After");
+  });
+
+  it("Rejects paragraph replacement for interleaved bullet paragraphs split by the reader.", () => {
+    const source = readPptx(
+      buildTextEditFixtureFromSlide(
+        `<p:sp><p:nvSpPr><p:cNvPr id="61" name="Interleaved bullets"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+          `<p:txBody><a:bodyPr/><a:lstStyle/>` +
+          `<a:p>` +
+          `<a:pPr><a:buChar char="&#x2022;"/></a:pPr><a:r><a:t>One</a:t></a:r><a:br/>` +
+          `<a:pPr><a:buChar char="&#x25E6;"/></a:pPr><a:r><a:t>Two</a:t></a:r>` +
+          `</a:p>` +
+          `</p:txBody></p:sp>`,
+      ),
+    );
+
+    expect(firstShape(source).textBody!.paragraphs).toHaveLength(2);
+    const edited = replaceParagraphPlainText(source, firstParagraph(source).handle!, "After");
+
+    expect(() => writePptx(edited)).toThrow(/interleaved bullet paragraph/);
+  });
+});
+
 describe("writePptx - shape xfrm edit", () => {
   it("Apply offset and extent update to PptxSourceModel source and reflect in PPTX after write", () => {
     const source = readPptx(buildTextEditFixture());
@@ -509,7 +652,13 @@ describe("writePptx - shape xfrm edit", () => {
 });
 
 function firstShape(source: ReturnType<typeof readPptx>): SourceShape {
-  const shape = source.slides[0].shapes.find((node): node is SourceShape => node.kind === "shape");
+  return shapeAt(source, 0);
+}
+
+function shapeAt(source: ReturnType<typeof readPptx>, index: number): SourceShape {
+  const shape = source.slides[0].shapes.filter(
+    (node): node is SourceShape => node.kind === "shape",
+  )[index];
   if (shape === undefined) throw new Error("shape not found");
   return shape;
 }

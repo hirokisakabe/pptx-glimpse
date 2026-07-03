@@ -32,6 +32,7 @@ import type {
   PartRelationships,
   PptxSourceModel,
   PptxSourceModelEdit,
+  PptxSourceModelParagraphTextEdit,
   PptxSourceModelShapeTransformEdit,
   PptxSourceModelTextRunEdit,
   RawOoxmlNode,
@@ -67,9 +68,13 @@ const xmlBuilder = new XMLBuilder({
  */
 export function writePptx(source: PptxSourceModel): WritePptxOutput {
   const textRunEdits = source.edits?.filter(isTextRunEdit) ?? [];
+  const paragraphTextEdits = source.edits?.filter(isParagraphTextEdit) ?? [];
   const shapeTransformEdits = source.edits?.filter(isShapeTransformEdit) ?? [];
+  validateEdits(textRunEdits, paragraphTextEdits, shapeTransformEdits);
   const dirtyPartPaths = new Set(
-    [...textRunEdits, ...shapeTransformEdits].map((edit) => edit.handle.partPath),
+    [...textRunEdits, ...paragraphTextEdits, ...shapeTransformEdits].map(
+      (edit) => edit.handle.partPath,
+    ),
   );
   const files: Record<string, Uint8Array> = {
     [CONTENT_TYPES_PART]: encodeXml(serializeContentTypes(source.packageGraph.contentTypes)),
@@ -95,7 +100,13 @@ export function writePptx(source: PptxSourceModel): WritePptxOutput {
   }
 
   for (const partPath of dirtyPartPaths) {
-    files[partPath] = serializeDirtyXmlPart(source, partPath, textRunEdits, shapeTransformEdits);
+    files[partPath] = serializeDirtyXmlPart(
+      source,
+      partPath,
+      textRunEdits,
+      paragraphTextEdits,
+      shapeTransformEdits,
+    );
     written.add(partPath);
   }
 
@@ -115,6 +126,10 @@ function isTextRunEdit(edit: PptxSourceModelEdit): edit is PptxSourceModelTextRu
   return edit.kind === "replaceTextRunPlainText";
 }
 
+function isParagraphTextEdit(edit: PptxSourceModelEdit): edit is PptxSourceModelParagraphTextEdit {
+  return edit.kind === "replaceParagraphPlainText";
+}
+
 function isShapeTransformEdit(
   edit: PptxSourceModelEdit,
 ): edit is PptxSourceModelShapeTransformEdit {
@@ -125,6 +140,7 @@ function serializeDirtyXmlPart(
   source: PptxSourceModel,
   partPath: PartPath,
   textRunEdits: readonly PptxSourceModelTextRunEdit[],
+  paragraphTextEdits: readonly PptxSourceModelParagraphTextEdit[],
   shapeTransformEdits: readonly PptxSourceModelShapeTransformEdit[],
 ): Uint8Array {
   const rawPart = source.packageGraph.rawParts?.find((part) => part.partPath === partPath);
@@ -136,6 +152,9 @@ function serializeDirtyXmlPart(
   }
 
   const root = parseXml(textDecoder.decode(rawPart.bytes));
+  for (const edit of paragraphTextEdits.filter((edit) => edit.handle.partPath === partPath)) {
+    applyParagraphTextEdit(root, edit);
+  }
   for (const edit of textRunEdits.filter((edit) => edit.handle.partPath === partPath)) {
     applyTextRunEdit(root, edit);
   }
@@ -162,6 +181,24 @@ function applyTextRunEdit(root: XmlNode, edit: PptxSourceModelTextRunEdit): void
   }
 
   setChildText(run, "t", edit.text);
+}
+
+function applyParagraphTextEdit(root: XmlNode, edit: PptxSourceModelParagraphTextEdit): void {
+  const locator = parseParagraphLocator(edit.handle.nodeId);
+  const slide = getChild(root, "sld");
+  const cSld = getChild(slide, "cSld");
+  const spTree = getChild(cSld, "spTree");
+  const shape = locateShape(spTree, locator);
+  const paragraphs = getChildArray(getChild(shape, "txBody"), "p");
+  const paragraph = locatePhysicalParagraphForTextEdit(paragraphs, locator, edit.handle.nodeId);
+
+  if (paragraph === undefined) {
+    throw new Error(
+      `writePptx: paragraph handle '${edit.handle.nodeId}' no longer matches source XML`,
+    );
+  }
+
+  replaceParagraphRunsWithSingleTextRun(paragraph, edit.text);
 }
 
 function applyShapeTransformEdit(root: XmlNode, edit: PptxSourceModelShapeTransformEdit): void {
@@ -199,6 +236,8 @@ interface TextRunLocator {
   readonly runIndex: number;
 }
 
+type ParagraphTextLocator = Omit<TextRunLocator, "runIndex">;
+
 interface ShapeLocator {
   readonly nodeId: string;
 }
@@ -233,7 +272,33 @@ function parseTextRunLocator(
   throw new Error(`writePptx: unsupported text run handle '${value}'`);
 }
 
-function locateShape(spTree: XmlNode | undefined, locator: TextRunLocator): XmlNode | undefined {
+function parseParagraphLocator(
+  nodeId: PptxSourceModelParagraphTextEdit["handle"]["nodeId"],
+): ParagraphTextLocator {
+  const value = String(nodeId ?? "");
+  const byShapeId = /^text:shape:(.+):p:(\d+)$/.exec(value);
+  if (byShapeId !== null) {
+    return {
+      shapeNodeId: byShapeId[1],
+      paragraphIndex: Number(byShapeId[2]),
+    };
+  }
+
+  const byShapeSlot = /^text:shapeSlot:(\d+):p:(\d+)$/.exec(value);
+  if (byShapeSlot !== null) {
+    return {
+      shapeOrderingSlot: Number(byShapeSlot[1]),
+      paragraphIndex: Number(byShapeSlot[2]),
+    };
+  }
+
+  throw new Error(`writePptx: unsupported paragraph handle '${value}'`);
+}
+
+function locateShape(
+  spTree: XmlNode | undefined,
+  locator: TextRunLocator | ParagraphTextLocator,
+): XmlNode | undefined {
   const shapes = getChildArray(spTree, "sp");
   if (locator.shapeNodeId !== undefined) {
     return shapes.find(
@@ -323,6 +388,107 @@ function setChildText(node: XmlNode, name: string, text: string): void {
     : text;
 }
 
+function replaceParagraphRunsWithSingleTextRun(paragraph: XmlNode, text: string): void {
+  const firstRunProperties = getChild(getFirstRunLikeNode(paragraph), "rPr");
+  const replacementRun: XmlNode = {
+    ...(firstRunProperties !== undefined ? { "a:rPr": cloneXmlNode(firstRunProperties) } : {}),
+    "a:t": textRequiresPreserve(text) ? { "@_xml:space": "preserve", "#text": text } : text,
+  };
+  const attrs: [string, unknown][] = [];
+  const paragraphProperties: [string, unknown][] = [];
+  const middleChildren: [string, unknown][] = [];
+  const endProperties: [string, unknown][] = [];
+
+  for (const [key, value] of Object.entries(paragraph)) {
+    if (key.startsWith("@_")) {
+      attrs.push([key, value]);
+      continue;
+    }
+
+    const local = localName(key);
+    if (isRunLikeLocalName(local)) continue;
+    if (local === "pPr") paragraphProperties.push([key, value]);
+    else if (local === "endParaRPr") endProperties.push([key, value]);
+    else middleChildren.push([key, value]);
+  }
+
+  replaceNodeEntries(paragraph, [
+    ...attrs,
+    ...paragraphProperties,
+    ["a:r", replacementRun],
+    ...middleChildren,
+    ...endProperties,
+  ]);
+}
+
+function getFirstRunLikeNode(paragraph: XmlNode): XmlNode | undefined {
+  for (const key of Object.keys(paragraph)) {
+    if (key.startsWith("@_")) continue;
+    if (!isRunLikeLocalName(localName(key))) continue;
+    const value = paragraph[key];
+    return Array.isArray(value)
+      ? unsafeOoxmlBoundaryAssertion<XmlNode | undefined>(value[0])
+      : unsafeOoxmlBoundaryAssertion<XmlNode | undefined>(value);
+  }
+  return undefined;
+}
+
+function isRunLikeLocalName(name: string): boolean {
+  return name === "r" || name === "fld" || name === "br";
+}
+
+function locatePhysicalParagraphForTextEdit(
+  paragraphs: readonly XmlNode[],
+  locator: ParagraphTextLocator,
+  handleNodeId: PptxSourceModelParagraphTextEdit["handle"]["nodeId"],
+): XmlNode | undefined {
+  let logicalParagraphIndex = 0;
+  for (const paragraph of paragraphs) {
+    const logicalCount = getLogicalParagraphCount(paragraph);
+    if (
+      locator.paragraphIndex >= logicalParagraphIndex &&
+      locator.paragraphIndex < logicalParagraphIndex + logicalCount
+    ) {
+      if (logicalCount > 1) {
+        throw new Error(
+          `writePptx: paragraph handle '${handleNodeId}' references an interleaved bullet paragraph split by the reader; paragraph replacement is not supported for this source XML`,
+        );
+      }
+      return paragraph;
+    }
+    logicalParagraphIndex += logicalCount;
+  }
+  return undefined;
+}
+
+function getLogicalParagraphCount(paragraph: XmlNode): number {
+  const bulletParagraphProperties = getChildArray(paragraph, "pPr").filter(
+    (properties) =>
+      getChild(properties, "buChar") !== undefined ||
+      getChild(properties, "buAutoNum") !== undefined,
+  );
+  return Math.max(1, bulletParagraphProperties.length);
+}
+
+function replaceNodeEntries(node: XmlNode, entries: readonly [string, unknown][]): void {
+  for (const key of Object.keys(node)) delete node[key];
+  for (const [key, value] of entries) node[key] = value;
+}
+
+function cloneXmlNode(node: XmlNode): XmlNode {
+  return Object.fromEntries(
+    Object.entries(node).map(([key, value]) => [key, cloneXmlValue(value)]),
+  );
+}
+
+function cloneXmlValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(cloneXmlValue);
+  if (typeof value === "object" && value !== null) {
+    return cloneXmlNode(unsafeOoxmlBoundaryAssertion<XmlNode>(value));
+  }
+  return value;
+}
+
 function textElementValue(existing: unknown, text: string): unknown {
   if (typeof existing === "object" && existing !== null && !Array.isArray(existing)) {
     const next: XmlNode = { ...unsafeOoxmlBoundaryAssertion<XmlNode>(existing), "#text": text };
@@ -335,6 +501,69 @@ function textElementValue(existing: unknown, text: string): unknown {
 
 function textRequiresPreserve(text: string): boolean {
   return text.startsWith(" ") || text.endsWith(" ");
+}
+
+function validateEdits(
+  textRunEdits: readonly PptxSourceModelTextRunEdit[],
+  paragraphTextEdits: readonly PptxSourceModelParagraphTextEdit[],
+  shapeTransformEdits: readonly PptxSourceModelShapeTransformEdit[],
+): void {
+  const runKeys = new Set<string>();
+  for (const edit of textRunEdits) {
+    const key = editHandleNodeKey(edit);
+    if (runKeys.has(key)) {
+      throw new Error(`writePptx: conflicting text run edits for handle '${edit.handle.nodeId}'`);
+    }
+    runKeys.add(key);
+  }
+
+  const paragraphKeys = new Set<string>();
+  for (const edit of paragraphTextEdits) {
+    const key = editHandleNodeKey(edit);
+    if (paragraphKeys.has(key)) {
+      throw new Error(
+        `writePptx: conflicting paragraph text edits for handle '${edit.handle.nodeId}'`,
+      );
+    }
+    paragraphKeys.add(key);
+  }
+
+  for (const runEdit of textRunEdits) {
+    const paragraphKey = textRunParagraphEditKey(runEdit);
+    if (paragraphKey !== undefined && paragraphKeys.has(paragraphKey)) {
+      throw new Error(
+        `writePptx: conflicting text run and paragraph edits for handle '${runEdit.handle.nodeId}'`,
+      );
+    }
+  }
+
+  const shapeKeys = new Set<string>();
+  for (const edit of shapeTransformEdits) {
+    const key = editHandleNodeKey(edit);
+    if (shapeKeys.has(key)) {
+      throw new Error(
+        `writePptx: conflicting shape transform edits for handle '${String(edit.handle.nodeId)}'`,
+      );
+    }
+    shapeKeys.add(key);
+  }
+}
+
+function editHandleNodeKey(edit: {
+  readonly handle: PptxSourceModelTextRunEdit["handle"];
+}): string {
+  return [edit.handle.partPath, edit.handle.nodeId ?? "", edit.handle.relationshipId ?? ""].join(
+    "\u0000",
+  );
+}
+
+function textRunParagraphEditKey(edit: PptxSourceModelTextRunEdit): string | undefined {
+  const nodeId = String(edit.handle.nodeId ?? "");
+  const byShapeId = /^(text:shape:.+:p:\d+):r:\d+$/.exec(nodeId);
+  const byShapeSlot = /^(text:shapeSlot:\d+:p:\d+):r:\d+$/.exec(nodeId);
+  const paragraphNodeId = byShapeId?.[1] ?? byShapeSlot?.[1];
+  if (paragraphNodeId === undefined) return undefined;
+  return [edit.handle.partPath, paragraphNodeId, edit.handle.relationshipId ?? ""].join("\u0000");
 }
 
 function serializeContentTypes(
