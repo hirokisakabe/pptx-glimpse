@@ -8,8 +8,9 @@
  * non-bookkeeping raw parts prefer the raw package material preserved by the reader.
  * Only dirty scopes are updated according to supported PptxSourceModel operations.
  *
- * The current slice supports one plain text-run edit, reserializing the dirty slide XML
- * part and replacing only the target run's `a:t` value via a stable source handle.
+ * The current slice supports plain text-run replacement and top-level shape transform
+ * offset/extent edits, reserializing dirty slide XML parts and replacing only the
+ * targeted values via stable source handles.
  * Node-level XML splicing, precise unsupported raw-sidecar invalidation, and package
  * topology rewrites belong to later writer slices, but the API and dirty-scope tracking
  * remain shaped for that extension path.

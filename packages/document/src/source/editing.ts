@@ -85,7 +85,7 @@ export function findShapeNodeBySourceHandle(
   handle: SourceHandle,
 ): SourceShapeNode | undefined {
   for (const slide of source.slides) {
-    const shape = slide.shapes.find((node) => sourceHandlesEqual(node.handle, handle));
+    const shape = findShapeNodeInTree(slide.shapes, handle);
     if (shape !== undefined) return shape;
   }
   return undefined;
@@ -102,6 +102,9 @@ export function updateShapeTransform(
     ...slide,
     shapes: slide.shapes.map((shape) => {
       if (!sourceHandlesEqual(shape.handle, handle)) return shape;
+      if (hasAlternateContentSidecar(shape)) {
+        throw new Error("updateShapeTransform: shapes inside AlternateContent are not supported");
+      }
       if (!hasEditableTransform(shape)) {
         throw new Error("updateShapeTransform: shape handle does not reference a shape with xfrm");
       }
@@ -120,6 +123,9 @@ export function updateShapeTransform(
   }));
 
   if (!updated) {
+    if (source.slides.some((slide) => hasNestedShapeNodeWithHandle(slide.shapes, handle))) {
+      throw new Error("updateShapeTransform: nested group shape editing is not supported");
+    }
     throw new Error("updateShapeTransform: shape handle was not found in PptxSourceModel source");
   }
 
@@ -153,6 +159,37 @@ function hasEditableTransform(shape: SourceShapeNode): shape is TransformableSha
   readonly transform: NonNullable<TransformableShapeNode["transform"]>;
 } {
   return shape.kind !== "raw" && shape.transform !== undefined;
+}
+
+function findShapeNodeInTree(
+  shapes: readonly SourceShapeNode[],
+  handle: SourceHandle,
+): SourceShapeNode | undefined {
+  for (const shape of shapes) {
+    if (sourceHandlesEqual(shape.handle, handle)) return shape;
+    if (shape.kind === "group") {
+      const child = findShapeNodeInTree(shape.children, handle);
+      if (child !== undefined) return child;
+    }
+  }
+  return undefined;
+}
+
+function hasNestedShapeNodeWithHandle(
+  shapes: readonly SourceShapeNode[],
+  handle: SourceHandle,
+): boolean {
+  return shapes.some(
+    (shape) =>
+      shape.kind === "group" &&
+      (findShapeNodeInTree(shape.children, handle) !== undefined ||
+        hasNestedShapeNodeWithHandle(shape.children, handle)),
+  );
+}
+
+function hasAlternateContentSidecar(shape: SourceShapeNode): boolean {
+  if (shape.kind === "raw") return false;
+  return shape.rawSidecars?.some((sidecar) => sidecar.node.name === "mc:AlternateContent") ?? false;
 }
 
 function sourceHandlesEqual(left: SourceHandle | undefined, right: SourceHandle): boolean {

@@ -2,4 +2,4 @@
 "pptx-glimpse": patch
 ---
 
-Add PptxSourceModel shape transform editing and writer round-trip support for xfrm offset and extent updates.
+Add document-path foundation support for shape transform edits, enabling internal writer round-trips for xfrm offset and extent updates.

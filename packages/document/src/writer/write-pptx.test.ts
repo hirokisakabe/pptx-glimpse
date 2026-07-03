@@ -428,6 +428,57 @@ describe("writePptx - shape xfrm edit", () => {
       }),
     ).toThrow(/shape handle was not found/);
   });
+
+  it("Rejects nested group child shape handles for this writer slice", () => {
+    const source = readPptx(
+      buildTextEditFixtureFromSlide(
+        `<p:grpSp>` +
+          `<p:nvGrpSpPr><p:cNvPr id="30" name="Group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
+          `<p:grpSpPr><a:xfrm><a:off x="10" y="20"/><a:ext cx="300" cy="400"/><a:chOff x="0" y="0"/><a:chExt cx="300" cy="400"/></a:xfrm></p:grpSpPr>` +
+          `<p:sp><p:nvSpPr><p:cNvPr id="31" name="Child"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="1" y="2"/><a:ext cx="3" cy="4"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>` +
+          `</p:sp>` +
+          `</p:grpSp>`,
+      ),
+    );
+    const group = source.slides[0].shapes[0];
+    if (group.kind !== "group") throw new Error("group not found");
+    const child = group.children[0];
+
+    expect(findShapeNodeBySourceHandle(source, child.handle!)).toBe(child);
+    expect(() =>
+      updateShapeTransform(source, child.handle!, {
+        offsetX: asEmu(1),
+        offsetY: asEmu(2),
+        width: asEmu(3),
+        height: asEmu(4),
+      }),
+    ).toThrow(/nested group shape editing is not supported/);
+  });
+
+  it("Rejects AlternateContent fallback shape handles for this writer slice", () => {
+    const source = readPptx(
+      buildTextEditFixtureFromSlide(
+        `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">` +
+          `<mc:Fallback>` +
+          `<p:sp><p:nvSpPr><p:cNvPr id="40" name="Fallback"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="1" y="2"/><a:ext cx="3" cy="4"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>` +
+          `</p:sp>` +
+          `</mc:Fallback>` +
+          `</mc:AlternateContent>`,
+      ),
+    );
+    const shape = firstShape(source);
+
+    expect(() =>
+      updateShapeTransform(source, shape.handle!, {
+        offsetX: asEmu(1),
+        offsetY: asEmu(2),
+        width: asEmu(3),
+        height: asEmu(4),
+      }),
+    ).toThrow(/AlternateContent/);
+  });
 });
 
 function firstShape(source: ReturnType<typeof readPptx>): SourceShape {
