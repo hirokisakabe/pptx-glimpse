@@ -17,6 +17,7 @@
     "baseUrl": ".",
     "paths": {
       "@pptx-glimpse/document": ["packages/document/src/index.ts"],
+      "@pptx-glimpse/editor-core": ["packages/editor-core/src/index.ts"],
       "@pptx-glimpse/renderer": ["packages/renderer/src/index.ts"]
     }
   },
