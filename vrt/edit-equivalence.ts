@@ -87,10 +87,8 @@ export async function assertEditEquivalence(
     ...baseRenderOptions,
     ...testCase.renderOptions,
   };
-  const [actualReport, expectedReport] = await Promise.all([
-    convertPptxToPng(editedPptx, renderOptions),
-    convertPptxToPng(expected, renderOptions),
-  ]);
+  const actualReport = await convertPptxToPng(editedPptx, renderOptions);
+  const expectedReport = await convertPptxToPng(expected, renderOptions);
 
   expect(actualReport.slides.map((slide) => slide.slideNumber)).toEqual(
     expectedReport.slides.map((slide) => slide.slideNumber),

@@ -26,11 +26,11 @@ const originalTextRunFixture = textRunFixture("source text-run fixture", "Origin
 const editedTextRunFixture = textRunFixture("expected edited text-run fixture", "Edited text");
 const mismatchedTextRunFixture = textRunFixture(
   "mismatched expected text-run fixture",
-  "Unexpected text",
+  "Alterd text",
 );
 
 const TEST_FONT_FAMILY = "Pptx Glimpse Edit Equivalence";
-const TEST_FONT_DIR = join(tmpdir(), "pptx-glimpse-edit-equivalence-font-v1");
+const TEST_FONT_DIR = join(tmpdir(), "pptx-glimpse-edit-equivalence-font-v2");
 const TEST_FONT_PATH = join(TEST_FONT_DIR, "PptxGlimpseEditEquivalence-Regular.ttf");
 
 const replaceFirstRunWithEditedText = {
@@ -129,13 +129,13 @@ async function createTinyTestFontDir(): Promise<string> {
       advanceWidth: 600,
       path: createGlyphPath(opentype),
     }),
-    ...Array.from(new Set("EditedOriginalUnexpected text")).map(
+    ...Array.from(new Set("EditedOriginalAlterd text")).map(
       (char) =>
         new opentype.Glyph({
           name: char === " " ? "space" : char,
           unicode: char.codePointAt(0),
-          advanceWidth: char === " " ? 300 : 600,
-          path: char === " " ? new opentype.Path() : createGlyphPath(opentype),
+          advanceWidth: glyphAdvanceWidth(char),
+          path: char === " " ? new opentype.Path() : createGlyphPath(opentype, char),
         }),
     ),
   ];
@@ -152,14 +152,23 @@ async function createTinyTestFontDir(): Promise<string> {
   return TEST_FONT_DIR;
 }
 
-function createGlyphPath(opentype: OpentypeModule): OpentypePath {
+function createGlyphPath(opentype: OpentypeModule, char = ".notdef"): OpentypePath {
+  const codePoint = char.codePointAt(0) ?? 0;
+  const width = 220 + (codePoint % 7) * 45;
+  const top = 520 + (codePoint % 5) * 35;
+  const skew = (codePoint % 3) * 35;
   const path = new opentype.Path();
   path.moveTo(100, 0);
-  path.lineTo(500, 0);
-  path.lineTo(500, 700);
-  path.lineTo(100, 700);
+  path.lineTo(100 + width, 0);
+  path.lineTo(100 + width + skew, top);
+  path.lineTo(100 + skew, top);
   path.close();
   return path;
+}
+
+function glyphAdvanceWidth(char: string): number {
+  if (char === " ") return 300;
+  return 440 + ((char.codePointAt(0) ?? 0) % 6) * 45;
 }
 
 interface OpentypeModule {

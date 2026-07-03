@@ -235,7 +235,7 @@ export function textBodyXmlHelper(
   const u = opts?.underline ? ` u="sng"` : "";
   const strike = opts?.strikethrough ? ` strike="sngStrike"` : "";
   const fillColor = opts?.color ?? "000000";
-  const latin = opts?.typeface ? `<a:latin typeface="${opts.typeface}"/>` : "";
+  const latin = opts?.typeface ? `<a:latin typeface="${escapeXmlAttribute(opts.typeface)}"/>` : "";
   const algn = opts?.align ? ` algn="${opts.align}"` : "";
   const anchor = opts?.anchor ?? "ctr";
   const wrap = opts?.wrap ? ` wrap="${opts.wrap}"` : "";
@@ -262,10 +262,18 @@ export function textBodyXmlHelper(
         <a:solidFill><a:srgbClr val="${fillColor}"/></a:solidFill>
         ${latin}
       </a:rPr>
-      <a:t>${text}</a:t>
+      <a:t>${escapeXmlText(text)}</a:t>
     </a:r>
   </a:p>
 </p:txBody>`;
+}
+
+function escapeXmlText(value: string): string {
+  return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function escapeXmlAttribute(value: string): string {
+  return escapeXmlText(value).replace(/"/g, "&quot;");
 }
 
 export function wrapSlideXml(spTreeContent: string, backgroundXml = ""): string {
