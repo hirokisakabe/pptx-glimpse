@@ -1111,9 +1111,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
             ? paragraphElement.querySelector('.text-editor-run[data-run-index="' + runIndex + '"]')
             : null;
           var text = runElement ? runElement.textContent || "" : textNode.text || "";
-          if (text.length === 0) {
-            throw new Error("Text editor runs must not be empty.");
-          }
+          if (text.length === 0) return;
           content.push({
             type: "text",
             text: text,

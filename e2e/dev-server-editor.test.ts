@@ -99,9 +99,22 @@ describe("dev server editor API", () => {
       });
       expect(overlayEdited.slides[0].svg).toContain("Overlay edited");
 
+      await postJson<SlidesResponse>(`${baseUrl}/api/editor/text-body`, {
+        handle: shapes.shapes[0].handle,
+        docJson: {
+          ...shapes.shapes[0].editableTextBody?.docJson,
+          content: [
+            {
+              ...shapes.shapes[0].editableTextBody?.docJson.content?.[0],
+              content: [],
+            },
+          ],
+        },
+      });
+
       const saved = await postJson<SaveResponse>(`${baseUrl}/api/editor/save`, { path: savedPath });
       expect(saved).toMatchObject({ ok: true, path: savedPath });
-      expect(firstRun(readPptx(await readFile(savedPath)))).toBe("Overlay edited");
+      expect(firstRun(readPptx(await readFile(savedPath)))).toBe("");
 
       const rejectedSave = await postJsonError(`${baseUrl}/api/editor/save`, {
         path: join(tmpdir(), "outside-dev-server-save.pptx"),
