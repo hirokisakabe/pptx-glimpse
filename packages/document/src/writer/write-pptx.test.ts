@@ -327,6 +327,14 @@ describe("writePptx - one plain text-run edit", () => {
     expect(firstParagraph(reread).runs[1].text).toBe(" Keep ");
   });
 
+  it("Writes dirty slide XML with a single XML declaration", () => {
+    const source = readPptx(buildTextEditFixture());
+    const edited = replaceTextRunPlainText(source, firstRun(source).handle!, "Edited text");
+    const slideXml = decoder.decode(getEntry(writePptx(edited), "ppt/slides/slide1.xml"));
+
+    expect(slideXml.match(/<\?xml/g)).toHaveLength(1);
+  });
+
   it("Preserving run / paragraph formatting and unrelated package material", () => {
     const input = buildTextEditFixture();
     const source = readPptx(input);

@@ -168,7 +168,9 @@ jobs:
         run: docker run --rm -v "${{ github.workspace }}":/workspace ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest bash /workspace/vrt/libreoffice/update_snapshots.sh
 
       - name: Run LibreOffice VRT
-        run: npx vitest run --config vitest.vrt.config.ts vrt/libreoffice/regression.test.ts
+        run: |
+          npx vitest run --config vitest.vrt.config.ts vrt/libreoffice/regression.test.ts
+          npx vitest run --config vitest.vrt.config.ts vrt/libreoffice/editor-validity.test.ts
 
       - name: Upload diff images on failure
         if: failure()
