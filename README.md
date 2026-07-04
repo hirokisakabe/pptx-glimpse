@@ -91,10 +91,6 @@ const { slides } = await convertPptxToPng(pptx, {
   height: 1080, // Currently ignored by public conversion; width controls PNG size
   logLevel: "warn", // Warning log level: "off" | "warn" | "debug"
   fontDirs: ["/custom/fonts"], // Additional font directories to search
-  fonts: [
-    // Browser-safe alternative to fontDirs; pass bytes loaded by fetch, bundler, etc.
-    { name: "Inter", data: fontArrayBuffer },
-  ],
   skipSystemFonts: true, // Skip OS system font directories; use fontDirs only
   fontMapping: {
     "Custom Corp Font": "Noto Sans", // Custom font name mapping
@@ -152,7 +148,7 @@ getMappedFont("calibri", mapping); // "Ubuntu"
 <details>
 <summary>Custom Font Loading</summary>
 
-In browsers, Edge Runtime, serverless workers, or any environment where Node.js filesystem APIs are unavailable, pass font bytes directly with the `fonts` option. You can load those bytes from a CDN, application bundle, File input, or any other source.
+When font files are loaded outside Node.js filesystem scanning, pass the bytes directly with the `fonts` option. This is the font-loading path to use for browser or Edge Runtime integrations that fetch fonts from a URL, application bundle, File input, or any other source. Other browser runtime requirements, such as resvg WASM loading for PNG output, are handled separately.
 
 ```typescript
 import { convertPptxToSvg } from "pptx-glimpse";
@@ -204,7 +200,7 @@ Default system font directories:
 
 Use the `fontDirs` option to add custom font directories. To skip system font scanning entirely and use only `fontDirs` (useful in containers, serverless environments, or when you want to bundle specific fonts to reduce startup time), set `skipSystemFonts: true`.
 
-For browser and Edge Runtime usage, prefer the `fonts` option instead of `fontDirs`:
+If your application already has font bytes, use the `fonts` option instead of `fontDirs`. When `fonts` is provided, `fontDirs` and system font scanning are not used:
 
 ```typescript
 const font = await fetch("/fonts/Inter-Regular.ttf").then((response) => response.arrayBuffer());

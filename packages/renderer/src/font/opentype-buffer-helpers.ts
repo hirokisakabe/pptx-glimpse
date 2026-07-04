@@ -280,17 +280,30 @@ export async function createOpentypeSetupFromBuffers(
   return buildOpentypeSetupFromState(state);
 }
 
-/** Caching parsed system Font objects. The cache lives here so clearFontCache is browser-safe. */
-let cachedSystemSetup: OpentypeSetup | null = null;
-let cachedSystemSetupKey: string | null = null;
+interface SystemFontCacheStore {
+  setup: OpentypeSetup | null;
+  key: string | null;
+}
+
+const SYSTEM_FONT_CACHE_KEY = "__pptxGlimpseSystemFontCache__";
+
+function getSystemFontCacheStore(): SystemFontCacheStore {
+  const globalObject = globalThis as typeof globalThis & {
+    [SYSTEM_FONT_CACHE_KEY]?: SystemFontCacheStore;
+  };
+  globalObject[SYSTEM_FONT_CACHE_KEY] ??= { setup: null, key: null };
+  return globalObject[SYSTEM_FONT_CACHE_KEY];
+}
 
 export function getCachedSystemOpentypeSetup(key: string): OpentypeSetup | null | undefined {
-  return cachedSystemSetupKey === key ? cachedSystemSetup : undefined;
+  const cache = getSystemFontCacheStore();
+  return cache.key === key ? cache.setup : undefined;
 }
 
 export function setCachedSystemOpentypeSetup(key: string, setup: OpentypeSetup): void {
-  cachedSystemSetup = setup;
-  cachedSystemSetupKey = key;
+  const cache = getSystemFontCacheStore();
+  cache.setup = setup;
+  cache.key = key;
 }
 
 /**
@@ -301,6 +314,7 @@ export function setCachedSystemOpentypeSetup(key: string, setup: OpentypeSetup):
  * long-running process when subsequent conversions must reload font files.
  */
 export function clearFontCache(): void {
-  cachedSystemSetup = null;
-  cachedSystemSetupKey = null;
+  const cache = getSystemFontCacheStore();
+  cache.setup = null;
+  cache.key = null;
 }

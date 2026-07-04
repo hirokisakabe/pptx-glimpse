@@ -405,6 +405,20 @@ describe("textOutput: text SVG output", () => {
     expect(svg).toContain('font-family:"DirectBufferFont"');
     expect(svg).toContain("ABA");
   });
+
+  it("treats an explicit empty fonts array as direct font input", async () => {
+    const rendererNode = await import("@pptx-glimpse/renderer/node");
+    const systemSetupSpy = vi.spyOn(rendererNode, "createOpentypeSetupFromSystem");
+    const pptx = await createTestPptx("ABA", { typeface: "DirectBufferFont" });
+
+    const { slides } = await convertPptxToSvg(pptx, {
+      fonts: [],
+      textOutput: "text",
+    });
+
+    expect(systemSetupSpy).not.toHaveBeenCalled();
+    expect(slides[0].svg).toContain("ABA");
+  });
 });
 
 describe("textOutput: path SVG output", () => {
@@ -449,6 +463,22 @@ describe("textOutput: PNG conversion", () => {
 
     const { slides } = await convertPptxToPng(pptx, {
       fonts: [{ name: "DirectPngFont", data: directFont }],
+      textOutput: "text",
+    });
+
+    expect(systemFontBufferSpy).not.toHaveBeenCalled();
+    expect(slides).toHaveLength(1);
+    expect(slides[0].png[0]).toBe(0x89);
+    expect(slides[0].png[1]).toBe(0x50);
+  });
+
+  it("does not load Node font files when fonts is an explicit empty array", async () => {
+    const nodeFontLoader = await import("./node-font-loader.js");
+    const systemFontBufferSpy = vi.spyOn(nodeFontLoader, "loadFontBuffersFromSystem");
+    const pptx = await createTestPptx("ABA", { typeface: "DirectPngFont" });
+
+    const { slides } = await convertPptxToPng(pptx, {
+      fonts: [],
       textOutput: "text",
     });
 

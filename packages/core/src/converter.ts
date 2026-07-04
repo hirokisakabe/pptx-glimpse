@@ -570,14 +570,16 @@ function injectIntoSvgDefs(svg: string, content: string): string {
 }
 
 async function createOpentypeSetup(options: ConvertOptions | undefined) {
-  if (options?.fonts && options.fonts.length > 0) {
+  if (options?.fonts !== undefined) {
     return createOpentypeSetupFromBuffers(options.fonts, options.fontMapping);
   }
   if (!shouldLoadSystemFonts(options)) {
     return null;
   }
 
-  const { createOpentypeSetupFromSystem } = await import("@pptx-glimpse/renderer/node");
+  const { createOpentypeSetupFromSystem } = await import(
+    /* @vite-ignore */ "@pptx-glimpse/renderer/node"
+  );
   return createOpentypeSetupFromSystem(
     options?.fontDirs,
     options?.fontMapping,
@@ -586,14 +588,14 @@ async function createOpentypeSetup(options: ConvertOptions | undefined) {
 }
 
 async function loadPngFontBuffers(options: ConvertOptions | undefined): Promise<Uint8Array[]> {
-  if (options?.fonts && options.fonts.length > 0) {
+  if (options?.fonts !== undefined) {
     return options.fonts.map((font) => toUint8Array(font.data));
   }
   if (!shouldLoadSystemFonts(options)) {
     return [];
   }
 
-  const { loadFontBuffersFromSystem } = await import("./node-font-loader.js");
+  const { loadFontBuffersFromSystem } = await import(/* @vite-ignore */ "./node-font-loader.js");
   return loadFontBuffersFromSystem(options?.fontDirs, options?.skipSystemFonts);
 }
 
