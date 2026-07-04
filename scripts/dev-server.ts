@@ -947,13 +947,34 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
 
     function selectShape(shape, event) {
       if (activeTextEditor) {
-        commitTextEditor().catch(function () {});
+        commitTextEditor()
+          .then(function () {
+            selectShapeAfterCommit(shape);
+          })
+          .catch(function () {});
         return;
       }
       selectedShapeKey = shapeKey(shape);
       selectedShape = cloneShape(shape);
       beginDrag("move", null, event);
       window.setTimeout(renderSelectionOverlay, 0);
+      postJson("/api/editor/select", { handle: shape.handle })
+        .then(function (data) {
+          updateHistory(data.history);
+          if (data.selection && data.selection.shapeHandle) {
+            selectedShapeKey = handleKey(data.selection.shapeHandle);
+          }
+          renderSelectionOverlay();
+        })
+        .catch(function (err) {
+          setEditorMessage(err.message, true);
+        });
+    }
+
+    function selectShapeAfterCommit(shape) {
+      selectedShapeKey = shapeKey(shape);
+      selectedShape = cloneShape(shape);
+      renderSelectionOverlay();
       postJson("/api/editor/select", { handle: shape.handle })
         .then(function (data) {
           updateHistory(data.history);
@@ -1114,18 +1135,25 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
           '.text-editor-paragraph[data-paragraph-index="' + paragraphIndex + '"]'
         );
         var content = [];
+        var emptyRunCount = 0;
         (paragraph.content || []).forEach(function (textNode, runIndex) {
           var runElement = paragraphElement
             ? paragraphElement.querySelector('.text-editor-run[data-run-index="' + runIndex + '"]')
             : null;
           var text = runElement ? runElement.textContent || "" : textNode.text || "";
-          if (text.length === 0) return;
+          if (text.length === 0) {
+            emptyRunCount += 1;
+            return;
+          }
           content.push({
             type: "text",
             text: text,
             marks: textNode.marks || []
           });
         });
+        if (emptyRunCount > 0 && content.length > 0) {
+          throw new Error("Clearing individual runs in multi-run text is unsupported.");
+        }
         paragraphs.push({
           type: "paragraph",
           attrs: paragraph.attrs || {},
