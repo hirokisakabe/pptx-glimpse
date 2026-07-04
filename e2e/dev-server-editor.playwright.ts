@@ -63,9 +63,60 @@ test("selects a shape, moves and resizes it, then saves xfrm edits", async ({ pa
   }
 });
 
+test("edits a text shape with the overlay editor, re-renders, and saves text", async ({ page }) => {
+  const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-editor-text-test-"));
+  let serverProcess: ChildProcessWithoutNullStreams | undefined;
+  try {
+    const sourcePath = join(dir, "fixture.pptx");
+    const savedPath = join(dir, "fixture.edited.pptx");
+    await writeFile(sourcePath, await buildShapeFixture());
+
+    const port = await findFreePort();
+    serverProcess = await startDevServer(sourcePath, port);
+    const baseUrl = `http://127.0.0.1:${String(port)}`;
+
+    await page.goto(baseUrl);
+    await expect(page.getByTestId("shape-hit-area").first()).toBeVisible();
+
+    await dblclickSvgPoint(page, 240, 240);
+    const overlay = page.getByTestId("text-editor-overlay");
+    await expect(overlay).toBeVisible();
+    await expect(overlay).toContainText("Original");
+    await expectOverlayNearSvgBounds(page, { x: 96, y: 192, width: 288, height: 96 });
+
+    const commandResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/editor/text-body") &&
+        response.request().method() === "POST" &&
+        response.ok(),
+    );
+    await page.getByTestId("text-editor-run").first().fill("Overlay edited");
+    await page.getByTestId("text-editor-done").click();
+    await commandResponse;
+
+    await expect(page.locator("#slide-container")).toContainText("Overlay edited");
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.locator("#editor-message")).toContainText(savedPath);
+
+    const saved = readPptx(await readFile(savedPath));
+    expect(firstText(saved)).toBe("Overlay edited");
+  } finally {
+    if (serverProcess !== undefined) {
+      serverProcess.kill();
+      await waitForExit(serverProcess);
+    }
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 async function clickSvgPoint(page: Page, x: number, y: number) {
   const point = await svgPointToClient(page, x, y);
   await page.mouse.click(point.x, point.y);
+}
+
+async function dblclickSvgPoint(page: Page, x: number, y: number) {
+  const point = await svgPointToClient(page, x, y);
+  await page.mouse.dblclick(point.x, point.y);
 }
 
 async function dragSvgPoint(
@@ -86,6 +137,48 @@ async function dragSvgPoint(
   await page.mouse.move(end.x, end.y, { steps: 6 });
   await page.mouse.up();
   await commandResponse;
+}
+
+async function expectOverlayNearSvgBounds(
+  page: Page,
+  bounds: { x: number; y: number; width: number; height: number },
+) {
+  const rects = await page.evaluate((expected) => {
+    const overlay = document.querySelector('[data-testid="text-editor-overlay"]');
+    const selectionOverlay = document.getElementById("selection-overlay");
+    if (!(overlay instanceof HTMLElement)) throw new Error("text editor overlay not found");
+    if (!(selectionOverlay instanceof SVGSVGElement))
+      throw new Error("selection overlay not found");
+    const point = selectionOverlay.createSVGPoint();
+    const matrix = selectionOverlay.getScreenCTM();
+    if (matrix === null) throw new Error("selection overlay matrix not found");
+    point.x = expected.x;
+    point.y = expected.y;
+    const topLeft = point.matrixTransform(matrix);
+    point.x = expected.x + expected.width;
+    point.y = expected.y + expected.height;
+    const bottomRight = point.matrixTransform(matrix);
+    const overlayRect = overlay.getBoundingClientRect();
+    return {
+      expected: {
+        left: topLeft.x,
+        top: topLeft.y,
+        width: bottomRight.x - topLeft.x,
+        height: bottomRight.y - topLeft.y,
+      },
+      actual: {
+        left: overlayRect.left,
+        top: overlayRect.top,
+        width: overlayRect.width,
+        height: overlayRect.height,
+      },
+    };
+  }, bounds);
+
+  expect(Math.abs(rects.actual.left - rects.expected.left)).toBeLessThan(3);
+  expect(Math.abs(rects.actual.top - rects.expected.top)).toBeLessThan(3);
+  expect(Math.abs(rects.actual.width - rects.expected.width)).toBeLessThan(3);
+  expect(Math.abs(rects.actual.height - rects.expected.height)).toBeLessThan(3);
 }
 
 async function svgPointToClient(
@@ -158,6 +251,9 @@ async function buildShapeFixture(): Promise<Uint8Array> {
         `<p:cSld><p:spTree>` +
         `<p:sp><p:nvSpPr><p:cNvPr id="10" name="Box"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
         `<p:spPr><a:xfrm><a:off x="914400" y="1828800"/><a:ext cx="2743200" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>` +
+        `<p:txBody><a:bodyPr/><a:lstStyle/>` +
+        `<a:p><a:r><a:rPr sz="2400"><a:latin typeface="Aptos"/></a:rPr><a:t>Original</a:t></a:r></a:p>` +
+        `</p:txBody>` +
         `</p:sp>` +
         `</p:spTree></p:cSld>` +
         `</p:sld>`,
@@ -171,6 +267,12 @@ function firstShape(source: PptxSourceModel): SourceShape {
   const shape = source.slides[0]?.shapes.find((node): node is SourceShape => node.kind === "shape");
   if (shape === undefined) throw new Error("fixture shape not found");
   return shape;
+}
+
+function firstText(source: PptxSourceModel): string {
+  const run = firstShape(source).textBody?.paragraphs[0]?.runs[0];
+  if (run === undefined) throw new Error("fixture text run not found");
+  return run.text;
 }
 
 async function findFreePort(): Promise<number> {
