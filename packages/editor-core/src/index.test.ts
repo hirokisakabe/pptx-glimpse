@@ -11,12 +11,18 @@ import {
   writePptx,
 } from "@pptx-glimpse/document";
 import JSZip from "jszip";
+import { Node as ProseMirrorNode } from "prosemirror-model";
+import { Transform } from "prosemirror-transform";
 import { describe, expect, it } from "vitest";
 
 import {
   createEditorSession,
   type EditorApplyCommandResult,
   type EditorHistoryResult,
+  pptxTextBodySchema,
+  proseMirrorDocJsonToEditorCommands,
+  proseMirrorDocJsonToTextBody,
+  textBodyToProseMirrorDocJson,
 } from "./index.js";
 
 const encoder = new TextEncoder();
@@ -125,6 +131,57 @@ describe("EditorSession text-run commands", () => {
     expect(session.canUndo).toBe(false);
     expect(session.canRedo).toBe(false);
     expect(session.undo()).toEqual({ ok: false, reason: "empty-undo-stack" });
+  });
+});
+
+describe("ProseMirror text body conversion", () => {
+  it("round-trips paragraph and run text with source properties", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const textBody = firstTextBody(source);
+    const docJson = textBodyToProseMirrorDocJson(textBody);
+    const roundTripped = proseMirrorDocJsonToTextBody(textBody, docJson);
+
+    expect(roundTripped.paragraphs).toEqual(textBody.paragraphs);
+    expect(roundTripped.paragraphs[0].runs[0].properties).toEqual(
+      textBody.paragraphs[0].runs[0].properties,
+    );
+    expect(roundTripped.paragraphs[0].runs[1].properties).toEqual(
+      textBody.paragraphs[0].runs[1].properties,
+    );
+  });
+
+  it("turns a run-crossing ProseMirror replacement into writer-persisted run edits", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const textBody = firstTextBody(source);
+    const doc = ProseMirrorNode.fromJSON(
+      pptxTextBodySchema,
+      textBodyToProseMirrorDocJson(textBody),
+    );
+    const firstRunMark = doc.firstChild?.child(0).marks[0];
+    if (firstRunMark === undefined) throw new Error("first run mark not found");
+    const transform = new Transform(doc).replaceWith(
+      1 + "Orig".length,
+      1 + "Original Ke".length,
+      pptxTextBodySchema.text("X", [firstRunMark]),
+    );
+    const editedJson: unknown = transform.doc.toJSON();
+    const commands = proseMirrorDocJsonToEditorCommands(textBody, editedJson);
+    const session = createEditorSession(source);
+
+    for (const command of commands) {
+      expectApplied(session.apply(command));
+    }
+    const reread = readPptx(writePptx(session.document));
+
+    expect(commands).toHaveLength(2);
+    expect(firstParagraph(session.document).runs.map((run) => run.text)).toEqual(["OrigX", "ep "]);
+    expect(firstParagraph(reread).runs.map((run) => run.text)).toEqual(["OrigX", "ep "]);
+    expect(firstParagraph(reread).runs[0].properties).toEqual(
+      firstParagraph(source).runs[0].properties,
+    );
+    expect(firstParagraph(reread).runs[1].properties).toEqual(
+      firstParagraph(source).runs[1].properties,
+    );
   });
 });
 
@@ -426,7 +483,10 @@ async function buildTextEditFixture(): Promise<Uint8Array> {
         `<p:sp><p:nvSpPr><p:cNvPr id="10" name="Title"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
         `<p:spPr><a:xfrm><a:off x="100" y="200"/><a:ext cx="300" cy="400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>` +
         `<p:txBody><a:bodyPr/><a:lstStyle/>` +
-        `<a:p><a:r><a:t>Original</a:t></a:r><a:r><a:t xml:space="preserve"> Keep </a:t></a:r></a:p>` +
+        `<a:p><a:pPr algn="ctr"/>` +
+        `<a:r><a:rPr b="1" sz="2400"><a:latin typeface="Aptos"/><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill></a:rPr><a:t>Original</a:t></a:r>` +
+        `<a:r><a:rPr i="1" sz="1800"><a:latin typeface="Arial"/></a:rPr><a:t xml:space="preserve"> Keep </a:t></a:r>` +
+        `</a:p>` +
         `</p:txBody></p:sp>` +
         `<p:sp><p:nvSpPr><p:cNvPr id="11" name="No xfrm"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
         `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
@@ -457,6 +517,10 @@ function firstShape(source: PptxSourceModel): SourceShape {
 
 function firstParagraph(source: PptxSourceModel) {
   return firstShape(source).textBody!.paragraphs[0];
+}
+
+function firstTextBody(source: PptxSourceModel) {
+  return firstShape(source).textBody!;
 }
 
 function firstRun(source: PptxSourceModel) {

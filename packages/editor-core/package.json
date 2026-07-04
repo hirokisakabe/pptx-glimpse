@@ -18,7 +18,9 @@
     "build": "tsup"
   },
   "dependencies": {
-    "@pptx-glimpse/document": "workspace:*"
+    "@pptx-glimpse/document": "workspace:*",
+    "prosemirror-model": "^1.25.9",
+    "prosemirror-transform": "^1.12.0"
   },
   "files": [
     "dist"

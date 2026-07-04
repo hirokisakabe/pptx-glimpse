@@ -3,8 +3,10 @@ import {
   findShapeNodeBySourceHandle,
   type PptxSourceModel,
   type PptxSourceModelEdit,
+  type PptxSourceModelParagraphTextEdit,
   type PptxSourceModelShapeTransformEdit,
   type PptxSourceModelTextRunEdit,
+  replaceParagraphPlainText,
   replaceTextRunPlainText,
   type SourceHandle,
   type SourceShapeNode,
@@ -12,8 +14,26 @@ import {
   updateShapeTransform,
 } from "@pptx-glimpse/document";
 
+export {
+  type PptxTextBodyProseMirrorCommand,
+  type PptxTextBodyProseMirrorDocJson,
+  type PptxTextBodyProseMirrorParagraphJson,
+  type PptxTextBodyProseMirrorRunMarkJson,
+  type PptxTextBodyProseMirrorTextJson,
+  pptxTextBodySchema,
+  proseMirrorDocJsonToEditorCommands,
+  proseMirrorDocJsonToTextBody,
+  textBodyToProseMirrorDocJson,
+} from "./prosemirror-text-body.js";
+
 export interface ReplaceTextRunPlainTextCommand {
   readonly kind: "replaceTextRunPlainText";
+  readonly handle: SourceHandle;
+  readonly text: string;
+}
+
+export interface ReplaceParagraphPlainTextCommand {
+  readonly kind: "replaceParagraphPlainText";
   readonly handle: SourceHandle;
   readonly text: string;
 }
@@ -32,7 +52,11 @@ export interface ResizeShapeCommand {
   readonly height: Emu;
 }
 
-export type EditorCommand = ReplaceTextRunPlainTextCommand | MoveShapeCommand | ResizeShapeCommand;
+export type EditorCommand =
+  | ReplaceTextRunPlainTextCommand
+  | ReplaceParagraphPlainTextCommand
+  | MoveShapeCommand
+  | ResizeShapeCommand;
 
 export type EditorApplyCommandResult =
   | {
@@ -182,6 +206,8 @@ function applyCommandToDocument(
   switch (command.kind) {
     case "replaceTextRunPlainText":
       return replaceTextRunPlainText(document, command.handle, command.text);
+    case "replaceParagraphPlainText":
+      return replaceParagraphPlainText(document, command.handle, command.text);
     case "moveShape":
       return moveShape(document, command);
     case "resizeShape":
@@ -261,6 +287,7 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
   if (edits === undefined) return document;
 
   const seenTextRuns = new Set<string>();
+  const seenParagraphs = new Set<string>();
   const seenShapeTransforms = new Set<string>();
   const normalizedReversed: PptxSourceModelEdit[] = [];
 
@@ -268,8 +295,15 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
     const edit = edits[index];
     if (edit.kind === "replaceTextRunPlainText") {
       const key = editHandleNodeKey(edit);
+      const paragraphKey = textRunParagraphEditKey(edit);
+      if (paragraphKey !== undefined && seenParagraphs.has(paragraphKey)) continue;
       if (seenTextRuns.has(key)) continue;
       seenTextRuns.add(key);
+    }
+    if (edit.kind === "replaceParagraphPlainText") {
+      const key = editHandleNodeKey(edit);
+      if (seenParagraphs.has(key)) continue;
+      seenParagraphs.add(key);
     }
     if (edit.kind === "updateShapeTransform") {
       const key = editHandleNodeKey(edit);
@@ -287,9 +321,21 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
 }
 
 function editHandleNodeKey(
-  edit: PptxSourceModelTextRunEdit | PptxSourceModelShapeTransformEdit,
+  edit:
+    | PptxSourceModelTextRunEdit
+    | PptxSourceModelParagraphTextEdit
+    | PptxSourceModelShapeTransformEdit,
 ): string {
   return [edit.handle.partPath, edit.handle.nodeId ?? "", edit.handle.relationshipId ?? ""].join(
     "\u0000",
   );
+}
+
+function textRunParagraphEditKey(edit: PptxSourceModelTextRunEdit): string | undefined {
+  const nodeId = String(edit.handle.nodeId ?? "");
+  const byShapeId = /^(text:shape:.+:p:\d+):r:\d+$/.exec(nodeId);
+  const byShapeSlot = /^(text:shapeSlot:\d+:p:\d+):r:\d+$/.exec(nodeId);
+  const paragraphNodeId = byShapeId?.[1] ?? byShapeSlot?.[1];
+  if (paragraphNodeId === undefined) return undefined;
+  return [edit.handle.partPath, paragraphNodeId, edit.handle.relationshipId ?? ""].join("\u0000");
 }
