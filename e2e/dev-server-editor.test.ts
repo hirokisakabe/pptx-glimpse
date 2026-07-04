@@ -69,6 +69,11 @@ describe("dev server editor API", () => {
       const saved = await postJson<SaveResponse>(`${baseUrl}/api/editor/save`, { path: savedPath });
       expect(saved).toMatchObject({ ok: true, path: savedPath });
       expect(firstRun(readPptx(await readFile(savedPath)))).toBe("Edited");
+
+      const rejectedSave = await postJsonError(`${baseUrl}/api/editor/save`, {
+        path: join(tmpdir(), "outside-dev-server-save.pptx"),
+      });
+      expect(rejectedSave.error).toMatch(/inside the source PPTX directory/);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -142,6 +147,17 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   return parseJson<T>(response);
+}
+
+async function postJsonError(url: string, body: unknown): Promise<{ error: string }> {
+  const response = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const json: unknown = await response.json();
+  expect(response.ok).toBe(false);
+  return unsafeScriptInputAssertion<{ error: string }>(json);
 }
 
 async function parseJson<T>(response: Response): Promise<T> {

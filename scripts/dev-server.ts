@@ -3,7 +3,7 @@ import { watch } from "fs";
 import { mkdtemp, readFile, rm, writeFile } from "fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { tmpdir } from "os";
-import { basename, dirname, extname, join, resolve } from "path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "path";
 import { pathToFileURL } from "url";
 import { promisify } from "util";
 import { type WebSocket, WebSocketServer } from "ws";
@@ -24,12 +24,7 @@ import { unsafeScriptInputAssertion } from "./unsafe-type-assertion.js";
 
 const DEFAULT_PORT = 3000;
 const DEBOUNCE_MS = 300;
-const WATCH_DIRS = [
-  resolve("packages/core/src"),
-  resolve("packages/document/src"),
-  resolve("packages/editor-core/src"),
-  resolve("packages/renderer/src"),
-];
+const WATCH_DIRS = [resolve("packages/core/src"), resolve("packages/renderer/src")];
 const RENDER_TIMEOUT_MS = 30_000;
 const MAX_BUFFER = 50 * 1024 * 1024;
 const EMU_PER_INCH = 914400;
@@ -108,6 +103,7 @@ async function renderPptxBytes(input: Uint8Array): Promise<SlideSvg[]> {
 export class DevEditorBackend {
   #session: ReturnType<typeof createEditorSession>;
   #slides: SlideSvg[] = [];
+  #dirty = false;
   readonly #render: RenderPptxBytes;
 
   private constructor(
@@ -125,7 +121,7 @@ export class DevEditorBackend {
   ): Promise<DevEditorBackend> {
     const input = await readFile(pptxPath);
     const backend = new DevEditorBackend(pptxPath, readPptx(input), render);
-    await backend.renderCurrentSlides();
+    await backend.renderSlidesFromBytes(input);
     return backend;
   }
 
@@ -153,7 +149,16 @@ export class DevEditorBackend {
   }
 
   async renderCurrentSlides(): Promise<readonly SlideSvg[]> {
-    this.#slides = await this.#render(writePptx(this.#session.document));
+    if (this.#dirty) {
+      await this.renderSlidesFromBytes(writePptx(this.#session.document));
+      return this.#slides;
+    }
+    await this.renderSlidesFromBytes(await readFile(this.sourcePath));
+    return this.#slides;
+  }
+
+  async renderSlidesFromBytes(input: Uint8Array): Promise<readonly SlideSvg[]> {
+    this.#slides = await this.#render(input);
     return this.#slides;
   }
 
@@ -162,6 +167,7 @@ export class DevEditorBackend {
     if (!result.ok) {
       throw new Error(result.message);
     }
+    this.#dirty = true;
     await this.renderCurrentSlides();
     return this.response();
   }
@@ -171,6 +177,7 @@ export class DevEditorBackend {
     if (!result.ok) {
       throw new Error(result.reason);
     }
+    this.#dirty = this.#session.undoDepth > 0;
     await this.renderCurrentSlides();
     return this.response();
   }
@@ -180,12 +187,13 @@ export class DevEditorBackend {
     if (!result.ok) {
       throw new Error(result.reason);
     }
+    this.#dirty = this.#session.undoDepth > 0;
     await this.renderCurrentSlides();
     return this.response();
   }
 
   async save(outputPath?: string): Promise<EditorSaveResponse> {
-    const path = outputPath ?? defaultEditedPath(this.sourcePath);
+    const path = resolveSavePath(this.sourcePath, outputPath);
     const output = writePptx(this.#session.document);
     readPptx(output);
     await writeFile(path, output);
@@ -197,6 +205,22 @@ function defaultEditedPath(sourcePath: string): string {
   const extension = extname(sourcePath);
   const base = basename(sourcePath, extension);
   return join(dirname(sourcePath), `${base}.edited${extension || ".pptx"}`);
+}
+
+function resolveSavePath(sourcePath: string, outputPath?: string): string {
+  const sourceDir = dirname(sourcePath);
+  const path =
+    outputPath === undefined
+      ? defaultEditedPath(sourcePath)
+      : resolve(isAbsolute(outputPath) ? outputPath : join(sourceDir, outputPath));
+  const relativePath = relative(sourceDir, path);
+  if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
+    throw new Error("save path must be inside the source PPTX directory");
+  }
+  if (extname(path).toLowerCase() !== ".pptx") {
+    throw new Error("save path must use the .pptx extension");
+  }
+  return path;
 }
 
 function shapeInfo(shape: SourceShapeNode, index: number): EditorShapeInfo[] {
@@ -449,6 +473,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     var slides = ${jsonForScript(slides)};
     var editorHistory = { canUndo: false, canRedo: false, undoDepth: 0, redoDepth: 0 };
     var textRunOptions = [];
+    var shapeRequestId = 0;
 
     function selectSlide(index) {
       currentIndex = index;
@@ -509,12 +534,14 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     }
 
     function loadShapeOptions(slideNumber) {
+      var requestId = ++shapeRequestId;
       fetch("/api/editor/shapes?slide=" + slideNumber)
         .then(function (res) {
           if (!res.ok) throw new Error("shape request failed");
           return res.json();
         })
         .then(function (data) {
+          if (requestId !== shapeRequestId || slideNumber !== currentIndex + 1) return;
           textRunOptions = [];
           data.shapes.forEach(function (shape) {
             (shape.textRuns || []).forEach(function (run, index) {
@@ -766,7 +793,7 @@ async function handleRequest(
   if (url.pathname === "/api/editor/save" && req.method === "POST") {
     const body = await readJsonBody(req);
     const path = isRecord(body) ? body.path : undefined;
-    sendJson(res, 200, await backend.save(typeof path === "string" ? resolve(path) : undefined));
+    sendJson(res, 200, await backend.save(typeof path === "string" ? path : undefined));
     return;
   }
 
@@ -872,6 +899,9 @@ function parseCliArgs(argv: readonly string[]): { pptxPath?: string; port: numbe
   const args = argv[0] === "--" ? argv.slice(1) : [...argv];
   const portArgIdx = args.indexOf("--port");
   const port = portArgIdx !== -1 ? Number(args[portArgIdx + 1]) : DEFAULT_PORT;
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error("--port must be an integer between 1 and 65535");
+  }
   const pptxPath = args.find((arg, index) => {
     if (arg === "--port") return false;
     if (index > 0 && args[index - 1] === "--port") return false;
