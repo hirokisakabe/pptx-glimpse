@@ -5,10 +5,14 @@ export * from "./font/font-mapping.js";
 export * from "./font/font-mapping-context.js";
 export * from "./font/font-subsetter.js";
 export * from "./font/font-usage-collector.js";
-export * from "./font/opentype-helpers.js";
+export type { FontBuffer, OpentypeSetup } from "./font/opentype-buffer-helpers.js";
+export {
+  clearFontCache,
+  createOpentypeSetupFromBuffers,
+  createOpentypeTextMeasurerFromBuffers,
+} from "./font/opentype-buffer-helpers.js";
 export * from "./font/opentype-text-measurer.js";
 export * from "./font/script-font-context.js";
-export * from "./font/system-font-loader.js";
 export * from "./font/text-measurer.js";
 export * from "./font/text-path-context.js";
 export * from "./font/ttc-parser.js";
@@ -24,7 +28,6 @@ export * from "./model/table.js";
 export * from "./model/text.js";
 export * from "./model/theme.js";
 export * from "./model/tokens.js";
-export * from "./png/png-converter.js";
 export * from "./renderer/blip-effect-renderer.js";
 export * from "./renderer/chart-renderer.js";
 export * from "./renderer/effect-renderer.js";

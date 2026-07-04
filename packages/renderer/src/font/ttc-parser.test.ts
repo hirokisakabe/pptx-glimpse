@@ -7,7 +7,6 @@ import { buildTtcFromTtfs } from "./ttc-test-helper.js";
  * Create a minimal valid TTF buffer with opentype.js.
  */
 async function createTestTtfBuffer(familyName: string): Promise<ArrayBuffer> {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const opentype: {
     Glyph: new (opts: Record<string, unknown>) => unknown;
     Path: new () => {
@@ -102,7 +101,6 @@ describe("extractTtcFonts", () => {
     const ttc = buildTtcFromTtfs([ttf1, ttf2]);
 
     const extracted = extractTtcFonts(ttc);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const opentype: {
       parse: (buf: ArrayBuffer) => { names: { fontFamily: Record<string, string> } };
     } = await import("opentype.js");
@@ -151,7 +149,6 @@ describe("extractTtcFonts", () => {
     const extracted = extractTtcFonts(ttc);
     expect(extracted).toHaveLength(1);
 
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
     const opentype: {
       parse: (buf: ArrayBuffer) => { names: { fontFamily: Record<string, string> } };
     } = await import("opentype.js");
