@@ -688,8 +688,17 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     var EMU_PER_PIXEL = ${String(EMU_PER_INCH / DEFAULT_DPI)};
 
     function selectSlide(index) {
+      if (activeTextEditor) {
+        commitTextEditor()
+          .then(function () {
+            selectSlide(index);
+          })
+          .catch(function () {
+            // Keep the editor open; commitTextEditor already reported the failure.
+          });
+        return;
+      }
       var slideChanged = currentIndex !== index;
-      closeTextEditor(false);
       currentIndex = index;
       shapeOptions = [];
       textRunOptions = [];
@@ -939,6 +948,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       selectedShapeKey = shapeKey(shape);
       selectedShape = cloneShape(shape);
       beginDrag("move", null, event);
+      window.setTimeout(renderSelectionOverlay, 0);
       postJson("/api/editor/select", { handle: shape.handle })
         .then(function (data) {
           updateHistory(data.history);
@@ -958,7 +968,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         dragState = null;
         detachDragListeners();
       }
-      closeTextEditor(false);
+      closeTextEditor();
       selectedShapeKey = shapeKey(shape);
       selectedShape = cloneShape(shape);
       renderSelectionOverlay();
@@ -977,7 +987,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       done.textContent = "Done";
       done.setAttribute("data-testid", "text-editor-done");
       done.addEventListener("click", function () {
-        commitTextEditor();
+        commitTextEditor().catch(function () {});
       });
       actions.appendChild(done);
       overlay.appendChild(actions);
@@ -985,18 +995,18 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       overlay.addEventListener("keydown", function (event) {
         if (event.key === "Enter" && !event.shiftKey) {
           event.preventDefault();
-          commitTextEditor();
+          commitTextEditor().catch(function () {});
         }
         if (event.key === "Escape") {
           event.preventDefault();
-          closeTextEditor(false);
+          closeTextEditor();
         }
       });
       overlay.addEventListener("focusout", function (event) {
         window.setTimeout(function () {
           if (!activeTextEditor) return;
           if (event.relatedTarget && activeTextEditor.element.contains(event.relatedTarget)) return;
-          commitTextEditor();
+          commitTextEditor().catch(function () {});
         }, 0);
       });
 
@@ -1116,17 +1126,18 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         docJson: docJson
       })
         .then(function (data) {
-          closeTextEditor(false);
+          closeTextEditor();
           applyEditorResponse(data);
           setEditorMessage("Applied", false);
         })
         .catch(function (err) {
           editor.committing = false;
           setEditorMessage(err.message, true);
+          throw err;
         });
     }
 
-    function closeTextEditor(_commit) {
+    function closeTextEditor() {
       if (!activeTextEditor) return;
       activeTextEditor.element.remove();
       activeTextEditor = null;
