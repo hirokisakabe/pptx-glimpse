@@ -39,7 +39,7 @@ interface OpentypeFontWithNames extends OpentypeFont {
   };
 }
 
-export interface OpentypeParser {
+interface OpentypeParser {
   parse: (buffer: ArrayBuffer) => OpentypeFontWithNames;
 }
 
@@ -108,7 +108,7 @@ export function parseFontBuffer(
   return [opentype.parse(arrayBuffer)];
 }
 
-export interface OpentypeSetupState {
+interface OpentypeSetupState {
   measurerFonts: Map<string, OpentypeFont>;
   resolverFonts: Map<string, OpentypeFullFont>;
   firstMeasurerFont: OpentypeFont | null;
