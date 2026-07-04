@@ -75,10 +75,17 @@ async function dragSvgPoint(
 ) {
   const start = await svgPointToClient(page, from.x, from.y);
   const end = await svgPointToClient(page, to.x, to.y);
+  const commandResponse = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/editor/command") &&
+      response.request().method() === "POST" &&
+      response.ok(),
+  );
   await page.mouse.move(start.x, start.y);
   await page.mouse.down();
   await page.mouse.move(end.x, end.y, { steps: 6 });
   await page.mouse.up();
+  await commandResponse;
 }
 
 async function svgPointToClient(
@@ -169,7 +176,7 @@ function firstShape(source: PptxSourceModel): SourceShape {
 async function findFreePort(): Promise<number> {
   const server = createServer();
   await new Promise<void>((resolve) => {
-    server.listen(0, "127.0.0.1", resolve);
+    server.listen(0, resolve);
   });
   const address = server.address();
   if (address === null || typeof address === "string") {

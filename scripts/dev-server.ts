@@ -190,12 +190,14 @@ export class DevEditorBackend {
     });
   }
 
-  selectShape(handle: SourceHandle): EditorSlidesResponse {
-    const result = this.#session.selectShape(handle);
-    if (!result.ok) {
-      throw new Error(result.message);
-    }
-    return this.response();
+  async selectShape(handle: SourceHandle): Promise<EditorSlidesResponse> {
+    return this.#enqueueMutation(() => {
+      const result = this.#session.selectShape(handle);
+      if (!result.ok) {
+        throw new Error(result.message);
+      }
+      return Promise.resolve(this.response());
+    });
   }
 
   async undo(): Promise<EditorSlidesResponse> {
@@ -290,7 +292,10 @@ function shapeInfo(
     ...(shapeName(shape) !== undefined ? { name: shapeName(shape) } : {}),
     ...(shape.handle !== undefined ? { handle: shape.handle } : {}),
     ...(shape.kind !== "raw" && shape.transform !== undefined
-      ? { bounds: transformBoundsPx(shape.transform), editableTransform }
+      ? {
+          bounds: transformBoundsPx(shape.transform),
+          editableTransform: editableTransform && isEditableTransformShape(shape),
+        }
       : {}),
     ...("textBody" in shape && shape.textBody !== undefined
       ? {
@@ -310,6 +315,13 @@ function shapeInfo(
 
 function shapeName(shape: SourceShapeNode): string | undefined {
   return "name" in shape ? shape.name : undefined;
+}
+
+function isEditableTransformShape(shape: SourceShapeNode): boolean {
+  if (shape.kind === "raw" || shape.transform === undefined || shape.handle?.nodeId === undefined) {
+    return false;
+  }
+  return !shape.rawSidecars?.some((sidecar) => sidecar.node.name === "mc:AlternateContent");
 }
 
 function collectTextRuns(runs: readonly SourceTextRun[]): EditorTextRunInfo[] {
@@ -946,38 +958,22 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     function applyShapeBoundsEdit(startBounds, nextBounds) {
       if (!selectedShape || !selectedShape.handle) return Promise.resolve();
       var handle = selectedShape.handle;
-      var moved =
+      var changed =
         Math.round(startBounds.x) !== Math.round(nextBounds.x) ||
-        Math.round(startBounds.y) !== Math.round(nextBounds.y);
-      var resized =
+        Math.round(startBounds.y) !== Math.round(nextBounds.y) ||
         Math.round(startBounds.width) !== Math.round(nextBounds.width) ||
         Math.round(startBounds.height) !== Math.round(nextBounds.height);
-      var promise = Promise.resolve(null);
-      if (moved) {
-        promise = promise.then(function () {
-          return postJson("/api/editor/command", {
-            command: {
-              kind: "moveShape",
-              handle: handle,
-              offsetX: Math.round(nextBounds.x * EMU_PER_PIXEL),
-              offsetY: Math.round(nextBounds.y * EMU_PER_PIXEL)
-            }
-          });
-        });
-      }
-      if (resized) {
-        promise = promise.then(function () {
-          return postJson("/api/editor/command", {
-            command: {
-              kind: "resizeShape",
-              handle: handle,
-              width: Math.round(nextBounds.width * EMU_PER_PIXEL),
-              height: Math.round(nextBounds.height * EMU_PER_PIXEL)
-            }
-          });
-        });
-      }
-      return promise.then(function (data) {
+      if (!changed) return Promise.resolve();
+      return postJson("/api/editor/command", {
+        command: {
+          kind: "setShapeTransform",
+          handle: handle,
+          offsetX: Math.round(nextBounds.x * EMU_PER_PIXEL),
+          offsetY: Math.round(nextBounds.y * EMU_PER_PIXEL),
+          width: Math.round(nextBounds.width * EMU_PER_PIXEL),
+          height: Math.round(nextBounds.height * EMU_PER_PIXEL)
+        }
+      }).then(function (data) {
         if (data) {
           applyEditorResponse(data);
           setEditorMessage("Applied", false);
@@ -1185,7 +1181,7 @@ async function handleRequest(
   if (url.pathname === "/api/editor/select" && req.method === "POST") {
     const body = await readJsonBody(req);
     const handle = normalizeHandle(isRecord(body) ? body.handle : undefined);
-    sendJson(res, 200, backend.selectShape(handle));
+    sendJson(res, 200, await backend.selectShape(handle));
     return;
   }
 
@@ -1271,6 +1267,16 @@ function normalizeCommand(command: unknown): EditorCommand {
       handle: normalizeHandle(command.handle),
       width: asEmu(requireFiniteNumber(command.width, "resizeShape.width")),
       height: asEmu(requireFiniteNumber(command.height, "resizeShape.height")),
+    };
+  }
+  if (command.kind === "setShapeTransform") {
+    return {
+      kind: "setShapeTransform",
+      handle: normalizeHandle(command.handle),
+      offsetX: asEmu(requireFiniteNumber(command.offsetX, "setShapeTransform.offsetX")),
+      offsetY: asEmu(requireFiniteNumber(command.offsetY, "setShapeTransform.offsetY")),
+      width: asEmu(requireFiniteNumber(command.width, "setShapeTransform.width")),
+      height: asEmu(requireFiniteNumber(command.height, "setShapeTransform.height")),
     };
   }
   throw new Error("unsupported command kind");
