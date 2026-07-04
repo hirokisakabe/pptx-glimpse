@@ -183,6 +183,43 @@ describe("ProseMirror text body conversion", () => {
       firstParagraph(source).runs[1].properties,
     );
   });
+
+  it("falls back to paragraph replacement when run mark order changes", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const textBody = firstTextBody(source);
+    const docJson = textBodyToProseMirrorDocJson(textBody);
+    const paragraph = docJson.content?.[0];
+    const firstText = paragraph?.content?.[0];
+    const secondText = paragraph?.content?.[1];
+    if (paragraph === undefined || firstText === undefined || secondText === undefined) {
+      throw new Error("text body doc fixture is missing expected text nodes");
+    }
+    const editedJson = {
+      type: "doc",
+      content: [
+        {
+          ...paragraph,
+          content: [secondText, firstText],
+        },
+      ],
+    };
+    const commands = proseMirrorDocJsonToEditorCommands(textBody, editedJson);
+    const session = createEditorSession(source);
+
+    for (const command of commands) {
+      expectApplied(session.apply(command));
+    }
+    const reread = readPptx(writePptx(session.document));
+
+    expect(commands).toEqual([
+      {
+        kind: "replaceParagraphPlainText",
+        handle: firstParagraph(source).handle,
+        text: " Keep Original",
+      },
+    ]);
+    expect(firstParagraph(reread).runs.map((run) => run.text)).toEqual([" Keep Original"]);
+  });
 });
 
 describe("EditorSession selection", () => {

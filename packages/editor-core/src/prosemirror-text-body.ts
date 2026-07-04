@@ -189,35 +189,11 @@ function paragraphJsonToSourceParagraph(
   originalParagraph: SourceParagraph | undefined,
   paragraphJson: PptxTextBodyProseMirrorParagraphJson,
 ): SourceParagraph {
-  const originalRunKeys = (originalParagraph?.runs ?? []).map((run) =>
-    run.handle === undefined ? undefined : sourceHandleKey(run.handle),
-  );
   const groups = collectRunGroups(paragraphJson, originalParagraph);
-  const groupsByKey = new Map(
-    groups.flatMap((group) => {
-      const key = group.handle === undefined ? undefined : sourceHandleKey(group.handle);
-      return key === undefined ? [] : [[key, group]];
-    }),
-  );
-  const emittedKeys = new Set<string>();
-  const orderedRuns: SourceTextRun[] = [];
-
-  for (const originalRun of originalParagraph?.runs ?? []) {
-    const key = originalRun.handle === undefined ? undefined : sourceHandleKey(originalRun.handle);
-    const group = key === undefined ? undefined : groupsByKey.get(key);
-    if (key !== undefined) emittedKeys.add(key);
-    orderedRuns.push(sourceRunFromGroup(group ?? emptyGroupForOriginalRun(originalRun)));
-  }
-
-  for (const group of groups) {
-    const key = group.handle === undefined ? undefined : sourceHandleKey(group.handle);
-    if (key !== undefined && (emittedKeys.has(key) || originalRunKeys.includes(key))) continue;
-    orderedRuns.push(sourceRunFromGroup(group));
-  }
 
   return {
     ...(originalParagraph ?? {}),
-    runs: orderedRuns,
+    runs: groups.map(sourceRunFromGroup),
     ...(originalParagraph?.properties !== undefined
       ? { properties: originalParagraph.properties }
       : {}),
@@ -269,14 +245,6 @@ function sourceRunFromGroup(group: RunGroup): SourceTextRun {
     text: group.text,
     ...(group.properties !== undefined ? { properties: group.properties } : {}),
     ...(group.handle !== undefined ? { handle: group.handle } : {}),
-  };
-}
-
-function emptyGroupForOriginalRun(run: SourceTextRun): RunGroup {
-  return {
-    ...(run.handle !== undefined ? { handle: run.handle } : {}),
-    ...(run.properties !== undefined ? { properties: run.properties } : {}),
-    text: "",
   };
 }
 
@@ -366,7 +334,12 @@ function sourceHandlesEqual(
 }
 
 function sourceHandleKey(handle: SourceHandle): string {
-  return [handle.partPath, handle.nodeId ?? "", handle.relationshipId ?? ""].join("\u0000");
+  return [
+    handle.partPath,
+    handle.nodeId ?? "",
+    handle.relationshipId ?? "",
+    handle.orderingSlot ?? "",
+  ].join("\u0000");
 }
 
 function isRecord(value: unknown): value is { readonly [key: string]: unknown } {

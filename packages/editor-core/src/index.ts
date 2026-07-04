@@ -326,16 +326,25 @@ function editHandleNodeKey(
     | PptxSourceModelParagraphTextEdit
     | PptxSourceModelShapeTransformEdit,
 ): string {
-  return [edit.handle.partPath, edit.handle.nodeId ?? "", edit.handle.relationshipId ?? ""].join(
-    "\u0000",
-  );
+  return [
+    edit.handle.partPath,
+    edit.handle.nodeId ?? "",
+    edit.handle.relationshipId ?? "",
+    edit.handle.orderingSlot ?? "",
+  ].join("\u0000");
 }
 
 function textRunParagraphEditKey(edit: PptxSourceModelTextRunEdit): string | undefined {
   const nodeId = String(edit.handle.nodeId ?? "");
-  const byShapeId = /^(text:shape:.+:p:\d+):r:\d+$/.exec(nodeId);
-  const byShapeSlot = /^(text:shapeSlot:\d+:p:\d+):r:\d+$/.exec(nodeId);
+  const byShapeId = /^(text:shape:.+:p:(\d+)):r:\d+$/.exec(nodeId);
+  const byShapeSlot = /^(text:shapeSlot:\d+:p:(\d+)):r:\d+$/.exec(nodeId);
   const paragraphNodeId = byShapeId?.[1] ?? byShapeSlot?.[1];
+  const paragraphOrderingSlot = byShapeId?.[2] ?? byShapeSlot?.[2] ?? "";
   if (paragraphNodeId === undefined) return undefined;
-  return [edit.handle.partPath, paragraphNodeId, edit.handle.relationshipId ?? ""].join("\u0000");
+  return [
+    edit.handle.partPath,
+    paragraphNodeId,
+    edit.handle.relationshipId ?? "",
+    paragraphOrderingSlot,
+  ].join("\u0000");
 }
