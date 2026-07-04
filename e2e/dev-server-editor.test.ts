@@ -36,6 +36,10 @@ describe("dev server editor API", () => {
       const savedPath = join(dir, "saved.pptx");
       await writeFile(sourcePath, await buildTextEditFixture());
 
+      const defaultRenderedBackend = await DevEditorBackend.load(sourcePath);
+      expect(defaultRenderedBackend.slides[0].svg).toContain("<svg");
+      expect(defaultRenderedBackend.slides[0].svg).toContain("<text");
+
       const backend = await DevEditorBackend.load(sourcePath, renderPreview);
       const server = createServer(createDevServerRequestHandler(backend, "fixture.pptx"));
       servers.push(server);
