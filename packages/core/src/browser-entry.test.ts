@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -5,12 +6,43 @@ import { build } from "esbuild";
 import { describe, expect, it } from "vitest";
 
 const here = dirname(fileURLToPath(import.meta.url));
+const packageRoot = resolve(here, "..");
+
+interface CorePackageJson {
+  exports: {
+    ".": {
+      browser: {
+        import: string;
+      };
+    };
+  };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function isCorePackageJson(value: unknown): value is CorePackageJson {
+  if (!isRecord(value) || !isRecord(value.exports)) return false;
+  const rootExport = value.exports["."];
+  if (!isRecord(rootExport) || !isRecord(rootExport.browser)) return false;
+  return typeof rootExport.browser.import === "string";
+}
 
 describe("browser entry", () => {
   it("bundles convertPptxToSvg for browser without Node built-ins", async () => {
+    const packageJson: unknown = JSON.parse(
+      readFileSync(resolve(packageRoot, "package.json"), "utf8"),
+    );
+    if (!isCorePackageJson(packageJson)) {
+      throw new Error("packages/core/package.json does not expose a browser import target");
+    }
+    const browserExport = packageJson.exports["."].browser.import;
+    expect(browserExport).toBe("./dist/browser.js");
+
     const result = await build({
       stdin: {
-        contents: 'import { convertPptxToSvg } from "./browser.ts"; console.log(convertPptxToSvg);',
+        contents: 'import { convertPptxToSvg } from "pptx-glimpse"; console.log(convertPptxToSvg);',
         resolveDir: here,
         sourcefile: "browser-entry-smoke.ts",
         loader: "ts",
@@ -22,6 +54,19 @@ describe("browser entry", () => {
       conditions: ["browser", "import"],
       logLevel: "silent",
       absWorkingDir: resolve(here, "../../.."),
+      plugins: [
+        {
+          name: "workspace-pptx-glimpse-browser-entry",
+          setup(build) {
+            build.onResolve({ filter: /^pptx-glimpse$/ }, () => ({
+              path: resolve(
+                packageRoot,
+                browserExport.replace("./dist/", "src/").replace(/\.js$/, ".ts"),
+              ),
+            }));
+          },
+        },
+      ],
     });
 
     const bundled = result.outputFiles[0].text;
