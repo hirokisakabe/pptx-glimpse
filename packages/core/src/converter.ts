@@ -29,7 +29,7 @@ export interface SlideImage {
   /**
    * PNG image bytes for the rendered slide.
    */
-  png: Buffer;
+  png: Uint8Array;
   /**
    * Actual output image width in pixels after rasterization.
    */
@@ -49,7 +49,7 @@ export interface PngConversionReport {
 /**
  * Convert a PPTX file to SVG documents.
  *
- * @param input PPTX binary data as a Node.js `Buffer` or `Uint8Array`.
+ * @param input PPTX binary data.
  * @param options Conversion options. `slides` uses 1-based slide numbers; when
  * omitted, all slides are converted.
  * @returns A conversion report containing converted slides, diagnostics, and support coverage.
@@ -60,7 +60,7 @@ export interface PngConversionReport {
  * control how PPTX font names are resolved for text measurement and text output.
  */
 export async function convertPptxToSvg(
-  input: Buffer | Uint8Array,
+  input: Uint8Array,
   options?: ConvertOptions,
 ): Promise<SvgConversionReport> {
   return convertPptxToSvgBase(input, options, loadSystemFontSetup);
@@ -69,7 +69,7 @@ export async function convertPptxToSvg(
 /**
  * Convert a PPTX file to PNG images.
  *
- * @param input PPTX binary data as a Node.js `Buffer` or `Uint8Array`.
+ * @param input PPTX binary data.
  * @param options Conversion options. `slides` uses 1-based slide numbers; when
  * omitted, all slides are converted.
  * @returns A conversion report containing converted PNG slides, diagnostics, and support coverage.
@@ -81,7 +81,7 @@ export async function convertPptxToSvg(
  * options are still used to resolve glyph outlines and text metrics.
  */
 export async function convertPptxToPng(
-  input: Buffer | Uint8Array,
+  input: Uint8Array,
   options?: ConvertOptions,
 ): Promise<PngConversionReport> {
   const svgResult = await convertPptxToSvg(input, {
@@ -97,7 +97,7 @@ export async function convertPptxToPng(
     const pngResult = await convertSvgToPng(svg, { width, height, fontBuffers });
     slides.push({
       slideNumber,
-      png: pngResult.png,
+      png: toPlainUint8Array(pngResult.png),
       width: pngResult.width,
       height: pngResult.height,
     });
@@ -151,4 +151,8 @@ function shouldLoadSystemFonts(options: ConvertOptions | undefined): boolean {
 
 function toUint8Array(data: ArrayBuffer | Uint8Array): Uint8Array {
   return data instanceof Uint8Array ? data : new Uint8Array(data);
+}
+
+function toPlainUint8Array(data: Uint8Array): Uint8Array {
+  return new Uint8Array(data);
 }

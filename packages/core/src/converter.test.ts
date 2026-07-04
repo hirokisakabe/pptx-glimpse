@@ -333,6 +333,23 @@ describe("public conversion orchestration", () => {
     expect([...pngSlide.png.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
   });
 
+  it("keeps Node Buffer input working while returning Uint8Array PNG bytes", async () => {
+    const input = Buffer.from(readSharedFixture("real-basic-theme.pptx"));
+    const { slides: result } = await convertPptxToPng(input, {
+      slides: [1],
+      width: 240,
+    });
+
+    const pngSlide = result[0];
+    if (pngSlide === undefined) {
+      throw new Error("Expected one PNG slide from the public converter");
+    }
+
+    expect(pngSlide.png).toBeInstanceOf(Uint8Array);
+    expect(Buffer.isBuffer(pngSlide.png)).toBe(false);
+    expect([...pngSlide.png.subarray(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+  });
+
   it("uses the source model reader and renderer adapter for SVG conversion", async () => {
     const readPptxSpy = vi.spyOn(document, "readPptx");
     const adapterSpy = vi.spyOn(adapterModule, "adaptComputedViewToRendererModel");

@@ -60,7 +60,7 @@ import {
   type XmlOrderedNode,
 } from "./xml.js";
 
-/** Input for `readPptx`. `Buffer` is accepted as a subclass of `Uint8Array`. */
+/** Input bytes for `readPptx`. */
 export type ReadPptxInput = Uint8Array;
 
 const CONTENT_TYPES_PART = "[Content_Types].xml";

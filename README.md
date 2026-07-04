@@ -65,7 +65,7 @@ const { slides: svgResults } = await convertPptxToSvg(pptx);
 
 // Convert to PNG
 const { slides: pngResults } = await convertPptxToPng(pptx);
-// [{ slideNumber: 1, png: Buffer, width: 960, height: 540 }, ...]
+// [{ slideNumber: 1, png: Uint8Array, width: 960, height: 540 }, ...]
 
 writeFileSync("slide1.png", pngResults[0].png);
 ```

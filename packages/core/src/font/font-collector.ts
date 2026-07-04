@@ -62,10 +62,10 @@ const DEFAULT_THEME_FONTS: ResolvedThemeFontScheme = {
  * fonts should be installed, bundled, or mapped before calling the conversion
  * APIs.
  *
- * @param input PPTX binary data as a Node.js `Buffer` or `Uint8Array`.
+ * @param input PPTX binary data.
  * @returns Theme font slots and a unique sorted list of referenced font names.
  */
-export function collectUsedFonts(input: Buffer | Uint8Array): UsedFonts {
+export function collectUsedFonts(input: Uint8Array): UsedFonts {
   const source = readPptx(input);
   const defaultFontScheme = findDefaultThemeFontScheme(source);
   const computed = createComputedView(source);
