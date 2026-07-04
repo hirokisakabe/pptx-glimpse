@@ -1147,7 +1147,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         docJson: docJson
       })
         .then(function (data) {
-          closeTextEditor();
+          closeTextEditor(editor);
           applyEditorResponse(data);
           setEditorMessage("Applied", false);
         })
@@ -1160,10 +1160,13 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       return editor.commitPromise;
     }
 
-    function closeTextEditor() {
-      if (!activeTextEditor) return;
-      activeTextEditor.element.remove();
-      activeTextEditor = null;
+    function closeTextEditor(editor) {
+      var target = editor || activeTextEditor;
+      if (!target) return;
+      if (editor && activeTextEditor !== editor) return;
+      if (!editor && target.committing) return;
+      target.element.remove();
+      if (activeTextEditor === target) activeTextEditor = null;
     }
 
     function beginDrag(kind, handle, event) {
