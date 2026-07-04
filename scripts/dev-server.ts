@@ -1040,6 +1040,18 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
           run.dataset.paragraphIndex = String(paragraphIndex);
           run.dataset.runIndex = String(runIndex);
           run.textContent = textNode.text || "";
+          run.addEventListener("beforeinput", function (event) {
+            if (event.inputType === "insertParagraph" || event.inputType === "insertLineBreak") {
+              event.preventDefault();
+              commitTextEditor().catch(function () {});
+            }
+          });
+          run.addEventListener("paste", function (event) {
+            event.preventDefault();
+            var text = (event.clipboardData ? event.clipboardData.getData("text/plain") : "")
+              .replace(/\\r?\\n/g, " ");
+            document.execCommand("insertText", false, text);
+          });
           paragraphElement.appendChild(run);
         });
         body.appendChild(paragraphElement);
@@ -1099,7 +1111,9 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
             ? paragraphElement.querySelector('.text-editor-run[data-run-index="' + runIndex + '"]')
             : null;
           var text = runElement ? runElement.textContent || "" : textNode.text || "";
-          if (text.length === 0) return;
+          if (text.length === 0) {
+            throw new Error("Text editor runs must not be empty.");
+          }
           content.push({
             type: "text",
             text: text,
