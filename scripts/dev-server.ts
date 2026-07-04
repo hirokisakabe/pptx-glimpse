@@ -69,12 +69,17 @@ interface EditorShapeInfo {
 interface EditorSlidesResponse {
   slides: SlideSvg[];
   history: EditorHistoryState;
+  selection?: EditorSelectionInfo;
 }
 
 interface EditorSaveResponse {
   ok: true;
   path: string;
   history: EditorHistoryState;
+}
+
+interface EditorSelectionInfo {
+  shapeHandle: SourceHandle;
 }
 
 type RenderPptxBytes = (input: Uint8Array) => Promise<SlideSvg[]>;
@@ -140,8 +145,16 @@ export class DevEditorBackend {
     };
   }
 
+  get selection(): EditorSelectionInfo | undefined {
+    return this.#session.selection;
+  }
+
   response(): EditorSlidesResponse {
-    return { slides: this.#slides, history: this.history };
+    return {
+      slides: this.#slides,
+      history: this.history,
+      ...(this.selection !== undefined ? { selection: this.selection } : {}),
+    };
   }
 
   shapes(slideNumber: number): EditorShapeInfo[] {
@@ -174,6 +187,14 @@ export class DevEditorBackend {
       await this.renderCurrentSlides();
       return this.response();
     });
+  }
+
+  selectShape(handle: SourceHandle): EditorSlidesResponse {
+    const result = this.#session.selectShape(handle);
+    if (!result.ok) {
+      throw new Error(result.message);
+    }
+    return this.response();
   }
 
   async undo(): Promise<EditorSlidesResponse> {
@@ -467,8 +488,41 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
       max-width: 100%;
       max-height: 100%;
+      position: relative;
     }
     #slide-container svg { display: block; width: 100%; height: auto; }
+    #selection-overlay {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      touch-action: none;
+    }
+    .shape-hit-area {
+      cursor: move;
+      fill: transparent;
+      pointer-events: all;
+    }
+    .selection-box {
+      fill: none;
+      stroke: #0f766e;
+      stroke-width: 1.5;
+      vector-effect: non-scaling-stroke;
+      pointer-events: none;
+    }
+    .selection-handle {
+      fill: #f8fafc;
+      stroke: #0f766e;
+      stroke-width: 1.5;
+      cursor: nwse-resize;
+      vector-effect: non-scaling-stroke;
+      pointer-events: all;
+    }
+    .selection-handle[data-handle="ne"],
+    .selection-handle[data-handle="sw"] {
+      cursor: nesw-resize;
+    }
     #info {
       padding: 4px 20px;
       background: #16213e;
@@ -507,7 +561,12 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     var slides = ${jsonForScript(slides)};
     var editorHistory = { canUndo: false, canRedo: false, undoDepth: 0, redoDepth: 0 };
     var textRunOptions = [];
+    var shapeOptions = [];
+    var selectedShapeKey = null;
+    var selectedShape = null;
+    var dragState = null;
     var shapeRequestId = 0;
+    var EMU_PER_PIXEL = ${String(EMU_PER_INCH / DEFAULT_DPI)};
 
     function selectSlide(index) {
       currentIndex = index;
@@ -530,6 +589,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       }
       document.getElementById("info").textContent =
         "Slide " + (index + 1) + " / " + slideCount;
+      renderSelectionOverlay();
       loadShapeOptions(index + 1);
     }
 
@@ -561,6 +621,48 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       document.getElementById("redo-button").disabled = !editorHistory.canRedo;
     }
 
+    function shapeKey(shape) {
+      return shape && shape.handle ? handleKey(shape.handle) : "";
+    }
+
+    function handleKey(handle) {
+      return [
+        handle.partPath || "",
+        handle.nodeId || "",
+        handle.relationshipId || "",
+        handle.orderingSlot == null ? "" : String(handle.orderingSlot)
+      ].join("\\u0000");
+    }
+
+    function syncSelection(selection) {
+      selectedShapeKey = selection && selection.shapeHandle ? handleKey(selection.shapeHandle) : selectedShapeKey;
+      selectedShape = null;
+      if (selectedShapeKey) {
+        for (var i = 0; i < shapeOptions.length; i++) {
+          if (shapeKey(shapeOptions[i]) === selectedShapeKey && shapeOptions[i].bounds) {
+            selectedShape = cloneShape(shapeOptions[i]);
+            break;
+          }
+        }
+      }
+      if (!selectedShape) selectedShapeKey = null;
+      renderSelectionOverlay();
+    }
+
+    function cloneShape(shape) {
+      return {
+        id: shape.id,
+        name: shape.name,
+        handle: shape.handle,
+        bounds: {
+          x: shape.bounds.x,
+          y: shape.bounds.y,
+          width: shape.bounds.width,
+          height: shape.bounds.height
+        }
+      };
+    }
+
     function setEditorMessage(message, isError) {
       var element = document.getElementById("editor-message");
       element.textContent = message;
@@ -576,6 +678,9 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         })
         .then(function (data) {
           if (requestId !== shapeRequestId || slideNumber !== currentIndex + 1) return;
+          shapeOptions = (data.shapes || []).filter(function (shape) {
+            return shape.handle && shape.bounds;
+          });
           textRunOptions = [];
           data.shapes.forEach(function (shape) {
             (shape.textRuns || []).forEach(function (run, index) {
@@ -595,6 +700,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
           select.disabled = textRunOptions.length === 0;
           document.getElementById("apply-text-button").disabled = textRunOptions.length === 0;
           syncTextInput();
+          syncSelection();
         })
         .catch(function (err) {
           setEditorMessage(err.message, true);
@@ -613,8 +719,258 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       slides = data.slides || slides;
       slideCount = slides.length;
       updateHistory(data.history);
+      if (data.selection && data.selection.shapeHandle) {
+        selectedShapeKey = handleKey(data.selection.shapeHandle);
+      }
       renderThumbnails();
       selectSlide(Math.min(currentIndex, Math.max(slides.length - 1, 0)));
+    }
+
+    function renderSelectionOverlay() {
+      var container = document.getElementById("slide-container");
+      var renderedSvg = container.querySelector("svg:not(#selection-overlay)");
+      var existing = document.getElementById("selection-overlay");
+      if (existing) existing.remove();
+      if (!renderedSvg) return;
+
+      var viewBox = renderedSvg.getAttribute("viewBox") || "0 0 960 540";
+      var overlay = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      overlay.setAttribute("id", "selection-overlay");
+      overlay.setAttribute("viewBox", viewBox);
+      overlay.setAttribute("data-testid", "selection-overlay");
+
+      shapeOptions.forEach(function (shape, index) {
+        if (!shape.bounds) return;
+        var hit = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        hit.setAttribute("class", "shape-hit-area");
+        hit.setAttribute("data-testid", "shape-hit-area");
+        hit.setAttribute("data-shape-index", String(index));
+        setRectAttributes(hit, shape.bounds);
+        hit.addEventListener("pointerdown", function (event) {
+          event.preventDefault();
+          selectShape(shape, event);
+        });
+        overlay.appendChild(hit);
+      });
+
+      if (selectedShape && selectedShape.bounds) {
+        var box = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+        box.setAttribute("class", "selection-box");
+        box.setAttribute("data-testid", "selection-box");
+        setRectAttributes(box, selectedShape.bounds);
+        overlay.appendChild(box);
+
+        ["nw", "ne", "sw", "se"].forEach(function (handle) {
+          var point = handlePoint(selectedShape.bounds, handle);
+          var rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+          rect.setAttribute("class", "selection-handle");
+          rect.setAttribute("data-testid", "selection-handle-" + handle);
+          rect.setAttribute("data-handle", handle);
+          rect.setAttribute("x", String(point.x - 4));
+          rect.setAttribute("y", String(point.y - 4));
+          rect.setAttribute("width", "8");
+          rect.setAttribute("height", "8");
+          rect.addEventListener("pointerdown", function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+            beginDrag("resize", handle, event);
+          });
+          overlay.appendChild(rect);
+        });
+
+        box.addEventListener("pointerdown", function (event) {
+          event.preventDefault();
+          beginDrag("move", null, event);
+        });
+      }
+
+      container.appendChild(overlay);
+    }
+
+    function setRectAttributes(rect, bounds) {
+      rect.setAttribute("x", String(bounds.x));
+      rect.setAttribute("y", String(bounds.y));
+      rect.setAttribute("width", String(bounds.width));
+      rect.setAttribute("height", String(bounds.height));
+    }
+
+    function handlePoint(bounds, handle) {
+      var right = bounds.x + bounds.width;
+      var bottom = bounds.y + bounds.height;
+      if (handle === "nw") return { x: bounds.x, y: bounds.y };
+      if (handle === "ne") return { x: right, y: bounds.y };
+      if (handle === "sw") return { x: bounds.x, y: bottom };
+      return { x: right, y: bottom };
+    }
+
+    function selectShape(shape, event) {
+      selectedShapeKey = shapeKey(shape);
+      selectedShape = cloneShape(shape);
+      renderSelectionOverlay();
+      beginDrag("move", null, event);
+      postJson("/api/editor/select", { handle: shape.handle })
+        .then(function (data) {
+          updateHistory(data.history);
+          if (data.selection && data.selection.shapeHandle) {
+            selectedShapeKey = handleKey(data.selection.shapeHandle);
+          }
+        })
+        .catch(function (err) {
+          setEditorMessage(err.message, true);
+        });
+    }
+
+    function beginDrag(kind, handle, event) {
+      if (!selectedShape || !selectedShape.bounds) return;
+      var overlay = document.getElementById("selection-overlay");
+      if (!overlay) return;
+      var point = eventPoint(overlay, event);
+      dragState = {
+        kind: kind,
+        handle: handle,
+        pointerId: event.pointerId,
+        startPoint: point,
+        startBounds: {
+          x: selectedShape.bounds.x,
+          y: selectedShape.bounds.y,
+          width: selectedShape.bounds.width,
+          height: selectedShape.bounds.height
+        }
+      };
+      try {
+        overlay.setPointerCapture(event.pointerId);
+      } catch (_error) {
+        // Pointer capture can be unavailable after a fast re-render; window listeners still cover drag.
+      }
+      window.addEventListener("pointermove", updateDrag);
+      window.addEventListener("pointerup", finishDrag);
+      window.addEventListener("pointercancel", cancelDrag);
+    }
+
+    function updateDrag(event) {
+      if (!dragState || event.pointerId !== dragState.pointerId || !selectedShape) return;
+      var overlay = document.getElementById("selection-overlay");
+      if (!overlay) return;
+      var point = eventPoint(overlay, event);
+      var dx = point.x - dragState.startPoint.x;
+      var dy = point.y - dragState.startPoint.y;
+      selectedShape.bounds =
+        dragState.kind === "move"
+          ? movedBounds(dragState.startBounds, dx, dy)
+          : resizedBounds(dragState.startBounds, dragState.handle, dx, dy);
+      renderSelectionOverlay();
+    }
+
+    function finishDrag(event) {
+      if (!dragState || event.pointerId !== dragState.pointerId || !selectedShape) return;
+      var nextBounds = selectedShape.bounds;
+      var previousDrag = dragState;
+      dragState = null;
+      detachDragListeners();
+      applyShapeBoundsEdit(previousDrag.startBounds, nextBounds).catch(function (err) {
+        setEditorMessage(err.message, true);
+        selectedShape.bounds = previousDrag.startBounds;
+        renderSelectionOverlay();
+      });
+    }
+
+    function cancelDrag(event) {
+      if (!dragState || event.pointerId !== dragState.pointerId || !selectedShape) return;
+      selectedShape.bounds = dragState.startBounds;
+      dragState = null;
+      detachDragListeners();
+      renderSelectionOverlay();
+    }
+
+    function detachDragListeners() {
+      window.removeEventListener("pointermove", updateDrag);
+      window.removeEventListener("pointerup", finishDrag);
+      window.removeEventListener("pointercancel", cancelDrag);
+    }
+
+    function eventPoint(svg, event) {
+      var point = svg.createSVGPoint();
+      point.x = event.clientX;
+      point.y = event.clientY;
+      return point.matrixTransform(svg.getScreenCTM().inverse());
+    }
+
+    function movedBounds(bounds, dx, dy) {
+      return {
+        x: bounds.x + dx,
+        y: bounds.y + dy,
+        width: bounds.width,
+        height: bounds.height
+      };
+    }
+
+    function resizedBounds(bounds, handle, dx, dy) {
+      var minSize = 8;
+      var right = bounds.x + bounds.width;
+      var bottom = bounds.y + bounds.height;
+      var next = {
+        x: bounds.x,
+        y: bounds.y,
+        width: bounds.width,
+        height: bounds.height
+      };
+      if (handle === "nw" || handle === "sw") {
+        next.x = Math.min(bounds.x + dx, right - minSize);
+        next.width = right - next.x;
+      }
+      if (handle === "ne" || handle === "se") {
+        next.width = Math.max(minSize, bounds.width + dx);
+      }
+      if (handle === "nw" || handle === "ne") {
+        next.y = Math.min(bounds.y + dy, bottom - minSize);
+        next.height = bottom - next.y;
+      }
+      if (handle === "sw" || handle === "se") {
+        next.height = Math.max(minSize, bounds.height + dy);
+      }
+      return next;
+    }
+
+    function applyShapeBoundsEdit(startBounds, nextBounds) {
+      if (!selectedShape || !selectedShape.handle) return Promise.resolve();
+      var handle = selectedShape.handle;
+      var moved =
+        Math.round(startBounds.x) !== Math.round(nextBounds.x) ||
+        Math.round(startBounds.y) !== Math.round(nextBounds.y);
+      var resized =
+        Math.round(startBounds.width) !== Math.round(nextBounds.width) ||
+        Math.round(startBounds.height) !== Math.round(nextBounds.height);
+      var promise = Promise.resolve(null);
+      if (moved) {
+        promise = promise.then(function () {
+          return postJson("/api/editor/command", {
+            command: {
+              kind: "moveShape",
+              handle: handle,
+              offsetX: Math.round(nextBounds.x * EMU_PER_PIXEL),
+              offsetY: Math.round(nextBounds.y * EMU_PER_PIXEL)
+            }
+          });
+        });
+      }
+      if (resized) {
+        promise = promise.then(function () {
+          return postJson("/api/editor/command", {
+            command: {
+              kind: "resizeShape",
+              handle: handle,
+              width: Math.round(nextBounds.width * EMU_PER_PIXEL),
+              height: Math.round(nextBounds.height * EMU_PER_PIXEL)
+            }
+          });
+        });
+      }
+      return promise.then(function (data) {
+        if (data) {
+          applyEditorResponse(data);
+          setEditorMessage("Applied", false);
+        }
+      });
     }
 
     function postJson(url, payload) {
@@ -811,6 +1167,13 @@ async function handleRequest(
     const body = await readJsonBody(req);
     const command = normalizeCommand(isRecord(body) ? body.command : undefined);
     sendJson(res, 200, await backend.apply(command));
+    return;
+  }
+
+  if (url.pathname === "/api/editor/select" && req.method === "POST") {
+    const body = await readJsonBody(req);
+    const handle = normalizeHandle(isRecord(body) ? body.handle : undefined);
+    sendJson(res, 200, backend.selectShape(handle));
     return;
   }
 

@@ -3,6 +3,7 @@ dist/
 *.tgz
 .DS_Store
 coverage/
+test-results/
 output/
 scripts/fonts/
 vrt/snapshot/diffs/
