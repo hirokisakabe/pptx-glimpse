@@ -64,6 +64,12 @@ describe("browser entry", () => {
                 browserExport.replace("./dist/", "src/").replace(/\.js$/, ".ts"),
               ),
             }));
+            build.onResolve({ filter: /^@pptx-glimpse\/document$/ }, () => ({
+              path: resolve(packageRoot, "../document/src/index.ts"),
+            }));
+            build.onResolve({ filter: /^@pptx-glimpse\/renderer$/ }, () => ({
+              path: resolve(packageRoot, "../renderer/src/index.ts"),
+            }));
           },
         },
       ],
