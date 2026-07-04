@@ -91,6 +91,10 @@ const { slides } = await convertPptxToPng(pptx, {
   height: 1080, // Currently ignored by public conversion; width controls PNG size
   logLevel: "warn", // Warning log level: "off" | "warn" | "debug"
   fontDirs: ["/custom/fonts"], // Additional font directories to search
+  fonts: [
+    // Browser-safe alternative to fontDirs; pass bytes loaded by fetch, bundler, etc.
+    { name: "Inter", data: fontArrayBuffer },
+  ],
   skipSystemFonts: true, // Skip OS system font directories; use fontDirs only
   fontMapping: {
     "Custom Corp Font": "Noto Sans", // Custom font name mapping
@@ -148,7 +152,27 @@ getMappedFont("calibri", mapping); // "Ubuntu"
 <details>
 <summary>Custom Font Loading</summary>
 
-In environments where system fonts are not available, you can build a text measurer from font buffers using `createOpentypeSetupFromBuffers`. This is a low-level utility for advanced use cases.
+In browsers, Edge Runtime, serverless workers, or any environment where Node.js filesystem APIs are unavailable, pass font bytes directly with the `fonts` option. You can load those bytes from a CDN, application bundle, File input, or any other source.
+
+```typescript
+import { convertPptxToSvg } from "pptx-glimpse";
+
+const [pptx, inter] = await Promise.all([
+  fetch("/slides/report.pptx").then((response) => response.arrayBuffer()),
+  fetch("/fonts/Inter-Regular.ttf").then((response) => response.arrayBuffer()),
+]);
+
+const { slides } = await convertPptxToSvg(new Uint8Array(pptx), {
+  fonts: [{ name: "Inter", data: inter }],
+  fontMapping: {
+    Arial: "Inter",
+    Calibri: "Inter",
+  },
+  textOutput: "text",
+});
+```
+
+For lower-level integrations, you can also build font services from font buffers using `createOpentypeSetupFromBuffers`.
 
 ```typescript
 import { readFileSync } from "fs";
@@ -179,6 +203,17 @@ Default system font directories:
 | Windows | `C:\Windows\Fonts`                                           |
 
 Use the `fontDirs` option to add custom font directories. To skip system font scanning entirely and use only `fontDirs` (useful in containers, serverless environments, or when you want to bundle specific fonts to reduce startup time), set `skipSystemFonts: true`.
+
+For browser and Edge Runtime usage, prefer the `fonts` option instead of `fontDirs`:
+
+```typescript
+const font = await fetch("/fonts/Inter-Regular.ttf").then((response) => response.arrayBuffer());
+
+await convertPptxToSvg(pptxBytes, {
+  fonts: [{ name: "Inter", data: font }],
+  fontMapping: { Arial: "Inter" },
+});
+```
 
 ### Font Mapping
 

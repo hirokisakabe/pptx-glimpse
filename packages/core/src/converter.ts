@@ -1,5 +1,3 @@
-import { readFileSync, statSync } from "node:fs";
-
 import type {
   ComputedElement,
   ComputedSlide,
@@ -9,6 +7,7 @@ import type {
 } from "@pptx-glimpse/document";
 import { createComputedView, readPptx } from "@pptx-glimpse/document";
 import type {
+  FontBuffer,
   FontMapping,
   LogLevel,
   Slide,
@@ -17,9 +16,8 @@ import type {
 } from "@pptx-glimpse/renderer";
 import {
   buildFontFaceStyle,
-  collectFontFilePaths,
   createFontMapping,
-  createOpentypeSetupFromSystem,
+  createOpentypeSetupFromBuffers,
   DEFAULT_OUTPUT_WIDTH,
   flushWarnings,
   FontUsageCollector,
@@ -86,9 +84,19 @@ export interface ConvertOptions {
    * Additional directories that are scanned for font files.
    *
    * These directories are searched in addition to system font directories unless
-   * `skipSystemFonts` is true.
+   * `skipSystemFonts` is true. This option uses Node.js filesystem APIs; use
+   * `fonts` when rendering in browsers, Edge Runtime, or other environments
+   * where filesystem access is unavailable.
    */
   fontDirs?: string[];
+  /**
+   * Font file bytes supplied directly by the caller.
+   *
+   * Use this browser-safe option when fonts are fetched from a URL, bundled by
+   * an application, or otherwise loaded without Node.js filesystem APIs. When
+   * provided, these font buffers are used instead of system font scanning.
+   */
+  fonts?: FontBuffer[];
   /**
    * Custom PPTX font name to replacement font name mapping.
    *
@@ -237,11 +245,7 @@ export async function convertPptxToSvg(
 ): Promise<SvgConversionReport> {
   const textOutput = options?.textOutput ?? "path";
   const logLevel = options?.logLevel ?? "off";
-  const setup = await createOpentypeSetupFromSystem(
-    options?.fontDirs,
-    options?.fontMapping,
-    options?.skipSystemFonts,
-  );
+  const setup = await createOpentypeSetup(options);
   if (setup) {
     setTextMeasurer(setup.measurer);
     if (textOutput !== "text") {
@@ -351,7 +355,7 @@ export async function convertPptxToPng(
   });
   const width = options?.width ?? DEFAULT_OUTPUT_WIDTH;
   const height = options?.height;
-  const fontBuffers = loadFontBuffers(options?.fontDirs, options?.skipSystemFonts);
+  const fontBuffers = await loadPngFontBuffers(options);
 
   const slides: SlideImage[] = [];
   for (const { slideNumber, svg } of svgResult.slides) {
@@ -565,44 +569,38 @@ function injectIntoSvgDefs(svg: string, content: string): string {
   return `${svg.slice(0, openTagEnd + 1)}<defs>${content}</defs>${svg.slice(openTagEnd + 1)}`;
 }
 
-let cachedFontBuffers: Uint8Array[] | null = null;
-let cachedFontBuffersKey: string | null = null;
-
-const MAX_TOTAL_FONT_BUFFER_BYTES = 100 * 1024 * 1024;
-
-function loadFontBuffers(fontDirs?: string[], skipSystemFonts?: boolean): Uint8Array[] {
-  const key = `${(fontDirs ?? []).join("\0")}\n${skipSystemFonts ?? false}`;
-  if (cachedFontBuffers !== null && cachedFontBuffersKey === key) {
-    return cachedFontBuffers;
+async function createOpentypeSetup(options: ConvertOptions | undefined) {
+  if (options?.fonts && options.fonts.length > 0) {
+    return createOpentypeSetupFromBuffers(options.fonts, options.fontMapping);
+  }
+  if (!shouldLoadSystemFonts(options)) {
+    return null;
   }
 
-  const fontPaths = collectFontFilePaths(fontDirs, skipSystemFonts).filter((path) => {
-    const lower = path.toLowerCase();
-    return lower.endsWith(".ttf") || lower.endsWith(".otf");
-  });
-  const readableFontPaths: { path: string; size: number }[] = [];
-  for (const path of fontPaths) {
-    try {
-      readableFontPaths.push({ path, size: statSync(path).size });
-    } catch {
-      // Ignore unreadable font files.
-    }
-  }
-  readableFontPaths.sort((a, b) => a.size - b.size || a.path.localeCompare(b.path));
+  const { createOpentypeSetupFromSystem } = await import("@pptx-glimpse/renderer/node");
+  return createOpentypeSetupFromSystem(
+    options?.fontDirs,
+    options?.fontMapping,
+    options?.skipSystemFonts,
+  );
+}
 
-  const buffers: Uint8Array[] = [];
-  let totalSize = 0;
-  for (const { path, size } of readableFontPaths) {
-    if (totalSize + size > MAX_TOTAL_FONT_BUFFER_BYTES) break;
-    try {
-      buffers.push(new Uint8Array(readFileSync(path)));
-      totalSize += size;
-    } catch {
-      // Ignore fonts that disappear between stat and read.
-    }
+async function loadPngFontBuffers(options: ConvertOptions | undefined): Promise<Uint8Array[]> {
+  if (options?.fonts && options.fonts.length > 0) {
+    return options.fonts.map((font) => toUint8Array(font.data));
+  }
+  if (!shouldLoadSystemFonts(options)) {
+    return [];
   }
 
-  cachedFontBuffers = buffers;
-  cachedFontBuffersKey = key;
-  return buffers;
+  const { loadFontBuffersFromSystem } = await import("./node-font-loader.js");
+  return loadFontBuffersFromSystem(options?.fontDirs, options?.skipSystemFonts);
+}
+
+function shouldLoadSystemFonts(options: ConvertOptions | undefined): boolean {
+  return options?.skipSystemFonts !== true || (options?.fontDirs?.length ?? 0) > 0;
+}
+
+function toUint8Array(data: ArrayBuffer | Uint8Array): Uint8Array {
+  return data instanceof Uint8Array ? data : new Uint8Array(data);
 }
