@@ -30,7 +30,7 @@ function isCorePackageJson(value: unknown): value is CorePackageJson {
 }
 
 describe("browser entry", () => {
-  it("bundles convertPptxToSvg for browser without Node built-ins", async () => {
+  it("bundles browser-safe entry APIs without Node built-ins", async () => {
     const packageJson: unknown = JSON.parse(
       readFileSync(resolve(packageRoot, "package.json"), "utf8"),
     );
@@ -42,7 +42,8 @@ describe("browser entry", () => {
 
     const result = await build({
       stdin: {
-        contents: 'import { convertPptxToSvg } from "pptx-glimpse"; console.log(convertPptxToSvg);',
+        contents:
+          'import { convertPptxToSvg, initResvgWasm } from "pptx-glimpse"; console.log(convertPptxToSvg, initResvgWasm);',
         resolveDir: here,
         sourcefile: "browser-entry-smoke.ts",
         loader: "ts",
@@ -69,6 +70,9 @@ describe("browser entry", () => {
             }));
             build.onResolve({ filter: /^@pptx-glimpse\/renderer$/ }, () => ({
               path: resolve(packageRoot, "../renderer/src/index.ts"),
+            }));
+            build.onResolve({ filter: /^@pptx-glimpse\/renderer\/png$/ }, () => ({
+              path: resolve(packageRoot, "../renderer/src/png.ts"),
             }));
           },
         },

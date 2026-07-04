@@ -22,8 +22,11 @@ export {
   createOpentypeTextMeasurerFromBuffers,
 } from "@pptx-glimpse/renderer";
 export { getWarningEntries, getWarningSummary } from "@pptx-glimpse/renderer";
+export type { ResvgWasmInput } from "@pptx-glimpse/renderer/png";
 
-export async function initResvgWasm(): Promise<void> {
+export async function initResvgWasm(
+  wasm?: import("@pptx-glimpse/renderer/png").ResvgWasmInput,
+): Promise<void> {
   const { initResvgWasm: initRendererResvgWasm } = await import("@pptx-glimpse/renderer/png");
-  return initRendererResvgWasm();
+  return initRendererResvgWasm(wasm);
 }

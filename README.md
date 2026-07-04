@@ -148,7 +148,7 @@ getMappedFont("calibri", mapping); // "Ubuntu"
 <details>
 <summary>Custom Font Loading</summary>
 
-When font files are loaded outside Node.js filesystem scanning, pass the bytes directly with the `fonts` option. This is the font-loading path to use for browser or Edge Runtime integrations that fetch fonts from a URL, application bundle, File input, or any other source. Other browser runtime requirements, such as resvg WASM loading for PNG output, are handled separately.
+When font files are loaded outside Node.js filesystem scanning, pass the bytes directly with the `fonts` option. This is the font-loading path to use for browser or Edge Runtime integrations that fetch fonts from a URL, application bundle, File input, or any other source.
 
 ```typescript
 import { convertPptxToSvg } from "pptx-glimpse";
@@ -181,6 +181,35 @@ const setup = await createOpentypeSetupFromBuffers([
 // setup.measurer — text width measurement
 // setup.fontResolver — text-to-SVG-path conversion
 ```
+
+</details>
+
+<details>
+<summary>Browser resvg WASM Loading for PNG</summary>
+
+PNG conversion uses `@resvg/resvg-wasm`. In Node.js, `convertPptxToPng` initializes the bundled WASM automatically on first use. In browser-like runtimes, fetch or bundle the `.wasm` file yourself and pass it to `initResvgWasm` before PNG conversion so no Node.js filesystem loading is needed.
+
+```typescript
+import { initResvgWasm } from "pptx-glimpse";
+
+// A Response can be passed directly.
+const wasmResponse = await fetch("/assets/resvg.wasm");
+await initResvgWasm(wasmResponse);
+```
+
+`initResvgWasm` also accepts raw WASM bytes when your bundler or application already loaded them:
+
+```typescript
+import { initResvgWasm } from "pptx-glimpse";
+
+const wasm = await fetch("/assets/resvg.wasm").then((response) => response.arrayBuffer());
+await initResvgWasm(wasm);
+
+// Uint8Array is accepted too.
+await initResvgWasm(new Uint8Array(wasm));
+```
+
+In Node.js, calling `initResvgWasm()` with no arguments preserves the default bundled WASM loading behavior.
 
 </details>
 

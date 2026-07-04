@@ -21,6 +21,7 @@ export {
   createOpentypeTextMeasurerFromBuffers,
 } from "@pptx-glimpse/renderer";
 export { getWarningEntries, getWarningSummary } from "@pptx-glimpse/renderer";
+export type { ResvgWasmInput } from "@pptx-glimpse/renderer/png";
 
 export function convertPptxToPng(): Promise<never> {
   return Promise.reject(
@@ -30,10 +31,9 @@ export function convertPptxToPng(): Promise<never> {
   );
 }
 
-export function initResvgWasm(): Promise<never> {
-  return Promise.reject(
-    new Error(
-      "initResvgWasm is not available from the browser entry. Browser PNG/WASM loading is tracked separately.",
-    ),
-  );
+export async function initResvgWasm(
+  wasm: import("@pptx-glimpse/renderer/png").ResvgWasmInput,
+): Promise<void> {
+  const { initResvgWasm: initRendererResvgWasm } = await import("@pptx-glimpse/renderer/png");
+  return initRendererResvgWasm(wasm);
 }
