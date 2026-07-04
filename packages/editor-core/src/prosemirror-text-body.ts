@@ -41,6 +41,7 @@ export interface PptxTextBodyProseMirrorDocJson {
 
 export interface PptxTextBodyProseMirrorParagraphJson {
   readonly type: "paragraph";
+  /** Read-only source metadata. Formatting edits are not applied from ProseMirror JSON. */
   readonly attrs?: {
     readonly handle?: SourceHandle | null;
     readonly properties?: unknown;
@@ -56,6 +57,7 @@ export interface PptxTextBodyProseMirrorTextJson {
 
 export interface PptxTextBodyProseMirrorRunMarkJson {
   readonly type: "pptxRun";
+  /** Read-only source metadata. Formatting edits are not applied from ProseMirror JSON. */
   readonly attrs?: {
     readonly handle?: SourceHandle | null;
     readonly properties?: unknown;
@@ -83,24 +85,23 @@ interface RunGroup {
 export function textBodyToProseMirrorDocJson(
   textBody: SourceTextBody,
 ): PptxTextBodyProseMirrorDocJson {
+  assertSupportedTextBody(textBody);
   return {
     type: "doc",
     content: textBody.paragraphs.map((paragraph) => {
-      const content: PptxTextBodyProseMirrorTextJson[] = paragraph.runs
-        .filter((run) => run.text.length > 0)
-        .map((run) => ({
-          type: "text",
-          text: run.text,
-          marks: [
-            {
-              type: "pptxRun",
-              attrs: {
-                handle: run.handle ?? null,
-                properties: run.properties ?? null,
-              },
+      const content: PptxTextBodyProseMirrorTextJson[] = paragraph.runs.map((run) => ({
+        type: "text",
+        text: run.text,
+        marks: [
+          {
+            type: "pptxRun",
+            attrs: {
+              handle: run.handle ?? null,
+              properties: run.properties ?? null,
             },
-          ],
-        }));
+          },
+        ],
+      }));
 
       return {
         type: "paragraph",
@@ -112,6 +113,23 @@ export function textBodyToProseMirrorDocJson(
       };
     }),
   };
+}
+
+function assertSupportedTextBody(textBody: SourceTextBody): void {
+  textBody.paragraphs.forEach((paragraph, paragraphIndex) => {
+    paragraph.runs.forEach((run, runIndex) => {
+      if (run.text.length === 0) {
+        throw new Error(
+          `textBodyToProseMirrorDocJson: empty text runs are unsupported at paragraph ${paragraphIndex}, run ${runIndex}`,
+        );
+      }
+      if (run.text.includes("\n") || (run.rawSidecars?.length ?? 0) > 0) {
+        throw new Error(
+          `textBodyToProseMirrorDocJson: unsupported run-like content at paragraph ${paragraphIndex}, run ${runIndex}`,
+        );
+      }
+    });
+  });
 }
 
 export function proseMirrorDocJsonToTextBody(

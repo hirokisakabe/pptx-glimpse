@@ -220,6 +220,24 @@ describe("ProseMirror text body conversion", () => {
     ]);
     expect(firstParagraph(reread).runs.map((run) => run.text)).toEqual([" Keep Original"]);
   });
+
+  it("rejects text bodies with empty or unsupported run-like content", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const textBody = firstTextBody(source);
+    const paragraph = textBody.paragraphs[0];
+    const run = paragraph.runs[0];
+    const withEmptyRun = {
+      ...textBody,
+      paragraphs: [{ ...paragraph, runs: [{ ...run, text: "" }] }],
+    };
+    const withBreakRun = {
+      ...textBody,
+      paragraphs: [{ ...paragraph, runs: [{ ...run, text: "\n" }] }],
+    };
+
+    expect(() => textBodyToProseMirrorDocJson(withEmptyRun)).toThrow(/empty text runs/);
+    expect(() => textBodyToProseMirrorDocJson(withBreakRun)).toThrow(/unsupported run-like/);
+  });
 });
 
 describe("EditorSession selection", () => {
