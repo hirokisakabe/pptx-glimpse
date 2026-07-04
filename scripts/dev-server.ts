@@ -885,6 +885,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
           selectShape(shape, event);
         });
         hit.addEventListener("mousedown", function (event) {
+          if (activeTextEditor) return;
           if (event.detail >= 2 && shape.editableTextBody) {
             event.preventDefault();
             openTextEditor(shape);
@@ -945,6 +946,10 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     }
 
     function selectShape(shape, event) {
+      if (activeTextEditor) {
+        commitTextEditor().catch(function () {});
+        return;
+      }
       selectedShapeKey = shapeKey(shape);
       selectedShape = cloneShape(shape);
       beginDrag("move", null, event);
@@ -964,6 +969,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
 
     function openTextEditor(shape) {
       if (!shape || !shape.handle || !shape.bounds || !shape.editableTextBody) return;
+      if (activeTextEditor) return;
       if (dragState) {
         dragState = null;
         detachDragListeners();
@@ -993,6 +999,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       overlay.appendChild(actions);
 
       overlay.addEventListener("keydown", function (event) {
+        if (event.isComposing || event.keyCode === 229) return;
         if (event.key === "Enter" && !event.shiftKey) {
           event.preventDefault();
           commitTextEditor().catch(function () {});
@@ -1015,7 +1022,8 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         element: overlay,
         shape: cloneShape(shape),
         originalDocJson: shape.editableTextBody.docJson,
-        committing: false
+        committing: false,
+        commitPromise: null
       };
       positionActiveTextEditor();
       var firstRun = overlay.querySelector(".text-editor-run");
@@ -1128,12 +1136,13 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     }
 
     function commitTextEditor() {
-      if (!activeTextEditor || activeTextEditor.committing) return Promise.resolve();
+      if (!activeTextEditor) return Promise.resolve();
       var editor = activeTextEditor;
+      if (editor.committing) return editor.commitPromise || Promise.resolve();
       var docJson = textEditorDocJson();
       if (!docJson) return Promise.resolve();
       editor.committing = true;
-      return postJson("/api/editor/text-body", {
+      editor.commitPromise = postJson("/api/editor/text-body", {
         handle: editor.shape.handle,
         docJson: docJson
       })
@@ -1144,9 +1153,11 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         })
         .catch(function (err) {
           editor.committing = false;
+          editor.commitPromise = null;
           setEditorMessage(err.message, true);
           throw err;
         });
+      return editor.commitPromise;
     }
 
     function closeTextEditor() {
