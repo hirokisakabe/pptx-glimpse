@@ -128,6 +128,99 @@ describe("EditorSession text-run commands", () => {
   });
 });
 
+describe("EditorSession selection", () => {
+  it("selects and deselects a shape without changing undo history", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const handle = requireHandle(firstShape(source).handle);
+
+    const selected = session.selectShape(handle);
+
+    expect(selected).toEqual({
+      ok: true,
+      selection: { shapeHandle: handle },
+    });
+    expect(session.selection).toEqual({ shapeHandle: handle });
+    expect(session.undoDepth).toBe(0);
+    expect(session.redoDepth).toBe(0);
+
+    session.deselectShape();
+
+    expect(session.selection).toBeUndefined();
+    expect(session.undoDepth).toBe(0);
+    expect(session.redoDepth).toBe(0);
+  });
+
+  it("rejects missing shape selection without changing selection", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const handle = requireHandle(firstShape(source).handle);
+    const missingHandle = {
+      partPath: asPartPath("ppt/slides/slide1.xml"),
+      nodeId: asSourceNodeId("999"),
+      orderingSlot: 99,
+    } satisfies SourceHandle;
+
+    expect(session.selectShape(handle)).toMatchObject({ ok: true });
+    const rejected = session.selectShape(missingHandle);
+
+    expect(rejected).toMatchObject({
+      ok: false,
+      code: "invalid-selection",
+    });
+    expect(rejected.ok).toBe(false);
+    if (!rejected.ok) {
+      expect(rejected.message).toMatch(/shape handle was not found/);
+    }
+    expect(session.selection).toEqual({ shapeHandle: handle });
+    expect(session.undoDepth).toBe(0);
+    expect(session.redoDepth).toBe(0);
+  });
+
+  it("keeps shape selection across move and resize edits, undo, and redo", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const handle = requireHandle(firstShape(source).handle);
+
+    expect(session.selectShape(handle)).toMatchObject({ ok: true });
+    expectApplied(
+      session.apply({
+        kind: "moveShape",
+        handle,
+        offsetX: asEmu(1000),
+        offsetY: asEmu(2000),
+      }),
+    );
+    expectApplied(
+      session.apply({
+        kind: "resizeShape",
+        handle,
+        width: asEmu(3000),
+        height: asEmu(4000),
+      }),
+    );
+
+    expect(session.selection).toEqual({ shapeHandle: handle });
+    expect(findShapeNodeBySourceHandle(session.document, handle)).toBeDefined();
+
+    expectHistory(session.undo());
+    expect(session.selection).toEqual({ shapeHandle: handle });
+    expect(findShapeNodeBySourceHandle(session.document, handle)).toBeDefined();
+
+    expectHistory(session.undo());
+    expect(session.selection).toEqual({ shapeHandle: handle });
+    expect(findShapeNodeBySourceHandle(session.document, handle)).toBeDefined();
+
+    expectHistory(session.redo());
+    expect(session.selection).toEqual({ shapeHandle: handle });
+    expect(findShapeNodeBySourceHandle(session.document, handle)).toBeDefined();
+
+    expectHistory(session.redo());
+    expect(session.selection).toEqual({ shapeHandle: handle });
+    expect(findShapeNodeBySourceHandle(session.document, handle)).toBeDefined();
+  });
+});
+
 describe("EditorSession xfrm commands", () => {
   it("applies move and resize edits and persists them through write/read round-trip", async () => {
     const source = readPptx(await buildTextEditFixture());
