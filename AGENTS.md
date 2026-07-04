@@ -5,7 +5,7 @@ This file provides guidance to AI coding agents, including Codex and Claude Code
 ## Project Overview
 
 pptx-glimpse is a TypeScript library that converts PPTX slides to SVG / PNG.
-Input: `Buffer | Uint8Array`, Output: SVG string or PNG Buffer.
+Input: `Uint8Array` (Node.js `Buffer` is accepted as a subclass), Output: SVG string or PNG `Uint8Array`.
 
 ## Commands
 

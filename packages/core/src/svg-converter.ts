@@ -204,7 +204,7 @@ export type SystemFontSetupLoader = (
 /**
  * Convert a PPTX file to SVG documents.
  *
- * @param input PPTX binary data as a Node.js `Buffer` or `Uint8Array`.
+ * @param input PPTX binary data.
  * @param options Conversion options. `slides` uses 1-based slide numbers; when
  * omitted, all slides are converted.
  * @returns A conversion report containing converted slides, diagnostics, and support coverage.
@@ -215,7 +215,7 @@ export type SystemFontSetupLoader = (
  * control how PPTX font names are resolved for text measurement and text output.
  */
 export async function convertPptxToSvg(
-  input: Buffer | Uint8Array,
+  input: Uint8Array,
   options?: ConvertOptions,
   loadSystemFontSetup?: SystemFontSetupLoader,
 ): Promise<SvgConversionReport> {

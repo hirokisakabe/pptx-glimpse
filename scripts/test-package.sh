@@ -94,28 +94,38 @@ cat > tsconfig.json << 'TESTEOF'
 TESTEOF
 
 cat > test-types.ts << 'TESTEOF'
-import { convertPptxToSvg, convertPptxToPng } from "pptx-glimpse";
-import type { ConvertOptions, PngConversionReport, SvgConversionReport } from "pptx-glimpse";
+import { collectUsedFonts, convertPptxToSvg, convertPptxToPng } from "pptx-glimpse";
+import type { ConvertOptions, PngConversionReport, SvgConversionReport, UsedFonts } from "pptx-glimpse";
 
 // Verify function signatures
-const _svgFn: (input: Buffer | Uint8Array, options?: ConvertOptions) => Promise<SvgConversionReport> =
+const _svgFn: (input: Uint8Array, options?: ConvertOptions) => Promise<SvgConversionReport> =
   convertPptxToSvg;
-const _pngFn: (input: Buffer | Uint8Array, options?: ConvertOptions) => Promise<PngConversionReport> =
+const _pngFn: (input: Uint8Array, options?: ConvertOptions) => Promise<PngConversionReport> =
   convertPptxToPng;
+const _fontFn: (input: Uint8Array) => UsedFonts = collectUsedFonts;
 
-// Verify SlideImage.png is Buffer
+// Verify SlideImage.png is Uint8Array
 async function _verifyPngType(input: Uint8Array) {
   const { slides } = await convertPptxToPng(input);
-  const _png: Buffer = slides[0].png;
+  const _png: Uint8Array = slides[0].png;
   void _png;
+}
+
+// Verify Node Buffer remains accepted as a Uint8Array subclass.
+function _verifyBufferInput(input: Buffer) {
+  void convertPptxToSvg(input);
+  void convertPptxToPng(input);
+  void collectUsedFonts(input);
 }
 
 // Verify ConvertOptions includes fontDirs
 const _options: ConvertOptions = { slides: [1], width: 960, fontDirs: ["/custom/fonts"] };
 void _svgFn;
 void _pngFn;
+void _fontFn;
 void _options;
 void _verifyPngType;
+void _verifyBufferInput;
 TESTEOF
 npx tsc --noEmit
 echo "TypeScript type resolution test passed!"
