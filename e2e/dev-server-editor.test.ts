@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -30,6 +30,7 @@ describe("dev server editor API", () => {
 
   it("applies text commands, undo/redo, exposes bounds, and saves edited PPTX", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-dev-server-test-"));
+    let outsideDir: string | undefined;
     try {
       const sourcePath = join(dir, "fixture.pptx");
       const savedPath = join(dir, "saved.pptx");
@@ -74,8 +75,24 @@ describe("dev server editor API", () => {
         path: join(tmpdir(), "outside-dev-server-save.pptx"),
       });
       expect(rejectedSave.error).toMatch(/inside the source PPTX directory/);
+
+      const rejectedExtension = await postJsonError(`${baseUrl}/api/editor/save`, {
+        path: join(dir, "saved.txt"),
+      });
+      expect(rejectedExtension.error).toMatch(/\.pptx extension/);
+
+      outsideDir = await mkdtemp(join(tmpdir(), "pptx-glimpse-outside-save-"));
+      const linkPath = join(dir, "outside-link");
+      await symlink(outsideDir, linkPath);
+      const rejectedSymlinkDir = await postJsonError(`${baseUrl}/api/editor/save`, {
+        path: join(linkPath, "saved.pptx"),
+      });
+      expect(rejectedSymlinkDir.error).toMatch(/inside the source PPTX directory/);
     } finally {
       await rm(dir, { recursive: true, force: true });
+      if (outsideDir !== undefined) {
+        await rm(outsideDir, { recursive: true, force: true });
+      }
     }
   });
 });

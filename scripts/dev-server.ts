@@ -1,6 +1,6 @@
 import { execFile } from "child_process";
 import { watch } from "fs";
-import { mkdtemp, readFile, rm, writeFile } from "fs/promises";
+import { lstat, mkdtemp, readFile, realpath, rm, writeFile } from "fs/promises";
 import { createServer, type IncomingMessage, type ServerResponse } from "http";
 import { tmpdir } from "os";
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from "path";
@@ -24,6 +24,7 @@ import { unsafeScriptInputAssertion } from "./unsafe-type-assertion.js";
 
 const DEFAULT_PORT = 3000;
 const DEBOUNCE_MS = 300;
+// The in-process editor session imports document/editor-core once; restart the server for those changes.
 const WATCH_DIRS = [resolve("packages/core/src"), resolve("packages/renderer/src")];
 const RENDER_TIMEOUT_MS = 30_000;
 const MAX_BUFFER = 50 * 1024 * 1024;
@@ -104,6 +105,7 @@ export class DevEditorBackend {
   #session: ReturnType<typeof createEditorSession>;
   #slides: SlideSvg[] = [];
   #dirty = false;
+  #mutationQueue: Promise<void> = Promise.resolve();
   readonly #render: RenderPptxBytes;
 
   private constructor(
@@ -163,41 +165,58 @@ export class DevEditorBackend {
   }
 
   async apply(command: EditorCommand): Promise<EditorSlidesResponse> {
-    const result = this.#session.apply(command);
-    if (!result.ok) {
-      throw new Error(result.message);
-    }
-    this.#dirty = true;
-    await this.renderCurrentSlides();
-    return this.response();
+    return this.#enqueueMutation(async () => {
+      const result = this.#session.apply(command);
+      if (!result.ok) {
+        throw new Error(result.message);
+      }
+      this.#dirty = true;
+      await this.renderCurrentSlides();
+      return this.response();
+    });
   }
 
   async undo(): Promise<EditorSlidesResponse> {
-    const result = this.#session.undo();
-    if (!result.ok) {
-      throw new Error(result.reason);
-    }
-    this.#dirty = this.#session.undoDepth > 0;
-    await this.renderCurrentSlides();
-    return this.response();
+    return this.#enqueueMutation(async () => {
+      const result = this.#session.undo();
+      if (!result.ok) {
+        throw new Error(result.reason);
+      }
+      this.#dirty = this.#session.undoDepth > 0;
+      await this.renderCurrentSlides();
+      return this.response();
+    });
   }
 
   async redo(): Promise<EditorSlidesResponse> {
-    const result = this.#session.redo();
-    if (!result.ok) {
-      throw new Error(result.reason);
-    }
-    this.#dirty = this.#session.undoDepth > 0;
-    await this.renderCurrentSlides();
-    return this.response();
+    return this.#enqueueMutation(async () => {
+      const result = this.#session.redo();
+      if (!result.ok) {
+        throw new Error(result.reason);
+      }
+      this.#dirty = this.#session.undoDepth > 0;
+      await this.renderCurrentSlides();
+      return this.response();
+    });
   }
 
   async save(outputPath?: string): Promise<EditorSaveResponse> {
-    const path = resolveSavePath(this.sourcePath, outputPath);
-    const output = writePptx(this.#session.document);
-    readPptx(output);
-    await writeFile(path, output);
-    return { ok: true, path, history: this.history };
+    return this.#enqueueMutation(async () => {
+      const path = await resolveSavePath(this.sourcePath, outputPath);
+      const output = writePptx(this.#session.document);
+      readPptx(output);
+      await writeFile(path, output);
+      return { ok: true, path, history: this.history };
+    });
+  }
+
+  #enqueueMutation<T>(operation: () => Promise<T>): Promise<T> {
+    const queued = this.#mutationQueue.then(operation, operation);
+    this.#mutationQueue = queued.then(
+      () => undefined,
+      () => undefined,
+    );
+    return queued;
   }
 }
 
@@ -207,20 +226,35 @@ function defaultEditedPath(sourcePath: string): string {
   return join(dirname(sourcePath), `${base}.edited${extension || ".pptx"}`);
 }
 
-function resolveSavePath(sourcePath: string, outputPath?: string): string {
+async function resolveSavePath(sourcePath: string, outputPath?: string): Promise<string> {
   const sourceDir = dirname(sourcePath);
   const path =
     outputPath === undefined
       ? defaultEditedPath(sourcePath)
       : resolve(isAbsolute(outputPath) ? outputPath : join(sourceDir, outputPath));
-  const relativePath = relative(sourceDir, path);
-  if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
-    throw new Error("save path must be inside the source PPTX directory");
-  }
   if (extname(path).toLowerCase() !== ".pptx") {
     throw new Error("save path must use the .pptx extension");
   }
+
+  const existingTarget = await lstat(path).catch((error: unknown) => {
+    if (isNodeError(error) && error.code === "ENOENT") return null;
+    throw error;
+  });
+  if (existingTarget?.isSymbolicLink()) {
+    throw new Error("save path must not be a symbolic link");
+  }
+
+  const sourceDirRealPath = await realpath(sourceDir);
+  const outputDirRealPath = await realpath(dirname(path));
+  const relativePath = relative(sourceDirRealPath, outputDirRealPath);
+  if (relativePath.startsWith("..") || isAbsolute(relativePath)) {
+    throw new Error("save path must be inside the source PPTX directory");
+  }
   return path;
+}
+
+function isNodeError(error: unknown): error is NodeJS.ErrnoException {
+  return error instanceof Error && "code" in error;
 }
 
 function shapeInfo(shape: SourceShapeNode, index: number): EditorShapeInfo[] {
