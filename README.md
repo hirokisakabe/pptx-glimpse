@@ -187,7 +187,9 @@ const setup = await createOpentypeSetupFromBuffers([
 <details>
 <summary>Browser resvg WASM Loading for PNG</summary>
 
-PNG conversion uses `@resvg/resvg-wasm`. In Node.js, `convertPptxToPng` initializes the bundled WASM automatically on first use. In browser-like runtimes, fetch or bundle the `.wasm` file yourself and pass it to `initResvgWasm` before PNG conversion so no Node.js filesystem loading is needed.
+PNG conversion uses `@resvg/resvg-wasm`. In Node.js, `convertPptxToPng` initializes the bundled WASM automatically on first use. In browser-like runtimes that call the PNG conversion path, fetch or bundle the `.wasm` file yourself and pass it to `initResvgWasm` before PNG conversion so no Node.js filesystem loading is needed.
+
+The browser export currently exposes `initResvgWasm` for explicit WASM initialization, but `convertPptxToPng` remains unavailable from the browser export until the PNG result API and browser conversion verification are completed.
 
 ```typescript
 import { initResvgWasm } from "pptx-glimpse";
