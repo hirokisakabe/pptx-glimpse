@@ -3,7 +3,15 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { build } from "esbuild";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+const rendererPngMocks = vi.hoisted(() => ({
+  initResvgWasm: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@pptx-glimpse/renderer/png", () => ({
+  initResvgWasm: rendererPngMocks.initResvgWasm,
+}));
 
 const here = dirname(fileURLToPath(import.meta.url));
 const packageRoot = resolve(here, "..");
@@ -30,7 +38,17 @@ function isCorePackageJson(value: unknown): value is CorePackageJson {
 }
 
 describe("browser entry", () => {
-  it("bundles convertPptxToSvg for browser without Node built-ins", async () => {
+  it("forwards explicit WASM input to the renderer PNG initializer", async () => {
+    rendererPngMocks.initResvgWasm.mockClear();
+    const { initResvgWasm } = await import("./browser.js");
+    const wasm = new Uint8Array([1, 2, 3]);
+
+    await initResvgWasm(wasm);
+
+    expect(rendererPngMocks.initResvgWasm).toHaveBeenCalledWith(wasm);
+  });
+
+  it("bundles browser-safe entry APIs without Node built-ins", async () => {
     const packageJson: unknown = JSON.parse(
       readFileSync(resolve(packageRoot, "package.json"), "utf8"),
     );
@@ -42,7 +60,8 @@ describe("browser entry", () => {
 
     const result = await build({
       stdin: {
-        contents: 'import { convertPptxToSvg } from "pptx-glimpse"; console.log(convertPptxToSvg);',
+        contents:
+          'import { convertPptxToSvg, initResvgWasm } from "pptx-glimpse"; console.log(convertPptxToSvg, initResvgWasm);',
         resolveDir: here,
         sourcefile: "browser-entry-smoke.ts",
         loader: "ts",
@@ -69,6 +88,9 @@ describe("browser entry", () => {
             }));
             build.onResolve({ filter: /^@pptx-glimpse\/renderer$/ }, () => ({
               path: resolve(packageRoot, "../renderer/src/index.ts"),
+            }));
+            build.onResolve({ filter: /^@pptx-glimpse\/renderer\/png$/ }, () => ({
+              path: resolve(packageRoot, "../renderer/src/png.ts"),
             }));
           },
         },
