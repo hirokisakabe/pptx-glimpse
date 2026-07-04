@@ -330,6 +330,10 @@ const { slides } = await convertPptxToSvg(pptx, {
 
 ## Development
 
+The local editor preview (`npm run dev -- <pptx-file>`) includes an MVP text editing
+overlay for text shapes. IME behavior is intentionally not automated in CI; verify IME
+composition manually as part of the release checklist before shipping editor changes.
+
 <details>
 <summary>Test rendering</summary>
 

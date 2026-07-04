@@ -52,6 +52,15 @@ describe("dev server editor API", () => {
         bounds: { x: 96, y: 192, width: 288, height: 96 },
       });
       expect(shapes.shapes[0].textRuns[0]).toMatchObject({ text: "Original" });
+      expect(shapes.shapes[0].editableTextBody?.docJson).toMatchObject({
+        type: "doc",
+        content: [
+          {
+            type: "paragraph",
+            content: [{ type: "text", text: "Original" }],
+          },
+        ],
+      });
 
       const edited = await postJson<SlidesResponse>(`${baseUrl}/api/editor/command`, {
         command: {
@@ -71,9 +80,41 @@ describe("dev server editor API", () => {
       expect(redone.slides[0].svg).toContain("Edited");
       expect(redone.history).toMatchObject({ canUndo: true, canRedo: false });
 
+      const overlayEdited = await postJson<SlidesResponse>(`${baseUrl}/api/editor/text-body`, {
+        handle: shapes.shapes[0].handle,
+        docJson: {
+          ...shapes.shapes[0].editableTextBody?.docJson,
+          content: [
+            {
+              ...shapes.shapes[0].editableTextBody?.docJson.content?.[0],
+              content: [
+                {
+                  ...shapes.shapes[0].editableTextBody?.docJson.content?.[0]?.content?.[0],
+                  text: "Overlay edited",
+                },
+              ],
+            },
+          ],
+        },
+      });
+      expect(overlayEdited.slides[0].svg).toContain("Overlay edited");
+
+      await postJson<SlidesResponse>(`${baseUrl}/api/editor/text-body`, {
+        handle: shapes.shapes[0].handle,
+        docJson: {
+          ...shapes.shapes[0].editableTextBody?.docJson,
+          content: [
+            {
+              ...shapes.shapes[0].editableTextBody?.docJson.content?.[0],
+              content: [],
+            },
+          ],
+        },
+      });
+
       const saved = await postJson<SaveResponse>(`${baseUrl}/api/editor/save`, { path: savedPath });
       expect(saved).toMatchObject({ ok: true, path: savedPath });
-      expect(firstRun(readPptx(await readFile(savedPath)))).toBe("Edited");
+      expect(firstRun(readPptx(await readFile(savedPath)))).toBe("");
 
       const rejectedSave = await postJsonError(`${baseUrl}/api/editor/save`, {
         path: join(tmpdir(), "outside-dev-server-save.pptx"),
@@ -103,10 +144,21 @@ describe("dev server editor API", () => {
 
 interface ShapesResponse {
   shapes: Array<{
+    handle: unknown;
     id: string;
     name?: string;
     bounds?: { x: number; y: number; width: number; height: number };
     textRuns: Array<{ text: string; handle: unknown }>;
+    editableTextBody?: {
+      docJson: {
+        type: "doc";
+        content?: Array<{
+          type: "paragraph";
+          attrs?: unknown;
+          content?: Array<{ type: "text"; text: string; marks?: unknown }>;
+        }>;
+      };
+    };
   }>;
 }
 

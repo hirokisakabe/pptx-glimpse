@@ -13,13 +13,21 @@ import {
   asPartPath,
   asRelationshipId,
   asSourceNodeId,
+  findShapeNodeBySourceHandle,
   readPptx,
   type SourceHandle,
   type SourceShapeNode,
+  type SourceTextBody,
   type SourceTextRun,
   writePptx,
 } from "../packages/document/src/index.js";
-import { createEditorSession, type EditorCommand } from "../packages/editor-core/src/index.js";
+import {
+  createEditorSession,
+  type EditorCommand,
+  type PptxTextBodyProseMirrorDocJson,
+  proseMirrorDocJsonToEditorCommands,
+  textBodyToProseMirrorDocJson,
+} from "../packages/editor-core/src/index.js";
 import { unsafeScriptInputAssertion } from "./unsafe-type-assertion.js";
 
 const DEFAULT_PORT = 3000;
@@ -57,6 +65,10 @@ interface EditorTextRunInfo {
   handle: SourceHandle;
 }
 
+interface EditorTextBodyInfo {
+  docJson: PptxTextBodyProseMirrorDocJson;
+}
+
 interface EditorShapeInfo {
   id: string;
   kind: SourceShapeNode["kind"];
@@ -65,6 +77,7 @@ interface EditorShapeInfo {
   bounds?: ShapeBoundsPx;
   editableTransform?: boolean;
   textRuns?: EditorTextRunInfo[];
+  editableTextBody?: EditorTextBodyInfo;
 }
 
 interface EditorSlidesResponse {
@@ -190,6 +203,27 @@ export class DevEditorBackend {
     });
   }
 
+  async applyTextBodyDocJson(
+    handle: SourceHandle,
+    docJson: unknown,
+  ): Promise<EditorSlidesResponse> {
+    return this.#enqueueMutation(async () => {
+      const textBody = this.#requireEditableShapeTextBody(handle);
+      const commands = proseMirrorDocJsonToEditorCommands(textBody, docJson);
+      if (commands.length === 0) return this.response();
+
+      for (const command of commands) {
+        const result = this.#session.apply(command);
+        if (!result.ok) {
+          throw new Error(result.message);
+        }
+      }
+      this.#dirty = true;
+      await this.renderCurrentSlides();
+      return this.response();
+    });
+  }
+
   async selectShape(handle: SourceHandle): Promise<EditorSlidesResponse> {
     return this.#enqueueMutation(() => {
       const result = this.#session.selectShape(handle);
@@ -241,6 +275,17 @@ export class DevEditorBackend {
       () => undefined,
     );
     return queued;
+  }
+
+  #requireEditableShapeTextBody(handle: SourceHandle): SourceTextBody {
+    const shape = findShapeNodeBySourceHandle(this.#session.document, handle);
+    if (shape === undefined) {
+      throw new Error("text body edit: shape handle was not found in PptxSourceModel source");
+    }
+    if (shape.kind !== "shape" || shape.textBody === undefined) {
+      throw new Error("text body edit: shape does not have editable text body");
+    }
+    return shape.textBody;
   }
 }
 
@@ -304,6 +349,9 @@ function shapeInfo(
           ),
         }
       : {}),
+    ...(shape.kind === "shape" && shape.textBody !== undefined && shape.transform !== undefined
+      ? editableTextBody(shape.textBody)
+      : {}),
   };
 
   if (shape.kind !== "group") return [base];
@@ -329,6 +377,16 @@ function collectTextRuns(runs: readonly SourceTextRun[]): EditorTextRunInfo[] {
     if (run.handle === undefined) return [];
     return [{ text: run.text, handle: run.handle }];
   });
+}
+
+function editableTextBody(
+  textBody: SourceTextBody,
+): Partial<Pick<EditorShapeInfo, "editableTextBody">> {
+  try {
+    return { editableTextBody: { docJson: textBodyToProseMirrorDocJson(textBody) } };
+  } catch {
+    return {};
+  }
 }
 
 function transformBoundsPx(transform: {
@@ -518,6 +576,46 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       height: 100%;
       overflow: visible;
       touch-action: none;
+      z-index: 2;
+    }
+    #text-editor-overlay {
+      position: absolute;
+      min-width: 40px;
+      min-height: 28px;
+      padding: 4px;
+      border: 1px solid #2563eb;
+      background: rgba(255, 255, 255, 0.96);
+      color: #111827;
+      z-index: 3;
+      overflow: hidden;
+      box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.25);
+    }
+    .text-editor-paragraph {
+      min-height: 20px;
+      line-height: 1.25;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+    .text-editor-run {
+      outline: none;
+      white-space: pre-wrap;
+    }
+    .text-editor-actions {
+      position: absolute;
+      right: 4px;
+      bottom: 4px;
+      display: flex;
+      gap: 4px;
+    }
+    .text-editor-actions button {
+      min-height: 24px;
+      padding: 2px 8px;
+      border: 1px solid #64748b;
+      border-radius: 4px;
+      background: #f8fafc;
+      color: #0f172a;
+      font-size: 11px;
+      font-weight: 600;
     }
     .shape-hit-area {
       cursor: move;
@@ -585,10 +683,21 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     var selectedShapeKey = null;
     var selectedShape = null;
     var dragState = null;
+    var activeTextEditor = null;
     var shapeRequestId = 0;
     var EMU_PER_PIXEL = ${String(EMU_PER_INCH / DEFAULT_DPI)};
 
     function selectSlide(index) {
+      if (activeTextEditor) {
+        commitTextEditor()
+          .then(function () {
+            selectSlide(index);
+          })
+          .catch(function () {
+            // Keep the editor open; commitTextEditor already reported the failure.
+          });
+        return;
+      }
       var slideChanged = currentIndex !== index;
       currentIndex = index;
       shapeOptions = [];
@@ -679,6 +788,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         id: shape.id,
         name: shape.name,
         handle: shape.handle,
+        editableTextBody: shape.editableTextBody,
         bounds: {
           x: shape.bounds.x,
           y: shape.bounds.y,
@@ -772,8 +882,19 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         hit.setAttribute("data-shape-index", String(index));
         setRectAttributes(hit, shape.bounds);
         hit.addEventListener("pointerdown", function (event) {
-          event.preventDefault();
           selectShape(shape, event);
+        });
+        hit.addEventListener("mousedown", function (event) {
+          if (activeTextEditor) return;
+          if (event.detail >= 2 && shape.editableTextBody) {
+            event.preventDefault();
+            openTextEditor(shape);
+          }
+        });
+        hit.addEventListener("dblclick", function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          openTextEditor(shape);
         });
         overlay.appendChild(hit);
       });
@@ -805,6 +926,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       }
 
       container.appendChild(overlay);
+      positionActiveTextEditor();
     }
 
     function setRectAttributes(rect, bounds) {
@@ -824,20 +946,255 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     }
 
     function selectShape(shape, event) {
+      if (activeTextEditor) {
+        commitTextEditor()
+          .then(function () {
+            selectShapeAfterCommit(shape);
+          })
+          .catch(function () {});
+        return;
+      }
       selectedShapeKey = shapeKey(shape);
       selectedShape = cloneShape(shape);
-      renderSelectionOverlay();
       beginDrag("move", null, event);
+      window.setTimeout(renderSelectionOverlay, 0);
       postJson("/api/editor/select", { handle: shape.handle })
         .then(function (data) {
           updateHistory(data.history);
           if (data.selection && data.selection.shapeHandle) {
             selectedShapeKey = handleKey(data.selection.shapeHandle);
           }
+          renderSelectionOverlay();
         })
         .catch(function (err) {
           setEditorMessage(err.message, true);
         });
+    }
+
+    function selectShapeAfterCommit(shape) {
+      selectedShapeKey = shapeKey(shape);
+      selectedShape = cloneShape(shape);
+      renderSelectionOverlay();
+      postJson("/api/editor/select", { handle: shape.handle })
+        .then(function (data) {
+          updateHistory(data.history);
+          if (data.selection && data.selection.shapeHandle) {
+            selectedShapeKey = handleKey(data.selection.shapeHandle);
+          }
+          renderSelectionOverlay();
+        })
+        .catch(function (err) {
+          setEditorMessage(err.message, true);
+        });
+    }
+
+    function openTextEditor(shape) {
+      if (!shape || !shape.handle || !shape.bounds || !shape.editableTextBody) return;
+      if (activeTextEditor) return;
+      if (dragState) {
+        dragState = null;
+        detachDragListeners();
+      }
+      closeTextEditor();
+      selectedShapeKey = shapeKey(shape);
+      selectedShape = cloneShape(shape);
+      renderSelectionOverlay();
+
+      var container = document.getElementById("slide-container");
+      var overlay = document.createElement("div");
+      overlay.id = "text-editor-overlay";
+      overlay.setAttribute("data-testid", "text-editor-overlay");
+      overlay.dataset.shapeKey = selectedShapeKey || "";
+      overlay.appendChild(createTextEditorContent(shape.editableTextBody.docJson));
+
+      var actions = document.createElement("div");
+      actions.className = "text-editor-actions";
+      var done = document.createElement("button");
+      done.type = "button";
+      done.textContent = "Done";
+      done.setAttribute("data-testid", "text-editor-done");
+      done.addEventListener("click", function () {
+        commitTextEditor().catch(function () {});
+      });
+      actions.appendChild(done);
+      overlay.appendChild(actions);
+
+      overlay.addEventListener("keydown", function (event) {
+        if (event.isComposing || event.keyCode === 229) return;
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          commitTextEditor().catch(function () {});
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          closeTextEditor();
+        }
+      });
+      overlay.addEventListener("focusout", function (event) {
+        window.setTimeout(function () {
+          if (!activeTextEditor) return;
+          if (event.relatedTarget && activeTextEditor.element.contains(event.relatedTarget)) return;
+          commitTextEditor().catch(function () {});
+        }, 0);
+      });
+
+      container.appendChild(overlay);
+      activeTextEditor = {
+        element: overlay,
+        shape: cloneShape(shape),
+        originalDocJson: shape.editableTextBody.docJson,
+        committing: false,
+        commitPromise: null
+      };
+      positionActiveTextEditor();
+      var firstRun = overlay.querySelector(".text-editor-run");
+      if (firstRun) {
+        firstRun.focus();
+        selectElementContents(firstRun);
+      }
+    }
+
+    function createTextEditorContent(docJson) {
+      var body = document.createElement("div");
+      body.setAttribute("data-testid", "text-editor-content");
+      (docJson.content || []).forEach(function (paragraph, paragraphIndex) {
+        var paragraphElement = document.createElement("div");
+        paragraphElement.className = "text-editor-paragraph";
+        paragraphElement.dataset.paragraphIndex = String(paragraphIndex);
+        (paragraph.content || []).forEach(function (textNode, runIndex) {
+          var run = document.createElement("span");
+          run.className = "text-editor-run";
+          run.setAttribute("data-testid", "text-editor-run");
+          run.contentEditable = "true";
+          run.dataset.paragraphIndex = String(paragraphIndex);
+          run.dataset.runIndex = String(runIndex);
+          run.textContent = textNode.text || "";
+          run.addEventListener("beforeinput", function (event) {
+            if (event.inputType === "insertParagraph" || event.inputType === "insertLineBreak") {
+              event.preventDefault();
+              commitTextEditor().catch(function () {});
+            }
+          });
+          run.addEventListener("paste", function (event) {
+            event.preventDefault();
+            var text = (event.clipboardData ? event.clipboardData.getData("text/plain") : "")
+              .replace(/\\r?\\n/g, " ");
+            document.execCommand("insertText", false, text);
+          });
+          paragraphElement.appendChild(run);
+        });
+        body.appendChild(paragraphElement);
+      });
+      return body;
+    }
+
+    function selectElementContents(element) {
+      var range = document.createRange();
+      range.selectNodeContents(element);
+      var selection = window.getSelection();
+      if (!selection) return;
+      selection.removeAllRanges();
+      selection.addRange(range);
+    }
+
+    function positionActiveTextEditor() {
+      if (!activeTextEditor || !activeTextEditor.shape || !activeTextEditor.shape.bounds) return;
+      var container = document.getElementById("slide-container");
+      var renderedSvg = container.querySelector("svg:not(#selection-overlay)");
+      if (!renderedSvg) return;
+      var svgRect = renderedSvg.getBoundingClientRect();
+      var containerRect = container.getBoundingClientRect();
+      var viewBox = parseViewBox(renderedSvg.getAttribute("viewBox") || "0 0 960 540");
+      var bounds = activeTextEditor.shape.bounds;
+      var left = svgRect.left - containerRect.left + ((bounds.x - viewBox.x) / viewBox.width) * svgRect.width;
+      var top = svgRect.top - containerRect.top + ((bounds.y - viewBox.y) / viewBox.height) * svgRect.height;
+      var width = (bounds.width / viewBox.width) * svgRect.width;
+      var height = (bounds.height / viewBox.height) * svgRect.height;
+      activeTextEditor.element.style.left = left + "px";
+      activeTextEditor.element.style.top = top + "px";
+      activeTextEditor.element.style.width = width + "px";
+      activeTextEditor.element.style.height = height + "px";
+    }
+
+    function parseViewBox(value) {
+      var parts = String(value).trim().split(/\\s+/).map(Number);
+      return {
+        x: Number.isFinite(parts[0]) ? parts[0] : 0,
+        y: Number.isFinite(parts[1]) ? parts[1] : 0,
+        width: Number.isFinite(parts[2]) && parts[2] > 0 ? parts[2] : 960,
+        height: Number.isFinite(parts[3]) && parts[3] > 0 ? parts[3] : 540
+      };
+    }
+
+    function textEditorDocJson() {
+      if (!activeTextEditor) return null;
+      var original = activeTextEditor.originalDocJson;
+      var paragraphs = [];
+      (original.content || []).forEach(function (paragraph, paragraphIndex) {
+        var paragraphElement = activeTextEditor.element.querySelector(
+          '.text-editor-paragraph[data-paragraph-index="' + paragraphIndex + '"]'
+        );
+        var content = [];
+        var emptyRunCount = 0;
+        (paragraph.content || []).forEach(function (textNode, runIndex) {
+          var runElement = paragraphElement
+            ? paragraphElement.querySelector('.text-editor-run[data-run-index="' + runIndex + '"]')
+            : null;
+          var text = runElement ? runElement.textContent || "" : textNode.text || "";
+          if (text.length === 0) {
+            emptyRunCount += 1;
+            return;
+          }
+          content.push({
+            type: "text",
+            text: text,
+            marks: textNode.marks || []
+          });
+        });
+        if (emptyRunCount > 0 && content.length > 0) {
+          throw new Error("Clearing individual runs in multi-run text is unsupported.");
+        }
+        paragraphs.push({
+          type: "paragraph",
+          attrs: paragraph.attrs || {},
+          content: content
+        });
+      });
+      return { type: "doc", content: paragraphs };
+    }
+
+    function commitTextEditor() {
+      if (!activeTextEditor) return Promise.resolve();
+      var editor = activeTextEditor;
+      if (editor.committing) return editor.commitPromise || Promise.resolve();
+      var docJson = textEditorDocJson();
+      if (!docJson) return Promise.resolve();
+      editor.committing = true;
+      editor.commitPromise = postJson("/api/editor/text-body", {
+        handle: editor.shape.handle,
+        docJson: docJson
+      })
+        .then(function (data) {
+          closeTextEditor(editor);
+          applyEditorResponse(data);
+          setEditorMessage("Applied", false);
+        })
+        .catch(function (err) {
+          editor.committing = false;
+          editor.commitPromise = null;
+          setEditorMessage(err.message, true);
+          throw err;
+        });
+      return editor.commitPromise;
+    }
+
+    function closeTextEditor(editor) {
+      var target = editor || activeTextEditor;
+      if (!target) return;
+      if (editor && activeTextEditor !== editor) return;
+      if (!editor && target.committing) return;
+      target.element.remove();
+      if (activeTextEditor === target) activeTextEditor = null;
     }
 
     function beginDrag(kind, handle, event) {
@@ -1175,6 +1532,14 @@ async function handleRequest(
     const body = await readJsonBody(req);
     const command = normalizeCommand(isRecord(body) ? body.command : undefined);
     sendJson(res, 200, await backend.apply(command));
+    return;
+  }
+
+  if (url.pathname === "/api/editor/text-body" && req.method === "POST") {
+    const body = await readJsonBody(req);
+    const handle = normalizeHandle(isRecord(body) ? body.handle : undefined);
+    const docJson = isRecord(body) ? body.docJson : undefined;
+    sendJson(res, 200, await backend.applyTextBodyDocJson(handle, docJson));
     return;
   }
 
