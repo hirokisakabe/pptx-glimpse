@@ -56,6 +56,21 @@ export type EditorHistoryResult =
       readonly reason: "empty-undo-stack" | "empty-redo-stack";
     };
 
+export interface EditorSelection {
+  readonly shapeHandle: SourceHandle;
+}
+
+export type EditorSelectShapeResult =
+  | {
+      readonly ok: true;
+      readonly selection: EditorSelection;
+    }
+  | {
+      readonly ok: false;
+      readonly code: "invalid-selection";
+      readonly message: string;
+    };
+
 interface HistoryEntry {
   readonly before: PptxSourceModel;
   readonly after: PptxSourceModel;
@@ -63,6 +78,7 @@ interface HistoryEntry {
 
 export class EditorSession {
   #document: PptxSourceModel;
+  #selection: EditorSelection | undefined;
   readonly #undoStack: HistoryEntry[] = [];
   readonly #redoStack: HistoryEntry[] = [];
 
@@ -72,6 +88,10 @@ export class EditorSession {
 
   get document(): PptxSourceModel {
     return this.#document;
+  }
+
+  get selection(): EditorSelection | undefined {
+    return this.#selection;
   }
 
   get canUndo(): boolean {
@@ -88,6 +108,24 @@ export class EditorSession {
 
   get redoDepth(): number {
     return this.#redoStack.length;
+  }
+
+  selectShape(handle: SourceHandle): EditorSelectShapeResult {
+    if (findShapeNodeBySourceHandle(this.#document, handle) === undefined) {
+      return {
+        ok: false,
+        code: "invalid-selection",
+        message: "selectShape: shape handle was not found in PptxSourceModel source",
+      };
+    }
+
+    const selection = { shapeHandle: handle };
+    this.#selection = selection;
+    return { ok: true, selection };
+  }
+
+  deselectShape(): void {
+    this.#selection = undefined;
   }
 
   apply(command: EditorCommand): EditorApplyCommandResult {
