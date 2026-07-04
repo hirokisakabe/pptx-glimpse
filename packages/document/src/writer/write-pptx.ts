@@ -161,7 +161,13 @@ function serializeDirtyXmlPart(
   for (const edit of shapeTransformEdits.filter((edit) => edit.handle.partPath === partPath)) {
     applyShapeTransformEdit(root, edit);
   }
-  return encodeXml(XML_DECLARATION + xmlBuilder.build(root));
+  return encodeXml(XML_DECLARATION + xmlBuilder.build(stripXmlProcessingInstruction(root)));
+}
+
+function stripXmlProcessingInstruction(root: XmlNode): XmlNode {
+  const stripped = { ...root };
+  delete stripped["?xml"];
+  return stripped;
 }
 
 function applyTextRunEdit(root: XmlNode, edit: PptxSourceModelTextRunEdit): void {
