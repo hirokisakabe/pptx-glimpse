@@ -52,11 +52,21 @@ export interface ResizeShapeCommand {
   readonly height: Emu;
 }
 
+export interface SetShapeTransformCommand {
+  readonly kind: "setShapeTransform";
+  readonly handle: SourceHandle;
+  readonly offsetX: Emu;
+  readonly offsetY: Emu;
+  readonly width: Emu;
+  readonly height: Emu;
+}
+
 export type EditorCommand =
   | ReplaceTextRunPlainTextCommand
   | ReplaceParagraphPlainTextCommand
   | MoveShapeCommand
-  | ResizeShapeCommand;
+  | ResizeShapeCommand
+  | SetShapeTransformCommand;
 
 export type EditorApplyCommandResult =
   | {
@@ -212,6 +222,8 @@ function applyCommandToDocument(
       return moveShape(document, command);
     case "resizeShape":
       return resizeShape(document, command);
+    case "setShapeTransform":
+      return setShapeTransform(document, command);
   }
 }
 
@@ -241,10 +253,28 @@ function resizeShape(document: PptxSourceModel, command: ResizeShapeCommand): Pp
   });
 }
 
+function setShapeTransform(
+  document: PptxSourceModel,
+  command: SetShapeTransformCommand,
+): PptxSourceModel {
+  requireFiniteEmu(command.offsetX, "setShapeTransform", "offsetX");
+  requireFiniteEmu(command.offsetY, "setShapeTransform", "offsetY");
+  requirePositiveFiniteEmu(command.width, "setShapeTransform", "width");
+  requirePositiveFiniteEmu(command.height, "setShapeTransform", "height");
+
+  requireEditableShapeTransform(document, command.handle, "setShapeTransform");
+  return updateShapeTransform(document, command.handle, {
+    offsetX: command.offsetX,
+    offsetY: command.offsetY,
+    width: command.width,
+    height: command.height,
+  });
+}
+
 function requireEditableShapeTransform(
   document: PptxSourceModel,
   handle: SourceHandle,
-  commandName: "moveShape" | "resizeShape",
+  commandName: "moveShape" | "resizeShape" | "setShapeTransform",
 ): SourceTransform {
   const shape = findShapeNodeBySourceHandle(document, handle);
   if (shape === undefined) {
@@ -258,7 +288,7 @@ function requireEditableShapeTransform(
 
 function requireFiniteEmu(
   value: Emu,
-  commandName: "moveShape" | "resizeShape",
+  commandName: "moveShape" | "resizeShape" | "setShapeTransform",
   fieldName: string,
 ): void {
   if (!Number.isFinite(value)) {
@@ -268,7 +298,7 @@ function requireFiniteEmu(
 
 function requirePositiveFiniteEmu(
   value: Emu,
-  commandName: "moveShape" | "resizeShape",
+  commandName: "moveShape" | "resizeShape" | "setShapeTransform",
   fieldName: string,
 ): void {
   if (!Number.isFinite(value) || value <= 0) {

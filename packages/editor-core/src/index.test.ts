@@ -426,6 +426,40 @@ describe("EditorSession xfrm commands", () => {
     });
   });
 
+  it("applies a full transform edit as one undoable command", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const handle = requireHandle(firstShape(source).handle);
+
+    const edited = expectApplied(
+      session.apply({
+        kind: "setShapeTransform",
+        handle,
+        offsetX: asEmu(1000),
+        offsetY: asEmu(2000),
+        width: asEmu(3000),
+        height: asEmu(4000),
+      }),
+    );
+
+    expect(session.undoDepth).toBe(1);
+    expect(requireShape(findShapeNodeBySourceHandle(edited, handle)).transform).toMatchObject({
+      offsetX: 1000,
+      offsetY: 2000,
+      width: 3000,
+      height: 4000,
+    });
+    expect(edited.edits?.filter((edit) => edit.kind === "updateShapeTransform")).toHaveLength(1);
+
+    expectHistory(session.undo());
+    expect(firstShape(session.document).transform).toMatchObject({
+      offsetX: 100,
+      offsetY: 200,
+      width: 300,
+      height: 400,
+    });
+  });
+
   it("rejects invalid xfrm commands without changing document state or undo history", async () => {
     const source = readPptx(await buildTextEditFixture());
     const session = createEditorSession(source);
