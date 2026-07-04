@@ -34,7 +34,6 @@ import {
   setScriptFonts,
   setTextMeasurer,
   setTextPathFontResolver,
-  svgToPng,
   warn,
 } from "@pptx-glimpse/renderer";
 
@@ -359,7 +358,7 @@ export async function convertPptxToPng(
 
   const slides: SlideImage[] = [];
   for (const { slideNumber, svg } of svgResult.slides) {
-    const pngResult = await svgToPng(svg, { width, height, fontBuffers });
+    const pngResult = await convertSvgToPng(svg, { width, height, fontBuffers });
     slides.push({
       slideNumber,
       png: pngResult.png,
@@ -597,6 +596,14 @@ async function loadPngFontBuffers(options: ConvertOptions | undefined): Promise<
 
   const { loadFontBuffersFromSystem } = await import(/* @vite-ignore */ "./node-font-loader.js");
   return loadFontBuffersFromSystem(options?.fontDirs, options?.skipSystemFonts);
+}
+
+async function convertSvgToPng(
+  svg: string,
+  options: { width?: number; height?: number; fontBuffers?: Uint8Array[] },
+) {
+  const { svgToPng } = await import("@pptx-glimpse/renderer/png");
+  return svgToPng(svg, options);
 }
 
 function shouldLoadSystemFonts(options: ConvertOptions | undefined): boolean {

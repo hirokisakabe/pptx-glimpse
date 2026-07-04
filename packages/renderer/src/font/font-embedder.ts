@@ -3,8 +3,7 @@
  * Used to embed subsetted fonts in SVG in native <text> output mode.
  */
 
-import { Buffer } from "node:buffer";
-
+import { uint8ArrayToBase64 } from "../utils/base64.js";
 import { subsetFont } from "./font-subsetter.js";
 import type { FontUsage } from "./font-usage-collector.js";
 import { getJpanFallbackFont } from "./script-font-context.js";
@@ -42,7 +41,7 @@ export async function buildFontFaceStyle(
     const buffer = await subsetFont(font, usage.chars, familyName);
     if (!buffer) continue;
 
-    const base64 = Buffer.from(buffer).toString("base64");
+    const base64 = uint8ArrayToBase64(buffer);
     faces.push(
       `@font-face{font-family:"${escapeCssFamilyName(familyName)}";src:url(data:font/otf;base64,${base64}) format("opentype");}`,
     );

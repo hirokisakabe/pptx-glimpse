@@ -21,7 +21,6 @@ interface OpentypeTestModule {
 }
 
 async function loadOpentype(): Promise<OpentypeTestModule> {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const mod: OpentypeTestModule = await import("opentype.js");
   return mod;
 }

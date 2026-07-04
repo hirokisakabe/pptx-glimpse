@@ -28,7 +28,6 @@ export * from "./model/table.js";
 export * from "./model/text.js";
 export * from "./model/theme.js";
 export * from "./model/tokens.js";
-export * from "./png/png-converter.js";
 export * from "./renderer/blip-effect-renderer.js";
 export * from "./renderer/chart-renderer.js";
 export * from "./renderer/effect-renderer.js";

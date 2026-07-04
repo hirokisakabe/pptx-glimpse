@@ -3,7 +3,6 @@
  * When the mapped font (e.g., Noto Sans JP) does not exist on the system.
  * falls back to OS-preinstalled CJK fonts.
  */
-import { platform } from "node:os";
 
 type CjkFallbackMap = Readonly<Record<string, readonly string[]>>;
 
@@ -26,11 +25,17 @@ const WINDOWS_FALLBACKS: CjkFallbackMap = {
 const EMPTY: readonly string[] = [];
 
 let cachedFallbacks: CjkFallbackMap | null = null;
+let platformOverrideForTest: string | null = null;
+
+function getRuntimePlatform(): string {
+  if (platformOverrideForTest !== null) return platformOverrideForTest;
+  return typeof process !== "undefined" ? process.platform : "";
+}
 
 function getFallbackMap(): CjkFallbackMap {
   if (cachedFallbacks) return cachedFallbacks;
 
-  const os = platform();
+  const os = getRuntimePlatform();
   if (os === "darwin") {
     cachedFallbacks = MACOS_FALLBACKS;
   } else if (os === "win32") {
@@ -52,4 +57,11 @@ export function getCjkFallbackFonts(mappedFontName: string): readonly string[] {
 /** Test-only: clear cache */
 export function _resetCjkFallbackCache(): void {
   cachedFallbacks = null;
+  platformOverrideForTest = null;
+}
+
+/** Test-only: override platform without importing node:os. */
+export function _setCjkFallbackPlatformForTest(platform: string): void {
+  cachedFallbacks = null;
+  platformOverrideForTest = platform;
 }

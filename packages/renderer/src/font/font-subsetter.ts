@@ -35,10 +35,7 @@ interface OpentypeCtors {
  */
 async function tryLoadOpentypeCtors(): Promise<OpentypeCtors | null> {
   try {
-    // Use a variable to prevent bundlers from statically resolving this import
-    const specifier = "opentype.js";
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const mod: OpentypeCtors = await import(/* @vite-ignore */ specifier);
+    const mod: OpentypeCtors = await import("opentype.js");
     return { Font: mod.Font, Glyph: mod.Glyph };
   } catch {
     return null;

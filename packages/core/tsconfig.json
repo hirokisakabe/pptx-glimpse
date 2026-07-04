@@ -5,7 +5,8 @@
     "paths": {
       "@pptx-glimpse/document": ["packages/document/dist/index.d.ts"],
       "@pptx-glimpse/renderer": ["packages/renderer/dist/index.d.ts"],
-      "@pptx-glimpse/renderer/node": ["packages/renderer/dist/node.d.ts"]
+      "@pptx-glimpse/renderer/node": ["packages/renderer/dist/node.d.ts"],
+      "@pptx-glimpse/renderer/png": ["packages/renderer/dist/png.d.ts"]
     },
     "rootDir": "./src",
     "outDir": "./dist"

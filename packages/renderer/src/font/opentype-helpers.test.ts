@@ -12,7 +12,6 @@ import { buildTtcFromTtfs } from "./ttc-test-helper.js";
  * Create a minimally valid TTF buffer using opentype.js.
  */
 async function createTestFontBuffer(familyName: string): Promise<ArrayBuffer> {
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   const opentype: {
     Glyph: new (opts: Record<string, unknown>) => unknown;
     Path: new () => {

@@ -49,13 +49,10 @@ export interface OpentypeParser {
  */
 export async function tryLoadOpentype(): Promise<OpentypeParser | null> {
   try {
-    // Use a variable to prevent bundlers from statically resolving this import
-    const specifier = "opentype.js";
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-    const mod: { parse: (buffer: ArrayBuffer) => OpentypeFontWithNames } = await import(
-      /* @vite-ignore */ specifier
-    );
-    return { parse: mod.parse };
+    const mod = await import("opentype.js");
+    return {
+      parse: (buffer) => unsafeExternalInteropAssertion<OpentypeFontWithNames>(mod.parse(buffer)),
+    };
   } catch {
     return null;
   }

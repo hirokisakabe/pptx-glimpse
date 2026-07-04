@@ -15,6 +15,10 @@
     "./node": {
       "types": "./dist/node.d.ts",
       "default": "./src/node.ts"
+    },
+    "./png": {
+      "types": "./dist/png.d.ts",
+      "default": "./src/png.ts"
     }
   },
   "scripts": {
