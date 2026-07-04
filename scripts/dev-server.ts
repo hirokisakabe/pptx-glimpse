@@ -63,6 +63,7 @@ interface EditorShapeInfo {
   name?: string;
   handle?: SourceHandle;
   bounds?: ShapeBoundsPx;
+  editableTransform?: boolean;
   textRuns?: EditorTextRunInfo[];
 }
 
@@ -278,14 +279,18 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && "code" in error;
 }
 
-function shapeInfo(shape: SourceShapeNode, index: number): EditorShapeInfo[] {
+function shapeInfo(
+  shape: SourceShapeNode,
+  index: number,
+  editableTransform = true,
+): EditorShapeInfo[] {
   const base: EditorShapeInfo = {
     id: String(shape.nodeId ?? shape.handle?.nodeId ?? `${shape.kind}:${String(index)}`),
     kind: shape.kind,
     ...(shapeName(shape) !== undefined ? { name: shapeName(shape) } : {}),
     ...(shape.handle !== undefined ? { handle: shape.handle } : {}),
     ...(shape.kind !== "raw" && shape.transform !== undefined
-      ? { bounds: transformBoundsPx(shape.transform) }
+      ? { bounds: transformBoundsPx(shape.transform), editableTransform }
       : {}),
     ...("textBody" in shape && shape.textBody !== undefined
       ? {
@@ -297,7 +302,10 @@ function shapeInfo(shape: SourceShapeNode, index: number): EditorShapeInfo[] {
   };
 
   if (shape.kind !== "group") return [base];
-  return [base, ...shape.children.flatMap((child, childIndex) => shapeInfo(child, childIndex))];
+  return [
+    base,
+    ...shape.children.flatMap((child, childIndex) => shapeInfo(child, childIndex, false)),
+  ];
 }
 
 function shapeName(shape: SourceShapeNode): string | undefined {
@@ -569,7 +577,12 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     var EMU_PER_PIXEL = ${String(EMU_PER_INCH / DEFAULT_DPI)};
 
     function selectSlide(index) {
+      var slideChanged = currentIndex !== index;
       currentIndex = index;
+      shapeOptions = [];
+      textRunOptions = [];
+      selectedShape = null;
+      if (slideChanged) selectedShapeKey = null;
       var thumbs = document.querySelectorAll(".thumbnail");
       for (var i = 0; i < thumbs.length; i++) {
         if (i === index) {
@@ -679,7 +692,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         .then(function (data) {
           if (requestId !== shapeRequestId || slideNumber !== currentIndex + 1) return;
           shapeOptions = (data.shapes || []).filter(function (shape) {
-            return shape.handle && shape.bounds;
+            return shape.handle && shape.bounds && shape.editableTransform;
           });
           textRunOptions = [];
           data.shapes.forEach(function (shape) {
@@ -777,11 +790,6 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
           });
           overlay.appendChild(rect);
         });
-
-        box.addEventListener("pointerdown", function (event) {
-          event.preventDefault();
-          beginDrag("move", null, event);
-        });
       }
 
       container.appendChild(overlay);
@@ -825,6 +833,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       var overlay = document.getElementById("selection-overlay");
       if (!overlay) return;
       var point = eventPoint(overlay, event);
+      if (!point) return;
       dragState = {
         kind: kind,
         handle: handle,
@@ -852,6 +861,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       var overlay = document.getElementById("selection-overlay");
       if (!overlay) return;
       var point = eventPoint(overlay, event);
+      if (!point) return;
       var dx = point.x - dragState.startPoint.x;
       var dy = point.y - dragState.startPoint.y;
       selectedShape.bounds =
@@ -889,10 +899,12 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     }
 
     function eventPoint(svg, event) {
+      var matrix = svg.getScreenCTM();
+      if (!matrix) return null;
       var point = svg.createSVGPoint();
       point.x = event.clientX;
       point.y = event.clientY;
-      return point.matrixTransform(svg.getScreenCTM().inverse());
+      return point.matrixTransform(matrix.inverse());
     }
 
     function movedBounds(bounds, dx, dy) {
