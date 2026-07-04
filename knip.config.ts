@@ -13,6 +13,7 @@ const config: KnipConfig = {
         "scripts/extract-font-metrics.ts",
         "vrt/snapshot/update-snapshots.ts",
         "bench/conversion.bench.ts",
+        "e2e/dev-server-editor.playwright.ts",
       ],
     },
   },
