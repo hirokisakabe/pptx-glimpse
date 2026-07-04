@@ -193,31 +193,37 @@ async function startDevServer(
     },
   );
 
-  await new Promise<void>((resolve, reject) => {
-    let output = "";
-    const timeout = setTimeout(() => {
-      reject(new Error(`dev server did not start:\n${output}`));
-    }, 30_000);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      let output = "";
+      const timeout = setTimeout(() => {
+        reject(new Error(`dev server did not start:\n${output}`));
+      }, 30_000);
 
-    child.stdout.on("data", (chunk: Buffer) => {
-      output += chunk.toString("utf8");
-      if (output.includes("Dev server running")) {
+      child.stdout.on("data", (chunk: Buffer) => {
+        output += chunk.toString("utf8");
+        if (output.includes("Dev server running")) {
+          clearTimeout(timeout);
+          resolve();
+        }
+      });
+      child.stderr.on("data", (chunk: Buffer) => {
+        output += chunk.toString("utf8");
+      });
+      child.on("error", (error) => {
         clearTimeout(timeout);
-        resolve();
-      }
+        reject(error);
+      });
+      child.on("exit", (code) => {
+        clearTimeout(timeout);
+        reject(new Error(`dev server exited with code ${String(code)}:\n${output}`));
+      });
     });
-    child.stderr.on("data", (chunk: Buffer) => {
-      output += chunk.toString("utf8");
-    });
-    child.on("error", (error) => {
-      clearTimeout(timeout);
-      reject(error);
-    });
-    child.on("exit", (code) => {
-      clearTimeout(timeout);
-      reject(new Error(`dev server exited with code ${String(code)}:\n${output}`));
-    });
-  });
+  } catch (error) {
+    child.kill();
+    await waitForExit(child);
+    throw error;
+  }
 
   return child;
 }
@@ -233,7 +239,7 @@ async function closeServer(server: Server): Promise<void> {
 }
 
 async function waitForExit(child: ChildProcessWithoutNullStreams): Promise<void> {
-  if (child.exitCode !== null || child.killed) return;
+  if (child.exitCode !== null || child.signalCode !== null) return;
   await new Promise<void>((resolve) => {
     child.once("exit", () => resolve());
   });
