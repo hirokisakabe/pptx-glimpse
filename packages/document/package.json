@@ -1,8 +1,14 @@
 {
   "name": "@pptx-glimpse/document",
   "version": "0.0.0",
-  "private": true,
   "description": "PptxSourceModel and OOXML document foundation for pptx-glimpse.",
+  "keywords": [
+    "pptx",
+    "powerpoint",
+    "ooxml",
+    "presentation",
+    "document"
+  ],
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -27,5 +33,15 @@
   "engines": {
     "node": ">=22"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hirokisakabe/pptx-glimpse.git",
+    "directory": "packages/document"
+  },
+  "homepage": "https://github.com/hirokisakabe/pptx-glimpse/tree/main/packages/document",
+  "bugs": {
+    "url": "https://github.com/hirokisakabe/pptx-glimpse/issues"
+  },
+  "author": "hirokisakabe",
   "license": "MIT"
 }

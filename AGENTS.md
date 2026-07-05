@@ -37,7 +37,7 @@ Data flow: **PPTX binary → PptxSourceModel reader → Computed view → Render
 
 Public `convertPptxToSvg` / `convertPptxToPng` use the PptxSourceModel document path. VRT baselines are committed document-path snapshots rather than an in-memory legacy parser oracle.
 
-The source code is split across pnpm workspaces (`packages/*`). The root package is private and only orchestrates the workspace. The public npm package `pptx-glimpse` is published from `packages/core`. The `pptx-glimpse` package references `@pptx-glimpse/document` / `@pptx-glimpse/renderer` as build-time workspace dependencies, and the published tarball contains the bundled output.
+The source code is split across pnpm workspaces (`packages/*`). The root package is private and only orchestrates the workspace. The public npm packages are `pptx-glimpse` from `packages/core` and the 0.x `@pptx-glimpse/document` package from `packages/document`. The `pptx-glimpse` package still references `@pptx-glimpse/document` / `@pptx-glimpse/renderer` as build-time workspace dependencies, and the published core tarball contains the bundled output.
 
 Before working on issues related to `@pptx-glimpse/document`, PptxSourceModel, the writer, editor-core, or pom integration, read the module-level comments in `packages/document/src/source/pptx-source-model.ts`, `packages/document/src/computed/pptx-computed-view.ts`, `packages/document/src/writer/write-pptx.ts`, and `packages/core/src/pptx-computed-view-renderer-adapter.ts` to confirm the current responsibility boundaries and dependency direction. Treat `document` as a lower-level foundation that does not know about `core`, `editor-core`, renderer, or pom.
 
@@ -64,7 +64,7 @@ Before working on issues related to `@pptx-glimpse/document`, PptxSourceModel, t
 
 Entry point: `packages/core/src/index.ts` exports `convertPptxToSvg`, `convertPptxToPng`, warning utilities (`getWarningSummary`, `getWarningEntries`), font utilities (`collectUsedFonts`, `DEFAULT_FONT_MAPPING`, `createFontMapping`, `getMappedFont`), and related types.
 
-`packages/core/tsup.config.ts` bundles `packages/core/src/index.ts`, generates `packages/core/dist/`, and publishes it as the `pptx-glimpse` package (`document` / `renderer` are included in the bundle via `noExternal`). The root `tsup.config.ts` remains for compatible manual builds; the normal publish path uses the `packages/core` config.
+`packages/core/tsup.config.ts` bundles `packages/core/src/index.ts`, generates `packages/core/dist/`, and publishes it as the `pptx-glimpse` package (`document` / `renderer` are included in the bundle via `noExternal`). `packages/document` is also publishable as `@pptx-glimpse/document` for direct document-layer consumers, but core keeps the bundled document configuration until a separate issue changes that packaging strategy. The root `tsup.config.ts` remains for compatible manual builds; the normal publish path uses the package-specific configs.
 
 ## Technical Constraints
 
