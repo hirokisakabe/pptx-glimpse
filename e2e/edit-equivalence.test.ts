@@ -14,12 +14,6 @@ import {
 } from "../packages/document/src/index.js";
 import { createEditorSession } from "../packages/editor-core/src/index.js";
 import {
-  assertEditEquivalence,
-  defineEditEquivalenceTests,
-  type EditEquivalenceFixture,
-  type EditEquivalenceOperation,
-} from "../vrt/edit-equivalence.js";
-import {
   buildPptx,
   shapeXml,
   slideRelsXml,
@@ -27,6 +21,12 @@ import {
   wrapSlideXml,
 } from "../vrt/snapshot/create-fixtures.js";
 import { unsafeVrtInteropAssertion } from "../vrt/unsafe-type-assertion.js";
+import {
+  assertEditEquivalence,
+  defineEditEquivalenceTests,
+  type EditEquivalenceFixture,
+  type EditEquivalenceOperation,
+} from "./edit-equivalence.js";
 
 const TEST_FONT_FAMILY = "Pptx Glimpse Edit Equivalence";
 const TEST_FONT_DIR = join(tmpdir(), "pptx-glimpse-edit-equivalence-font-v2");
