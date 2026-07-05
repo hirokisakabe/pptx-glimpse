@@ -346,6 +346,11 @@ function validateTextRunPropertySet(
   properties: EditableTextRunProperties,
   commandName: "setTextRunProperties",
 ): void {
+  for (const property of Object.keys(properties)) {
+    if (!EDITABLE_TEXT_RUN_PROPERTY_SET.has(property)) {
+      throw new Error(`${commandName}: unsupported text run property '${property}'`);
+    }
+  }
   requireBooleanOrUndefined(properties.bold, commandName, "bold");
   requireBooleanOrUndefined(properties.italic, commandName, "italic");
   requireBooleanOrUndefined(properties.underline, commandName, "underline");
@@ -428,42 +433,66 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
   const seenParagraphs = new Set<string>();
   const seenShapeTransforms = new Set<string>();
   const normalizedReversed: PptxSourceModelEdit[] = [];
+  let changed = false;
 
   for (let index = edits.length - 1; index >= 0; index -= 1) {
     const edit = edits[index];
     if (edit.kind === "replaceTextRunPlainText") {
       const key = editHandleNodeKey(edit);
       const paragraphKey = textRunParagraphEditKey(edit);
-      if (paragraphKey !== undefined && seenParagraphs.has(paragraphKey)) continue;
-      if (seenTextRuns.has(key)) continue;
+      if (paragraphKey !== undefined && seenParagraphs.has(paragraphKey)) {
+        changed = true;
+        continue;
+      }
+      if (seenTextRuns.has(key)) {
+        changed = true;
+        continue;
+      }
       seenTextRuns.add(key);
     }
     if (edit.kind === "updateTextRunProperties") {
       const paragraphKey = textRunParagraphEditKey(edit);
-      if (paragraphKey !== undefined && seenParagraphs.has(paragraphKey)) continue;
+      if (paragraphKey !== undefined && seenParagraphs.has(paragraphKey)) {
+        changed = true;
+        continue;
+      }
       const normalized = normalizeTextRunPropertiesEdit(edit, seenTextRunProperties);
-      if (normalized === undefined) continue;
+      if (normalized === undefined) {
+        changed = true;
+        continue;
+      }
+      if (!editorEditsEqual(normalized, edit)) changed = true;
       normalizedReversed.push(normalized);
       continue;
     }
     if (edit.kind === "replaceParagraphPlainText") {
       const key = editHandleNodeKey(edit);
-      if (seenParagraphs.has(key)) continue;
+      if (seenParagraphs.has(key)) {
+        changed = true;
+        continue;
+      }
       seenParagraphs.add(key);
     }
     if (edit.kind === "updateShapeTransform") {
       const key = editHandleNodeKey(edit);
-      if (seenShapeTransforms.has(key)) continue;
+      if (seenShapeTransforms.has(key)) {
+        changed = true;
+        continue;
+      }
       seenShapeTransforms.add(key);
     }
     normalizedReversed.push(edit);
   }
 
-  if (normalizedReversed.length === edits.length) return document;
+  if (!changed && normalizedReversed.length === edits.length) return document;
   return {
     ...document,
     edits: normalizedReversed.reverse(),
   };
+}
+
+function editorEditsEqual(left: PptxSourceModelEdit, right: PptxSourceModelEdit): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
 }
 
 function editHandleNodeKey(
@@ -509,9 +538,6 @@ function normalizeTextRunPropertiesEdit(
     seenTextRunProperties.set(key, seenProperties);
   }
 
-  const clear = (edit.clear ?? []).filter((property) => !seenProperties.has(property));
-  for (const property of clear) seenProperties.add(property);
-
   const set: MutableEditableTextRunProperties = {};
   if (edit.set?.bold !== undefined && !seenProperties.has("bold")) {
     seenProperties.add("bold");
@@ -537,6 +563,9 @@ function normalizeTextRunPropertiesEdit(
     seenProperties.add("typeface");
     set.typeface = edit.set.typeface;
   }
+
+  const clear = (edit.clear ?? []).filter((property) => !seenProperties.has(property));
+  for (const property of clear) seenProperties.add(property);
 
   if (clear.length === 0 && Object.keys(set).length === 0) return undefined;
   const normalized: PptxSourceModelTextRunPropertiesEdit = {

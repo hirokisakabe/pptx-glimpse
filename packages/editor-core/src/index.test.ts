@@ -270,6 +270,12 @@ describe("EditorSession text run property commands", () => {
       handle,
       properties: { fontSize: asPt(0) },
     });
+    const unsupportedSetProperty = session.apply({
+      kind: "setTextRunProperties",
+      handle,
+      // @ts-expect-error exercises runtime validation for JS callers.
+      properties: { strikethrough: true },
+    });
     const emptyClearProperties = session.apply({
       kind: "clearTextRunProperties",
       handle,
@@ -281,7 +287,13 @@ describe("EditorSession text run property commands", () => {
       properties: { bold: true },
     });
 
-    for (const result of [invalidHex, invalidFontSize, emptyClearProperties, missingHandle]) {
+    for (const result of [
+      invalidHex,
+      invalidFontSize,
+      unsupportedSetProperty,
+      emptyClearProperties,
+      missingHandle,
+    ]) {
       expect(result).toMatchObject({ ok: false, code: "invalid-command" });
     }
     expect(session.document).toBe(before);
@@ -322,6 +334,44 @@ describe("EditorSession text run property commands", () => {
       italic: false,
       fontSize: 20,
       color: { kind: "srgb", hex: "445566" },
+    });
+  });
+
+  it("preserves mixed clear and set edits from an existing edit journal during normalization", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const handle = requireHandle(firstRun(source).handle);
+    const sourceWithMixedEdit: PptxSourceModel = {
+      ...source,
+      edits: [
+        {
+          kind: "updateTextRunProperties",
+          handle,
+          clear: ["color"],
+          set: { color: { kind: "srgb", hex: "112233" } },
+        },
+      ],
+    };
+    const session = createEditorSession(sourceWithMixedEdit);
+    const edited = expectApplied(
+      session.apply({
+        kind: "setTextRunProperties",
+        handle,
+        properties: { bold: false },
+      }),
+    );
+    const propertyEdits =
+      edited.edits?.filter((edit) => edit.kind === "updateTextRunProperties") ?? [];
+    const reread = readPptx(writePptx(edited));
+
+    expect(propertyEdits).toHaveLength(2);
+    expect(propertyEdits[0]).toMatchObject({
+      set: { color: { kind: "srgb", hex: "112233" } },
+    });
+    expect(propertyEdits[0]?.clear).toBeUndefined();
+    expect(propertyEdits[1]).toMatchObject({ set: { bold: false } });
+    expect(firstRun(reread).properties).toMatchObject({
+      bold: false,
+      color: { kind: "srgb", hex: "112233" },
     });
   });
 

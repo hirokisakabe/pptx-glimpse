@@ -28,6 +28,7 @@ import {
   type XmlNode,
 } from "../reader/xml.js";
 import type {
+  EditableTextRunProperties,
   PartPath,
   PartRelationships,
   PptxSourceModel,
@@ -206,6 +207,7 @@ function applyTextRunPropertiesEdit(
   root: XmlNode,
   edit: PptxSourceModelTextRunPropertiesEdit,
 ): void {
+  assertTextRunPropertiesEdit(edit);
   const run = locateTextRun(root, edit.handle.nodeId);
 
   if (run === undefined) {
@@ -214,11 +216,16 @@ function applyTextRunPropertiesEdit(
     );
   }
 
-  const rPr = ensureRunProperties(run);
-  for (const property of edit.clear ?? []) {
-    clearRunProperty(rPr, property);
-  }
   const set = edit.set ?? {};
+  const hasSet = hasTextRunPropertiesSetValues(set);
+  const existingRunProperties = getChild(run, "rPr");
+  if (existingRunProperties === undefined && !hasSet) return;
+
+  const rPr = existingRunProperties ?? ensureRunProperties(run);
+  let cleared = false;
+  for (const property of edit.clear ?? []) {
+    cleared = clearRunProperty(rPr, property) || cleared;
+  }
   if (set.bold !== undefined) rPr["@_b"] = booleanOoxmlValue(set.bold);
   if (set.italic !== undefined) rPr["@_i"] = booleanOoxmlValue(set.italic);
   if (set.underline !== undefined) rPr["@_u"] = set.underline ? "sng" : "none";
@@ -231,6 +238,7 @@ function applyTextRunPropertiesEdit(
       },
     });
   }
+  if (!hasSet && cleared && xmlNodeIsEmpty(rPr)) deleteChild(run, "rPr");
 }
 
 function applyParagraphTextEdit(root: XmlNode, edit: PptxSourceModelParagraphTextEdit): void {
@@ -473,28 +481,33 @@ function ensureRunProperties(run: XmlNode): XmlNode {
 function clearRunProperty(
   rPr: XmlNode,
   property: NonNullable<PptxSourceModelTextRunPropertiesEdit["clear"]>[number],
-): void {
+): boolean {
   switch (property) {
     case "bold":
+      if (rPr["@_b"] === undefined) return false;
       delete rPr["@_b"];
-      break;
+      return true;
     case "italic":
+      if (rPr["@_i"] === undefined) return false;
       delete rPr["@_i"];
-      break;
+      return true;
     case "underline":
+      if (rPr["@_u"] === undefined) return false;
       delete rPr["@_u"];
-      break;
+      return true;
     case "fontSize":
+      if (rPr["@_sz"] === undefined) return false;
       delete rPr["@_sz"];
-      break;
+      return true;
     case "typeface": {
       const latin = getChild(rPr, "latin");
-      if (latin !== undefined) delete latin["@_typeface"];
-      break;
+      if (latin?.["@_typeface"] === undefined) return false;
+      delete latin["@_typeface"];
+      if (xmlNodeIsEmpty(latin)) deleteChild(rPr, "latin");
+      return true;
     }
     case "color":
-      deleteChild(rPr, "solidFill");
-      break;
+      return deleteChild(rPr, "solidFill");
   }
 }
 
@@ -520,15 +533,43 @@ function replaceChild(node: XmlNode, name: string, value: XmlNode): void {
   replaceNodeEntries(node, entries);
 }
 
-function deleteChild(node: XmlNode, name: string): void {
+function deleteChild(node: XmlNode, name: string): boolean {
+  let deleted = false;
   replaceNodeEntries(
     node,
-    Object.entries(node).filter(([key]) => key.startsWith("@_") || localName(key) !== name),
+    Object.entries(node).filter(([key]) => {
+      const keep = key.startsWith("@_") || localName(key) !== name;
+      if (!keep) deleted = true;
+      return keep;
+    }),
   );
+  return deleted;
 }
 
 function booleanOoxmlValue(value: boolean): string {
   return value ? "1" : "0";
+}
+
+function hasTextRunPropertiesSetValues(properties: EditableTextRunProperties): boolean {
+  return (
+    properties.bold !== undefined ||
+    properties.italic !== undefined ||
+    properties.underline !== undefined ||
+    properties.fontSize !== undefined ||
+    properties.color !== undefined ||
+    properties.typeface !== undefined
+  );
+}
+
+function assertTextRunPropertiesEdit(edit: PptxSourceModelTextRunPropertiesEdit): void {
+  const clear = edit.clear ?? [];
+  if (!hasTextRunPropertiesSetValues(edit.set ?? {}) && clear.length === 0) {
+    throw new Error("writePptx: text run properties edit must set or clear at least one property");
+  }
+}
+
+function xmlNodeIsEmpty(node: XmlNode): boolean {
+  return Object.keys(node).length === 0;
 }
 
 function replaceParagraphRunsWithSingleTextRun(paragraph: XmlNode, text: string): void {

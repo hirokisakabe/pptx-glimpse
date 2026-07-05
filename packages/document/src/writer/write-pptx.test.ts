@@ -519,6 +519,68 @@ describe("writePptx - text run property edits", () => {
     });
   });
 
+  it("Does not dirty a run when clearing properties that are already absent", () => {
+    const source = readPptx(buildSlotHandleTextEditFixture());
+    const edited = clearTextRunProperties(source, firstRun(source).handle!, ["bold"]);
+    const output = writePptx(edited);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+
+    expect(edited).toBe(source);
+    expect(slideXml).not.toContain("<a:rPr");
+    expect(firstRun(readPptx(output)).properties).toBeUndefined();
+  });
+
+  it("Removes an empty latin run property element when clearing typeface", () => {
+    const source = readPptx(
+      buildTextEditFixtureFromSlide(
+        `<p:sp><p:nvSpPr><p:cNvPr id="71" name="Typeface"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+          `<p:txBody><a:bodyPr/><a:lstStyle/>` +
+          `<a:p><a:r><a:rPr><a:latin typeface="Aptos"/></a:rPr><a:t>Original</a:t></a:r></a:p>` +
+          `</p:txBody></p:sp>`,
+      ),
+    );
+    const edited = clearTextRunProperties(source, firstRun(source).handle!, ["typeface"]);
+    const output = writePptx(edited);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+
+    expect(slideXml).not.toContain("<a:latin");
+    expect(slideXml).not.toContain("<a:rPr");
+    expect(firstRun(readPptx(output)).properties).toBeUndefined();
+  });
+
+  it("Rejects invalid direct text run property helper input", () => {
+    const source = readPptx(buildTextEditFixture());
+    const handle = firstRun(source).handle!;
+
+    expect(() => setTextRunProperties(source, handle, { fontSize: asPt(0) })).toThrow(
+      /fontSize must be a finite positive pt value/,
+    );
+    expect(() =>
+      // @ts-expect-error exercises runtime validation for JS callers.
+      setTextRunProperties(source, handle, { strikethrough: true }),
+    ).toThrow(/unsupported text run property 'strikethrough'/);
+    expect(() =>
+      // @ts-expect-error exercises runtime validation for JS callers.
+      clearTextRunProperties(source, handle, ["strikethrough"]),
+    ).toThrow(/unsupported text run property 'strikethrough'/);
+  });
+
+  it("Rejects no-op text run property edits constructed directly in an edit journal", () => {
+    const source = readPptx(buildTextEditFixture());
+    const edited = {
+      ...source,
+      edits: [
+        {
+          kind: "updateTextRunProperties",
+          handle: firstRun(source).handle!,
+        },
+      ],
+    } satisfies typeof source;
+
+    expect(() => writePptx(edited)).toThrow(/must set or clear at least one property/);
+  });
+
   it("Applies text and property edits to the same run in one write", () => {
     const source = readPptx(buildTextEditFixture());
     const handle = firstRun(source).handle!;

@@ -16,6 +16,19 @@ type TransformableShapeNode = Exclude<SourceShapeNode, { readonly kind: "raw" }>
 type MutableRunProperties = {
   -readonly [K in keyof SourceRunProperties]?: SourceRunProperties[K];
 };
+type MutableEditableTextRunProperties = {
+  -readonly [K in keyof EditableTextRunProperties]?: EditableTextRunProperties[K];
+};
+
+const EDITABLE_TEXT_RUN_PROPERTIES = [
+  "bold",
+  "italic",
+  "underline",
+  "fontSize",
+  "color",
+  "typeface",
+] as const satisfies readonly EditableTextRunProperty[];
+const EDITABLE_TEXT_RUN_PROPERTY_SET: ReadonlySet<string> = new Set(EDITABLE_TEXT_RUN_PROPERTIES);
 
 export function findTextRunBySourceHandle(
   source: PptxSourceModel,
@@ -184,11 +197,14 @@ function updateTextRunProperties(
   patch: UpdateTextRunPropertiesPatch,
 ): PptxSourceModel {
   assertEditableTextRunProperties(patch.set);
-  if (Object.values(patch.set).every((value) => value === undefined) && patch.clear.length === 0) {
+  assertEditableTextRunPropertyNames(patch.clear);
+  const set = definedEditableTextRunProperties(patch.set);
+  if (Object.values(set).every((value) => value === undefined) && patch.clear.length === 0) {
     throw new Error("updateTextRunProperties: patch must set or clear at least one property");
   }
 
-  let updated = false;
+  let found = false;
+  let changed = false;
 
   const slides = source.slides.map((slide) => ({
     ...slide,
@@ -200,10 +216,12 @@ function updateTextRunProperties(
         let paragraphChanged = false;
         const runs = paragraph.runs.map((run) => {
           if (!sourceHandlesEqual(run.handle, handle)) return run;
-          updated = true;
+          found = true;
+          const properties = patchTextRunProperties(run.properties, { set, clear: patch.clear });
+          if (textRunPropertiesEqual(run.properties, properties)) return run;
+          changed = true;
           paragraphChanged = true;
           shapeChanged = true;
-          const properties = patchTextRunProperties(run.properties, patch);
           return {
             kind: run.kind,
             text: run.text,
@@ -226,11 +244,12 @@ function updateTextRunProperties(
     }),
   }));
 
-  if (!updated) {
+  if (!found) {
     throw new Error(
       "updateTextRunProperties: text run handle was not found in PptxSourceModel source",
     );
   }
+  if (!changed) return source;
 
   return {
     ...source,
@@ -240,7 +259,7 @@ function updateTextRunProperties(
       {
         kind: "updateTextRunProperties",
         handle,
-        ...(Object.keys(patch.set).length > 0 ? { set: patch.set } : {}),
+        ...(Object.keys(set).length > 0 ? { set } : {}),
         ...(patch.clear.length > 0 ? { clear: patch.clear } : {}),
       },
     ],
@@ -360,6 +379,23 @@ function findParagraphInShape(
 }
 
 function assertEditableTextRunProperties(properties: EditableTextRunProperties): void {
+  for (const property of Object.keys(properties)) {
+    if (!EDITABLE_TEXT_RUN_PROPERTY_SET.has(property)) {
+      throw new Error(`updateTextRunProperties: unsupported text run property '${property}'`);
+    }
+  }
+  requireBooleanOrUndefined(properties.bold, "bold");
+  requireBooleanOrUndefined(properties.italic, "italic");
+  requireBooleanOrUndefined(properties.underline, "underline");
+  if (
+    properties.fontSize !== undefined &&
+    (!Number.isFinite(properties.fontSize) || properties.fontSize <= 0)
+  ) {
+    throw new Error("updateTextRunProperties: fontSize must be a finite positive pt value");
+  }
+  if (properties.typeface !== undefined && properties.typeface.trim() === "") {
+    throw new Error("updateTextRunProperties: typeface must be a non-empty string");
+  }
   if (properties.color !== undefined) {
     if (properties.color.kind !== "srgb") {
       throw new Error("updateTextRunProperties: only srgb text run color is supported");
@@ -368,6 +404,43 @@ function assertEditableTextRunProperties(properties: EditableTextRunProperties):
       throw new Error("updateTextRunProperties: srgb text run color must be a 6-digit hex value");
     }
   }
+}
+
+function requireBooleanOrUndefined(
+  value: boolean | undefined,
+  fieldName: "bold" | "italic" | "underline",
+): void {
+  if (value !== undefined && typeof value !== "boolean") {
+    throw new Error(`updateTextRunProperties: ${fieldName} must be a boolean value`);
+  }
+}
+
+function assertEditableTextRunPropertyNames(properties: readonly EditableTextRunProperty[]): void {
+  for (const property of properties) {
+    if (!EDITABLE_TEXT_RUN_PROPERTY_SET.has(property)) {
+      throw new Error(`updateTextRunProperties: unsupported text run property '${property}'`);
+    }
+  }
+}
+
+function definedEditableTextRunProperties(
+  properties: EditableTextRunProperties,
+): EditableTextRunProperties {
+  const defined: MutableEditableTextRunProperties = {};
+  if (properties.bold !== undefined) defined.bold = properties.bold;
+  if (properties.italic !== undefined) defined.italic = properties.italic;
+  if (properties.underline !== undefined) defined.underline = properties.underline;
+  if (properties.fontSize !== undefined) defined.fontSize = properties.fontSize;
+  if (properties.color !== undefined) defined.color = properties.color;
+  if (properties.typeface !== undefined) defined.typeface = properties.typeface;
+  return defined;
+}
+
+function textRunPropertiesEqual(
+  left: SourceRunProperties | undefined,
+  right: SourceRunProperties | undefined,
+): boolean {
+  return JSON.stringify(left ?? {}) === JSON.stringify(right ?? {});
 }
 
 function createReplacementRunHandle(paragraph: SourceParagraph): SourceHandle | undefined {
