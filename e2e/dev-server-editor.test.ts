@@ -172,6 +172,12 @@ describe("dev server editor API", () => {
         },
       });
       expect(decorated.history).toMatchObject({ canUndo: true, canRedo: false });
+      expect(decorated.slides[0].svg).toContain('data-bold="true"');
+      expect(decorated.slides[0].svg).toContain('data-italic="true"');
+      expect(decorated.slides[0].svg).toContain('data-underline="true"');
+      expect(decorated.slides[0].svg).toContain('data-font-size="32"');
+      expect(decorated.slides[0].svg).toContain('data-color="9C0000"');
+      expect(decorated.slides[0].svg).toContain('data-typeface="Liberation Sans"');
 
       const undone = await postJson<SlidesResponse>(`${baseUrl}/api/editor/undo`, {});
       expect(undone.history).toMatchObject({ canUndo: false, canRedo: true });
@@ -243,8 +249,23 @@ interface SaveResponse {
 function renderPreview(input: Uint8Array): Promise<Array<{ slideNumber: number; svg: string }>> {
   const source = readPptx(input);
   return Promise.resolve([
-    { slideNumber: 1, svg: `<svg><text>${escapeXml(firstRun(source))}</text></svg>` },
+    {
+      slideNumber: 1,
+      svg: `<svg><text${runPropertyAttrs(source)}>${escapeXml(firstRun(source))}</text></svg>`,
+    },
   ]);
+}
+
+function runPropertyAttrs(source: PptxSourceModel): string {
+  const properties = firstRunProperties(source);
+  return [
+    properties?.bold === undefined ? "" : ` data-bold="${String(properties.bold)}"`,
+    properties?.italic === undefined ? "" : ` data-italic="${String(properties.italic)}"`,
+    properties?.underline === undefined ? "" : ` data-underline="${String(properties.underline)}"`,
+    properties?.fontSize === undefined ? "" : ` data-font-size="${String(properties.fontSize)}"`,
+    properties?.color === undefined ? "" : ` data-color="${escapeXml(properties.color.hex)}"`,
+    properties?.typeface === undefined ? "" : ` data-typeface="${escapeXml(properties.typeface)}"`,
+  ].join("");
 }
 
 function escapeXml(value: string): string {
