@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
@@ -15,9 +16,19 @@ import { createDevServerRequestHandler, DevEditorBackend } from "../scripts/dev-
 import { unsafeScriptInputAssertion } from "../scripts/unsafe-type-assertion.js";
 
 const encoder = new TextEncoder();
+const RED_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEUlEQVR4nGP8z4AATEhsPBwAM9EBBzDn4UwAAAAASUVORK5CYII=";
+const BLUE_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGNkYPjPAANMcBZeDgAx0wEH1s7nlgAAAABJRU5ErkJggg==";
+const RED_PNG = pngBytes(RED_PNG_BASE64);
+const BLUE_PNG = pngBytes(BLUE_PNG_BASE64);
 
 function xml(content: string): Uint8Array {
   return encoder.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n${content}`);
+}
+
+function pngBytes(base64: string): Uint8Array {
+  return new Uint8Array(Buffer.from(base64, "base64"));
 }
 
 describe("dev server editor API", () => {
@@ -234,12 +245,73 @@ describe("dev server editor API", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it("applies image replacement commands with shared media warnings, undo, redo, and save", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-dev-server-image-test-"));
+    try {
+      const sourcePath = join(dir, "fixture.pptx");
+      const savedPath = join(dir, "saved.pptx");
+      await writeFile(sourcePath, await buildImageFixture());
+
+      const backend = await DevEditorBackend.load(sourcePath, renderImagePreview);
+      const server = createServer(createDevServerRequestHandler(backend, "fixture.pptx"));
+      servers.push(server);
+      const baseUrl = await listen(server);
+
+      const shapes = await getJson<ShapesResponse>(`${baseUrl}/api/editor/shapes?slide=1`);
+      const image = shapes.shapes.find((shape) => shape.kind === "image");
+      expect(image?.editableImageReplacement).toEqual({
+        contentType: "image/png",
+        accept: "image/png,.png",
+        mediaPartPath: "ppt/media/image1.png",
+        sharedReferenceCount: 2,
+      });
+
+      const rejected = await postJsonError(`${baseUrl}/api/editor/command`, {
+        command: {
+          kind: "replaceImage",
+          handle: shapes.shapes[0].handle,
+          bytes: [0xff, 0xd8, 0xff, 0xd9],
+        },
+      });
+      expect(rejected.error).toContain("does not match existing media content type");
+
+      const replaced = await postJson<SlidesResponse>(`${baseUrl}/api/editor/command`, {
+        command: {
+          kind: "replaceImage",
+          handle: image?.handle,
+          bytes: Array.from(BLUE_PNG),
+        },
+      });
+      expect(replaced.slides[0].svg).toContain(BLUE_PNG_BASE64);
+      expect(replaced.warnings).toEqual([
+        expect.objectContaining({
+          code: "shared-media-part",
+          mediaPartPath: "ppt/media/image1.png",
+          referenceCount: 2,
+        }),
+      ]);
+
+      const undone = await postJson<SlidesResponse>(`${baseUrl}/api/editor/undo`, {});
+      expect(undone.slides[0].svg).toContain(RED_PNG_BASE64);
+      const redone = await postJson<SlidesResponse>(`${baseUrl}/api/editor/redo`, {});
+      expect(redone.slides[0].svg).toContain(BLUE_PNG_BASE64);
+
+      await postJson<SaveResponse>(`${baseUrl}/api/editor/save`, { path: savedPath });
+      expect(mediaBytes(readPptx(await readFile(savedPath)), "ppt/media/image1.png")).toEqual(
+        BLUE_PNG,
+      );
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 interface ShapesResponse {
   shapes: Array<{
     handle: unknown;
     id: string;
+    kind: string;
     name?: string;
     bounds?: { x: number; y: number; width: number; height: number };
     textRuns: Array<{ text: string; handle: unknown }>;
@@ -253,12 +325,23 @@ interface ShapesResponse {
         }>;
       };
     };
+    editableImageReplacement?: {
+      contentType: string;
+      accept: string;
+      mediaPartPath: string;
+      sharedReferenceCount: number;
+    };
   }>;
 }
 
 interface SlidesResponse {
   slides: Array<{ slideNumber: number; svg: string }>;
   history: { canUndo: boolean; canRedo: boolean };
+  warnings?: Array<{
+    code: string;
+    mediaPartPath: string;
+    referenceCount: number;
+  }>;
 }
 
 interface SaveResponse {
@@ -272,6 +355,20 @@ function renderPreview(input: Uint8Array): Promise<Array<{ slideNumber: number; 
     {
       slideNumber: 1,
       svg: `<svg><text${runPropertyAttrs(source)}>${escapeXml(firstRun(source))}</text></svg>`,
+    },
+  ]);
+}
+
+function renderImagePreview(
+  input: Uint8Array,
+): Promise<Array<{ slideNumber: number; svg: string }>> {
+  const source = readPptx(input);
+  return Promise.resolve([
+    {
+      slideNumber: 1,
+      svg: `<svg><image href="data:image/png;base64,${Buffer.from(
+        mediaBytes(source, "ppt/media/image1.png"),
+      ).toString("base64")}"/></svg>`,
     },
   ]);
 }
@@ -406,6 +503,73 @@ async function buildTextEditFixture(): Promise<Uint8Array> {
   return zip.generateAsync({ type: "uint8array" });
 }
 
+async function buildImageFixture(): Promise<Uint8Array> {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    xml(
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Default Extension="png" ContentType="image/png"/>` +
+        `<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>` +
+        `<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+        `</Types>`,
+    ),
+  );
+  zip.file(
+    "_rels/.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file(
+    "ppt/presentation.xml",
+    xml(
+      `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:sldIdLst><p:sldId id="256" r:id="rIdSlide1"/></p:sldIdLst>` +
+        `<p:sldSz cx="9144000" cy="5143500"/>` +
+        `</p:presentation>`,
+    ),
+  );
+  zip.file(
+    "ppt/_rels/presentation.xml.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdSlide1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file(
+    "ppt/slides/slide1.xml",
+    xml(
+      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:cSld><p:spTree>` +
+        `<p:pic><p:nvPicPr><p:cNvPr id="20" name="Shared Picture A"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+        `<p:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+        `<p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:pic>` +
+        `<p:pic><p:nvPicPr><p:cNvPr id="21" name="Shared Picture B"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+        `<p:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+        `<p:spPr><a:xfrm><a:off x="1828800" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:pic>` +
+        `</p:spTree></p:cSld>` +
+        `</p:sld>`,
+    ),
+  );
+  zip.file(
+    "ppt/slides/_rels/slide1.xml.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file("ppt/media/image1.png", RED_PNG);
+
+  return zip.generateAsync({ type: "uint8array" });
+}
+
 function firstRun(source: PptxSourceModel): string {
   const shape = source.slides[0].shapes.find((node): node is SourceShape => node.kind === "shape");
   const run = shape?.textBody?.paragraphs[0].runs[0];
@@ -418,4 +582,10 @@ function firstRunProperties(source: PptxSourceModel) {
   const run = shape?.textBody?.paragraphs[0].runs[0];
   if (run === undefined) throw new Error("fixture text run not found");
   return run.properties;
+}
+
+function mediaBytes(source: PptxSourceModel, partPath: string): Uint8Array {
+  const media = source.packageGraph.media.find((part) => part.partPath === partPath);
+  if (media === undefined) throw new Error(`media not found: ${partPath}`);
+  return media.bytes;
 }

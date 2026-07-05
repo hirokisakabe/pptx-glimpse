@@ -9,6 +9,7 @@ import { type ConvertOptions, convertPptxToSvg as convertPptxToSvgBase } from ".
 
 export type {
   BrowserEditorHistoryState,
+  BrowserEditorImageReplacementInfo,
   BrowserEditorRenderOptions,
   BrowserEditorSaveResponse,
   BrowserEditorSelectionInfo,

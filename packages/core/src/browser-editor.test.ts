@@ -69,6 +69,12 @@ describe("BrowserPptxEditorSession", () => {
     });
     const image = editor.shapes(1).find((shape) => shape.kind === "image");
     if (image?.handle === undefined) throw new Error("image handle not found");
+    expect(image.editableImageReplacement).toEqual({
+      contentType: "image/png",
+      accept: "image/png,.png",
+      mediaPartPath: "ppt/media/image1.png",
+      sharedReferenceCount: 2,
+    });
 
     const result = await editor.apply({
       kind: "replaceImage",
@@ -84,6 +90,16 @@ describe("BrowserPptxEditorSession", () => {
       }),
     ]);
     expect(mediaBytes(editor.document, "ppt/media/image1.png")).toEqual(BLUE_PNG);
+  });
+
+  it("counts unparsed image relationships in image replacement metadata", async () => {
+    const editor = await createBrowserPptxEditorSession(
+      await buildImageFixture({ includeUnusedImageRelationship: true }),
+      { skipSystemFonts: true },
+    );
+    const image = editor.shapes(1).find((shape) => shape.kind === "image");
+
+    expect(image?.editableImageReplacement?.sharedReferenceCount).toBe(3);
   });
 });
 
@@ -152,7 +168,9 @@ async function buildShapeFixture(): Promise<Uint8Array> {
   return zip.generateAsync({ type: "uint8array" });
 }
 
-async function buildImageFixture(): Promise<Uint8Array> {
+async function buildImageFixture(
+  options: { readonly includeUnusedImageRelationship?: boolean } = {},
+): Promise<Uint8Array> {
   const zip = new JSZip();
   zip.file(
     "[Content_Types].xml",
@@ -211,6 +229,9 @@ async function buildImageFixture(): Promise<Uint8Array> {
     xml(
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
         `<Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>` +
+        (options.includeUnusedImageRelationship === true
+          ? `<Relationship Id="rIdUnusedImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>`
+          : "") +
         `</Relationships>`,
     ),
   );

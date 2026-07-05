@@ -17,8 +17,13 @@ import {
   type EditableTextRunProperties,
   type EditableTextRunProperty,
   findShapeNodeBySourceHandle,
+  type MediaPart,
+  type PartPath,
   readPptx,
+  type Relationship,
+  type RelationshipId,
   type SourceHandle,
+  type SourceImage,
   type SourceShapeNode,
   type SourceTextBody,
   type SourceTextRun,
@@ -27,6 +32,7 @@ import {
 import {
   createEditorSession,
   type EditorCommand,
+  type EditorCommandWarning,
   type PptxTextBodyProseMirrorDocJson,
   proseMirrorDocJsonToEditorCommands,
   textBodyToProseMirrorDocJson,
@@ -41,6 +47,18 @@ const RENDER_TIMEOUT_MS = 30_000;
 const MAX_BUFFER = 50 * 1024 * 1024;
 const EMU_PER_INCH = 914400;
 const DEFAULT_DPI = 96;
+const IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+const MAX_JSON_BODY_BYTES = 20 * 1024 * 1024;
+const MAX_IMAGE_REPLACEMENT_BYTES = 5 * 1024 * 1024;
+
+const IMAGE_ACCEPT_BY_CONTENT_TYPE: Readonly<Record<string, string>> = {
+  "image/png": "image/png,.png",
+  "image/jpeg": "image/jpeg,.jpg,.jpeg",
+  "image/gif": "image/gif,.gif",
+  "image/bmp": "image/bmp,.bmp",
+  "image/tiff": "image/tiff,.tif,.tiff",
+  "image/webp": "image/webp,.webp",
+};
 
 const execFileAsync = promisify(execFile);
 
@@ -72,6 +90,13 @@ interface EditorTextBodyInfo {
   docJson: PptxTextBodyProseMirrorDocJson;
 }
 
+interface EditorImageReplacementInfo {
+  contentType: string;
+  accept: string;
+  mediaPartPath: string;
+  sharedReferenceCount: number;
+}
+
 interface EditorShapeInfo {
   id: string;
   kind: SourceShapeNode["kind"];
@@ -81,12 +106,14 @@ interface EditorShapeInfo {
   editableTransform?: boolean;
   textRuns?: EditorTextRunInfo[];
   editableTextBody?: EditorTextBodyInfo;
+  editableImageReplacement?: EditorImageReplacementInfo;
 }
 
 interface EditorSlidesResponse {
   slides: SlideSvg[];
   history: EditorHistoryState;
   selection?: EditorSelectionInfo;
+  warnings?: readonly EditorCommandWarning[];
 }
 
 interface EditorSaveResponse {
@@ -166,18 +193,19 @@ export class DevEditorBackend {
     return this.#session.selection;
   }
 
-  response(): EditorSlidesResponse {
+  response(warnings?: readonly EditorCommandWarning[]): EditorSlidesResponse {
     return {
       slides: this.#slides,
       history: this.history,
       ...(this.selection !== undefined ? { selection: this.selection } : {}),
+      ...(warnings !== undefined && warnings.length > 0 ? { warnings } : {}),
     };
   }
 
   shapes(slideNumber: number): EditorShapeInfo[] {
     const slide = this.#session.document.slides[slideNumber - 1];
     if (slide === undefined) return [];
-    return slide.shapes.flatMap((shape, index) => shapeInfo(shape, index));
+    return slide.shapes.flatMap((shape, index) => shapeInfo(this.#session.document, shape, index));
   }
 
   async renderCurrentSlides(): Promise<readonly SlideSvg[]> {
@@ -202,7 +230,7 @@ export class DevEditorBackend {
       }
       this.#dirty = true;
       await this.renderCurrentSlides();
-      return this.response();
+      return this.response(result.warnings);
     });
   }
 
@@ -330,6 +358,7 @@ function isNodeError(error: unknown): error is NodeJS.ErrnoException {
 }
 
 function shapeInfo(
+  source: ReturnType<typeof readPptx>,
   shape: SourceShapeNode,
   index: number,
   editableTransform = true,
@@ -355,12 +384,13 @@ function shapeInfo(
     ...(shape.kind === "shape" && shape.textBody !== undefined && shape.transform !== undefined
       ? editableTextBody(shape.textBody)
       : {}),
+    ...(shape.kind === "image" ? editableImageReplacement(source, shape) : {}),
   };
 
   if (shape.kind !== "group") return [base];
   return [
     base,
-    ...shape.children.flatMap((child, childIndex) => shapeInfo(child, childIndex, false)),
+    ...shape.children.flatMap((child, childIndex) => shapeInfo(source, child, childIndex, false)),
   ];
 }
 
@@ -390,6 +420,174 @@ function editableTextBody(
   } catch {
     return {};
   }
+}
+
+function editableImageReplacement(
+  source: ReturnType<typeof readPptx>,
+  image: SourceImage,
+): Partial<Pick<EditorShapeInfo, "editableImageReplacement">> {
+  const media = imageMediaPart(source, image);
+  if (media === undefined) return {};
+  const accept = IMAGE_ACCEPT_BY_CONTENT_TYPE[media.contentType];
+  if (accept === undefined) return {};
+
+  return {
+    editableImageReplacement: {
+      contentType: media.contentType,
+      accept,
+      mediaPartPath: media.partPath,
+      sharedReferenceCount: countImageReferencesToMedia(source, media.partPath),
+    },
+  };
+}
+
+function imageMediaPart(
+  source: ReturnType<typeof readPptx>,
+  image: SourceImage,
+): MediaPart | undefined {
+  if (image.blipRelationshipId === undefined || image.handle?.partPath === undefined) {
+    return undefined;
+  }
+  const mediaPartPath = imageMediaPartPath(source, image.handle.partPath, image.blipRelationshipId);
+  if (mediaPartPath === undefined) return undefined;
+  return source.packageGraph.media.find((part) => part.partPath === mediaPartPath);
+}
+
+function imageMediaPartPath(
+  source: ReturnType<typeof readPptx>,
+  sourcePartPath: PartPath,
+  relationshipId: RelationshipId,
+): PartPath | undefined {
+  const relationships = source.packageGraph.relationships.find(
+    (candidate) => candidate.sourcePartPath === sourcePartPath,
+  );
+  const relationship = relationships?.relationships.find(
+    (candidate) => candidate.id === relationshipId && candidate.type === IMAGE_REL_TYPE,
+  );
+  if (relationship === undefined) return undefined;
+  return resolveInternalRelationshipTarget(sourcePartPath, relationship);
+}
+
+function countImageReferencesToMedia(
+  source: ReturnType<typeof readPptx>,
+  mediaPartPath: PartPath,
+): number {
+  const parsedImageRelationshipKeys = new Set<string>();
+  let count = 0;
+  for (const slide of source.slides) {
+    count += countImageReferencesInTree(
+      source,
+      slide.partPath,
+      slide.shapes,
+      mediaPartPath,
+      parsedImageRelationshipKeys,
+    );
+  }
+  for (const layout of source.slideLayouts) {
+    count += countImageReferencesInTree(
+      source,
+      layout.partPath,
+      layout.shapes,
+      mediaPartPath,
+      parsedImageRelationshipKeys,
+    );
+  }
+  for (const master of source.slideMasters) {
+    count += countImageReferencesInTree(
+      source,
+      master.partPath,
+      master.shapes,
+      mediaPartPath,
+      parsedImageRelationshipKeys,
+    );
+  }
+
+  for (const relationships of source.packageGraph.relationships) {
+    for (const relationship of relationships.relationships) {
+      if (relationship.type !== IMAGE_REL_TYPE) continue;
+      if (
+        parsedImageRelationshipKeys.has(
+          imageRelationshipKey(relationships.sourcePartPath, relationship.id),
+        )
+      ) {
+        continue;
+      }
+      if (
+        resolveInternalRelationshipTarget(relationships.sourcePartPath, relationship) ===
+        mediaPartPath
+      ) {
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
+
+function countImageReferencesInTree(
+  source: ReturnType<typeof readPptx>,
+  sourcePartPath: PartPath,
+  shapes: readonly SourceShapeNode[],
+  mediaPartPath: PartPath,
+  parsedImageRelationshipKeys: Set<string>,
+): number {
+  let count = 0;
+  for (const shape of shapes) {
+    if (shape.kind === "group") {
+      count += countImageReferencesInTree(
+        source,
+        sourcePartPath,
+        shape.children,
+        mediaPartPath,
+        parsedImageRelationshipKeys,
+      );
+      continue;
+    }
+    if (shape.kind !== "image" || shape.blipRelationshipId === undefined) continue;
+    if (imageMediaPartPath(source, sourcePartPath, shape.blipRelationshipId) === mediaPartPath) {
+      count += 1;
+      parsedImageRelationshipKeys.add(
+        imageRelationshipKey(sourcePartPath, shape.blipRelationshipId),
+      );
+    }
+  }
+  return count;
+}
+
+function imageRelationshipKey(partPath: PartPath, relationshipId: RelationshipId): string {
+  return `${partPath}\0${relationshipId}`;
+}
+
+function resolveInternalRelationshipTarget(
+  sourcePartPath: PartPath,
+  relationship: Relationship,
+): PartPath | undefined {
+  if (relationship.targetMode === "External") return undefined;
+  return unsafeScriptInputAssertion<PartPath>(
+    normalizePackagePath(
+      relationship.target.startsWith("/")
+        ? relationship.target.slice(1)
+        : joinPackageRelativeTarget(sourcePartPath, relationship.target),
+    ),
+  );
+}
+
+function joinPackageRelativeTarget(sourcePartPath: string, target: string): string {
+  const slash = sourcePartPath.lastIndexOf("/");
+  const baseDir = slash === -1 ? "" : sourcePartPath.slice(0, slash);
+  return baseDir === "" ? target : `${baseDir}/${target}`;
+}
+
+function normalizePackagePath(path: string): string {
+  const segments: string[] = [];
+  for (const segment of path.split("/")) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") {
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+  return segments.join("/");
 }
 
 function transformBoundsPx(transform: {
@@ -703,6 +901,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       <label>Text run<select id="text-run-select"></select></label>
       <label>Text<input id="text-run-input" type="text"></label>
       <button id="apply-text-button" type="button">Apply</button>
+      <label>Image<input id="image-replacement-input" data-testid="image-replacement-input" type="file" disabled></label>
       <div id="editor-actions">
         <button id="undo-button" type="button">Undo</button>
         <button id="redo-button" type="button">Redo</button>
@@ -743,6 +942,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       textRunOptions = [];
       selectedShape = null;
       if (slideChanged) selectedShapeKey = null;
+      syncImageReplacementInput();
       var thumbs = document.querySelectorAll(".thumbnail");
       for (var i = 0; i < thumbs.length; i++) {
         if (i === index) {
@@ -819,15 +1019,19 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         }
       }
       if (!selectedShape) selectedShapeKey = null;
+      syncImageReplacementInput();
       renderSelectionOverlay();
     }
 
     function cloneShape(shape) {
       return {
         id: shape.id,
+        kind: shape.kind,
         name: shape.name,
         handle: shape.handle,
+        editableTransform: shape.editableTransform,
         editableTextBody: shape.editableTextBody,
+        editableImageReplacement: shape.editableImageReplacement,
         bounds: {
           x: shape.bounds.x,
           y: shape.bounds.y,
@@ -853,7 +1057,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         .then(function (data) {
           if (requestId !== shapeRequestId || slideNumber !== currentIndex + 1) return;
           shapeOptions = (data.shapes || []).filter(function (shape) {
-            return shape.handle && shape.bounds && shape.editableTransform;
+            return shape.handle && shape.bounds && (shape.editableTransform || shape.editableImageReplacement);
           });
           textRunOptions = [];
           data.shapes.forEach(function (shape) {
@@ -875,6 +1079,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
           document.getElementById("apply-text-button").disabled = textRunOptions.length === 0;
           syncTextInput();
           syncSelection();
+          syncImageReplacementInput();
         })
         .catch(function (err) {
           setEditorMessage(err.message, true);
@@ -945,23 +1150,25 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         setRectAttributes(box, selectedShape.bounds);
         overlay.appendChild(box);
 
-        ["nw", "ne", "sw", "se"].forEach(function (handle) {
-          var point = handlePoint(selectedShape.bounds, handle);
-          var rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-          rect.setAttribute("class", "selection-handle");
-          rect.setAttribute("data-testid", "selection-handle-" + handle);
-          rect.setAttribute("data-handle", handle);
-          rect.setAttribute("x", String(point.x - 4));
-          rect.setAttribute("y", String(point.y - 4));
-          rect.setAttribute("width", "8");
-          rect.setAttribute("height", "8");
-          rect.addEventListener("pointerdown", function (event) {
-            event.preventDefault();
-            event.stopPropagation();
-            beginDrag("resize", handle, event);
+        if (selectedShape.editableTransform) {
+          ["nw", "ne", "sw", "se"].forEach(function (handle) {
+            var point = handlePoint(selectedShape.bounds, handle);
+            var rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            rect.setAttribute("class", "selection-handle");
+            rect.setAttribute("data-testid", "selection-handle-" + handle);
+            rect.setAttribute("data-handle", handle);
+            rect.setAttribute("x", String(point.x - 4));
+            rect.setAttribute("y", String(point.y - 4));
+            rect.setAttribute("width", "8");
+            rect.setAttribute("height", "8");
+            rect.addEventListener("pointerdown", function (event) {
+              event.preventDefault();
+              event.stopPropagation();
+              beginDrag("resize", handle, event);
+            });
+            overlay.appendChild(rect);
           });
-          overlay.appendChild(rect);
-        });
+        }
       }
 
       container.appendChild(overlay);
@@ -995,7 +1202,8 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       }
       selectedShapeKey = shapeKey(shape);
       selectedShape = cloneShape(shape);
-      beginDrag("move", null, event);
+      syncImageReplacementInput();
+      if (shape.editableTransform) beginDrag("move", null, event);
       window.setTimeout(renderSelectionOverlay, 0);
       postJson("/api/editor/select", { handle: shape.handle })
         .then(function (data) {
@@ -1003,6 +1211,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
           if (data.selection && data.selection.shapeHandle) {
             selectedShapeKey = handleKey(data.selection.shapeHandle);
           }
+          syncImageReplacementInput();
           renderSelectionOverlay();
         })
         .catch(function (err) {
@@ -1013,6 +1222,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     function selectShapeAfterCommit(shape) {
       selectedShapeKey = shapeKey(shape);
       selectedShape = cloneShape(shape);
+      syncImageReplacementInput();
       renderSelectionOverlay();
       postJson("/api/editor/select", { handle: shape.handle })
         .then(function (data) {
@@ -1020,6 +1230,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
           if (data.selection && data.selection.shapeHandle) {
             selectedShapeKey = handleKey(data.selection.shapeHandle);
           }
+          syncImageReplacementInput();
           renderSelectionOverlay();
         })
         .catch(function (err) {
@@ -1674,7 +1885,9 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     }
 
     function applyShapeBoundsEdit(startBounds, nextBounds) {
-      if (!selectedShape || !selectedShape.handle) return Promise.resolve();
+      if (!selectedShape || !selectedShape.handle || !selectedShape.editableTransform) {
+        return Promise.resolve();
+      }
       var handle = selectedShape.handle;
       var changed =
         Math.round(startBounds.x) !== Math.round(nextBounds.x) ||
@@ -1697,6 +1910,64 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
           setEditorMessage("Applied", false);
         }
       });
+    }
+
+    function syncImageReplacementInput() {
+      var input = document.getElementById("image-replacement-input");
+      if (!input) return;
+      var replacement = selectedShape && selectedShape.editableImageReplacement;
+      input.disabled = !replacement;
+      input.value = "";
+      if (replacement) {
+        input.setAttribute("accept", replacement.accept);
+        input.title =
+          "Replace " + replacement.mediaPartPath + " with another " + replacement.contentType + " image";
+      } else {
+        input.removeAttribute("accept");
+        input.title = "Select an image shape to replace its media";
+      }
+    }
+
+    function replaceSelectedImage(file) {
+      if (!selectedShape || !selectedShape.handle || !selectedShape.editableImageReplacement) {
+        setEditorMessage("Select an image shape before replacing media.", true);
+        return Promise.resolve();
+      }
+      if (file.size > ${String(MAX_IMAGE_REPLACEMENT_BYTES)}) {
+        setEditorMessage("Replacement image is too large.", true);
+        return Promise.resolve();
+      }
+      var handle = selectedShape.handle;
+      var input = document.getElementById("image-replacement-input");
+      if (input) input.disabled = true;
+      return file.arrayBuffer()
+        .then(function (buffer) {
+          return postJson("/api/editor/command", {
+            command: {
+              kind: "replaceImage",
+              handle: handle,
+              bytes: Array.from(new Uint8Array(buffer))
+            }
+          });
+        })
+        .then(function (data) {
+          applyEditorResponse(data);
+          setEditorMessage(imageReplacementMessage(data), false);
+        });
+    }
+
+    function imageReplacementMessage(data) {
+      var warnings = (data && data.warnings) || [];
+      var shared = warnings.find(function (warning) {
+        return warning.code === "shared-media-part";
+      });
+      if (!shared) return "Image replaced";
+      return (
+        "Image replaced; shared media part affects " +
+        shared.referenceCount +
+        " pictures: " +
+        shared.mediaPartPath
+      );
     }
 
     function postJson(url, payload) {
@@ -1725,6 +1996,18 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     loadShapeOptions(1);
 
     document.getElementById("text-run-select").addEventListener("change", syncTextInput);
+    document.getElementById("image-replacement-input").addEventListener("change", function () {
+      var input = document.getElementById("image-replacement-input");
+      var file = input && input.files ? input.files[0] : null;
+      if (!file) return;
+      replaceSelectedImage(file)
+        .catch(function (err) {
+          setEditorMessage(err.message, true);
+        })
+        .finally(function () {
+          syncImageReplacementInput();
+        });
+    });
     document.getElementById("apply-text-button").addEventListener("click", function () {
       var option = textRunOptions[Number(document.getElementById("text-run-select").value || "0")];
       if (!option) return;
@@ -1948,7 +2231,7 @@ function readJsonBody(req: IncomingMessage): Promise<unknown> {
     req.setEncoding("utf8");
     req.on("data", (chunk: string) => {
       raw += chunk;
-      if (raw.length > 1024 * 1024) {
+      if (raw.length > MAX_JSON_BODY_BYTES) {
         req.destroy(new Error("Request body is too large"));
       }
     });
@@ -2019,7 +2302,29 @@ function normalizeCommand(command: unknown): EditorCommand {
       height: asEmu(requireFiniteNumber(command.height, "setShapeTransform.height")),
     };
   }
+  if (command.kind === "replaceImage") {
+    return {
+      kind: "replaceImage",
+      handle: normalizeHandle(command.handle),
+      bytes: normalizeByteArray(command.bytes, "replaceImage.bytes"),
+    };
+  }
   throw new Error("unsupported command kind");
+}
+
+function normalizeByteArray(value: unknown, field: string): Uint8Array {
+  if (!Array.isArray(value)) throw new Error(`${field} must be an array of bytes`);
+  if (value.length > MAX_IMAGE_REPLACEMENT_BYTES) {
+    throw new Error(`${field} must not exceed ${String(MAX_IMAGE_REPLACEMENT_BYTES)} bytes`);
+  }
+  return new Uint8Array(
+    value.map((byte, index) => {
+      if (!Number.isInteger(byte) || byte < 0 || byte > 255) {
+        throw new Error(`${field}[${String(index)}] must be an integer byte`);
+      }
+      return byte;
+    }),
+  );
 }
 
 function normalizeTextRunProperties(value: unknown): EditableTextRunProperties {
