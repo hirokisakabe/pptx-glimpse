@@ -878,7 +878,14 @@ describe("writePptx - shape add/delete edits", () => {
         end: { shapeId: "30", connectionSiteIndex: 3 },
       },
       geometry: { preset: "bentConnector3" },
-      outline: { tailEnd: { type: "triangle", width: "med", length: "lg" } },
+      outline: {
+        fill: { kind: "solid", color: { kind: "srgb", hex: "000000" } },
+        tailEnd: { type: "triangle", width: "med", length: "lg" },
+      },
+    });
+    expect(findConnectorByName(edited, "Connector 31").outline).toMatchObject({
+      fill: { kind: "solid", color: { kind: "srgb", hex: "000000" } },
+      tailEnd: { type: "triangle", width: "med", length: "lg" },
     });
     expect(slideXml).toContain(`<p:cxnSp>`);
     expect(slideXml).toContain(`<a:stCxn id="10" idx="1"`);
@@ -886,6 +893,31 @@ describe("writePptx - shape add/delete edits", () => {
     expect(slideXml).toContain(`<a:prstGeom prst="bentConnector3"`);
     expect(slideXml).toContain(`<a:tailEnd type="triangle" w="med" len="lg"`);
     expect(decoder.decode(getEntry(output, "docProps/custom.xml"))).toContain("preserve-me");
+  });
+
+  it("rejects deleting a shape referenced by a connector", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const start = findShapeByName(source, "Delete Me");
+    const end = findShapeByName(source, "Keep Shape");
+    const withConnector = addConnector(source, source.slides[0].handle!, {
+      preset: "straightConnector1",
+      offsetX: asEmu(100),
+      offsetY: asEmu(200),
+      width: asEmu(700),
+      height: asEmu(800),
+      start: {
+        shapeHandle: requireHandle(start.handle),
+        connectionSiteIndex: 1,
+      },
+      end: {
+        shapeHandle: requireHandle(end.handle),
+        connectionSiteIndex: 3,
+      },
+    });
+
+    expect(() => deleteShape(withConnector, requireHandle(start.handle))).toThrow(
+      /referenced by connector/,
+    );
   });
 
   it("allows an added text box to be edited before write", () => {

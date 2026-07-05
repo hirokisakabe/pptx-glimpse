@@ -16,6 +16,7 @@ import type {
   SourceConnector,
   SourceHandle,
   SourceNodeId,
+  SourceOutline,
   SourceParagraph,
   SourceRunProperties,
   SourceShape,
@@ -71,6 +72,9 @@ const CONNECTOR_PRESETS: ReadonlySet<ConnectorPresetGeometry> = new Set([
 ]);
 const ARROW_TYPES = new Set(["triangle", "stealth", "diamond", "oval", "arrow"]);
 const ARROW_SIZES = new Set(["sm", "med", "lg"]);
+const DEFAULT_CONNECTOR_OUTLINE: SourceOutline = {
+  fill: { kind: "solid", color: { kind: "srgb", hex: "000000" } },
+};
 
 export function findTextRunBySourceHandle(
   source: PptxSourceModel,
@@ -673,6 +677,13 @@ export function deleteShape(source: PptxSourceModel, handle: SourceHandle): Pptx
     throw new Error("deleteShape: shape handle was not found in PptxSourceModel source");
   }
 
+  const referencingConnector = findConnectorReferencingShape(source, handle);
+  if (referencingConnector !== undefined) {
+    throw new Error(
+      `deleteShape: shape is referenced by connector '${referencingConnector.name ?? referencingConnector.nodeId ?? "unknown"}'`,
+    );
+  }
+
   const retainedEdits = (source.edits ?? []).filter((edit) => !editTargetsShape(edit, handle));
   const deletedInsertedShape = (source.edits ?? []).some(
     (edit) =>
@@ -1211,8 +1222,16 @@ function createConnectorShape(
     },
     transform,
     geometry: { preset: input.preset },
-    ...(input.outline !== undefined ? { outline: input.outline } : {}),
+    outline: createConnectorOutline(input.outline),
     handle: { partPath, nodeId: shapeId, orderingSlot },
+  };
+}
+
+function createConnectorOutline(input: AddConnectorOutlineInput | undefined): SourceOutline {
+  return {
+    ...DEFAULT_CONNECTOR_OUTLINE,
+    ...(input?.headEnd !== undefined ? { headEnd: input.headEnd } : {}),
+    ...(input?.tailEnd !== undefined ? { tailEnd: input.tailEnd } : {}),
   };
 }
 
@@ -1314,6 +1333,26 @@ function hasNestedShapeNodeWithHandle(
 function hasAlternateContentSidecar(shape: SourceShapeNode): boolean {
   if (shape.kind === "raw") return false;
   return shape.rawSidecars?.some((sidecar) => sidecar.node.name === "mc:AlternateContent") ?? false;
+}
+
+function findConnectorReferencingShape(
+  source: PptxSourceModel,
+  handle: SourceHandle,
+): SourceConnector | undefined {
+  if (handle.nodeId === undefined) return undefined;
+  for (const slide of source.slides) {
+    if (slide.partPath !== handle.partPath) continue;
+    for (const shape of slide.shapes) {
+      if (shape.kind !== "connector") continue;
+      if (
+        shape.connection?.start?.shapeId === handle.nodeId ||
+        shape.connection?.end?.shapeId === handle.nodeId
+      ) {
+        return shape;
+      }
+    }
+  }
+  return undefined;
 }
 
 function sourceHandlesEqual(left: SourceHandle | undefined, right: SourceHandle): boolean {
