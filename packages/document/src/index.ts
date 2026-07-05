@@ -4,7 +4,7 @@
  * This surface is limited to the PptxSourceModel foundation that current
  * conversion, writer, and minimal editing workflows are allowed to depend on:
  * source model types, the PPTX reader, computed view generation, the writer,
- * and the narrow plain text-run edit operation.
+ * and focused text / shape / slide topology editing operations.
  *
  * Keep parser helpers, raw replacement/editing APIs, writer dirty-scope
  * implementation details, and other OOXML internals behind their owning
@@ -55,6 +55,7 @@ export { createComputedView } from "./computed/index.js";
 export type { ReadPptxInput } from "./reader/index.js";
 export { readPptx } from "./reader/index.js";
 export type {
+  AddEmptySlideFromLayoutInput,
   AddTextBoxInput,
   ContentTypeDefault,
   ContentTypeOverride,
@@ -73,6 +74,7 @@ export type {
   PartPath,
   PartRelationships,
   PptxSourceModel,
+  PptxSourceModelAddEmptySlideFromLayoutEdit,
   PptxSourceModelAddTextBoxEdit,
   PptxSourceModelDeleteShapeEdit,
   PptxSourceModelDeleteSlideEdit,
@@ -172,6 +174,7 @@ export type {
   UpdateShapeTransformInput,
 } from "./source/index.js";
 export {
+  addEmptySlideFromLayout,
   addTextBox,
   clearTextRunProperties,
   deleteShape,

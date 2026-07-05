@@ -204,6 +204,13 @@ function readSlideHierarchy(
       ),
     );
   }
+  for (const masterPath of resolveAllRels(
+    relationships,
+    presentation.partPath,
+    SLIDE_MASTER_REL_TYPE,
+  )) {
+    masterPaths.add(masterPath);
+  }
 
   const slideMasters: SourceSlideMaster[] = [];
   const themePaths = new OrderedPathSet();
@@ -223,6 +230,24 @@ function readSlideHierarchy(
         navigateOrdered(part.orderedRoot, ["cSld", "spTree"]),
       ),
     );
+  }
+
+  const readLayoutPaths = new Set(slideLayouts.map((layout) => layout.partPath));
+  for (const layoutPath of slideMasters.flatMap((master) => master.layoutPartPaths)) {
+    if (readLayoutPaths.has(layoutPath)) continue;
+    const part = parsePartRoot(entries, layoutPath, "sldLayout", diagnostics, true);
+    if (part === undefined) continue;
+    const masterPath = resolveSingleRel(relationships, layoutPath, SLIDE_MASTER_REL_TYPE);
+    slideLayouts.push(
+      parseSlideLayout(
+        part.root,
+        layoutPath,
+        masterPath ?? asPartPath(""),
+        createSidecarIdFactory(layoutPath),
+        navigateOrdered(part.orderedRoot, ["cSld", "spTree"]),
+      ),
+    );
+    readLayoutPaths.add(layoutPath);
   }
 
   const themes: SourceTheme[] = [];

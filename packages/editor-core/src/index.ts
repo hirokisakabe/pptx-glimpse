@@ -1,4 +1,6 @@
 import {
+  addEmptySlideFromLayout,
+  type AddEmptySlideFromLayoutInput,
   addTextBox,
   type AddTextBoxInput,
   clearTextRunProperties,
@@ -93,6 +95,10 @@ export interface DeleteShapeCommand {
   readonly handle: SourceHandle;
 }
 
+export interface AddEmptySlideFromLayoutCommand extends AddEmptySlideFromLayoutInput {
+  readonly kind: "addEmptySlideFromLayout";
+}
+
 export interface DuplicateSlideCommand {
   readonly kind: "duplicateSlide";
   readonly handle: SourceHandle;
@@ -113,6 +119,7 @@ export type EditorCommand =
   | SetShapeTransformCommand
   | AddTextBoxCommand
   | DeleteShapeCommand
+  | AddEmptySlideFromLayoutCommand
   | DuplicateSlideCommand
   | DeleteSlideCommand;
 
@@ -295,6 +302,8 @@ function applyCommandToDocument(
       return addTextBoxCommand(document, command);
     case "deleteShape":
       return deleteShape(document, command.handle);
+    case "addEmptySlideFromLayout":
+      return addEmptySlideFromLayout(document, command);
     case "duplicateSlide":
       return duplicateSlide(document, command.handle);
     case "deleteSlide":

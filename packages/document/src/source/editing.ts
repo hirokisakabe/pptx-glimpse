@@ -36,8 +36,20 @@ const SLIDE_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.presen
 const NOTES_SLIDE_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml";
 const SLIDE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
+const SLIDE_LAYOUT_REL_TYPE =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout";
 const NOTES_SLIDE_REL_TYPE =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
+const EMPTY_SLIDE_XML =
+  `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n` +
+  `<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ` +
+  `xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ` +
+  `xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">` +
+  `<p:cSld><p:spTree>` +
+  `<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
+  `<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/>` +
+  `<a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>` +
+  `</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`;
 
 const EDITABLE_TEXT_RUN_PROPERTIES = [
   "bold",
@@ -314,6 +326,10 @@ export interface AddTextBoxInput extends UpdateShapeTransformInput {
   readonly name?: string;
 }
 
+export interface AddEmptySlideFromLayoutInput {
+  readonly layoutPartPath: PartPath;
+}
+
 export function findShapeNodeBySourceHandle(
   source: PptxSourceModel,
   handle: SourceHandle,
@@ -427,6 +443,104 @@ export function addTextBox(
         width: input.width,
         height: input.height,
         text: input.text,
+      },
+    ],
+  };
+}
+
+export function addEmptySlideFromLayout(
+  source: PptxSourceModel,
+  input: AddEmptySlideFromLayoutInput,
+): PptxSourceModel {
+  const layout = source.slideLayouts.find(
+    (candidate) => candidate.partPath === input.layoutPartPath,
+  );
+  if (layout === undefined) {
+    throw new Error("addEmptySlideFromLayout: slide layout part path was not found");
+  }
+
+  const presentationRels = requirePartRelationships(
+    source,
+    source.presentation.partPath,
+    "addEmptySlideFromLayout",
+  );
+  const newSlidePartPath = nextNumberedPartPath(source, "ppt/slides/slide", ".xml");
+  const newPresentationRelationshipId = nextRelationshipId(presentationRels.relationships);
+  const newSlideRelationshipsPartPath = asPartPath(relationshipsPartPath(newSlidePartPath));
+  const newSlide: SourceSlide = {
+    partPath: newSlidePartPath,
+    layoutPartPath: layout.partPath,
+    shapes: [],
+    handle: { partPath: newSlidePartPath },
+  };
+  const newSlideRelationships: PartRelationships = {
+    sourcePartPath: newSlidePartPath,
+    relationships: [
+      {
+        id: asRelationshipId("rId1"),
+        type: SLIDE_LAYOUT_REL_TYPE,
+        target: relativeTarget(newSlidePartPath, layout.partPath),
+      },
+    ],
+  };
+
+  return {
+    ...source,
+    presentation: {
+      ...source.presentation,
+      slidePartPaths: [...source.presentation.slidePartPaths, newSlidePartPath],
+    },
+    slides: [...source.slides, newSlide],
+    packageGraph: {
+      ...source.packageGraph,
+      parts: [
+        ...source.packageGraph.parts,
+        { partPath: newSlidePartPath, contentType: SLIDE_CONTENT_TYPE },
+        { partPath: newSlideRelationshipsPartPath, contentType: RELS_CONTENT_TYPE },
+      ],
+      contentTypes: {
+        ...source.packageGraph.contentTypes,
+        overrides: [
+          ...source.packageGraph.contentTypes.overrides,
+          { partName: newSlidePartPath, contentType: SLIDE_CONTENT_TYPE },
+          ...relationshipPartOverrides(source, [newSlideRelationshipsPartPath]),
+        ],
+      },
+      relationships: [
+        ...source.packageGraph.relationships.map((relationships) =>
+          relationships.sourcePartPath !== source.presentation.partPath
+            ? relationships
+            : {
+                ...relationships,
+                relationships: [
+                  ...relationships.relationships,
+                  {
+                    id: newPresentationRelationshipId,
+                    type: SLIDE_REL_TYPE,
+                    target: relativeTarget(source.presentation.partPath, newSlidePartPath),
+                  },
+                ],
+              },
+        ),
+        newSlideRelationships,
+      ],
+      rawParts: [
+        ...(source.packageGraph.rawParts ?? []),
+        {
+          kind: "binary",
+          partPath: newSlidePartPath,
+          contentType: SLIDE_CONTENT_TYPE,
+          bytes: new TextEncoder().encode(EMPTY_SLIDE_XML),
+        },
+      ],
+    },
+    edits: [
+      ...(source.edits ?? []),
+      {
+        kind: "addEmptySlideFromLayout",
+        layoutPartPath: layout.partPath,
+        newSlidePartPath,
+        newRelationshipId: newPresentationRelationshipId,
       },
     ],
   };
@@ -699,7 +813,9 @@ export function deleteSlide(source: PptxSourceModel, slideHandle: SourceHandle):
     (edit) => !editIsInvalidatedByDeletedParts(edit, removedPartPaths),
   );
   const deletedInsertedSlide = (source.edits ?? []).some(
-    (edit) => edit.kind === "duplicateSlide" && edit.newSlidePartPath === slide.partPath,
+    (edit) =>
+      (edit.kind === "addEmptySlideFromLayout" || edit.kind === "duplicateSlide") &&
+      edit.newSlidePartPath === slide.partPath,
   );
 
   return {
@@ -1068,7 +1184,7 @@ function createNotesSlideCopy(
 function requirePartRelationships(
   source: PptxSourceModel,
   partPath: PartPath,
-  operationName: "duplicateSlide" | "deleteSlide",
+  operationName: "addEmptySlideFromLayout" | "duplicateSlide" | "deleteSlide",
 ): PartRelationships {
   const relationships = source.packageGraph.relationships.find(
     (candidate) => candidate.sourcePartPath === partPath,
@@ -1083,7 +1199,7 @@ function requireSlideRelationship(
   source: PptxSourceModel,
   relationships: PartRelationships,
   slidePartPath: PartPath,
-  operationName: "duplicateSlide" | "deleteSlide",
+  operationName: "addEmptySlideFromLayout" | "duplicateSlide" | "deleteSlide",
 ): Relationship {
   const relationship = relationships.relationships.find(
     (candidate) =>
@@ -1166,6 +1282,8 @@ function relationshipPartOverrides(
 
 function topologyEditPartPaths(edit: PptxSourceModelEdit): readonly PartPath[] {
   switch (edit.kind) {
+    case "addEmptySlideFromLayout":
+      return [edit.layoutPartPath, edit.newSlidePartPath];
     case "duplicateSlide":
       return [edit.sourceSlidePartPath, edit.newSlidePartPath];
     case "deleteSlide":
@@ -1253,6 +1371,7 @@ function hasDirtyEditForPart(edits: readonly PptxSourceModelEdit[], partPath: Pa
         return edit.handle.partPath === partPath;
       case "addTextBox":
         return edit.slidePartPath === partPath;
+      case "addEmptySlideFromLayout":
       case "duplicateSlide":
       case "deleteSlide":
         return false;
@@ -1276,6 +1395,7 @@ function editTargetsShape(edit: PptxSourceModelEdit, handle: SourceHandle): bool
       return sourceHandlesEqual(edit.handle, handle);
     case "addTextBox":
       return edit.slidePartPath === handle.partPath && edit.shapeId === String(handle.nodeId);
+    case "addEmptySlideFromLayout":
     case "duplicateSlide":
     case "deleteSlide":
       return false;
@@ -1302,6 +1422,8 @@ function editIsInvalidatedByDeletedParts(
       return partPaths.has(edit.handle.partPath);
     case "addTextBox":
       return partPaths.has(edit.slidePartPath);
+    case "addEmptySlideFromLayout":
+      return partPaths.has(edit.newSlidePartPath);
     case "deleteShape":
       return partPaths.has(edit.handle.partPath);
     case "duplicateSlide":

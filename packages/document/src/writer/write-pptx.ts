@@ -35,6 +35,7 @@ import type {
   PartPath,
   PartRelationships,
   PptxSourceModel,
+  PptxSourceModelAddEmptySlideFromLayoutEdit,
   PptxSourceModelAddTextBoxEdit,
   PptxSourceModelDeleteShapeEdit,
   PptxSourceModelDeleteSlideEdit,
@@ -83,6 +84,7 @@ export function writePptx(source: PptxSourceModel): WritePptxOutput {
   const shapeTransformEdits = source.edits?.filter(isShapeTransformEdit) ?? [];
   const addTextBoxEdits = source.edits?.filter(isAddTextBoxEdit) ?? [];
   const deleteShapeEdits = source.edits?.filter(isDeleteShapeEdit) ?? [];
+  const addEmptySlideFromLayoutEdits = source.edits?.filter(isAddEmptySlideFromLayoutEdit) ?? [];
   const duplicateSlideEdits = source.edits?.filter(isDuplicateSlideEdit) ?? [];
   const deleteSlideEdits = source.edits?.filter(isDeleteSlideEdit) ?? [];
   validateEdits(
@@ -101,7 +103,10 @@ export function writePptx(source: PptxSourceModel): WritePptxOutput {
     ...deleteShapeEdits.map((edit) => edit.handle.partPath),
     ...addTextBoxEdits.map((edit) => edit.slidePartPath),
   ]);
-  const hasSlideTopologyEdits = duplicateSlideEdits.length > 0 || deleteSlideEdits.length > 0;
+  const hasSlideTopologyEdits =
+    addEmptySlideFromLayoutEdits.length > 0 ||
+    duplicateSlideEdits.length > 0 ||
+    deleteSlideEdits.length > 0;
   const files: Record<string, Uint8Array> = {
     [CONTENT_TYPES_PART]: encodeXml(serializeContentTypes(source.packageGraph.contentTypes)),
   };
@@ -188,6 +193,12 @@ function isDeleteShapeEdit(edit: PptxSourceModelEdit): edit is PptxSourceModelDe
   return edit.kind === "deleteShape";
 }
 
+function isAddEmptySlideFromLayoutEdit(
+  edit: PptxSourceModelEdit,
+): edit is PptxSourceModelAddEmptySlideFromLayoutEdit {
+  return edit.kind === "addEmptySlideFromLayout";
+}
+
 function isDuplicateSlideEdit(
   edit: PptxSourceModelEdit,
 ): edit is PptxSourceModelDuplicateSlideEdit {
@@ -238,14 +249,19 @@ function serializeDirtyXmlPart(
   return encodeXml(XML_DECLARATION + xmlBuilder.build(stripXmlProcessingInstruction(root)));
 }
 
-type SlideTopologyEdit = PptxSourceModelDuplicateSlideEdit | PptxSourceModelDeleteSlideEdit;
+type SlideTopologyEdit =
+  | PptxSourceModelAddEmptySlideFromLayoutEdit
+  | PptxSourceModelDuplicateSlideEdit
+  | PptxSourceModelDeleteSlideEdit;
 
 function mergeSlideTopologyEdits(
   edits: readonly PptxSourceModelEdit[],
 ): readonly SlideTopologyEdit[] {
   return edits.filter(
     (edit): edit is SlideTopologyEdit =>
-      edit.kind === "duplicateSlide" || edit.kind === "deleteSlide",
+      edit.kind === "addEmptySlideFromLayout" ||
+      edit.kind === "duplicateSlide" ||
+      edit.kind === "deleteSlide",
   );
 }
 
@@ -273,7 +289,9 @@ function serializePresentationWithSlideTopologyEdits(
   const sldIdLst = ensureSlideIdList(presentation);
 
   for (const edit of edits) {
-    if (edit.kind === "duplicateSlide") {
+    if (edit.kind === "addEmptySlideFromLayout") {
+      appendSlideId(sldIdLst, edit.newRelationshipId);
+    } else if (edit.kind === "duplicateSlide") {
       insertSlideIdAfter(sldIdLst, edit.sourceRelationshipId, edit.newRelationshipId);
     } else {
       removeSlideId(sldIdLst, edit.relationshipId);
@@ -290,6 +308,18 @@ function ensureSlideIdList(presentation: XmlNode): XmlNode {
   const created: XmlNode = {};
   presentation[key] = created;
   return created;
+}
+
+function appendSlideId(sldIdLst: XmlNode, newRelationshipId: RelationshipId): void {
+  const { key, items } = slideIdEntries(sldIdLst);
+  if (items.some((item) => getRelationshipAttr(item) === newRelationshipId)) return;
+  const relationshipAttrKey =
+    items[0] === undefined ? "@_r:id" : namespacedAttributeKey(items[0], "r:id", "id");
+  const newNode: XmlNode = {
+    "@_id": String(nextSlideNumericId(items)),
+    [relationshipAttrKey]: newRelationshipId,
+  };
+  sldIdLst[key] = [...items, newNode];
 }
 
 function insertSlideIdAfter(

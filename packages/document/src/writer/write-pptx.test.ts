@@ -5,8 +5,9 @@ import { unzipSync, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 
 // Import via the actual public surface (`@pptx-glimpse/document`).
-import { asEmu, asPt, asSourceNodeId, readPptx, writePptx } from "../index.js";
+import { asEmu, asPartPath, asPt, asSourceNodeId, readPptx, writePptx } from "../index.js";
 import {
+  addEmptySlideFromLayout,
   addTextBox,
   clearTextRunProperties,
   deleteShape,
@@ -171,6 +172,109 @@ function buildSlideTopologyFixtureWithRelationshipOverrides(): Uint8Array {
   return zipSync({
     ...entries,
     "[Content_Types].xml": encoder.encode(contentTypes),
+  });
+}
+
+function buildUnreferencedLayoutFixture(): Uint8Array {
+  return zipSync({
+    "[Content_Types].xml": xml(
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>` +
+        `<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+        `<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>` +
+        `<Override PartName="/ppt/slideLayouts/slideLayout2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>` +
+        `<Override PartName="/ppt/slideLayouts/slideLayout3.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>` +
+        `<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>` +
+        `<Override PartName="/ppt/slideMasters/slideMaster2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>` +
+        `</Types>`,
+    ),
+    "_rels/.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/presentation.xml": xml(
+      `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rIdMaster1"/><p:sldMasterId id="2147483649" r:id="rIdMaster2"/></p:sldMasterIdLst>` +
+        `<p:sldIdLst><p:sldId id="256" r:id="rIdSlide1"/></p:sldIdLst>` +
+        `<p:sldSz cx="9144000" cy="5143500"/>` +
+        `</p:presentation>`,
+    ),
+    "ppt/_rels/presentation.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdSlide1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>` +
+        `<Relationship Id="rIdMaster1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>` +
+        `<Relationship Id="rIdMaster2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster2.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/slides/slide1.xml": xml(
+      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">` +
+        `<p:cSld><p:spTree/></p:cSld>` +
+        `</p:sld>`,
+    ),
+    "ppt/slides/_rels/slide1.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/slideLayouts/slideLayout1.xml": xml(
+      `<p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" type="blank">` +
+        `<p:cSld name="Referenced"><p:spTree/></p:cSld>` +
+        `</p:sldLayout>`,
+    ),
+    "ppt/slideLayouts/_rels/slideLayout1.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdMaster" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/slideLayouts/slideLayout2.xml": xml(
+      `<p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" type="title">` +
+        `<p:cSld name="Unreferenced"><p:spTree/></p:cSld>` +
+        `</p:sldLayout>`,
+    ),
+    "ppt/slideLayouts/_rels/slideLayout2.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdMaster" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/slideLayouts/slideLayout3.xml": xml(
+      `<p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" type="picTx">` +
+        `<p:cSld name="Unused Master Layout"><p:spTree/></p:cSld>` +
+        `</p:sldLayout>`,
+    ),
+    "ppt/slideLayouts/_rels/slideLayout3.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdMaster" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster2.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/slideMasters/slideMaster1.xml": xml(
+      `<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:cSld><p:spTree/></p:cSld>` +
+        `<p:sldLayoutIdLst>` +
+        `<p:sldLayoutId id="2147483649" r:id="rIdLayout1"/>` +
+        `<p:sldLayoutId id="2147483650" r:id="rIdLayout2"/>` +
+        `</p:sldLayoutIdLst>` +
+        `</p:sldMaster>`,
+    ),
+    "ppt/slideMasters/_rels/slideMaster1.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdLayout1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>` +
+        `<Relationship Id="rIdLayout2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout2.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/slideMasters/slideMaster2.xml": xml(
+      `<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:cSld><p:spTree/></p:cSld>` +
+        `<p:sldLayoutIdLst><p:sldLayoutId id="2147483651" r:id="rIdLayout3"/></p:sldLayoutIdLst>` +
+        `</p:sldMaster>`,
+    ),
+    "ppt/slideMasters/_rels/slideMaster2.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdLayout3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout3.xml"/>` +
+        `</Relationships>`,
+    ),
   });
 }
 
@@ -520,6 +624,49 @@ describe("writePptx - no-edit round-trip", () => {
 });
 
 describe("writePptx - slide topology edits", () => {
+  it("adds an empty slide that references a layout unused by existing slides", () => {
+    const source = readPptx(buildUnreferencedLayoutFixture());
+    const targetLayout = source.slideLayouts.find(
+      (layout) => layout.partPath === "ppt/slideLayouts/slideLayout3.xml",
+    );
+    const edited = addEmptySlideFromLayout(source, {
+      layoutPartPath: asPartPath("ppt/slideLayouts/slideLayout3.xml"),
+    });
+    const output = writePptx(edited);
+    const entries = unzipSync(output);
+    const reread = readPptx(output);
+    const presentationXml = decoder.decode(getEntry(output, "ppt/presentation.xml"));
+    const presentationRels = decoder.decode(getEntry(output, "ppt/_rels/presentation.xml.rels"));
+    const newSlideXml = decoder.decode(getEntry(output, "ppt/slides/slide2.xml"));
+    const newSlideRels = decoder.decode(getEntry(output, "ppt/slides/_rels/slide2.xml.rels"));
+
+    expect(targetLayout).toBeDefined();
+    expect(edited.presentation.slidePartPaths).toEqual([
+      "ppt/slides/slide1.xml",
+      "ppt/slides/slide2.xml",
+    ]);
+    expect(reread.slides[1]?.layoutPartPath).toBe("ppt/slideLayouts/slideLayout3.xml");
+    expect(presentationXml).toContain(`<p:sldId id="257" r:id="rId3"/>`);
+    expect(presentationRels).toContain(
+      `<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide2.xml"/>`,
+    );
+    expect(newSlideRels).toContain(
+      `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout3.xml"/>`,
+    );
+    expect(newSlideXml).toContain("<p:cSld><p:spTree>");
+    expect(newSlideXml).not.toContain("<p:sp>");
+    expect(entries["ppt/slides/slide2.xml"]).toBeDefined();
+    expect(entries["ppt/slides/_rels/slide2.xml.rels"]).toBeDefined();
+    expect(reread.packageGraph.contentTypes.overrides).toEqual(
+      expect.arrayContaining([
+        {
+          partName: "ppt/slides/slide2.xml",
+          contentType: "application/vnd.openxmlformats-officedocument.presentationml.slide+xml",
+        },
+      ]),
+    );
+  });
+
   it("duplicates a slide immediately after the source and preserves raw invisible slide material", () => {
     const source = readPptx(buildSlideTopologyFixture());
     const edited = duplicateSlide(source, source.slides[0].handle!);

@@ -55,6 +55,7 @@ export type PptxSourceModelEdit =
   | PptxSourceModelShapeTransformEdit
   | PptxSourceModelAddTextBoxEdit
   | PptxSourceModelDeleteShapeEdit
+  | PptxSourceModelAddEmptySlideFromLayoutEdit
   | PptxSourceModelDuplicateSlideEdit
   | PptxSourceModelDeleteSlideEdit;
 
@@ -118,6 +119,13 @@ export interface PptxSourceModelAddTextBoxEdit {
 export interface PptxSourceModelDeleteShapeEdit {
   readonly kind: "deleteShape";
   readonly handle: SourceHandle;
+}
+
+export interface PptxSourceModelAddEmptySlideFromLayoutEdit {
+  readonly kind: "addEmptySlideFromLayout";
+  readonly layoutPartPath: PartPath;
+  readonly newSlidePartPath: PartPath;
+  readonly newRelationshipId: RelationshipId;
 }
 
 export interface PptxSourceModelDuplicateSlideEdit {

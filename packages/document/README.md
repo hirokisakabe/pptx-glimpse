@@ -18,6 +18,7 @@ Import supported APIs from the package root:
 
 ```ts
 import {
+  addEmptySlideFromLayout,
   createComputedView,
   readPptx,
   replaceTextRunPlainText,
@@ -31,6 +32,7 @@ The stable entry point includes:
 - `createComputedView(source, options?)` for deriving slide/layout/master/theme effective values without mutating the source
 - `writePptx(source)` for structural round-trip writing
 - Text editing helpers such as `replaceTextRunPlainText(source, handle, text)` and related source handle lookup types exported from the root entry point
+- Slide topology helpers such as `addEmptySlideFromLayout(source, { layoutPartPath })`; choose `layoutPartPath` from `source.slideLayouts`
 - Source model, computed view, and unit types needed to consume those APIs
 
 Parser helpers, raw replacement internals, writer dirty-scope implementation details, and OOXML implementation modules outside the package root are internal and may change without notice.
@@ -57,11 +59,7 @@ await writeFile("round-trip.pptx", output);
 
 ```ts
 import { readFile, writeFile } from "node:fs/promises";
-import {
-  readPptx,
-  replaceTextRunPlainText,
-  writePptx,
-} from "@pptx-glimpse/document";
+import { readPptx, replaceTextRunPlainText, writePptx } from "@pptx-glimpse/document";
 
 const source = readPptx(await readFile("input.pptx"));
 const firstTextRun = source.slides

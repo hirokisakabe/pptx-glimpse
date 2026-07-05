@@ -943,6 +943,31 @@ describe("EditorSession xfrm commands", () => {
 });
 
 describe("EditorSession slide topology commands", () => {
+  it("adds an empty slide from a layout as one undoable command and persists it", async () => {
+    const source = readPptx(await buildUnreferencedLayoutFixture());
+    const session = createEditorSession(source);
+    const added = expectApplied(
+      session.apply({
+        kind: "addEmptySlideFromLayout",
+        layoutPartPath: asPartPath("ppt/slideLayouts/slideLayout2.xml"),
+      }),
+    );
+
+    expect(added.presentation.slidePartPaths).toEqual([
+      "ppt/slides/slide1.xml",
+      "ppt/slides/slide2.xml",
+    ]);
+    expect(readPptx(writePptx(added)).slides[1]?.layoutPartPath).toBe(
+      "ppt/slideLayouts/slideLayout2.xml",
+    );
+    expect(session.undoDepth).toBe(1);
+
+    const undone = expectHistory(session.undo());
+    expect(undone.presentation.slidePartPaths).toEqual(source.presentation.slidePartPaths);
+    const redone = expectHistory(session.redo());
+    expect(redone.presentation.slidePartPaths).toEqual(added.presentation.slidePartPaths);
+  });
+
   it("duplicates a slide as one undoable command and persists it", async () => {
     const source = readPptx(await buildTwoSlideFixture());
     const session = createEditorSession(source);
@@ -1115,6 +1140,120 @@ async function buildTwoSlideFixture(): Promise<Uint8Array> {
       `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">` +
         `<p:cSld><p:spTree><p:sp><p:nvSpPr><p:cNvPr id="20" name="Second"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:prstGeom prst="rect"/></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Second</a:t></a:r></a:p></p:txBody></p:sp></p:spTree></p:cSld>` +
         `</p:sld>`,
+    ),
+  );
+
+  return zip.generateAsync({ type: "uint8array" });
+}
+
+async function buildUnreferencedLayoutFixture(): Promise<Uint8Array> {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    xml(
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>` +
+        `<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+        `<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>` +
+        `<Override PartName="/ppt/slideLayouts/slideLayout2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>` +
+        `<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>` +
+        `</Types>`,
+    ),
+  );
+  zip.file(
+    "_rels/.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file(
+    "ppt/presentation.xml",
+    xml(
+      `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:sldIdLst><p:sldId id="256" r:id="rIdSlide1"/></p:sldIdLst>` +
+        `<p:sldSz cx="9144000" cy="5143500"/>` +
+        `</p:presentation>`,
+    ),
+  );
+  zip.file(
+    "ppt/_rels/presentation.xml.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdSlide1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file(
+    "ppt/slides/slide1.xml",
+    xml(
+      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">` +
+        `<p:cSld><p:spTree/></p:cSld>` +
+        `</p:sld>`,
+    ),
+  );
+  zip.file(
+    "ppt/slides/_rels/slide1.xml.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file(
+    "ppt/slideLayouts/slideLayout1.xml",
+    xml(
+      `<p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" type="blank">` +
+        `<p:cSld name="Referenced"><p:spTree/></p:cSld>` +
+        `</p:sldLayout>`,
+    ),
+  );
+  zip.file(
+    "ppt/slideLayouts/_rels/slideLayout1.xml.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdMaster" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file(
+    "ppt/slideLayouts/slideLayout2.xml",
+    xml(
+      `<p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" type="title">` +
+        `<p:cSld name="Unreferenced"><p:spTree/></p:cSld>` +
+        `</p:sldLayout>`,
+    ),
+  );
+  zip.file(
+    "ppt/slideLayouts/_rels/slideLayout2.xml.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdMaster" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file(
+    "ppt/slideMasters/slideMaster1.xml",
+    xml(
+      `<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:cSld><p:spTree/></p:cSld>` +
+        `<p:sldLayoutIdLst>` +
+        `<p:sldLayoutId id="2147483649" r:id="rIdLayout1"/>` +
+        `<p:sldLayoutId id="2147483650" r:id="rIdLayout2"/>` +
+        `</p:sldLayoutIdLst>` +
+        `</p:sldMaster>`,
+    ),
+  );
+  zip.file(
+    "ppt/slideMasters/_rels/slideMaster1.xml.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdLayout1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>` +
+        `<Relationship Id="rIdLayout2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout2.xml"/>` +
+        `</Relationships>`,
     ),
   );
 
