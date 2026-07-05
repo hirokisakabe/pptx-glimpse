@@ -11,8 +11,11 @@ import { type WebSocket, WebSocketServer } from "ws";
 import {
   asEmu,
   asPartPath,
+  asPt,
   asRelationshipId,
   asSourceNodeId,
+  type EditableTextRunProperties,
+  type EditableTextRunProperty,
   findShapeNodeBySourceHandle,
   readPptx,
   type SourceHandle,
@@ -600,6 +603,39 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       outline: none;
       white-space: pre-wrap;
     }
+    .text-run-format-toolbar {
+      display: grid;
+      grid-template-columns: repeat(3, 28px) minmax(52px, 1fr) 24px 34px 24px minmax(72px, 1fr) 24px;
+      gap: 4px;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .text-run-format-toolbar button,
+    .text-run-format-toolbar input {
+      min-height: 24px;
+      border: 1px solid #94a3b8;
+      border-radius: 4px;
+      background: #f8fafc;
+      color: #0f172a;
+      font-size: 11px;
+      font-weight: 650;
+    }
+    .text-run-format-toolbar button[aria-pressed="true"] {
+      background: #dbeafe;
+      border-color: #2563eb;
+    }
+    .text-run-format-toolbar input {
+      min-width: 0;
+      padding: 2px 4px;
+      font-weight: 500;
+    }
+    .text-run-format-toolbar input[type="color"] {
+      padding: 1px;
+    }
+    .text-run-format-toolbar :disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
     .text-editor-actions {
       position: absolute;
       right: 4px;
@@ -1005,6 +1041,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       overlay.id = "text-editor-overlay";
       overlay.setAttribute("data-testid", "text-editor-overlay");
       overlay.dataset.shapeKey = selectedShapeKey || "";
+      overlay.appendChild(createTextRunFormatToolbar());
       overlay.appendChild(createTextEditorContent(shape.editableTextBody.docJson));
 
       var actions = document.createElement("div");
@@ -1043,15 +1080,236 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         element: overlay,
         shape: cloneShape(shape),
         originalDocJson: shape.editableTextBody.docJson,
+        selectedRunElement: null,
         committing: false,
         commitPromise: null
       };
       positionActiveTextEditor();
       var firstRun = overlay.querySelector(".text-editor-run");
       if (firstRun) {
+        setActiveTextRunElement(firstRun);
         firstRun.focus();
         selectElementContents(firstRun);
       }
+    }
+
+    function createTextRunFormatToolbar() {
+      var toolbar = document.createElement("div");
+      toolbar.className = "text-run-format-toolbar";
+      toolbar.setAttribute("data-testid", "text-run-format-toolbar");
+      toolbar.addEventListener("mousedown", function (event) {
+        event.preventDefault();
+      });
+
+      [["bold", "B"], ["italic", "I"], ["underline", "U"]].forEach(function (item) {
+        var button = document.createElement("button");
+        button.type = "button";
+        button.textContent = item[1];
+        button.dataset.property = item[0];
+        button.setAttribute("data-testid", "text-run-format-" + item[0]);
+        button.setAttribute("aria-pressed", "false");
+        button.addEventListener("click", function () {
+          toggleActiveTextRunBooleanProperty(item[0]);
+        });
+        toolbar.appendChild(button);
+      });
+
+      var size = document.createElement("input");
+      size.type = "number";
+      size.min = "1";
+      size.step = "0.5";
+      size.placeholder = "pt";
+      size.setAttribute("data-testid", "text-run-format-font-size");
+      size.addEventListener("change", function () {
+        var value = Number(size.value);
+        if (size.value.trim() === "") {
+          applyActiveTextRunPropertyClear(["fontSize"]);
+        } else if (Number.isFinite(value) && value > 0) {
+          applyActiveTextRunPropertySet({ fontSize: value });
+        } else {
+          setEditorMessage("font size must be positive", true);
+        }
+      });
+      toolbar.appendChild(size);
+
+      var clearSize = clearButton("font-size", function () {
+        applyActiveTextRunPropertyClear(["fontSize"]);
+      });
+      toolbar.appendChild(clearSize);
+
+      var color = document.createElement("input");
+      color.type = "color";
+      color.setAttribute("data-testid", "text-run-format-color");
+      color.addEventListener("change", function () {
+        applyActiveTextRunPropertySet({
+          color: { kind: "srgb", hex: color.value.replace(/^#/, "").toUpperCase() }
+        });
+      });
+      toolbar.appendChild(color);
+
+      var clearColor = clearButton("color", function () {
+        applyActiveTextRunPropertyClear(["color"]);
+      });
+      toolbar.appendChild(clearColor);
+
+      var typeface = document.createElement("input");
+      typeface.type = "text";
+      typeface.placeholder = "Font";
+      typeface.setAttribute("data-testid", "text-run-format-typeface");
+      typeface.addEventListener("keydown", function (event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          applyTypefaceInput(typeface);
+        }
+      });
+      typeface.addEventListener("change", function () {
+        applyTypefaceInput(typeface);
+      });
+      toolbar.appendChild(typeface);
+
+      var clearTypeface = clearButton("typeface", function () {
+        applyActiveTextRunPropertyClear(["typeface"]);
+      });
+      toolbar.appendChild(clearTypeface);
+
+      window.setTimeout(refreshTextRunFormatToolbar, 0);
+      return toolbar;
+    }
+
+    function clearButton(name, onClick) {
+      var button = document.createElement("button");
+      button.type = "button";
+      button.textContent = "x";
+      button.setAttribute("data-testid", "text-run-format-clear-" + name);
+      button.addEventListener("click", onClick);
+      return button;
+    }
+
+    function applyTypefaceInput(input) {
+      var value = input.value.trim();
+      if (value.length === 0) {
+        applyActiveTextRunPropertyClear(["typeface"]);
+        return;
+      }
+      applyActiveTextRunPropertySet({ typeface: value });
+    }
+
+    function setActiveTextRunElement(element) {
+      if (!activeTextEditor) return;
+      activeTextEditor.selectedRunElement = element;
+      refreshTextRunFormatToolbar();
+    }
+
+    function activeTextRunInfo() {
+      if (!activeTextEditor || !activeTextEditor.selectedRunElement) return null;
+      var element = activeTextEditor.selectedRunElement;
+      var paragraphIndex = Number(element.dataset.paragraphIndex || "-1");
+      var runIndex = Number(element.dataset.runIndex || "-1");
+      var paragraph = (activeTextEditor.originalDocJson.content || [])[paragraphIndex];
+      var textNode = paragraph && (paragraph.content || [])[runIndex];
+      var mark = textNode && (textNode.marks || []).find(function (candidate) {
+        return candidate.type === "pptxRun";
+      });
+      var attrs = mark && mark.attrs ? mark.attrs : {};
+      return {
+        handle: attrs.handle || null,
+        properties: attrs.properties || {}
+      };
+    }
+
+    function refreshTextRunFormatToolbar() {
+      if (!activeTextEditor) return;
+      var toolbar = activeTextEditor.element.querySelector('[data-testid="text-run-format-toolbar"]');
+      if (!toolbar) return;
+      var info = activeTextRunInfo();
+      var properties = info && info.properties ? info.properties : {};
+      var disabled = !info || !info.handle;
+      setToolbarControl(toolbar, "bold", disabled, Boolean(properties.bold));
+      setToolbarControl(toolbar, "italic", disabled, Boolean(properties.italic));
+      setToolbarControl(toolbar, "underline", disabled, Boolean(properties.underline));
+      var size = toolbar.querySelector('[data-testid="text-run-format-font-size"]');
+      if (size) {
+        size.disabled = disabled;
+        size.value = properties.fontSize == null ? "" : String(properties.fontSize);
+      }
+      var color = toolbar.querySelector('[data-testid="text-run-format-color"]');
+      if (color) {
+        color.disabled = disabled;
+        color.value =
+          properties.color && properties.color.kind === "srgb" && typeof properties.color.hex === "string"
+            ? "#" + properties.color.hex
+            : "#000000";
+      }
+      var typeface = toolbar.querySelector('[data-testid="text-run-format-typeface"]');
+      if (typeface) {
+        typeface.disabled = disabled;
+        typeface.value = typeof properties.typeface === "string" ? properties.typeface : "";
+      }
+      Array.prototype.forEach.call(toolbar.querySelectorAll('[data-testid^="text-run-format-clear-"]'), function (control) {
+        control.disabled = disabled;
+      });
+    }
+
+    function setToolbarControl(toolbar, property, disabled, pressed) {
+      var control = toolbar.querySelector('[data-testid="text-run-format-' + property + '"]');
+      if (!control) return;
+      control.disabled = disabled;
+      control.setAttribute("aria-pressed", pressed ? "true" : "false");
+    }
+
+    function toggleActiveTextRunBooleanProperty(property) {
+      var info = activeTextRunInfo();
+      if (!info || !info.handle) {
+        setEditorMessage("No editable text run selected", true);
+        return;
+      }
+      if (Object.prototype.hasOwnProperty.call(info.properties || {}, property)) {
+        applyActiveTextRunPropertyClear([property]);
+        return;
+      }
+      var properties = {};
+      properties[property] = true;
+      applyActiveTextRunPropertySet(properties);
+    }
+
+    function applyActiveTextRunPropertySet(properties) {
+      var info = activeTextRunInfo();
+      if (!info || !info.handle) {
+        setEditorMessage("No editable text run selected", true);
+        return;
+      }
+      applyActiveTextRunPropertyCommand({
+        kind: "setTextRunProperties",
+        handle: info.handle,
+        properties: properties
+      });
+    }
+
+    function applyActiveTextRunPropertyClear(properties) {
+      var info = activeTextRunInfo();
+      if (!info || !info.handle) {
+        setEditorMessage("No editable text run selected", true);
+        return;
+      }
+      applyActiveTextRunPropertyCommand({
+        kind: "clearTextRunProperties",
+        handle: info.handle,
+        properties: properties
+      });
+    }
+
+    function applyActiveTextRunPropertyCommand(command) {
+      commitTextEditor()
+        .then(function () {
+          return postJson("/api/editor/command", { command: command });
+        })
+        .then(function (data) {
+          applyEditorResponse(data);
+          setEditorMessage("Applied", false);
+        })
+        .catch(function (err) {
+          setEditorMessage(err.message, true);
+        });
     }
 
     function createTextEditorContent(docJson) {
@@ -1069,6 +1327,13 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
           run.dataset.paragraphIndex = String(paragraphIndex);
           run.dataset.runIndex = String(runIndex);
           run.textContent = textNode.text || "";
+          applyTextRunStyle(run, textNode);
+          run.addEventListener("focus", function () {
+            setActiveTextRunElement(run);
+          });
+          run.addEventListener("pointerdown", function () {
+            setActiveTextRunElement(run);
+          });
           run.addEventListener("beforeinput", function (event) {
             if (event.inputType === "insertParagraph" || event.inputType === "insertLineBreak") {
               event.preventDefault();
@@ -1086,6 +1351,21 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         body.appendChild(paragraphElement);
       });
       return body;
+    }
+
+    function applyTextRunStyle(run, textNode) {
+      var mark = (textNode.marks || []).find(function (candidate) {
+        return candidate.type === "pptxRun";
+      });
+      var properties = mark && mark.attrs && mark.attrs.properties ? mark.attrs.properties : {};
+      if (properties.bold === true) run.style.fontWeight = "700";
+      if (properties.italic === true) run.style.fontStyle = "italic";
+      if (properties.underline === true) run.style.textDecoration = "underline";
+      if (properties.fontSize != null) run.style.fontSize = String(properties.fontSize) + "pt";
+      if (properties.typeface) run.style.fontFamily = '"' + String(properties.typeface).replace(/"/g, "") + '"';
+      if (properties.color && properties.color.kind === "srgb" && typeof properties.color.hex === "string") {
+        run.style.color = "#" + properties.color.hex;
+      }
     }
 
     function selectElementContents(element) {
@@ -1618,6 +1898,20 @@ function normalizeCommand(command: unknown): EditorCommand {
       text: command.text,
     };
   }
+  if (command.kind === "setTextRunProperties") {
+    return {
+      kind: "setTextRunProperties",
+      handle: normalizeHandle(command.handle),
+      properties: normalizeTextRunProperties(command.properties),
+    };
+  }
+  if (command.kind === "clearTextRunProperties") {
+    return {
+      kind: "clearTextRunProperties",
+      handle: normalizeHandle(command.handle),
+      properties: normalizeTextRunPropertyNames(command.properties),
+    };
+  }
   if (command.kind === "moveShape") {
     return {
       kind: "moveShape",
@@ -1647,6 +1941,74 @@ function normalizeCommand(command: unknown): EditorCommand {
   throw new Error("unsupported command kind");
 }
 
+function normalizeTextRunProperties(value: unknown): EditableTextRunProperties {
+  if (!isRecord(value)) throw new Error("setTextRunProperties.properties must be an object");
+  const properties: EditableTextRunProperties = {};
+  if ("bold" in value) {
+    if (typeof value.bold !== "boolean")
+      throw new Error("setTextRunProperties.bold must be boolean");
+    properties.bold = value.bold;
+  }
+  if ("italic" in value) {
+    if (typeof value.italic !== "boolean") {
+      throw new Error("setTextRunProperties.italic must be boolean");
+    }
+    properties.italic = value.italic;
+  }
+  if ("underline" in value) {
+    if (typeof value.underline !== "boolean") {
+      throw new Error("setTextRunProperties.underline must be boolean");
+    }
+    properties.underline = value.underline;
+  }
+  if ("fontSize" in value) {
+    properties.fontSize = asPt(requireFinitePositiveNumber(value.fontSize, "fontSize"));
+  }
+  if ("color" in value) {
+    properties.color = normalizeSrgbColor(value.color);
+  }
+  if ("typeface" in value) {
+    if (typeof value.typeface !== "string" || value.typeface.trim().length === 0) {
+      throw new Error("setTextRunProperties.typeface must be a non-empty string");
+    }
+    properties.typeface = value.typeface;
+  }
+  return properties;
+}
+
+function normalizeSrgbColor(value: unknown): { kind: "srgb"; hex: string } {
+  if (!isRecord(value) || value.kind !== "srgb" || typeof value.hex !== "string") {
+    throw new Error("setTextRunProperties.color must be an srgb color object");
+  }
+  if (!/^[0-9a-fA-F]{6}$/.test(value.hex)) {
+    throw new Error("setTextRunProperties.color.hex must be six hex digits");
+  }
+  return { kind: "srgb", hex: value.hex.toUpperCase() };
+}
+
+function normalizeTextRunPropertyNames(value: unknown): EditableTextRunProperty[] {
+  if (!Array.isArray(value)) throw new Error("clearTextRunProperties.properties must be an array");
+  return value.map((property): EditableTextRunProperty => {
+    if (!isEditableTextRunProperty(property)) {
+      throw new Error(
+        `clearTextRunProperties: unsupported text run property '${String(property)}'`,
+      );
+    }
+    return property;
+  });
+}
+
+function isEditableTextRunProperty(value: unknown): value is EditableTextRunProperty {
+  return (
+    value === "bold" ||
+    value === "italic" ||
+    value === "underline" ||
+    value === "fontSize" ||
+    value === "color" ||
+    value === "typeface"
+  );
+}
+
 function normalizeHandle(value: unknown): SourceHandle {
   if (!isRecord(value)) throw new Error("command.handle must be an object");
   if (typeof value.partPath !== "string") {
@@ -1667,6 +2029,12 @@ function requireFiniteNumber(value: unknown, field: string): number {
     throw new Error(`${field} must be a finite number`);
   }
   return value;
+}
+
+function requireFinitePositiveNumber(value: unknown, field: string): number {
+  const number = requireFiniteNumber(value, field);
+  if (number <= 0) throw new Error(`${field} must be positive`);
+  return number;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

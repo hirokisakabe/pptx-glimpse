@@ -140,6 +140,74 @@ describe("dev server editor API", () => {
       }
     }
   });
+
+  it("applies, undoes, redoes, clears, and saves text run property commands", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-dev-server-run-property-test-"));
+    try {
+      const sourcePath = join(dir, "fixture.pptx");
+      const savedPath = join(dir, "saved.pptx");
+      const clearedPath = join(dir, "cleared.pptx");
+      await writeFile(sourcePath, await buildTextEditFixture());
+
+      const backend = await DevEditorBackend.load(sourcePath, renderPreview);
+      const server = createServer(createDevServerRequestHandler(backend, "fixture.pptx"));
+      servers.push(server);
+      const baseUrl = await listen(server);
+
+      const shapes = await getJson<ShapesResponse>(`${baseUrl}/api/editor/shapes?slide=1`);
+      const handle = shapes.shapes[0].textRuns[0].handle;
+
+      const decorated = await postJson<SlidesResponse>(`${baseUrl}/api/editor/command`, {
+        command: {
+          kind: "setTextRunProperties",
+          handle,
+          properties: {
+            bold: true,
+            italic: true,
+            underline: true,
+            fontSize: 32,
+            color: { kind: "srgb", hex: "9c0000" },
+            typeface: "Liberation Sans",
+          },
+        },
+      });
+      expect(decorated.history).toMatchObject({ canUndo: true, canRedo: false });
+
+      const undone = await postJson<SlidesResponse>(`${baseUrl}/api/editor/undo`, {});
+      expect(undone.history).toMatchObject({ canUndo: false, canRedo: true });
+      const redone = await postJson<SlidesResponse>(`${baseUrl}/api/editor/redo`, {});
+      expect(redone.history).toMatchObject({ canUndo: true, canRedo: false });
+
+      await postJson<SaveResponse>(`${baseUrl}/api/editor/save`, { path: savedPath });
+      expect(firstRunProperties(readPptx(await readFile(savedPath)))).toMatchObject({
+        bold: true,
+        italic: true,
+        underline: true,
+        fontSize: 32,
+        color: { kind: "srgb", hex: "9C0000" },
+        typeface: "Liberation Sans",
+      });
+
+      await postJson<SlidesResponse>(`${baseUrl}/api/editor/command`, {
+        command: {
+          kind: "clearTextRunProperties",
+          handle,
+          properties: ["bold", "italic", "underline", "fontSize", "color", "typeface"],
+        },
+      });
+      await postJson<SaveResponse>(`${baseUrl}/api/editor/save`, { path: clearedPath });
+
+      const cleared = firstRunProperties(readPptx(await readFile(clearedPath)));
+      expect(cleared?.bold).toBeUndefined();
+      expect(cleared?.italic).toBeUndefined();
+      expect(cleared?.underline).toBeUndefined();
+      expect(cleared?.fontSize).toBeUndefined();
+      expect(cleared?.color).toBeUndefined();
+      expect(cleared?.typeface).toBeUndefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 interface ShapesResponse {
@@ -302,4 +370,11 @@ function firstRun(source: PptxSourceModel): string {
   const run = shape?.textBody?.paragraphs[0].runs[0];
   if (run === undefined) throw new Error("fixture text run not found");
   return run.text;
+}
+
+function firstRunProperties(source: PptxSourceModel) {
+  const shape = source.slides[0].shapes.find((node): node is SourceShape => node.kind === "shape");
+  const run = shape?.textBody?.paragraphs[0].runs[0];
+  if (run === undefined) throw new Error("fixture text run not found");
+  return run.properties;
 }
