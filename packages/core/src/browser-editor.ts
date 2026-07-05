@@ -1,9 +1,14 @@
 import {
   asEmu,
   findShapeNodeBySourceHandle,
+  type MediaPart,
+  type PartPath,
   type PptxSourceModel,
   readPptx,
+  type Relationship,
+  type RelationshipId,
   type SourceHandle,
+  type SourceImage,
   type SourceShapeNode,
   type SourceTextBody,
   type SourceTextRun,
@@ -19,11 +24,11 @@ import {
 } from "@pptx-glimpse/editor-core";
 
 import { type ConvertOptions, renderPptxSourceModelToSvg, type SlideSvg } from "./svg-converter.js";
+import { unsafeBrandAssertion } from "./unsafe-type-assertion.js";
 
 const EMU_PER_INCH = 914400;
 const DEFAULT_DPI = 96;
 const EMU_PER_PIXEL = EMU_PER_INCH / DEFAULT_DPI;
-
 const DEFAULT_TEXT_BOX_BOUNDS_PX = {
   x: 96,
   y: 96,
@@ -31,6 +36,16 @@ const DEFAULT_TEXT_BOX_BOUNDS_PX = {
   height: 72,
 };
 const DEFAULT_TEXT_BOX_TEXT = "New text box";
+const IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+
+const IMAGE_ACCEPT_BY_CONTENT_TYPE: Readonly<Record<string, string>> = {
+  "image/png": "image/png,.png",
+  "image/jpeg": "image/jpeg,.jpg,.jpeg",
+  "image/gif": "image/gif,.gif",
+  "image/bmp": "image/bmp,.bmp",
+  "image/tiff": "image/tiff,.tif,.tiff",
+  "image/webp": "image/webp,.webp",
+};
 
 export interface BrowserEditorHistoryState {
   readonly canUndo: boolean;
@@ -52,6 +67,13 @@ export interface BrowserEditorTextBodyInfo {
   readonly docJson: PptxTextBodyProseMirrorDocJson;
 }
 
+export interface BrowserEditorImageReplacementInfo {
+  readonly contentType: string;
+  readonly accept: string;
+  readonly mediaPartPath: string;
+  readonly sharedReferenceCount: number;
+}
+
 export interface BrowserEditorShapeBoundsPx {
   readonly x: number;
   readonly y: number;
@@ -69,6 +91,11 @@ export interface BrowserEditorShapeInfo {
   readonly editableDelete?: boolean;
   readonly textRuns?: readonly BrowserEditorTextRunInfo[];
   readonly editableTextBody?: BrowserEditorTextBodyInfo;
+  readonly editableImageReplacement?: BrowserEditorImageReplacementInfo;
+}
+
+export interface BrowserEditorSlideSvg extends SlideSvg {
+  readonly handle?: SourceHandle;
 }
 
 export interface BrowserEditorAddTextBoxOptions {
@@ -81,7 +108,7 @@ export interface BrowserEditorAddTextBoxOptions {
 }
 
 export interface BrowserEditorSlidesResponse {
-  readonly slides: readonly SlideSvg[];
+  readonly slides: readonly BrowserEditorSlideSvg[];
   readonly history: BrowserEditorHistoryState;
   readonly selection?: BrowserEditorSelectionInfo;
   readonly warnings?: readonly EditorCommandWarning[];
@@ -97,7 +124,7 @@ export type BrowserEditorRenderOptions = Omit<ConvertOptions, "slides">;
 
 export class BrowserPptxEditorSession {
   #session: ReturnType<typeof createEditorSession>;
-  #slides: readonly SlideSvg[] = [];
+  #slides: readonly BrowserEditorSlideSvg[] = [];
   readonly #renderOptions: BrowserEditorRenderOptions;
 
   private constructor(source: PptxSourceModel, renderOptions: BrowserEditorRenderOptions) {
@@ -118,7 +145,7 @@ export class BrowserPptxEditorSession {
     return this.#session.document;
   }
 
-  get slides(): readonly SlideSvg[] {
+  get slides(): readonly BrowserEditorSlideSvg[] {
     return this.#slides;
   }
 
@@ -147,16 +174,23 @@ export class BrowserPptxEditorSession {
   shapes(slideNumber: number): readonly BrowserEditorShapeInfo[] {
     const slide = this.#session.document.slides[slideNumber - 1];
     if (slide === undefined) return [];
-    return slide.shapes.flatMap((shape, index) => shapeInfo(shape, index, true, slide.shapes));
+    return slide.shapes.flatMap((shape, index) =>
+      shapeInfo(this.#session.document, shape, index, true, slide.shapes),
+    );
   }
 
-  async renderCurrentSlides(): Promise<readonly SlideSvg[]> {
+  async renderCurrentSlides(): Promise<readonly BrowserEditorSlideSvg[]> {
     const report = await renderPptxSourceModelToSvg(this.#session.document, {
       textOutput: "text",
       skipSystemFonts: true,
       ...this.#renderOptions,
     });
-    this.#slides = report.slides;
+    this.#slides = report.slides.map((slide) => ({
+      ...slide,
+      ...(this.#session.document.slides[slide.slideNumber - 1]?.handle !== undefined
+        ? { handle: this.#session.document.slides[slide.slideNumber - 1]?.handle }
+        : {}),
+    }));
     return this.#slides;
   }
 
@@ -288,6 +322,7 @@ export function createBrowserPptxEditorSession(
 }
 
 function shapeInfo(
+  source: PptxSourceModel,
   shape: SourceShapeNode,
   index: number,
   editableTransform = true,
@@ -320,13 +355,14 @@ function shapeInfo(
     ...(shape.kind === "shape" && canEditTransform && shape.textBody !== undefined
       ? editableTextBody(shape.textBody)
       : {}),
+    ...(shape.kind === "image" ? editableImageReplacement(source, shape) : {}),
   };
 
   if (shape.kind !== "group") return [base];
   return [
     base,
     ...shape.children.flatMap((child, childIndex) =>
-      shapeInfo(child, childIndex, false, slideShapes),
+      shapeInfo(source, child, childIndex, false, slideShapes),
     ),
   ];
 }
@@ -382,6 +418,168 @@ function editableTextBody(
   } catch {
     return {};
   }
+}
+
+function editableImageReplacement(
+  source: PptxSourceModel,
+  image: SourceImage,
+): Partial<Pick<BrowserEditorShapeInfo, "editableImageReplacement">> {
+  const media = imageMediaPart(source, image);
+  if (media === undefined) return {};
+  const accept = IMAGE_ACCEPT_BY_CONTENT_TYPE[media.contentType];
+  if (accept === undefined) return {};
+
+  return {
+    editableImageReplacement: {
+      contentType: media.contentType,
+      accept,
+      mediaPartPath: media.partPath,
+      sharedReferenceCount: countImageReferencesToMedia(source, media.partPath),
+    },
+  };
+}
+
+function imageMediaPart(source: PptxSourceModel, image: SourceImage): MediaPart | undefined {
+  if (image.blipRelationshipId === undefined || image.handle?.partPath === undefined) {
+    return undefined;
+  }
+  const mediaPartPath = imageMediaPartPath(source, image.handle.partPath, image.blipRelationshipId);
+  if (mediaPartPath === undefined) return undefined;
+  return source.packageGraph.media.find((part) => part.partPath === mediaPartPath);
+}
+
+function imageMediaPartPath(
+  source: PptxSourceModel,
+  sourcePartPath: PartPath,
+  relationshipId: RelationshipId,
+): PartPath | undefined {
+  const relationships = source.packageGraph.relationships.find(
+    (candidate) => candidate.sourcePartPath === sourcePartPath,
+  );
+  const relationship = relationships?.relationships.find(
+    (candidate) => candidate.id === relationshipId && candidate.type === IMAGE_REL_TYPE,
+  );
+  if (relationship === undefined) return undefined;
+  return resolveInternalRelationshipTarget(sourcePartPath, relationship);
+}
+
+function countImageReferencesToMedia(source: PptxSourceModel, mediaPartPath: PartPath): number {
+  const parsedImageRelationshipKeys = new Set<string>();
+  let count = 0;
+  for (const slide of source.slides) {
+    count += countImageReferencesInTree(
+      source,
+      slide.partPath,
+      slide.shapes,
+      mediaPartPath,
+      parsedImageRelationshipKeys,
+    );
+  }
+  for (const layout of source.slideLayouts) {
+    count += countImageReferencesInTree(
+      source,
+      layout.partPath,
+      layout.shapes,
+      mediaPartPath,
+      parsedImageRelationshipKeys,
+    );
+  }
+  for (const master of source.slideMasters) {
+    count += countImageReferencesInTree(
+      source,
+      master.partPath,
+      master.shapes,
+      mediaPartPath,
+      parsedImageRelationshipKeys,
+    );
+  }
+
+  for (const relationships of source.packageGraph.relationships) {
+    for (const relationship of relationships.relationships) {
+      if (relationship.type !== IMAGE_REL_TYPE) continue;
+      if (
+        parsedImageRelationshipKeys.has(
+          imageRelationshipKey(relationships.sourcePartPath, relationship.id),
+        )
+      ) {
+        continue;
+      }
+      if (
+        resolveInternalRelationshipTarget(relationships.sourcePartPath, relationship) ===
+        mediaPartPath
+      ) {
+        count += 1;
+      }
+    }
+  }
+  return count;
+}
+
+function countImageReferencesInTree(
+  source: PptxSourceModel,
+  sourcePartPath: PartPath,
+  shapes: readonly SourceShapeNode[],
+  mediaPartPath: PartPath,
+  parsedImageRelationshipKeys: Set<string>,
+): number {
+  let count = 0;
+  for (const shape of shapes) {
+    if (shape.kind === "group") {
+      count += countImageReferencesInTree(
+        source,
+        sourcePartPath,
+        shape.children,
+        mediaPartPath,
+        parsedImageRelationshipKeys,
+      );
+      continue;
+    }
+    if (shape.kind !== "image" || shape.blipRelationshipId === undefined) continue;
+    if (imageMediaPartPath(source, sourcePartPath, shape.blipRelationshipId) === mediaPartPath) {
+      count += 1;
+      parsedImageRelationshipKeys.add(
+        imageRelationshipKey(sourcePartPath, shape.blipRelationshipId),
+      );
+    }
+  }
+  return count;
+}
+
+function imageRelationshipKey(partPath: PartPath, relationshipId: RelationshipId): string {
+  return `${partPath}\0${relationshipId}`;
+}
+
+function resolveInternalRelationshipTarget(
+  sourcePartPath: PartPath,
+  relationship: Relationship,
+): PartPath | undefined {
+  if (relationship.targetMode === "External") return undefined;
+  return unsafeBrandAssertion<PartPath>(
+    normalizePackagePath(
+      relationship.target.startsWith("/")
+        ? relationship.target.slice(1)
+        : joinPackageRelativeTarget(sourcePartPath, relationship.target),
+    ),
+  );
+}
+
+function joinPackageRelativeTarget(sourcePartPath: string, target: string): string {
+  const slash = sourcePartPath.lastIndexOf("/");
+  const baseDir = slash === -1 ? "" : sourcePartPath.slice(0, slash);
+  return baseDir === "" ? target : `${baseDir}/${target}`;
+}
+
+function normalizePackagePath(path: string): string {
+  const segments: string[] = [];
+  for (const segment of path.split("/")) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") {
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+  return segments.join("/");
 }
 
 function transformBoundsPx(transform: {

@@ -8,11 +8,14 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 echo "=== Package publish verification ==="
 echo "Working directory: $WORK_DIR"
 
-# Generate tarballs for publishing target package and document workspace package with npm pack
-TARBALL=$(cd packages/core && npm pack --pack-destination "$WORK_DIR" 2>/dev/null)
-TARBALL_PATH="$WORK_DIR/$TARBALL"
-DOCUMENT_TARBALL=$(cd packages/document && npm pack --pack-destination "$WORK_DIR" 2>/dev/null)
-DOCUMENT_TARBALL_PATH="$WORK_DIR/$DOCUMENT_TARBALL"
+# Generate tarballs for publishing target package and document workspace package with pnpm pack.
+# pnpm rewrites workspace: dependency ranges the same way publish does.
+pnpm --dir packages/core pack --pack-destination "$WORK_DIR" > /dev/null
+TARBALL_PATH=$(find "$WORK_DIR" -maxdepth 1 -type f -name "pptx-glimpse-[0-9]*.tgz" -print -quit)
+TARBALL=$(basename "$TARBALL_PATH")
+pnpm --dir packages/document pack --pack-destination "$WORK_DIR" > /dev/null
+DOCUMENT_TARBALL_PATH=$(find "$WORK_DIR" -maxdepth 1 -type f -name "pptx-glimpse-document-*.tgz" -print -quit)
+DOCUMENT_TARBALL=$(basename "$DOCUMENT_TARBALL_PATH")
 echo "Packed: $TARBALL"
 echo "Packed: $DOCUMENT_TARBALL"
 

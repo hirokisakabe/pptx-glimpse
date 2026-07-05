@@ -10,12 +10,14 @@ import { type ConvertOptions, convertPptxToSvg as convertPptxToSvgBase } from ".
 export type {
   BrowserEditorAddTextBoxOptions,
   BrowserEditorHistoryState,
+  BrowserEditorImageReplacementInfo,
   BrowserEditorRenderOptions,
   BrowserEditorSaveResponse,
   BrowserEditorSelectionInfo,
   BrowserEditorShapeBoundsPx,
   BrowserEditorShapeInfo,
   BrowserEditorSlidesResponse,
+  BrowserEditorSlideSvg,
   BrowserEditorTextBodyInfo,
   BrowserEditorTextRunInfo,
 } from "./browser-editor.js";
