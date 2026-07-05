@@ -71,7 +71,7 @@ describe("browser entry", () => {
     const result = await build({
       stdin: {
         contents:
-          'import { convertPptxToPng, convertPptxToSvg, initResvgWasm } from "pptx-glimpse"; console.log(convertPptxToPng, convertPptxToSvg, initResvgWasm);',
+          'import { convertPptxToPng, convertPptxToSvg, createBrowserPptxEditorSession, initResvgWasm } from "pptx-glimpse"; console.log(convertPptxToPng, convertPptxToSvg, createBrowserPptxEditorSession, initResvgWasm);',
         resolveDir: here,
         sourcefile: "browser-entry-smoke.ts",
         loader: "ts",
@@ -95,6 +95,9 @@ describe("browser entry", () => {
             }));
             build.onResolve({ filter: /^@pptx-glimpse\/document$/ }, () => ({
               path: resolve(packageRoot, "../document/src/index.ts"),
+            }));
+            build.onResolve({ filter: /^@pptx-glimpse\/editor-core$/ }, () => ({
+              path: resolve(packageRoot, "../editor-core/src/index.ts"),
             }));
             build.onResolve({ filter: /^@pptx-glimpse\/renderer$/ }, () => ({
               path: resolve(packageRoot, "../renderer/src/index.ts"),

@@ -98,6 +98,9 @@ importers:
       '@pptx-glimpse/document':
         specifier: workspace:*
         version: link:../document
+      '@pptx-glimpse/editor-core':
+        specifier: workspace:*
+        version: link:../editor-core
       '@pptx-glimpse/renderer':
         specifier: workspace:*
         version: link:../renderer
