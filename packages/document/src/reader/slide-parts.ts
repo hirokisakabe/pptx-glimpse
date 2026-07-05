@@ -108,6 +108,7 @@ export function parseSlideLayout(
 ): SourceSlideLayout {
   const cSld = getChild(root, "cSld");
   const type = getAttr(root, "type");
+  const show = booleanAttr(root, "show");
   const background = parseBackground(getChild(cSld, "bg"), nextId);
   const colorMapOverride = parseColorMapOverride(getChild(root, "clrMapOvr"));
   const showMasterShapes = booleanAttr(root, "showMasterSp");
@@ -116,6 +117,7 @@ export function parseSlideLayout(
     partPath,
     masterPartPath,
     ...(type !== undefined ? { type } : {}),
+    ...(show !== undefined ? { show } : {}),
     ...(background !== undefined ? { background } : {}),
     ...(colorMapOverride !== undefined ? { colorMapOverride } : {}),
     ...(showMasterShapes !== undefined ? { showMasterShapes } : {}),
