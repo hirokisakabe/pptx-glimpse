@@ -119,6 +119,10 @@ When rendering slides repeatedly, keep the parsed `PptxSourceModel` from
 `@pptx-glimpse/document` and call `renderPptxSourceModelToSvg`. This avoids
 unzipping and parsing the PPTX bytes again on each render.
 
+```bash
+npm install pptx-glimpse @pptx-glimpse/document
+```
+
 ```typescript
 import { readPptx } from "@pptx-glimpse/document";
 import { renderPptxSourceModelToSvg } from "pptx-glimpse";

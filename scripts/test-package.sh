@@ -21,7 +21,7 @@ TEST_DIR="$WORK_DIR/core-test-project"
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
 npm init -y > /dev/null 2>&1
-npm install "$TARBALL_PATH" > /dev/null 2>&1
+npm install "$DOCUMENT_TARBALL_PATH" "$TARBALL_PATH" > /dev/null 2>&1
 
 echo ""
 
@@ -104,11 +104,11 @@ cat > tsconfig.json << 'TESTEOF'
 TESTEOF
 
 cat > test-types.ts << 'TESTEOF'
+import { readPptx } from "@pptx-glimpse/document";
 import { collectUsedFonts, convertPptxToSvg, convertPptxToPng, renderPptxSourceModelToSvg } from "pptx-glimpse";
 import type {
   ConvertOptions,
   PngConversionReport,
-  PptxSourceModel,
   SvgConversionReport,
   UsedFonts,
 } from "pptx-glimpse";
@@ -119,7 +119,7 @@ const _svgFn: (input: Uint8Array, options?: ConvertOptions) => Promise<SvgConver
 const _pngFn: (input: Uint8Array, options?: ConvertOptions) => Promise<PngConversionReport> =
   convertPptxToPng;
 const _sourceModelSvgFn: (
-  source: PptxSourceModel,
+  source: ReturnType<typeof readPptx>,
   options?: ConvertOptions,
 ) => Promise<SvgConversionReport> = renderPptxSourceModelToSvg;
 const _fontFn: (input: Uint8Array) => UsedFonts = collectUsedFonts;
@@ -138,6 +138,12 @@ function _verifyBufferInput(input: Buffer) {
   void collectUsedFonts(input);
 }
 
+// Verify @pptx-glimpse/document readPptx() output is accepted by the source-model render API.
+async function _verifyDocumentSourceModel(input: Uint8Array) {
+  const source = readPptx(input);
+  await renderPptxSourceModelToSvg(source);
+}
+
 // Verify ConvertOptions includes fontDirs
 const _options: ConvertOptions = { slides: [1], width: 960, fontDirs: ["/custom/fonts"] };
 void _svgFn;
@@ -147,6 +153,7 @@ void _fontFn;
 void _options;
 void _verifyPngType;
 void _verifyBufferInput;
+void _verifyDocumentSourceModel;
 TESTEOF
 npx tsc --noEmit
 echo "TypeScript type resolution test passed!"
