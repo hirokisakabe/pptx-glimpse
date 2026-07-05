@@ -91,7 +91,10 @@ export function UploadViewer() {
       <>
         <div className="viewer-summary" data-testid="viewer-status">
           <span>{slides.length} slides rendered</span>
-          <span>{renderedFontCount} font files used for this render</span>
+          <span>
+            {renderedFontCount} font file{renderedFontCount === 1 ? "" : "s"} provided for this
+            render
+          </span>
         </div>
         <SlideViewer slides={slides} currentIndex={currentIndex} onNavigate={handleNavigate} />
         <ThumbnailStrip slides={slides} currentIndex={currentIndex} onSelect={handleNavigate} />

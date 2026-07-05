@@ -21,7 +21,8 @@ export {
   createOpentypeTextMeasurerFromBuffers,
 } from "@pptx-glimpse/renderer";
 export { getWarningEntries, getWarningSummary } from "@pptx-glimpse/renderer";
-export type { ResvgWasmInput } from "@pptx-glimpse/renderer/png";
+
+export type ResvgWasmInput = ArrayBuffer | Uint8Array | Response;
 
 export function convertPptxToPng(): Promise<never> {
   return Promise.reject(
@@ -31,9 +32,7 @@ export function convertPptxToPng(): Promise<never> {
   );
 }
 
-export async function initResvgWasm(
-  wasm: import("@pptx-glimpse/renderer/png").ResvgWasmInput,
-): Promise<void> {
+export async function initResvgWasm(wasm: ResvgWasmInput): Promise<void> {
   const { initWasm } = await import("@resvg/resvg-wasm");
   const wasmInput =
     wasm instanceof Response

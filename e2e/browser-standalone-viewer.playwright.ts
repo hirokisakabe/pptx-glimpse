@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -89,36 +89,31 @@ async function startStandaloneViewer(): Promise<ViewerServer> {
 
 async function buildStandaloneViewerBundle(): Promise<string> {
   await ensureCoreDist();
-  const result = await build({
-    stdin: {
-      contents: viewerAppSource,
-      resolveDir: here,
-      sourcefile: "browser-standalone-viewer.ts",
-      loader: "ts",
-    },
-    bundle: true,
-    write: false,
-    format: "esm",
-    platform: "browser",
-    conditions: ["browser", "import"],
-    logLevel: "silent",
-    absWorkingDir: repoRoot,
-    plugins: [
-      {
-        name: "workspace-pptx-glimpse-browser-entry",
-        setup(buildContext) {
-          buildContext.onResolve({ filter: /^pptx-glimpse$/ }, () => ({
-            path: resolve(corePackageRoot, "dist/browser.js"),
-          }));
-        },
+  const packageResolveDir = await createPackageResolveDir();
+  try {
+    const result = await build({
+      stdin: {
+        contents: viewerAppSource,
+        resolveDir: packageResolveDir,
+        sourcefile: "browser-standalone-viewer.ts",
+        loader: "ts",
       },
-    ],
-  });
-  const bundled = result.outputFiles[0].text;
-  expect(bundled).not.toMatch(
-    /(?:node:fs|node:path|node:os|node:buffer|fs\/promises|from "fs"|from "path"|from "os"|from "module")/,
-  );
-  return bundled;
+      bundle: true,
+      write: false,
+      format: "esm",
+      platform: "browser",
+      conditions: ["browser", "import"],
+      logLevel: "silent",
+      absWorkingDir: repoRoot,
+    });
+    const bundled = result.outputFiles[0].text;
+    expect(bundled).not.toMatch(
+      /(?:node:fs|node:path|node:os|node:buffer|fs\/promises|from "fs"|from "path"|from "os"|from "module")/,
+    );
+    return bundled;
+  } finally {
+    await rm(packageResolveDir, { recursive: true, force: true });
+  }
 }
 
 async function ensureCoreDist(): Promise<void> {
@@ -127,6 +122,14 @@ async function ensureCoreDist(): Promise<void> {
     maxBuffer: 10 * 1024 * 1024,
   }).then(() => undefined);
   await coreDistBuildPromise;
+}
+
+async function createPackageResolveDir(): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-browser-resolve-"));
+  const nodeModules = join(dir, "node_modules");
+  await mkdir(nodeModules);
+  await symlink(corePackageRoot, join(nodeModules, "pptx-glimpse"), "dir");
+  return dir;
 }
 
 const viewerHtml = `<!doctype html>
