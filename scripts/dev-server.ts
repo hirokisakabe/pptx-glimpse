@@ -827,6 +827,9 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       }
 
       Array.prototype.forEach.call(sidebar.querySelectorAll("[data-action]"), function (button) {
+        button.addEventListener("mousedown", function (event) {
+          event.preventDefault();
+        });
         button.addEventListener("click", function (event) {
           event.preventDefault();
           event.stopPropagation();
@@ -1751,6 +1754,10 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     }
 
     function duplicateSlide(index) {
+      if (activeTextEditor) {
+        setEditorMessage("Finish text editing before slide operations", true);
+        return;
+      }
       var slide = slides[index];
       if (!slide || !slide.handle) {
         setEditorMessage("Slide handle is unavailable", true);
@@ -1772,6 +1779,10 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     }
 
     function deleteSlide(index) {
+      if (activeTextEditor) {
+        setEditorMessage("Finish text editing before slide operations", true);
+        return;
+      }
       if (slideCount <= 1) {
         setEditorMessage("Cannot delete the last slide", true);
         return;

@@ -205,6 +205,16 @@ test("duplicates and deletes slides from thumbnails with undo and redo", async (
     await expect(page.locator(".thumbnail")).toHaveCount(2);
     await expect(page.locator("#slide-container")).toContainText("First");
 
+    await dblclickSvgPoint(page, 150, 130);
+    await expect(page.getByTestId("text-editor-overlay")).toBeVisible();
+    await page.getByTestId("duplicate-slide-0").click();
+    await expect(page.locator("#editor-message")).toContainText(
+      "Finish text editing before slide operations",
+    );
+    await expect(page.locator(".thumbnail")).toHaveCount(2);
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("text-editor-overlay")).toBeHidden();
+
     let commandResponse = page.waitForResponse(
       (response) =>
         response.url().endsWith("/api/editor/command") &&
