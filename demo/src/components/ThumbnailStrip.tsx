@@ -15,11 +15,14 @@ export function ThumbnailStrip({
   onSelect: (index: number) => void;
 }) {
   return (
-    <div className="thumbnail-strip">
+    <div className="thumbnail-strip" aria-label="Rendered slides">
       {slides.map((slide, index) => (
-        <div
+        <button
           key={slide.slideNumber}
           className={`thumbnail${index === currentIndex ? " active" : ""}`}
+          aria-label={`Slide ${slide.slideNumber}`}
+          aria-current={index === currentIndex ? "true" : undefined}
+          type="button"
           onClick={() => onSelect(index)}
           dangerouslySetInnerHTML={{ __html: slide.svg }}
         />

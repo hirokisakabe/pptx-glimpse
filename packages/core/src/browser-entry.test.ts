@@ -5,12 +5,12 @@ import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { describe, expect, it, vi } from "vitest";
 
-const rendererPngMocks = vi.hoisted(() => ({
-  initResvgWasm: vi.fn().mockResolvedValue(undefined),
+const resvgMocks = vi.hoisted(() => ({
+  initWasm: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("@pptx-glimpse/renderer/png", () => ({
-  initResvgWasm: rendererPngMocks.initResvgWasm,
+vi.mock("@resvg/resvg-wasm", () => ({
+  initWasm: resvgMocks.initWasm,
 }));
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -39,13 +39,13 @@ function isCorePackageJson(value: unknown): value is CorePackageJson {
 
 describe("browser entry", () => {
   it("forwards explicit WASM input to the renderer PNG initializer", async () => {
-    rendererPngMocks.initResvgWasm.mockClear();
+    resvgMocks.initWasm.mockClear();
     const { initResvgWasm } = await import("./browser.js");
     const wasm = new Uint8Array([1, 2, 3]);
 
     await initResvgWasm(wasm);
 
-    expect(rendererPngMocks.initResvgWasm).toHaveBeenCalledWith(wasm);
+    expect(resvgMocks.initWasm).toHaveBeenCalledWith(wasm);
   });
 
   it("bundles browser-safe entry APIs without Node built-ins", async () => {
