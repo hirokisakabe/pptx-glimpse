@@ -47,6 +47,7 @@ const execFileAsync = promisify(execFile);
 interface SlideSvg {
   slideNumber: number;
   svg: string;
+  handle?: SourceHandle;
 }
 
 interface EditorHistoryState {
@@ -190,7 +191,7 @@ export class DevEditorBackend {
   }
 
   async renderSlidesFromBytes(input: Uint8Array): Promise<readonly SlideSvg[]> {
-    this.#slides = await this.#render(input);
+    this.#slides = addSlideHandles(await this.#render(input), this.#session.document);
     return this.#slides;
   }
 
@@ -410,6 +411,18 @@ function emuToPixels(value: number): number {
   return (value / EMU_PER_INCH) * DEFAULT_DPI;
 }
 
+function addSlideHandles(
+  slides: readonly SlideSvg[],
+  source: ReturnType<typeof readPptx>,
+): SlideSvg[] {
+  return slides.map((slide) => ({
+    ...slide,
+    ...(source.slides[slide.slideNumber - 1]?.handle !== undefined
+      ? { handle: source.slides[slide.slideNumber - 1]?.handle }
+      : {}),
+  }));
+}
+
 // --- WebSocket ---
 
 function broadcast(wss: WebSocketServer, data: unknown): void {
@@ -548,12 +561,31 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     .thumbnail.active { border-color: #4472c4; }
     .thumbnail:hover { border-color: #6090d0; }
     .thumb-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px;
       font-size: 10px;
       color: #888;
-      text-align: center;
       padding: 2px 0;
       background: #16213e;
     }
+    .thumb-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .thumb-actions { display: flex; gap: 3px; }
+    .thumb-action {
+      min-width: 22px;
+      min-height: 20px;
+      border: 1px solid #334155;
+      border-radius: 3px;
+      background: #0f172a;
+      color: #e5e7eb;
+      cursor: pointer;
+      font-size: 10px;
+      font-weight: 700;
+      line-height: 1;
+    }
+    .thumb-action:hover:not(:disabled) { background: #1d4ed8; }
+    .thumb-action:disabled { opacity: 0.4; cursor: not-allowed; }
     .thumb-svg svg { width: 100%; height: auto; display: block; }
     #viewer {
       flex: 1;
@@ -772,7 +804,14 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         .map(function (s, i) {
           return '<div class="thumbnail' + (i === currentIndex ? ' active' : '') +
             '" data-index="' + i + '">' +
-            '<div class="thumb-label">Slide ' + s.slideNumber + '</div>' +
+            '<div class="thumb-label">' +
+            '<span class="thumb-title">Slide ' + s.slideNumber + '</span>' +
+            '<span class="thumb-actions">' +
+            '<button class="thumb-action" data-testid="duplicate-slide-' + i + '" data-action="duplicate" data-index="' + i + '" type="button" title="Duplicate slide">D</button>' +
+            '<button class="thumb-action" data-testid="delete-slide-' + i + '" data-action="delete" data-index="' + i + '" type="button" title="Delete slide"' +
+            (slideCount <= 1 ? ' disabled' : '') + '>X</button>' +
+            '</span>' +
+            '</div>' +
             '<div class="thumb-svg">' + s.svg + '</div>' +
             '</div>';
         })
@@ -786,6 +825,17 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
           });
         })(i);
       }
+
+      Array.prototype.forEach.call(sidebar.querySelectorAll("[data-action]"), function (button) {
+        button.addEventListener("click", function (event) {
+          event.preventDefault();
+          event.stopPropagation();
+          var index = Number(button.getAttribute("data-index") || "-1");
+          var action = button.getAttribute("data-action");
+          if (action === "duplicate") duplicateSlide(index);
+          if (action === "delete") deleteSlide(index);
+        });
+      });
     }
 
     function updateHistory(history) {
@@ -889,7 +939,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       input.disabled = !option;
     }
 
-    function applyEditorResponse(data) {
+    function applyEditorResponse(data, preferredIndex) {
       slides = data.slides || slides;
       slideCount = slides.length;
       updateHistory(data.history);
@@ -897,7 +947,8 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         selectedShapeKey = handleKey(data.selection.shapeHandle);
       }
       renderThumbnails();
-      selectSlide(Math.min(currentIndex, Math.max(slides.length - 1, 0)));
+      var nextIndex = preferredIndex == null ? currentIndex : preferredIndex;
+      selectSlide(Math.min(Math.max(nextIndex, 0), Math.max(slides.length - 1, 0)));
     }
 
     function renderSelectionOverlay() {
@@ -1699,6 +1750,52 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       });
     }
 
+    function duplicateSlide(index) {
+      var slide = slides[index];
+      if (!slide || !slide.handle) {
+        setEditorMessage("Slide handle is unavailable", true);
+        return;
+      }
+      postJson("/api/editor/command", {
+        command: {
+          kind: "duplicateSlide",
+          handle: slide.handle
+        }
+      })
+        .then(function (data) {
+          applyEditorResponse(data, index + 1);
+          setEditorMessage("Duplicated slide", false);
+        })
+        .catch(function (err) {
+          setEditorMessage(err.message, true);
+        });
+    }
+
+    function deleteSlide(index) {
+      if (slideCount <= 1) {
+        setEditorMessage("Cannot delete the last slide", true);
+        return;
+      }
+      var slide = slides[index];
+      if (!slide || !slide.handle) {
+        setEditorMessage("Slide handle is unavailable", true);
+        return;
+      }
+      postJson("/api/editor/command", {
+        command: {
+          kind: "deleteSlide",
+          handle: slide.handle
+        }
+      })
+        .then(function (data) {
+          applyEditorResponse(data, Math.min(index, (data.slides || slides).length - 1));
+          setEditorMessage("Deleted slide", false);
+        })
+        .catch(function (err) {
+          setEditorMessage(err.message, true);
+        });
+    }
+
     function postJson(url, payload) {
       return fetch(url, {
         method: "POST",
@@ -1832,7 +1929,11 @@ function generateThumbnailsHtml(slides: SlideSvg[]): string {
     .map(
       (s, i) =>
         `<div class="thumbnail${i === 0 ? " active" : ""}" data-index="${i}">` +
-        `<div class="thumb-label">Slide ${String(s.slideNumber)}</div>` +
+        `<div class="thumb-label"><span class="thumb-title">Slide ${String(s.slideNumber)}</span>` +
+        `<span class="thumb-actions">` +
+        `<button class="thumb-action" data-testid="duplicate-slide-${String(i)}" data-action="duplicate" data-index="${String(i)}" type="button" title="Duplicate slide">D</button>` +
+        `<button class="thumb-action" data-testid="delete-slide-${String(i)}" data-action="delete" data-index="${String(i)}" type="button" title="Delete slide"${slides.length <= 1 ? " disabled" : ""}>X</button>` +
+        `</span></div>` +
         `<div class="thumb-svg">${s.svg}</div>` +
         `</div>`,
     )
@@ -2017,6 +2118,18 @@ function normalizeCommand(command: unknown): EditorCommand {
       offsetY: asEmu(requireFiniteNumber(command.offsetY, "setShapeTransform.offsetY")),
       width: asEmu(requireFiniteNumber(command.width, "setShapeTransform.width")),
       height: asEmu(requireFiniteNumber(command.height, "setShapeTransform.height")),
+    };
+  }
+  if (command.kind === "duplicateSlide") {
+    return {
+      kind: "duplicateSlide",
+      handle: normalizeHandle(command.handle),
+    };
+  }
+  if (command.kind === "deleteSlide") {
+    return {
+      kind: "deleteSlide",
+      handle: normalizeHandle(command.handle),
     };
   }
   throw new Error("unsupported command kind");

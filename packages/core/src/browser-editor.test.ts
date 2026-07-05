@@ -85,6 +85,58 @@ describe("BrowserPptxEditorSession", () => {
     ]);
     expect(mediaBytes(editor.document, "ppt/media/image1.png")).toEqual(BLUE_PNG);
   });
+
+  it("duplicates and deletes slides with render state and history updates", async () => {
+    const editor = await createBrowserPptxEditorSession(await buildTwoSlideFixture(), {
+      skipSystemFonts: true,
+    });
+    const firstSlide = editor.slides[0];
+    if (firstSlide?.handle === undefined) throw new Error("first slide handle not found");
+
+    const duplicated = await editor.apply({ kind: "duplicateSlide", handle: firstSlide.handle });
+    expect(duplicated.slides).toHaveLength(3);
+    expect(duplicated.slides.map((slide) => slide.handle?.partPath)).toEqual([
+      "ppt/slides/slide1.xml",
+      "ppt/slides/slide3.xml",
+      "ppt/slides/slide2.xml",
+    ]);
+    expect(duplicated.slides[0]?.svg).toContain("First");
+    expect(duplicated.slides[1]?.svg).toContain("First");
+    expect(duplicated.history).toMatchObject({ canUndo: true, undoDepth: 1 });
+
+    const duplicateSlide = duplicated.slides[1];
+    if (duplicateSlide?.handle === undefined) throw new Error("duplicate slide handle not found");
+    const deleted = await editor.apply({ kind: "deleteSlide", handle: duplicateSlide.handle });
+    expect(deleted.slides.map((slide) => slide.handle?.partPath)).toEqual([
+      "ppt/slides/slide1.xml",
+      "ppt/slides/slide2.xml",
+    ]);
+    expect(deleted.history.undoDepth).toBe(2);
+
+    expect((await editor.undo()).slides.map((slide) => slide.handle?.partPath)).toEqual([
+      "ppt/slides/slide1.xml",
+      "ppt/slides/slide3.xml",
+      "ppt/slides/slide2.xml",
+    ]);
+    expect((await editor.redo()).slides.map((slide) => slide.handle?.partPath)).toEqual([
+      "ppt/slides/slide1.xml",
+      "ppt/slides/slide2.xml",
+    ]);
+  });
+
+  it("rejects deleting the last slide without changing the browser editor state", async () => {
+    const editor = await createBrowserPptxEditorSession(await buildShapeFixture(), {
+      skipSystemFonts: true,
+    });
+    const slide = editor.slides[0];
+    if (slide?.handle === undefined) throw new Error("slide handle not found");
+
+    await expect(editor.apply({ kind: "deleteSlide", handle: slide.handle })).rejects.toThrow(
+      /last slide/,
+    );
+    expect(editor.slides).toHaveLength(1);
+    expect(editor.history).toMatchObject({ canUndo: false, undoDepth: 0 });
+  });
 });
 
 function xml(content: string): Uint8Array {
@@ -217,6 +269,65 @@ async function buildImageFixture(): Promise<Uint8Array> {
   zip.file("ppt/media/image1.png", RED_PNG);
 
   return zip.generateAsync({ type: "uint8array" });
+}
+
+async function buildTwoSlideFixture(): Promise<Uint8Array> {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    xml(
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>` +
+        `<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+        `<Override PartName="/ppt/slides/slide2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+        `</Types>`,
+    ),
+  );
+  zip.file(
+    "_rels/.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file(
+    "ppt/presentation.xml",
+    xml(
+      `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:sldIdLst><p:sldId id="256" r:id="rIdSlide1"/><p:sldId id="257" r:id="rIdSlide2"/></p:sldIdLst>` +
+        `<p:sldSz cx="9144000" cy="5143500"/>` +
+        `</p:presentation>`,
+    ),
+  );
+  zip.file(
+    "ppt/_rels/presentation.xml.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdSlide1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>` +
+        `<Relationship Id="rIdSlide2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide2.xml"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file("ppt/slides/slide1.xml", textSlideXml(10, "First"));
+  zip.file("ppt/slides/slide2.xml", textSlideXml(20, "Second"));
+
+  return zip.generateAsync({ type: "uint8array" });
+}
+
+function textSlideXml(shapeId: number, text: string): Uint8Array {
+  return xml(
+    `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">` +
+      `<p:cSld><p:spTree>` +
+      `<p:sp><p:nvSpPr><p:cNvPr id="${String(shapeId)}" name="${text}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+      `<p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="2743200" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>` +
+      `<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>${text}</a:t></a:r></a:p></p:txBody>` +
+      `</p:sp>` +
+      `</p:spTree></p:cSld>` +
+      `</p:sld>`,
+  );
 }
 
 function firstShape(source: ReturnType<typeof readPptx>): SourceShape {

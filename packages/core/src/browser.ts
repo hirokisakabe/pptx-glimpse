@@ -15,6 +15,7 @@ export type {
   BrowserEditorShapeBoundsPx,
   BrowserEditorShapeInfo,
   BrowserEditorSlidesResponse,
+  BrowserEditorSlideSvg,
   BrowserEditorTextBodyInfo,
   BrowserEditorTextRunInfo,
 } from "./browser-editor.js";

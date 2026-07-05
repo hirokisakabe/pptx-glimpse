@@ -60,8 +60,12 @@ export interface BrowserEditorShapeInfo {
   readonly editableTextBody?: BrowserEditorTextBodyInfo;
 }
 
+export interface BrowserEditorSlideSvg extends SlideSvg {
+  readonly handle?: SourceHandle;
+}
+
 export interface BrowserEditorSlidesResponse {
-  readonly slides: readonly SlideSvg[];
+  readonly slides: readonly BrowserEditorSlideSvg[];
   readonly history: BrowserEditorHistoryState;
   readonly selection?: BrowserEditorSelectionInfo;
   readonly warnings?: readonly EditorCommandWarning[];
@@ -77,7 +81,7 @@ export type BrowserEditorRenderOptions = Omit<ConvertOptions, "slides">;
 
 export class BrowserPptxEditorSession {
   #session: ReturnType<typeof createEditorSession>;
-  #slides: readonly SlideSvg[] = [];
+  #slides: readonly BrowserEditorSlideSvg[] = [];
   readonly #renderOptions: BrowserEditorRenderOptions;
 
   private constructor(source: PptxSourceModel, renderOptions: BrowserEditorRenderOptions) {
@@ -98,7 +102,7 @@ export class BrowserPptxEditorSession {
     return this.#session.document;
   }
 
-  get slides(): readonly SlideSvg[] {
+  get slides(): readonly BrowserEditorSlideSvg[] {
     return this.#slides;
   }
 
@@ -130,13 +134,18 @@ export class BrowserPptxEditorSession {
     return slide.shapes.flatMap((shape, index) => shapeInfo(shape, index));
   }
 
-  async renderCurrentSlides(): Promise<readonly SlideSvg[]> {
+  async renderCurrentSlides(): Promise<readonly BrowserEditorSlideSvg[]> {
     const report = await renderPptxSourceModelToSvg(this.#session.document, {
       textOutput: "text",
       skipSystemFonts: true,
       ...this.#renderOptions,
     });
-    this.#slides = report.slides;
+    this.#slides = report.slides.map((slide) => ({
+      ...slide,
+      ...(this.#session.document.slides[slide.slideNumber - 1]?.handle !== undefined
+        ? { handle: this.#session.document.slides[slide.slideNumber - 1]?.handle }
+        : {}),
+    }));
     return this.#slides;
   }
 
