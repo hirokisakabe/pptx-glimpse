@@ -53,6 +53,8 @@ export type PptxSourceModelEdit =
   | PptxSourceModelTextRunPropertiesEdit
   | PptxSourceModelParagraphTextEdit
   | PptxSourceModelShapeTransformEdit
+  | PptxSourceModelAddTextBoxEdit
+  | PptxSourceModelDeleteShapeEdit
   | PptxSourceModelDuplicateSlideEdit
   | PptxSourceModelDeleteSlideEdit;
 
@@ -99,6 +101,23 @@ export interface PptxSourceModelShapeTransformEdit {
   readonly offsetY: Emu;
   readonly width: Emu;
   readonly height: Emu;
+}
+
+export interface PptxSourceModelAddTextBoxEdit {
+  readonly kind: "addTextBox";
+  readonly slidePartPath: PartPath;
+  readonly shapeId: string;
+  readonly name: string;
+  readonly offsetX: Emu;
+  readonly offsetY: Emu;
+  readonly width: Emu;
+  readonly height: Emu;
+  readonly text: string;
+}
+
+export interface PptxSourceModelDeleteShapeEdit {
+  readonly kind: "deleteShape";
+  readonly handle: SourceHandle;
 }
 
 export interface PptxSourceModelDuplicateSlideEdit {

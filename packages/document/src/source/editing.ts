@@ -11,12 +11,14 @@ import type {
   Relationship,
   RelationshipId,
   SourceHandle,
+  SourceNodeId,
   SourceParagraph,
   SourceRunProperties,
   SourceShape,
   SourceShapeNode,
   SourceSlide,
   SourceTextRun,
+  SourceTransform,
 } from "./index.js";
 import { asPartPath, asRelationshipId } from "./index.js";
 import { relationshipsPartPath, resolveInternalRelationshipTarget } from "./package-paths.js";
@@ -307,6 +309,11 @@ export interface UpdateShapeTransformInput {
   readonly height: Emu;
 }
 
+export interface AddTextBoxInput extends UpdateShapeTransformInput {
+  readonly text: string;
+  readonly name?: string;
+}
+
 export function findShapeNodeBySourceHandle(
   source: PptxSourceModel,
   handle: SourceHandle,
@@ -374,6 +381,112 @@ export function updateShapeTransform(
         height: transform.height,
       },
     ],
+  };
+}
+
+export function addTextBox(
+  source: PptxSourceModel,
+  slideHandle: SourceHandle,
+  input: AddTextBoxInput,
+): PptxSourceModel {
+  assertTextBoxInput(input);
+  const slideIndex = source.slides.findIndex((slide) =>
+    sourceHandlesEqual(slide.handle, slideHandle),
+  );
+  if (slideIndex === -1) {
+    throw new Error("addTextBox: slide handle was not found in PptxSourceModel source");
+  }
+
+  const slide = source.slides[slideIndex];
+  const shapeId = nextShapeId(slide.shapes, source.edits ?? [], slide.partPath);
+  const shapeIdValue = String(shapeId);
+  const name = input.name?.trim() || `TextBox ${shapeIdValue}`;
+  const orderingSlot = nextOrderingSlot(slide.shapes);
+  const shape = createTextBoxShape(slide.partPath, shapeId, name, orderingSlot, input);
+  const slides = source.slides.map((candidate, index) =>
+    index === slideIndex
+      ? {
+          ...candidate,
+          shapes: [...candidate.shapes, shape],
+        }
+      : candidate,
+  );
+
+  return {
+    ...source,
+    slides,
+    edits: [
+      ...(source.edits ?? []),
+      {
+        kind: "addTextBox",
+        slidePartPath: slide.partPath,
+        shapeId: shapeIdValue,
+        name,
+        offsetX: input.offsetX,
+        offsetY: input.offsetY,
+        width: input.width,
+        height: input.height,
+        text: input.text,
+      },
+    ],
+  };
+}
+
+export function deleteShape(source: PptxSourceModel, handle: SourceHandle): PptxSourceModel {
+  if (handle.nodeId === undefined) {
+    throw new Error("deleteShape: shape delete requires a node id");
+  }
+
+  let found: SourceShapeNode | undefined;
+  let deleted = false;
+  const slides = source.slides.map((slide) => {
+    let slideChanged = false;
+    const nextShapes = slide.shapes.filter((shape) => {
+      if (!sourceHandlesEqual(shape.handle, handle)) return true;
+      found = shape;
+      if (shape.kind !== "shape") {
+        throw new Error("deleteShape: only top-level sp shapes can be deleted");
+      }
+      if (hasAlternateContentSidecar(shape)) {
+        throw new Error("deleteShape: shapes inside AlternateContent are not supported");
+      }
+      deleted = true;
+      slideChanged = true;
+      return false;
+    });
+    return slideChanged ? { ...slide, shapes: nextShapes } : slide;
+  });
+
+  if (!deleted) {
+    if (
+      found === undefined &&
+      source.slides.some((slide) => hasNestedShapeNodeWithHandle(slide.shapes, handle))
+    ) {
+      throw new Error("deleteShape: nested group shape deletion is not supported");
+    }
+    throw new Error("deleteShape: shape handle was not found in PptxSourceModel source");
+  }
+
+  const retainedEdits = (source.edits ?? []).filter((edit) => !editTargetsShape(edit, handle));
+  const deletedInsertedShape = (source.edits ?? []).some(
+    (edit) =>
+      edit.kind === "addTextBox" &&
+      edit.slidePartPath === handle.partPath &&
+      edit.shapeId === String(handle.nodeId),
+  );
+
+  return {
+    ...source,
+    slides,
+    edits: deletedInsertedShape
+      ? retainedEdits
+      : [
+          ...retainedEdits,
+          {
+            kind: "deleteShape",
+            handle,
+          },
+        ],
   };
 }
 
@@ -740,6 +853,125 @@ function hasEditableTransform(shape: SourceShapeNode): shape is TransformableSha
   return shape.kind !== "raw" && shape.transform !== undefined;
 }
 
+function assertTextBoxInput(input: AddTextBoxInput): void {
+  assertFiniteEmu(input.offsetX, "addTextBox", "offsetX");
+  assertFiniteEmu(input.offsetY, "addTextBox", "offsetY");
+  assertPositiveFiniteEmu(input.width, "addTextBox", "width");
+  assertPositiveFiniteEmu(input.height, "addTextBox", "height");
+  if (typeof input.text !== "string") {
+    throw new Error("addTextBox: text must be a string");
+  }
+  if (input.name !== undefined && input.name.trim() === "") {
+    throw new Error("addTextBox: name must be a non-empty string when provided");
+  }
+}
+
+function assertFiniteEmu(value: Emu, operationName: "addTextBox", fieldName: string): void {
+  if (!Number.isFinite(value)) {
+    throw new Error(`${operationName}: ${fieldName} must be a finite EMU value`);
+  }
+}
+
+function assertPositiveFiniteEmu(value: Emu, operationName: "addTextBox", fieldName: string): void {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${operationName}: ${fieldName} must be a finite positive EMU value`);
+  }
+}
+
+function createTextBoxShape(
+  partPath: PartPath,
+  shapeId: SourceNodeId,
+  name: string,
+  orderingSlot: number,
+  input: AddTextBoxInput,
+): SourceShape {
+  const transform: SourceTransform = {
+    offsetX: input.offsetX,
+    offsetY: input.offsetY,
+    width: input.width,
+    height: input.height,
+  };
+  return {
+    kind: "shape",
+    nodeId: shapeId,
+    name,
+    transform,
+    geometry: { preset: "rect" },
+    textBody: {
+      handle: { partPath, nodeId: asSourceNodeId(`text:shape:${shapeId}`), orderingSlot },
+      paragraphs: [
+        {
+          handle: {
+            partPath,
+            nodeId: asSourceNodeId(`text:shape:${shapeId}:p:0`),
+            orderingSlot: 0,
+          },
+          runs: [
+            {
+              kind: "textRun",
+              text: input.text,
+              handle: {
+                partPath,
+                nodeId: asSourceNodeId(`text:shape:${shapeId}:p:0:r:0`),
+                orderingSlot: 0,
+              },
+            },
+          ],
+        },
+      ],
+    },
+    handle: { partPath, nodeId: shapeId, orderingSlot },
+  };
+}
+
+function nextShapeId(
+  shapes: readonly SourceShapeNode[],
+  edits: readonly PptxSourceModelEdit[],
+  slidePartPath: PartPath,
+): SourceNodeId {
+  const used = new Set<number>();
+  collectNumericShapeIds(shapes, used);
+  collectNumericShapeEditIds(edits, slidePartPath, used);
+  const max = Math.max(0, ...used);
+  for (let candidate = max + 1; ; candidate += 1) {
+    if (!used.has(candidate)) return asSourceNodeId(String(candidate));
+  }
+}
+
+function collectNumericShapeIds(shapes: readonly SourceShapeNode[], used: Set<number>): void {
+  for (const shape of shapes) {
+    const numericId = Number(shape.nodeId);
+    if (Number.isInteger(numericId) && numericId > 0) used.add(numericId);
+    if (shape.kind === "group") collectNumericShapeIds(shape.children, used);
+  }
+}
+
+function collectNumericShapeEditIds(
+  edits: readonly PptxSourceModelEdit[],
+  slidePartPath: PartPath,
+  used: Set<number>,
+): void {
+  for (const edit of edits) {
+    const id =
+      edit.kind === "addTextBox" && edit.slidePartPath === slidePartPath
+        ? edit.shapeId
+        : edit.kind === "deleteShape" && edit.handle.partPath === slidePartPath
+          ? edit.handle.nodeId
+          : undefined;
+    const numericId = Number(id);
+    if (Number.isInteger(numericId) && numericId > 0) used.add(numericId);
+  }
+}
+
+function nextOrderingSlot(shapes: readonly SourceShapeNode[]): number {
+  return (
+    shapes.reduce((current, shape) => {
+      const slot = shape.handle?.orderingSlot ?? -1;
+      return Math.max(current, slot);
+    }, -1) + 1
+  );
+}
+
 function findShapeNodeInTree(
   shapes: readonly SourceShapeNode[],
   handle: SourceHandle,
@@ -938,10 +1170,13 @@ function topologyEditPartPaths(edit: PptxSourceModelEdit): readonly PartPath[] {
       return [edit.sourceSlidePartPath, edit.newSlidePartPath];
     case "deleteSlide":
       return [edit.slidePartPath];
+    case "addTextBox":
+      return [edit.slidePartPath];
     case "replaceTextRunPlainText":
     case "updateTextRunProperties":
     case "replaceParagraphPlainText":
     case "updateShapeTransform":
+    case "deleteShape":
       return [];
   }
 }
@@ -1014,12 +1249,45 @@ function hasDirtyEditForPart(edits: readonly PptxSourceModelEdit[], partPath: Pa
       case "updateTextRunProperties":
       case "replaceParagraphPlainText":
       case "updateShapeTransform":
+      case "deleteShape":
         return edit.handle.partPath === partPath;
+      case "addTextBox":
+        return edit.slidePartPath === partPath;
       case "duplicateSlide":
       case "deleteSlide":
         return false;
     }
   });
+}
+
+function editTargetsShape(edit: PptxSourceModelEdit, handle: SourceHandle): boolean {
+  switch (edit.kind) {
+    case "replaceTextRunPlainText":
+    case "updateTextRunProperties":
+      return (
+        edit.handle.partPath === handle.partPath && textRunShapeId(edit.handle) === handle.nodeId
+      );
+    case "replaceParagraphPlainText":
+      return (
+        edit.handle.partPath === handle.partPath && paragraphShapeId(edit.handle) === handle.nodeId
+      );
+    case "updateShapeTransform":
+    case "deleteShape":
+      return sourceHandlesEqual(edit.handle, handle);
+    case "addTextBox":
+      return edit.slidePartPath === handle.partPath && edit.shapeId === String(handle.nodeId);
+    case "duplicateSlide":
+    case "deleteSlide":
+      return false;
+  }
+}
+
+function textRunShapeId(handle: SourceHandle): string | undefined {
+  return /^text:shape:([^:]+):p:\d+:r:\d+$/.exec(String(handle.nodeId ?? ""))?.[1];
+}
+
+function paragraphShapeId(handle: SourceHandle): string | undefined {
+  return /^text:shape:([^:]+):p:\d+$/.exec(String(handle.nodeId ?? ""))?.[1];
 }
 
 function editIsInvalidatedByDeletedParts(
@@ -1031,6 +1299,10 @@ function editIsInvalidatedByDeletedParts(
     case "updateTextRunProperties":
     case "replaceParagraphPlainText":
     case "updateShapeTransform":
+      return partPaths.has(edit.handle.partPath);
+    case "addTextBox":
+      return partPaths.has(edit.slidePartPath);
+    case "deleteShape":
       return partPaths.has(edit.handle.partPath);
     case "duplicateSlide":
       return partPaths.has(edit.newSlidePartPath);

@@ -1,5 +1,8 @@
 import {
+  addTextBox,
+  type AddTextBoxInput,
   clearTextRunProperties,
+  deleteShape,
   deleteSlide,
   duplicateSlide,
   type EditableTextRunProperties,
@@ -80,6 +83,16 @@ export interface SetShapeTransformCommand {
   readonly height: Emu;
 }
 
+export interface AddTextBoxCommand extends AddTextBoxInput {
+  readonly kind: "addTextBox";
+  readonly slideHandle: SourceHandle;
+}
+
+export interface DeleteShapeCommand {
+  readonly kind: "deleteShape";
+  readonly handle: SourceHandle;
+}
+
 export interface DuplicateSlideCommand {
   readonly kind: "duplicateSlide";
   readonly handle: SourceHandle;
@@ -98,6 +111,8 @@ export type EditorCommand =
   | MoveShapeCommand
   | ResizeShapeCommand
   | SetShapeTransformCommand
+  | AddTextBoxCommand
+  | DeleteShapeCommand
   | DuplicateSlideCommand
   | DeleteSlideCommand;
 
@@ -208,6 +223,7 @@ export class EditorSession {
         commands.reduce((document, command) => applyCommandToDocument(document, command), before),
       );
       this.#document = after;
+      this.reconcileSelectionAfterDocumentChange();
       this.#undoStack.push({ before, after });
       this.#redoStack.length = 0;
 
@@ -227,6 +243,7 @@ export class EditorSession {
     if (entry === undefined) return { ok: false, reason: "empty-undo-stack" };
 
     this.#document = entry.before;
+    this.reconcileSelectionAfterDocumentChange();
     this.#redoStack.push(entry);
 
     return { ok: true, document: entry.before };
@@ -237,9 +254,17 @@ export class EditorSession {
     if (entry === undefined) return { ok: false, reason: "empty-redo-stack" };
 
     this.#document = entry.after;
+    this.reconcileSelectionAfterDocumentChange();
     this.#undoStack.push(entry);
 
     return { ok: true, document: entry.after };
+  }
+
+  private reconcileSelectionAfterDocumentChange(): void {
+    if (this.#selection === undefined) return;
+    if (findShapeNodeBySourceHandle(this.#document, this.#selection.shapeHandle) === undefined) {
+      this.#selection = undefined;
+    }
   }
 }
 
@@ -266,11 +291,29 @@ function applyCommandToDocument(
       return resizeShape(document, command);
     case "setShapeTransform":
       return setShapeTransform(document, command);
+    case "addTextBox":
+      return addTextBoxCommand(document, command);
+    case "deleteShape":
+      return deleteShape(document, command.handle);
     case "duplicateSlide":
       return duplicateSlide(document, command.handle);
     case "deleteSlide":
       return deleteSlide(document, command.handle);
   }
+}
+
+function addTextBoxCommand(document: PptxSourceModel, command: AddTextBoxCommand): PptxSourceModel {
+  requireFiniteEmu(command.offsetX, "addTextBox", "offsetX");
+  requireFiniteEmu(command.offsetY, "addTextBox", "offsetY");
+  requirePositiveFiniteEmu(command.width, "addTextBox", "width");
+  requirePositiveFiniteEmu(command.height, "addTextBox", "height");
+  if (typeof command.text !== "string") {
+    throw new Error("addTextBox: text must be a string");
+  }
+  if (command.name !== undefined && command.name.trim() === "") {
+    throw new Error("addTextBox: name must be a non-empty string when provided");
+  }
+  return addTextBox(document, command.slideHandle, command);
 }
 
 function setTextRunPropertiesCommand(
@@ -418,7 +461,7 @@ function requireEditableShapeTransform(
 
 function requireFiniteEmu(
   value: Emu,
-  commandName: "moveShape" | "resizeShape" | "setShapeTransform",
+  commandName: "moveShape" | "resizeShape" | "setShapeTransform" | "addTextBox",
   fieldName: string,
 ): void {
   if (!Number.isFinite(value)) {
@@ -428,7 +471,7 @@ function requireFiniteEmu(
 
 function requirePositiveFiniteEmu(
   value: Emu,
-  commandName: "moveShape" | "resizeShape" | "setShapeTransform",
+  commandName: "moveShape" | "resizeShape" | "setShapeTransform" | "addTextBox",
   fieldName: string,
 ): void {
   if (!Number.isFinite(value) || value <= 0) {

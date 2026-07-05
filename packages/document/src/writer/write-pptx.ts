@@ -35,6 +35,8 @@ import type {
   PartPath,
   PartRelationships,
   PptxSourceModel,
+  PptxSourceModelAddTextBoxEdit,
+  PptxSourceModelDeleteShapeEdit,
   PptxSourceModelDeleteSlideEdit,
   PptxSourceModelDuplicateSlideEdit,
   PptxSourceModelEdit,
@@ -79,14 +81,26 @@ export function writePptx(source: PptxSourceModel): WritePptxOutput {
   const textRunPropertiesEdits = source.edits?.filter(isTextRunPropertiesEdit) ?? [];
   const paragraphTextEdits = source.edits?.filter(isParagraphTextEdit) ?? [];
   const shapeTransformEdits = source.edits?.filter(isShapeTransformEdit) ?? [];
+  const addTextBoxEdits = source.edits?.filter(isAddTextBoxEdit) ?? [];
+  const deleteShapeEdits = source.edits?.filter(isDeleteShapeEdit) ?? [];
   const duplicateSlideEdits = source.edits?.filter(isDuplicateSlideEdit) ?? [];
   const deleteSlideEdits = source.edits?.filter(isDeleteSlideEdit) ?? [];
-  validateEdits(textRunEdits, textRunPropertiesEdits, paragraphTextEdits, shapeTransformEdits);
-  const dirtyPartPaths = new Set(
-    [...textRunEdits, ...textRunPropertiesEdits, ...paragraphTextEdits, ...shapeTransformEdits].map(
-      (edit) => edit.handle.partPath,
-    ),
+  validateEdits(
+    textRunEdits,
+    textRunPropertiesEdits,
+    paragraphTextEdits,
+    shapeTransformEdits,
+    addTextBoxEdits,
+    deleteShapeEdits,
   );
+  const dirtyPartPaths = new Set([
+    ...textRunEdits.map((edit) => edit.handle.partPath),
+    ...textRunPropertiesEdits.map((edit) => edit.handle.partPath),
+    ...paragraphTextEdits.map((edit) => edit.handle.partPath),
+    ...shapeTransformEdits.map((edit) => edit.handle.partPath),
+    ...deleteShapeEdits.map((edit) => edit.handle.partPath),
+    ...addTextBoxEdits.map((edit) => edit.slidePartPath),
+  ]);
   const hasSlideTopologyEdits = duplicateSlideEdits.length > 0 || deleteSlideEdits.length > 0;
   const files: Record<string, Uint8Array> = {
     [CONTENT_TYPES_PART]: encodeXml(serializeContentTypes(source.packageGraph.contentTypes)),
@@ -120,6 +134,8 @@ export function writePptx(source: PptxSourceModel): WritePptxOutput {
       textRunPropertiesEdits,
       paragraphTextEdits,
       shapeTransformEdits,
+      addTextBoxEdits,
+      deleteShapeEdits,
     );
     written.add(partPath);
   }
@@ -164,6 +180,14 @@ function isShapeTransformEdit(
   return edit.kind === "updateShapeTransform";
 }
 
+function isAddTextBoxEdit(edit: PptxSourceModelEdit): edit is PptxSourceModelAddTextBoxEdit {
+  return edit.kind === "addTextBox";
+}
+
+function isDeleteShapeEdit(edit: PptxSourceModelEdit): edit is PptxSourceModelDeleteShapeEdit {
+  return edit.kind === "deleteShape";
+}
+
 function isDuplicateSlideEdit(
   edit: PptxSourceModelEdit,
 ): edit is PptxSourceModelDuplicateSlideEdit {
@@ -181,6 +205,8 @@ function serializeDirtyXmlPart(
   textRunPropertiesEdits: readonly PptxSourceModelTextRunPropertiesEdit[],
   paragraphTextEdits: readonly PptxSourceModelParagraphTextEdit[],
   shapeTransformEdits: readonly PptxSourceModelShapeTransformEdit[],
+  addTextBoxEdits: readonly PptxSourceModelAddTextBoxEdit[],
+  deleteShapeEdits: readonly PptxSourceModelDeleteShapeEdit[],
 ): Uint8Array {
   const rawPart = source.packageGraph.rawParts?.find((part) => part.partPath === partPath);
   if (rawPart === undefined) {
@@ -191,6 +217,9 @@ function serializeDirtyXmlPart(
   }
 
   const root = parseXml(textDecoder.decode(rawPart.bytes));
+  for (const edit of addTextBoxEdits.filter((edit) => edit.slidePartPath === partPath)) {
+    applyAddTextBoxEdit(root, edit);
+  }
   for (const edit of paragraphTextEdits.filter((edit) => edit.handle.partPath === partPath)) {
     applyParagraphTextEdit(root, edit);
   }
@@ -202,6 +231,9 @@ function serializeDirtyXmlPart(
   }
   for (const edit of shapeTransformEdits.filter((edit) => edit.handle.partPath === partPath)) {
     applyShapeTransformEdit(root, edit);
+  }
+  for (const edit of deleteShapeEdits.filter((edit) => edit.handle.partPath === partPath)) {
+    applyDeleteShapeEdit(root, edit);
   }
   return encodeXml(XML_DECLARATION + xmlBuilder.build(stripXmlProcessingInstruction(root)));
 }
@@ -457,6 +489,77 @@ function applyShapeTransformEdit(root: XmlNode, edit: PptxSourceModelShapeTransf
   ext["@_cy"] = String(edit.height);
 }
 
+function applyAddTextBoxEdit(root: XmlNode, edit: PptxSourceModelAddTextBoxEdit): void {
+  const slide = getChild(root, "sld");
+  const cSld = getChild(slide, "cSld");
+  const spTree = getChild(cSld, "spTree");
+  if (spTree === undefined) {
+    throw new Error(`writePptx: slide '${edit.slidePartPath}' has no spTree`);
+  }
+  if (locateShapeTreeNode(spTree, { nodeId: edit.shapeId }) !== undefined) {
+    throw new Error(`writePptx: shape id '${edit.shapeId}' already exists in source XML`);
+  }
+
+  appendChild(spTree, "p:sp", createTextBoxXml(edit));
+}
+
+function applyDeleteShapeEdit(root: XmlNode, edit: PptxSourceModelDeleteShapeEdit): void {
+  const locator = parseShapeLocator(edit.handle);
+  const slide = getChild(root, "sld");
+  const cSld = getChild(slide, "cSld");
+  const spTree = getChild(cSld, "spTree");
+  if (!deleteShapeXml(spTree, locator.nodeId)) {
+    throw new Error(`writePptx: shape delete handle '${locator.nodeId}' no longer matches p:sp`);
+  }
+}
+
+function createTextBoxXml(edit: PptxSourceModelAddTextBoxEdit): XmlNode {
+  return {
+    "p:nvSpPr": {
+      "p:cNvPr": {
+        "@_id": edit.shapeId,
+        "@_name": edit.name,
+      },
+      "p:cNvSpPr": {
+        "@_txBox": "1",
+      },
+      "p:nvPr": {},
+    },
+    "p:spPr": {
+      "a:xfrm": {
+        "a:off": {
+          "@_x": String(edit.offsetX),
+          "@_y": String(edit.offsetY),
+        },
+        "a:ext": {
+          "@_cx": String(edit.width),
+          "@_cy": String(edit.height),
+        },
+      },
+      "a:prstGeom": {
+        "@_prst": "rect",
+        "a:avLst": {},
+      },
+      "a:noFill": {},
+      "a:ln": {
+        "a:noFill": {},
+      },
+    },
+    "p:txBody": {
+      "a:bodyPr": {
+        "@_wrap": "square",
+      },
+      "a:lstStyle": {},
+      "a:p": {
+        "a:r": {
+          "a:t": textElementValue(undefined, edit.text),
+        },
+        "a:endParaRPr": {},
+      },
+    },
+  };
+}
+
 interface TextRunLocator {
   readonly shapeNodeId?: string;
   readonly shapeOrderingSlot?: number;
@@ -556,6 +659,24 @@ function locateShapeTreeNode(
   return undefined;
 }
 
+function deleteShapeXml(spTree: XmlNode | undefined, nodeId: string): boolean {
+  if (spTree === undefined) return false;
+  const entry = Object.entries(spTree).find(
+    ([key]) => !key.startsWith("@_") && localName(key) === "sp",
+  );
+  if (entry === undefined) return false;
+
+  const [key, value] = entry;
+  const shapes = Array.isArray(value) ? unsafeOoxmlBoundaryAssertion<unknown[]>(value) : [value];
+  const nextShapes = shapes.filter(
+    (shape) => getShapeTreeNodeId(unsafeOoxmlBoundaryAssertion<XmlNode>(shape)) !== nodeId,
+  );
+  if (nextShapes.length === shapes.length) return false;
+  if (nextShapes.length === 0) delete spTree[key];
+  else spTree[key] = Array.isArray(value) ? nextShapes : nextShapes[0];
+  return true;
+}
+
 function getShapeByOrderingSlot(
   spTree: XmlNode | undefined,
   orderingSlot: number,
@@ -614,6 +735,23 @@ function setChildText(node: XmlNode, name: string, text: string): void {
   node[`a:${name}`] = textRequiresPreserve(text)
     ? { "@_xml:space": "preserve", "#text": text }
     : text;
+}
+
+function appendChild(node: XmlNode, preferredKey: string, value: XmlNode): void {
+  const local = localName(preferredKey);
+  const existingKey = Object.keys(node).find(
+    (key) => !key.startsWith("@_") && localName(key) === local,
+  );
+  if (existingKey === undefined) {
+    node[preferredKey] = [value];
+    return;
+  }
+
+  const current = node[existingKey];
+  const currentItems = Array.isArray(current)
+    ? unsafeOoxmlBoundaryAssertion<unknown[]>(current)
+    : [current];
+  node[existingKey] = [...currentItems, value];
 }
 
 function ensureRunProperties(run: XmlNode): XmlNode {
@@ -848,7 +986,18 @@ function validateEdits(
   textRunPropertiesEdits: readonly PptxSourceModelTextRunPropertiesEdit[],
   paragraphTextEdits: readonly PptxSourceModelParagraphTextEdit[],
   shapeTransformEdits: readonly PptxSourceModelShapeTransformEdit[],
+  addTextBoxEdits: readonly PptxSourceModelAddTextBoxEdit[],
+  deleteShapeEdits: readonly PptxSourceModelDeleteShapeEdit[],
 ): void {
+  const addedShapeKeys = new Set<string>();
+  for (const edit of addTextBoxEdits) {
+    const key = [edit.slidePartPath, edit.shapeId].join("\u0000");
+    if (addedShapeKeys.has(key)) {
+      throw new Error(`writePptx: conflicting text box additions for shape id '${edit.shapeId}'`);
+    }
+    addedShapeKeys.add(key);
+  }
+
   const runKeys = new Set<string>();
   for (const edit of textRunEdits) {
     const key = editHandleNodeKey(edit);
@@ -895,6 +1044,17 @@ function validateEdits(
       );
     }
     shapeKeys.add(key);
+  }
+
+  const deletedShapeKeys = new Set<string>();
+  for (const edit of deleteShapeEdits) {
+    const key = editHandleNodeKey(edit);
+    if (deletedShapeKeys.has(key)) {
+      throw new Error(
+        `writePptx: conflicting shape delete edits for handle '${String(edit.handle.nodeId)}'`,
+      );
+    }
+    deletedShapeKeys.add(key);
   }
 }
 

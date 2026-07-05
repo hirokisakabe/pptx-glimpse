@@ -7,7 +7,9 @@ import { describe, expect, it } from "vitest";
 // Import via the actual public surface (`@pptx-glimpse/document`).
 import { asEmu, asPt, asSourceNodeId, readPptx, writePptx } from "../index.js";
 import {
+  addTextBox,
   clearTextRunProperties,
+  deleteShape,
   deleteSlide,
   duplicateSlide,
   findParagraphBySourceHandle,
@@ -17,6 +19,7 @@ import {
   replaceTextRunPlainText,
   setTextRunProperties,
   type SourceShape,
+  type SourceShapeNode,
   updateShapeTransform,
 } from "../index.js";
 
@@ -295,6 +298,52 @@ function buildTextEditFixtureFromSlide(slideSpTree: string): Uint8Array {
     ),
     "docProps/custom.xml": xml(`<Properties><custom value="preserve-me"/></Properties>`),
     "ppt/media/image1.png": new Uint8Array([0x89, 0x50, 0x4e, 0x47, 9, 8, 7]),
+  });
+}
+
+function buildShapeDeleteFixture(): Uint8Array {
+  return zipSync({
+    "[Content_Types].xml": xml(
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>` +
+        `<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+        `</Types>`,
+    ),
+    "_rels/.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/presentation.xml": xml(
+      `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:sldIdLst><p:sldId id="256" r:id="rIdSlide1"/></p:sldIdLst>` +
+        `<p:sldSz cx="9144000" cy="5143500"/>` +
+        `</p:presentation>`,
+    ),
+    "ppt/_rels/presentation.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdSlide1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/slides/slide1.xml": xml(
+      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">` +
+        `<p:cSld><p:spTree>` +
+        `<p:sp><p:nvSpPr><p:cNvPr id="10" name="Delete Me"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+        `<p:spPr><a:xfrm><a:off x="100" y="200"/><a:ext cx="300" cy="400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>` +
+        `<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Remove</a:t></a:r></a:p></p:txBody>` +
+        `</p:sp>` +
+        `<p:pic><p:nvPicPr><p:cNvPr id="20" name="Keep Picture"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill/><p:spPr/></p:pic>` +
+        `<p:sp><p:nvSpPr><p:cNvPr id="30" name="Keep Shape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+        `<p:spPr><a:xfrm><a:off x="500" y="600"/><a:ext cx="700" cy="800"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>` +
+        `<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Keep</a:t></a:r></a:p></p:txBody>` +
+        `</p:sp>` +
+        `</p:spTree></p:cSld>` +
+        `<p:timing><p:tnLst><p:par/></p:tnLst></p:timing>` +
+        `</p:sld>`,
+    ),
+    "docProps/custom.xml": xml(`<Properties><custom value="preserve-me"/></Properties>`),
   });
 }
 
@@ -611,6 +660,149 @@ describe("writePptx - slide topology edits", () => {
     expect(reread.presentation.slidePartPaths).toEqual(["ppt/slides/slide1.xml"]);
     expect(presentationXml).not.toContain(`r:id="rIdSlide2"`);
     expect(presentationXml).not.toContain(`r:id="rId3"`);
+  });
+});
+
+describe("writePptx - shape add/delete edits", () => {
+  it("adds a text box with a collision-free shape id and persists it", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const edited = addTextBox(source, source.slides[0].handle!, {
+      offsetX: asEmu(914400),
+      offsetY: asEmu(457200),
+      width: asEmu(2743200),
+      height: asEmu(914400),
+      text: "Added text box",
+    });
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+    const added = requireShape(findShapeByName(reread, "TextBox 31"));
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+
+    expect(added).toMatchObject({
+      nodeId: "31",
+      name: "TextBox 31",
+      transform: {
+        offsetX: 914400,
+        offsetY: 457200,
+        width: 2743200,
+        height: 914400,
+      },
+    });
+    expect(added.textBody?.paragraphs[0]?.runs[0]?.text).toBe("Added text box");
+    expect(slideXml).toContain(`<p:cNvPr id="31" name="TextBox 31"`);
+    expect(slideXml).toContain(`<p:cNvSpPr txBox="1"`);
+    expect(decoder.decode(getEntry(output, "docProps/custom.xml"))).toContain("preserve-me");
+  });
+
+  it("allows an added text box to be edited before write", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const withTextBox = addTextBox(source, source.slides[0].handle!, {
+      offsetX: asEmu(1000),
+      offsetY: asEmu(2000),
+      width: asEmu(3000),
+      height: asEmu(4000),
+      text: "Initial",
+      name: "Editable Added",
+    });
+    const added = requireShape(findShapeByName(withTextBox, "Editable Added"));
+    const runHandle = added.textBody?.paragraphs[0]?.runs[0]?.handle;
+    if (runHandle === undefined || added.handle === undefined) {
+      throw new Error("added text box handles not found");
+    }
+
+    const edited = updateShapeTransform(
+      replaceTextRunPlainText(withTextBox, runHandle, "Edited Added"),
+      added.handle,
+      {
+        offsetX: asEmu(5000),
+        offsetY: asEmu(6000),
+        width: asEmu(7000),
+        height: asEmu(8000),
+      },
+    );
+    const rereadAdded = requireShape(
+      findShapeByName(readPptx(writePptx(edited)), "Editable Added"),
+    );
+
+    expect(rereadAdded.textBody?.paragraphs[0]?.runs[0]?.text).toBe("Edited Added");
+    expect(rereadAdded.transform).toMatchObject({
+      offsetX: 5000,
+      offsetY: 6000,
+      width: 7000,
+      height: 8000,
+    });
+  });
+
+  it("does not reuse a pending-deleted shape id when adding a text box", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const deletedMaxIdShape = deleteShape(
+      source,
+      requireHandle(findShapeByName(source, "Keep Shape").handle),
+    );
+    const edited = addTextBox(deletedMaxIdShape, deletedMaxIdShape.slides[0].handle!, {
+      offsetX: asEmu(900),
+      offsetY: asEmu(1000),
+      width: asEmu(1100),
+      height: asEmu(1200),
+      text: "Added after delete",
+    });
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+
+    expect(findShapeByName(reread, "TextBox 31").textBody?.paragraphs[0]?.runs[0]?.text).toBe(
+      "Added after delete",
+    );
+    expect(() => findShapeByName(reread, "Keep Shape")).toThrow(/shape not found/);
+  });
+
+  it("cancels the add edit when a newly-added text box is deleted before write", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const withTextBox = addTextBox(source, source.slides[0].handle!, {
+      offsetX: asEmu(100),
+      offsetY: asEmu(200),
+      width: asEmu(300),
+      height: asEmu(400),
+      text: "Temporary",
+      name: "Temporary TextBox",
+    });
+    const added = findShapeByName(withTextBox, "Temporary TextBox");
+    const edited = deleteShape(withTextBox, requireHandle(added.handle));
+    const output = writePptx(edited);
+
+    expect(
+      edited.edits?.filter((edit) => edit.kind === "addTextBox" || edit.kind === "deleteShape"),
+    ).toEqual([]);
+    expect(decoder.decode(getEntry(output, "ppt/slides/slide1.xml"))).not.toContain(
+      "Temporary TextBox",
+    );
+  });
+
+  it("deletes only the targeted sp shape while preserving other shapes and invisible slide material", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const deleted = deleteShape(source, requireHandle(source.slides[0].shapes[0]?.handle));
+    const output = writePptx(deleted);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+    const reread = readPptx(output);
+    const rereadShapeNames: (string | undefined)[] = [];
+    for (const shape of reread.slides[0].shapes) {
+      rereadShapeNames.push(shape.kind === "raw" ? undefined : shape.name);
+    }
+
+    expect(rereadShapeNames).toEqual(expect.arrayContaining(["Keep Picture", "Keep Shape"]));
+    expect(reread.slides[0].shapes).toHaveLength(2);
+    expect(slideXml).not.toContain("Delete Me");
+    expect(slideXml).toContain("Keep Picture");
+    expect(slideXml).toContain("Keep Shape");
+    expect(slideXml).toContain("<p:timing>");
+    expect(decoder.decode(getEntry(output, "docProps/custom.xml"))).toContain("preserve-me");
+  });
+
+  it("rejects deleting pic and graphicFrame nodes through the sp-only delete API", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+
+    expect(() => deleteShape(source, requireHandle(source.slides[0].shapes[1]?.handle))).toThrow(
+      /only top-level sp shapes/,
+    );
   });
 });
 
@@ -1175,6 +1367,24 @@ function shapeAt(source: ReturnType<typeof readPptx>, index: number): SourceShap
   )[index];
   if (shape === undefined) throw new Error("shape not found");
   return shape;
+}
+
+function findShapeByName(source: ReturnType<typeof readPptx>, name: string): SourceShape {
+  const shape = source.slides
+    .flatMap((slide) => slide.shapes)
+    .find((node): node is SourceShape => node.kind === "shape" && node.name === name);
+  if (shape === undefined) throw new Error(`shape not found: ${name}`);
+  return shape;
+}
+
+function requireShape(shape: SourceShape | undefined): SourceShape {
+  if (shape === undefined) throw new Error("shape not found");
+  return shape;
+}
+
+function requireHandle(handle: SourceShapeNode["handle"]): NonNullable<SourceShapeNode["handle"]> {
+  if (handle === undefined) throw new Error("handle not found");
+  return handle;
 }
 
 function firstParagraph(source: ReturnType<typeof readPptx>) {

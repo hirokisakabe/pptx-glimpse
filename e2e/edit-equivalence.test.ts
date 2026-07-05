@@ -6,7 +6,12 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import type { ConvertOptions } from "../packages/core/src/converter.js";
-import { asPt, replaceTextRunPlainText } from "../packages/document/src/index.js";
+import {
+  addTextBox,
+  asEmu,
+  asPt,
+  replaceTextRunPlainText,
+} from "../packages/document/src/index.js";
 import { createEditorSession } from "../packages/editor-core/src/index.js";
 import {
   assertEditEquivalence,
@@ -49,6 +54,38 @@ const mismatchedTextRunFixture = textRunFixture(
   "mismatched expected text-run fixture",
   "Alterd text",
 );
+const emptySlideFixture = {
+  name: "source empty slide fixture",
+  create: async () =>
+    await buildPptx({
+      slides: [
+        {
+          xml: wrapSlideXml(""),
+          rels: slideRelsXml(),
+        },
+      ],
+    }),
+} as const satisfies EditEquivalenceFixture;
+const expectedAddedTextBoxFixture = {
+  name: "expected added text box fixture",
+  create: async () =>
+    await buildPptx({
+      slides: [
+        {
+          xml: wrapSlideXml(
+            textBoxShapeXml(1, "TextBox 1", {
+              x: 914400,
+              y: 914400,
+              cx: 3657600,
+              cy: 914400,
+              text: "Edited added box",
+            }),
+          ),
+          rels: slideRelsXml(),
+        },
+      ],
+    }),
+} as const satisfies EditEquivalenceFixture;
 
 const replaceFirstRunWithEditedText = {
   name: "replace first text run with edited text",
@@ -88,6 +125,44 @@ const decorateFirstRun = {
   },
 } as const satisfies EditEquivalenceOperation;
 
+const addThenEditTextBox = {
+  name: "add then edit text box",
+  apply: (source) => {
+    const withTextBox = addTextBox(source, source.slides[0].handle!, {
+      offsetX: asEmu(457200),
+      offsetY: asEmu(457200),
+      width: asEmu(2743200),
+      height: asEmu(685800),
+      text: "Initial added box",
+    });
+    const shape = withTextBox.slides[0]?.shapes.find(
+      (candidate) => candidate.kind === "shape" && candidate.name === "TextBox 1",
+    );
+    const runHandle =
+      shape?.kind === "shape" ? shape.textBody?.paragraphs[0]?.runs[0]?.handle : undefined;
+    if (shape?.handle === undefined || runHandle === undefined) {
+      throw new Error("added text box handles not found");
+    }
+    const session = createEditorSession(withTextBox);
+    const textResult = session.apply({
+      kind: "replaceTextRunPlainText",
+      handle: runHandle,
+      text: "Edited added box",
+    });
+    if (!textResult.ok) throw new Error(textResult.message);
+    const xfrmResult = session.apply({
+      kind: "setShapeTransform",
+      handle: shape.handle,
+      offsetX: asEmu(914400),
+      offsetY: asEmu(914400),
+      width: asEmu(3657600),
+      height: asEmu(914400),
+    });
+    if (!xfrmResult.ok) throw new Error(xfrmResult.message);
+    return xfrmResult.document;
+  },
+} as const satisfies EditEquivalenceOperation;
+
 defineEditEquivalenceTests([
   {
     name: "text-run replacement",
@@ -102,6 +177,14 @@ defineEditEquivalenceTests([
     sourceFixture: originalDecoratedRunFixture,
     operations: [decorateFirstRun],
     expectedFixture: expectedDecoratedRunFixture,
+    renderOptionsProvider: getTinyTestFontRenderOptions,
+    renderOptions: { width: 480 },
+  },
+  {
+    name: "add edit text box",
+    sourceFixture: emptySlideFixture,
+    operations: [addThenEditTextBox],
+    expectedFixture: expectedAddedTextBoxFixture,
     renderOptionsProvider: getTinyTestFontRenderOptions,
     renderOptions: { width: 480 },
   },
@@ -167,6 +250,23 @@ function decoratedTextRunShapeXml(
   });
 }
 
+function textBoxShapeXml(
+  id: number,
+  name: string,
+  opts: { x: number; y: number; cx: number; cy: number; text: string },
+): string {
+  return `<p:sp>
+  <p:nvSpPr><p:cNvPr id="${id}" name="${name}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr>
+  <p:spPr>
+    <a:xfrm><a:off x="${opts.x}" y="${opts.y}"/><a:ext cx="${opts.cx}" cy="${opts.cy}"/></a:xfrm>
+    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+    <a:noFill/>
+    <a:ln><a:noFill/></a:ln>
+  </p:spPr>
+  <p:txBody><a:bodyPr wrap="square"/><a:lstStyle/><a:p><a:r><a:t>${opts.text}</a:t></a:r><a:endParaRPr/></a:p></p:txBody>
+</p:sp>`;
+}
+
 let tinyTestFontDirPromise: Promise<string> | null = null;
 
 async function getTinyTestFontRenderOptions(): Promise<ConvertOptions> {
@@ -192,7 +292,7 @@ async function createTinyTestFontDir(): Promise<string> {
       advanceWidth: 600,
       path: createGlyphPath(opentype),
     }),
-    ...Array.from(new Set("EditedOriginalAlterd text")).map(
+    ...Array.from(new Set("EditedOriginalAlterd added box text")).map(
       (char) =>
         new opentype.Glyph({
           name: char === " " ? "space" : char,
