@@ -34,7 +34,7 @@ export type SlideTopologyOperation =
     };
 
 /** Shape inserted by an edit, identified by its slide part and shape id. */
-export interface InsertedShapeRef {
+interface InsertedShapeRef {
   readonly slidePartPath: PartPath;
   readonly shapeId: string;
 }
