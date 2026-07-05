@@ -136,12 +136,37 @@ test("applies text run decoration from the overlay toolbar with undo and redo", 
     );
     await page.getByTestId("text-run-format-bold").click();
     await commandResponse;
+    await expect(page.getByTestId("text-run-format-toolbar")).toBeVisible();
+
+    const italicResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/editor/command") &&
+        response.request().method() === "POST" &&
+        response.ok(),
+    );
+    await page.getByTestId("text-run-format-italic").click();
+    await italicResponse;
+    await expect(page.getByTestId("text-run-format-toolbar")).toBeVisible();
+    const textBodyResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/editor/text-body") &&
+        response.request().method() === "POST" &&
+        response.ok(),
+    );
+    await page.getByTestId("text-editor-done").click();
+    await textBodyResponse;
 
     const undoResponse = page.waitForResponse(
       (response) => response.url().endsWith("/api/editor/undo") && response.ok(),
     );
     await page.getByRole("button", { name: "Undo" }).click();
     await undoResponse;
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.locator("#editor-message")).toContainText(savedPath);
+    let saved = readPptx(await readFile(savedPath));
+    expect(firstRunProperties(saved)).toMatchObject({ bold: true });
+    expect(firstRunProperties(saved)?.italic).toBeUndefined();
 
     const redoResponse = page.waitForResponse(
       (response) => response.url().endsWith("/api/editor/redo") && response.ok(),
@@ -152,8 +177,8 @@ test("applies text run decoration from the overlay toolbar with undo and redo", 
     await page.getByRole("button", { name: "Save" }).click();
     await expect(page.locator("#editor-message")).toContainText(savedPath);
 
-    const saved = readPptx(await readFile(savedPath));
-    expect(firstRunProperties(saved)).toMatchObject({ bold: true });
+    saved = readPptx(await readFile(savedPath));
+    expect(firstRunProperties(saved)).toMatchObject({ bold: true, italic: true });
   } finally {
     if (serverProcess !== undefined) {
       serverProcess.kill();

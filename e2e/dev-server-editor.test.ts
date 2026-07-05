@@ -181,8 +181,21 @@ describe("dev server editor API", () => {
 
       const undone = await postJson<SlidesResponse>(`${baseUrl}/api/editor/undo`, {});
       expect(undone.history).toMatchObject({ canUndo: false, canRedo: true });
+      expect(undone.slides[0].svg).not.toContain('data-bold="true"');
+      expect(undone.slides[0].svg).not.toContain('data-italic="true"');
+      expect(undone.slides[0].svg).not.toContain('data-underline="true"');
+      expect(undone.slides[0].svg).not.toContain('data-font-size="32"');
+      expect(undone.slides[0].svg).not.toContain('data-color="9C0000"');
+      expect(undone.slides[0].svg).not.toContain('data-typeface="Liberation Sans"');
+
       const redone = await postJson<SlidesResponse>(`${baseUrl}/api/editor/redo`, {});
       expect(redone.history).toMatchObject({ canUndo: true, canRedo: false });
+      expect(redone.slides[0].svg).toContain('data-bold="true"');
+      expect(redone.slides[0].svg).toContain('data-italic="true"');
+      expect(redone.slides[0].svg).toContain('data-underline="true"');
+      expect(redone.slides[0].svg).toContain('data-font-size="32"');
+      expect(redone.slides[0].svg).toContain('data-color="9C0000"');
+      expect(redone.slides[0].svg).toContain('data-typeface="Liberation Sans"');
 
       await postJson<SaveResponse>(`${baseUrl}/api/editor/save`, { path: savedPath });
       expect(firstRunProperties(readPptx(await readFile(savedPath)))).toMatchObject({
@@ -194,13 +207,20 @@ describe("dev server editor API", () => {
         typeface: "Liberation Sans",
       });
 
-      await postJson<SlidesResponse>(`${baseUrl}/api/editor/command`, {
+      const clearedResponse = await postJson<SlidesResponse>(`${baseUrl}/api/editor/command`, {
         command: {
           kind: "clearTextRunProperties",
           handle,
           properties: ["bold", "italic", "underline", "fontSize", "color", "typeface"],
         },
       });
+      expect(clearedResponse.slides[0].svg).not.toContain("data-bold=");
+      expect(clearedResponse.slides[0].svg).not.toContain("data-italic=");
+      expect(clearedResponse.slides[0].svg).not.toContain("data-underline=");
+      expect(clearedResponse.slides[0].svg).not.toContain("data-font-size=");
+      expect(clearedResponse.slides[0].svg).not.toContain("data-color=");
+      expect(clearedResponse.slides[0].svg).not.toContain("data-typeface=");
+
       await postJson<SaveResponse>(`${baseUrl}/api/editor/save`, { path: clearedPath });
 
       const cleared = firstRunProperties(readPptx(await readFile(clearedPath)));

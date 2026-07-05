@@ -605,20 +605,24 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     }
     .text-run-format-toolbar {
       display: grid;
-      grid-template-columns: repeat(3, 28px) minmax(52px, 1fr) 24px 34px 24px minmax(72px, 1fr) 24px;
-      gap: 4px;
+      grid-template-columns: repeat(3, 24px) 44px 20px 28px 20px minmax(48px, 1fr) 20px;
+      gap: 3px;
       align-items: center;
       margin-bottom: 4px;
     }
     .text-run-format-toolbar button,
     .text-run-format-toolbar input {
-      min-height: 24px;
+      min-height: 22px;
       border: 1px solid #94a3b8;
       border-radius: 4px;
       background: #f8fafc;
       color: #0f172a;
-      font-size: 11px;
+      font-size: 10px;
       font-weight: 650;
+    }
+    .text-run-format-toolbar button {
+      padding: 0;
+      min-width: 0;
     }
     .text-run-format-toolbar button[aria-pressed="true"] {
       background: #dbeafe;
@@ -637,11 +641,10 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       cursor: not-allowed;
     }
     .text-editor-actions {
-      position: absolute;
-      right: 4px;
-      bottom: 4px;
       display: flex;
+      justify-content: flex-end;
       gap: 4px;
+      margin-top: 4px;
     }
     .text-editor-actions button {
       min-height: 24px;
@@ -1097,9 +1100,6 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       var toolbar = document.createElement("div");
       toolbar.className = "text-run-format-toolbar";
       toolbar.setAttribute("data-testid", "text-run-format-toolbar");
-      toolbar.addEventListener("mousedown", function (event) {
-        event.preventDefault();
-      });
 
       [["bold", "B"], ["italic", "I"], ["underline", "U"]].forEach(function (item) {
         var button = document.createElement("button");
@@ -1263,7 +1263,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         setEditorMessage("No editable text run selected", true);
         return;
       }
-      if (Object.prototype.hasOwnProperty.call(info.properties || {}, property)) {
+      if ((info.properties || {})[property] === true) {
         applyActiveTextRunPropertyClear([property]);
         return;
       }
@@ -1299,17 +1299,98 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     }
 
     function applyActiveTextRunPropertyCommand(command) {
-      commitTextEditor()
-        .then(function () {
-          return postJson("/api/editor/command", { command: command });
-        })
+      postJson("/api/editor/command", { command: command })
         .then(function (data) {
-          applyEditorResponse(data);
+          applyEditorResponseBehindTextEditor(data);
+          patchActiveTextRunProperties(command);
           setEditorMessage("Applied", false);
         })
         .catch(function (err) {
           setEditorMessage(err.message, true);
         });
+    }
+
+    function applyEditorResponseBehindTextEditor(data) {
+      slides = data.slides || slides;
+      slideCount = slides.length;
+      updateHistory(data.history);
+      if (data.selection && data.selection.shapeHandle) {
+        selectedShapeKey = handleKey(data.selection.shapeHandle);
+      }
+      renderThumbnails();
+      replaceCurrentRenderedSvg();
+      renderSelectionOverlay();
+      loadShapeOptions(currentIndex + 1);
+    }
+
+    function replaceCurrentRenderedSvg() {
+      var container = document.getElementById("slide-container");
+      var previous = container.querySelector("svg:not(#selection-overlay)");
+      var slide = slides[currentIndex];
+      if (!slide) return;
+      var wrapper = document.createElement("div");
+      wrapper.innerHTML = slide.svg;
+      var next = wrapper.querySelector("svg");
+      if (!next) return;
+      next.removeAttribute("width");
+      next.removeAttribute("height");
+      next.style.width = "100%";
+      next.style.height = "auto";
+      if (previous) {
+        previous.replaceWith(next);
+      } else {
+        container.insertBefore(next, container.firstChild);
+      }
+    }
+
+    function patchActiveTextRunProperties(command) {
+      var textNode = activeTextRunTextNode();
+      if (!textNode) return;
+      var mark = (textNode.marks || []).find(function (candidate) {
+        return candidate.type === "pptxRun";
+      });
+      if (!mark) return;
+      var attrs = mark.attrs || {};
+      var properties = { ...(attrs.properties || {}) };
+      if (command.kind === "setTextRunProperties") {
+        Object.keys(command.properties || {}).forEach(function (property) {
+          properties[property] = command.properties[property];
+        });
+      }
+      if (command.kind === "clearTextRunProperties") {
+        (command.properties || []).forEach(function (property) {
+          delete properties[property];
+        });
+      }
+      attrs.properties = Object.keys(properties).length > 0 ? properties : null;
+      mark.attrs = attrs;
+      refreshTextRunFormatToolbar();
+      syncActiveTextRunStyle(properties);
+    }
+
+    function activeTextRunTextNode() {
+      if (!activeTextEditor || !activeTextEditor.selectedRunElement) return null;
+      var element = activeTextEditor.selectedRunElement;
+      var paragraphIndex = Number(element.dataset.paragraphIndex || "-1");
+      var runIndex = Number(element.dataset.runIndex || "-1");
+      var paragraph = (activeTextEditor.originalDocJson.content || [])[paragraphIndex];
+      return paragraph && (paragraph.content || [])[runIndex] ? paragraph.content[runIndex] : null;
+    }
+
+    function syncActiveTextRunStyle(properties) {
+      if (!activeTextEditor || !activeTextEditor.selectedRunElement) return;
+      var run = activeTextEditor.selectedRunElement;
+      run.style.fontWeight = properties.bold === true ? "700" : "";
+      run.style.fontStyle = properties.italic === true ? "italic" : "";
+      run.style.textDecoration = properties.underline === true ? "underline" : "";
+      run.style.fontSize = properties.fontSize != null ? String(properties.fontSize) + "pt" : "";
+      run.style.fontFamily = properties.typeface
+        ? '"' + String(properties.typeface).replace(/"/g, "") + '"'
+        : "";
+      run.style.color =
+        properties.color && properties.color.kind === "srgb" && typeof properties.color.hex === "string"
+          ? "#" + properties.color.hex
+          : "";
     }
 
     function createTextEditorContent(docJson) {
