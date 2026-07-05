@@ -3,9 +3,11 @@
  */
 
 export type { Diagnostic, DiagnosticSeverity } from "./diagnostics.js";
-export type { UpdateShapeTransformInput } from "./editing.js";
+export type { AddTextBoxInput, UpdateShapeTransformInput } from "./editing.js";
 export {
+  addTextBox,
   clearTextRunProperties,
+  deleteShape,
   deleteSlide,
   duplicateSlide,
   findParagraphBySourceHandle,
@@ -39,6 +41,8 @@ export type {
   EditableTextRunProperties,
   EditableTextRunProperty,
   PptxSourceModel,
+  PptxSourceModelAddTextBoxEdit,
+  PptxSourceModelDeleteShapeEdit,
   PptxSourceModelDeleteSlideEdit,
   PptxSourceModelDuplicateSlideEdit,
   PptxSourceModelEdit,

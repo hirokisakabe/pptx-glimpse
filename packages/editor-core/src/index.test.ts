@@ -623,6 +623,130 @@ describe("EditorSession selection", () => {
     expect(session.selection).toEqual({ shapeHandle: handle });
     expect(findShapeNodeBySourceHandle(session.document, handle)).toBeDefined();
   });
+
+  it("clears selection when the selected shape is deleted", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const handle = requireHandle(firstShape(source).handle);
+
+    expect(session.selectShape(handle)).toMatchObject({ ok: true });
+    expectApplied(session.apply({ kind: "deleteShape", handle }));
+
+    expect(session.selection).toBeUndefined();
+    expect(findShapeNodeBySourceHandle(session.document, handle)).toBeUndefined();
+    expectHistory(session.undo());
+    expect(findShapeNodeBySourceHandle(session.document, handle)).toBeDefined();
+    expect(session.selection).toBeUndefined();
+    expectHistory(session.redo());
+    expect(findShapeNodeBySourceHandle(session.document, handle)).toBeUndefined();
+    expect(session.selection).toBeUndefined();
+  });
+});
+
+describe("EditorSession shape add/delete commands", () => {
+  it("adds a text box and lets existing text/xfrm commands edit it before save", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const withTextBox = expectApplied(
+      session.apply({
+        kind: "addTextBox",
+        slideHandle: requireHandle(source.slides[0].handle),
+        offsetX: asEmu(914400),
+        offsetY: asEmu(457200),
+        width: asEmu(2743200),
+        height: asEmu(914400),
+        text: "Initial textbox",
+        name: "Added Textbox",
+      }),
+    );
+    const addedShape = requireShape(findShapeByName(withTextBox, "Added Textbox"));
+    const runHandle = addedShape.textBody?.paragraphs[0]?.runs[0]?.handle;
+    if (runHandle === undefined || addedShape.handle === undefined) {
+      throw new Error("added text box handles not found");
+    }
+
+    expectApplied(
+      session.apply({
+        kind: "replaceTextRunPlainText",
+        handle: runHandle,
+        text: "Edited textbox",
+      }),
+    );
+    const edited = expectApplied(
+      session.apply({
+        kind: "setShapeTransform",
+        handle: addedShape.handle,
+        offsetX: asEmu(1000),
+        offsetY: asEmu(2000),
+        width: asEmu(3000),
+        height: asEmu(4000),
+      }),
+    );
+    const rereadAdded = requireShape(findShapeByName(readPptx(writePptx(edited)), "Added Textbox"));
+
+    expect(rereadAdded.textBody?.paragraphs[0]?.runs[0]?.text).toBe("Edited textbox");
+    expect(rereadAdded.transform).toMatchObject({
+      offsetX: 1000,
+      offsetY: 2000,
+      width: 3000,
+      height: 4000,
+    });
+  });
+
+  it("undoes and redoes shape deletion for generated command sequences", async () => {
+    const cases = [
+      [{ kind: "deleteShape" }],
+      [{ kind: "moveShape", offsetX: asEmu(1000), offsetY: asEmu(2000) }, { kind: "deleteShape" }],
+      [{ kind: "resizeShape", width: asEmu(3000), height: asEmu(4000) }, { kind: "deleteShape" }],
+    ] as const;
+
+    for (const commands of cases) {
+      const source = readPptx(await buildTextEditFixture());
+      const session = createEditorSession(source);
+      const handle = requireHandle(firstShape(source).handle);
+
+      for (const command of commands) {
+        expectApplied(session.apply({ ...command, handle }));
+      }
+      expect(findShapeNodeBySourceHandle(session.document, handle)).toBeUndefined();
+      expect(firstRun(readPptx(writePptx(session.document))).text).toBe("No xfrm");
+
+      for (let i = 0; i < commands.length; i += 1) expectHistory(session.undo());
+      expect(findShapeNodeBySourceHandle(session.document, handle)).toBeDefined();
+      expect(firstRun(readPptx(writePptx(session.document))).text).toBe("Original");
+
+      for (let i = 0; i < commands.length; i += 1) expectHistory(session.redo());
+      expect(findShapeNodeBySourceHandle(session.document, handle)).toBeUndefined();
+      expect(firstRun(readPptx(writePptx(session.document))).text).toBe("No xfrm");
+    }
+  });
+
+  it("rejects invalid add/delete shape commands without changing document state", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const before = session.document;
+    const missingHandle = {
+      partPath: asPartPath("ppt/slides/slide1.xml"),
+      nodeId: asSourceNodeId("999"),
+      orderingSlot: 99,
+    } satisfies SourceHandle;
+
+    const invalidAdd = session.apply({
+      kind: "addTextBox",
+      slideHandle: requireHandle(source.slides[0].handle),
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(0),
+      height: asEmu(100),
+      text: "Invalid",
+    });
+    const missingDelete = session.apply({ kind: "deleteShape", handle: missingHandle });
+
+    expect(invalidAdd).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(missingDelete).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(session.document).toBe(before);
+    expect(session.undoDepth).toBe(0);
+  });
 });
 
 describe("EditorSession xfrm commands", () => {
@@ -1033,10 +1157,14 @@ function shapeWithoutTransform(source: PptxSourceModel): SourceShape {
   return shape;
 }
 
-function requireShape(shape: SourceShapeNode | undefined): SourceShapeNode & {
-  readonly transform: NonNullable<SourceShapeNode["transform"]>;
+function findShapeByName(source: PptxSourceModel, name: string): SourceShapeNode | undefined {
+  return source.slides.flatMap((slide) => slide.shapes).find((shape) => shape.name === name);
+}
+
+function requireShape(shape: SourceShapeNode | undefined): SourceShape & {
+  readonly transform: NonNullable<SourceShape["transform"]>;
 } {
-  if (shape === undefined || shape.kind === "raw" || shape.transform === undefined) {
+  if (shape === undefined || shape.kind !== "shape" || shape.transform === undefined) {
     throw new Error("transform shape not found");
   }
   return shape;

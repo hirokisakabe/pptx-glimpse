@@ -5,8 +5,10 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  addTextBox,
   asEmu,
   asPt,
+  deleteShape,
   deleteSlide,
   duplicateSlide,
   readPptx,
@@ -170,6 +172,39 @@ describeOrSkip("LibreOffice slide topology validity", { timeout: 120000 }, () =>
       libreOfficeImage,
       "editor-validity-slide-topology-edited.pptx",
       writePptx(deleted),
+    );
+  });
+});
+
+describeOrSkip("LibreOffice shape add/delete validity", { timeout: 120000 }, () => {
+  it("opens PPTX after adding a text box", () => {
+    const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
+    const source = readPptx(sourcePptx);
+    const edited = addTextBox(source, requireHandle(source.slides[0]?.handle), {
+      offsetX: asEmu(914400),
+      offsetY: asEmu(914400),
+      width: asEmu(3657600),
+      height: asEmu(914400),
+      text: "LibreOffice added text box",
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-shape-add-edited.pptx",
+      writePptx(edited),
+    );
+  });
+
+  it("opens PPTX after deleting a shape", () => {
+    const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
+    const source = readPptx(sourcePptx);
+    const shape = source.slides[0]?.shapes.find((candidate) => candidate.kind === "shape");
+    const edited = deleteShape(source, requireHandle(shape?.handle));
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-shape-delete-edited.pptx",
+      writePptx(edited),
     );
   });
 });
