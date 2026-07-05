@@ -188,6 +188,101 @@ test("applies text run decoration from the overlay toolbar with undo and redo", 
   }
 });
 
+test("duplicates and deletes slides from thumbnails with undo and redo", async ({ page }) => {
+  const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-editor-slide-test-"));
+  let serverProcess: ChildProcessWithoutNullStreams | undefined;
+  try {
+    const sourcePath = join(dir, "fixture.pptx");
+    const savedPath = join(dir, "fixture.edited.pptx");
+    await writeFile(sourcePath, await buildTwoSlideFixture());
+
+    const port = await findFreePort();
+    serverProcess = await startDevServer(sourcePath, port);
+    const baseUrl = `http://127.0.0.1:${String(port)}`;
+
+    await page.goto(baseUrl);
+    await expect(page.locator("#info")).toContainText("Slide 1 / 2");
+    await expect(page.locator(".thumbnail")).toHaveCount(2);
+    await expect(page.locator("#slide-container")).toContainText("First");
+
+    await dblclickSvgPoint(page, 150, 130);
+    await expect(page.getByTestId("text-editor-overlay")).toBeVisible();
+    await page.getByTestId("duplicate-slide-0").click();
+    await expect(page.locator("#editor-message")).toContainText(
+      "Finish text editing before slide operations",
+    );
+    await expect(page.locator(".thumbnail")).toHaveCount(2);
+    await page.keyboard.press("Escape");
+    await expect(page.getByTestId("text-editor-overlay")).toBeHidden();
+
+    let commandResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/editor/command") &&
+        response.request().method() === "POST" &&
+        response.ok(),
+    );
+    await page.getByTestId("duplicate-slide-0").click();
+    await commandResponse;
+    await expect(page.locator(".thumbnail")).toHaveCount(3);
+    await expect(page.locator("#info")).toContainText("Slide 2 / 3");
+    await expect(page.locator("#slide-container")).toContainText("First");
+
+    commandResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/editor/command") &&
+        response.request().method() === "POST" &&
+        response.ok(),
+    );
+    await page.getByTestId("delete-slide-1").click();
+    await commandResponse;
+    await expect(page.locator(".thumbnail")).toHaveCount(2);
+    await expect(page.locator("#info")).toContainText("Slide 2 / 2");
+    await expect(page.locator("#slide-container")).toContainText("Second");
+
+    const undoResponse = page.waitForResponse(
+      (response) => response.url().endsWith("/api/editor/undo") && response.ok(),
+    );
+    await page.getByRole("button", { name: "Undo" }).click();
+    await undoResponse;
+    await expect(page.locator(".thumbnail")).toHaveCount(3);
+    await expect(page.locator("#info")).toContainText("Slide 2 / 3");
+    await expect(page.locator("#slide-container")).toContainText("First");
+
+    const redoResponse = page.waitForResponse(
+      (response) => response.url().endsWith("/api/editor/redo") && response.ok(),
+    );
+    await page.getByRole("button", { name: "Redo" }).click();
+    await redoResponse;
+    await expect(page.locator(".thumbnail")).toHaveCount(2);
+    await expect(page.locator("#info")).toContainText("Slide 2 / 2");
+    await expect(page.locator("#slide-container")).toContainText("Second");
+
+    commandResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/editor/command") &&
+        response.request().method() === "POST" &&
+        response.ok(),
+    );
+    await page.getByTestId("delete-slide-0").click();
+    await commandResponse;
+    await expect(page.locator(".thumbnail")).toHaveCount(1);
+    await expect(page.locator("#info")).toContainText("Slide 1 / 1");
+    await expect(page.locator("#slide-container")).toContainText("Second");
+    await expect(page.getByTestId("delete-slide-0")).toBeDisabled();
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.locator("#editor-message")).toContainText(savedPath);
+    const saved = readPptx(await readFile(savedPath));
+    expect(saved.presentation.slidePartPaths).toEqual(["ppt/slides/slide2.xml"]);
+  } finally {
+    if (serverProcess !== undefined) {
+      serverProcess.kill();
+      await waitForExit(serverProcess);
+    }
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 async function clickSvgPoint(page: Page, x: number, y: number) {
   const point = await svgPointToClient(page, x, y);
   await page.mouse.click(point.x, point.y);
@@ -340,6 +435,65 @@ async function buildShapeFixture(): Promise<Uint8Array> {
   );
 
   return zip.generateAsync({ type: "uint8array" });
+}
+
+async function buildTwoSlideFixture(): Promise<Uint8Array> {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    xml(
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>` +
+        `<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+        `<Override PartName="/ppt/slides/slide2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+        `</Types>`,
+    ),
+  );
+  zip.file(
+    "_rels/.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file(
+    "ppt/presentation.xml",
+    xml(
+      `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:sldIdLst><p:sldId id="256" r:id="rIdSlide1"/><p:sldId id="257" r:id="rIdSlide2"/></p:sldIdLst>` +
+        `<p:sldSz cx="9144000" cy="5143500"/>` +
+        `</p:presentation>`,
+    ),
+  );
+  zip.file(
+    "ppt/_rels/presentation.xml.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdSlide1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>` +
+        `<Relationship Id="rIdSlide2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide2.xml"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file("ppt/slides/slide1.xml", textSlideXml(10, "First"));
+  zip.file("ppt/slides/slide2.xml", textSlideXml(20, "Second"));
+
+  return zip.generateAsync({ type: "uint8array" });
+}
+
+function textSlideXml(shapeId: number, text: string): Uint8Array {
+  return xml(
+    `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">` +
+      `<p:cSld><p:spTree>` +
+      `<p:sp><p:nvSpPr><p:cNvPr id="${String(shapeId)}" name="${text}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+      `<p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="2743200" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>` +
+      `<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>${text}</a:t></a:r></a:p></p:txBody>` +
+      `</p:sp>` +
+      `</p:spTree></p:cSld>` +
+      `</p:sld>`,
+  );
 }
 
 function firstShape(source: PptxSourceModel): SourceShape {
