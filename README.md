@@ -43,8 +43,8 @@ rather than pixel-perfect rendering of every PowerPoint feature.
 
 ## Requirements
 
-- **Node.js >= 22** when using pptx-glimpse in Node.js.
-- **Browser usage** should provide font bytes with the `fonts` option; see
+- **Node.js >= 22** for package tooling and Node.js runtime usage.
+- **Browser runtime usage** should provide font bytes with the `fonts` option; see
   [Custom Font Loading](#custom-font-loading). PNG conversion in browser-like
   runtimes also requires explicit resvg WASM initialization; see
   [Browser resvg WASM Loading for PNG](#browser-resvg-wasm-loading-for-png).
