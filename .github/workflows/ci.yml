@@ -108,6 +108,10 @@ jobs:
       - name: Verify package (CJS/ESM/TypeScript)
         run: bash scripts/test-package.sh
 
+      - name: Verify demo production samples
+        if: matrix.node-version == 22
+        run: cd demo && npm ci && npx playwright install chromium && npm run verify:samples
+
   vrt:
     runs-on: ubuntu-latest
     steps:
