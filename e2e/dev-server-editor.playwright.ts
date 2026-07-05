@@ -82,6 +82,7 @@ test("edits a text shape with the overlay editor, re-renders, and saves text", a
     const overlay = page.getByTestId("text-editor-overlay");
     await expect(overlay).toBeVisible();
     await expect(overlay).toContainText("Original");
+    await expect(page.getByRole("button", { name: "Delete shape" })).toBeDisabled();
     await expectOverlayNearSvgBounds(page, { x: 96, y: 192, width: 288, height: 96 });
 
     const commandResponse = page.waitForResponse(
@@ -100,6 +101,87 @@ test("edits a text shape with the overlay editor, re-renders, and saves text", a
 
     const saved = readPptx(await readFile(savedPath));
     expect(firstText(saved)).toBe("Overlay edited");
+  } finally {
+    if (serverProcess !== undefined) {
+      serverProcess.kill();
+      await waitForExit(serverProcess);
+    }
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("adds, edits, moves, resizes, saves, and deletes a text box from the UI", async ({ page }) => {
+  const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-editor-add-delete-test-"));
+  let serverProcess: ChildProcessWithoutNullStreams | undefined;
+  try {
+    const sourcePath = join(dir, "fixture.pptx");
+    const savedPath = join(dir, "fixture.edited.pptx");
+    await writeFile(sourcePath, await buildShapeFixture());
+
+    const port = await findFreePort();
+    serverProcess = await startDevServer(sourcePath, port);
+    const baseUrl = `http://127.0.0.1:${String(port)}`;
+
+    await page.goto(baseUrl);
+    await expect(page.getByTestId("shape-hit-area").first()).toBeVisible();
+
+    const addResponse = page.waitForResponse(
+      (response) => response.url().endsWith("/api/editor/add-text-box") && response.ok(),
+    );
+    await page.getByRole("button", { name: "Add text box" }).click();
+    await addResponse;
+    await expect(page.getByTestId("selection-box")).toHaveAttribute("x", "96");
+    await expect(page.getByTestId("selection-box")).toHaveAttribute("y", "96");
+
+    await dblclickSvgPoint(page, 216, 132);
+    const overlay = page.getByTestId("text-editor-overlay");
+    await expect(overlay).toBeVisible();
+    await expect(overlay).toContainText("New text box");
+
+    const textResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/editor/text-body") &&
+        response.request().method() === "POST" &&
+        response.ok(),
+    );
+    await page.getByTestId("text-editor-run").first().fill("Added edited");
+    await page.getByTestId("text-editor-done").click();
+    await textResponse;
+    await expect(page.locator("#slide-container")).toContainText("Added edited");
+
+    await dragSvgPoint(page, { x: 240, y: 132 }, { x: 264, y: 148 });
+    await expect(page.getByTestId("selection-box")).toHaveAttribute("x", "120");
+    await expect(page.getByTestId("selection-box")).toHaveAttribute("y", "112");
+
+    await dragSvgPoint(page, { x: 408, y: 184 }, { x: 456, y: 208 });
+    await expect(page.getByTestId("selection-box")).toHaveAttribute("width", "336");
+    await expect(page.getByTestId("selection-box")).toHaveAttribute("height", "96");
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.locator("#editor-message")).toContainText(savedPath);
+
+    let saved = readPptx(await readFile(savedPath));
+    expect(shapeByText(saved, "Added edited").transform).toMatchObject({
+      offsetX: 120 * EMU_PER_PIXEL,
+      offsetY: 112 * EMU_PER_PIXEL,
+      width: 336 * EMU_PER_PIXEL,
+      height: 96 * EMU_PER_PIXEL,
+    });
+
+    const deleteResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/editor/command") &&
+        response.request().method() === "POST" &&
+        response.ok(),
+    );
+    await page.getByRole("button", { name: "Delete shape" }).click();
+    await deleteResponse;
+    await expect(page.getByTestId("selection-box")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.locator("#editor-message")).toContainText(savedPath);
+    saved = readPptx(await readFile(savedPath));
+    expect(findShapeByText(saved, "Added edited")).toBeUndefined();
   } finally {
     if (serverProcess !== undefined) {
       serverProcess.kill();
@@ -506,6 +588,22 @@ function firstText(source: PptxSourceModel): string {
   const run = firstShape(source).textBody?.paragraphs[0]?.runs[0];
   if (run === undefined) throw new Error("fixture text run not found");
   return run.text;
+}
+
+function shapeByText(source: PptxSourceModel, text: string): SourceShape {
+  const shape = findShapeByText(source, text);
+  if (shape === undefined) throw new Error(`shape text not found: ${text}`);
+  return shape;
+}
+
+function findShapeByText(source: PptxSourceModel, text: string): SourceShape | undefined {
+  return source.slides[0]?.shapes.find(
+    (node): node is SourceShape =>
+      node.kind === "shape" &&
+      node.textBody?.paragraphs.some((paragraph) =>
+        paragraph.runs.some((run) => run.text === text),
+      ) === true,
+  );
 }
 
 function firstRunProperties(source: PptxSourceModel) {

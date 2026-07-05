@@ -92,6 +92,102 @@ describe("BrowserPptxEditorSession", () => {
     expect(mediaBytes(editor.document, "ppt/media/image1.png")).toEqual(BLUE_PNG);
   });
 
+  it("adds, selects, edits, moves, resizes, saves, deletes, undoes, and redoes a text box", async () => {
+    const editor = await createBrowserPptxEditorSession(await buildShapeFixture(), {
+      skipSystemFonts: true,
+    });
+
+    const addedResponse = await editor.addTextBox(1);
+    const addedHandle = addedResponse.selection?.shapeHandle;
+    if (addedHandle === undefined) throw new Error("added shape was not selected");
+    const addedShape = editor
+      .shapes(1)
+      .find((shape) => handleKey(shape.handle) === handleKey(addedHandle));
+    if (addedShape?.handle === undefined) throw new Error("added shape handle not found");
+    expect(addedShape).toMatchObject({
+      bounds: { x: 96, y: 96, width: 288, height: 72 },
+      editableDelete: true,
+    });
+    expect(addedShape.editableTextBody).toBeDefined();
+
+    await editor.applyTextBodyDocJson(addedShape.handle, {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          attrs: {},
+          content: [{ type: "text", text: "Added edited", marks: [] }],
+        },
+      ],
+    });
+    await editor.apply({
+      kind: "setShapeTransform",
+      handle: addedShape.handle,
+      offsetX: asEmu(144 * 9525),
+      offsetY: asEmu(120 * 9525),
+      width: asEmu(240 * 9525),
+      height: asEmu(96 * 9525),
+    });
+
+    const saved = readPptx(editor.save().pptx);
+    const savedAdded = shapeByText(saved, "Added edited");
+    expect(savedAdded.transform).toMatchObject({
+      offsetX: 144 * 9525,
+      offsetY: 120 * 9525,
+      width: 240 * 9525,
+      height: 96 * 9525,
+    });
+
+    const deleted = await editor.deleteSelectedShape();
+    expect(deleted.selection).toBeUndefined();
+    expect(
+      editor.shapes(1).some((shape) => handleKey(shape.handle) === handleKey(addedShape.handle)),
+    ).toBe(false);
+
+    await editor.undo();
+    expect(
+      editor.shapes(1).some((shape) => handleKey(shape.handle) === handleKey(addedShape.handle)),
+    ).toBe(true);
+    await editor.redo();
+    expect(
+      editor.shapes(1).some((shape) => handleKey(shape.handle) === handleKey(addedShape.handle)),
+    ).toBe(false);
+  });
+
+  it("marks top-level text shapes without transform as deletable", async () => {
+    const editor = await createBrowserPptxEditorSession(
+      await buildShapeFixture({ includeNoTransformShape: true }),
+      {
+        skipSystemFonts: true,
+      },
+    );
+
+    const noTransformShape = editor.shapes(1).find((shape) => shape.name === "No Transform");
+    if (noTransformShape?.handle === undefined) throw new Error("no-transform shape not found");
+    expect(noTransformShape.bounds).toBeUndefined();
+    expect(noTransformShape.editableTransform).toBeUndefined();
+    expect(noTransformShape.editableDelete).toBe(true);
+
+    await editor.deleteShape(noTransformShape.handle);
+    expect(editor.shapes(1).find((shape) => shape.name === "No Transform")).toBeUndefined();
+  });
+
+  it("does not mark connector-referenced shapes as deletable", async () => {
+    const editor = await createBrowserPptxEditorSession(
+      await buildShapeFixture({ includeConnector: true }),
+      {
+        skipSystemFonts: true,
+      },
+    );
+
+    const connectedShape = editor.shapes(1).find((shape) => shape.name === "Box");
+    if (connectedShape?.handle === undefined) throw new Error("connected shape not found");
+    expect(connectedShape.editableDelete).toBeUndefined();
+    await expect(editor.deleteShape(connectedShape.handle)).rejects.toThrow(
+      /referenced by connector/,
+    );
+  });
+
   it("duplicates and deletes slides with render state and history updates", async () => {
     const editor = await createBrowserPptxEditorSession(await buildTwoSlideFixture(), {
       skipSystemFonts: true,
@@ -163,7 +259,9 @@ function pngBytes(base64: string): Uint8Array {
   return new Uint8Array(Buffer.from(base64, "base64"));
 }
 
-async function buildShapeFixture(): Promise<Uint8Array> {
+async function buildShapeFixture(
+  options: { includeNoTransformShape?: boolean; includeConnector?: boolean } = {},
+): Promise<Uint8Array> {
   const zip = new JSZip();
   zip.file(
     "[Content_Types].xml",
@@ -212,6 +310,20 @@ async function buildShapeFixture(): Promise<Uint8Array> {
         `<a:p><a:r><a:rPr sz="2400"><a:latin typeface="Aptos"/></a:rPr><a:t>Original</a:t></a:r></a:p>` +
         `</p:txBody>` +
         `</p:sp>` +
+        (options.includeNoTransformShape
+          ? `<p:sp><p:nvSpPr><p:cNvPr id="11" name="No Transform"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+            `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+            `<p:txBody><a:bodyPr/><a:lstStyle/>` +
+            `<a:p><a:r><a:t>No transform</a:t></a:r></a:p>` +
+            `</p:txBody>` +
+            `</p:sp>`
+          : "") +
+        (options.includeConnector
+          ? `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="12" name="Connector"/><p:cNvCxnSpPr>` +
+            `<a:stCxn id="10" idx="0"/></p:cNvCxnSpPr><p:nvPr/></p:nvCxnSpPr>` +
+            `<p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm>` +
+            `<a:prstGeom prst="straightConnector1"/></p:spPr></p:cxnSp>`
+          : "") +
         `</p:spTree></p:cSld>` +
         `</p:sld>`,
     ),
@@ -361,6 +473,34 @@ function firstText(source: ReturnType<typeof readPptx>): string {
   const run = firstShape(source).textBody?.paragraphs[0]?.runs[0];
   if (run === undefined) throw new Error("fixture text run not found");
   return run.text;
+}
+
+function shapeByText(source: ReturnType<typeof readPptx>, text: string): SourceShape {
+  const shape = source.slides[0]?.shapes.find(
+    (node): node is SourceShape =>
+      node.kind === "shape" &&
+      node.textBody?.paragraphs.some((paragraph) =>
+        paragraph.runs.some((run) => run.text === text),
+      ) === true,
+  );
+  if (shape === undefined) throw new Error(`shape text not found: ${text}`);
+  return shape;
+}
+
+function handleKey(handle: unknown): string {
+  if (handle === undefined || handle === null || typeof handle !== "object") return "";
+  const value = handle as {
+    partPath?: string;
+    nodeId?: string;
+    relationshipId?: string;
+    orderingSlot?: number;
+  };
+  return [
+    value.partPath ?? "",
+    value.nodeId ?? "",
+    value.relationshipId ?? "",
+    value.orderingSlot ?? "",
+  ].join("\u0000");
 }
 
 function mediaBytes(source: ReturnType<typeof readPptx>, partPath: string): Uint8Array {

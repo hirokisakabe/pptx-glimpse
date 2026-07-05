@@ -1,4 +1,5 @@
 import {
+  asEmu,
   findShapeNodeBySourceHandle,
   type MediaPart,
   type PartPath,
@@ -27,6 +28,14 @@ import { unsafeBrandAssertion } from "./unsafe-type-assertion.js";
 
 const EMU_PER_INCH = 914400;
 const DEFAULT_DPI = 96;
+const EMU_PER_PIXEL = EMU_PER_INCH / DEFAULT_DPI;
+const DEFAULT_TEXT_BOX_BOUNDS_PX = {
+  x: 96,
+  y: 96,
+  width: 288,
+  height: 72,
+};
+const DEFAULT_TEXT_BOX_TEXT = "New text box";
 const IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
 
 const IMAGE_ACCEPT_BY_CONTENT_TYPE: Readonly<Record<string, string>> = {
@@ -79,6 +88,7 @@ export interface BrowserEditorShapeInfo {
   readonly handle?: SourceHandle;
   readonly bounds?: BrowserEditorShapeBoundsPx;
   readonly editableTransform?: boolean;
+  readonly editableDelete?: boolean;
   readonly textRuns?: readonly BrowserEditorTextRunInfo[];
   readonly editableTextBody?: BrowserEditorTextBodyInfo;
   readonly editableImageReplacement?: BrowserEditorImageReplacementInfo;
@@ -86,6 +96,15 @@ export interface BrowserEditorShapeInfo {
 
 export interface BrowserEditorSlideSvg extends SlideSvg {
   readonly handle?: SourceHandle;
+}
+
+export interface BrowserEditorAddTextBoxOptions {
+  readonly x?: number;
+  readonly y?: number;
+  readonly width?: number;
+  readonly height?: number;
+  readonly text?: string;
+  readonly name?: string;
 }
 
 export interface BrowserEditorSlidesResponse {
@@ -155,7 +174,9 @@ export class BrowserPptxEditorSession {
   shapes(slideNumber: number): readonly BrowserEditorShapeInfo[] {
     const slide = this.#session.document.slides[slideNumber - 1];
     if (slide === undefined) return [];
-    return slide.shapes.flatMap((shape, index) => shapeInfo(this.#session.document, shape, index));
+    return slide.shapes.flatMap((shape, index) =>
+      shapeInfo(this.#session.document, shape, index, true, slide.shapes),
+    );
   }
 
   async renderCurrentSlides(): Promise<readonly BrowserEditorSlideSvg[]> {
@@ -180,6 +201,50 @@ export class BrowserPptxEditorSession {
     }
     await this.renderCurrentSlides();
     return this.response(result.warnings);
+  }
+
+  async addTextBox(
+    slideNumber = 1,
+    options: BrowserEditorAddTextBoxOptions = {},
+  ): Promise<BrowserEditorSlidesResponse> {
+    const slide = this.#session.document.slides[slideNumber - 1];
+    if (slide?.handle === undefined) {
+      throw new Error("addTextBox: slide handle was not found in PptxSourceModel source");
+    }
+    const existingShapeKeys = new Set(slide.shapes.map(shapeSourceKey));
+    const result = this.#session.apply({
+      kind: "addTextBox",
+      slideHandle: slide.handle,
+      offsetX: pxToEmu(options.x ?? DEFAULT_TEXT_BOX_BOUNDS_PX.x),
+      offsetY: pxToEmu(options.y ?? DEFAULT_TEXT_BOX_BOUNDS_PX.y),
+      width: pxToEmu(options.width ?? DEFAULT_TEXT_BOX_BOUNDS_PX.width),
+      height: pxToEmu(options.height ?? DEFAULT_TEXT_BOX_BOUNDS_PX.height),
+      text: options.text ?? DEFAULT_TEXT_BOX_TEXT,
+      ...(options.name !== undefined ? { name: options.name } : {}),
+    });
+    if (!result.ok) {
+      throw new Error(result.message);
+    }
+    this.#selectNewShape(slideNumber, existingShapeKeys);
+    await this.renderCurrentSlides();
+    return this.response(result.warnings);
+  }
+
+  async deleteShape(handle: SourceHandle): Promise<BrowserEditorSlidesResponse> {
+    const result = this.#session.apply({ kind: "deleteShape", handle });
+    if (!result.ok) {
+      throw new Error(result.message);
+    }
+    await this.renderCurrentSlides();
+    return this.response(result.warnings);
+  }
+
+  async deleteSelectedShape(): Promise<BrowserEditorSlidesResponse> {
+    const selection = this.#session.selection;
+    if (selection === undefined) {
+      throw new Error("deleteShape: no selected shape");
+    }
+    return this.deleteShape(selection.shapeHandle);
   }
 
   async applyTextBodyDocJson(
@@ -240,6 +305,13 @@ export class BrowserPptxEditorSession {
     }
     return shape.textBody;
   }
+
+  #selectNewShape(slideNumber: number, existingShapeKeys: ReadonlySet<string>): void {
+    const slide = this.#session.document.slides[slideNumber - 1];
+    const addedShape = slide?.shapes.find((shape) => !existingShapeKeys.has(shapeSourceKey(shape)));
+    if (addedShape?.handle === undefined) return;
+    this.#session.selectShape(addedShape.handle);
+  }
 }
 
 export function createBrowserPptxEditorSession(
@@ -254,6 +326,7 @@ function shapeInfo(
   shape: SourceShapeNode,
   index: number,
   editableTransform = true,
+  slideShapes: readonly SourceShapeNode[] = [],
 ): BrowserEditorShapeInfo[] {
   const canEditTransform =
     shape.kind !== "raw" &&
@@ -271,6 +344,7 @@ function shapeInfo(
           editableTransform: true,
         }
       : {}),
+    ...(editableTransform && isDeletableShape(shape, slideShapes) ? { editableDelete: true } : {}),
     ...("textBody" in shape && shape.textBody !== undefined
       ? {
           textRuns: collectTextRuns(
@@ -287,7 +361,9 @@ function shapeInfo(
   if (shape.kind !== "group") return [base];
   return [
     base,
-    ...shape.children.flatMap((child, childIndex) => shapeInfo(source, child, childIndex, false)),
+    ...shape.children.flatMap((child, childIndex) =>
+      shapeInfo(source, child, childIndex, false, slideShapes),
+    ),
   ];
 }
 
@@ -300,6 +376,31 @@ function isEditableTransformShape(shape: SourceShapeNode): boolean {
     return false;
   }
   return !shape.rawSidecars?.some((sidecar) => sidecar.node.name === "mc:AlternateContent");
+}
+
+function isDeletableShape(
+  shape: SourceShapeNode,
+  slideShapes: readonly SourceShapeNode[],
+): boolean {
+  if (shape.kind !== "shape" || shape.handle?.nodeId === undefined) {
+    return false;
+  }
+  if (isShapeReferencedByConnector(shape, slideShapes)) {
+    return false;
+  }
+  return !shape.rawSidecars?.some((sidecar) => sidecar.node.name === "mc:AlternateContent");
+}
+
+function isShapeReferencedByConnector(
+  shape: SourceShapeNode,
+  slideShapes: readonly SourceShapeNode[],
+): boolean {
+  return slideShapes.some(
+    (candidate) =>
+      candidate.kind === "connector" &&
+      (candidate.connection?.start?.shapeId === shape.nodeId ||
+        candidate.connection?.end?.shapeId === shape.nodeId),
+  );
 }
 
 function collectTextRuns(runs: readonly SourceTextRun[]): BrowserEditorTextRunInfo[] {
@@ -497,4 +598,19 @@ function transformBoundsPx(transform: {
 
 function emuToPixels(value: number): number {
   return (value / EMU_PER_INCH) * DEFAULT_DPI;
+}
+
+function pxToEmu(value: number): ReturnType<typeof asEmu> {
+  return asEmu(Math.round(value * EMU_PER_PIXEL));
+}
+
+function shapeSourceKey(shape: SourceShapeNode): string {
+  const handle = shape.handle;
+  return [
+    shape.kind,
+    handle?.partPath ?? "",
+    handle?.nodeId ?? "",
+    handle?.relationshipId ?? "",
+    handle?.orderingSlot ?? "",
+  ].join("\u0000");
 }
