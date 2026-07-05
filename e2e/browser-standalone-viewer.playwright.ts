@@ -117,7 +117,7 @@ async function buildStandaloneViewerBundle(): Promise<string> {
 }
 
 async function ensureCoreDist(): Promise<void> {
-  coreDistBuildPromise ??= execFileAsync("pnpm", ["--filter", "pptx-glimpse", "build"], {
+  coreDistBuildPromise ??= execFileAsync("pnpm", ["run", "build"], {
     cwd: repoRoot,
     maxBuffer: 10 * 1024 * 1024,
   }).then(() => undefined);
