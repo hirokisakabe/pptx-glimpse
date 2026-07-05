@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -14,7 +15,9 @@ import {
   deleteSlide,
   duplicateSlide,
   readPptx,
+  replaceImageBytes,
   type SourceHandle,
+  type SourceImage,
   type SourceShape,
   type SourceShapeNode,
   type SourceTextRun,
@@ -40,6 +43,12 @@ const TRANSFORM_EDIT = {
   height: asEmu(1463040),
 } as const;
 const FORMATTING_EDITED_VALUE = "Editable formatting target";
+const BLUE_PNG = new Uint8Array(
+  Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGNkYPjPAANMcBZeDgAx0wEH1s7nlgAAAABJRU5ErkJggg==",
+    "base64",
+  ),
+);
 
 const LO_EDITOR_VALIDITY_CASES = [
   {
@@ -118,6 +127,16 @@ const LO_EDITOR_VALIDITY_CASES = [
 
       if (!clearResult.ok) throw new Error(clearResult.message);
       return writePptx(clearResult.document);
+    },
+  },
+  {
+    name: "image replacement",
+    sourceFixture: "editor-validity-image-source.pptx",
+    expectedFixture: "editor-validity-image-expected.pptx",
+    createEditedPptx: (input: Uint8Array) => {
+      const source = readPptx(input);
+      const image = findFirstImage(source);
+      return writePptx(replaceImageBytes(source, requireHandle(image.handle), BLUE_PNG));
     },
   },
 ] as const;
@@ -370,6 +389,14 @@ function findShapeByName(shapes: readonly SourceShapeNode[], name: string): Sour
   const shape = flattenShapes(shapes).find((candidate) => candidate.name === name);
   if (shape === undefined) throw new Error(`Shape not found: ${name}`);
   return shape;
+}
+
+function findFirstImage(source: ReturnType<typeof readPptx>): SourceImage {
+  for (const slide of source.slides) {
+    const image = slide.shapes.find((shape): shape is SourceImage => shape.kind === "image");
+    if (image !== undefined) return image;
+  }
+  throw new Error("Image shape not found");
 }
 
 function flattenShapes(shapes: readonly SourceShapeNode[]): SourceShape[] {

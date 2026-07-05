@@ -57,6 +57,7 @@ export type PptxSourceModelEdit =
   | PptxSourceModelAddTextBoxEdit
   | PptxSourceModelAddConnectorEdit
   | PptxSourceModelDeleteShapeEdit
+  | PptxSourceModelReplaceImageEdit
   | PptxSourceModelAddEmptySlideFromLayoutEdit
   | PptxSourceModelDuplicateSlideEdit
   | PptxSourceModelDeleteSlideEdit;
@@ -143,6 +144,14 @@ export interface PptxSourceModelAddConnectorEdit {
 export interface PptxSourceModelDeleteShapeEdit {
   readonly kind: "deleteShape";
   readonly handle: SourceHandle;
+}
+
+export interface PptxSourceModelReplaceImageEdit {
+  readonly kind: "replaceImage";
+  readonly handle: SourceHandle;
+  readonly mediaPartPath: PartPath;
+  readonly contentType: string;
+  readonly sharedReferenceCount: number;
 }
 
 export interface PptxSourceModelAddEmptySlideFromLayoutEdit {

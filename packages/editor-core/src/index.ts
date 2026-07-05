@@ -19,6 +19,7 @@ import {
   type PptxSourceModelShapeTransformEdit,
   type PptxSourceModelTextRunEdit,
   type PptxSourceModelTextRunPropertiesEdit,
+  replaceImageBytes,
   replaceParagraphPlainText,
   replaceTextRunPlainText,
   setTextRunProperties,
@@ -102,6 +103,12 @@ export interface DeleteShapeCommand {
   readonly handle: SourceHandle;
 }
 
+export interface ReplaceImageCommand {
+  readonly kind: "replaceImage";
+  readonly handle: SourceHandle;
+  readonly bytes: Uint8Array;
+}
+
 export interface AddEmptySlideFromLayoutCommand extends AddEmptySlideFromLayoutInput {
   readonly kind: "addEmptySlideFromLayout";
 }
@@ -127,6 +134,7 @@ export type EditorCommand =
   | AddTextBoxCommand
   | AddConnectorCommand
   | DeleteShapeCommand
+  | ReplaceImageCommand
   | AddEmptySlideFromLayoutCommand
   | DuplicateSlideCommand
   | DeleteSlideCommand;
@@ -135,6 +143,7 @@ export type EditorApplyCommandResult =
   | {
       readonly ok: true;
       readonly document: PptxSourceModel;
+      readonly warnings?: readonly EditorCommandWarning[];
     }
   | {
       readonly ok: false;
@@ -142,6 +151,13 @@ export type EditorApplyCommandResult =
       readonly message: string;
       readonly cause?: unknown;
     };
+
+export interface EditorCommandWarning {
+  readonly code: "shared-media-part";
+  readonly message: string;
+  readonly mediaPartPath: string;
+  readonly referenceCount: number;
+}
 
 export type EditorHistoryResult =
   | {
@@ -237,12 +253,17 @@ export class EditorSession {
       const after = normalizeEditorEdits(
         commands.reduce((document, command) => applyCommandToDocument(document, command), before),
       );
+      const warnings = collectCommandWarnings(after, commands);
       this.#document = after;
       this.reconcileSelectionAfterDocumentChange();
       this.#undoStack.push({ before, after });
       this.#redoStack.length = 0;
 
-      return { ok: true, document: after };
+      return {
+        ok: true,
+        document: after,
+        ...(warnings.length > 0 ? { warnings } : {}),
+      };
     } catch (error) {
       return {
         ok: false,
@@ -312,6 +333,8 @@ function applyCommandToDocument(
       return addConnectorCommand(document, command);
     case "deleteShape":
       return deleteShape(document, command.handle);
+    case "replaceImage":
+      return replaceImageBytes(document, command.handle, command.bytes);
     case "addEmptySlideFromLayout":
       return addEmptySlideFromLayout(document, command);
     case "duplicateSlide":
@@ -319,6 +342,43 @@ function applyCommandToDocument(
     case "deleteSlide":
       return deleteSlide(document, command.handle);
   }
+}
+
+function collectCommandWarnings(
+  document: PptxSourceModel,
+  commands: readonly EditorCommand[],
+): EditorCommandWarning[] {
+  if (!commands.some((command) => command.kind === "replaceImage")) return [];
+  const warnings: EditorCommandWarning[] = [];
+  const imageEdits = document.edits?.filter((edit) => edit.kind === "replaceImage") ?? [];
+
+  for (const command of commands) {
+    if (command.kind !== "replaceImage") continue;
+    let edit: (typeof imageEdits)[number] | undefined;
+    for (let index = imageEdits.length - 1; index >= 0; index -= 1) {
+      const candidate = imageEdits[index];
+      if (
+        candidate.handle.partPath === command.handle.partPath &&
+        candidate.handle.nodeId === command.handle.nodeId &&
+        candidate.handle.relationshipId === command.handle.relationshipId &&
+        candidate.handle.orderingSlot === command.handle.orderingSlot
+      ) {
+        edit = candidate;
+        break;
+      }
+    }
+    if (edit === undefined || edit.sharedReferenceCount <= 1) continue;
+    warnings.push({
+      code: "shared-media-part",
+      mediaPartPath: edit.mediaPartPath,
+      referenceCount: edit.sharedReferenceCount,
+      message:
+        `replaceImage: media part '${edit.mediaPartPath}' is referenced by ` +
+        `${edit.sharedReferenceCount} pic shapes; all references now use the replacement image.`,
+    });
+  }
+
+  return warnings;
 }
 
 function addTextBoxCommand(document: PptxSourceModel, command: AddTextBoxCommand): PptxSourceModel {

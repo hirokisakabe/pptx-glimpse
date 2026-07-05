@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -17,6 +18,7 @@ import {
   findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
+  replaceImageBytes,
   replaceParagraphPlainText,
   replaceTextRunPlainText,
   setTextRunProperties,
@@ -28,9 +30,22 @@ import {
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+const RED_PNG = pngBytes(
+  "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEUlEQVR4nGP8z4AATEhsPBwAM9EBBzDn4UwAAAAASUVORK5CYII=",
+);
+const BLUE_PNG = pngBytes(
+  "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGNkYPjPAANMcBZeDgAx0wEH1s7nlgAAAABJRU5ErkJggg==",
+);
+const GREEN_PNG = pngBytes(
+  "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEklEQVR4nGNk+M8AB0wIJj4OADLSAQcrNhPdAAAAAElFTkSuQmCC",
+);
 
 function xml(content: string): Uint8Array {
   return encoder.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n${content}`);
+}
+
+function pngBytes(base64: string): Uint8Array {
+  return new Uint8Array(Buffer.from(base64, "base64"));
 }
 
 function buildRoundTripFixture(): Uint8Array {
@@ -74,6 +89,54 @@ function buildRoundTripFixture(): Uint8Array {
         `</Relationships>`,
     ),
     "ppt/media/image1.png": new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]),
+    "docProps/custom.xml": xml(`<Properties><custom value="preserve-me"/></Properties>`),
+  });
+}
+
+function buildMediaReplacementFixture(): Uint8Array {
+  return zipSync({
+    "[Content_Types].xml": xml(
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Default Extension="png" ContentType="image/png"/>` +
+        `<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>` +
+        `<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+        `</Types>`,
+    ),
+    "_rels/.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/presentation.xml": xml(
+      `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:sldIdLst><p:sldId id="256" r:id="rIdSlide1"/></p:sldIdLst>` +
+        `<p:sldSz cx="9144000" cy="5143500"/>` +
+        `</p:presentation>`,
+    ),
+    "ppt/_rels/presentation.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdSlide1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/slides/slide1.xml": xml(
+      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:cSld><p:spTree>` +
+        `<p:pic><p:nvPicPr><p:cNvPr id="20" name="Replace Target"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+        `<p:blipFill><a:blip r:embed="rIdImage1"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+        `<p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:pic>` +
+        `</p:spTree></p:cSld>` +
+        `</p:sld>`,
+    ),
+    "ppt/slides/_rels/slide1.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdImage1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>` +
+        `<Relationship Id="rIdImage2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image2.png"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/media/image1.png": RED_PNG,
+    "ppt/media/image2.png": GREEN_PNG,
     "docProps/custom.xml": xml(`<Properties><custom value="preserve-me"/></Properties>`),
   });
 }
@@ -509,6 +572,36 @@ describe("writePptx - no-edit round-trip", () => {
     expect(decoder.decode(getEntry(output, "ppt/slides/slide1.xml"))).toBe(
       decoder.decode(getEntry(input, "ppt/slides/slide1.xml")),
     );
+  });
+
+  it("Replaces one image media part while preserving relationships, content types, and other media bytes", () => {
+    const input = buildMediaReplacementFixture();
+    const source = readPptx(input);
+    const image = source.slides[0]?.shapes.find((shape) => shape.kind === "image");
+    if (image === undefined) throw new Error("image fixture was not parsed");
+    const edited = replaceImageBytes(source, image.handle!, BLUE_PNG);
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+
+    expect(getEntry(output, "ppt/media/image1.png")).toEqual(BLUE_PNG);
+    expect(getEntry(output, "ppt/media/image2.png")).toEqual(GREEN_PNG);
+    expect(decoder.decode(getEntry(output, "docProps/custom.xml"))).toBe(
+      decoder.decode(getEntry(input, "docProps/custom.xml")),
+    );
+    expect(reread.packageGraph.contentTypes).toEqual(source.packageGraph.contentTypes);
+    expect(reread.packageGraph.relationships).toEqual(source.packageGraph.relationships);
+    expect(
+      reread.packageGraph.media.find((part) => part.partPath === "ppt/media/image1.png"),
+    ).toMatchObject({
+      contentType: "image/png",
+      bytes: BLUE_PNG,
+    });
+    expect(
+      reread.packageGraph.media.find((part) => part.partPath === "ppt/media/image2.png"),
+    ).toMatchObject({
+      contentType: "image/png",
+      bytes: GREEN_PNG,
+    });
   });
 
   it("Can write xml raw package material in serializable range", () => {

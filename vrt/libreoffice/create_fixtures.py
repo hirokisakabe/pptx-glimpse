@@ -6,7 +6,9 @@ Usage:
     python3 vrt/libreoffice/create_fixtures.py
 """
 
+import base64
 import os
+import tempfile
 
 from lxml import etree
 from pptx import Presentation
@@ -245,6 +247,31 @@ def create_editor_validity_formatting_fixture(filename, *, expected):
     print(f"  Created: {filename}")
 
 
+def create_editor_validity_image_fixture(filename, image_base64):
+    """Fixture pair for editor-core image replacement validity checks."""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    title = slide.shapes.add_textbox(Inches(0.4), Inches(0.25), Inches(9.2), Inches(0.5))
+    title.text_frame.text = "LibreOffice editor validity: image"
+    title.text_frame.paragraphs[0].runs[0].font.size = Pt(18)
+
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        tmp.write(base64.b64decode(image_base64))
+        image_path = tmp.name
+
+    try:
+        pic = slide.shapes.add_picture(
+            image_path, Inches(2.2), Inches(1.4), Inches(4.8), Inches(2.7)
+        )
+        pic.name = "Replace Image Target"
+    finally:
+        os.unlink(image_path)
+
+    prs.save(os.path.join(OUTPUT_DIR, filename))
+    print(f"  Created: {filename}")
+
+
 def create_editor_validity_fixtures():
     """PPTX source / expected pairs consumed by editor-validity.test.ts."""
     create_editor_validity_text_fixture(
@@ -276,6 +303,14 @@ def create_editor_validity_fixtures():
     create_editor_validity_formatting_fixture(
         "editor-validity-formatting-expected.pptx",
         expected=True,
+    )
+    create_editor_validity_image_fixture(
+        "editor-validity-image-source.pptx",
+        "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEUlEQVR4nGP8z4AATEhsPBwAM9EBBzDn4UwAAAAASUVORK5CYII=",
+    )
+    create_editor_validity_image_fixture(
+        "editor-validity-image-expected.pptx",
+        "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGNkYPjPAANMcBZeDgAx0wEH1s7nlgAAAABJRU5ErkJggg==",
     )
 
 
