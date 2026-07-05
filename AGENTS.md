@@ -27,7 +27,7 @@ npm run dev -- file.pptx  # Live preview dev server (auto-reload on packages/*/s
 CI consists of 4 jobs:
 
 - **lint**: `knip` → `lint` → `format:check` → `typecheck` (Node 22 only, runs once)
-- **test**: `test` with coverage → `build` → package verification (Node 22/24, coverage report on Node 22)
+- **test**: `test` with coverage → `build` → package verification (Node 22/24/26, coverage report on Node 22)
 - **vrt**: Snapshot VRT (Docker-based, self-comparison)
 - **libreoffice-vrt**: LibreOffice VRT (generates fixtures and reference images via Docker)
 
