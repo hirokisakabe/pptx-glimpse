@@ -169,6 +169,8 @@ getMappedFont("calibri", mapping); // "Ubuntu"
 
 </details>
 
+<a id="custom-font-loading"></a>
+
 <details>
 <summary>Custom Font Loading</summary>
 
@@ -207,6 +209,8 @@ const setup = await createOpentypeSetupFromBuffers([
 ```
 
 </details>
+
+<a id="browser-resvg-wasm-loading-for-png"></a>
 
 <details>
 <summary>Browser resvg WASM Loading for PNG</summary>
