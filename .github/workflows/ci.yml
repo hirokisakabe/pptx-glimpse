@@ -178,9 +178,7 @@ jobs:
         run: docker run --rm -v "${{ github.workspace }}":/workspace ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest bash /workspace/vrt/libreoffice/update_snapshots.sh
 
       - name: Run LibreOffice VRT
-        run: |
-          npx vitest run --config vitest.vrt.config.ts vrt/libreoffice/regression.test.ts
-          npx vitest run --config vitest.vrt.config.ts vrt/libreoffice/editor-validity.test.ts
+        run: npx vitest run --config vitest.vrt.config.ts vrt/libreoffice/regression.test.ts
 
       - name: Upload diff images on failure
         if: failure()
@@ -188,4 +186,45 @@ jobs:
         with:
           name: libreoffice-vrt-diffs
           path: vrt/libreoffice/diffs/
+          retention-days: 7
+
+  editor-validity:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Pull or build Docker image
+        run: |
+          git fetch origin main --depth=1
+          if git diff --name-only origin/main -- docker/libreoffice-vrt/ | grep -q .; then
+            echo "docker/libreoffice-vrt changed, forcing local build"
+            docker build -t ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest docker/libreoffice-vrt
+          else
+            docker pull ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest || \
+              docker build -t ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest docker/libreoffice-vrt
+          fi
+
+      - name: Generate fixtures
+        run: docker run --rm -v "${{ github.workspace }}":/workspace ghcr.io/hirokisakabe/pptx-glimpse-vrt:latest python3 /workspace/vrt/editor-validity/create_fixtures.py
+
+      - name: Run editor validity tests
+        run: npx vitest run --config vitest.vrt.config.ts vrt/editor-validity/editor-validity.test.ts
+
+      - name: Upload diff images on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: editor-validity-diffs
+          path: vrt/editor-validity/diffs/
           retention-days: 7
