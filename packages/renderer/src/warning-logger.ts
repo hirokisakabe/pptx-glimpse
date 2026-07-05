@@ -38,50 +38,105 @@ export interface WarningSummary {
   features: { feature: string; message: string; count: number }[];
 }
 
+export interface WarningLogger {
+  warn(feature: string, message: string, context?: string): void;
+  debug(feature: string, message: string, context?: string): void;
+  getWarningSummary(): WarningSummary;
+  flushWarnings(): WarningSummary;
+  getWarningEntries(): readonly WarningEntry[];
+  getLogLevel(): LogLevel;
+}
+
 const PREFIX = "[pptx-glimpse]";
 
-let currentLevel: LogLevel = "off";
-let entries: WarningEntry[] = [];
-const featureCounts = new Map<string, { message: string; count: number }>();
+class InMemoryWarningLogger implements WarningLogger {
+  private entries: WarningEntry[] = [];
+  private readonly featureCounts = new Map<string, { message: string; count: number }>();
+
+  constructor(private readonly level: LogLevel) {}
+
+  warn(feature: string, message: string, context?: string): void {
+    if (this.level === "off") return;
+    this.record(feature, message, context);
+
+    if (this.level === "debug") {
+      const ctx = context ? ` (${context})` : "";
+      console.warn(`${PREFIX} SKIP: ${feature} - ${message}${ctx}`);
+    }
+  }
+
+  debug(feature: string, message: string, context?: string): void {
+    if (this.level !== "debug") return;
+    this.record(feature, message, context);
+
+    const ctx = context ? ` (${context})` : "";
+    console.warn(`${PREFIX} DEBUG: ${feature} - ${message}${ctx}`);
+  }
+
+  getWarningSummary(): WarningSummary {
+    const features: WarningSummary["features"] = [];
+    for (const [feature, { message, count }] of this.featureCounts) {
+      features.push({ feature, message, count });
+    }
+    return { totalCount: this.entries.length, features };
+  }
+
+  flushWarnings(): WarningSummary {
+    const summary = this.getWarningSummary();
+
+    if (this.level !== "off" && summary.features.length > 0) {
+      console.warn(`${PREFIX} Summary: ${summary.features.length} unsupported feature(s) detected`);
+      for (const { feature, count } of summary.features) {
+        console.warn(`  - ${feature}: ${count} occurrence(s)`);
+      }
+    }
+
+    this.entries = [];
+    this.featureCounts.clear();
+
+    return summary;
+  }
+
+  getWarningEntries(): readonly WarningEntry[] {
+    return this.entries;
+  }
+
+  getLogLevel(): LogLevel {
+    return this.level;
+  }
+
+  private record(feature: string, message: string, context?: string): void {
+    this.entries.push({ feature, message, ...(context !== undefined && { context }) });
+
+    const existing = this.featureCounts.get(feature);
+    if (existing) {
+      existing.count++;
+    } else {
+      this.featureCounts.set(feature, { message, count: 1 });
+    }
+  }
+}
+
+let activeLogger: WarningLogger = createWarningLogger("off");
+
+export function createWarningLogger(level: LogLevel): WarningLogger {
+  return new InMemoryWarningLogger(level);
+}
 
 export function initWarningLogger(level: LogLevel): void {
-  currentLevel = level;
-  entries = [];
-  featureCounts.clear();
+  activeLogger = createWarningLogger(level);
+}
+
+export function getActiveWarningLogger(): WarningLogger {
+  return activeLogger;
 }
 
 export function warn(feature: string, message: string, context?: string): void {
-  if (currentLevel === "off") return;
-
-  entries.push({ feature, message, ...(context !== undefined && { context }) });
-
-  const existing = featureCounts.get(feature);
-  if (existing) {
-    existing.count++;
-  } else {
-    featureCounts.set(feature, { message, count: 1 });
-  }
-
-  if (currentLevel === "debug") {
-    const ctx = context ? ` (${context})` : "";
-    console.warn(`${PREFIX} SKIP: ${feature} - ${message}${ctx}`);
-  }
+  activeLogger.warn(feature, message, context);
 }
 
 export function debug(feature: string, message: string, context?: string): void {
-  if (currentLevel !== "debug") return;
-
-  entries.push({ feature, message, ...(context !== undefined && { context }) });
-
-  const existing = featureCounts.get(feature);
-  if (existing) {
-    existing.count++;
-  } else {
-    featureCounts.set(feature, { message, count: 1 });
-  }
-
-  const ctx = context ? ` (${context})` : "";
-  console.warn(`${PREFIX} DEBUG: ${feature} - ${message}${ctx}`);
+  activeLogger.debug(feature, message, context);
 }
 
 /**
@@ -94,27 +149,11 @@ export function debug(feature: string, message: string, context?: string): void 
  * that manage the warning cycle directly.
  */
 export function getWarningSummary(): WarningSummary {
-  const features: WarningSummary["features"] = [];
-  for (const [feature, { message, count }] of featureCounts) {
-    features.push({ feature, message, count });
-  }
-  return { totalCount: entries.length, features };
+  return activeLogger.getWarningSummary();
 }
 
 export function flushWarnings(): WarningSummary {
-  const summary = getWarningSummary();
-
-  if (currentLevel !== "off" && summary.features.length > 0) {
-    console.warn(`${PREFIX} Summary: ${summary.features.length} unsupported feature(s) detected`);
-    for (const { feature, count } of summary.features) {
-      console.warn(`  - ${feature}: ${count} occurrence(s)`);
-    }
-  }
-
-  entries = [];
-  featureCounts.clear();
-
-  return summary;
+  return activeLogger.flushWarnings();
 }
 
 /**
@@ -126,9 +165,9 @@ export function flushWarnings(): WarningSummary {
  * manage the warning cycle directly.
  */
 export function getWarningEntries(): readonly WarningEntry[] {
-  return entries;
+  return activeLogger.getWarningEntries();
 }
 
 export function getLogLevel(): LogLevel {
-  return currentLevel;
+  return activeLogger.getLogLevel();
 }

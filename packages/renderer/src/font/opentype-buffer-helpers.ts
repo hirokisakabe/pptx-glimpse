@@ -203,12 +203,16 @@ export interface OpentypeSetup {
   fontResolver: TextPathFontResolver;
 }
 
-export function buildOpentypeSetupFromState(state: OpentypeSetupState): OpentypeSetup | null {
+export function buildOpentypeSetupFromState(
+  state: OpentypeSetupState,
+  fontMapping?: FontMapping,
+): OpentypeSetup | null {
   if (state.measurerFonts.size === 0 && !state.firstMeasurerFont) return null;
 
   const measurer = new OpentypeTextMeasurer(
     state.measurerFonts,
     state.firstMeasurerFont ?? undefined,
+    fontMapping,
   );
   const fontResolver = new DefaultTextPathFontResolver(
     state.resolverFonts,
@@ -274,7 +278,7 @@ export async function createOpentypeSetupFromBuffers(
     }
   }
 
-  return buildOpentypeSetupFromState(state);
+  return buildOpentypeSetupFromState(state, mapping);
 }
 
 interface SystemFontCacheStore {

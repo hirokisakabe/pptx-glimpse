@@ -21,7 +21,7 @@ TEST_DIR="$WORK_DIR/core-test-project"
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
 npm init -y > /dev/null 2>&1
-npm install "$TARBALL_PATH" > /dev/null 2>&1
+npm install "$DOCUMENT_TARBALL_PATH" "$TARBALL_PATH" > /dev/null 2>&1
 
 echo ""
 
@@ -39,9 +39,14 @@ const assert = (condition, message) => {
 
 assert(typeof pkg.convertPptxToSvg === "function", "convertPptxToSvg should be a function");
 assert(typeof pkg.convertPptxToPng === "function", "convertPptxToPng should be a function");
+assert(
+  typeof pkg.renderPptxSourceModelToSvg === "function",
+  "renderPptxSourceModelToSvg should be a function",
+);
 
 console.log("  convertPptxToSvg: function OK");
 console.log("  convertPptxToPng: function OK");
+console.log("  renderPptxSourceModelToSvg: function OK");
 console.log("CJS test passed!");
 TESTEOF
 node test-cjs.cjs
@@ -51,7 +56,7 @@ echo ""
 # --- core ESM test ---
 echo "--- Test: pptx-glimpse ESM (import) ---"
 cat > test-esm.mjs << 'TESTEOF'
-import { convertPptxToSvg, convertPptxToPng } from "pptx-glimpse";
+import { convertPptxToSvg, convertPptxToPng, renderPptxSourceModelToSvg } from "pptx-glimpse";
 
 const assert = (condition, message) => {
   if (!condition) {
@@ -62,9 +67,14 @@ const assert = (condition, message) => {
 
 assert(typeof convertPptxToSvg === "function", "convertPptxToSvg should be a function");
 assert(typeof convertPptxToPng === "function", "convertPptxToPng should be a function");
+assert(
+  typeof renderPptxSourceModelToSvg === "function",
+  "renderPptxSourceModelToSvg should be a function",
+);
 
 console.log("  convertPptxToSvg: function OK");
 console.log("  convertPptxToPng: function OK");
+console.log("  renderPptxSourceModelToSvg: function OK");
 console.log("ESM test passed!");
 TESTEOF
 node test-esm.mjs
@@ -94,14 +104,25 @@ cat > tsconfig.json << 'TESTEOF'
 TESTEOF
 
 cat > test-types.ts << 'TESTEOF'
-import { collectUsedFonts, convertPptxToSvg, convertPptxToPng } from "pptx-glimpse";
-import type { ConvertOptions, PngConversionReport, SvgConversionReport, UsedFonts } from "pptx-glimpse";
+import { readPptx } from "@pptx-glimpse/document";
+import { collectUsedFonts, convertPptxToSvg, convertPptxToPng, renderPptxSourceModelToSvg } from "pptx-glimpse";
+import type {
+  ConvertOptions,
+  PngConversionReport,
+  PptxSourceModel,
+  SvgConversionReport,
+  UsedFonts,
+} from "pptx-glimpse";
 
 // Verify function signatures
 const _svgFn: (input: Uint8Array, options?: ConvertOptions) => Promise<SvgConversionReport> =
   convertPptxToSvg;
 const _pngFn: (input: Uint8Array, options?: ConvertOptions) => Promise<PngConversionReport> =
   convertPptxToPng;
+const _sourceModelSvgFn: (
+  source: ReturnType<typeof readPptx>,
+  options?: ConvertOptions,
+) => Promise<SvgConversionReport> = renderPptxSourceModelToSvg;
 const _fontFn: (input: Uint8Array) => UsedFonts = collectUsedFonts;
 
 // Verify SlideImage.png is Uint8Array
@@ -118,14 +139,24 @@ function _verifyBufferInput(input: Buffer) {
   void collectUsedFonts(input);
 }
 
+// Verify @pptx-glimpse/document readPptx() output is accepted by the source-model render API.
+async function _verifyDocumentSourceModel(input: Uint8Array) {
+  const source = readPptx(input);
+  const _source: PptxSourceModel = source;
+  await renderPptxSourceModelToSvg(source);
+  void _source;
+}
+
 // Verify ConvertOptions includes fontDirs
 const _options: ConvertOptions = { slides: [1], width: 960, fontDirs: ["/custom/fonts"] };
 void _svgFn;
 void _pngFn;
+void _sourceModelSvgFn;
 void _fontFn;
 void _options;
 void _verifyPngType;
 void _verifyBufferInput;
+void _verifyDocumentSourceModel;
 TESTEOF
 npx tsc --noEmit
 echo "TypeScript type resolution test passed!"

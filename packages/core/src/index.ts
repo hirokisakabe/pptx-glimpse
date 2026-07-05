@@ -2,6 +2,7 @@ export type {
   ConversionDiagnostic,
   ConvertOptions,
   PngConversionReport,
+  PptxSourceModel,
   SlideImage,
   SlideSupportCoverage,
   SlideSvg,
@@ -9,7 +10,7 @@ export type {
   SupportCoverageCounts,
   SvgConversionReport,
 } from "./converter.js";
-export { convertPptxToPng, convertPptxToSvg } from "./converter.js";
+export { convertPptxToPng, convertPptxToSvg, renderPptxSourceModelToSvg } from "./converter.js";
 export type { UsedFonts } from "./font/font-collector.js";
 export { collectUsedFonts } from "./font/font-collector.js";
 export type { FontMapping } from "@pptx-glimpse/renderer";

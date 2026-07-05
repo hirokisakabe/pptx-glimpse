@@ -4,6 +4,7 @@
  */
 
 import { unsafeExternalInteropAssertion } from "../unsafe-type-assertion.js";
+import type { WarningLogger } from "../warning-logger.js";
 import { warn } from "../warning-logger.js";
 import type { OpentypeFullFont } from "./text-path-context.js";
 
@@ -58,6 +59,7 @@ export async function subsetFont(
   font: OpentypeFullFont,
   chars: Set<string>,
   familyName: string,
+  warningLogger?: WarningLogger,
 ): Promise<Uint8Array | null> {
   const opentype = await tryLoadOpentypeCtors();
   if (!opentype) return null;
@@ -124,10 +126,14 @@ export async function subsetFont(
 
     return new Uint8Array(subset.toArrayBuffer());
   } catch (e) {
-    warn(
-      "font.subsetFailed",
-      `Failed to subset font "${familyName}": ${e instanceof Error ? e.message : String(e)}`,
-    );
+    const message = `Failed to subset font "${familyName}": ${
+      e instanceof Error ? e.message : String(e)
+    }`;
+    if (warningLogger) {
+      warningLogger.warn("font.subsetFailed", message);
+    } else {
+      warn("font.subsetFailed", message);
+    }
     return null;
   }
 }

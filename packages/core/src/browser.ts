@@ -25,13 +25,14 @@ export { collectUsedFonts } from "./font/font-collector.js";
 export type {
   ConversionDiagnostic,
   ConvertOptions,
+  PptxSourceModel,
   SlideSupportCoverage,
   SlideSvg,
   SupportCoverage,
   SupportCoverageCounts,
   SvgConversionReport,
 } from "./svg-converter.js";
-export { convertPptxToSvg } from "./svg-converter.js";
+export { convertPptxToSvg, renderPptxSourceModelToSvg } from "./svg-converter.js";
 export type { SourceHandle } from "@pptx-glimpse/document";
 export type { EditorCommand, EditorCommandWarning } from "@pptx-glimpse/editor-core";
 export type { FontMapping } from "@pptx-glimpse/renderer";

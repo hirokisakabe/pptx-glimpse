@@ -5,6 +5,8 @@ import { emuToPixels } from "../utils/emu.js";
 import { renderChart } from "./chart-renderer.js";
 import { renderFillAttrs } from "./fill-renderer.js";
 import { renderImage } from "./image-renderer.js";
+import type { RendererContext } from "./render-context.js";
+import { createLegacyRendererContext } from "./render-context.js";
 import type { RenderResult } from "./render-result.js";
 import { renderConnector, renderShape } from "./shape-renderer.js";
 import { renderTable } from "./table-renderer.js";
@@ -12,7 +14,11 @@ import { renderTable } from "./table-renderer.js";
 // Outputs SVG 1.1 (W3C). Uses only inline attributes and no CSS classes.
 // Reason: sharp (which uses librsvg internally) does not interpret CSS selectors correctly.
 
-export function renderSlideToSvg(slide: Slide, slideSize: SlideSize): string {
+export function renderSlideToSvg(
+  slide: Slide,
+  slideSize: SlideSize,
+  context: RendererContext = createLegacyRendererContext(),
+): string {
   const width = emuToPixels(slideSize.width);
   const height = emuToPixels(slideSize.height);
 
@@ -39,7 +45,7 @@ export function renderSlideToSvg(slide: Slide, slideSize: SlideSize): string {
 
   // Elements
   for (const element of slide.elements) {
-    const result = renderElement(element);
+    const result = renderElement(element, context);
     if (result) {
       parts.push(result.content);
       defs.push(...result.defs);
@@ -55,11 +61,11 @@ export function renderSlideToSvg(slide: Slide, slideSize: SlideSize): string {
   return parts.join("");
 }
 
-function renderElement(element: SlideElement): RenderResult | null {
+function renderElement(element: SlideElement, context: RendererContext): RenderResult | null {
   let result: RenderResult | null = null;
   switch (element.type) {
     case "shape":
-      result = renderShape(element);
+      result = renderShape(element, context);
       break;
     case "image":
       result = renderImage(element);
@@ -68,13 +74,13 @@ function renderElement(element: SlideElement): RenderResult | null {
       result = renderConnector(element);
       break;
     case "group":
-      result = renderGroup(element);
+      result = renderGroup(element, context);
       break;
     case "chart":
-      result = renderChart(element);
+      result = renderChart(element, context);
       break;
     case "table":
-      result = renderTable(element);
+      result = renderTable(element, context);
       break;
   }
 
@@ -99,7 +105,7 @@ function addAriaLabel(svgFragment: string, altText: string): string {
   return svgFragment.replace(/^<(g|image|path)\b/, `<$1 role="img" aria-label="${escaped}"`);
 }
 
-function renderGroup(group: GroupElement): RenderResult {
+function renderGroup(group: GroupElement, context: RendererContext): RenderResult {
   const x = emuToPixels(group.transform.offsetX);
   const y = emuToPixels(group.transform.offsetY);
   const w = emuToPixels(group.transform.extentWidth);
@@ -136,7 +142,7 @@ function renderGroup(group: GroupElement): RenderResult {
   parts.push(`<g transform="${transformParts.join(" ")}">`);
 
   for (const child of group.children) {
-    const childResult = renderElement(child);
+    const childResult = renderElement(child, context);
     if (childResult) {
       parts.push(childResult.content);
       defs.push(...childResult.defs);

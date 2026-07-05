@@ -16,6 +16,10 @@ export function resetScriptFonts(): void {
   jpanMinorFont = null;
 }
 
+export function getScriptFonts(): { majorJpan: string | null; minorJpan: string | null } {
+  return { majorJpan: jpanMajorFont, minorJpan: jpanMinorFont };
+}
+
 /**
  * Returns the Japan font for fallback for CJK text.
  * If major/minor distinction is not necessary, major takes precedence.

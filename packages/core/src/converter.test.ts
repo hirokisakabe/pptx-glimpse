@@ -2,21 +2,32 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import * as document from "@pptx-glimpse/document";
-import { clearFontCache, getWarningEntries, warn } from "@pptx-glimpse/renderer";
+import {
+  clearFontCache,
+  getWarningEntries,
+  OpentypeTextMeasurer,
+  type TextPathFontResolver,
+  warn,
+} from "@pptx-glimpse/renderer";
 import JSZip from "jszip";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
   convertPptxToPng as convertPptxToPngBase,
   convertPptxToSvg as convertPptxToSvgBase,
+  renderPptxSourceModelToSvg as renderPptxSourceModelToSvgBase,
 } from "./converter.js";
 import * as adapterModule from "./pptx-computed-view-renderer-adapter.js";
+import { renderPptxSourceModelToSvg as renderPptxSourceModelToSvgInternal } from "./svg-converter.js";
 
 const convertPptxToSvg: typeof convertPptxToSvgBase = (input, options) =>
   convertPptxToSvgBase(input, { skipSystemFonts: true, ...options });
 
 const convertPptxToPng: typeof convertPptxToPngBase = (input, options) =>
   convertPptxToPngBase(input, { skipSystemFonts: true, ...options });
+
+const renderPptxSourceModelToSvg: typeof renderPptxSourceModelToSvgBase = (source, options) =>
+  renderPptxSourceModelToSvgBase(source, { skipSystemFonts: true, ...options });
 
 const SELECTED_SHARED_FIXTURES = ["real-basic-theme.pptx", "real-product-page.pptx"] as const;
 
@@ -363,6 +374,63 @@ describe("public conversion orchestration", () => {
     expect(publicDefault[0]?.svg).toContain("<svg");
     expect(readPptxSpy).toHaveBeenCalledOnce();
     expect(adapterSpy).toHaveBeenCalledOnce();
+  });
+
+  it("renders from a PptxSourceModel repeatedly without re-reading PPTX bytes", async () => {
+    const readPptxSpy = vi.spyOn(document, "readPptx");
+    const adapterSpy = vi.spyOn(adapterModule, "adaptComputedViewToRendererModel");
+    const source = document.readPptx(readSharedFixture("real-basic-theme.pptx"));
+
+    const first = await renderPptxSourceModelToSvg(source, { slides: [1] });
+    const second = await renderPptxSourceModelToSvg(source, { slides: [1] });
+
+    expect(first.slides[0]?.svg).toContain("<svg");
+    expect(second.slides[0]?.svg).toContain("<svg");
+    expect(readPptxSpy).toHaveBeenCalledOnce();
+    expect(adapterSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps concurrent source-model renders isolated by font options", async () => {
+    const source = document.readPptx(testPptx);
+
+    const [alpha, beta] = await Promise.all([
+      renderPptxSourceModelToSvg(source, {
+        textOutput: "text",
+        fontMapping: { Arial: "MappedAlpha" },
+      }),
+      renderPptxSourceModelToSvg(source, {
+        textOutput: "text",
+        fontMapping: { Arial: "MappedBeta" },
+      }),
+    ]);
+
+    expect(alpha.slides[0]?.svg).toContain("MappedAlpha");
+    expect(alpha.slides[0]?.svg).not.toContain("MappedBeta");
+    expect(beta.slides[0]?.svg).toContain("MappedBeta");
+    expect(beta.slides[0]?.svg).not.toContain("MappedAlpha");
+  });
+
+  it('collects text measurement font warnings in diagnostics when logLevel is "off"', async () => {
+    const source = document.readPptx(testPptx);
+    const fontResolver: TextPathFontResolver = { resolveFont: () => null };
+
+    const report = await renderPptxSourceModelToSvgInternal(
+      source,
+      { textOutput: "text", logLevel: "off" },
+      () =>
+        Promise.resolve({
+          measurer: new OpentypeTextMeasurer(new Map()),
+          fontResolver,
+        }),
+    );
+
+    expect(report.diagnostics).toContainEqual(
+      expect.objectContaining({
+        source: "renderer",
+        code: "renderer.font.notFound",
+      }),
+    );
+    expect(getWarningEntries()).toHaveLength(0);
   });
 
   it("uses the source model reader and renderer adapter for PNG conversion", async () => {

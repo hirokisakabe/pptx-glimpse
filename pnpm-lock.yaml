@@ -82,6 +82,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@pptx-glimpse/document':
+        specifier: ^0.1.0
+        version: link:../document
       '@resvg/resvg-wasm':
         specifier: ^2.6.2
         version: 2.6.2
@@ -95,9 +98,6 @@ importers:
         specifier: 1.3.4
         version: 1.3.4
     devDependencies:
-      '@pptx-glimpse/document':
-        specifier: workspace:*
-        version: link:../document
       '@pptx-glimpse/editor-core':
         specifier: workspace:*
         version: link:../editor-core

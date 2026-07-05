@@ -61,7 +61,8 @@ export async function createOpentypeSetupFromSystem(
   const fontFilePaths = collectFontFilePaths(additionalFontDirs, skipSystemFonts);
   if (fontFilePaths.length === 0) return null;
 
-  const reverseMap = buildReverseMapping(createFontMapping(fontMapping));
+  const mapping = createFontMapping(fontMapping);
+  const reverseMap = buildReverseMapping(mapping);
   const state = createOpentypeSetupState();
 
   for (const filePath of fontFilePaths) {
@@ -78,7 +79,7 @@ export async function createOpentypeSetupFromSystem(
     }
   }
 
-  const setup = buildOpentypeSetupFromState(state);
+  const setup = buildOpentypeSetupFromState(state, mapping);
   if (setup === null) return null;
 
   setCachedSystemOpentypeSetup(key, setup);

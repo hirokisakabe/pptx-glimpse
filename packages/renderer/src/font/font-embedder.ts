@@ -3,6 +3,8 @@
  * Used to embed subsetted fonts in SVG in native <text> output mode.
  */
 
+import type { RendererContext } from "../renderer/render-context.js";
+import { getJpanFallbackFontFromContext } from "../renderer/render-context.js";
 import { uint8ArrayToBase64 } from "../utils/base64.js";
 import { subsetFont } from "./font-subsetter.js";
 import type { FontUsage } from "./font-usage-collector.js";
@@ -26,19 +28,22 @@ function escapeCssFamilyName(name: string): string {
 export async function buildFontFaceStyle(
   usages: Map<string, FontUsage>,
   fontResolver: TextPathFontResolver,
+  context?: RendererContext,
 ): Promise<string> {
   const faces: string[] = [];
-  const jpanFallback = getJpanFallbackFont();
+  const jpanFallback =
+    context !== undefined ? getJpanFallbackFontFromContext(context) : getJpanFallbackFont();
 
   for (const [familyName, usage] of usages) {
     const font = fontResolver.resolveFont(
       usage.fonts[0],
       usage.fonts[1] ?? null,
       usage.fonts[2] ?? jpanFallback,
+      context,
     );
     if (!font) continue;
 
-    const buffer = await subsetFont(font, usage.chars, familyName);
+    const buffer = await subsetFont(font, usage.chars, familyName, context?.warningLogger);
     if (!buffer) continue;
 
     const base64 = uint8ArrayToBase64(buffer);

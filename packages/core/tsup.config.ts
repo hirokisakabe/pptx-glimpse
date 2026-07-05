@@ -5,7 +5,6 @@ export default defineConfig({
   format: ["cjs", "esm"],
   dts: {
     resolve: [
-      "@pptx-glimpse/document",
       "@pptx-glimpse/editor-core",
       "@pptx-glimpse/renderer",
       "@pptx-glimpse/renderer/png",

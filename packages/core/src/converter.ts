@@ -1,8 +1,10 @@
+import type { PptxSourceModel } from "@pptx-glimpse/document";
 import { DEFAULT_OUTPUT_WIDTH } from "@pptx-glimpse/renderer";
 
 import {
   type ConvertOptions,
   convertPptxToSvg as convertPptxToSvgBase,
+  renderPptxSourceModelToSvg as renderPptxSourceModelToSvgBase,
   type SupportCoverage,
   type SvgConversionReport,
   type SystemFontSetupLoader,
@@ -17,6 +19,7 @@ export type {
   SupportCoverageCounts,
   SvgConversionReport,
 } from "./svg-converter.js";
+export type { PptxSourceModel } from "@pptx-glimpse/document";
 
 /**
  * PNG conversion result for one slide.
@@ -64,6 +67,19 @@ export async function convertPptxToSvg(
   options?: ConvertOptions,
 ): Promise<SvgConversionReport> {
   return convertPptxToSvgBase(input, options, loadSystemFontSetup);
+}
+
+/**
+ * Render SVG documents from an already parsed PptxSourceModel.
+ *
+ * Use this with `readPptx()` from `@pptx-glimpse/document` to repeatedly render
+ * slides without unzipping and parsing the PPTX bytes again.
+ */
+export async function renderPptxSourceModelToSvg(
+  source: PptxSourceModel,
+  options?: ConvertOptions,
+): Promise<SvgConversionReport> {
+  return renderPptxSourceModelToSvgBase(source, options, loadSystemFontSetup);
 }
 
 /**

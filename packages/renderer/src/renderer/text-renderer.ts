@@ -1,10 +1,5 @@
 import { getMetricsFallbackFont } from "../data/font-metrics.js";
-import { getCurrentMappedFont } from "../font/font-mapping-context.js";
-import { getFontUsageCollector } from "../font/font-usage-collector.js";
-import { getJpanFallbackFont } from "../font/script-font-context.js";
-import { getTextMeasurer } from "../font/text-measurer.js";
 import type { TextPathFontResolver } from "../font/text-path-context.js";
-import { getTextPathFontResolver } from "../font/text-path-context.js";
 import type { Transform } from "../model/shape.js";
 import type {
   AutoNumScheme,
@@ -21,6 +16,12 @@ import { emuToPixels } from "../utils/emu.js";
 import { wrapParagraph } from "../utils/text-wrap.js";
 import type { Emu } from "../utils/unit-types.js";
 import { asEmu } from "../utils/unit-types.js";
+import type { RendererContext } from "./render-context.js";
+import {
+  createLegacyRendererContext,
+  getJpanFallbackFontFromContext,
+  getMappedFontFromContext,
+} from "./render-context.js";
 
 const PX_PER_PT = 96 / 72;
 const DEFAULT_LINE_SPACING = 1.0;
@@ -87,10 +88,14 @@ function resolveTextDimensions(
   };
 }
 
-export function renderTextBody(textBody: TextBody, transform: Transform): string {
-  const fontResolver = getTextPathFontResolver();
+export function renderTextBody(
+  textBody: TextBody,
+  transform: Transform,
+  context: RendererContext = createLegacyRendererContext(),
+): string {
+  const fontResolver = context.textPathFontResolver;
   if (fontResolver) {
-    return renderTextBodyAsPath(textBody, transform, fontResolver);
+    return renderTextBodyAsPath(textBody, transform, fontResolver, context);
   }
 
   const { bodyProperties, paragraphs } = textBody;
@@ -122,14 +127,15 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
       lnSpcReduction,
       textWidth,
       availableHeight,
+      context,
     );
   }
 
   const scaledDefaultFontSizePt = defaultFontSize * fontScale;
 
   // Default font line height ratio
-  const defaultLineHeightRatio = getDefaultLineHeightRatio(paragraphs);
-  const defaultAscenderRatio = getDefaultAscenderRatio(paragraphs);
+  const defaultLineHeightRatio = getDefaultLineHeightRatio(paragraphs, context);
+  const defaultAscenderRatio = getDefaultAscenderRatio(paragraphs, context);
   const defaultNaturalHeightPt = scaledDefaultFontSizePt * defaultLineHeightRatio;
 
   const tspans: string[] = [];
@@ -186,6 +192,8 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
         effectiveTextWidth,
         scaledDefaultFontSizePt,
         fontScale,
+        context.textMeasurer,
+        context,
       );
       for (let lineIdx = 0; lineIdx < wrappedLines.length; lineIdx++) {
         const line = wrappedLines[lineIdx];
@@ -208,6 +216,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
             line.segments,
             defaultFontSize,
             fontScale,
+            context,
           );
           const dy = computeDy(
             isFirstLine,
@@ -225,8 +234,9 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
             lineFontSize,
             fontScale,
             bulletFontChain,
+            context,
           );
-          getFontUsageCollector()?.record(bulletFontChain, bulletText);
+          context.fontUsageCollector?.record(bulletFontChain, bulletText);
           tspans.push(
             `<tspan x="${bulletX}" dy="${dy}" text-anchor="start" ${bulletStyles}>${escapeXml(bulletText)}</tspan>`,
           );
@@ -234,7 +244,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
           for (let segIdx = 0; segIdx < line.segments.length; segIdx++) {
             const seg = line.segments[segIdx];
             const prefix = segIdx === 0 ? `x="${xPos}" text-anchor="${anchorValue}" ` : "";
-            tspans.push(renderSegment(seg.text, seg.properties, fontScale, prefix));
+            tspans.push(renderSegment(seg.text, seg.properties, fontScale, prefix, context));
           }
         } else {
           for (let segIdx = 0; segIdx < line.segments.length; segIdx++) {
@@ -245,6 +255,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
                 line.segments,
                 defaultFontSize,
                 fontScale,
+                context,
               );
               const dy = computeDy(
                 isFirstLine,
@@ -252,9 +263,9 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
                 lineGapPx,
               );
               const prefix = `x="${xPos}" dy="${dy}" text-anchor="${anchorValue}" `;
-              tspans.push(renderSegment(seg.text, seg.properties, fontScale, prefix));
+              tspans.push(renderSegment(seg.text, seg.properties, fontScale, prefix, context));
             } else {
-              tspans.push(renderSegment(seg.text, seg.properties, fontScale, ""));
+              tspans.push(renderSegment(seg.text, seg.properties, fontScale, "", context));
             }
           }
         }
@@ -266,7 +277,12 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
       if (bulletText) {
         const firstRun = para.runs.find((r) => r.text.length > 0);
         const fontSize = (firstRun?.properties.fontSize ?? defaultFontSize) * fontScale;
-        const naturalHeightPt = computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
+        const naturalHeightPt = computeLineNaturalHeight(
+          para.runs,
+          defaultFontSize,
+          fontScale,
+          context,
+        );
         const dy = computeDy(
           isFirstLine,
           getLineHeightPx(para, naturalHeightPt, lnSpcReduction),
@@ -282,8 +298,9 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
           fontSize,
           fontScale,
           bulletFontChain,
+          context,
         );
-        getFontUsageCollector()?.record(bulletFontChain, bulletText);
+        context.fontUsageCollector?.record(bulletFontChain, bulletText);
         tspans.push(
           `<tspan x="${bulletX}" dy="${dy}" text-anchor="start" ${bulletStyles}>${escapeXml(bulletText)}</tspan>`,
         );
@@ -297,20 +314,25 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
           if (bulletText) {
             // If there is a bullet, the text specifies the x position (no dy, same line as the bullet)
             const prefix = `x="${xPos}" text-anchor="${anchorValue}" `;
-            tspans.push(renderSegment(run.text, run.properties, fontScale, prefix));
+            tspans.push(renderSegment(run.text, run.properties, fontScale, prefix, context));
           } else {
-            const naturalHeightPt = computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
+            const naturalHeightPt = computeLineNaturalHeight(
+              para.runs,
+              defaultFontSize,
+              fontScale,
+              context,
+            );
             const dy = computeDy(
               isFirstLine,
               getLineHeightPx(para, naturalHeightPt, lnSpcReduction),
               paragraphGapPx,
             );
             const prefix = `x="${xPos}" dy="${dy}" text-anchor="${anchorValue}" `;
-            tspans.push(renderSegment(run.text, run.properties, fontScale, prefix));
+            tspans.push(renderSegment(run.text, run.properties, fontScale, prefix, context));
           }
           firstRunRendered = true;
         } else {
-          tspans.push(renderSegment(run.text, run.properties, fontScale, ""));
+          tspans.push(renderSegment(run.text, run.properties, fontScale, "", context));
         }
       }
       isFirstLine = false;
@@ -328,6 +350,7 @@ export function renderTextBody(textBody: TextBody, transform: Transform): string
     textWidth,
     lnSpcReduction,
     fontScale,
+    context,
   );
   if (bodyProperties.anchor === "ctr") {
     yStart = Math.max(marginTopPx, (height - totalTextHeight) / 2);
@@ -451,6 +474,7 @@ function buildBulletStyleAttrs(
   textFontSizePt: number,
   fontScale: number,
   bulletFontChain: (string | null)[],
+  context: RendererContext = createLegacyRendererContext(),
 ): string {
   const styles: string[] = [];
 
@@ -459,7 +483,7 @@ function buildBulletStyleAttrs(
     styles.push(`font-size="${size}pt"`);
   }
 
-  const fontFamilyValue = buildFontFamilyValue(bulletFontChain);
+  const fontFamilyValue = buildFontFamilyValue(bulletFontChain, context);
   if (fontFamilyValue) {
     styles.push(`font-family="${fontFamilyValue}"`);
   }
@@ -549,13 +573,15 @@ function computeLineNaturalHeight(
   segments: { properties: RunProperties }[],
   defaultFontSize: number,
   fontScale: number,
+  context: RendererContext = createLegacyRendererContext(),
 ): number {
   let maxHeight = 0;
   for (const seg of segments) {
     const fontSize = (seg.properties.fontSize ?? defaultFontSize) * fontScale;
-    const ratio = getTextMeasurer().getLineHeightRatio(
+    const ratio = context.textMeasurer.getLineHeightRatio(
       seg.properties.fontFamily,
       seg.properties.fontFamilyEa,
+      context,
     );
     maxHeight = Math.max(maxHeight, fontSize * ratio);
   }
@@ -631,7 +657,10 @@ function escapeFontName(name: string): string {
     .replace(/"/g, "&quot;");
 }
 
-export function buildFontFamilyValue(fonts: (string | null)[]): string | null {
+export function buildFontFamilyValue(
+  fonts: (string | null)[],
+  context: RendererContext = createLegacyRendererContext(),
+): string | null {
   const uniqueFonts: string[] = [];
   const seen = new Set<string>();
 
@@ -641,7 +670,7 @@ export function buildFontFamilyValue(fonts: (string | null)[]): string | null {
       uniqueFonts.push(font);
 
       // Add OSS alternative font from mapping table
-      const mapped = getCurrentMappedFont(font);
+      const mapped = getMappedFontFromContext(font, context);
       if (mapped && !seen.has(mapped)) {
         seen.add(mapped);
         uniqueFonts.push(mapped);
@@ -673,6 +702,7 @@ function buildStyleAttrs(
   props: RunProperties,
   fontScale: number = 1,
   fontFamilies?: (string | null)[],
+  context: RendererContext = createLegacyRendererContext(),
 ): string {
   const styles: string[] = [];
 
@@ -681,7 +711,7 @@ function buildStyleAttrs(
     styles.push(`font-size="${scaledSize}pt"`);
   }
   const fonts = fontFamilies ?? [props.fontFamily, props.fontFamilyEa];
-  const fontFamilyValue = buildFontFamilyValue(fonts);
+  const fontFamilyValue = buildFontFamilyValue(fonts, context);
   if (fontFamilyValue) {
     styles.push(`font-family="${fontFamilyValue}"`);
   }
@@ -729,11 +759,12 @@ function renderSegment(
   props: RunProperties,
   fontScale: number,
   prefix: string,
+  context: RendererContext,
 ): string {
   let tspanContent: string;
   if (!needsScriptSplit(props)) {
-    const styles = buildStyleAttrs(props, fontScale);
-    getFontUsageCollector()?.record([props.fontFamily, props.fontFamilyEa], text);
+    const styles = buildStyleAttrs(props, fontScale, undefined, context);
+    context.fontUsageCollector?.record([props.fontFamily, props.fontFamilyEa], text);
     tspanContent = `<tspan ${prefix}${styles}>${escapeXml(text)}</tspan>`;
   } else {
     const parts = splitByScript(text);
@@ -741,10 +772,10 @@ function renderSegment(
     for (let i = 0; i < parts.length; i++) {
       const part = parts[i];
       const fonts = part.isEa
-        ? [props.fontFamilyEa, getJpanFallbackFont(), props.fontFamily]
+        ? [props.fontFamilyEa, getJpanFallbackFontFromContext(context), props.fontFamily]
         : [props.fontFamily, props.fontFamilyEa];
-      const styles = buildStyleAttrs(props, fontScale, fonts);
-      getFontUsageCollector()?.record(fonts, part.text);
+      const styles = buildStyleAttrs(props, fontScale, fonts, context);
+      context.fontUsageCollector?.record(fonts, part.text);
       if (i === 0) {
         result.push(`<tspan ${prefix}${styles}>${escapeXml(part.text)}</tspan>`);
       } else {
@@ -770,13 +801,17 @@ function getDefaultFontSize(paragraphs: TextBody["paragraphs"]): number {
   return DEFAULT_FONT_SIZE_PT;
 }
 
-function getDefaultLineHeightRatio(paragraphs: TextBody["paragraphs"]): number {
+function getDefaultLineHeightRatio(
+  paragraphs: TextBody["paragraphs"],
+  context: RendererContext = createLegacyRendererContext(),
+): number {
   for (const p of paragraphs) {
     for (const r of p.runs) {
       if (r.properties.fontFamily || r.properties.fontFamilyEa) {
-        return getTextMeasurer().getLineHeightRatio(
+        return context.textMeasurer.getLineHeightRatio(
           r.properties.fontFamily,
           r.properties.fontFamilyEa,
+          context,
         );
       }
     }
@@ -784,13 +819,17 @@ function getDefaultLineHeightRatio(paragraphs: TextBody["paragraphs"]): number {
   return 1.2;
 }
 
-function getDefaultAscenderRatio(paragraphs: TextBody["paragraphs"]): number {
+function getDefaultAscenderRatio(
+  paragraphs: TextBody["paragraphs"],
+  context: RendererContext = createLegacyRendererContext(),
+): number {
   for (const p of paragraphs) {
     for (const r of p.runs) {
       if (r.properties.fontFamily || r.properties.fontFamilyEa) {
-        return getTextMeasurer().getAscenderRatio(
+        return context.textMeasurer.getAscenderRatio(
           r.properties.fontFamily,
           r.properties.fontFamilyEa,
+          context,
         );
       }
     }
@@ -802,7 +841,11 @@ function getDefaultAscenderRatio(paragraphs: TextBody["paragraphs"]): number {
  * spAutofit: Calculates the required shape height (EMU) depending on the amount of text.
  * Returns null if the text fits within the original shape.
  */
-export function computeSpAutofitHeight(textBody: TextBody, transform: Transform): Emu | null {
+export function computeSpAutofitHeight(
+  textBody: TextBody,
+  transform: Transform,
+  context: RendererContext = createLegacyRendererContext(),
+): Emu | null {
   const { bodyProperties, paragraphs } = textBody;
 
   const hasText = paragraphs.some((p) => p.runs.some((r) => r.text.length > 0));
@@ -820,7 +863,15 @@ export function computeSpAutofitHeight(textBody: TextBody, transform: Transform)
   const defaultFontSize = getDefaultFontSize(paragraphs);
   const shouldWrap = bodyProperties.wrap !== "none";
 
-  const textHeight = estimateTextHeight(paragraphs, defaultFontSize, shouldWrap, textWidth);
+  const textHeight = estimateTextHeight(
+    paragraphs,
+    defaultFontSize,
+    shouldWrap,
+    textWidth,
+    undefined,
+    undefined,
+    context,
+  );
   const requiredHeightPx = textHeight + marginTopPx + marginBottomPx;
 
   if (requiredHeightPx <= height) return null;
@@ -836,6 +887,7 @@ function computeShrinkToFitScale(
   lnSpcReduction: number,
   textWidth: number,
   availableHeight: number,
+  context: RendererContext = createLegacyRendererContext(),
 ): number {
   if (availableHeight <= 0) return fontScale;
 
@@ -851,6 +903,7 @@ function computeShrinkToFitScale(
       textWidth,
       lnSpcReduction,
       scale,
+      context,
     );
     if (textHeight <= availableHeight) break;
     const newScale = scale * (availableHeight / textHeight);
@@ -868,9 +921,10 @@ function estimateTextHeight(
   textWidth: number,
   lnSpcReduction: number = 0,
   fontScale: number = 1,
+  context: RendererContext = createLegacyRendererContext(),
 ): number {
   let totalHeight = 0;
-  const defaultRatio = getDefaultLineHeightRatio(paragraphs);
+  const defaultRatio = getDefaultLineHeightRatio(paragraphs, context);
   let prevSpaceAfterPx = 0;
   // wrapParagraph expects a pre-scaled defaultFontSize
   const scaledDefaultForWrap = defaultFontSize * fontScale;
@@ -881,7 +935,7 @@ function estimateTextHeight(
     const naturalHeightPt =
       isEmpty && para.endParaRunProperties?.fontSize
         ? para.endParaRunProperties.fontSize * fontScale * defaultRatio
-        : computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
+        : computeLineNaturalHeight(para.runs, defaultFontSize, fontScale, context);
     const lineHeight = getLineHeightPx(
       para,
       naturalHeightPt > 0 ? naturalHeightPt : defaultFontSize * fontScale * defaultRatio,
@@ -890,7 +944,14 @@ function estimateTextHeight(
 
     let lineCount: number;
     if (shouldWrap && para.runs.length > 0 && para.runs.some((r) => r.text.length > 0)) {
-      const wrappedLines = wrapParagraph(para, textWidth, scaledDefaultForWrap, fontScale);
+      const wrappedLines = wrapParagraph(
+        para,
+        textWidth,
+        scaledDefaultForWrap,
+        fontScale,
+        context.textMeasurer,
+        context,
+      );
       lineCount = wrappedLines.length;
     } else {
       lineCount = para.runs.some((r) => r.text.length > 0) ? 1 : 1;
@@ -941,9 +1002,10 @@ function measureLineWidth(
   defaultFontSize: number,
   fontScale: number,
   fontResolver?: TextPathFontResolver | null,
+  context: RendererContext = createLegacyRendererContext(),
 ): number {
   let totalWidth = 0;
-  const jpanFallback = fontResolver ? getJpanFallbackFont() : null;
+  const jpanFallback = fontResolver ? getJpanFallbackFontFromContext(context) : null;
   for (const seg of segments) {
     const fontSize = (seg.properties.fontSize ?? defaultFontSize) * fontScale;
     if (fontResolver) {
@@ -952,18 +1014,20 @@ function measureLineWidth(
         seg.properties.fontFamily,
         seg.properties.fontFamilyEa,
         jpanFallback,
+        context,
       );
       if (font) {
         totalWidth += font.getAdvanceWidth(seg.text, fontSizePx);
         continue;
       }
     }
-    totalWidth += getTextMeasurer().measureTextWidth(
+    totalWidth += context.textMeasurer.measureTextWidth(
       seg.text,
       fontSize,
       seg.properties.bold,
       seg.properties.fontFamily,
       seg.properties.fontFamilyEa,
+      context,
     );
   }
   return totalWidth;
@@ -1029,6 +1093,7 @@ function renderSegmentAsPath(
   fontScale: number,
   defaultFontSize: number,
   fontResolver: TextPathFontResolver,
+  context: RendererContext,
   vert?: TextVerticalType,
 ): { svg: string; width: number } {
   const fontSize = (props.fontSize ?? defaultFontSize) * fontScale;
@@ -1045,7 +1110,7 @@ function renderSegmentAsPath(
   else if (props.baseline < 0) yOffset = fontSizePx * 0.2;
   const effectiveY = y + yOffset;
 
-  const jpanFallback = getJpanFallbackFont();
+  const jpanFallback = getJpanFallbackFontFromContext(context);
 
   const processSegment = (
     segText: string,
@@ -1054,15 +1119,16 @@ function renderSegmentAsPath(
   ) => {
     if (segText.length === 0) return;
 
-    const font = fontResolver.resolveFont(fontFamily, fontFamilyEa, jpanFallback);
+    const font = fontResolver.resolveFont(fontFamily, fontFamilyEa, jpanFallback, context);
     const segWidth = font
       ? font.getAdvanceWidth(segText, fontSizePx)
-      : getTextMeasurer().measureTextWidth(
+      : context.textMeasurer.measureTextWidth(
           segText,
           fontSize,
           props.bold,
           props.fontFamily,
           props.fontFamilyEa,
+          context,
         );
 
     if (font) {
@@ -1095,18 +1161,19 @@ function renderSegmentAsPath(
   ) => {
     if (segText.length === 0) return;
 
-    const font = fontResolver.resolveFont(fontFamily, fontFamilyEa, jpanFallback);
+    const font = fontResolver.resolveFont(fontFamily, fontFamilyEa, jpanFallback, context);
     const fillAttrs = buildPathFillAttrs(props);
 
     for (const char of segText) {
       const charWidth = font
         ? font.getAdvanceWidth(char, fontSizePx)
-        : getTextMeasurer().measureTextWidth(
+        : context.textMeasurer.measureTextWidth(
             char,
             fontSize,
             props.bold,
             props.fontFamily,
             props.fontFamilyEa,
+            context,
           );
 
       if (font) {
@@ -1180,6 +1247,7 @@ function renderBulletAsPath(
   textFontSizePt: number,
   fontScale: number,
   fontResolver: TextPathFontResolver,
+  context: RendererContext,
   runFontFamily?: string | null,
   runFontFamilyEa?: string | null,
 ): string[] {
@@ -1191,8 +1259,8 @@ function renderBulletAsPath(
 
   // Use bulletFont if specified, fallback to text run font if not specified
   const font = paraProps.bulletFont
-    ? fontResolver.resolveFont(paraProps.bulletFont, null)
-    : fontResolver.resolveFont(runFontFamily ?? null, runFontFamilyEa ?? null);
+    ? fontResolver.resolveFont(paraProps.bulletFont, null, undefined, context)
+    : fontResolver.resolveFont(runFontFamily ?? null, runFontFamilyEa ?? null, undefined, context);
   if (!font) return [];
 
   const path = font.getPath(bulletText, x, y, fontSizePx);
@@ -1220,6 +1288,7 @@ function renderTextBodyAsPath(
   textBody: TextBody,
   transform: Transform,
   fontResolver: TextPathFontResolver,
+  context: RendererContext,
 ): string {
   const { bodyProperties, paragraphs } = textBody;
   const originalWidth = emuToPixels(transform.extentWidth);
@@ -1249,12 +1318,13 @@ function renderTextBodyAsPath(
       lnSpcReduction,
       textWidth,
       availableHeight,
+      context,
     );
   }
 
   const scaledDefaultFontSizePt = defaultFontSize * fontScale;
-  const defaultLineHeightRatio = getDefaultLineHeightRatio(paragraphs);
-  const defaultAscenderRatio = getDefaultAscenderRatio(paragraphs);
+  const defaultLineHeightRatio = getDefaultLineHeightRatio(paragraphs, context);
+  const defaultAscenderRatio = getDefaultAscenderRatio(paragraphs, context);
   const defaultNaturalHeightPt = scaledDefaultFontSizePt * defaultLineHeightRatio;
 
   // Vertical position calculation (reusing existing logic)
@@ -1266,6 +1336,7 @@ function renderTextBodyAsPath(
     textWidth,
     lnSpcReduction,
     fontScale,
+    context,
   );
   if (bodyProperties.anchor === "ctr") {
     yStart = Math.max(marginTopPx, (height - totalTextHeight) / 2);
@@ -1313,6 +1384,8 @@ function renderTextBodyAsPath(
         effectiveTextWidth,
         scaledDefaultFontSizePt,
         fontScale,
+        context.textMeasurer,
+        context,
       );
 
       for (let lineIdx = 0; lineIdx < wrappedLines.length; lineIdx++) {
@@ -1332,13 +1405,20 @@ function renderTextBodyAsPath(
           line.segments,
           defaultFontSize,
           fontScale,
+          context,
         );
         if (!isFirstLine) {
           currentY += getLineHeightPx(para, lineNaturalHeightPt, lnSpcReduction) + lineGapPx;
         }
 
         // Calculate x position for alignment by measuring line width
-        const lineWidth = measureLineWidth(line.segments, defaultFontSize, fontScale, fontResolver);
+        const lineWidth = measureLineWidth(
+          line.segments,
+          defaultFontSize,
+          fontScale,
+          fontResolver,
+          context,
+        );
         const lineStartX = computePathLineX(
           para.properties.alignment,
           textStartX,
@@ -1363,6 +1443,7 @@ function renderTextBodyAsPath(
               lineFontSize,
               fontScale,
               fontResolver,
+              context,
               firstSeg?.properties.fontFamily,
               firstSeg?.properties.fontFamilyEa,
             ),
@@ -1379,6 +1460,7 @@ function renderTextBodyAsPath(
             fontScale,
             defaultFontSize,
             fontResolver,
+            context,
             bodyProperties.vert,
           );
           if (result.svg) elements.push(result.svg);
@@ -1389,7 +1471,12 @@ function renderTextBodyAsPath(
       }
     } else {
       // wrap="none": no wrapping
-      const naturalHeightPt = computeLineNaturalHeight(para.runs, defaultFontSize, fontScale);
+      const naturalHeightPt = computeLineNaturalHeight(
+        para.runs,
+        defaultFontSize,
+        fontScale,
+        context,
+      );
       if (!isFirstLine) {
         currentY += getLineHeightPx(para, naturalHeightPt, lnSpcReduction) + paragraphGapPx;
       }
@@ -1398,7 +1485,13 @@ function renderTextBodyAsPath(
       const runsAsSegments = para.runs
         .filter((r) => r.text.length > 0)
         .map((r) => ({ text: r.text, properties: r.properties }));
-      const lineWidth = measureLineWidth(runsAsSegments, defaultFontSize, fontScale, fontResolver);
+      const lineWidth = measureLineWidth(
+        runsAsSegments,
+        defaultFontSize,
+        fontScale,
+        fontResolver,
+        context,
+      );
       const lineStartX = computePathLineX(
         para.properties.alignment,
         textStartX,
@@ -1423,6 +1516,7 @@ function renderTextBodyAsPath(
             fontSize,
             fontScale,
             fontResolver,
+            context,
             firstRun?.properties.fontFamily,
             firstRun?.properties.fontFamilyEa,
           ),
@@ -1440,6 +1534,7 @@ function renderTextBodyAsPath(
           fontScale,
           defaultFontSize,
           fontResolver,
+          context,
           bodyProperties.vert,
         );
         if (result.svg) elements.push(result.svg);

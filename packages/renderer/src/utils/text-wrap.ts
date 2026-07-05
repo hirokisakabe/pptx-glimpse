@@ -1,3 +1,4 @@
+import type { TextMeasurementContext, TextMeasurer } from "../font/text-measurer.js";
 import { getTextMeasurer } from "../font/text-measurer.js";
 import type { Paragraph, RunProperties } from "../model/text.js";
 
@@ -99,6 +100,8 @@ function tokenizeRuns(
   runs: Paragraph["runs"],
   defaultFontSize: number,
   fontScale: number,
+  textMeasurer: TextMeasurer,
+  measurementContext?: TextMeasurementContext,
 ): Token[] {
   const tokens: Token[] = [];
   let isFirst = true;
@@ -131,12 +134,13 @@ function tokenizeRuns(
         const fontFamilyEa = run.properties.fontFamilyEa;
         const fragments = splitTextIntoFragments(part);
         for (const { fragment, breakable } of fragments) {
-          const width = getTextMeasurer().measureTextWidth(
+          const width = textMeasurer.measureTextWidth(
             fragment,
             fontSize,
             bold,
             fontFamily,
             fontFamilyEa,
+            measurementContext,
           );
           tokens.push({
             text: fragment,
@@ -159,12 +163,13 @@ function tokenizeRuns(
     const fragments = splitTextIntoFragments(run.text);
 
     for (const { fragment, breakable } of fragments) {
-      const width = getTextMeasurer().measureTextWidth(
+      const width = textMeasurer.measureTextWidth(
         fragment,
         fontSize,
         bold,
         fontFamily,
         fontFamilyEa,
+        measurementContext,
       );
       tokens.push({
         text: fragment,
@@ -194,6 +199,8 @@ function splitTokenByChars(
   availableWidth: number,
   defaultFontSize: number,
   fontScale: number,
+  textMeasurer: TextMeasurer,
+  measurementContext?: TextMeasurementContext,
 ): Token[][] {
   const lines: Token[][] = [];
   let currentLine: Token[] = [];
@@ -206,12 +213,13 @@ function splitTokenByChars(
   const fontFamilyEa = token.properties.fontFamilyEa;
 
   for (const char of token.text) {
-    const charWidth = getTextMeasurer().measureTextWidth(
+    const charWidth = textMeasurer.measureTextWidth(
       char,
       fontSize,
       bold,
       fontFamily,
       fontFamilyEa,
+      measurementContext,
     );
 
     if (currentWidth + charWidth > availableWidth && currentLine.length > 0) {
@@ -276,6 +284,8 @@ function layoutTokensIntoLines(
   availableWidth: number,
   defaultFontSize: number,
   fontScale: number,
+  textMeasurer: TextMeasurer,
+  measurementContext?: TextMeasurementContext,
 ): WrappedLine[] {
   if (tokens.length === 0) return [{ segments: [] }];
 
@@ -305,7 +315,14 @@ function layoutTokensIntoLines(
         // Skip blank tokens
         continue;
       }
-      const splitLines = splitTokenByChars(token, availableWidth, defaultFontSize, fontScale);
+      const splitLines = splitTokenByChars(
+        token,
+        availableWidth,
+        defaultFontSize,
+        fontScale,
+        textMeasurer,
+        measurementContext,
+      );
       for (let j = 0; j < splitLines.length; j++) {
         if (j < splitLines.length - 1) {
           const segments = trimTrailingSpaces(mergeSegments(splitLines[j]));
@@ -354,15 +371,30 @@ export function wrapParagraph(
   availableWidth: number,
   defaultFontSize: number = DEFAULT_FONT_SIZE,
   fontScale: number = 1,
+  textMeasurer: TextMeasurer = getTextMeasurer(),
+  measurementContext?: TextMeasurementContext,
 ): WrappedLine[] {
   if (paragraph.runs.length === 0 || !paragraph.runs.some((r) => r.text.length > 0)) {
     return [{ segments: [] }];
   }
 
   const safeWidth = Math.max(availableWidth, 1);
-  const tokens = tokenizeRuns(paragraph.runs, defaultFontSize, fontScale);
+  const tokens = tokenizeRuns(
+    paragraph.runs,
+    defaultFontSize,
+    fontScale,
+    textMeasurer,
+    measurementContext,
+  );
 
   if (tokens.length === 0) return [{ segments: [] }];
 
-  return layoutTokensIntoLines(tokens, safeWidth, defaultFontSize, fontScale);
+  return layoutTokensIntoLines(
+    tokens,
+    safeWidth,
+    defaultFontSize,
+    fontScale,
+    textMeasurer,
+    measurementContext,
+  );
 }
