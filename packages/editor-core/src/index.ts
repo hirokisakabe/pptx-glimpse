@@ -1,5 +1,7 @@
 import {
   clearTextRunProperties,
+  deleteSlide,
+  duplicateSlide,
   type EditableTextRunProperties,
   type EditableTextRunProperty,
   type Emu,
@@ -78,6 +80,16 @@ export interface SetShapeTransformCommand {
   readonly height: Emu;
 }
 
+export interface DuplicateSlideCommand {
+  readonly kind: "duplicateSlide";
+  readonly handle: SourceHandle;
+}
+
+export interface DeleteSlideCommand {
+  readonly kind: "deleteSlide";
+  readonly handle: SourceHandle;
+}
+
 export type EditorCommand =
   | ReplaceTextRunPlainTextCommand
   | ReplaceParagraphPlainTextCommand
@@ -85,7 +97,9 @@ export type EditorCommand =
   | ClearTextRunPropertiesCommand
   | MoveShapeCommand
   | ResizeShapeCommand
-  | SetShapeTransformCommand;
+  | SetShapeTransformCommand
+  | DuplicateSlideCommand
+  | DeleteSlideCommand;
 
 export type EditorApplyCommandResult =
   | {
@@ -252,6 +266,10 @@ function applyCommandToDocument(
       return resizeShape(document, command);
     case "setShapeTransform":
       return setShapeTransform(document, command);
+    case "duplicateSlide":
+      return duplicateSlide(document, command.handle);
+    case "deleteSlide":
+      return deleteSlide(document, command.handle);
   }
 }
 

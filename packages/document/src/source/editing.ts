@@ -3,14 +3,23 @@ import type {
   EditableTextRunProperties,
   EditableTextRunProperty,
   Emu,
+  PartPath,
+  PartRelationships,
   PptxSourceModel,
+  PptxSourceModelEdit,
+  RawPackagePart,
+  Relationship,
+  RelationshipId,
   SourceHandle,
   SourceParagraph,
   SourceRunProperties,
   SourceShape,
   SourceShapeNode,
+  SourceSlide,
   SourceTextRun,
 } from "./index.js";
+import { asPartPath, asRelationshipId } from "./index.js";
+import { relationshipsPartPath, resolveInternalRelationshipTarget } from "./package-paths.js";
 
 type TransformableShapeNode = Exclude<SourceShapeNode, { readonly kind: "raw" }>;
 type MutableRunProperties = {
@@ -19,6 +28,14 @@ type MutableRunProperties = {
 type MutableEditableTextRunProperties = {
   -readonly [K in keyof EditableTextRunProperties]?: EditableTextRunProperties[K];
 };
+
+const RELS_CONTENT_TYPE = "application/vnd.openxmlformats-package.relationships+xml";
+const SLIDE_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.slide+xml";
+const NOTES_SLIDE_CONTENT_TYPE =
+  "application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml";
+const SLIDE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
+const NOTES_SLIDE_REL_TYPE =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide";
 
 const EDITABLE_TEXT_RUN_PROPERTIES = [
   "bold",
@@ -360,6 +377,270 @@ export function updateShapeTransform(
   };
 }
 
+export function duplicateSlide(
+  source: PptxSourceModel,
+  slideHandle: SourceHandle,
+): PptxSourceModel {
+  const slideIndex = source.slides.findIndex((slide) =>
+    sourceHandlesEqual(slide.handle, slideHandle),
+  );
+  if (slideIndex === -1) {
+    throw new Error("duplicateSlide: slide handle was not found in PptxSourceModel source");
+  }
+
+  const sourceSlide = source.slides[slideIndex];
+  if (hasDirtyEditForPart(source.edits ?? [], sourceSlide.partPath)) {
+    throw new Error(
+      "duplicateSlide: duplicating a slide with pending dirty part edits is unsupported",
+    );
+  }
+
+  const presentationRels = requirePartRelationships(
+    source,
+    source.presentation.partPath,
+    "duplicateSlide",
+  );
+  const sourcePresentationRelationship = requireSlideRelationship(
+    source,
+    presentationRels,
+    sourceSlide.partPath,
+    "duplicateSlide",
+  );
+  const sourceRawSlide = requireRawBinaryPart(source, sourceSlide.partPath, "duplicateSlide");
+  const sourceSlideRelationships = source.packageGraph.relationships.find(
+    (relationships) => relationships.sourcePartPath === sourceSlide.partPath,
+  );
+  const newSlidePartPath = nextNumberedPartPath(source, "ppt/slides/slide", ".xml");
+  const newPresentationRelationshipId = nextRelationshipId(presentationRels.relationships);
+  const notesCopy = createNotesSlideCopy(
+    source,
+    sourceSlide,
+    sourceSlideRelationships,
+    newSlidePartPath,
+  );
+  const newSlideRelationships =
+    sourceSlideRelationships === undefined
+      ? undefined
+      : {
+          sourcePartPath: newSlidePartPath,
+          relationships: sourceSlideRelationships.relationships.map((relationship) =>
+            notesCopy !== undefined && relationship.id === notesCopy.slideRelationshipId
+              ? { ...relationship, target: relativeTarget(newSlidePartPath, notesCopy.newPartPath) }
+              : relationship,
+          ),
+        };
+  const newRelationshipPartPaths = [
+    ...(newSlideRelationships === undefined
+      ? []
+      : [asPartPath(relationshipsPartPath(newSlidePartPath))]),
+    ...(notesCopy?.relationships === undefined
+      ? []
+      : [asPartPath(relationshipsPartPath(notesCopy.newPartPath))]),
+  ];
+
+  const slideContentType =
+    source.packageGraph.parts.find((part) => part.partPath === sourceSlide.partPath)?.contentType ??
+    SLIDE_CONTENT_TYPE;
+  const insertAt = slideIndex + 1;
+  const newSlide = withPartPath(cloneJson(sourceSlide), newSlidePartPath);
+
+  return {
+    ...source,
+    presentation: {
+      ...source.presentation,
+      slidePartPaths: insertAtReadonly(
+        source.presentation.slidePartPaths,
+        insertAt,
+        newSlidePartPath,
+      ),
+    },
+    slides: insertAtReadonly(source.slides, insertAt, newSlide),
+    packageGraph: {
+      ...source.packageGraph,
+      parts: [
+        ...source.packageGraph.parts,
+        { partPath: newSlidePartPath, contentType: slideContentType },
+        ...(newSlideRelationships === undefined
+          ? []
+          : [
+              {
+                partPath: asPartPath(relationshipsPartPath(newSlidePartPath)),
+                contentType: RELS_CONTENT_TYPE,
+              },
+            ]),
+        ...(notesCopy === undefined
+          ? []
+          : [
+              { partPath: notesCopy.newPartPath, contentType: notesCopy.contentType },
+              ...(notesCopy.relationships === undefined
+                ? []
+                : [
+                    {
+                      partPath: asPartPath(relationshipsPartPath(notesCopy.newPartPath)),
+                      contentType: RELS_CONTENT_TYPE,
+                    },
+                  ]),
+            ]),
+      ],
+      contentTypes: {
+        ...source.packageGraph.contentTypes,
+        overrides: [
+          ...source.packageGraph.contentTypes.overrides,
+          { partName: newSlidePartPath, contentType: slideContentType },
+          ...(notesCopy === undefined
+            ? []
+            : [{ partName: notesCopy.newPartPath, contentType: notesCopy.contentType }]),
+          ...relationshipPartOverrides(source, newRelationshipPartPaths),
+        ],
+      },
+      relationships: [
+        ...source.packageGraph.relationships.map((relationships) =>
+          relationships.sourcePartPath !== source.presentation.partPath
+            ? relationships
+            : {
+                ...relationships,
+                relationships: [
+                  ...relationships.relationships,
+                  {
+                    id: newPresentationRelationshipId,
+                    type: SLIDE_REL_TYPE,
+                    target: relativeTarget(source.presentation.partPath, newSlidePartPath),
+                  },
+                ],
+              },
+        ),
+        ...(newSlideRelationships === undefined ? [] : [newSlideRelationships]),
+        ...(notesCopy?.relationships === undefined ? [] : [notesCopy.relationships]),
+      ],
+      rawParts: [
+        ...(source.packageGraph.rawParts ?? []),
+        {
+          kind: "binary",
+          partPath: newSlidePartPath,
+          contentType: slideContentType,
+          bytes: copyBytes(sourceRawSlide.bytes),
+        },
+        ...(notesCopy === undefined
+          ? []
+          : [
+              {
+                kind: "binary" as const,
+                partPath: notesCopy.newPartPath,
+                contentType: notesCopy.contentType,
+                bytes: copyBytes(notesCopy.raw.bytes),
+              },
+            ]),
+      ],
+    },
+    edits: [
+      ...(source.edits ?? []),
+      {
+        kind: "duplicateSlide",
+        sourceSlidePartPath: sourceSlide.partPath,
+        sourceRelationshipId: sourcePresentationRelationship.id,
+        newSlidePartPath,
+        newRelationshipId: newPresentationRelationshipId,
+      },
+    ],
+  };
+}
+
+export function deleteSlide(source: PptxSourceModel, slideHandle: SourceHandle): PptxSourceModel {
+  if (source.slides.length <= 1) {
+    throw new Error("deleteSlide: cannot delete the last slide");
+  }
+
+  const slideIndex = source.slides.findIndex((slide) =>
+    sourceHandlesEqual(slide.handle, slideHandle),
+  );
+  if (slideIndex === -1) {
+    throw new Error("deleteSlide: slide handle was not found in PptxSourceModel source");
+  }
+
+  const slide = source.slides[slideIndex];
+  const presentationRels = requirePartRelationships(
+    source,
+    source.presentation.partPath,
+    "deleteSlide",
+  );
+  const presentationRelationship = requireSlideRelationship(
+    source,
+    presentationRels,
+    slide.partPath,
+    "deleteSlide",
+  );
+  const slideRelationships = source.packageGraph.relationships.find(
+    (relationships) => relationships.sourcePartPath === slide.partPath,
+  );
+  const notesPartPaths =
+    slideRelationships?.relationships.flatMap((relationship) => {
+      if (relationship.type !== NOTES_SLIDE_REL_TYPE) return [];
+      const target = resolveInternalRelationshipTarget(slide.partPath, relationship);
+      return target === undefined ? [] : [target];
+    }) ?? [];
+  const removedPartPaths = new Set<string>([slide.partPath, ...notesPartPaths]);
+  const removedRelationshipPartPaths = new Set<string>(
+    [slide.partPath, ...notesPartPaths].map((partPath) => relationshipsPartPath(partPath)),
+  );
+  const retainedEdits = (source.edits ?? []).filter(
+    (edit) => !editIsInvalidatedByDeletedParts(edit, removedPartPaths),
+  );
+  const deletedInsertedSlide = (source.edits ?? []).some(
+    (edit) => edit.kind === "duplicateSlide" && edit.newSlidePartPath === slide.partPath,
+  );
+
+  return {
+    ...source,
+    presentation: {
+      ...source.presentation,
+      slidePartPaths: source.presentation.slidePartPaths.filter(
+        (partPath) => partPath !== slide.partPath,
+      ),
+    },
+    slides: source.slides.filter((candidate) => candidate.partPath !== slide.partPath),
+    packageGraph: {
+      ...source.packageGraph,
+      parts: source.packageGraph.parts.filter(
+        (part) =>
+          !removedPartPaths.has(part.partPath) && !removedRelationshipPartPaths.has(part.partPath),
+      ),
+      contentTypes: {
+        ...source.packageGraph.contentTypes,
+        overrides: source.packageGraph.contentTypes.overrides.filter(
+          (override) =>
+            !removedPartPaths.has(override.partName) &&
+            !removedRelationshipPartPaths.has(override.partName),
+        ),
+      },
+      relationships: source.packageGraph.relationships
+        .filter((relationships) => !removedPartPaths.has(relationships.sourcePartPath))
+        .map((relationships) =>
+          relationships.sourcePartPath !== source.presentation.partPath
+            ? relationships
+            : {
+                ...relationships,
+                relationships: relationships.relationships.filter(
+                  (relationship) => relationship.id !== presentationRelationship.id,
+                ),
+              },
+        ),
+      rawParts: source.packageGraph.rawParts?.filter(
+        (part) => !removedPartPaths.has(part.partPath),
+      ),
+    },
+    edits: deletedInsertedSlide
+      ? retainedEdits
+      : [
+          ...retainedEdits,
+          {
+            kind: "deleteSlide",
+            slidePartPath: slide.partPath,
+            relationshipId: presentationRelationship.id,
+          },
+        ],
+  };
+}
+
 function findTextRunInShape(shape: SourceShape, handle: SourceHandle): SourceTextRun | undefined {
   for (const paragraph of shape.textBody?.paragraphs ?? []) {
     for (const run of paragraph.runs) {
@@ -498,4 +779,266 @@ function sourceHandlesEqual(left: SourceHandle | undefined, right: SourceHandle)
     left.relationshipId === right.relationshipId &&
     left.orderingSlot === right.orderingSlot
   );
+}
+
+interface NotesSlideCopy {
+  readonly slideRelationshipId: RelationshipId;
+  readonly newPartPath: PartPath;
+  readonly contentType: string;
+  readonly raw: Extract<RawPackagePart, { readonly kind: "binary" }>;
+  readonly relationships?: PartRelationships;
+}
+
+function createNotesSlideCopy(
+  source: PptxSourceModel,
+  sourceSlide: SourceSlide,
+  slideRelationships: PartRelationships | undefined,
+  newSlidePartPath: PartPath,
+): NotesSlideCopy | undefined {
+  const notesRelationship = slideRelationships?.relationships.find(
+    (relationship) => relationship.type === NOTES_SLIDE_REL_TYPE,
+  );
+  if (notesRelationship === undefined) return undefined;
+  const notesPartPath = resolveInternalRelationshipTarget(sourceSlide.partPath, notesRelationship);
+  if (notesPartPath === undefined) return undefined;
+
+  const raw = requireRawBinaryPart(source, notesPartPath, "duplicateSlide");
+  const contentType =
+    source.packageGraph.parts.find((part) => part.partPath === notesPartPath)?.contentType ??
+    NOTES_SLIDE_CONTENT_TYPE;
+  const newPartPath = nextNumberedPartPath(source, "ppt/notesSlides/notesSlide", ".xml");
+  const notesRelationships = source.packageGraph.relationships.find(
+    (relationships) => relationships.sourcePartPath === notesPartPath,
+  );
+
+  // Notes slides are 1:1 with a slide, so their slide back-reference must move
+  // to the duplicated slide. Other notes relationships remain shared.
+  return {
+    slideRelationshipId: notesRelationship.id,
+    newPartPath,
+    contentType,
+    raw,
+    ...(notesRelationships === undefined
+      ? {}
+      : {
+          relationships: {
+            sourcePartPath: newPartPath,
+            relationships: notesRelationships.relationships.map((relationship) =>
+              relationship.type === SLIDE_REL_TYPE && relationship.targetMode !== "External"
+                ? { ...relationship, target: relativeTarget(newPartPath, newSlidePartPath) }
+                : relationship,
+            ),
+          },
+        }),
+  };
+}
+
+function requirePartRelationships(
+  source: PptxSourceModel,
+  partPath: PartPath,
+  operationName: "duplicateSlide" | "deleteSlide",
+): PartRelationships {
+  const relationships = source.packageGraph.relationships.find(
+    (candidate) => candidate.sourcePartPath === partPath,
+  );
+  if (relationships === undefined) {
+    throw new Error(`${operationName}: presentation relationships were not found`);
+  }
+  return relationships;
+}
+
+function requireSlideRelationship(
+  source: PptxSourceModel,
+  relationships: PartRelationships,
+  slidePartPath: PartPath,
+  operationName: "duplicateSlide" | "deleteSlide",
+): Relationship {
+  const relationship = relationships.relationships.find(
+    (candidate) =>
+      candidate.type === SLIDE_REL_TYPE &&
+      candidate.targetMode !== "External" &&
+      resolveInternalRelationshipTarget(source.presentation.partPath, candidate) === slidePartPath,
+  );
+  if (relationship === undefined) {
+    throw new Error(`${operationName}: slide relationship was not found in presentation.xml.rels`);
+  }
+  return relationship;
+}
+
+function requireRawBinaryPart(
+  source: PptxSourceModel,
+  partPath: PartPath,
+  operationName: "duplicateSlide",
+): Extract<RawPackagePart, { readonly kind: "binary" }> {
+  const rawPart = source.packageGraph.rawParts?.find((part) => part.partPath === partPath);
+  if (rawPart === undefined) {
+    throw new Error(`${operationName}: part '${partPath}' has no preserved raw package material`);
+  }
+  if (rawPart.kind !== "binary") {
+    throw new Error(
+      `${operationName}: part '${partPath}' is not backed by binary package material`,
+    );
+  }
+  return rawPart;
+}
+
+function nextRelationshipId(relationships: readonly Relationship[]): RelationshipId {
+  const used = new Set(relationships.map((relationship) => relationship.id));
+  const max = relationships.reduce((current, relationship) => {
+    const match = /(\d+)$/.exec(relationship.id);
+    return match === null ? current : Math.max(current, Number(match[1]));
+  }, 0);
+  for (let index = max + 1; ; index += 1) {
+    const candidate = asRelationshipId(`rId${index}`);
+    if (!used.has(candidate)) return candidate;
+  }
+}
+
+function nextNumberedPartPath(source: PptxSourceModel, prefix: string, suffix: string): PartPath {
+  const used = new Set<string>([
+    ...source.packageGraph.parts.map((part) => part.partPath),
+    ...source.packageGraph.contentTypes.overrides.map((override) => override.partName),
+    ...(source.packageGraph.rawParts ?? []).map((part) => part.partPath),
+    ...(source.edits?.flatMap((edit) => topologyEditPartPaths(edit)) ?? []),
+  ]);
+  const pattern = new RegExp(`^${escapeRegExp(prefix)}(\\d+)${escapeRegExp(suffix)}$`);
+  const max = [...used].reduce((current, path) => {
+    const match = pattern.exec(path);
+    return match === null ? current : Math.max(current, Number(match[1]));
+  }, 0);
+  for (let index = max + 1; ; index += 1) {
+    const candidate = asPartPath(`${prefix}${index}${suffix}`);
+    if (!used.has(candidate)) return candidate;
+  }
+}
+
+function relationshipPartOverrides(
+  source: PptxSourceModel,
+  partPaths: readonly PartPath[],
+): readonly { readonly partName: PartPath; readonly contentType: string }[] {
+  if (
+    source.packageGraph.contentTypes.defaults.some(
+      (entry) => entry.extension === "rels" && entry.contentType === RELS_CONTENT_TYPE,
+    )
+  ) {
+    return [];
+  }
+
+  const existingOverrides = new Set(
+    source.packageGraph.contentTypes.overrides.map((override) => override.partName),
+  );
+  return partPaths
+    .filter((partPath) => !existingOverrides.has(partPath))
+    .map((partName) => ({ partName, contentType: RELS_CONTENT_TYPE }));
+}
+
+function topologyEditPartPaths(edit: PptxSourceModelEdit): readonly PartPath[] {
+  switch (edit.kind) {
+    case "duplicateSlide":
+      return [edit.sourceSlidePartPath, edit.newSlidePartPath];
+    case "deleteSlide":
+      return [edit.slidePartPath];
+    case "replaceTextRunPlainText":
+    case "updateTextRunProperties":
+    case "replaceParagraphPlainText":
+    case "updateShapeTransform":
+      return [];
+  }
+}
+
+function relativeTarget(sourcePartPath: PartPath, targetPartPath: PartPath): string {
+  const sourceDir = sourcePartPath.split("/").slice(0, -1);
+  const targetSegments = targetPartPath.split("/");
+  while (sourceDir.length > 0 && targetSegments.length > 0 && sourceDir[0] === targetSegments[0]) {
+    sourceDir.shift();
+    targetSegments.shift();
+  }
+  return [...sourceDir.map(() => ".."), ...targetSegments].join("/");
+}
+
+function withPartPath(slide: SourceSlide, partPath: PartPath): SourceSlide {
+  return {
+    ...slide,
+    partPath,
+    handle: { partPath },
+    shapes: slide.shapes.map((shape) => withShapePartPath(shape, partPath)),
+  };
+}
+
+function withShapePartPath(shape: SourceShapeNode, partPath: PartPath): SourceShapeNode {
+  if (shape.kind === "raw") return shape;
+  const handle = shape.handle === undefined ? undefined : { ...shape.handle, partPath };
+  if (shape.kind === "group") {
+    return {
+      ...shape,
+      ...(handle !== undefined ? { handle } : {}),
+      children: shape.children.map((child) => withShapePartPath(child, partPath)),
+    };
+  }
+  if (shape.kind !== "shape" || shape.textBody === undefined) {
+    return { ...shape, ...(handle !== undefined ? { handle } : {}) };
+  }
+  return {
+    ...shape,
+    ...(handle !== undefined ? { handle } : {}),
+    textBody: {
+      ...shape.textBody,
+      paragraphs: shape.textBody.paragraphs.map((paragraph) => ({
+        ...paragraph,
+        ...(paragraph.handle !== undefined ? { handle: { ...paragraph.handle, partPath } } : {}),
+        runs: paragraph.runs.map((run) => ({
+          ...run,
+          ...(run.handle !== undefined ? { handle: { ...run.handle, partPath } } : {}),
+        })),
+      })),
+    },
+  };
+}
+
+function cloneJson<T>(value: T): T {
+  return structuredClone(value);
+}
+
+function copyBytes(bytes: Uint8Array): Uint8Array {
+  return new Uint8Array(bytes);
+}
+
+function insertAtReadonly<T>(items: readonly T[], index: number, item: T): readonly T[] {
+  return [...items.slice(0, index), item, ...items.slice(index)];
+}
+
+function hasDirtyEditForPart(edits: readonly PptxSourceModelEdit[], partPath: PartPath): boolean {
+  return edits.some((edit) => {
+    switch (edit.kind) {
+      case "replaceTextRunPlainText":
+      case "updateTextRunProperties":
+      case "replaceParagraphPlainText":
+      case "updateShapeTransform":
+        return edit.handle.partPath === partPath;
+      case "duplicateSlide":
+      case "deleteSlide":
+        return false;
+    }
+  });
+}
+
+function editIsInvalidatedByDeletedParts(
+  edit: PptxSourceModelEdit,
+  partPaths: ReadonlySet<string>,
+): boolean {
+  switch (edit.kind) {
+    case "replaceTextRunPlainText":
+    case "updateTextRunProperties":
+    case "replaceParagraphPlainText":
+    case "updateShapeTransform":
+      return partPaths.has(edit.handle.partPath);
+    case "duplicateSlide":
+      return partPaths.has(edit.newSlidePartPath);
+    case "deleteSlide":
+      return partPaths.has(edit.slidePartPath);
+  }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

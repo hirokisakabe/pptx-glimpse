@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import {
   asEmu,
   asPt,
+  deleteSlide,
+  duplicateSlide,
   readPptx,
   type SourceHandle,
   type SourceShape,
@@ -157,6 +159,21 @@ describeOrSkip("LibreOffice edited PPTX validity", { timeout: 120000 }, () => {
   }
 });
 
+describeOrSkip("LibreOffice slide topology validity", { timeout: 120000 }, () => {
+  it("opens PPTX after slide duplicate and delete edits", () => {
+    const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
+    const source = readPptx(sourcePptx);
+    const duplicated = duplicateSlide(source, requireHandle(source.slides[0]?.handle));
+    const deleted = deleteSlide(duplicated, requireHandle(duplicated.slides[1]?.handle));
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-slide-topology-edited.pptx",
+      writePptx(deleted),
+    );
+  });
+});
+
 function findLibreOfficeDockerImage(): string | undefined {
   for (const image of LIBREOFFICE_IMAGE_CANDIDATES) {
     const result = spawnSync("docker", ["image", "inspect", image], { encoding: "utf8" });
@@ -212,6 +229,46 @@ function renderWithLibreOffice(
   }
 
   return { editedPngPath, expectedPngPath };
+}
+
+function renderSingleWithLibreOffice(
+  image: string,
+  editedFilename: string,
+  editedPptx: Uint8Array,
+): string {
+  const workDir = mkdtempSync(join(tmpdir(), "pptx-glimpse-lo-editor-validity-"));
+  const outputDir = join(workDir, "out");
+  const editedPath = join(workDir, editedFilename);
+
+  writeFileSync(editedPath, editedPptx);
+
+  const result = spawnSync(
+    "docker",
+    [
+      "run",
+      "--rm",
+      "-v",
+      `${workDir}:/work`,
+      image,
+      "bash",
+      "-lc",
+      `mkdir -p /work/out && libreoffice --headless --convert-to png --outdir /work/out /work/${editedFilename}`,
+    ],
+    { encoding: "utf8" },
+  );
+
+  if (result.status !== 0) {
+    throw new Error(
+      `LibreOffice conversion failed for '${editedFilename}'.\n` +
+        `stdout:\n${result.stdout}\n\nstderr:\n${result.stderr}`,
+    );
+  }
+
+  const editedPngPath = join(outputDir, `${basename(editedFilename, ".pptx")}.png`);
+  if (!existsSync(editedPngPath)) {
+    throw new Error(`LibreOffice conversion did not produce expected PNG for '${editedFilename}'.`);
+  }
+  return editedPngPath;
 }
 
 function findTextRun(source: ReturnType<typeof readPptx>, text: string): SourceTextRun {
