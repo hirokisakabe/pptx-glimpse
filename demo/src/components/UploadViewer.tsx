@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { convertPptxToSvg, type FontBuffer } from "pptx-glimpse";
 
-import { DropZone } from "./DropZone";
+import { DropZone, type SamplePptx } from "./DropZone";
 import { SlideViewer } from "./SlideViewer";
 import { ThumbnailStrip } from "./ThumbnailStrip";
 
@@ -57,6 +57,28 @@ export function UploadViewer() {
     [fontFiles],
   );
 
+  const handleSample = useCallback(
+    async (sample: SamplePptx) => {
+      setPhase("loading");
+      setErrorMessage("");
+
+      try {
+        const response = await fetch(sample.href);
+        if (!response.ok) {
+          throw new Error(`Could not load sample PPTX: ${response.status.toString()}`);
+        }
+        const file = new File([await response.blob()], sample.filename, {
+          type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        });
+        await handleFile(file);
+      } catch (err) {
+        setErrorMessage(err instanceof Error ? err.message : String(err));
+        setPhase("error");
+      }
+    },
+    [handleFile],
+  );
+
   const handleNavigate = useCallback(
     (index: number) => {
       if (index >= 0 && index < slides.length) {
@@ -81,7 +103,12 @@ export function UploadViewer() {
         <div className="error" data-testid="viewer-error">
           {errorMessage}
         </div>
-        <DropZone fontFiles={fontFiles} onFile={handleFile} onFontFiles={handleFontFiles} />
+        <DropZone
+          fontFiles={fontFiles}
+          onFile={handleFile}
+          onFontFiles={handleFontFiles}
+          onSample={handleSample}
+        />
       </>
     );
   }
@@ -98,12 +125,25 @@ export function UploadViewer() {
         </div>
         <SlideViewer slides={slides} currentIndex={currentIndex} onNavigate={handleNavigate} />
         <ThumbnailStrip slides={slides} currentIndex={currentIndex} onSelect={handleNavigate} />
-        <DropZone compact fontFiles={fontFiles} onFile={handleFile} onFontFiles={handleFontFiles} />
+        <DropZone
+          compact
+          fontFiles={fontFiles}
+          onFile={handleFile}
+          onFontFiles={handleFontFiles}
+          onSample={handleSample}
+        />
       </>
     );
   }
 
-  return <DropZone fontFiles={fontFiles} onFile={handleFile} onFontFiles={handleFontFiles} />;
+  return (
+    <DropZone
+      fontFiles={fontFiles}
+      onFile={handleFile}
+      onFontFiles={handleFontFiles}
+      onSample={handleSample}
+    />
+  );
 }
 
 async function readFontBuffers(files: readonly File[]): Promise<FontBuffer[]> {

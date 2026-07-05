@@ -99,6 +99,10 @@ header .description {
   gap: 10px;
 }
 
+.sample-actions {
+  display: contents;
+}
+
 .file-label {
   border: 1px solid transparent;
   border-radius: 6px;
