@@ -8,11 +8,14 @@
  * non-bookkeeping raw parts prefer the raw package material preserved by the reader.
  * Only dirty scopes are updated according to supported PptxSourceModel operations.
  *
- * The current slice supports plain text-run replacement, paragraph replacement,
- * top-level shape transform offset/extent edits, and slide duplicate/delete topology
- * edits. Dirty slide XML parts are reserialized by replacing only targeted values via
- * stable source handles; slide duplicate/delete patches presentation bookkeeping while
- * preserving unrelated raw package material.
+ * The current slice supports text-run replacement and run property edits, paragraph
+ * replacement, top-level shape transform offset/extent edits, text box / connector
+ * insertion, sp shape deletion, media byte replacement, and slide add/duplicate/delete
+ * topology edits. Dirty slide XML parts are reserialized by replacing only targeted
+ * values via stable source handles; slide topology edits patch presentation
+ * bookkeeping while preserving unrelated raw package material. Per-edit-kind traits
+ * (dirty part, topology operation, and so on) come from the descriptor table in
+ * `../source/edit-descriptors.ts`; this file keeps only the exhaustive apply switch.
  * Node-level XML splicing and precise unsupported raw-sidecar invalidation belong to
  * later writer slices, but the API and dirty-scope tracking remain shaped for that
  * extension path.
@@ -157,6 +160,10 @@ function serializeDirtyXmlPart(
   }
 
   const root = parseXml(textDecoder.decode(rawPart.bytes));
+  // Edits are applied in chronological order. This relies on the editing API
+  // invariant that deleteShape drops earlier edits targeting the deleted shape,
+  // so no stale-target edit can follow its delete within one part. Hand-built
+  // edit arrays that violate the invariant fail fast in the apply functions.
   for (const edit of edits) {
     if (editDirtyPartPath(edit) !== partPath) continue;
     applyDirtyPartEdit(root, edit);
