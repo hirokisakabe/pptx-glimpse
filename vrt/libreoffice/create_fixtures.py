@@ -52,7 +52,7 @@ def new_presentation_4_3():
 
 
 def create_basic_shapes():
-    """Basic shapes: rect, ellipse, roundRect (solid fill + border)"""
+    """Basic shapes: 6 presets from rect to hexagon (solid fill + border)"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])  # blank layout
 

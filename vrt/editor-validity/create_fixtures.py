@@ -4,6 +4,9 @@ Generate PPTX fixtures for editor-validity tests with python-pptx.
 
 The fixtures are source / expected pairs consumed by editor-validity.test.ts,
 plus a basic-shapes source used by slide topology and shape add/delete checks.
+basic-shapes.pptx duplicates the renderer VRT fixture of the same name on
+purpose: the editor-validity suite must stay runnable without generating the
+vrt/libreoffice/ fixture set.
 
 Usage:
     python3 vrt/editor-validity/create_fixtures.py
@@ -34,7 +37,7 @@ def new_presentation():
 
 
 def create_basic_shapes():
-    """Basic shapes: rect, ellipse, roundRect (solid fill + border)"""
+    """Basic shapes: 6 presets from rect to hexagon (solid fill + border)"""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])  # blank layout
 

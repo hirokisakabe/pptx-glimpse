@@ -142,11 +142,13 @@ const LO_EDITOR_VALIDITY_CASES = [
 ] as const;
 
 const libreOfficeImage = findLibreOfficeDockerImage();
-const hasFixtures = LO_EDITOR_VALIDITY_CASES.every(
-  (testCase) =>
-    existsSync(join(FIXTURE_DIR, testCase.sourceFixture)) &&
-    existsSync(join(FIXTURE_DIR, testCase.expectedFixture)),
-);
+const hasFixtures =
+  existsSync(join(FIXTURE_DIR, "basic-shapes.pptx")) &&
+  LO_EDITOR_VALIDITY_CASES.every(
+    (testCase) =>
+      existsSync(join(FIXTURE_DIR, testCase.sourceFixture)) &&
+      existsSync(join(FIXTURE_DIR, testCase.expectedFixture)),
+  );
 const describeOrSkip = libreOfficeImage !== undefined && hasFixtures ? describe : describe.skip;
 
 describeOrSkip("LibreOffice edited PPTX validity", { timeout: 120000 }, () => {
