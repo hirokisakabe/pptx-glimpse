@@ -81,7 +81,7 @@ importers:
   packages/core:
     dependencies:
       '@pptx-glimpse/document':
-        specifier: ^0.1.0
+        specifier: workspace:^
         version: link:../document
       '@resvg/resvg-wasm':
         specifier: ^2.6.2
