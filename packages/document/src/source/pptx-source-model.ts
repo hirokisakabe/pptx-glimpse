@@ -23,7 +23,7 @@
  */
 
 import type { Diagnostic } from "./diagnostics.js";
-import type { SourceHandle } from "./handles.js";
+import type { PartPath, RelationshipId, SourceHandle } from "./handles.js";
 import type { PackageGraph } from "./package-graph.js";
 import type {
   SourcePresentation,
@@ -52,7 +52,9 @@ export type PptxSourceModelEdit =
   | PptxSourceModelTextRunEdit
   | PptxSourceModelTextRunPropertiesEdit
   | PptxSourceModelParagraphTextEdit
-  | PptxSourceModelShapeTransformEdit;
+  | PptxSourceModelShapeTransformEdit
+  | PptxSourceModelDuplicateSlideEdit
+  | PptxSourceModelDeleteSlideEdit;
 
 export interface PptxSourceModelTextRunEdit {
   readonly kind: "replaceTextRunPlainText";
@@ -97,4 +99,18 @@ export interface PptxSourceModelShapeTransformEdit {
   readonly offsetY: Emu;
   readonly width: Emu;
   readonly height: Emu;
+}
+
+export interface PptxSourceModelDuplicateSlideEdit {
+  readonly kind: "duplicateSlide";
+  readonly sourceSlidePartPath: PartPath;
+  readonly sourceRelationshipId: RelationshipId;
+  readonly newSlidePartPath: PartPath;
+  readonly newRelationshipId: RelationshipId;
+}
+
+export interface PptxSourceModelDeleteSlideEdit {
+  readonly kind: "deleteSlide";
+  readonly slidePartPath: PartPath;
+  readonly relationshipId: RelationshipId;
 }

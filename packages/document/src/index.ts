@@ -72,6 +72,8 @@ export type {
   PartPath,
   PartRelationships,
   PptxSourceModel,
+  PptxSourceModelDeleteSlideEdit,
+  PptxSourceModelDuplicateSlideEdit,
   PptxSourceModelEdit,
   PptxSourceModelParagraphTextEdit,
   PptxSourceModelShapeTransformEdit,
@@ -168,6 +170,8 @@ export type {
 } from "./source/index.js";
 export {
   clearTextRunProperties,
+  deleteSlide,
+  duplicateSlide,
   findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,

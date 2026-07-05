@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 import {
   asEmu,
   createComputedView,
+  deleteSlide,
+  duplicateSlide,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
   type MediaPart,
@@ -187,6 +189,40 @@ describe("PptxSourceModel PoC end-to-end round-trip", () => {
     expect(slides).toHaveLength(1);
     expect(slides[0].svg).toContain('transform="translate(96, 192)"');
     expect(slides[0].svg).toContain('width="288" height="96"');
+  });
+
+  it("duplicates and deletes slides through writer output while keeping render order stable", async () => {
+    const input = readFixture("real-basic-theme.pptx");
+    const source = readPptx(input);
+    const duplicatedOutput = writePptx(duplicateSlide(source, source.slides[0].handle!));
+    const duplicated = readPptx(duplicatedOutput);
+    const { slides: duplicatedSvgs } = await convertPptxToSvg(duplicatedOutput, {
+      textOutput: "text",
+      skipSystemFonts: true,
+    });
+
+    expect(duplicated.presentation.slidePartPaths).toEqual([
+      source.slides[0].partPath,
+      "ppt/slides/slide3.xml",
+      source.slides[1].partPath,
+    ]);
+    expect(duplicatedSvgs).toHaveLength(3);
+    expect(duplicatedSvgs[1].svg).toEqual(duplicatedSvgs[0].svg);
+
+    const deletedOutput = writePptx(deleteSlide(duplicated, duplicated.slides[0].handle!));
+    const deleted = readPptx(deletedOutput);
+    const { slides: deletedSvgs } = await convertPptxToSvg(deletedOutput, {
+      textOutput: "text",
+      skipSystemFonts: true,
+    });
+
+    expect(deleted.presentation.slidePartPaths).toEqual([
+      "ppt/slides/slide3.xml",
+      source.slides[1].partPath,
+    ]);
+    expect(deletedSvgs).toHaveLength(2);
+    expect(deletedSvgs[0].svg).toEqual(duplicatedSvgs[0].svg);
+    expect(deletedSvgs[1].svg).toEqual(duplicatedSvgs[2].svg);
   });
 });
 

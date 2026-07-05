@@ -8,6 +8,8 @@ import { describe, expect, it } from "vitest";
 import { asEmu, asPt, asSourceNodeId, readPptx, writePptx } from "../index.js";
 import {
   clearTextRunProperties,
+  deleteSlide,
+  duplicateSlide,
   findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
@@ -67,6 +69,83 @@ function buildRoundTripFixture(): Uint8Array {
     ),
     "ppt/media/image1.png": new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]),
     "docProps/custom.xml": xml(`<Properties><custom value="preserve-me"/></Properties>`),
+  });
+}
+
+function buildSlideTopologyFixture(): Uint8Array {
+  return zipSync({
+    "[Content_Types].xml": xml(
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>` +
+        `<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+        `<Override PartName="/ppt/slides/slide2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+        `<Override PartName="/ppt/notesSlides/notesSlide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml"/>` +
+        `<Override PartName="/ppt/comments/comment1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.comments+xml"/>` +
+        `</Types>`,
+    ),
+    "_rels/.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/presentation.xml": xml(
+      `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:sldIdLst>` +
+        `<p:sldId id="256" r:id="rIdSlide1"/>` +
+        `<p:sldId id="300" r:id="rIdSlide2"/>` +
+        `</p:sldIdLst>` +
+        `<p:sldSz cx="9144000" cy="5143500"/>` +
+        `</p:presentation>`,
+    ),
+    "ppt/_rels/presentation.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdSlide1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>` +
+        `<Relationship Id="rIdSlide2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide2.xml"/>` +
+        `<Relationship Id="rId9" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/viewProps" Target="viewProps.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/slides/slide1.xml": xml(
+      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:cSld><p:spTree>` +
+        `<p:sp><p:nvSpPr><p:cNvPr id="10" name="Invisible Source"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+        `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+        `<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Slide One</a:t></a:r></a:p></p:txBody>` +
+        `</p:sp>` +
+        `</p:spTree></p:cSld>` +
+        `<p:timing><p:tnLst><p:par/></p:tnLst></p:timing>` +
+        `</p:sld>`,
+    ),
+    "ppt/slides/slide2.xml": xml(
+      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">` +
+        `<p:cSld><p:spTree>` +
+        `<p:sp><p:nvSpPr><p:cNvPr id="20" name="Second"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+        `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+        `<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Slide Two</a:t></a:r></a:p></p:txBody>` +
+        `</p:sp>` +
+        `</p:spTree></p:cSld>` +
+        `</p:sld>`,
+    ),
+    "ppt/slides/_rels/slide1.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdNotes" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesSlide" Target="../notesSlides/notesSlide1.xml"/>` +
+        `<Relationship Id="rIdComments" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/comments" Target="../comments/comment1.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/notesSlides/notesSlide1.xml": xml(
+      `<p:notes xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">` +
+        `<p:cSld><p:spTree/></p:cSld>` +
+        `</p:notes>`,
+    ),
+    "ppt/notesSlides/_rels/notesSlide1.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdNotesMaster" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="../notesMasters/notesMaster1.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/comments/comment1.xml": xml(
+      `<p:cmLst xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"/>`,
+    ),
   });
 }
 
@@ -366,6 +445,99 @@ describe("writePptx - no-edit round-trip", () => {
     };
 
     expect(() => writePptx(withoutRawSlide)).toThrow(/no preserved package material/);
+  });
+});
+
+describe("writePptx - slide topology edits", () => {
+  it("duplicates a slide immediately after the source and preserves raw invisible slide material", () => {
+    const source = readPptx(buildSlideTopologyFixture());
+    const edited = duplicateSlide(source, source.slides[0].handle!);
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+    const presentationXml = decoder.decode(getEntry(output, "ppt/presentation.xml"));
+    const presentationRels = decoder.decode(getEntry(output, "ppt/_rels/presentation.xml.rels"));
+    const duplicateSlideXml = decoder.decode(getEntry(output, "ppt/slides/slide3.xml"));
+    const duplicateSlideRels = decoder.decode(getEntry(output, "ppt/slides/_rels/slide3.xml.rels"));
+
+    expect(reread.presentation.slidePartPaths).toEqual([
+      "ppt/slides/slide1.xml",
+      "ppt/slides/slide3.xml",
+      "ppt/slides/slide2.xml",
+    ]);
+    expect(
+      reread.slides.map((slide) => slide.shapes[0]?.kind === "shape" && slide.shapes[0].name),
+    ).toEqual(["Invisible Source", "Invisible Source", "Second"]);
+    expect(presentationXml).toContain(`<p:sldId id="301" r:id="rId10"/>`);
+    expect(presentationXml.indexOf(`r:id="rIdSlide1"`)).toBeLessThan(
+      presentationXml.indexOf(`r:id="rId10"`),
+    );
+    expect(presentationXml.indexOf(`r:id="rId10"`)).toBeLessThan(
+      presentationXml.indexOf(`r:id="rIdSlide2"`),
+    );
+    expect(presentationRels).toContain(
+      `<Relationship Id="rId10" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide3.xml"/>`,
+    );
+    expect(duplicateSlideXml).toContain("<p:timing>");
+    expect(duplicateSlideRels).toContain(`Id="rIdComments"`);
+    expect(duplicateSlideRels).toContain(`Target="../comments/comment1.xml"`);
+    expect(duplicateSlideRels).toContain(`Id="rIdNotes"`);
+    expect(duplicateSlideRels).toContain(`Target="../notesSlides/notesSlide2.xml"`);
+    expect(decoder.decode(getEntry(output, "ppt/notesSlides/notesSlide2.xml"))).toContain(
+      "<p:notes",
+    );
+    expect(
+      decoder.decode(getEntry(output, "ppt/notesSlides/_rels/notesSlide2.xml.rels")),
+    ).toContain(`notesMaster`);
+    expect(reread.packageGraph.contentTypes.overrides).toEqual(
+      expect.arrayContaining([
+        {
+          partName: "ppt/slides/slide3.xml",
+          contentType: "application/vnd.openxmlformats-officedocument.presentationml.slide+xml",
+        },
+        {
+          partName: "ppt/notesSlides/notesSlide2.xml",
+          contentType:
+            "application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml",
+        },
+      ]),
+    );
+  });
+
+  it("deletes a slide and its notes part while keeping remaining slide order and orphan cleanup out of scope", () => {
+    const source = readPptx(buildSlideTopologyFixture());
+    const edited = deleteSlide(source, source.slides[0].handle!);
+    const output = writePptx(edited);
+    const entries = unzipSync(output);
+    const reread = readPptx(output);
+    const presentationXml = decoder.decode(getEntry(output, "ppt/presentation.xml"));
+    const presentationRels = decoder.decode(getEntry(output, "ppt/_rels/presentation.xml.rels"));
+
+    expect(reread.presentation.slidePartPaths).toEqual(["ppt/slides/slide2.xml"]);
+    expect(reread.slides[0]?.shapes[0]?.kind === "shape" && reread.slides[0].shapes[0].name).toBe(
+      "Second",
+    );
+    expect(presentationXml).not.toContain(`r:id="rIdSlide1"`);
+    expect(presentationRels).not.toContain(`Id="rIdSlide1"`);
+    expect(entries["ppt/slides/slide1.xml"]).toBeUndefined();
+    expect(entries["ppt/slides/_rels/slide1.xml.rels"]).toBeUndefined();
+    expect(entries["ppt/notesSlides/notesSlide1.xml"]).toBeUndefined();
+    expect(entries["ppt/notesSlides/_rels/notesSlide1.xml.rels"]).toBeUndefined();
+    expect(entries["ppt/comments/comment1.xml"]).toBeDefined();
+    expect(
+      reread.packageGraph.contentTypes.overrides.some(
+        (override) => override.partName === "ppt/notesSlides/notesSlide1.xml",
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects deleting the last slide and duplicating a dirty slide", () => {
+    const singleSlide = readPptx(buildTextEditFixture());
+    expect(() => deleteSlide(singleSlide, singleSlide.slides[0].handle!)).toThrow(/last slide/);
+
+    const dirty = replaceTextRunPlainText(singleSlide, firstRun(singleSlide).handle!, "Dirty");
+    expect(() => duplicateSlide(dirty, dirty.slides[0].handle!)).toThrow(
+      /pending dirty part edits/,
+    );
   });
 });
 

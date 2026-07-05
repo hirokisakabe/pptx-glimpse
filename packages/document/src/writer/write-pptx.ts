@@ -23,6 +23,7 @@ import {
   getAttr,
   getChild,
   getChildArray,
+  getNamespacedAttr,
   localName,
   parseXml,
   type XmlNode,
@@ -32,6 +33,8 @@ import type {
   PartPath,
   PartRelationships,
   PptxSourceModel,
+  PptxSourceModelDeleteSlideEdit,
+  PptxSourceModelDuplicateSlideEdit,
   PptxSourceModelEdit,
   PptxSourceModelParagraphTextEdit,
   PptxSourceModelShapeTransformEdit,
@@ -39,6 +42,7 @@ import type {
   PptxSourceModelTextRunPropertiesEdit,
   RawOoxmlNode,
   RawPackagePart,
+  RelationshipId,
 } from "../source/index.js";
 import { isRelationshipPart, relationshipsPartPath } from "../source/package-paths.js";
 import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
@@ -73,12 +77,15 @@ export function writePptx(source: PptxSourceModel): WritePptxOutput {
   const textRunPropertiesEdits = source.edits?.filter(isTextRunPropertiesEdit) ?? [];
   const paragraphTextEdits = source.edits?.filter(isParagraphTextEdit) ?? [];
   const shapeTransformEdits = source.edits?.filter(isShapeTransformEdit) ?? [];
+  const duplicateSlideEdits = source.edits?.filter(isDuplicateSlideEdit) ?? [];
+  const deleteSlideEdits = source.edits?.filter(isDeleteSlideEdit) ?? [];
   validateEdits(textRunEdits, textRunPropertiesEdits, paragraphTextEdits, shapeTransformEdits);
   const dirtyPartPaths = new Set(
     [...textRunEdits, ...textRunPropertiesEdits, ...paragraphTextEdits, ...shapeTransformEdits].map(
       (edit) => edit.handle.partPath,
     ),
   );
+  const hasSlideTopologyEdits = duplicateSlideEdits.length > 0 || deleteSlideEdits.length > 0;
   const files: Record<string, Uint8Array> = {
     [CONTENT_TYPES_PART]: encodeXml(serializeContentTypes(source.packageGraph.contentTypes)),
   };
@@ -97,6 +104,7 @@ export function writePptx(source: PptxSourceModel): WritePptxOutput {
   }
 
   for (const rawPart of source.packageGraph.rawParts ?? []) {
+    if (hasSlideTopologyEdits && rawPart.partPath === source.presentation.partPath) continue;
     if (dirtyPartPaths.has(rawPart.partPath)) continue;
     files[rawPart.partPath] = serializeRawPackagePart(rawPart);
     written.add(rawPart.partPath);
@@ -112,6 +120,14 @@ export function writePptx(source: PptxSourceModel): WritePptxOutput {
       shapeTransformEdits,
     );
     written.add(partPath);
+  }
+
+  if (hasSlideTopologyEdits) {
+    files[source.presentation.partPath] = serializePresentationWithSlideTopologyEdits(
+      source,
+      mergeSlideTopologyEdits(source.edits ?? []),
+    );
+    written.add(source.presentation.partPath);
   }
 
   for (const part of source.packageGraph.parts) {
@@ -146,6 +162,16 @@ function isShapeTransformEdit(
   return edit.kind === "updateShapeTransform";
 }
 
+function isDuplicateSlideEdit(
+  edit: PptxSourceModelEdit,
+): edit is PptxSourceModelDuplicateSlideEdit {
+  return edit.kind === "duplicateSlide";
+}
+
+function isDeleteSlideEdit(edit: PptxSourceModelEdit): edit is PptxSourceModelDeleteSlideEdit {
+  return edit.kind === "deleteSlide";
+}
+
 function serializeDirtyXmlPart(
   source: PptxSourceModel,
   partPath: PartPath,
@@ -176,6 +202,134 @@ function serializeDirtyXmlPart(
     applyShapeTransformEdit(root, edit);
   }
   return encodeXml(XML_DECLARATION + xmlBuilder.build(stripXmlProcessingInstruction(root)));
+}
+
+type SlideTopologyEdit = PptxSourceModelDuplicateSlideEdit | PptxSourceModelDeleteSlideEdit;
+
+function mergeSlideTopologyEdits(
+  edits: readonly PptxSourceModelEdit[],
+): readonly SlideTopologyEdit[] {
+  return edits.filter(
+    (edit): edit is SlideTopologyEdit =>
+      edit.kind === "duplicateSlide" || edit.kind === "deleteSlide",
+  );
+}
+
+function serializePresentationWithSlideTopologyEdits(
+  source: PptxSourceModel,
+  edits: readonly SlideTopologyEdit[],
+): Uint8Array {
+  const rawPart = source.packageGraph.rawParts?.find(
+    (part) => part.partPath === source.presentation.partPath,
+  );
+  if (rawPart === undefined) {
+    throw new Error(
+      `writePptx: presentation part '${source.presentation.partPath}' has no preserved raw package material`,
+    );
+  }
+  if (rawPart.kind !== "binary") {
+    throw new Error("writePptx: presentation XML tree part patching is not implemented");
+  }
+
+  const root = parseXml(textDecoder.decode(rawPart.bytes));
+  const presentation = getChild(root, "presentation");
+  if (presentation === undefined) {
+    throw new Error("writePptx: presentation part does not contain p:presentation root");
+  }
+  const sldIdLst = ensureSlideIdList(presentation);
+
+  for (const edit of edits) {
+    if (edit.kind === "duplicateSlide") {
+      insertSlideIdAfter(sldIdLst, edit.sourceRelationshipId, edit.newRelationshipId);
+    } else {
+      removeSlideId(sldIdLst, edit.relationshipId);
+    }
+  }
+
+  return encodeXml(XML_DECLARATION + xmlBuilder.build(stripXmlProcessingInstruction(root)));
+}
+
+function ensureSlideIdList(presentation: XmlNode): XmlNode {
+  const existing = getChild(presentation, "sldIdLst");
+  if (existing !== undefined) return existing;
+  const key = namespacedChildKey(presentation, "p:sldIdLst", "sldIdLst");
+  const created: XmlNode = {};
+  presentation[key] = created;
+  return created;
+}
+
+function insertSlideIdAfter(
+  sldIdLst: XmlNode,
+  sourceRelationshipId: RelationshipId,
+  newRelationshipId: RelationshipId,
+): void {
+  const { key, items } = slideIdEntries(sldIdLst);
+  const sourceIndex = items.findIndex((item) => getRelationshipAttr(item) === sourceRelationshipId);
+  if (sourceIndex === -1) {
+    throw new Error(
+      `writePptx: slide relationship '${sourceRelationshipId}' was not found in p:sldIdLst`,
+    );
+  }
+  if (items.some((item) => getRelationshipAttr(item) === newRelationshipId)) return;
+  const newSlideId = String(nextSlideNumericId(items));
+  const relationshipAttrKey = namespacedAttributeKey(items[sourceIndex], "r:id", "id");
+  const newNode: XmlNode = {
+    "@_id": newSlideId,
+    [relationshipAttrKey]: newRelationshipId,
+  };
+  sldIdLst[key] = [...items.slice(0, sourceIndex + 1), newNode, ...items.slice(sourceIndex + 1)];
+}
+
+function removeSlideId(sldIdLst: XmlNode, relationshipId: RelationshipId): void {
+  const { key, items } = slideIdEntries(sldIdLst);
+  sldIdLst[key] = items.filter((item) => getRelationshipAttr(item) !== relationshipId);
+}
+
+function slideIdEntries(sldIdLst: XmlNode): { readonly key: string; readonly items: XmlNode[] } {
+  const key = namespacedChildKey(sldIdLst, "p:sldId", "sldId");
+  const value = sldIdLst[key];
+  if (value === undefined || value === null) return { key, items: [] };
+  return {
+    key,
+    items: Array.isArray(value)
+      ? unsafeOoxmlBoundaryAssertion<XmlNode[]>(value)
+      : [unsafeOoxmlBoundaryAssertion<XmlNode>(value)],
+  };
+}
+
+function nextSlideNumericId(items: readonly XmlNode[]): number {
+  const used = new Set(
+    items.flatMap((item) => {
+      const id = Number(getAttr(item, "id"));
+      return Number.isFinite(id) ? [id] : [];
+    }),
+  );
+  const max = Math.max(255, ...used);
+  for (let candidate = max + 1; ; candidate += 1) {
+    if (!used.has(candidate)) return candidate;
+  }
+}
+
+function getRelationshipAttr(node: XmlNode): string | undefined {
+  return getNamespacedAttr(node, "id");
+}
+
+function namespacedChildKey(node: XmlNode, fallback: string, local: string): string {
+  for (const key of Object.keys(node)) {
+    if (key.startsWith("@_")) continue;
+    if (localName(key) === local) return key;
+  }
+  return fallback;
+}
+
+function namespacedAttributeKey(node: XmlNode, fallback: string, local: string): string {
+  for (const key of Object.keys(node)) {
+    if (!key.startsWith("@_")) continue;
+    const name = key.slice(2);
+    const colon = name.indexOf(":");
+    if (colon !== -1 && name.slice(colon + 1) === local) return key;
+  }
+  return `@_${fallback}`;
 }
 
 function stripXmlProcessingInstruction(root: XmlNode): XmlNode {
