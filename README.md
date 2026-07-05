@@ -113,6 +113,22 @@ Note: embedded fonts and `<text>` may not render as expected when the SVG is ref
 
 ### Advanced Usage
 
+#### Rendering from a parsed source model
+
+When rendering slides repeatedly, keep the parsed `PptxSourceModel` from
+`@pptx-glimpse/document` and call `renderPptxSourceModelToSvg`. This avoids
+unzipping and parsing the PPTX bytes again on each render.
+
+```typescript
+import { readPptx } from "@pptx-glimpse/document";
+import { renderPptxSourceModelToSvg } from "pptx-glimpse";
+
+const source = readPptx(pptx);
+
+const first = await renderPptxSourceModelToSvg(source, { slides: [1] });
+const second = await renderPptxSourceModelToSvg(source, { slides: [2] });
+```
+
 <details>
 <summary>Font Utilities</summary>
 

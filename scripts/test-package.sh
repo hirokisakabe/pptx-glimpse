@@ -39,9 +39,14 @@ const assert = (condition, message) => {
 
 assert(typeof pkg.convertPptxToSvg === "function", "convertPptxToSvg should be a function");
 assert(typeof pkg.convertPptxToPng === "function", "convertPptxToPng should be a function");
+assert(
+  typeof pkg.renderPptxSourceModelToSvg === "function",
+  "renderPptxSourceModelToSvg should be a function",
+);
 
 console.log("  convertPptxToSvg: function OK");
 console.log("  convertPptxToPng: function OK");
+console.log("  renderPptxSourceModelToSvg: function OK");
 console.log("CJS test passed!");
 TESTEOF
 node test-cjs.cjs
@@ -51,7 +56,7 @@ echo ""
 # --- core ESM test ---
 echo "--- Test: pptx-glimpse ESM (import) ---"
 cat > test-esm.mjs << 'TESTEOF'
-import { convertPptxToSvg, convertPptxToPng } from "pptx-glimpse";
+import { convertPptxToSvg, convertPptxToPng, renderPptxSourceModelToSvg } from "pptx-glimpse";
 
 const assert = (condition, message) => {
   if (!condition) {
@@ -62,9 +67,14 @@ const assert = (condition, message) => {
 
 assert(typeof convertPptxToSvg === "function", "convertPptxToSvg should be a function");
 assert(typeof convertPptxToPng === "function", "convertPptxToPng should be a function");
+assert(
+  typeof renderPptxSourceModelToSvg === "function",
+  "renderPptxSourceModelToSvg should be a function",
+);
 
 console.log("  convertPptxToSvg: function OK");
 console.log("  convertPptxToPng: function OK");
+console.log("  renderPptxSourceModelToSvg: function OK");
 console.log("ESM test passed!");
 TESTEOF
 node test-esm.mjs
@@ -94,14 +104,24 @@ cat > tsconfig.json << 'TESTEOF'
 TESTEOF
 
 cat > test-types.ts << 'TESTEOF'
-import { collectUsedFonts, convertPptxToSvg, convertPptxToPng } from "pptx-glimpse";
-import type { ConvertOptions, PngConversionReport, SvgConversionReport, UsedFonts } from "pptx-glimpse";
+import { collectUsedFonts, convertPptxToSvg, convertPptxToPng, renderPptxSourceModelToSvg } from "pptx-glimpse";
+import type {
+  ConvertOptions,
+  PngConversionReport,
+  PptxSourceModel,
+  SvgConversionReport,
+  UsedFonts,
+} from "pptx-glimpse";
 
 // Verify function signatures
 const _svgFn: (input: Uint8Array, options?: ConvertOptions) => Promise<SvgConversionReport> =
   convertPptxToSvg;
 const _pngFn: (input: Uint8Array, options?: ConvertOptions) => Promise<PngConversionReport> =
   convertPptxToPng;
+const _sourceModelSvgFn: (
+  source: PptxSourceModel,
+  options?: ConvertOptions,
+) => Promise<SvgConversionReport> = renderPptxSourceModelToSvg;
 const _fontFn: (input: Uint8Array) => UsedFonts = collectUsedFonts;
 
 // Verify SlideImage.png is Uint8Array
@@ -122,6 +142,7 @@ function _verifyBufferInput(input: Buffer) {
 const _options: ConvertOptions = { slides: [1], width: 960, fontDirs: ["/custom/fonts"] };
 void _svgFn;
 void _pngFn;
+void _sourceModelSvgFn;
 void _fontFn;
 void _options;
 void _verifyPngType;

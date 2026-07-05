@@ -24,6 +24,7 @@ export interface RendererContext {
   readonly fontUsageCollector: FontUsageCollector | null;
   readonly scriptFonts: RendererScriptFonts;
   readonly warningLogger: WarningLogger;
+  readonly fontWarningCache: Set<string>;
 }
 
 export function createRendererContext(overrides: Partial<RendererContext> = {}): RendererContext {
@@ -34,6 +35,7 @@ export function createRendererContext(overrides: Partial<RendererContext> = {}):
     fontUsageCollector: overrides.fontUsageCollector ?? null,
     scriptFonts: overrides.scriptFonts ?? { majorJpan: null, minorJpan: null },
     warningLogger: overrides.warningLogger ?? createWarningLogger("off"),
+    fontWarningCache: overrides.fontWarningCache ?? new Set<string>(),
   };
 }
 
@@ -45,6 +47,7 @@ export function createLegacyRendererContext(): RendererContext {
     fontUsageCollector: getFontUsageCollector(),
     scriptFonts: getScriptFonts(),
     warningLogger: getActiveWarningLogger(),
+    fontWarningCache: new Set<string>(),
   };
 }
 

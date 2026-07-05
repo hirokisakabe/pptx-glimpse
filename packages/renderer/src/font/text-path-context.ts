@@ -34,6 +34,7 @@ export interface TextPathFontResolver {
 export interface TextPathFontResolverContext {
   readonly fontMapping?: FontMapping;
   readonly warningLogger?: WarningLogger;
+  readonly fontWarningCache?: Set<string>;
 }
 
 export class DefaultTextPathFontResolver implements TextPathFontResolver {
@@ -70,6 +71,8 @@ export class DefaultTextPathFontResolver implements TextPathFontResolver {
       if (name) {
         const logger = context?.warningLogger;
         if (logger) {
+          if (context.fontWarningCache?.has(name)) continue;
+          context.fontWarningCache?.add(name);
           logger.warn("font.notFound", `Font not found: "${name}"`);
           continue;
         }

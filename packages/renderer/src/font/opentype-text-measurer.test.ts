@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { getWarningEntries, initWarningLogger } from "../warning-logger.js";
+import { createWarningLogger, getWarningEntries, initWarningLogger } from "../warning-logger.js";
 import { resetFontMapping, setFontMapping } from "./font-mapping-context.js";
 import { type OpentypeFont, OpentypeTextMeasurer } from "./opentype-text-measurer.js";
 
@@ -321,6 +321,37 @@ describe("OpentypeTextMeasurer font warnings", () => {
     const entries = getWarningEntries();
     expect(entries.some((e) => e.feature === "font.notFound")).toBe(true);
     expect(entries.some((e) => e.message.includes("UnknownFont"))).toBe(true);
+  });
+
+  it("records font.notFound warnings into the provided measurement context", () => {
+    initWarningLogger("warn");
+    const logger = createWarningLogger("warn");
+    const measurer = new OpentypeTextMeasurer(new Map());
+
+    const fontWarningCache = new Set<string>();
+    const context = {
+      warningLogger: logger,
+      fontWarningCache,
+    };
+
+    measurer.measureTextWidth("A", 18, false, "UnknownFont", null, context);
+    measurer.measureTextWidth("A", 18, false, "UnknownFont", null, context);
+
+    expect(
+      logger
+        .getWarningEntries()
+        .some(
+          (entry) => entry.feature === "font.notFound" && entry.message.includes("UnknownFont"),
+        ),
+    ).toBe(true);
+    expect(
+      logger
+        .getWarningEntries()
+        .filter(
+          (entry) => entry.feature === "font.notFound" && entry.message.includes("UnknownFont"),
+        ),
+    ).toHaveLength(1);
+    expect(getWarningEntries()).toHaveLength(0);
   });
 
   it("Warnings with the same font name are not duplicated", () => {

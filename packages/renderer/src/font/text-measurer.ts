@@ -3,6 +3,14 @@ import {
   getLineHeightRatio as defaultGetLineHeightRatio,
   measureTextWidth as defaultMeasureTextWidth,
 } from "../utils/text-measure.js";
+import type { WarningLogger } from "../warning-logger.js";
+import type { FontMapping } from "./font-mapping.js";
+
+export interface TextMeasurementContext {
+  readonly fontMapping?: FontMapping;
+  readonly warningLogger?: WarningLogger;
+  readonly fontWarningCache?: Set<string>;
+}
 
 /**
  * Interface for measuring text width and line height.
@@ -25,6 +33,7 @@ export interface TextMeasurer {
     bold: boolean,
     fontFamily?: string | null,
     fontFamilyEa?: string | null,
+    context?: TextMeasurementContext,
   ): number;
 
   /**
@@ -33,7 +42,11 @@ export interface TextMeasurer {
    * @param fontFamily - font family name for Latin text
    * @param fontFamilyEa - font family name for East Asian text
    */
-  getLineHeightRatio(fontFamily?: string | null, fontFamilyEa?: string | null): number;
+  getLineHeightRatio(
+    fontFamily?: string | null,
+    fontFamilyEa?: string | null,
+    context?: TextMeasurementContext,
+  ): number;
 
   /**
    * Font ascender ratio (ascender / unitsPerEm) .
@@ -42,7 +55,11 @@ export interface TextMeasurer {
    * @param fontFamily - font family name for Latin text
    * @param fontFamilyEa - font family name for East Asian text
    */
-  getAscenderRatio(fontFamily?: string | null, fontFamilyEa?: string | null): number;
+  getAscenderRatio(
+    fontFamily?: string | null,
+    fontFamilyEa?: string | null,
+    context?: TextMeasurementContext,
+  ): number;
 }
 
 export class DefaultTextMeasurer implements TextMeasurer {
@@ -52,15 +69,24 @@ export class DefaultTextMeasurer implements TextMeasurer {
     bold: boolean,
     fontFamily?: string | null,
     fontFamilyEa?: string | null,
+    _context?: TextMeasurementContext,
   ): number {
     return defaultMeasureTextWidth(text, fontSizePt, bold, fontFamily, fontFamilyEa);
   }
 
-  getLineHeightRatio(fontFamily?: string | null, fontFamilyEa?: string | null): number {
+  getLineHeightRatio(
+    fontFamily?: string | null,
+    fontFamilyEa?: string | null,
+    _context?: TextMeasurementContext,
+  ): number {
     return defaultGetLineHeightRatio(fontFamily, fontFamilyEa);
   }
 
-  getAscenderRatio(fontFamily?: string | null, fontFamilyEa?: string | null): number {
+  getAscenderRatio(
+    fontFamily?: string | null,
+    fontFamilyEa?: string | null,
+    _context?: TextMeasurementContext,
+  ): number {
     return defaultGetAscenderRatio(fontFamily, fontFamilyEa);
   }
 }

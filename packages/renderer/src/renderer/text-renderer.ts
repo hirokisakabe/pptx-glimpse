@@ -193,6 +193,7 @@ export function renderTextBody(
         scaledDefaultFontSizePt,
         fontScale,
         context.textMeasurer,
+        context,
       );
       for (let lineIdx = 0; lineIdx < wrappedLines.length; lineIdx++) {
         const line = wrappedLines[lineIdx];
@@ -580,6 +581,7 @@ function computeLineNaturalHeight(
     const ratio = context.textMeasurer.getLineHeightRatio(
       seg.properties.fontFamily,
       seg.properties.fontFamilyEa,
+      context,
     );
     maxHeight = Math.max(maxHeight, fontSize * ratio);
   }
@@ -809,6 +811,7 @@ function getDefaultLineHeightRatio(
         return context.textMeasurer.getLineHeightRatio(
           r.properties.fontFamily,
           r.properties.fontFamilyEa,
+          context,
         );
       }
     }
@@ -826,6 +829,7 @@ function getDefaultAscenderRatio(
         return context.textMeasurer.getAscenderRatio(
           r.properties.fontFamily,
           r.properties.fontFamilyEa,
+          context,
         );
       }
     }
@@ -946,6 +950,7 @@ function estimateTextHeight(
         scaledDefaultForWrap,
         fontScale,
         context.textMeasurer,
+        context,
       );
       lineCount = wrappedLines.length;
     } else {
@@ -1022,6 +1027,7 @@ function measureLineWidth(
       seg.properties.bold,
       seg.properties.fontFamily,
       seg.properties.fontFamilyEa,
+      context,
     );
   }
   return totalWidth;
@@ -1122,6 +1128,7 @@ function renderSegmentAsPath(
           props.bold,
           props.fontFamily,
           props.fontFamilyEa,
+          context,
         );
 
     if (font) {
@@ -1166,6 +1173,7 @@ function renderSegmentAsPath(
             props.bold,
             props.fontFamily,
             props.fontFamilyEa,
+            context,
           );
 
       if (font) {
@@ -1377,6 +1385,7 @@ function renderTextBodyAsPath(
         scaledDefaultFontSizePt,
         fontScale,
         context.textMeasurer,
+        context,
       );
 
       for (let lineIdx = 0; lineIdx < wrappedLines.length; lineIdx++) {
