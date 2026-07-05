@@ -99,6 +99,12 @@ header .description {
   gap: 10px;
 }
 
+.sample-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .file-label {
   border: 1px solid transparent;
   border-radius: 6px;

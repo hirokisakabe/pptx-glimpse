@@ -7,11 +7,13 @@ export function DropZone({
   fontFiles,
   onFile,
   onFontFiles,
+  onSample,
 }: {
   compact?: boolean;
   fontFiles: File[];
   onFile: (file: File) => void;
   onFontFiles: (files: File[]) => void;
+  onSample: (sample: SamplePptx) => void;
 }) {
   const [dragOver, setDragOver] = useState(false);
   const pptxInputRef = useRef<HTMLInputElement>(null);
@@ -57,7 +59,9 @@ export function DropZone({
     >
       <div className="drop-zone-copy">
         <p className="drop-zone-title">Drop a PPTX file</p>
-        <p className="drop-zone-note">Conversion runs locally in your browser.</p>
+        <p className="drop-zone-note">
+          PPTX files are never sent to a server. Conversion runs locally in your browser.
+        </p>
       </div>
       <div className="file-actions">
         <button
@@ -74,6 +78,19 @@ export function DropZone({
         >
           Add fonts
         </button>
+        <div className="sample-actions" role="group" aria-label="Sample PPTX files">
+          {SAMPLE_PPTX_FILES.map((sample) => (
+            <button
+              className="file-label secondary"
+              data-testid={`sample-${sample.id}`}
+              key={sample.id}
+              type="button"
+              onClick={() => onSample(sample)}
+            >
+              {sample.label}
+            </button>
+          ))}
+        </div>
       </div>
       {fontFiles.length > 0 ? (
         <p className="font-count" data-testid="font-count">
@@ -100,6 +117,28 @@ export function DropZone({
     </div>
   );
 }
+
+export interface SamplePptx {
+  readonly id: string;
+  readonly label: string;
+  readonly filename: string;
+  readonly href: string;
+}
+
+const SAMPLE_PPTX_FILES: readonly SamplePptx[] = [
+  {
+    id: "basic-theme",
+    label: "Open sample",
+    filename: "real-basic-theme.pptx",
+    href: "/samples/real-basic-theme.pptx",
+  },
+  {
+    id: "product-page",
+    label: "Open product sample",
+    filename: "real-product-page.pptx",
+    href: "/samples/real-product-page.pptx",
+  },
+];
 
 function isPptxFile(file: File): boolean {
   return file.name.toLowerCase().endsWith(".pptx");
