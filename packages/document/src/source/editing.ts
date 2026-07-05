@@ -398,7 +398,7 @@ export function addTextBox(
   }
 
   const slide = source.slides[slideIndex];
-  const shapeId = nextShapeId(slide.shapes);
+  const shapeId = nextShapeId(slide.shapes, source.edits ?? [], slide.partPath);
   const shapeIdValue = String(shapeId);
   const name = input.name?.trim() || `TextBox ${shapeIdValue}`;
   const orderingSlot = nextOrderingSlot(slide.shapes);
@@ -440,6 +440,7 @@ export function deleteShape(source: PptxSourceModel, handle: SourceHandle): Pptx
   let found: SourceShapeNode | undefined;
   let deleted = false;
   const slides = source.slides.map((slide) => {
+    let slideChanged = false;
     const nextShapes = slide.shapes.filter((shape) => {
       if (!sourceHandlesEqual(shape.handle, handle)) return true;
       found = shape;
@@ -450,9 +451,10 @@ export function deleteShape(source: PptxSourceModel, handle: SourceHandle): Pptx
         throw new Error("deleteShape: shapes inside AlternateContent are not supported");
       }
       deleted = true;
+      slideChanged = true;
       return false;
     });
-    return nextShapes === slide.shapes ? slide : { ...slide, shapes: nextShapes };
+    return slideChanged ? { ...slide, shapes: nextShapes } : slide;
   });
 
   if (!deleted) {
@@ -922,9 +924,14 @@ function createTextBoxShape(
   };
 }
 
-function nextShapeId(shapes: readonly SourceShapeNode[]): SourceNodeId {
+function nextShapeId(
+  shapes: readonly SourceShapeNode[],
+  edits: readonly PptxSourceModelEdit[],
+  slidePartPath: PartPath,
+): SourceNodeId {
   const used = new Set<number>();
   collectNumericShapeIds(shapes, used);
+  collectNumericShapeEditIds(edits, slidePartPath, used);
   const max = Math.max(0, ...used);
   for (let candidate = max + 1; ; candidate += 1) {
     if (!used.has(candidate)) return asSourceNodeId(String(candidate));
@@ -936,6 +943,23 @@ function collectNumericShapeIds(shapes: readonly SourceShapeNode[], used: Set<nu
     const numericId = Number(shape.nodeId);
     if (Number.isInteger(numericId) && numericId > 0) used.add(numericId);
     if (shape.kind === "group") collectNumericShapeIds(shape.children, used);
+  }
+}
+
+function collectNumericShapeEditIds(
+  edits: readonly PptxSourceModelEdit[],
+  slidePartPath: PartPath,
+  used: Set<number>,
+): void {
+  for (const edit of edits) {
+    const id =
+      edit.kind === "addTextBox" && edit.slidePartPath === slidePartPath
+        ? edit.shapeId
+        : edit.kind === "deleteShape" && edit.handle.partPath === slidePartPath
+          ? edit.handle.nodeId
+          : undefined;
+    const numericId = Number(id);
+    if (Number.isInteger(numericId) && numericId > 0) used.add(numericId);
   }
 }
 

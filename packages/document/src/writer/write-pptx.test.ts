@@ -733,6 +733,50 @@ describe("writePptx - shape add/delete edits", () => {
     });
   });
 
+  it("does not reuse a pending-deleted shape id when adding a text box", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const deletedMaxIdShape = deleteShape(
+      source,
+      requireHandle(findShapeByName(source, "Keep Shape").handle),
+    );
+    const edited = addTextBox(deletedMaxIdShape, deletedMaxIdShape.slides[0].handle!, {
+      offsetX: asEmu(900),
+      offsetY: asEmu(1000),
+      width: asEmu(1100),
+      height: asEmu(1200),
+      text: "Added after delete",
+    });
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+
+    expect(findShapeByName(reread, "TextBox 31").textBody?.paragraphs[0]?.runs[0]?.text).toBe(
+      "Added after delete",
+    );
+    expect(() => findShapeByName(reread, "Keep Shape")).toThrow(/shape not found/);
+  });
+
+  it("cancels the add edit when a newly-added text box is deleted before write", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const withTextBox = addTextBox(source, source.slides[0].handle!, {
+      offsetX: asEmu(100),
+      offsetY: asEmu(200),
+      width: asEmu(300),
+      height: asEmu(400),
+      text: "Temporary",
+      name: "Temporary TextBox",
+    });
+    const added = findShapeByName(withTextBox, "Temporary TextBox");
+    const edited = deleteShape(withTextBox, requireHandle(added.handle));
+    const output = writePptx(edited);
+
+    expect(
+      edited.edits?.filter((edit) => edit.kind === "addTextBox" || edit.kind === "deleteShape"),
+    ).toEqual([]);
+    expect(decoder.decode(getEntry(output, "ppt/slides/slide1.xml"))).not.toContain(
+      "Temporary TextBox",
+    );
+  });
+
   it("deletes only the targeted sp shape while preserving other shapes and invisible slide material", () => {
     const source = readPptx(buildShapeDeleteFixture());
     const deleted = deleteShape(source, requireHandle(source.slides[0].shapes[0]?.handle));
