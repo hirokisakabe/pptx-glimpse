@@ -15,7 +15,11 @@ export default defineConfig({
   },
   test: {
     globals: true,
-    include: ["packages/*/src/**/*.test.ts", "e2e/**/*.test.ts"],
+    include: [
+      "packages/*/src/**/*.test.ts",
+      "e2e/**/*.test.ts",
+      "vrt/libreoffice/editor-validity.test.ts",
+    ],
     testTimeout: 30000,
     coverage: {
       provider: "v8",

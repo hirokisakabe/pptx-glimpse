@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   asEmu,
+  asPt,
   readPptx,
   type SourceHandle,
   type SourceShape,
@@ -32,6 +33,7 @@ const TRANSFORM_EDIT = {
   width: asEmu(2926080),
   height: asEmu(1463040),
 } as const;
+const FORMATTING_EDITED_VALUE = "Editable formatting target";
 
 const LO_EDITOR_VALIDITY_CASES = [
   {
@@ -79,6 +81,37 @@ const LO_EDITOR_VALIDITY_CASES = [
 
       if (!resizeResult.ok) throw new Error(resizeResult.message);
       return writePptx(resizeResult.document);
+    },
+  },
+  {
+    name: "text run formatting",
+    sourceFixture: "editor-validity-formatting-source.pptx",
+    expectedFixture: "editor-validity-formatting-expected.pptx",
+    createEditedPptx: (input: Uint8Array) => {
+      const source = readPptx(input);
+      const session = createEditorSession(source);
+      const handle = requireHandle(findTextRun(source, FORMATTING_EDITED_VALUE).handle);
+      const setResult = session.apply({
+        kind: "setTextRunProperties",
+        handle,
+        properties: {
+          bold: false,
+          fontSize: asPt(30),
+          color: { kind: "srgb", hex: "9C0000" },
+          typeface: "Liberation Serif",
+        },
+      });
+
+      if (!setResult.ok) throw new Error(setResult.message);
+
+      const clearResult = session.apply({
+        kind: "clearTextRunProperties",
+        handle,
+        properties: ["italic", "underline"],
+      });
+
+      if (!clearResult.ok) throw new Error(clearResult.message);
+      return writePptx(clearResult.document);
     },
   },
 ] as const;
