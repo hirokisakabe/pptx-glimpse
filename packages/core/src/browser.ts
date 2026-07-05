@@ -1,3 +1,12 @@
+import { DEFAULT_OUTPUT_WIDTH } from "@pptx-glimpse/renderer";
+import {
+  initResvgWasm as initRendererResvgWasm,
+  type ResvgWasmInput,
+  svgToPng,
+} from "@pptx-glimpse/renderer/png/browser";
+
+import { type ConvertOptions, convertPptxToSvg as convertPptxToSvgBase } from "./svg-converter.js";
+
 export type { PngConversionReport, SlideImage } from "./converter.js";
 export type { UsedFonts } from "./font/font-collector.js";
 export { collectUsedFonts } from "./font/font-collector.js";
@@ -21,24 +30,42 @@ export {
   createOpentypeTextMeasurerFromBuffers,
 } from "@pptx-glimpse/renderer";
 export { getWarningEntries, getWarningSummary } from "@pptx-glimpse/renderer";
+export type { ResvgWasmInput } from "@pptx-glimpse/renderer/png/browser";
 
-export type ResvgWasmInput = ArrayBuffer | Uint8Array | Response;
+export async function convertPptxToPng(
+  input: Uint8Array,
+  options?: ConvertOptions,
+): Promise<import("./converter.js").PngConversionReport> {
+  const svgResult = await convertPptxToSvgBase(input, {
+    ...options,
+    textOutput: "path",
+  });
+  const width = options?.width ?? DEFAULT_OUTPUT_WIDTH;
+  const height = options?.height;
+  const fontBuffers = options?.fonts?.map((font) => toUint8Array(font.data)) ?? [];
 
-export function convertPptxToPng(): Promise<never> {
-  return Promise.reject(
-    new Error(
-      "convertPptxToPng is not available from the browser entry. Use convertPptxToSvg or the Node.js entry.",
-    ),
-  );
+  const slides: import("./converter.js").SlideImage[] = [];
+  for (const { slideNumber, svg } of svgResult.slides) {
+    const pngResult = await svgToPng(svg, { width, height, fontBuffers });
+    slides.push({
+      slideNumber,
+      png: new Uint8Array(pngResult.png),
+      width: pngResult.width,
+      height: pngResult.height,
+    });
+  }
+
+  return {
+    slides,
+    diagnostics: svgResult.diagnostics,
+    supportCoverage: svgResult.supportCoverage,
+  };
 }
 
-export async function initResvgWasm(wasm: ResvgWasmInput): Promise<void> {
-  const { initWasm } = await import("@resvg/resvg-wasm");
-  const wasmInput =
-    wasm instanceof Response
-      ? await wasm.arrayBuffer()
-      : wasm instanceof Uint8Array
-        ? new Uint8Array(wasm)
-        : wasm;
-  await initWasm(wasmInput);
+export function initResvgWasm(wasm: ResvgWasmInput): Promise<void> {
+  return initRendererResvgWasm(wasm);
+}
+
+function toUint8Array(data: ArrayBuffer | Uint8Array): Uint8Array {
+  return data instanceof Uint8Array ? data : new Uint8Array(data);
 }

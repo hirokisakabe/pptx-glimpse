@@ -20,7 +20,8 @@
       "@pptx-glimpse/editor-core": ["packages/editor-core/src/index.ts"],
       "@pptx-glimpse/renderer": ["packages/renderer/src/index.ts"],
       "@pptx-glimpse/renderer/node": ["packages/renderer/src/node.ts"],
-      "@pptx-glimpse/renderer/png": ["packages/renderer/src/png.ts"]
+      "@pptx-glimpse/renderer/png": ["packages/renderer/src/png.ts"],
+      "@pptx-glimpse/renderer/png/browser": ["packages/renderer/src/png-browser.ts"]
     }
   },
   "include": ["packages/*/src/**/*"],
