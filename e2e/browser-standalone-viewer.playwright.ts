@@ -21,6 +21,7 @@ const vrtFixtures = resolve(repoRoot, "vrt/snapshot/fixtures");
 const execFileAsync = promisify(execFile);
 const coreRequire = createRequire(resolve(corePackageRoot, "package.json"));
 let coreDistBuildPromise: Promise<void> | null = null;
+let vrtFixturesPromise: Promise<void> | null = null;
 
 test("runs a browser-only PPTX to SVG viewer for shared fixtures", async ({ page }) => {
   const viewer = await startStandaloneViewer();
@@ -42,6 +43,7 @@ test("runs a browser-only PPTX to SVG viewer for shared fixtures", async ({ page
 });
 
 test("runs browser-only PPTX to SVG conversion for a VRT fixture", async ({ page }) => {
+  await ensureVrtFixtures();
   const viewer = await startStandaloneViewer();
   try {
     await page.goto(viewer.url);
@@ -184,6 +186,18 @@ async function runPackageBuild(packageRoot: string): Promise<void> {
     cwd: packageRoot,
     maxBuffer: 10 * 1024 * 1024,
   });
+}
+
+async function ensureVrtFixtures(): Promise<void> {
+  vrtFixturesPromise ??= execFileAsync(
+    resolve(repoRoot, "node_modules/.bin/tsx"),
+    ["vrt/snapshot/create-fixtures.ts"],
+    {
+      cwd: repoRoot,
+      maxBuffer: 10 * 1024 * 1024,
+    },
+  ).then(() => undefined);
+  await vrtFixturesPromise;
 }
 
 async function createPackageResolveDir(): Promise<string> {

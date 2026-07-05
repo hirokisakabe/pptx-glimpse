@@ -9,12 +9,20 @@ async function normalizeWasmInput(wasm: ResvgWasmInput): Promise<ArrayBuffer | U
   if (wasm instanceof ArrayBuffer || wasm instanceof Uint8Array) {
     return wasm;
   }
+  if (!wasm.ok) {
+    throw new Error(`Failed to load resvg WASM: HTTP ${wasm.status.toString()}`);
+  }
   return wasm.arrayBuffer();
 }
 
 export async function initResvgWasm(wasm: ResvgWasmInput): Promise<void> {
   if (!wasmInitPromise) {
-    wasmInitPromise = normalizeWasmInput(wasm).then((wasmInput) => initWasm(wasmInput));
+    wasmInitPromise = normalizeWasmInput(wasm)
+      .then((wasmInput) => initWasm(wasmInput))
+      .catch((error: unknown) => {
+        wasmInitPromise = null;
+        throw error;
+      });
   }
   await wasmInitPromise;
 }
