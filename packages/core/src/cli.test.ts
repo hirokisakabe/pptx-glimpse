@@ -45,6 +45,27 @@ describe("pptx-glimpse CLI", () => {
     expect(streams.stderr).toBe("");
   });
 
+  it("can opt in to system font scanning", async () => {
+    const workspace = await createWorkspace();
+    const pptxPath = await writeInput(workspace);
+    const calls: ConvertOptions[] = [];
+
+    const exitCode = await runCli(["convert", pptxPath, "--system-fonts"], {
+      cwd: workspace,
+      streams: createStreams().streams,
+      converters: {
+        convertPptxToSvg: (_input, options) => {
+          calls.push(options ?? {});
+          return Promise.resolve(svgReport([[1, "<svg />"]]));
+        },
+        convertPptxToPng: failPngConverter,
+      },
+    });
+
+    expect(exitCode).toBe(0);
+    expect(calls).toEqual([{ logLevel: "off", skipSystemFonts: false }]);
+  });
+
   it("switches to PNG output with --format png", async () => {
     const workspace = await createWorkspace();
     const pptxPath = await writeInput(workspace);
@@ -152,6 +173,12 @@ describe("pptx-glimpse CLI", () => {
     );
 
     expect(packageJson.bin).toEqual({ "pptx-glimpse": "./dist/cli.js" });
+  });
+
+  it("keeps the CLI source executable for the package bin", async () => {
+    const cliSource = await readFile(new URL("./cli.ts", import.meta.url), "utf8");
+
+    expect(cliSource.startsWith("#!/usr/bin/env node\n")).toBe(true);
   });
 });
 

@@ -45,6 +45,7 @@ interface ConvertCommandOptions {
   readonly format: CliFormat;
   readonly slides?: number[];
   readonly logLevel: CliLogLevel;
+  readonly systemFonts: boolean;
 }
 
 const defaultConverters: CliConverters = {
@@ -60,6 +61,7 @@ Options:
   --slides <list>          Comma-separated 1-based slide numbers, such as 1,3.
   --out <dir>              Output directory. Defaults to the current directory.
   --log-level <level>      Diagnostic output: off, warn, or debug. Defaults to warn.
+  --system-fonts           Scan OS system font directories for better text fidelity.
   -h, --help               Show this help message.
 `;
 
@@ -106,6 +108,7 @@ function parseConvertCommand(args: readonly string[], cwd: string): ConvertComma
         slides: { type: "string" },
         out: { type: "string" },
         "log-level": { type: "string" },
+        "system-fonts": { type: "boolean" },
         help: { type: "boolean", short: "h" },
       },
     });
@@ -132,6 +135,7 @@ function parseConvertCommand(args: readonly string[], cwd: string): ConvertComma
     format,
     ...(slides !== undefined ? { slides } : {}),
     logLevel,
+    systemFonts: parsed.values["system-fonts"] === true,
   };
 }
 
@@ -148,7 +152,7 @@ async function runConvertCommand(
   const conversionOptions: ConvertOptions = {
     // Route diagnostics through the CLI streams below instead of converter console output.
     logLevel: "off",
-    skipSystemFonts: true,
+    skipSystemFonts: !options.systemFonts,
     ...(options.slides !== undefined ? { slides: options.slides } : {}),
   };
 
