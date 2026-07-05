@@ -6,6 +6,7 @@ import {
   findShapeNodeBySourceHandle,
   type PptxSourceModel,
   readPptx,
+  type SourceConnector,
   type SourceHandle,
   type SourceShape,
   type SourceShapeNode,
@@ -693,6 +694,45 @@ describe("EditorSession shape add/delete commands", () => {
     });
   });
 
+  it("adds a connector command and persists native connection sites", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const start = firstShape(source);
+    const end = shapeWithoutTransform(source);
+    const edited = expectApplied(
+      session.apply({
+        kind: "addConnector",
+        slideHandle: requireHandle(source.slides[0].handle),
+        preset: "curvedConnector3",
+        offsetX: asEmu(100),
+        offsetY: asEmu(200),
+        width: asEmu(300),
+        height: asEmu(400),
+        start: {
+          shapeHandle: requireHandle(start.handle),
+          connectionSiteIndex: 0,
+        },
+        end: {
+          shapeHandle: requireHandle(end.handle),
+          connectionSiteIndex: 2,
+        },
+        outline: {
+          tailEnd: { type: "triangle", width: "med", length: "med" },
+        },
+      }),
+    );
+    const connector = findConnectorByName(readPptx(writePptx(edited)), "Connector 12");
+
+    expect(connector).toMatchObject({
+      connection: {
+        start: { shapeId: "10", connectionSiteIndex: 0 },
+        end: { shapeId: "11", connectionSiteIndex: 2 },
+      },
+      geometry: { preset: "curvedConnector3" },
+      outline: { tailEnd: { type: "triangle" } },
+    });
+  });
+
   it("undoes and redoes shape deletion for generated command sequences", async () => {
     const cases = [
       [{ kind: "deleteShape" }],
@@ -1298,6 +1338,14 @@ function shapeWithoutTransform(source: PptxSourceModel): SourceShape {
 
 function findShapeByName(source: PptxSourceModel, name: string): SourceShapeNode | undefined {
   return source.slides.flatMap((slide) => slide.shapes).find((shape) => shape.name === name);
+}
+
+function findConnectorByName(source: PptxSourceModel, name: string): SourceConnector {
+  const connector = source.slides
+    .flatMap((slide) => slide.shapes)
+    .find((shape): shape is SourceConnector => shape.kind === "connector" && shape.name === name);
+  if (connector === undefined) throw new Error(`connector not found: ${name}`);
+  return connector;
 }
 
 function requireShape(shape: SourceShapeNode | undefined): SourceShape & {

@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 // Import via the actual public surface (`@pptx-glimpse/document`).
 import { asEmu, asPartPath, asPt, asSourceNodeId, readPptx, writePptx } from "../index.js";
 import {
+  addConnector,
   addEmptySlideFromLayout,
   addTextBox,
   clearTextRunProperties,
@@ -19,6 +20,7 @@ import {
   replaceParagraphPlainText,
   replaceTextRunPlainText,
   setTextRunProperties,
+  type SourceConnector,
   type SourceShape,
   type SourceShapeNode,
   updateShapeTransform,
@@ -841,6 +843,83 @@ describe("writePptx - shape add/delete edits", () => {
     expect(decoder.decode(getEntry(output, "docProps/custom.xml"))).toContain("preserve-me");
   });
 
+  it("adds a connector with connection sites, preset geometry, and arrow endpoints", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const start = findShapeByName(source, "Delete Me");
+    const end = findShapeByName(source, "Keep Shape");
+    const edited = addConnector(source, source.slides[0].handle!, {
+      preset: "bentConnector3",
+      offsetX: asEmu(100),
+      offsetY: asEmu(200),
+      width: asEmu(700),
+      height: asEmu(800),
+      start: {
+        shapeHandle: requireHandle(start.handle),
+        connectionSiteIndex: 1,
+      },
+      end: {
+        shapeHandle: requireHandle(end.handle),
+        connectionSiteIndex: 3,
+      },
+      outline: {
+        tailEnd: { type: "triangle", width: "med", length: "lg" },
+      },
+    });
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+    const added = findConnectorByName(reread, "Connector 31");
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+
+    expect(added).toMatchObject({
+      nodeId: "31",
+      name: "Connector 31",
+      connection: {
+        start: { shapeId: "10", connectionSiteIndex: 1 },
+        end: { shapeId: "30", connectionSiteIndex: 3 },
+      },
+      geometry: { preset: "bentConnector3" },
+      outline: {
+        fill: { kind: "solid", color: { kind: "srgb", hex: "000000" } },
+        tailEnd: { type: "triangle", width: "med", length: "lg" },
+      },
+    });
+    expect(findConnectorByName(edited, "Connector 31").outline).toMatchObject({
+      fill: { kind: "solid", color: { kind: "srgb", hex: "000000" } },
+      tailEnd: { type: "triangle", width: "med", length: "lg" },
+    });
+    expect(slideXml).toContain(`<p:cxnSp>`);
+    expect(slideXml).toContain(`<a:stCxn id="10" idx="1"`);
+    expect(slideXml).toContain(`<a:endCxn id="30" idx="3"`);
+    expect(slideXml).toContain(`<a:prstGeom prst="bentConnector3"`);
+    expect(slideXml).toContain(`<a:tailEnd type="triangle" w="med" len="lg"`);
+    expect(decoder.decode(getEntry(output, "docProps/custom.xml"))).toContain("preserve-me");
+  });
+
+  it("rejects deleting a shape referenced by a connector", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const start = findShapeByName(source, "Delete Me");
+    const end = findShapeByName(source, "Keep Shape");
+    const withConnector = addConnector(source, source.slides[0].handle!, {
+      preset: "straightConnector1",
+      offsetX: asEmu(100),
+      offsetY: asEmu(200),
+      width: asEmu(700),
+      height: asEmu(800),
+      start: {
+        shapeHandle: requireHandle(start.handle),
+        connectionSiteIndex: 1,
+      },
+      end: {
+        shapeHandle: requireHandle(end.handle),
+        connectionSiteIndex: 3,
+      },
+    });
+
+    expect(() => deleteShape(withConnector, requireHandle(start.handle))).toThrow(
+      /referenced by connector/,
+    );
+  });
+
   it("allows an added text box to be edited before write", () => {
     const source = readPptx(buildShapeDeleteFixture());
     const withTextBox = addTextBox(source, source.slides[0].handle!, {
@@ -1522,6 +1601,14 @@ function findShapeByName(source: ReturnType<typeof readPptx>, name: string): Sou
     .find((node): node is SourceShape => node.kind === "shape" && node.name === name);
   if (shape === undefined) throw new Error(`shape not found: ${name}`);
   return shape;
+}
+
+function findConnectorByName(source: ReturnType<typeof readPptx>, name: string): SourceConnector {
+  const connector = source.slides
+    .flatMap((slide) => slide.shapes)
+    .find((node): node is SourceConnector => node.kind === "connector" && node.name === name);
+  if (connector === undefined) throw new Error(`connector not found: ${name}`);
+  return connector;
 }
 
 function requireShape(shape: SourceShape | undefined): SourceShape {

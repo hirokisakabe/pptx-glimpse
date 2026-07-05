@@ -55,8 +55,12 @@ export { createComputedView } from "./computed/index.js";
 export type { ReadPptxInput } from "./reader/index.js";
 export { readPptx } from "./reader/index.js";
 export type {
+  AddConnectorConnectionEndpointInput,
+  AddConnectorInput,
+  AddConnectorOutlineInput,
   AddEmptySlideFromLayoutInput,
   AddTextBoxInput,
+  ConnectorPresetGeometry,
   ContentTypeDefault,
   ContentTypeOverride,
   ContentTypes,
@@ -74,6 +78,7 @@ export type {
   PartPath,
   PartRelationships,
   PptxSourceModel,
+  PptxSourceModelAddConnectorEdit,
   PptxSourceModelAddEmptySlideFromLayoutEdit,
   PptxSourceModelAddTextBoxEdit,
   PptxSourceModelDeleteShapeEdit,
@@ -109,6 +114,8 @@ export type {
   SourceColorMap,
   SourceColorTransform,
   SourceConnector,
+  SourceConnectorConnection,
+  SourceConnectorConnectionEndpoint,
   SourceCustomGeometry,
   SourceCustomGeometryPath,
   SourceDashStyle,
@@ -174,6 +181,7 @@ export type {
   UpdateShapeTransformInput,
 } from "./source/index.js";
 export {
+  addConnector,
   addEmptySlideFromLayout,
   addTextBox,
   clearTextRunProperties,

@@ -4,11 +4,15 @@
 
 export type { Diagnostic, DiagnosticSeverity } from "./diagnostics.js";
 export type {
+  AddConnectorConnectionEndpointInput,
+  AddConnectorInput,
+  AddConnectorOutlineInput,
   AddEmptySlideFromLayoutInput,
   AddTextBoxInput,
   UpdateShapeTransformInput,
 } from "./editing.js";
 export {
+  addConnector,
   addEmptySlideFromLayout,
   addTextBox,
   clearTextRunProperties,
@@ -43,9 +47,11 @@ export type {
   RelationshipTargetMode,
 } from "./package-graph.js";
 export type {
+  ConnectorPresetGeometry,
   EditableTextRunProperties,
   EditableTextRunProperty,
   PptxSourceModel,
+  PptxSourceModelAddConnectorEdit,
   PptxSourceModelAddEmptySlideFromLayoutEdit,
   PptxSourceModelAddTextBoxEdit,
   PptxSourceModelDeleteShapeEdit,
@@ -87,6 +93,8 @@ export type {
   SourceColorChangeEffect,
   SourceColorTransform,
   SourceConnector,
+  SourceConnectorConnection,
+  SourceConnectorConnectionEndpoint,
   SourceCustomGeometry,
   SourceCustomGeometryPath,
   SourceDashStyle,

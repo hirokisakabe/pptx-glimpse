@@ -5,6 +5,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  addConnector,
   addEmptySlideFromLayout,
   addTextBox,
   asEmu,
@@ -206,6 +207,38 @@ describeOrSkip("LibreOffice shape add/delete validity", { timeout: 120000 }, () 
     renderSingleWithLibreOffice(
       libreOfficeImage,
       "editor-validity-shape-add-edited.pptx",
+      writePptx(edited),
+    );
+  });
+
+  it("opens PPTX after adding a connector", () => {
+    const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
+    const source = readPptx(sourcePptx);
+    const shapes = source.slides[0]?.shapes.filter(
+      (shape): shape is SourceShape => shape.kind === "shape",
+    );
+    const edited = addConnector(source, requireHandle(source.slides[0]?.handle), {
+      preset: "straightConnector1",
+      offsetX: asEmu(914400),
+      offsetY: asEmu(1371600),
+      width: asEmu(3657600),
+      height: asEmu(914400),
+      start: {
+        shapeHandle: requireHandle(shapes?.[0]?.handle),
+        connectionSiteIndex: 1,
+      },
+      end: {
+        shapeHandle: requireHandle(shapes?.[1]?.handle),
+        connectionSiteIndex: 3,
+      },
+      outline: {
+        tailEnd: { type: "triangle", width: "med", length: "med" },
+      },
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-shape-connector-edited.pptx",
       writePptx(edited),
     );
   });

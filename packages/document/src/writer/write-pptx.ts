@@ -35,6 +35,7 @@ import type {
   PartPath,
   PartRelationships,
   PptxSourceModel,
+  PptxSourceModelAddConnectorEdit,
   PptxSourceModelAddEmptySlideFromLayoutEdit,
   PptxSourceModelAddTextBoxEdit,
   PptxSourceModelDeleteShapeEdit,
@@ -83,6 +84,7 @@ export function writePptx(source: PptxSourceModel): WritePptxOutput {
   const paragraphTextEdits = source.edits?.filter(isParagraphTextEdit) ?? [];
   const shapeTransformEdits = source.edits?.filter(isShapeTransformEdit) ?? [];
   const addTextBoxEdits = source.edits?.filter(isAddTextBoxEdit) ?? [];
+  const addConnectorEdits = source.edits?.filter(isAddConnectorEdit) ?? [];
   const deleteShapeEdits = source.edits?.filter(isDeleteShapeEdit) ?? [];
   const addEmptySlideFromLayoutEdits = source.edits?.filter(isAddEmptySlideFromLayoutEdit) ?? [];
   const duplicateSlideEdits = source.edits?.filter(isDuplicateSlideEdit) ?? [];
@@ -93,6 +95,7 @@ export function writePptx(source: PptxSourceModel): WritePptxOutput {
     paragraphTextEdits,
     shapeTransformEdits,
     addTextBoxEdits,
+    addConnectorEdits,
     deleteShapeEdits,
   );
   const dirtyPartPaths = new Set([
@@ -102,6 +105,7 @@ export function writePptx(source: PptxSourceModel): WritePptxOutput {
     ...shapeTransformEdits.map((edit) => edit.handle.partPath),
     ...deleteShapeEdits.map((edit) => edit.handle.partPath),
     ...addTextBoxEdits.map((edit) => edit.slidePartPath),
+    ...addConnectorEdits.map((edit) => edit.slidePartPath),
   ]);
   const hasSlideTopologyEdits =
     addEmptySlideFromLayoutEdits.length > 0 ||
@@ -140,6 +144,7 @@ export function writePptx(source: PptxSourceModel): WritePptxOutput {
       paragraphTextEdits,
       shapeTransformEdits,
       addTextBoxEdits,
+      addConnectorEdits,
       deleteShapeEdits,
     );
     written.add(partPath);
@@ -189,6 +194,10 @@ function isAddTextBoxEdit(edit: PptxSourceModelEdit): edit is PptxSourceModelAdd
   return edit.kind === "addTextBox";
 }
 
+function isAddConnectorEdit(edit: PptxSourceModelEdit): edit is PptxSourceModelAddConnectorEdit {
+  return edit.kind === "addConnector";
+}
+
 function isDeleteShapeEdit(edit: PptxSourceModelEdit): edit is PptxSourceModelDeleteShapeEdit {
   return edit.kind === "deleteShape";
 }
@@ -217,6 +226,7 @@ function serializeDirtyXmlPart(
   paragraphTextEdits: readonly PptxSourceModelParagraphTextEdit[],
   shapeTransformEdits: readonly PptxSourceModelShapeTransformEdit[],
   addTextBoxEdits: readonly PptxSourceModelAddTextBoxEdit[],
+  addConnectorEdits: readonly PptxSourceModelAddConnectorEdit[],
   deleteShapeEdits: readonly PptxSourceModelDeleteShapeEdit[],
 ): Uint8Array {
   const rawPart = source.packageGraph.rawParts?.find((part) => part.partPath === partPath);
@@ -230,6 +240,9 @@ function serializeDirtyXmlPart(
   const root = parseXml(textDecoder.decode(rawPart.bytes));
   for (const edit of addTextBoxEdits.filter((edit) => edit.slidePartPath === partPath)) {
     applyAddTextBoxEdit(root, edit);
+  }
+  for (const edit of addConnectorEdits.filter((edit) => edit.slidePartPath === partPath)) {
+    applyAddConnectorEdit(root, edit);
   }
   for (const edit of paragraphTextEdits.filter((edit) => edit.handle.partPath === partPath)) {
     applyParagraphTextEdit(root, edit);
@@ -533,6 +546,26 @@ function applyAddTextBoxEdit(root: XmlNode, edit: PptxSourceModelAddTextBoxEdit)
   appendChild(spTree, "p:sp", createTextBoxXml(edit));
 }
 
+function applyAddConnectorEdit(root: XmlNode, edit: PptxSourceModelAddConnectorEdit): void {
+  const slide = getChild(root, "sld");
+  const cSld = getChild(slide, "cSld");
+  const spTree = getChild(cSld, "spTree");
+  if (spTree === undefined) {
+    throw new Error(`writePptx: slide '${edit.slidePartPath}' has no spTree`);
+  }
+  if (locateShapeTreeNode(spTree, { nodeId: edit.shapeId }) !== undefined) {
+    throw new Error(`writePptx: shape id '${edit.shapeId}' already exists in source XML`);
+  }
+  if (locateShapeTreeNode(spTree, { nodeId: edit.startShapeId }) === undefined) {
+    throw new Error(`writePptx: connector start shape '${edit.startShapeId}' was not found`);
+  }
+  if (locateShapeTreeNode(spTree, { nodeId: edit.endShapeId }) === undefined) {
+    throw new Error(`writePptx: connector end shape '${edit.endShapeId}' was not found`);
+  }
+
+  appendChild(spTree, "p:cxnSp", createConnectorXml(edit));
+}
+
 function applyDeleteShapeEdit(root: XmlNode, edit: PptxSourceModelDeleteShapeEdit): void {
   const locator = parseShapeLocator(edit.handle);
   const slide = getChild(root, "sld");
@@ -587,6 +620,71 @@ function createTextBoxXml(edit: PptxSourceModelAddTextBoxEdit): XmlNode {
         "a:endParaRPr": {},
       },
     },
+  };
+}
+
+function createConnectorXml(edit: PptxSourceModelAddConnectorEdit): XmlNode {
+  return {
+    "p:nvCxnSpPr": {
+      "p:cNvPr": {
+        "@_id": edit.shapeId,
+        "@_name": edit.name,
+      },
+      "p:cNvCxnSpPr": {
+        "a:stCxn": {
+          "@_id": edit.startShapeId,
+          "@_idx": String(edit.startConnectionSiteIndex),
+        },
+        "a:endCxn": {
+          "@_id": edit.endShapeId,
+          "@_idx": String(edit.endConnectionSiteIndex),
+        },
+      },
+      "p:nvPr": {},
+    },
+    "p:spPr": {
+      "a:xfrm": {
+        "a:off": {
+          "@_x": String(edit.offsetX),
+          "@_y": String(edit.offsetY),
+        },
+        "a:ext": {
+          "@_cx": String(edit.width),
+          "@_cy": String(edit.height),
+        },
+      },
+      "a:prstGeom": {
+        "@_prst": edit.preset,
+        "a:avLst": {},
+      },
+      "a:ln": createConnectorLineXml(edit),
+    },
+  };
+}
+
+function createConnectorLineXml(edit: PptxSourceModelAddConnectorEdit): XmlNode {
+  return {
+    "a:solidFill": {
+      "a:srgbClr": {
+        "@_val": "000000",
+      },
+    },
+    ...(edit.outline?.headEnd !== undefined
+      ? { "a:headEnd": createArrowEndpointXml(edit.outline.headEnd) }
+      : {}),
+    ...(edit.outline?.tailEnd !== undefined
+      ? { "a:tailEnd": createArrowEndpointXml(edit.outline.tailEnd) }
+      : {}),
+  };
+}
+
+function createArrowEndpointXml(
+  endpoint: NonNullable<NonNullable<PptxSourceModelAddConnectorEdit["outline"]>["headEnd"]>,
+): XmlNode {
+  return {
+    "@_type": endpoint.type,
+    "@_w": endpoint.width,
+    "@_len": endpoint.length,
   };
 }
 
@@ -1017,13 +1115,14 @@ function validateEdits(
   paragraphTextEdits: readonly PptxSourceModelParagraphTextEdit[],
   shapeTransformEdits: readonly PptxSourceModelShapeTransformEdit[],
   addTextBoxEdits: readonly PptxSourceModelAddTextBoxEdit[],
+  addConnectorEdits: readonly PptxSourceModelAddConnectorEdit[],
   deleteShapeEdits: readonly PptxSourceModelDeleteShapeEdit[],
 ): void {
   const addedShapeKeys = new Set<string>();
-  for (const edit of addTextBoxEdits) {
+  for (const edit of [...addTextBoxEdits, ...addConnectorEdits]) {
     const key = [edit.slidePartPath, edit.shapeId].join("\u0000");
     if (addedShapeKeys.has(key)) {
-      throw new Error(`writePptx: conflicting text box additions for shape id '${edit.shapeId}'`);
+      throw new Error(`writePptx: conflicting shape additions for shape id '${edit.shapeId}'`);
     }
     addedShapeKeys.add(key);
   }
