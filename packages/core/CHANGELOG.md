@@ -1,5 +1,23 @@
 # pptx-glimpse
 
+## 3.0.0
+
+### Major Changes
+
+- cc0b52b: Remove Node.js Buffer types from the public conversion and font-collection APIs in favor of Uint8Array.
+
+### Minor Changes
+
+- 13b554d: Expose browser PNG conversion after explicit resvg WASM initialization and add Playwright coverage for browser-only SVG/PNG conversion.
+- 19f0718: Allow `initResvgWasm` to accept externally loaded WASM bytes or a `Response`, enabling browser-like runtimes to initialize PNG conversion without Node.js filesystem loading.
+- 0b931dc: Add a browser-only PPTX editor session API for loading, editing, undoing, redoing, rendering, and downloading edited presentations without a Node backend.
+- 7794eca: Add a `fonts` conversion option that accepts `ArrayBuffer` or `Uint8Array` font data directly for SVG and PNG rendering without Node.js font file loading.
+
+### Patch Changes
+
+- 27687a6: Fix browser-entry bundling in webpack-based apps so SVG-only browser viewers do not pull in Node or declaration-file artifacts from the PNG path.
+- e6aeb72: Add document-path foundation support for shape transform edits, enabling internal writer round-trips for xfrm offset and extent updates.
+
 ## 2.0.0
 
 ### Major Changes
