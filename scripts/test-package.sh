@@ -109,6 +109,7 @@ import { collectUsedFonts, convertPptxToSvg, convertPptxToPng, renderPptxSourceM
 import type {
   ConvertOptions,
   PngConversionReport,
+  PptxSourceModel,
   SvgConversionReport,
   UsedFonts,
 } from "pptx-glimpse";
@@ -141,7 +142,9 @@ function _verifyBufferInput(input: Buffer) {
 // Verify @pptx-glimpse/document readPptx() output is accepted by the source-model render API.
 async function _verifyDocumentSourceModel(input: Uint8Array) {
   const source = readPptx(input);
+  const _source: PptxSourceModel = source;
   await renderPptxSourceModelToSvg(source);
+  void _source;
 }
 
 // Verify ConvertOptions includes fontDirs
