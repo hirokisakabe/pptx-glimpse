@@ -1,8 +1,10 @@
+import { execFile } from "node:child_process";
 import { rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 
 import { expect, test } from "@playwright/test";
 import { build } from "esbuild";
@@ -11,6 +13,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
 const corePackageRoot = resolve(repoRoot, "packages/core");
 const sharedFixtures = resolve(repoRoot, "shared-fixtures");
+const execFileAsync = promisify(execFile);
+let coreDistBuildPromise: Promise<void> | null = null;
 
 test("runs a browser-only PPTX to SVG viewer for shared fixtures", async ({ page }) => {
   const viewer = await startStandaloneViewer();
@@ -84,6 +88,7 @@ async function startStandaloneViewer(): Promise<ViewerServer> {
 }
 
 async function buildStandaloneViewerBundle(): Promise<string> {
+  await ensureCoreDist();
   const result = await build({
     stdin: {
       contents: viewerAppSource,
@@ -103,16 +108,7 @@ async function buildStandaloneViewerBundle(): Promise<string> {
         name: "workspace-pptx-glimpse-browser-entry",
         setup(buildContext) {
           buildContext.onResolve({ filter: /^pptx-glimpse$/ }, () => ({
-            path: resolve(corePackageRoot, "src/browser.ts"),
-          }));
-          buildContext.onResolve({ filter: /^@pptx-glimpse\/document$/ }, () => ({
-            path: resolve(corePackageRoot, "../document/src/index.ts"),
-          }));
-          buildContext.onResolve({ filter: /^@pptx-glimpse\/renderer$/ }, () => ({
-            path: resolve(corePackageRoot, "../renderer/src/index.ts"),
-          }));
-          buildContext.onResolve({ filter: /^@pptx-glimpse\/renderer\/png$/ }, () => ({
-            path: resolve(corePackageRoot, "../renderer/src/png.ts"),
+            path: resolve(corePackageRoot, "dist/browser.js"),
           }));
         },
       },
@@ -123,6 +119,14 @@ async function buildStandaloneViewerBundle(): Promise<string> {
     /(?:node:fs|node:path|node:os|node:buffer|fs\/promises|from "fs"|from "path"|from "os"|from "module")/,
   );
   return bundled;
+}
+
+async function ensureCoreDist(): Promise<void> {
+  coreDistBuildPromise ??= execFileAsync("pnpm", ["--filter", "pptx-glimpse", "build"], {
+    cwd: repoRoot,
+    maxBuffer: 10 * 1024 * 1024,
+  }).then(() => undefined);
+  await coreDistBuildPromise;
 }
 
 const viewerHtml = `<!doctype html>

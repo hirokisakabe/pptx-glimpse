@@ -31,6 +31,7 @@ export function SlideViewer({
         <button
           aria-label="Previous slide"
           disabled={currentIndex === 0}
+          type="button"
           onClick={() => onNavigate(currentIndex - 1)}
         >
           &larr;
@@ -41,6 +42,7 @@ export function SlideViewer({
         <button
           aria-label="Next slide"
           disabled={currentIndex === slides.length - 1}
+          type="button"
           onClick={() => onNavigate(currentIndex + 1)}
         >
           &rarr;

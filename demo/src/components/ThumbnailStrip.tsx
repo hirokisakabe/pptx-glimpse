@@ -22,6 +22,7 @@ export function ThumbnailStrip({
           className={`thumbnail${index === currentIndex ? " active" : ""}`}
           aria-label={`Slide ${slide.slideNumber}`}
           aria-current={index === currentIndex ? "true" : undefined}
+          type="button"
           onClick={() => onSelect(index)}
           dangerouslySetInnerHTML={{ __html: slide.svg }}
         />

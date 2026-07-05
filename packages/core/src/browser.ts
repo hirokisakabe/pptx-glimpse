@@ -34,8 +34,12 @@ export function convertPptxToPng(): Promise<never> {
 export async function initResvgWasm(
   wasm: import("@pptx-glimpse/renderer/png").ResvgWasmInput,
 ): Promise<void> {
-  const { initResvgWasm: initRendererResvgWasm } = await import(
-    /* webpackIgnore: true */ /* @vite-ignore */ "@pptx-glimpse/renderer/png"
-  );
-  return initRendererResvgWasm(wasm);
+  const { initWasm } = await import("@resvg/resvg-wasm");
+  const wasmInput =
+    wasm instanceof Response
+      ? await wasm.arrayBuffer()
+      : wasm instanceof Uint8Array
+        ? new Uint8Array(wasm)
+        : wasm;
+  await initWasm(wasmInput);
 }

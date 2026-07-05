@@ -20,6 +20,7 @@ export function UploadViewer() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [errorMessage, setErrorMessage] = useState("");
   const [fontFiles, setFontFiles] = useState<File[]>([]);
+  const [renderedFontCount, setRenderedFontCount] = useState(0);
 
   const handleFontFiles = useCallback((files: File[]) => {
     setFontFiles(files);
@@ -45,6 +46,7 @@ export function UploadViewer() {
         }
 
         setSlides([...report.slides]);
+        setRenderedFontCount(fonts.length);
         setCurrentIndex(0);
         setPhase("viewing");
       } catch (err) {
@@ -89,7 +91,7 @@ export function UploadViewer() {
       <>
         <div className="viewer-summary" data-testid="viewer-status">
           <span>{slides.length} slides rendered</span>
-          <span>{fontFiles.length} font files loaded</span>
+          <span>{renderedFontCount} font files used for this render</span>
         </div>
         <SlideViewer slides={slides} currentIndex={currentIndex} onNavigate={handleNavigate} />
         <ThumbnailStrip slides={slides} currentIndex={currentIndex} onSelect={handleNavigate} />

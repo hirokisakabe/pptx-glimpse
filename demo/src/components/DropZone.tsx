@@ -60,10 +60,18 @@ export function DropZone({
         <p className="drop-zone-note">Conversion runs locally in your browser.</p>
       </div>
       <div className="file-actions">
-        <button className="file-label primary" onClick={() => pptxInputRef.current?.click()}>
+        <button
+          className="file-label primary"
+          type="button"
+          onClick={() => pptxInputRef.current?.click()}
+        >
           Choose PPTX
         </button>
-        <button className="file-label secondary" onClick={() => fontInputRef.current?.click()}>
+        <button
+          className="file-label secondary"
+          type="button"
+          onClick={() => fontInputRef.current?.click()}
+        >
           Add fonts
         </button>
       </div>
