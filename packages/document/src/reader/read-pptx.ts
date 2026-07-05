@@ -225,6 +225,24 @@ function readSlideHierarchy(
     );
   }
 
+  const readLayoutPaths = new Set(slideLayouts.map((layout) => layout.partPath));
+  for (const layoutPath of slideMasters.flatMap((master) => master.layoutPartPaths)) {
+    if (readLayoutPaths.has(layoutPath)) continue;
+    const part = parsePartRoot(entries, layoutPath, "sldLayout", diagnostics, true);
+    if (part === undefined) continue;
+    const masterPath = resolveSingleRel(relationships, layoutPath, SLIDE_MASTER_REL_TYPE);
+    slideLayouts.push(
+      parseSlideLayout(
+        part.root,
+        layoutPath,
+        masterPath ?? asPartPath(""),
+        createSidecarIdFactory(layoutPath),
+        navigateOrdered(part.orderedRoot, ["cSld", "spTree"]),
+      ),
+    );
+    readLayoutPaths.add(layoutPath);
+  }
+
   const themes: SourceTheme[] = [];
   for (const themePath of themePaths.values()) {
     const part = parsePartRoot(entries, themePath, "theme", diagnostics, true);

@@ -55,6 +55,7 @@ export { createComputedView } from "./computed/index.js";
 export type { ReadPptxInput } from "./reader/index.js";
 export { readPptx } from "./reader/index.js";
 export type {
+  AddEmptySlideFromLayoutInput,
   AddTextBoxInput,
   ContentTypeDefault,
   ContentTypeOverride,
@@ -73,6 +74,7 @@ export type {
   PartPath,
   PartRelationships,
   PptxSourceModel,
+  PptxSourceModelAddEmptySlideFromLayoutEdit,
   PptxSourceModelAddTextBoxEdit,
   PptxSourceModelDeleteShapeEdit,
   PptxSourceModelDeleteSlideEdit,
@@ -172,6 +174,7 @@ export type {
   UpdateShapeTransformInput,
 } from "./source/index.js";
 export {
+  addEmptySlideFromLayout,
   addTextBox,
   clearTextRunProperties,
   deleteShape,

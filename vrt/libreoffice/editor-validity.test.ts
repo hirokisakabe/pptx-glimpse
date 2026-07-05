@@ -5,6 +5,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  addEmptySlideFromLayout,
   addTextBox,
   asEmu,
   asPt,
@@ -162,6 +163,20 @@ describeOrSkip("LibreOffice edited PPTX validity", { timeout: 120000 }, () => {
 });
 
 describeOrSkip("LibreOffice slide topology validity", { timeout: 120000 }, () => {
+  it("opens PPTX after adding an empty slide from a layout", () => {
+    const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
+    const source = readPptx(sourcePptx);
+    const layout = source.slideLayouts[0];
+    if (layout === undefined) throw new Error("basic-shapes fixture has no slide layout");
+    const edited = addEmptySlideFromLayout(source, { layoutPartPath: layout.partPath });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-empty-slide-from-layout-edited.pptx",
+      writePptx(edited),
+    );
+  });
+
   it("opens PPTX after slide duplicate and delete edits", () => {
     const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
     const source = readPptx(sourcePptx);
