@@ -82,6 +82,7 @@ test("edits a text shape with the overlay editor, re-renders, and saves text", a
     const overlay = page.getByTestId("text-editor-overlay");
     await expect(overlay).toBeVisible();
     await expect(overlay).toContainText("Original");
+    await expect(page.getByRole("button", { name: "Delete shape" })).toBeDisabled();
     await expectOverlayNearSvgBounds(page, { x: 96, y: 192, width: 288, height: 96 });
 
     const commandResponse = page.waitForResponse(

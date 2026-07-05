@@ -282,6 +282,36 @@ describe("dev server editor API", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it("does not expose connector-referenced shapes as deletable through the editor API", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-dev-server-connector-test-"));
+    try {
+      const sourcePath = join(dir, "fixture.pptx");
+      await writeFile(sourcePath, await buildTextEditFixture({ includeConnector: true }));
+
+      const backend = await DevEditorBackend.load(sourcePath, renderPreview);
+      const server = createServer(createDevServerRequestHandler(backend, "fixture.pptx"));
+      servers.push(server);
+      const baseUrl = await listen(server);
+
+      const shapes = await getJson<ShapesResponse>(`${baseUrl}/api/editor/shapes?slide=1`);
+      const connectedShape = shapes.shapes.find((shape) => shape.name === "Title");
+      expect(connectedShape).toMatchObject({
+        bounds: { x: 96, y: 192, width: 288, height: 96 },
+      });
+      expect(connectedShape?.editableDelete).toBeUndefined();
+
+      const rejectedDelete = await postJsonError(`${baseUrl}/api/editor/command`, {
+        command: {
+          kind: "deleteShape",
+          handle: connectedShape?.handle,
+        },
+      });
+      expect(rejectedDelete.error).toMatch(/referenced by connector/);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 interface ShapesResponse {
@@ -402,7 +432,9 @@ async function parseJson<T>(response: Response): Promise<T> {
   return unsafeScriptInputAssertion<T>(json);
 }
 
-async function buildTextEditFixture(): Promise<Uint8Array> {
+async function buildTextEditFixture(
+  options: { includeConnector?: boolean } = {},
+): Promise<Uint8Array> {
   const zip = new JSZip();
   zip.file(
     "[Content_Types].xml",
@@ -450,6 +482,12 @@ async function buildTextEditFixture(): Promise<Uint8Array> {
         `<p:txBody><a:bodyPr/><a:lstStyle/>` +
         `<a:p><a:r><a:t>Original</a:t></a:r></a:p>` +
         `</p:txBody></p:sp>` +
+        (options.includeConnector
+          ? `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="11" name="Connector"/><p:cNvCxnSpPr>` +
+            `<a:stCxn id="10" idx="0"/></p:cNvCxnSpPr><p:nvPr/></p:nvCxnSpPr>` +
+            `<p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm>` +
+            `<a:prstGeom prst="straightConnector1"/></p:spPr></p:cxnSp>`
+          : "") +
         `</p:spTree></p:cSld>` +
         `</p:sld>`,
     ),

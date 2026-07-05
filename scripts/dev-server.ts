@@ -186,7 +186,7 @@ export class DevEditorBackend {
   shapes(slideNumber: number): EditorShapeInfo[] {
     const slide = this.#session.document.slides[slideNumber - 1];
     if (slide === undefined) return [];
-    return slide.shapes.flatMap((shape, index) => shapeInfo(shape, index));
+    return slide.shapes.flatMap((shape, index) => shapeInfo(shape, index, true, slide.shapes));
   }
 
   async renderCurrentSlides(): Promise<readonly SlideSvg[]> {
@@ -375,6 +375,7 @@ function shapeInfo(
   shape: SourceShapeNode,
   index: number,
   editableTransform = true,
+  slideShapes: readonly SourceShapeNode[] = [],
 ): EditorShapeInfo[] {
   const base: EditorShapeInfo = {
     id: String(shape.nodeId ?? shape.handle?.nodeId ?? `${shape.kind}:${String(index)}`),
@@ -387,7 +388,7 @@ function shapeInfo(
           editableTransform: editableTransform && isEditableTransformShape(shape),
         }
       : {}),
-    ...(editableTransform && isDeletableShape(shape) ? { editableDelete: true } : {}),
+    ...(editableTransform && isDeletableShape(shape, slideShapes) ? { editableDelete: true } : {}),
     ...("textBody" in shape && shape.textBody !== undefined
       ? {
           textRuns: collectTextRuns(
@@ -403,7 +404,9 @@ function shapeInfo(
   if (shape.kind !== "group") return [base];
   return [
     base,
-    ...shape.children.flatMap((child, childIndex) => shapeInfo(child, childIndex, false)),
+    ...shape.children.flatMap((child, childIndex) =>
+      shapeInfo(child, childIndex, false, slideShapes),
+    ),
   ];
 }
 
@@ -418,11 +421,29 @@ function isEditableTransformShape(shape: SourceShapeNode): boolean {
   return !shape.rawSidecars?.some((sidecar) => sidecar.node.name === "mc:AlternateContent");
 }
 
-function isDeletableShape(shape: SourceShapeNode): boolean {
+function isDeletableShape(
+  shape: SourceShapeNode,
+  slideShapes: readonly SourceShapeNode[],
+): boolean {
   if (shape.kind !== "shape" || shape.handle?.nodeId === undefined) {
     return false;
   }
+  if (isShapeReferencedByConnector(shape, slideShapes)) {
+    return false;
+  }
   return !shape.rawSidecars?.some((sidecar) => sidecar.node.name === "mc:AlternateContent");
+}
+
+function isShapeReferencedByConnector(
+  shape: SourceShapeNode,
+  slideShapes: readonly SourceShapeNode[],
+): boolean {
+  return slideShapes.some(
+    (candidate) =>
+      candidate.kind === "connector" &&
+      (candidate.connection?.start?.shapeId === shape.nodeId ||
+        candidate.connection?.end?.shapeId === shape.nodeId),
+  );
 }
 
 function collectTextRuns(runs: readonly SourceTextRun[]): EditorTextRunInfo[] {
@@ -864,7 +885,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
 
     function updateSelectedShapeActions() {
       document.getElementById("delete-shape-button").disabled =
-        !selectedShape || !selectedShape.editableDelete;
+        activeTextEditor || !selectedShape || !selectedShape.editableDelete;
     }
 
     function shapeKey(shape) {
@@ -1164,6 +1185,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         committing: false,
         commitPromise: null
       };
+      updateSelectedShapeActions();
       positionActiveTextEditor();
       var firstRun = overlay.querySelector(".text-editor-run");
       if (firstRun) {
@@ -1633,6 +1655,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       if (!editor && target.committing) return;
       target.element.remove();
       if (activeTextEditor === target) activeTextEditor = null;
+      updateSelectedShapeActions();
     }
 
     function beginDrag(kind, handle, event) {

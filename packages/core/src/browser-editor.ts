@@ -147,7 +147,7 @@ export class BrowserPptxEditorSession {
   shapes(slideNumber: number): readonly BrowserEditorShapeInfo[] {
     const slide = this.#session.document.slides[slideNumber - 1];
     if (slide === undefined) return [];
-    return slide.shapes.flatMap((shape, index) => shapeInfo(shape, index));
+    return slide.shapes.flatMap((shape, index) => shapeInfo(shape, index, true, slide.shapes));
   }
 
   async renderCurrentSlides(): Promise<readonly SlideSvg[]> {
@@ -291,6 +291,7 @@ function shapeInfo(
   shape: SourceShapeNode,
   index: number,
   editableTransform = true,
+  slideShapes: readonly SourceShapeNode[] = [],
 ): BrowserEditorShapeInfo[] {
   const canEditTransform =
     shape.kind !== "raw" &&
@@ -308,7 +309,7 @@ function shapeInfo(
           editableTransform: true,
         }
       : {}),
-    ...(editableTransform && isDeletableShape(shape) ? { editableDelete: true } : {}),
+    ...(editableTransform && isDeletableShape(shape, slideShapes) ? { editableDelete: true } : {}),
     ...("textBody" in shape && shape.textBody !== undefined
       ? {
           textRuns: collectTextRuns(
@@ -324,7 +325,9 @@ function shapeInfo(
   if (shape.kind !== "group") return [base];
   return [
     base,
-    ...shape.children.flatMap((child, childIndex) => shapeInfo(child, childIndex, false)),
+    ...shape.children.flatMap((child, childIndex) =>
+      shapeInfo(child, childIndex, false, slideShapes),
+    ),
   ];
 }
 
@@ -339,11 +342,29 @@ function isEditableTransformShape(shape: SourceShapeNode): boolean {
   return !shape.rawSidecars?.some((sidecar) => sidecar.node.name === "mc:AlternateContent");
 }
 
-function isDeletableShape(shape: SourceShapeNode): boolean {
+function isDeletableShape(
+  shape: SourceShapeNode,
+  slideShapes: readonly SourceShapeNode[],
+): boolean {
   if (shape.kind !== "shape" || shape.handle?.nodeId === undefined) {
     return false;
   }
+  if (isShapeReferencedByConnector(shape, slideShapes)) {
+    return false;
+  }
   return !shape.rawSidecars?.some((sidecar) => sidecar.node.name === "mc:AlternateContent");
+}
+
+function isShapeReferencedByConnector(
+  shape: SourceShapeNode,
+  slideShapes: readonly SourceShapeNode[],
+): boolean {
+  return slideShapes.some(
+    (candidate) =>
+      candidate.kind === "connector" &&
+      (candidate.connection?.start?.shapeId === shape.nodeId ||
+        candidate.connection?.end?.shapeId === shape.nodeId),
+  );
 }
 
 function collectTextRuns(runs: readonly SourceTextRun[]): BrowserEditorTextRunInfo[] {

@@ -165,6 +165,22 @@ describe("BrowserPptxEditorSession", () => {
     await editor.deleteShape(noTransformShape.handle);
     expect(editor.shapes(1).find((shape) => shape.name === "No Transform")).toBeUndefined();
   });
+
+  it("does not mark connector-referenced shapes as deletable", async () => {
+    const editor = await createBrowserPptxEditorSession(
+      await buildShapeFixture({ includeConnector: true }),
+      {
+        skipSystemFonts: true,
+      },
+    );
+
+    const connectedShape = editor.shapes(1).find((shape) => shape.name === "Box");
+    if (connectedShape?.handle === undefined) throw new Error("connected shape not found");
+    expect(connectedShape.editableDelete).toBeUndefined();
+    await expect(editor.deleteShape(connectedShape.handle)).rejects.toThrow(
+      /referenced by connector/,
+    );
+  });
 });
 
 function xml(content: string): Uint8Array {
@@ -176,7 +192,7 @@ function pngBytes(base64: string): Uint8Array {
 }
 
 async function buildShapeFixture(
-  options: { includeNoTransformShape?: boolean } = {},
+  options: { includeNoTransformShape?: boolean; includeConnector?: boolean } = {},
 ): Promise<Uint8Array> {
   const zip = new JSZip();
   zip.file(
@@ -233,6 +249,12 @@ async function buildShapeFixture(
             `<a:p><a:r><a:t>No transform</a:t></a:r></a:p>` +
             `</p:txBody>` +
             `</p:sp>`
+          : "") +
+        (options.includeConnector
+          ? `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="12" name="Connector"/><p:cNvCxnSpPr>` +
+            `<a:stCxn id="10" idx="0"/></p:cNvCxnSpPr><p:nvPr/></p:nvCxnSpPr>` +
+            `<p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm>` +
+            `<a:prstGeom prst="straightConnector1"/></p:spPr></p:cxnSp>`
           : "") +
         `</p:spTree></p:cSld>` +
         `</p:sld>`,
