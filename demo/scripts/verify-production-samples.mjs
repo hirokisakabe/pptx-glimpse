@@ -11,7 +11,10 @@ const execFileAsync = promisify(execFile);
 const here = dirname(fileURLToPath(import.meta.url));
 const demoRoot = resolve(here, "..");
 const repoRoot = resolve(demoRoot, "..");
-const sampleNames = ["real-basic-theme.pptx", "real-product-page.pptx"];
+const samples = [
+  { id: "basic-theme", filename: "real-basic-theme.pptx" },
+  { id: "product-page", filename: "real-product-page.pptx" },
+];
 
 const port = await getFreePort();
 const baseUrl = `http://127.0.0.1:${port.toString()}`;
@@ -39,18 +42,20 @@ try {
 
   await waitForHttpOk(baseUrl, () => serverOutput);
 
-  for (const sampleName of sampleNames) {
-    await assertSampleServed(baseUrl, sampleName);
+  for (const sample of samples) {
+    await assertSampleServed(baseUrl, sample.filename);
   }
 
   browser = await chromium.launch();
   const page = await browser.newPage();
-  await page.goto(baseUrl);
-  await page.getByTestId("sample-basic-theme").click();
-  await expect(page.getByTestId("viewer-status")).toContainText("slides rendered", {
-    timeout: 30_000,
-  });
-  await expect(page.locator("svg").first()).toBeVisible();
+  for (const sample of samples) {
+    await page.goto(baseUrl);
+    await page.getByTestId(`sample-${sample.id}`).click();
+    await expect(page.getByTestId("viewer-status")).toContainText("slides rendered", {
+      timeout: 30_000,
+    });
+    await expect(page.locator("svg").first()).toBeVisible();
+  }
 } finally {
   await browser?.close();
   if (server !== undefined) {
