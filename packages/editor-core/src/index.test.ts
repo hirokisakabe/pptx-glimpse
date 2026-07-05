@@ -826,6 +826,53 @@ describe("EditorSession image replacement commands", () => {
     });
   });
 
+  it("keeps shared-media warnings when a later batch command invalidates the image edit", async () => {
+    const source = readPptx(await buildTwoSlideSharedImageFixture());
+    const session = createEditorSession(source);
+    const result = session.applyAll([
+      {
+        kind: "replaceImage",
+        handle: requireHandle(firstImage(source).handle),
+        bytes: BLUE_PNG,
+      },
+      {
+        kind: "deleteSlide",
+        handle: requireHandle(source.slides[0]?.handle),
+      },
+    ]);
+    const edited = expectApplied(result);
+
+    expect(edited.slides).toHaveLength(1);
+    expect(edited.slides[0]?.partPath).toBe(asPartPath("ppt/slides/slide2.xml"));
+    expect(mediaBytes(edited, "ppt/media/image1.png")).toEqual(BLUE_PNG);
+    expect(result.ok && result.warnings).toEqual([
+      expect.objectContaining({
+        code: "shared-media-part",
+        mediaPartPath: "ppt/media/image1.png",
+        referenceCount: 2,
+      }),
+    ]);
+  });
+
+  it("deduplicates shared-media warnings for repeated replacements in one batch", async () => {
+    const source = readPptx(await buildImageReplacementFixture());
+    const session = createEditorSession(source);
+    const imageHandle = requireHandle(firstImage(source).handle);
+    const result = session.applyAll([
+      { kind: "replaceImage", handle: imageHandle, bytes: BLUE_PNG },
+      { kind: "replaceImage", handle: imageHandle, bytes: RED_PNG },
+    ]);
+
+    expectApplied(result);
+    expect(result.ok && result.warnings).toEqual([
+      expect.objectContaining({
+        code: "shared-media-part",
+        mediaPartPath: "ppt/media/image1.png",
+        referenceCount: 2,
+      }),
+    ]);
+  });
+
   it("undoes and redoes image replacement by restoring media bytes", async () => {
     const source = readPptx(await buildImageReplacementFixture());
     const session = createEditorSession(source);
@@ -1280,6 +1327,76 @@ async function buildImageReplacementFixture(): Promise<Uint8Array> {
   zip.file("ppt/media/image1.png", RED_PNG);
 
   return zip.generateAsync({ type: "uint8array" });
+}
+
+async function buildTwoSlideSharedImageFixture(): Promise<Uint8Array> {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    xml(
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Default Extension="png" ContentType="image/png"/>` +
+        `<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>` +
+        `<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+        `<Override PartName="/ppt/slides/slide2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+        `</Types>`,
+    ),
+  );
+  zip.file(
+    "_rels/.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file(
+    "ppt/presentation.xml",
+    xml(
+      `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:sldIdLst><p:sldId id="256" r:id="rIdSlide1"/><p:sldId id="257" r:id="rIdSlide2"/></p:sldIdLst>` +
+        `<p:sldSz cx="9144000" cy="5143500"/>` +
+        `</p:presentation>`,
+    ),
+  );
+  zip.file(
+    "ppt/_rels/presentation.xml.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdSlide1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>` +
+        `<Relationship Id="rIdSlide2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide2.xml"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file("ppt/slides/slide1.xml", imageSlideXml(20, "Shared Picture A"));
+  zip.file("ppt/slides/slide2.xml", imageSlideXml(30, "Shared Picture B"));
+  for (const slideIndex of [1, 2]) {
+    zip.file(
+      `ppt/slides/_rels/slide${slideIndex}.xml.rels`,
+      xml(
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+          `<Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>` +
+          `</Relationships>`,
+      ),
+    );
+  }
+  zip.file("ppt/media/image1.png", RED_PNG);
+
+  return zip.generateAsync({ type: "uint8array" });
+}
+
+function imageSlideXml(shapeId: number, name: string): Uint8Array {
+  return xml(
+    `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+      `<p:cSld><p:spTree>` +
+      `<p:pic><p:nvPicPr><p:cNvPr id="${shapeId}" name="${name}"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+      `<p:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+      `<p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:pic>` +
+      `</p:spTree></p:cSld>` +
+      `</p:sld>`,
+  );
 }
 
 async function buildTwoSlideFixture(): Promise<Uint8Array> {

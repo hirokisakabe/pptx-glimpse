@@ -250,10 +250,14 @@ export class EditorSession {
     if (commands.length === 0) return { ok: true, document: before };
 
     try {
-      const after = normalizeEditorEdits(
-        commands.reduce((document, command) => applyCommandToDocument(document, command), before),
-      );
-      const warnings = collectCommandWarnings(after, commands);
+      let after = before;
+      const warnings: EditorCommandWarning[] = [];
+      for (const command of commands) {
+        after = applyCommandToDocument(after, command);
+        warnings.push(...collectCommandWarnings(after, [command]));
+      }
+      after = normalizeEditorEdits(after);
+      const dedupedWarnings = dedupeCommandWarnings(warnings);
       this.#document = after;
       this.reconcileSelectionAfterDocumentChange();
       this.#undoStack.push({ before, after });
@@ -262,7 +266,7 @@ export class EditorSession {
       return {
         ok: true,
         document: after,
-        ...(warnings.length > 0 ? { warnings } : {}),
+        ...(dedupedWarnings.length > 0 ? { warnings: dedupedWarnings } : {}),
       };
     } catch (error) {
       return {
@@ -379,6 +383,15 @@ function collectCommandWarnings(
   }
 
   return warnings;
+}
+
+function dedupeCommandWarnings(warnings: readonly EditorCommandWarning[]): EditorCommandWarning[] {
+  const deduped = new Map<string, EditorCommandWarning>();
+  for (const warning of warnings) {
+    const key = `${warning.code}\0${warning.mediaPartPath}`;
+    if (!deduped.has(key)) deduped.set(key, warning);
+  }
+  return [...deduped.values()];
 }
 
 function addTextBoxCommand(document: PptxSourceModel, command: AddTextBoxCommand): PptxSourceModel {

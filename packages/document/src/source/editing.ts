@@ -1081,24 +1081,54 @@ function requireMediaForImage(
 }
 
 function countImageReferencesToMedia(source: PptxSourceModel, mediaPartPath: PartPath): number {
+  const parsedImageRelationshipKeys = new Set<string>();
   let count = 0;
-  for (const slide of source.slides) {
-    for (const image of findImagesInTree(slide.shapes)) {
+
+  const countParsedImages = (partPath: PartPath, shapes: readonly SourceShapeNode[]) => {
+    for (const image of findImagesInTree(shapes)) {
       if (image.blipRelationshipId === undefined) continue;
       const relationships = source.packageGraph.relationships.find(
-        (candidate) => candidate.sourcePartPath === slide.partPath,
+        (candidate) => candidate.sourcePartPath === partPath,
       );
       const relationship = relationships?.relationships.find(
         (candidate) =>
           candidate.id === image.blipRelationshipId && candidate.type === IMAGE_REL_TYPE,
       );
       if (relationship === undefined) continue;
-      if (resolveInternalRelationshipTarget(slide.partPath, relationship) === mediaPartPath) {
+      if (resolveInternalRelationshipTarget(partPath, relationship) === mediaPartPath) {
+        count += 1;
+        parsedImageRelationshipKeys.add(imageRelationshipKey(partPath, relationship.id));
+      }
+    }
+  };
+
+  for (const slide of source.slides) countParsedImages(slide.partPath, slide.shapes);
+  for (const layout of source.slideLayouts) countParsedImages(layout.partPath, layout.shapes);
+  for (const master of source.slideMasters) countParsedImages(master.partPath, master.shapes);
+
+  for (const relationships of source.packageGraph.relationships) {
+    for (const relationship of relationships.relationships) {
+      if (relationship.type !== IMAGE_REL_TYPE) continue;
+      if (
+        parsedImageRelationshipKeys.has(
+          imageRelationshipKey(relationships.sourcePartPath, relationship.id),
+        )
+      ) {
+        continue;
+      }
+      if (
+        resolveInternalRelationshipTarget(relationships.sourcePartPath, relationship) ===
+        mediaPartPath
+      ) {
         count += 1;
       }
     }
   }
   return count;
+}
+
+function imageRelationshipKey(partPath: PartPath, relationshipId: RelationshipId): string {
+  return `${partPath}\0${relationshipId}`;
 }
 
 function findImagesInTree(shapes: readonly SourceShapeNode[]): SourceImage[] {

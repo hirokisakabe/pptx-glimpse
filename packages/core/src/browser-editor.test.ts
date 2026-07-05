@@ -1,3 +1,5 @@
+import { Buffer } from "node:buffer";
+
 import { asEmu, readPptx, type SourceShape } from "@pptx-glimpse/document";
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
@@ -5,6 +7,12 @@ import { describe, expect, it } from "vitest";
 import { createBrowserPptxEditorSession } from "./browser-editor.js";
 
 const encoder = new TextEncoder();
+const RED_PNG = pngBytes(
+  "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEUlEQVR4nGP8z4AATEhsPBwAM9EBBzDn4UwAAAAASUVORK5CYII=",
+);
+const BLUE_PNG = pngBytes(
+  "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGNkYPjPAANMcBZeDgAx0wEH1s7nlgAAAABJRU5ErkJggg==",
+);
 
 describe("BrowserPptxEditorSession", () => {
   it("edits, renders, undoes, redoes, and saves a browser editor session", async () => {
@@ -54,10 +62,37 @@ describe("BrowserPptxEditorSession", () => {
       height: 120 * 9525,
     });
   });
+
+  it("returns shared media warnings from image replacement commands", async () => {
+    const editor = await createBrowserPptxEditorSession(await buildImageFixture(), {
+      skipSystemFonts: true,
+    });
+    const image = editor.shapes(1).find((shape) => shape.kind === "image");
+    if (image?.handle === undefined) throw new Error("image handle not found");
+
+    const result = await editor.apply({
+      kind: "replaceImage",
+      handle: image.handle,
+      bytes: BLUE_PNG,
+    });
+
+    expect(result.warnings).toEqual([
+      expect.objectContaining({
+        code: "shared-media-part",
+        mediaPartPath: "ppt/media/image1.png",
+        referenceCount: 2,
+      }),
+    ]);
+    expect(mediaBytes(editor.document, "ppt/media/image1.png")).toEqual(BLUE_PNG);
+  });
 });
 
 function xml(content: string): Uint8Array {
   return encoder.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n${content}`);
+}
+
+function pngBytes(base64: string): Uint8Array {
+  return new Uint8Array(Buffer.from(base64, "base64"));
 }
 
 async function buildShapeFixture(): Promise<Uint8Array> {
@@ -117,6 +152,73 @@ async function buildShapeFixture(): Promise<Uint8Array> {
   return zip.generateAsync({ type: "uint8array" });
 }
 
+async function buildImageFixture(): Promise<Uint8Array> {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    xml(
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Default Extension="png" ContentType="image/png"/>` +
+        `<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>` +
+        `<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+        `</Types>`,
+    ),
+  );
+  zip.file(
+    "_rels/.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file(
+    "ppt/presentation.xml",
+    xml(
+      `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:sldIdLst><p:sldId id="256" r:id="rIdSlide1"/></p:sldIdLst>` +
+        `<p:sldSz cx="9144000" cy="5143500"/>` +
+        `</p:presentation>`,
+    ),
+  );
+  zip.file(
+    "ppt/_rels/presentation.xml.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdSlide1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file(
+    "ppt/slides/slide1.xml",
+    xml(
+      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:cSld><p:spTree>` +
+        `<p:pic><p:nvPicPr><p:cNvPr id="20" name="Shared Picture A"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+        `<p:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+        `<p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:pic>` +
+        `<p:pic><p:nvPicPr><p:cNvPr id="21" name="Shared Picture B"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+        `<p:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+        `<p:spPr><a:xfrm><a:off x="1828800" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:pic>` +
+        `</p:spTree></p:cSld>` +
+        `</p:sld>`,
+    ),
+  );
+  zip.file(
+    "ppt/slides/_rels/slide1.xml.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file("ppt/media/image1.png", RED_PNG);
+
+  return zip.generateAsync({ type: "uint8array" });
+}
+
 function firstShape(source: ReturnType<typeof readPptx>): SourceShape {
   const shape = source.slides[0]?.shapes.find((node): node is SourceShape => node.kind === "shape");
   if (shape === undefined) throw new Error("fixture shape not found");
@@ -127,4 +229,10 @@ function firstText(source: ReturnType<typeof readPptx>): string {
   const run = firstShape(source).textBody?.paragraphs[0]?.runs[0];
   if (run === undefined) throw new Error("fixture text run not found");
   return run.text;
+}
+
+function mediaBytes(source: ReturnType<typeof readPptx>, partPath: string): Uint8Array {
+  const media = source.packageGraph.media.find((part) => part.partPath === partPath);
+  if (media === undefined) throw new Error(`media not found: ${partPath}`);
+  return media.bytes;
 }
