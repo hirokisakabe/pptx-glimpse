@@ -471,15 +471,53 @@ function countImageReferencesToMedia(
   source: ReturnType<typeof readPptx>,
   mediaPartPath: PartPath,
 ): number {
+  const parsedImageRelationshipKeys = new Set<string>();
   let count = 0;
   for (const slide of source.slides) {
-    count += countImageReferencesInTree(source, slide.partPath, slide.shapes, mediaPartPath);
+    count += countImageReferencesInTree(
+      source,
+      slide.partPath,
+      slide.shapes,
+      mediaPartPath,
+      parsedImageRelationshipKeys,
+    );
   }
   for (const layout of source.slideLayouts) {
-    count += countImageReferencesInTree(source, layout.partPath, layout.shapes, mediaPartPath);
+    count += countImageReferencesInTree(
+      source,
+      layout.partPath,
+      layout.shapes,
+      mediaPartPath,
+      parsedImageRelationshipKeys,
+    );
   }
   for (const master of source.slideMasters) {
-    count += countImageReferencesInTree(source, master.partPath, master.shapes, mediaPartPath);
+    count += countImageReferencesInTree(
+      source,
+      master.partPath,
+      master.shapes,
+      mediaPartPath,
+      parsedImageRelationshipKeys,
+    );
+  }
+
+  for (const relationships of source.packageGraph.relationships) {
+    for (const relationship of relationships.relationships) {
+      if (relationship.type !== IMAGE_REL_TYPE) continue;
+      if (
+        parsedImageRelationshipKeys.has(
+          imageRelationshipKey(relationships.sourcePartPath, relationship.id),
+        )
+      ) {
+        continue;
+      }
+      if (
+        resolveInternalRelationshipTarget(relationships.sourcePartPath, relationship) ===
+        mediaPartPath
+      ) {
+        count += 1;
+      }
+    }
   }
   return count;
 }
@@ -489,19 +527,33 @@ function countImageReferencesInTree(
   sourcePartPath: PartPath,
   shapes: readonly SourceShapeNode[],
   mediaPartPath: PartPath,
+  parsedImageRelationshipKeys: Set<string>,
 ): number {
   let count = 0;
   for (const shape of shapes) {
     if (shape.kind === "group") {
-      count += countImageReferencesInTree(source, sourcePartPath, shape.children, mediaPartPath);
+      count += countImageReferencesInTree(
+        source,
+        sourcePartPath,
+        shape.children,
+        mediaPartPath,
+        parsedImageRelationshipKeys,
+      );
       continue;
     }
     if (shape.kind !== "image" || shape.blipRelationshipId === undefined) continue;
     if (imageMediaPartPath(source, sourcePartPath, shape.blipRelationshipId) === mediaPartPath) {
       count += 1;
+      parsedImageRelationshipKeys.add(
+        imageRelationshipKey(sourcePartPath, shape.blipRelationshipId),
+      );
     }
   }
   return count;
+}
+
+function imageRelationshipKey(partPath: PartPath, relationshipId: RelationshipId): string {
+  return `${partPath}\0${relationshipId}`;
 }
 
 function resolveInternalRelationshipTarget(
