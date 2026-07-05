@@ -109,6 +109,85 @@ test("edits a text shape with the overlay editor, re-renders, and saves text", a
   }
 });
 
+test("applies text run decoration from the overlay toolbar with undo and redo", async ({
+  page,
+}) => {
+  const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-editor-decoration-test-"));
+  let serverProcess: ChildProcessWithoutNullStreams | undefined;
+  try {
+    const sourcePath = join(dir, "fixture.pptx");
+    const savedPath = join(dir, "fixture.edited.pptx");
+    await writeFile(sourcePath, await buildShapeFixture());
+
+    const port = await findFreePort();
+    serverProcess = await startDevServer(sourcePath, port);
+    const baseUrl = `http://127.0.0.1:${String(port)}`;
+
+    await page.goto(baseUrl);
+    await expect(page.getByTestId("shape-hit-area").first()).toBeVisible();
+
+    await dblclickSvgPoint(page, 240, 240);
+    await expect(page.getByTestId("text-run-format-toolbar")).toBeVisible();
+    const commandResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/editor/command") &&
+        response.request().method() === "POST" &&
+        response.ok(),
+    );
+    await page.getByTestId("text-run-format-bold").click();
+    await commandResponse;
+    await expect(page.getByTestId("text-run-format-toolbar")).toBeVisible();
+
+    const italicResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/editor/command") &&
+        response.request().method() === "POST" &&
+        response.ok(),
+    );
+    await page.getByTestId("text-run-format-italic").click();
+    await italicResponse;
+    await expect(page.getByTestId("text-run-format-toolbar")).toBeVisible();
+    const textBodyResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/editor/text-body") &&
+        response.request().method() === "POST" &&
+        response.ok(),
+    );
+    await page.getByTestId("text-editor-done").click();
+    await textBodyResponse;
+
+    const undoResponse = page.waitForResponse(
+      (response) => response.url().endsWith("/api/editor/undo") && response.ok(),
+    );
+    await page.getByRole("button", { name: "Undo" }).click();
+    await undoResponse;
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.locator("#editor-message")).toContainText(savedPath);
+    let saved = readPptx(await readFile(savedPath));
+    expect(firstRunProperties(saved)).toMatchObject({ bold: true });
+    expect(firstRunProperties(saved)?.italic).toBeUndefined();
+
+    const redoResponse = page.waitForResponse(
+      (response) => response.url().endsWith("/api/editor/redo") && response.ok(),
+    );
+    await page.getByRole("button", { name: "Redo" }).click();
+    await redoResponse;
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.locator("#editor-message")).toContainText(savedPath);
+
+    saved = readPptx(await readFile(savedPath));
+    expect(firstRunProperties(saved)).toMatchObject({ bold: true, italic: true });
+  } finally {
+    if (serverProcess !== undefined) {
+      serverProcess.kill();
+      await waitForExit(serverProcess);
+    }
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 async function clickSvgPoint(page: Page, x: number, y: number) {
   const point = await svgPointToClient(page, x, y);
   await page.mouse.click(point.x, point.y);
@@ -273,6 +352,12 @@ function firstText(source: PptxSourceModel): string {
   const run = firstShape(source).textBody?.paragraphs[0]?.runs[0];
   if (run === undefined) throw new Error("fixture text run not found");
   return run.text;
+}
+
+function firstRunProperties(source: PptxSourceModel) {
+  const run = firstShape(source).textBody?.paragraphs[0]?.runs[0];
+  if (run === undefined) throw new Error("fixture text run not found");
+  return run.properties;
 }
 
 async function findFreePort(): Promise<number> {

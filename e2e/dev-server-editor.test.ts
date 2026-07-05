@@ -140,6 +140,100 @@ describe("dev server editor API", () => {
       }
     }
   });
+
+  it("applies, undoes, redoes, clears, and saves text run property commands", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-dev-server-run-property-test-"));
+    try {
+      const sourcePath = join(dir, "fixture.pptx");
+      const savedPath = join(dir, "saved.pptx");
+      const clearedPath = join(dir, "cleared.pptx");
+      await writeFile(sourcePath, await buildTextEditFixture());
+
+      const backend = await DevEditorBackend.load(sourcePath, renderPreview);
+      const server = createServer(createDevServerRequestHandler(backend, "fixture.pptx"));
+      servers.push(server);
+      const baseUrl = await listen(server);
+
+      const shapes = await getJson<ShapesResponse>(`${baseUrl}/api/editor/shapes?slide=1`);
+      const handle = shapes.shapes[0].textRuns[0].handle;
+
+      const decorated = await postJson<SlidesResponse>(`${baseUrl}/api/editor/command`, {
+        command: {
+          kind: "setTextRunProperties",
+          handle,
+          properties: {
+            bold: true,
+            italic: true,
+            underline: true,
+            fontSize: 32,
+            color: { kind: "srgb", hex: "9c0000" },
+            typeface: "Liberation Sans",
+          },
+        },
+      });
+      expect(decorated.history).toMatchObject({ canUndo: true, canRedo: false });
+      expect(decorated.slides[0].svg).toContain('data-bold="true"');
+      expect(decorated.slides[0].svg).toContain('data-italic="true"');
+      expect(decorated.slides[0].svg).toContain('data-underline="true"');
+      expect(decorated.slides[0].svg).toContain('data-font-size="32"');
+      expect(decorated.slides[0].svg).toContain('data-color="9C0000"');
+      expect(decorated.slides[0].svg).toContain('data-typeface="Liberation Sans"');
+
+      const undone = await postJson<SlidesResponse>(`${baseUrl}/api/editor/undo`, {});
+      expect(undone.history).toMatchObject({ canUndo: false, canRedo: true });
+      expect(undone.slides[0].svg).not.toContain('data-bold="true"');
+      expect(undone.slides[0].svg).not.toContain('data-italic="true"');
+      expect(undone.slides[0].svg).not.toContain('data-underline="true"');
+      expect(undone.slides[0].svg).not.toContain('data-font-size="32"');
+      expect(undone.slides[0].svg).not.toContain('data-color="9C0000"');
+      expect(undone.slides[0].svg).not.toContain('data-typeface="Liberation Sans"');
+
+      const redone = await postJson<SlidesResponse>(`${baseUrl}/api/editor/redo`, {});
+      expect(redone.history).toMatchObject({ canUndo: true, canRedo: false });
+      expect(redone.slides[0].svg).toContain('data-bold="true"');
+      expect(redone.slides[0].svg).toContain('data-italic="true"');
+      expect(redone.slides[0].svg).toContain('data-underline="true"');
+      expect(redone.slides[0].svg).toContain('data-font-size="32"');
+      expect(redone.slides[0].svg).toContain('data-color="9C0000"');
+      expect(redone.slides[0].svg).toContain('data-typeface="Liberation Sans"');
+
+      await postJson<SaveResponse>(`${baseUrl}/api/editor/save`, { path: savedPath });
+      expect(firstRunProperties(readPptx(await readFile(savedPath)))).toMatchObject({
+        bold: true,
+        italic: true,
+        underline: true,
+        fontSize: 32,
+        color: { kind: "srgb", hex: "9C0000" },
+        typeface: "Liberation Sans",
+      });
+
+      const clearedResponse = await postJson<SlidesResponse>(`${baseUrl}/api/editor/command`, {
+        command: {
+          kind: "clearTextRunProperties",
+          handle,
+          properties: ["bold", "italic", "underline", "fontSize", "color", "typeface"],
+        },
+      });
+      expect(clearedResponse.slides[0].svg).not.toContain("data-bold=");
+      expect(clearedResponse.slides[0].svg).not.toContain("data-italic=");
+      expect(clearedResponse.slides[0].svg).not.toContain("data-underline=");
+      expect(clearedResponse.slides[0].svg).not.toContain("data-font-size=");
+      expect(clearedResponse.slides[0].svg).not.toContain("data-color=");
+      expect(clearedResponse.slides[0].svg).not.toContain("data-typeface=");
+
+      await postJson<SaveResponse>(`${baseUrl}/api/editor/save`, { path: clearedPath });
+
+      const cleared = firstRunProperties(readPptx(await readFile(clearedPath)));
+      expect(cleared?.bold).toBeUndefined();
+      expect(cleared?.italic).toBeUndefined();
+      expect(cleared?.underline).toBeUndefined();
+      expect(cleared?.fontSize).toBeUndefined();
+      expect(cleared?.color).toBeUndefined();
+      expect(cleared?.typeface).toBeUndefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 interface ShapesResponse {
@@ -175,8 +269,23 @@ interface SaveResponse {
 function renderPreview(input: Uint8Array): Promise<Array<{ slideNumber: number; svg: string }>> {
   const source = readPptx(input);
   return Promise.resolve([
-    { slideNumber: 1, svg: `<svg><text>${escapeXml(firstRun(source))}</text></svg>` },
+    {
+      slideNumber: 1,
+      svg: `<svg><text${runPropertyAttrs(source)}>${escapeXml(firstRun(source))}</text></svg>`,
+    },
   ]);
+}
+
+function runPropertyAttrs(source: PptxSourceModel): string {
+  const properties = firstRunProperties(source);
+  return [
+    properties?.bold === undefined ? "" : ` data-bold="${String(properties.bold)}"`,
+    properties?.italic === undefined ? "" : ` data-italic="${String(properties.italic)}"`,
+    properties?.underline === undefined ? "" : ` data-underline="${String(properties.underline)}"`,
+    properties?.fontSize === undefined ? "" : ` data-font-size="${String(properties.fontSize)}"`,
+    properties?.color === undefined ? "" : ` data-color="${escapeXml(properties.color.hex)}"`,
+    properties?.typeface === undefined ? "" : ` data-typeface="${escapeXml(properties.typeface)}"`,
+  ].join("");
 }
 
 function escapeXml(value: string): string {
@@ -302,4 +411,11 @@ function firstRun(source: PptxSourceModel): string {
   const run = shape?.textBody?.paragraphs[0].runs[0];
   if (run === undefined) throw new Error("fixture text run not found");
   return run.text;
+}
+
+function firstRunProperties(source: PptxSourceModel) {
+  const shape = source.slides[0].shapes.find((node): node is SourceShape => node.kind === "shape");
+  const run = shape?.textBody?.paragraphs[0].runs[0];
+  if (run === undefined) throw new Error("fixture text run not found");
+  return run.properties;
 }
