@@ -3,9 +3,13 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "sync:samples": "node scripts/sync-samples.mjs",
+    "predev": "npm run sync:samples",
     "dev": "next dev",
+    "prebuild": "npm run sync:samples",
     "build": "next build",
-    "start": "next start"
+    "start": "next start",
+    "verify:samples": "node scripts/verify-production-samples.mjs"
   },
   "dependencies": {
     "@vercel/analytics": "^1.6.1",
