@@ -7,6 +7,18 @@ import {
 
 import { type ConvertOptions, convertPptxToSvg as convertPptxToSvgBase } from "./svg-converter.js";
 
+export type {
+  BrowserEditorHistoryState,
+  BrowserEditorRenderOptions,
+  BrowserEditorSaveResponse,
+  BrowserEditorSelectionInfo,
+  BrowserEditorShapeBoundsPx,
+  BrowserEditorShapeInfo,
+  BrowserEditorSlidesResponse,
+  BrowserEditorTextBodyInfo,
+  BrowserEditorTextRunInfo,
+} from "./browser-editor.js";
+export { BrowserPptxEditorSession, createBrowserPptxEditorSession } from "./browser-editor.js";
 export type { PngConversionReport, SlideImage } from "./converter.js";
 export type { UsedFonts } from "./font/font-collector.js";
 export { collectUsedFonts } from "./font/font-collector.js";
@@ -20,6 +32,8 @@ export type {
   SvgConversionReport,
 } from "./svg-converter.js";
 export { convertPptxToSvg } from "./svg-converter.js";
+export type { SourceHandle } from "@pptx-glimpse/document";
+export type { EditorCommand } from "@pptx-glimpse/editor-core";
 export type { FontMapping } from "@pptx-glimpse/renderer";
 export type { FontBuffer, OpentypeSetup } from "@pptx-glimpse/renderer";
 export type { LogLevel, WarningEntry, WarningSummary } from "@pptx-glimpse/renderer";

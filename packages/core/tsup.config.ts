@@ -5,11 +5,13 @@ export default defineConfig({
   format: ["cjs", "esm"],
   dts: {
     resolve: [
+      "@pptx-glimpse/document",
+      "@pptx-glimpse/editor-core",
       "@pptx-glimpse/renderer",
       "@pptx-glimpse/renderer/png",
       "@pptx-glimpse/renderer/png/browser",
     ],
   },
   clean: true,
-  noExternal: ["@pptx-glimpse/document", "@pptx-glimpse/renderer"],
+  noExternal: ["@pptx-glimpse/document", "@pptx-glimpse/editor-core", "@pptx-glimpse/renderer"],
 });

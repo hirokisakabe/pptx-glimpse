@@ -132,6 +132,40 @@ describe("EditorSession text-run commands", () => {
     expect(session.canRedo).toBe(false);
     expect(session.undo()).toEqual({ ok: false, reason: "empty-undo-stack" });
   });
+
+  it("rejects an invalid command batch without partially applying earlier commands", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const before = session.document;
+    const validHandle = requireHandle(firstRun(source).handle);
+    const invalidHandle = {
+      partPath: asPartPath("ppt/slides/slide1.xml"),
+      nodeId: asSourceNodeId("text:shape:999:p:0:r:0"),
+      orderingSlot: 0,
+    } satisfies SourceHandle;
+
+    const result = session.applyAll([
+      {
+        kind: "replaceTextRunPlainText",
+        handle: validHandle,
+        text: "Should not stay applied",
+      },
+      {
+        kind: "replaceTextRunPlainText",
+        handle: invalidHandle,
+        text: "Should not apply",
+      },
+    ]);
+
+    expect(result).toMatchObject({
+      ok: false,
+      code: "invalid-command",
+    });
+    expect(session.document).toBe(before);
+    expect(firstRun(session.document).text).toBe("Original");
+    expect(session.undoDepth).toBe(0);
+    expect(session.redoDepth).toBe(0);
+  });
 });
 
 describe("ProseMirror text body conversion", () => {
@@ -168,12 +202,11 @@ describe("ProseMirror text body conversion", () => {
     const commands = proseMirrorDocJsonToEditorCommands(textBody, editedJson);
     const session = createEditorSession(source);
 
-    for (const command of commands) {
-      expectApplied(session.apply(command));
-    }
+    expectApplied(session.applyAll(commands));
     const reread = readPptx(writePptx(session.document));
 
     expect(commands).toHaveLength(2);
+    expect(session.undoDepth).toBe(1);
     expect(firstParagraph(session.document).runs.map((run) => run.text)).toEqual(["OrigX", "ep "]);
     expect(firstParagraph(reread).runs.map((run) => run.text)).toEqual(["OrigX", "ep "]);
     expect(firstParagraph(reread).runs[0].properties).toEqual(
@@ -182,6 +215,14 @@ describe("ProseMirror text body conversion", () => {
     expect(firstParagraph(reread).runs[1].properties).toEqual(
       firstParagraph(source).runs[1].properties,
     );
+
+    expectHistory(session.undo());
+    expect(firstParagraph(session.document).runs.map((run) => run.text)).toEqual([
+      "Original",
+      " Keep ",
+    ]);
+    expectHistory(session.redo());
+    expect(firstParagraph(session.document).runs.map((run) => run.text)).toEqual(["OrigX", "ep "]);
   });
 
   it("falls back to paragraph replacement when run mark order changes", async () => {

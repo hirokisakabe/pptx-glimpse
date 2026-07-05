@@ -53,6 +53,7 @@
   },
   "devDependencies": {
     "@pptx-glimpse/document": "workspace:*",
+    "@pptx-glimpse/editor-core": "workspace:*",
     "@pptx-glimpse/renderer": "workspace:*"
   }
 }

@@ -163,11 +163,22 @@ export class EditorSession {
   }
 
   apply(command: EditorCommand): EditorApplyCommandResult {
+    return this.applyAll([command]);
+  }
+
+  applyAll(commands: readonly EditorCommand[]): EditorApplyCommandResult {
     const before = this.#document;
-    let after: PptxSourceModel;
+    if (commands.length === 0) return { ok: true, document: before };
 
     try {
-      after = normalizeEditorEdits(applyCommandToDocument(before, command));
+      const after = normalizeEditorEdits(
+        commands.reduce((document, command) => applyCommandToDocument(document, command), before),
+      );
+      this.#document = after;
+      this.#undoStack.push({ before, after });
+      this.#redoStack.length = 0;
+
+      return { ok: true, document: after };
     } catch (error) {
       return {
         ok: false,
@@ -176,12 +187,6 @@ export class EditorSession {
         cause: error,
       };
     }
-
-    this.#document = after;
-    this.#undoStack.push({ before, after });
-    this.#redoStack.length = 0;
-
-    return { ok: true, document: after };
   }
 
   undo(): EditorHistoryResult {
