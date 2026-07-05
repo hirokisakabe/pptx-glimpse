@@ -208,7 +208,75 @@ function buildSyntheticPptx(slideSpTree: string): Uint8Array {
   return zipSync(files);
 }
 
+function buildSyntheticPptxWithLayout(slideLayoutAttrs: string): Uint8Array {
+  const files: Record<string, Uint8Array> = {
+    "[Content_Types].xml": xml(
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>` +
+        `<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+        `<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>` +
+        `<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>` +
+        `</Types>`,
+    ),
+    "_rels/.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/presentation.xml": xml(
+      `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:sldIdLst><p:sldId id="256" r:id="rIdSlide1"/></p:sldIdLst>` +
+        `</p:presentation>`,
+    ),
+    "ppt/_rels/presentation.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdSlide1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/slides/slide1.xml": xml(
+      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:cSld><p:spTree/></p:cSld>` +
+        `</p:sld>`,
+    ),
+    "ppt/slides/_rels/slide1.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdLayout" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/slideLayouts/slideLayout1.xml": xml(
+      `<p:sldLayout${slideLayoutAttrs} xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:cSld><p:spTree/></p:cSld>` +
+        `</p:sldLayout>`,
+    ),
+    "ppt/slideLayouts/_rels/slideLayout1.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdMaster" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/slideMasters/slideMaster1.xml": xml(
+      `<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">` +
+        `<p:cSld><p:spTree/></p:cSld>` +
+        `</p:sldMaster>`,
+    ),
+  };
+  return zipSync(files);
+}
+
 describe("readPptx - typed shape detail (synthetic)", () => {
+  it.each([
+    ['show="0"', ` show="0"`, false, false],
+    ['show="false"', ` show="false"`, false, false],
+    ["missing show", "", undefined, true],
+  ])("Read p:sldLayout@show for %s", (_label, slideLayoutAttrs, authored, effective) => {
+    const source = readPptx(buildSyntheticPptxWithLayout(slideLayoutAttrs));
+    const layout = source.slideLayouts[0];
+
+    expect(layout?.show).toBe(authored);
+    expect(layout?.show ?? true).toBe(effective);
+  });
+
   it("Read scheme color + lumMod transform / outline width+color / rotation+flip", () => {
     const source = readPptx(
       buildSyntheticPptx(

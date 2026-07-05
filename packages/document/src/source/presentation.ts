@@ -113,6 +113,8 @@ export interface SourceSlideLayout {
   readonly background?: SourceBackground;
   /** Layout `p:clrMapOvr` (when overridden). */
   readonly colorMapOverride?: SourceColorMap;
+  /** `p:sldLayout@show` (layout visibility). When omitted, the effective value is visible (`show ?? true`). */
+  readonly show?: boolean;
   /** `p:sldLayout@showMasterSp` (master shape visibility). */
   readonly showMasterShapes?: boolean;
   readonly shapes: readonly SourceShapeNode[];
