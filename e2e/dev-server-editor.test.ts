@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   type PptxSourceModel,
   readPptx,
-  type SourceShape,
+  type SourceTextRun,
 } from "../packages/document/src/index.js";
 import { createDevServerRequestHandler, DevEditorBackend } from "../scripts/dev-server.js";
 import { unsafeScriptInputAssertion } from "../scripts/unsafe-type-assertion.js";
@@ -234,6 +234,54 @@ describe("dev server editor API", () => {
       await rm(dir, { recursive: true, force: true });
     }
   });
+
+  it("adds, selects, deletes, undoes, and redoes a text box through the editor API", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-dev-server-shape-test-"));
+    try {
+      const sourcePath = join(dir, "fixture.pptx");
+      await writeFile(sourcePath, await buildTextEditFixture());
+
+      const backend = await DevEditorBackend.load(sourcePath, renderPreview);
+      const server = createServer(createDevServerRequestHandler(backend, "fixture.pptx"));
+      servers.push(server);
+      const baseUrl = await listen(server);
+
+      const added = await postJson<SlidesResponse>(`${baseUrl}/api/editor/add-text-box`, {
+        slide: 1,
+      });
+      expect(added.slides[0].svg).toContain("New text box");
+      expect(added.selection?.shapeHandle).toBeDefined();
+      expect(added.history).toMatchObject({ canUndo: true, canRedo: false });
+
+      const shapes = await getJson<ShapesResponse>(`${baseUrl}/api/editor/shapes?slide=1`);
+      const textBox = shapes.shapes.find((shape) =>
+        shape.textRuns.some((run) => run.text === "New text box"),
+      );
+      expect(textBox).toMatchObject({
+        bounds: { x: 96, y: 96, width: 288, height: 72 },
+        editableDelete: true,
+      });
+
+      const deleted = await postJson<SlidesResponse>(`${baseUrl}/api/editor/command`, {
+        command: {
+          kind: "deleteShape",
+          handle: textBox?.handle,
+        },
+      });
+      expect(deleted.selection).toBeUndefined();
+      expect(deleted.slides[0].svg).not.toContain("New text box");
+
+      const undone = await postJson<SlidesResponse>(`${baseUrl}/api/editor/undo`, {});
+      expect(undone.slides[0].svg).toContain("New text box");
+      expect(undone.history).toMatchObject({ canUndo: true, canRedo: true });
+
+      const redone = await postJson<SlidesResponse>(`${baseUrl}/api/editor/redo`, {});
+      expect(redone.slides[0].svg).not.toContain("New text box");
+      expect(redone.history).toMatchObject({ canUndo: true, canRedo: false });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 interface ShapesResponse {
@@ -242,6 +290,7 @@ interface ShapesResponse {
     id: string;
     name?: string;
     bounds?: { x: number; y: number; width: number; height: number };
+    editableDelete?: boolean;
     textRuns: Array<{ text: string; handle: unknown }>;
     editableTextBody?: {
       docJson: {
@@ -259,6 +308,7 @@ interface ShapesResponse {
 interface SlidesResponse {
   slides: Array<{ slideNumber: number; svg: string }>;
   history: { canUndo: boolean; canRedo: boolean };
+  selection?: { shapeHandle: unknown };
 }
 
 interface SaveResponse {
@@ -271,13 +321,15 @@ function renderPreview(input: Uint8Array): Promise<Array<{ slideNumber: number; 
   return Promise.resolve([
     {
       slideNumber: 1,
-      svg: `<svg><text${runPropertyAttrs(source)}>${escapeXml(firstRun(source))}</text></svg>`,
+      svg: `<svg>${allRuns(source)
+        .map((run) => `<text${runPropertyAttrs(run)}>${escapeXml(run.text)}</text>`)
+        .join("")}</svg>`,
     },
   ]);
 }
 
-function runPropertyAttrs(source: PptxSourceModel): string {
-  const properties = firstRunProperties(source);
+function runPropertyAttrs(run: SourceTextRun): string {
+  const properties = run.properties;
   return [
     properties?.bold === undefined ? "" : ` data-bold="${String(properties.bold)}"`,
     properties?.italic === undefined ? "" : ` data-italic="${String(properties.italic)}"`,
@@ -407,15 +459,20 @@ async function buildTextEditFixture(): Promise<Uint8Array> {
 }
 
 function firstRun(source: PptxSourceModel): string {
-  const shape = source.slides[0].shapes.find((node): node is SourceShape => node.kind === "shape");
-  const run = shape?.textBody?.paragraphs[0].runs[0];
+  const run = allRuns(source)[0];
   if (run === undefined) throw new Error("fixture text run not found");
   return run.text;
 }
 
 function firstRunProperties(source: PptxSourceModel) {
-  const shape = source.slides[0].shapes.find((node): node is SourceShape => node.kind === "shape");
-  const run = shape?.textBody?.paragraphs[0].runs[0];
+  const run = allRuns(source)[0];
   if (run === undefined) throw new Error("fixture text run not found");
   return run.properties;
+}
+
+function allRuns(source: PptxSourceModel) {
+  return source.slides[0].shapes.flatMap((node) => {
+    if (node.kind !== "shape") return [];
+    return node.textBody?.paragraphs.flatMap((paragraph) => paragraph.runs) ?? [];
+  });
 }

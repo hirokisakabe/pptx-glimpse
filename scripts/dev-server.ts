@@ -41,6 +41,14 @@ const RENDER_TIMEOUT_MS = 30_000;
 const MAX_BUFFER = 50 * 1024 * 1024;
 const EMU_PER_INCH = 914400;
 const DEFAULT_DPI = 96;
+const EMU_PER_PIXEL = EMU_PER_INCH / DEFAULT_DPI;
+const DEFAULT_TEXT_BOX_BOUNDS_PX = {
+  x: 96,
+  y: 96,
+  width: 288,
+  height: 72,
+};
+const DEFAULT_TEXT_BOX_TEXT = "New text box";
 
 const execFileAsync = promisify(execFile);
 
@@ -79,6 +87,7 @@ interface EditorShapeInfo {
   handle?: SourceHandle;
   bounds?: ShapeBoundsPx;
   editableTransform?: boolean;
+  editableDelete?: boolean;
   textRuns?: EditorTextRunInfo[];
   editableTextBody?: EditorTextBodyInfo;
 }
@@ -206,6 +215,32 @@ export class DevEditorBackend {
     });
   }
 
+  async addTextBox(slideNumber: number): Promise<EditorSlidesResponse> {
+    return this.#enqueueMutation(async () => {
+      const slide = this.#session.document.slides[slideNumber - 1];
+      if (slide?.handle === undefined) {
+        throw new Error("addTextBox: slide handle was not found in PptxSourceModel source");
+      }
+      const existingShapeKeys = new Set(slide.shapes.map(shapeSourceKey));
+      const result = this.#session.apply({
+        kind: "addTextBox",
+        slideHandle: slide.handle,
+        offsetX: pxToEmu(DEFAULT_TEXT_BOX_BOUNDS_PX.x),
+        offsetY: pxToEmu(DEFAULT_TEXT_BOX_BOUNDS_PX.y),
+        width: pxToEmu(DEFAULT_TEXT_BOX_BOUNDS_PX.width),
+        height: pxToEmu(DEFAULT_TEXT_BOX_BOUNDS_PX.height),
+        text: DEFAULT_TEXT_BOX_TEXT,
+      });
+      if (!result.ok) {
+        throw new Error(result.message);
+      }
+      this.#selectNewShape(slideNumber, existingShapeKeys);
+      this.#dirty = true;
+      await this.renderCurrentSlides();
+      return this.response();
+    });
+  }
+
   async applyTextBodyDocJson(
     handle: SourceHandle,
     docJson: unknown,
@@ -290,6 +325,13 @@ export class DevEditorBackend {
     }
     return shape.textBody;
   }
+
+  #selectNewShape(slideNumber: number, existingShapeKeys: ReadonlySet<string>): void {
+    const slide = this.#session.document.slides[slideNumber - 1];
+    const addedShape = slide?.shapes.find((shape) => !existingShapeKeys.has(shapeSourceKey(shape)));
+    if (addedShape?.handle === undefined) return;
+    this.#session.selectShape(addedShape.handle);
+  }
 }
 
 function defaultEditedPath(sourcePath: string): string {
@@ -345,6 +387,7 @@ function shapeInfo(
           editableTransform: editableTransform && isEditableTransformShape(shape),
         }
       : {}),
+    ...(editableTransform && isDeletableShape(shape) ? { editableDelete: true } : {}),
     ...("textBody" in shape && shape.textBody !== undefined
       ? {
           textRuns: collectTextRuns(
@@ -373,6 +416,10 @@ function isEditableTransformShape(shape: SourceShapeNode): boolean {
     return false;
   }
   return !shape.rawSidecars?.some((sidecar) => sidecar.node.name === "mc:AlternateContent");
+}
+
+function isDeletableShape(shape: SourceShapeNode): boolean {
+  return shape.kind === "shape" && isEditableTransformShape(shape);
 }
 
 function collectTextRuns(runs: readonly SourceTextRun[]): EditorTextRunInfo[] {
@@ -408,6 +455,21 @@ function transformBoundsPx(transform: {
 
 function emuToPixels(value: number): number {
   return (value / EMU_PER_INCH) * DEFAULT_DPI;
+}
+
+function pxToEmu(value: number): ReturnType<typeof asEmu> {
+  return asEmu(Math.round(value * EMU_PER_PIXEL));
+}
+
+function shapeSourceKey(shape: SourceShapeNode): string {
+  const handle = shape.handle;
+  return [
+    shape.kind,
+    handle?.partPath ?? "",
+    handle?.nodeId ?? "",
+    handle?.relationshipId ?? "",
+    handle?.orderingSlot ?? "",
+  ].join("\u0000");
 }
 
 // --- WebSocket ---
@@ -704,6 +766,8 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       <label>Text<input id="text-run-input" type="text"></label>
       <button id="apply-text-button" type="button">Apply</button>
       <div id="editor-actions">
+        <button id="add-text-box-button" type="button">Add text box</button>
+        <button id="delete-shape-button" type="button" disabled>Delete shape</button>
         <button id="undo-button" type="button">Undo</button>
         <button id="redo-button" type="button">Redo</button>
         <button id="save-button" type="button">Save</button>
@@ -792,6 +856,12 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       editorHistory = history || editorHistory;
       document.getElementById("undo-button").disabled = !editorHistory.canUndo;
       document.getElementById("redo-button").disabled = !editorHistory.canRedo;
+      updateSelectedShapeActions();
+    }
+
+    function updateSelectedShapeActions() {
+      document.getElementById("delete-shape-button").disabled =
+        !selectedShape || !selectedShape.editableDelete;
     }
 
     function shapeKey(shape) {
@@ -820,13 +890,16 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       }
       if (!selectedShape) selectedShapeKey = null;
       renderSelectionOverlay();
+      updateSelectedShapeActions();
     }
 
     function cloneShape(shape) {
       return {
         id: shape.id,
+        kind: shape.kind,
         name: shape.name,
         handle: shape.handle,
+        editableDelete: shape.editableDelete === true,
         editableTextBody: shape.editableTextBody,
         bounds: {
           x: shape.bounds.x,
@@ -966,6 +1039,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
 
       container.appendChild(overlay);
       positionActiveTextEditor();
+      updateSelectedShapeActions();
     }
 
     function setRectAttributes(rect, bounds) {
@@ -1699,6 +1773,51 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       });
     }
 
+    function addTextBox() {
+      if (activeTextEditor) {
+        commitTextEditor()
+          .then(addTextBox)
+          .catch(function () {});
+        return;
+      }
+      postJson("/api/editor/add-text-box", { slide: currentIndex + 1 })
+        .then(function (data) {
+          applyEditorResponse(data);
+          setEditorMessage("Text box added", false);
+        })
+        .catch(function (err) {
+          setEditorMessage(err.message, true);
+        });
+    }
+
+    function deleteSelectedShape() {
+      if (activeTextEditor || !selectedShape || !selectedShape.handle || !selectedShape.editableDelete) {
+        return;
+      }
+      postJson("/api/editor/command", {
+        command: {
+          kind: "deleteShape",
+          handle: selectedShape.handle
+        }
+      })
+        .then(function (data) {
+          selectedShape = null;
+          selectedShapeKey = null;
+          applyEditorResponse(data);
+          setEditorMessage("Deleted", false);
+        })
+        .catch(function (err) {
+          setEditorMessage(err.message, true);
+        });
+    }
+
+    function isTypingTarget(target) {
+      return target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        target instanceof HTMLSelectElement ||
+        (target instanceof HTMLElement && target.isContentEditable);
+    }
+
     function postJson(url, payload) {
       return fetch(url, {
         method: "POST",
@@ -1743,6 +1862,8 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
           setEditorMessage(err.message, true);
         });
     });
+    document.getElementById("add-text-box-button").addEventListener("click", addTextBox);
+    document.getElementById("delete-shape-button").addEventListener("click", deleteSelectedShape);
     document.getElementById("undo-button").addEventListener("click", function () {
       postJson("/api/editor/undo")
         .then(function (data) {
@@ -1818,6 +1939,13 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
 
     // Keyboard navigation
     document.addEventListener("keydown", function (e) {
+      if (e.key === "Delete" && !isTypingTarget(e.target)) {
+        if (selectedShape && selectedShape.editableDelete) {
+          e.preventDefault();
+          deleteSelectedShape();
+        }
+        return;
+      }
       if (e.key === "ArrowLeft" && currentIndex > 0) selectSlide(currentIndex - 1);
       if (e.key === "ArrowRight" && currentIndex < slideCount - 1)
         selectSlide(currentIndex + 1);
@@ -1893,6 +2021,13 @@ async function handleRequest(
     const body = await readJsonBody(req);
     const command = normalizeCommand(isRecord(body) ? body.command : undefined);
     sendJson(res, 200, await backend.apply(command));
+    return;
+  }
+
+  if (url.pathname === "/api/editor/add-text-box" && req.method === "POST") {
+    const body = await readJsonBody(req);
+    const slideNumber = isRecord(body) ? body.slide : undefined;
+    sendJson(res, 200, await backend.addTextBox(normalizeSlideNumber(slideNumber)));
     return;
   }
 
@@ -2019,7 +2154,40 @@ function normalizeCommand(command: unknown): EditorCommand {
       height: asEmu(requireFiniteNumber(command.height, "setShapeTransform.height")),
     };
   }
+  if (command.kind === "addTextBox") {
+    const text = command.text ?? DEFAULT_TEXT_BOX_TEXT;
+    if (typeof text !== "string") {
+      throw new Error("addTextBox.text must be a string");
+    }
+    if (command.name !== undefined && typeof command.name !== "string") {
+      throw new Error("addTextBox.name must be a string");
+    }
+    return {
+      kind: "addTextBox",
+      slideHandle: normalizeHandle(command.slideHandle),
+      offsetX: asEmu(requireFiniteNumber(command.offsetX, "addTextBox.offsetX")),
+      offsetY: asEmu(requireFiniteNumber(command.offsetY, "addTextBox.offsetY")),
+      width: asEmu(requireFinitePositiveNumber(command.width, "addTextBox.width")),
+      height: asEmu(requireFinitePositiveNumber(command.height, "addTextBox.height")),
+      text,
+      ...(typeof command.name === "string" ? { name: command.name } : {}),
+    };
+  }
+  if (command.kind === "deleteShape") {
+    return {
+      kind: "deleteShape",
+      handle: normalizeHandle(command.handle),
+    };
+  }
   throw new Error("unsupported command kind");
+}
+
+function normalizeSlideNumber(value: unknown): number {
+  const slideNumber = value === undefined ? 1 : value;
+  if (!Number.isInteger(slideNumber) || slideNumber < 1) {
+    throw new Error("slide must be a positive integer");
+  }
+  return slideNumber;
 }
 
 function normalizeTextRunProperties(value: unknown): EditableTextRunProperties {

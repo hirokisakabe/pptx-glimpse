@@ -85,6 +85,68 @@ describe("BrowserPptxEditorSession", () => {
     ]);
     expect(mediaBytes(editor.document, "ppt/media/image1.png")).toEqual(BLUE_PNG);
   });
+
+  it("adds, selects, edits, moves, resizes, saves, deletes, undoes, and redoes a text box", async () => {
+    const editor = await createBrowserPptxEditorSession(await buildShapeFixture(), {
+      skipSystemFonts: true,
+    });
+
+    const addedResponse = await editor.addTextBox(1);
+    const addedHandle = addedResponse.selection?.shapeHandle;
+    if (addedHandle === undefined) throw new Error("added shape was not selected");
+    const addedShape = editor
+      .shapes(1)
+      .find((shape) => handleKey(shape.handle) === handleKey(addedHandle));
+    if (addedShape?.handle === undefined) throw new Error("added shape handle not found");
+    expect(addedShape).toMatchObject({
+      bounds: { x: 96, y: 96, width: 288, height: 72 },
+      editableDelete: true,
+    });
+    expect(addedShape.editableTextBody).toBeDefined();
+
+    await editor.applyTextBodyDocJson(addedShape.handle, {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          attrs: {},
+          content: [{ type: "text", text: "Added edited", marks: [] }],
+        },
+      ],
+    });
+    await editor.apply({
+      kind: "setShapeTransform",
+      handle: addedShape.handle,
+      offsetX: asEmu(144 * 9525),
+      offsetY: asEmu(120 * 9525),
+      width: asEmu(240 * 9525),
+      height: asEmu(96 * 9525),
+    });
+
+    const saved = readPptx(editor.save().pptx);
+    const savedAdded = shapeByText(saved, "Added edited");
+    expect(savedAdded.transform).toMatchObject({
+      offsetX: 144 * 9525,
+      offsetY: 120 * 9525,
+      width: 240 * 9525,
+      height: 96 * 9525,
+    });
+
+    const deleted = await editor.deleteSelectedShape();
+    expect(deleted.selection).toBeUndefined();
+    expect(
+      editor.shapes(1).some((shape) => handleKey(shape.handle) === handleKey(addedShape.handle)),
+    ).toBe(false);
+
+    await editor.undo();
+    expect(
+      editor.shapes(1).some((shape) => handleKey(shape.handle) === handleKey(addedShape.handle)),
+    ).toBe(true);
+    await editor.redo();
+    expect(
+      editor.shapes(1).some((shape) => handleKey(shape.handle) === handleKey(addedShape.handle)),
+    ).toBe(false);
+  });
 });
 
 function xml(content: string): Uint8Array {
@@ -229,6 +291,34 @@ function firstText(source: ReturnType<typeof readPptx>): string {
   const run = firstShape(source).textBody?.paragraphs[0]?.runs[0];
   if (run === undefined) throw new Error("fixture text run not found");
   return run.text;
+}
+
+function shapeByText(source: ReturnType<typeof readPptx>, text: string): SourceShape {
+  const shape = source.slides[0]?.shapes.find(
+    (node): node is SourceShape =>
+      node.kind === "shape" &&
+      node.textBody?.paragraphs.some((paragraph) =>
+        paragraph.runs.some((run) => run.text === text),
+      ) === true,
+  );
+  if (shape === undefined) throw new Error(`shape text not found: ${text}`);
+  return shape;
+}
+
+function handleKey(handle: unknown): string {
+  if (handle === undefined || handle === null || typeof handle !== "object") return "";
+  const value = handle as {
+    partPath?: string;
+    nodeId?: string;
+    relationshipId?: string;
+    orderingSlot?: number;
+  };
+  return [
+    value.partPath ?? "",
+    value.nodeId ?? "",
+    value.relationshipId ?? "",
+    value.orderingSlot ?? "",
+  ].join("\u0000");
 }
 
 function mediaBytes(source: ReturnType<typeof readPptx>, partPath: string): Uint8Array {

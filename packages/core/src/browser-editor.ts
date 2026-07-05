@@ -1,4 +1,5 @@
 import {
+  asEmu,
   findShapeNodeBySourceHandle,
   type PptxSourceModel,
   readPptx,
@@ -21,6 +22,15 @@ import { type ConvertOptions, renderPptxSourceModelToSvg, type SlideSvg } from "
 
 const EMU_PER_INCH = 914400;
 const DEFAULT_DPI = 96;
+const EMU_PER_PIXEL = EMU_PER_INCH / DEFAULT_DPI;
+
+const DEFAULT_TEXT_BOX_BOUNDS_PX = {
+  x: 96,
+  y: 96,
+  width: 288,
+  height: 72,
+};
+const DEFAULT_TEXT_BOX_TEXT = "New text box";
 
 export interface BrowserEditorHistoryState {
   readonly canUndo: boolean;
@@ -56,8 +66,18 @@ export interface BrowserEditorShapeInfo {
   readonly handle?: SourceHandle;
   readonly bounds?: BrowserEditorShapeBoundsPx;
   readonly editableTransform?: boolean;
+  readonly editableDelete?: boolean;
   readonly textRuns?: readonly BrowserEditorTextRunInfo[];
   readonly editableTextBody?: BrowserEditorTextBodyInfo;
+}
+
+export interface BrowserEditorAddTextBoxOptions {
+  readonly x?: number;
+  readonly y?: number;
+  readonly width?: number;
+  readonly height?: number;
+  readonly text?: string;
+  readonly name?: string;
 }
 
 export interface BrowserEditorSlidesResponse {
@@ -149,6 +169,50 @@ export class BrowserPptxEditorSession {
     return this.response(result.warnings);
   }
 
+  async addTextBox(
+    slideNumber = 1,
+    options: BrowserEditorAddTextBoxOptions = {},
+  ): Promise<BrowserEditorSlidesResponse> {
+    const slide = this.#session.document.slides[slideNumber - 1];
+    if (slide?.handle === undefined) {
+      throw new Error("addTextBox: slide handle was not found in PptxSourceModel source");
+    }
+    const existingShapeKeys = new Set(slide.shapes.map(shapeSourceKey));
+    const result = this.#session.apply({
+      kind: "addTextBox",
+      slideHandle: slide.handle,
+      offsetX: pxToEmu(options.x ?? DEFAULT_TEXT_BOX_BOUNDS_PX.x),
+      offsetY: pxToEmu(options.y ?? DEFAULT_TEXT_BOX_BOUNDS_PX.y),
+      width: pxToEmu(options.width ?? DEFAULT_TEXT_BOX_BOUNDS_PX.width),
+      height: pxToEmu(options.height ?? DEFAULT_TEXT_BOX_BOUNDS_PX.height),
+      text: options.text ?? DEFAULT_TEXT_BOX_TEXT,
+      ...(options.name !== undefined ? { name: options.name } : {}),
+    });
+    if (!result.ok) {
+      throw new Error(result.message);
+    }
+    this.#selectNewShape(slideNumber, existingShapeKeys);
+    await this.renderCurrentSlides();
+    return this.response(result.warnings);
+  }
+
+  async deleteShape(handle: SourceHandle): Promise<BrowserEditorSlidesResponse> {
+    const result = this.#session.apply({ kind: "deleteShape", handle });
+    if (!result.ok) {
+      throw new Error(result.message);
+    }
+    await this.renderCurrentSlides();
+    return this.response(result.warnings);
+  }
+
+  async deleteSelectedShape(): Promise<BrowserEditorSlidesResponse> {
+    const selection = this.#session.selection;
+    if (selection === undefined) {
+      throw new Error("deleteShape: no selected shape");
+    }
+    return this.deleteShape(selection.shapeHandle);
+  }
+
   async applyTextBodyDocJson(
     handle: SourceHandle,
     docJson: unknown,
@@ -207,6 +271,13 @@ export class BrowserPptxEditorSession {
     }
     return shape.textBody;
   }
+
+  #selectNewShape(slideNumber: number, existingShapeKeys: ReadonlySet<string>): void {
+    const slide = this.#session.document.slides[slideNumber - 1];
+    const addedShape = slide?.shapes.find((shape) => !existingShapeKeys.has(shapeSourceKey(shape)));
+    if (addedShape?.handle === undefined) return;
+    this.#session.selectShape(addedShape.handle);
+  }
 }
 
 export function createBrowserPptxEditorSession(
@@ -237,6 +308,7 @@ function shapeInfo(
           editableTransform: true,
         }
       : {}),
+    ...(editableTransform && isDeletableShape(shape) ? { editableDelete: true } : {}),
     ...("textBody" in shape && shape.textBody !== undefined
       ? {
           textRuns: collectTextRuns(
@@ -265,6 +337,10 @@ function isEditableTransformShape(shape: SourceShapeNode): boolean {
     return false;
   }
   return !shape.rawSidecars?.some((sidecar) => sidecar.node.name === "mc:AlternateContent");
+}
+
+function isDeletableShape(shape: SourceShapeNode): boolean {
+  return shape.kind === "shape" && isEditableTransformShape(shape);
 }
 
 function collectTextRuns(runs: readonly SourceTextRun[]): BrowserEditorTextRunInfo[] {
@@ -300,4 +376,19 @@ function transformBoundsPx(transform: {
 
 function emuToPixels(value: number): number {
   return (value / EMU_PER_INCH) * DEFAULT_DPI;
+}
+
+function pxToEmu(value: number): ReturnType<typeof asEmu> {
+  return asEmu(Math.round(value * EMU_PER_PIXEL));
+}
+
+function shapeSourceKey(shape: SourceShapeNode): string {
+  const handle = shape.handle;
+  return [
+    shape.kind,
+    handle?.partPath ?? "",
+    handle?.nodeId ?? "",
+    handle?.relationshipId ?? "",
+    handle?.orderingSlot ?? "",
+  ].join("\u0000");
 }
