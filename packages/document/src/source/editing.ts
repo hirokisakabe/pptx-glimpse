@@ -412,7 +412,12 @@ export function duplicateSlide(
   );
   const newSlidePartPath = nextNumberedPartPath(source, "ppt/slides/slide", ".xml");
   const newPresentationRelationshipId = nextRelationshipId(presentationRels.relationships);
-  const notesCopy = createNotesSlideCopy(source, sourceSlide, sourceSlideRelationships);
+  const notesCopy = createNotesSlideCopy(
+    source,
+    sourceSlide,
+    sourceSlideRelationships,
+    newSlidePartPath,
+  );
   const newSlideRelationships =
     sourceSlideRelationships === undefined
       ? undefined
@@ -777,6 +782,7 @@ function createNotesSlideCopy(
   source: PptxSourceModel,
   sourceSlide: SourceSlide,
   slideRelationships: PartRelationships | undefined,
+  newSlidePartPath: PartPath,
 ): NotesSlideCopy | undefined {
   const notesRelationship = slideRelationships?.relationships.find(
     (relationship) => relationship.type === NOTES_SLIDE_REL_TYPE,
@@ -794,6 +800,8 @@ function createNotesSlideCopy(
     (relationships) => relationships.sourcePartPath === notesPartPath,
   );
 
+  // Notes slides are 1:1 with a slide, so their slide back-reference must move
+  // to the duplicated slide. Other notes relationships remain shared.
   return {
     slideRelationshipId: notesRelationship.id,
     newPartPath,
@@ -804,7 +812,11 @@ function createNotesSlideCopy(
       : {
           relationships: {
             sourcePartPath: newPartPath,
-            relationships: notesRelationships.relationships,
+            relationships: notesRelationships.relationships.map((relationship) =>
+              relationship.type === SLIDE_REL_TYPE && relationship.targetMode !== "External"
+                ? { ...relationship, target: relativeTarget(newPartPath, newSlidePartPath) }
+                : relationship,
+            ),
           },
         }),
   };
@@ -876,6 +888,7 @@ function nextNumberedPartPath(source: PptxSourceModel, prefix: string, suffix: s
     ...source.packageGraph.parts.map((part) => part.partPath),
     ...source.packageGraph.contentTypes.overrides.map((override) => override.partName),
     ...(source.packageGraph.rawParts ?? []).map((part) => part.partPath),
+    ...(source.edits?.flatMap((edit) => topologyEditPartPaths(edit)) ?? []),
   ]);
   const pattern = new RegExp(`^${escapeRegExp(prefix)}(\\d+)${escapeRegExp(suffix)}$`);
   const max = [...used].reduce((current, path) => {
@@ -885,6 +898,20 @@ function nextNumberedPartPath(source: PptxSourceModel, prefix: string, suffix: s
   for (let index = max + 1; ; index += 1) {
     const candidate = asPartPath(`${prefix}${index}${suffix}`);
     if (!used.has(candidate)) return candidate;
+  }
+}
+
+function topologyEditPartPaths(edit: PptxSourceModelEdit): readonly PartPath[] {
+  switch (edit.kind) {
+    case "duplicateSlide":
+      return [edit.sourceSlidePartPath, edit.newSlidePartPath];
+    case "deleteSlide":
+      return [edit.slidePartPath];
+    case "replaceTextRunPlainText":
+    case "updateTextRunProperties":
+    case "replaceParagraphPlainText":
+    case "updateShapeTransform":
+      return [];
   }
 }
 

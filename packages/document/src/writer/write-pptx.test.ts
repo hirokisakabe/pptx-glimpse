@@ -140,6 +140,7 @@ function buildSlideTopologyFixture(): Uint8Array {
     ),
     "ppt/notesSlides/_rels/notesSlide1.xml.rels": xml(
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdSlide" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="../slides/slide1.xml"/>` +
         `<Relationship Id="rIdNotesMaster" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/notesMaster" Target="../notesMasters/notesMaster1.xml"/>` +
         `</Relationships>`,
     ),
@@ -488,6 +489,9 @@ describe("writePptx - slide topology edits", () => {
     expect(
       decoder.decode(getEntry(output, "ppt/notesSlides/_rels/notesSlide2.xml.rels")),
     ).toContain(`notesMaster`);
+    expect(
+      decoder.decode(getEntry(output, "ppt/notesSlides/_rels/notesSlide2.xml.rels")),
+    ).toContain(`Target="../slides/slide3.xml"`);
     expect(reread.packageGraph.contentTypes.overrides).toEqual(
       expect.arrayContaining([
         {
@@ -538,6 +542,24 @@ describe("writePptx - slide topology edits", () => {
     expect(() => duplicateSlide(dirty, dirty.slides[0].handle!)).toThrow(
       /pending dirty part edits/,
     );
+  });
+
+  it("does not reuse a deleted slide part name within the same edit journal", () => {
+    const source = readPptx(buildRoundTripFixture());
+    const deletedSecond = deleteSlide(source, source.slides[1].handle!);
+    const duplicatedFirst = duplicateSlide(deletedSecond, deletedSecond.slides[0].handle!);
+    const deletedDuplicate = deleteSlide(duplicatedFirst, duplicatedFirst.slides[1].handle!);
+    const output = writePptx(deletedDuplicate);
+    const reread = readPptx(output);
+    const presentationXml = decoder.decode(getEntry(output, "ppt/presentation.xml"));
+
+    expect(duplicatedFirst.presentation.slidePartPaths).toEqual([
+      "ppt/slides/slide1.xml",
+      "ppt/slides/slide3.xml",
+    ]);
+    expect(reread.presentation.slidePartPaths).toEqual(["ppt/slides/slide1.xml"]);
+    expect(presentationXml).not.toContain(`r:id="rIdSlide2"`);
+    expect(presentationXml).not.toContain(`r:id="rId3"`);
   });
 });
 
