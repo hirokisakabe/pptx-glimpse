@@ -33,6 +33,7 @@ export * from "./renderer/chart-renderer.js";
 export * from "./renderer/effect-renderer.js";
 export * from "./renderer/fill-renderer.js";
 export * from "./renderer/image-renderer.js";
+export * from "./renderer/render-context.js";
 export * from "./renderer/render-result.js";
 export * from "./renderer/shape-renderer.js";
 export * from "./renderer/svg-renderer.js";

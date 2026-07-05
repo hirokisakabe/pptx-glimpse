@@ -4,6 +4,8 @@ import {
 } from "../utils/text-measure.js";
 import { warn } from "../warning-logger.js";
 import { getCjkFallbackFonts } from "./cjk-font-fallback.js";
+import type { FontMapping } from "./font-mapping.js";
+import { getMappedFont } from "./font-mapping.js";
 import { getCurrentMappedFont } from "./font-mapping-context.js";
 import type { TextMeasurer } from "./text-measurer.js";
 
@@ -30,7 +32,11 @@ export class OpentypeTextMeasurer implements TextMeasurer {
    * @param fonts - font name -> opentype.js Map of Font objects
    * @param defaultFont - fallback font (optional)
    */
-  constructor(fonts: Map<string, OpentypeFont>, defaultFont?: OpentypeFont) {
+  constructor(
+    fonts: Map<string, OpentypeFont>,
+    defaultFont?: OpentypeFont,
+    private readonly fontMapping?: FontMapping,
+  ) {
     this.fonts = fonts;
     this.defaultFont = defaultFont ?? null;
   }
@@ -108,13 +114,13 @@ export class OpentypeTextMeasurer implements TextMeasurer {
     if (!name) return null;
     // Look for Bold variants by both the original name and the OSS alternate name after font mapping
     const bases = [name];
-    const mappedBase = getCurrentMappedFont(name);
+    const mappedBase = this.getMappedFont(name);
     if (mappedBase && mappedBase !== name) bases.push(mappedBase);
     for (const base of bases) {
       for (const boldName of [`${base} Bold`, `${base}-Bold`]) {
         const direct = this.fonts.get(boldName);
         if (direct) return direct;
-        const mapped = getCurrentMappedFont(boldName);
+        const mapped = this.getMappedFont(boldName);
         if (mapped) {
           const mappedFont = this.fonts.get(mapped);
           if (mappedFont) return mappedFont;
@@ -130,7 +136,7 @@ export class OpentypeTextMeasurer implements TextMeasurer {
     if (direct) return direct;
 
     // Try OSS replacement names from font mapping
-    const mapped = getCurrentMappedFont(name);
+    const mapped = this.getMappedFont(name);
     if (mapped) {
       const mappedFont = this.fonts.get(mapped);
       if (mappedFont) return mappedFont;
@@ -149,5 +155,11 @@ export class OpentypeTextMeasurer implements TextMeasurer {
     }
 
     return null;
+  }
+
+  private getMappedFont(name: string | null | undefined): string | null {
+    return this.fontMapping !== undefined
+      ? getMappedFont(name, this.fontMapping)
+      : getCurrentMappedFont(name);
   }
 }

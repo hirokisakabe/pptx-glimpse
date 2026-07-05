@@ -4,11 +4,16 @@ import { emuToPixels } from "../utils/emu.js";
 import type { Emu } from "../utils/unit-types.js";
 import { asEmu } from "../utils/unit-types.js";
 import { renderFillAttrs, renderOutlineAttrs } from "./fill-renderer.js";
+import type { RendererContext } from "./render-context.js";
+import { createLegacyRendererContext } from "./render-context.js";
 import type { RenderResult } from "./render-result.js";
 import { renderTextBody } from "./text-renderer.js";
 import { buildTransformAttr } from "./transform.js";
 
-export function renderTable(element: TableElement): RenderResult {
+export function renderTable(
+  element: TableElement,
+  context: RendererContext = createLegacyRendererContext(),
+): RenderResult {
   const { transform, table } = element;
   const transformAttr = buildTransformAttr(transform);
 
@@ -82,7 +87,7 @@ export function renderTable(element: TableElement): RenderResult {
           flipH: false,
           flipV: false,
         };
-        const textSvg = renderTextBody(cell.textBody, cellTransform);
+        const textSvg = renderTextBody(cell.textBody, cellTransform, context);
         if (textSvg) {
           parts.push(`<g transform="translate(${x}, ${y})">${textSvg}</g>`);
         }

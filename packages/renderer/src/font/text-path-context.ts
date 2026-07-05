@@ -3,8 +3,11 @@
  * Provides access to a Font object with the opentype.js getPath() method.
  */
 
+import type { WarningLogger } from "../warning-logger.js";
 import { warn } from "../warning-logger.js";
 import { getCjkFallbackFonts } from "./cjk-font-fallback.js";
+import type { FontMapping } from "./font-mapping.js";
+import { getMappedFont } from "./font-mapping.js";
 import { getCurrentMappedFont } from "./font-mapping-context.js";
 
 export interface OpentypePath {
@@ -24,7 +27,13 @@ export interface TextPathFontResolver {
     fontFamily: string | null | undefined,
     fontFamilyEa: string | null | undefined,
     jpanFallback?: string | null,
+    context?: TextPathFontResolverContext,
   ): OpentypeFullFont | null;
+}
+
+export interface TextPathFontResolverContext {
+  readonly fontMapping?: FontMapping;
+  readonly warningLogger?: WarningLogger;
 }
 
 export class DefaultTextPathFontResolver implements TextPathFontResolver {
@@ -41,37 +50,48 @@ export class DefaultTextPathFontResolver implements TextPathFontResolver {
     fontFamily: string | null | undefined,
     fontFamilyEa: string | null | undefined,
     jpanFallback?: string | null,
+    context?: TextPathFontResolverContext,
   ): OpentypeFullFont | null {
     if (fontFamily) {
-      const font = this.findFont(fontFamily);
+      const font = this.findFont(fontFamily, context);
       if (font) return font;
     }
     if (fontFamilyEa) {
-      const font = this.findFont(fontFamilyEa);
+      const font = this.findFont(fontFamilyEa, context);
       if (font) return font;
     }
     if (jpanFallback) {
-      const font = this.findFont(jpanFallback);
+      const font = this.findFont(jpanFallback, context);
       if (font) return font;
     }
 
     // Font-not-found warning
     for (const name of [fontFamily, fontFamilyEa, jpanFallback]) {
-      if (name && !this.warnedFonts.has(name)) {
-        this.warnedFonts.add(name);
-        warn("font.notFound", `Font not found: "${name}"`);
+      if (name) {
+        const logger = context?.warningLogger;
+        if (logger) {
+          logger.warn("font.notFound", `Font not found: "${name}"`);
+          continue;
+        }
+        if (!this.warnedFonts.has(name)) {
+          this.warnedFonts.add(name);
+          warn("font.notFound", `Font not found: "${name}"`);
+        }
       }
     }
 
     return this.defaultFont;
   }
 
-  private findFont(name: string): OpentypeFullFont | null {
+  private findFont(name: string, context?: TextPathFontResolverContext): OpentypeFullFont | null {
     const direct = this.fonts.get(name);
     if (direct) return direct;
 
     // Try OSS replacement names from font mapping
-    const mapped = getCurrentMappedFont(name);
+    const mapped =
+      context?.fontMapping !== undefined
+        ? getMappedFont(name, context.fontMapping)
+        : getCurrentMappedFont(name);
     if (mapped) {
       const mappedFont = this.fonts.get(mapped);
       if (mappedFont) return mappedFont;

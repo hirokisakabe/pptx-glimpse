@@ -17,7 +17,7 @@ import {
   textBodyToProseMirrorDocJson,
 } from "@pptx-glimpse/editor-core";
 
-import { type ConvertOptions, convertPptxToSvg, type SlideSvg } from "./svg-converter.js";
+import { type ConvertOptions, renderPptxSourceModelToSvg, type SlideSvg } from "./svg-converter.js";
 
 const EMU_PER_INCH = 914400;
 const DEFAULT_DPI = 96;
@@ -131,7 +131,7 @@ export class BrowserPptxEditorSession {
   }
 
   async renderCurrentSlides(): Promise<readonly SlideSvg[]> {
-    const report = await convertPptxToSvg(writePptx(this.#session.document), {
+    const report = await renderPptxSourceModelToSvg(this.#session.document, {
       textOutput: "text",
       skipSystemFonts: true,
       ...this.#renderOptions,

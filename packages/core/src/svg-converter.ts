@@ -3,6 +3,7 @@ import type {
   ComputedSlide,
   Diagnostic,
   PptxComputedView,
+  PptxSourceModel,
   SourceHandle,
 } from "@pptx-glimpse/document";
 import { createComputedView, readPptx } from "@pptx-glimpse/document";
@@ -19,22 +20,10 @@ import {
   buildFontFaceStyle,
   createFontMapping,
   createOpentypeSetupFromBuffers,
-  flushWarnings,
+  createRendererContext,
+  createWarningLogger,
   FontUsageCollector,
-  getWarningEntries,
-  initWarningLogger,
   renderSlideToSvg,
-  resetFontMapping,
-  resetFontUsageCollector,
-  resetScriptFonts,
-  resetTextMeasurer,
-  resetTextPathFontResolver,
-  setFontMapping,
-  setFontUsageCollector,
-  setScriptFonts,
-  setTextMeasurer,
-  setTextPathFontResolver,
-  warn,
 } from "@pptx-glimpse/renderer";
 
 import {
@@ -201,6 +190,8 @@ export type SystemFontSetupLoader = (
   options: ConvertOptions | undefined,
 ) => Promise<OpentypeSetup | null>;
 
+export type { PptxSourceModel } from "@pptx-glimpse/document";
+
 /**
  * Convert a PPTX file to SVG documents.
  *
@@ -219,85 +210,86 @@ export async function convertPptxToSvg(
   options?: ConvertOptions,
   loadSystemFontSetup?: SystemFontSetupLoader,
 ): Promise<SvgConversionReport> {
+  const source = readPptx(input);
+  return renderPptxSourceModelToSvg(source, options, loadSystemFontSetup);
+}
+
+/**
+ * Render SVG documents from an already parsed PptxSourceModel.
+ *
+ * This avoids re-reading PPTX bytes when callers keep the result of `readPptx()`
+ * and need to render one or more slides repeatedly.
+ */
+export async function renderPptxSourceModelToSvg(
+  source: PptxSourceModel,
+  options?: ConvertOptions,
+  loadSystemFontSetup?: SystemFontSetupLoader,
+): Promise<SvgConversionReport> {
   const textOutput = options?.textOutput ?? "path";
   const logLevel = options?.logLevel ?? "off";
   const setup = await createOpentypeSetup(options, loadSystemFontSetup);
-  if (setup) {
-    setTextMeasurer(setup.measurer);
-    if (textOutput !== "text") {
-      setTextPathFontResolver(setup.fontResolver);
-    }
-  }
 
   const fontUsageCollector = textOutput === "text" ? new FontUsageCollector() : null;
-  if (fontUsageCollector) {
-    setFontUsageCollector(fontUsageCollector);
+  const scriptFontScheme = findScriptFontScheme(source);
+  const warningLogger = createWarningLogger(logLevel === "off" ? "warn" : logLevel);
+  const context = createRendererContext({
+    ...(setup !== null ? { textMeasurer: setup.measurer } : {}),
+    textPathFontResolver: setup !== null && textOutput !== "text" ? setup.fontResolver : null,
+    fontUsageCollector,
+    fontMapping: createFontMapping(options?.fontMapping),
+    scriptFonts: {
+      majorJpan: scriptFontScheme?.majorJapanese ?? null,
+      minorJpan: scriptFontScheme?.minorJapanese ?? null,
+    },
+    warningLogger,
+  });
+
+  if (source.presentation.slidePartPaths.length === 0) {
+    context.warningLogger.warn("presentation.noSlides", "No slides found in the PPTX file");
   }
-  setFontMapping(createFontMapping(options?.fontMapping));
 
-  try {
-    initWarningLogger(logLevel === "off" ? "warn" : logLevel);
+  const computed = createComputedView(source, { slides: options?.slides });
+  const adapted = adaptComputedViewToRendererModel(computed);
+  const slideSize = adapted.slideSize;
+  if (slideSize === undefined && adapted.slides.length > 0) {
+    throw new Error("Converter requires a computed slide size");
+  }
 
-    const source = readPptx(input);
-    const scriptFontScheme = findScriptFontScheme(source);
-    setScriptFonts(
-      scriptFontScheme?.majorJapanese ?? null,
-      scriptFontScheme?.minorJapanese ?? null,
-    );
-    if (source.presentation.slidePartPaths.length === 0) {
-      warn("presentation.noSlides", "No slides found in the PPTX file");
-    }
-
-    const computed = createComputedView(source, { slides: options?.slides });
-    const adapted = adaptComputedViewToRendererModel(computed);
-    const slideSize = adapted.slideSize;
-    if (slideSize === undefined && adapted.slides.length > 0) {
-      throw new Error("Converter requires a computed slide size");
-    }
-
-    const slides: SlideSvg[] = [];
-    for (const slide of adapted.slides) {
-      if (slideSize === undefined) continue;
-      fontUsageCollector?.reset();
-      let svg = renderSlideToSvg(slide, slideSize);
-      if (fontUsageCollector && setup) {
-        const style = await buildFontFaceStyle(fontUsageCollector.getUsages(), setup.fontResolver);
-        if (style) {
-          svg = injectIntoSvgDefs(svg, style);
-        }
+  const slides: SlideSvg[] = [];
+  for (const slide of adapted.slides) {
+    if (slideSize === undefined) continue;
+    fontUsageCollector?.reset();
+    let svg = renderSlideToSvg(slide, slideSize, context);
+    if (fontUsageCollector && setup) {
+      const style = await buildFontFaceStyle(
+        fontUsageCollector.getUsages(),
+        setup.fontResolver,
+        context,
+      );
+      if (style) {
+        svg = injectIntoSvgDefs(svg, style);
       }
-      slides.push({ slideNumber: slide.slideNumber, svg });
     }
-
-    const rendererWarningEntries = [...getWarningEntries()];
-    if (logLevel === "off") {
-      initWarningLogger("off");
-    } else {
-      flushWarnings();
-    }
-
-    const diagnostics: ConversionDiagnostic[] = [
-      ...normalizeDocumentDiagnostics(source.diagnostics),
-      ...collectSmartArtComputedViewDiagnostics(computed),
-      ...normalizeRendererAdapterDiagnostics(adapted.diagnostics),
-      ...normalizeRendererWarningDiagnostics(rendererWarningEntries),
-    ];
-    const supportCoverage = buildSupportCoverage(computed, adapted.slides, diagnostics);
-
-    return { slides, diagnostics, supportCoverage };
-  } finally {
-    if (logLevel === "off") {
-      initWarningLogger("off");
-    }
-    resetTextMeasurer();
-    resetTextPathFontResolver();
-    resetFontUsageCollector();
-    resetFontMapping();
-    resetScriptFonts();
+    slides.push({ slideNumber: slide.slideNumber, svg });
   }
+
+  const rendererWarningEntries = [...context.warningLogger.getWarningEntries()];
+  if (logLevel !== "off") {
+    context.warningLogger.flushWarnings();
+  }
+
+  const diagnostics: ConversionDiagnostic[] = [
+    ...normalizeDocumentDiagnostics(source.diagnostics),
+    ...collectSmartArtComputedViewDiagnostics(computed),
+    ...normalizeRendererAdapterDiagnostics(adapted.diagnostics),
+    ...normalizeRendererWarningDiagnostics(rendererWarningEntries),
+  ];
+  const supportCoverage = buildSupportCoverage(computed, adapted.slides, diagnostics);
+
+  return { slides, diagnostics, supportCoverage };
 }
 
-function findScriptFontScheme(source: ReturnType<typeof readPptx>) {
+function findScriptFontScheme(source: PptxSourceModel) {
   const firstThemePartPath = source.slideMasters.find(
     (master) => master.themePartPath !== undefined,
   )?.themePartPath;

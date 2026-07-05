@@ -3,17 +3,22 @@ import { emuToPixels } from "../utils/emu.js";
 import { renderEffects } from "./effect-renderer.js";
 import { renderFillAttrs, renderMarkers, renderOutlineAttrs } from "./fill-renderer.js";
 import { renderGeometry } from "./geometry/index.js";
+import type { RendererContext } from "./render-context.js";
+import { createLegacyRendererContext } from "./render-context.js";
 import type { RenderResult } from "./render-result.js";
 import { computeSpAutofitHeight, renderTextBody } from "./text-renderer.js";
 import { buildTransformAttr } from "./transform.js";
 
-export function renderShape(shape: ShapeElement): RenderResult {
+export function renderShape(
+  shape: ShapeElement,
+  context: RendererContext = createLegacyRendererContext(),
+): RenderResult {
   const { transform, geometry, fill, outline, textBody, effects } = shape;
 
   // spAutofit: expand shape height according to text amount
   let effectiveTransform = transform;
   if (textBody?.bodyProperties.autoFit === "spAutofit") {
-    const requiredHeightEmu = computeSpAutofitHeight(textBody, transform);
+    const requiredHeightEmu = computeSpAutofitHeight(textBody, transform, context);
     if (requiredHeightEmu !== null) {
       effectiveTransform = { ...transform, extentHeight: requiredHeightEmu };
     }
@@ -48,7 +53,7 @@ export function renderShape(shape: ShapeElement): RenderResult {
   }
 
   if (textBody) {
-    const textSvg = renderTextBody(textBody, effectiveTransform);
+    const textSvg = renderTextBody(textBody, effectiveTransform, context);
     if (textSvg) {
       parts.push(textSvg);
     }

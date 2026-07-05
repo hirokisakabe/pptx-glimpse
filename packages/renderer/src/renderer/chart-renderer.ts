@@ -1,7 +1,8 @@
 import type { ChartData, ChartElement, ChartSeries } from "../model/chart.js";
 import type { ResolvedColor } from "../model/fill.js";
 import { emuToPixels } from "../utils/emu.js";
-import { debug } from "../warning-logger.js";
+import type { RendererContext } from "./render-context.js";
+import { createLegacyRendererContext } from "./render-context.js";
 import type { RenderResult } from "./render-result.js";
 import { buildTransformAttr } from "./transform.js";
 
@@ -16,7 +17,10 @@ const DEFAULT_SERIES_COLORS: ResolvedColor[] = [
 
 const LEGEND_SIDE_WIDTH = 100;
 
-export function renderChart(element: ChartElement): RenderResult {
+export function renderChart(
+  element: ChartElement,
+  context: RendererContext = createLegacyRendererContext(),
+): RenderResult {
   const { transform, chart } = element;
   const w = emuToPixels(transform.extentWidth);
   const h = emuToPixels(transform.extentHeight);
@@ -50,37 +54,37 @@ export function renderChart(element: ChartElement): RenderResult {
   if (plotW > 0 && plotH > 0) {
     switch (chart.chartType) {
       case "bar":
-        parts.push(renderBarChart(chart, plotX, plotY, plotW, plotH));
+        parts.push(renderBarChart(chart, plotX, plotY, plotW, plotH, context));
         break;
       case "line":
-        parts.push(renderLineChart(chart, plotX, plotY, plotW, plotH));
+        parts.push(renderLineChart(chart, plotX, plotY, plotW, plotH, context));
         break;
       case "pie":
-        parts.push(renderPieChart(chart, plotX, plotY, plotW, plotH));
+        parts.push(renderPieChart(chart, plotX, plotY, plotW, plotH, context));
         break;
       case "doughnut":
-        parts.push(renderDoughnutChart(chart, plotX, plotY, plotW, plotH));
+        parts.push(renderDoughnutChart(chart, plotX, plotY, plotW, plotH, context));
         break;
       case "scatter":
-        parts.push(renderScatterChart(chart, plotX, plotY, plotW, plotH));
+        parts.push(renderScatterChart(chart, plotX, plotY, plotW, plotH, context));
         break;
       case "bubble":
-        parts.push(renderBubbleChart(chart, plotX, plotY, plotW, plotH));
+        parts.push(renderBubbleChart(chart, plotX, plotY, plotW, plotH, context));
         break;
       case "area":
-        parts.push(renderAreaChart(chart, plotX, plotY, plotW, plotH));
+        parts.push(renderAreaChart(chart, plotX, plotY, plotW, plotH, context));
         break;
       case "radar":
-        parts.push(renderRadarChart(chart, plotX, plotY, plotW, plotH));
+        parts.push(renderRadarChart(chart, plotX, plotY, plotW, plotH, context));
         break;
       case "stock":
-        parts.push(renderStockChart(chart, plotX, plotY, plotW, plotH));
+        parts.push(renderStockChart(chart, plotX, plotY, plotW, plotH, context));
         break;
       case "surface":
-        parts.push(renderSurfaceChart(chart, plotX, plotY, plotW, plotH));
+        parts.push(renderSurfaceChart(chart, plotX, plotY, plotW, plotH, context));
         break;
       case "ofPie":
-        parts.push(renderOfPieChart(chart, plotX, plotY, plotW, plotH));
+        parts.push(renderOfPieChart(chart, plotX, plotY, plotW, plotH, context));
         break;
     }
   }
@@ -97,23 +101,34 @@ function renderChartTitle(title: string, chartWidth: number): string {
   return `<text x="${round(chartWidth / 2)}" y="20" text-anchor="middle" font-size="14" font-weight="bold" fill="#404040">${escapeXml(title)}</text>`;
 }
 
-function renderBarChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
+function debugChart(context: RendererContext, feature: string, message: string): void {
+  context.warningLogger.debug(feature, message);
+}
+
+function renderBarChart(
+  chart: ChartData,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  context: RendererContext,
+): string {
   const parts: string[] = [];
   const { series, categories } = chart;
   if (series.length === 0) {
-    debug("chart.bar", "series is empty");
+    debugChart(context, "chart.bar", "series is empty");
     return "";
   }
 
   const maxVal = getMaxValue(series);
   if (maxVal === 0) {
-    debug("chart.bar", "max value is 0");
+    debugChart(context, "chart.bar", "max value is 0");
     return "";
   }
 
   const catCount = categories.length || Math.max(...series.map((s) => s.values.length));
   if (catCount === 0) {
-    debug("chart.bar", "category count is 0");
+    debugChart(context, "chart.bar", "category count is 0");
     return "";
   }
 
@@ -199,23 +214,30 @@ function renderBarChart(chart: ChartData, x: number, y: number, w: number, h: nu
   return parts.join("");
 }
 
-function renderLineChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
+function renderLineChart(
+  chart: ChartData,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  context: RendererContext,
+): string {
   const parts: string[] = [];
   const { series, categories } = chart;
   if (series.length === 0) {
-    debug("chart.line", "series is empty");
+    debugChart(context, "chart.line", "series is empty");
     return "";
   }
 
   const maxVal = getMaxValue(series);
   if (maxVal === 0) {
-    debug("chart.line", "max value is 0");
+    debugChart(context, "chart.line", "max value is 0");
     return "";
   }
 
   const catCount = categories.length || Math.max(...series.map((s) => s.values.length));
   if (catCount === 0) {
-    debug("chart.line", "category count is 0");
+    debugChart(context, "chart.line", "category count is 0");
     return "";
   }
 
@@ -267,23 +289,30 @@ function renderLineChart(chart: ChartData, x: number, y: number, w: number, h: n
   return parts.join("");
 }
 
-function renderAreaChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
+function renderAreaChart(
+  chart: ChartData,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  context: RendererContext,
+): string {
   const parts: string[] = [];
   const { series, categories } = chart;
   if (series.length === 0) {
-    debug("chart.area", "series is empty");
+    debugChart(context, "chart.area", "series is empty");
     return "";
   }
 
   const maxVal = getMaxValue(series);
   if (maxVal === 0) {
-    debug("chart.area", "max value is 0");
+    debugChart(context, "chart.area", "max value is 0");
     return "";
   }
 
   const catCount = categories.length || Math.max(...series.map((s) => s.values.length));
   if (catCount === 0) {
-    debug("chart.area", "category count is 0");
+    debugChart(context, "chart.area", "category count is 0");
     return "";
   }
 
@@ -336,17 +365,24 @@ function renderAreaChart(chart: ChartData, x: number, y: number, w: number, h: n
   return parts.join("");
 }
 
-function renderPieChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
+function renderPieChart(
+  chart: ChartData,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  context: RendererContext,
+): string {
   const parts: string[] = [];
   const series = chart.series[0];
   if (!series || series.values.length === 0) {
-    debug("chart.pie", "series is empty or has no values");
+    debugChart(context, "chart.pie", "series is empty or has no values");
     return "";
   }
 
   const total = series.values.reduce((sum, v) => sum + v, 0);
   if (total === 0) {
-    debug("chart.pie", "total value is 0");
+    debugChart(context, "chart.pie", "total value is 0");
     return "";
   }
 
@@ -383,17 +419,24 @@ function renderPieChart(chart: ChartData, x: number, y: number, w: number, h: nu
   return parts.join("");
 }
 
-function renderDoughnutChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
+function renderDoughnutChart(
+  chart: ChartData,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  context: RendererContext,
+): string {
   const parts: string[] = [];
   const series = chart.series[0];
   if (!series || series.values.length === 0) {
-    debug("chart.doughnut", "series is empty or has no values");
+    debugChart(context, "chart.doughnut", "series is empty or has no values");
     return "";
   }
 
   const total = series.values.reduce((sum, v) => sum + v, 0);
   if (total === 0) {
-    debug("chart.doughnut", "total value is 0");
+    debugChart(context, "chart.doughnut", "total value is 0");
     return "";
   }
 
@@ -439,11 +482,18 @@ function renderDoughnutChart(chart: ChartData, x: number, y: number, w: number, 
   return parts.join("");
 }
 
-function renderScatterChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
+function renderScatterChart(
+  chart: ChartData,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  context: RendererContext,
+): string {
   const parts: string[] = [];
   const { series } = chart;
   if (series.length === 0) {
-    debug("chart.scatter", "series is empty");
+    debugChart(context, "chart.scatter", "series is empty");
     return "";
   }
 
@@ -487,11 +537,18 @@ function renderScatterChart(chart: ChartData, x: number, y: number, w: number, h
   return parts.join("");
 }
 
-function renderBubbleChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
+function renderBubbleChart(
+  chart: ChartData,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  context: RendererContext,
+): string {
   const parts: string[] = [];
   const { series } = chart;
   if (series.length === 0) {
-    debug("chart.bubble", "series is empty");
+    debugChart(context, "chart.bubble", "series is empty");
     return "";
   }
 
@@ -546,23 +603,30 @@ function renderBubbleChart(chart: ChartData, x: number, y: number, w: number, h:
   return parts.join("");
 }
 
-function renderRadarChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
+function renderRadarChart(
+  chart: ChartData,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  context: RendererContext,
+): string {
   const parts: string[] = [];
   const { series, categories } = chart;
   if (series.length === 0) {
-    debug("chart.radar", "series is empty");
+    debugChart(context, "chart.radar", "series is empty");
     return "";
   }
 
   const maxVal = getMaxValue(series);
   if (maxVal === 0) {
-    debug("chart.radar", "max value is 0");
+    debugChart(context, "chart.radar", "max value is 0");
     return "";
   }
 
   const catCount = categories.length || Math.max(...series.map((s) => s.values.length));
   if (catCount === 0) {
-    debug("chart.radar", "category count is 0");
+    debugChart(context, "chart.radar", "category count is 0");
     return "";
   }
 
@@ -639,13 +703,24 @@ function renderRadarChart(chart: ChartData, x: number, y: number, w: number, h: 
   return parts.join("");
 }
 
-function renderStockChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
+function renderStockChart(
+  chart: ChartData,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  context: RendererContext,
+): string {
   const parts: string[] = [];
   const { series, categories } = chart;
 
   // Stock chart expects series in order: High (0), Low (1), Close (2)
   if (series.length < 3) {
-    debug("chart.stock", `insufficient series count: ${series.length} (need at least 3)`);
+    debugChart(
+      context,
+      "chart.stock",
+      `insufficient series count: ${series.length} (need at least 3)`,
+    );
     return "";
   }
 
@@ -654,7 +729,7 @@ function renderStockChart(chart: ChartData, x: number, y: number, w: number, h: 
   const closeSeries = series[2];
   const catCount = categories.length || highSeries.values.length;
   if (catCount === 0) {
-    debug("chart.stock", "category count is 0");
+    debugChart(context, "chart.stock", "category count is 0");
     return "";
   }
 
@@ -667,7 +742,7 @@ function renderStockChart(chart: ChartData, x: number, y: number, w: number, h: 
     }
   }
   if (maxVal === minVal) {
-    debug("chart.stock", "max equals min value");
+    debugChart(context, "chart.stock", "max equals min value");
     return "";
   }
 
@@ -723,18 +798,25 @@ function renderStockChart(chart: ChartData, x: number, y: number, w: number, h: 
   return parts.join("");
 }
 
-function renderSurfaceChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
+function renderSurfaceChart(
+  chart: ChartData,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  context: RendererContext,
+): string {
   const parts: string[] = [];
   const { series, categories } = chart;
   if (series.length === 0) {
-    debug("chart.surface", "series is empty");
+    debugChart(context, "chart.surface", "series is empty");
     return "";
   }
 
   const rows = series.length;
   const cols = categories.length || Math.max(...series.map((s) => s.values.length));
   if (cols === 0) {
-    debug("chart.surface", "column count is 0");
+    debugChart(context, "chart.surface", "column count is 0");
     return "";
   }
 
@@ -819,17 +901,24 @@ function heatmapColor(t: number): string {
   return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`;
 }
 
-function renderOfPieChart(chart: ChartData, x: number, y: number, w: number, h: number): string {
+function renderOfPieChart(
+  chart: ChartData,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  context: RendererContext,
+): string {
   const parts: string[] = [];
   const series = chart.series[0];
   if (!series || series.values.length === 0) {
-    debug("chart.ofPie", "series is empty or has no values");
+    debugChart(context, "chart.ofPie", "series is empty or has no values");
     return "";
   }
 
   const total = series.values.reduce((sum, v) => sum + v, 0);
   if (total === 0) {
-    debug("chart.ofPie", "total value is 0");
+    debugChart(context, "chart.ofPie", "total value is 0");
     return "";
   }
 

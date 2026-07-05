@@ -15,6 +15,10 @@ export function resetFontMapping(): void {
   currentMapping = { ...DEFAULT_FONT_MAPPING };
 }
 
+export function getFontMapping(): FontMapping {
+  return currentMapping;
+}
+
 /**
  * Shortcut for getting an OSS replacement font name from the current mapping table.
  */
