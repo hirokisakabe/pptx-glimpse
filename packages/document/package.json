@@ -1,7 +1,6 @@
 {
   "name": "@pptx-glimpse/document",
   "version": "0.0.0",
-  "private": true,
   "description": "PptxSourceModel and OOXML document foundation for pptx-glimpse.",
   "type": "module",
   "main": "./dist/index.cjs",
