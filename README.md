@@ -7,7 +7,7 @@
 
 No LibreOffice required — just `npm install`.
 
-A lightweight JavaScript library that renders PowerPoint (.pptx) slides as SVG or PNG in Node.js.
+A lightweight JavaScript library that renders PowerPoint (.pptx) slides as SVG or PNG — in Node.js and in the browser.
 
 **[Try the Demo](https://glimpse.pptx.app/)** | [npm](https://www.npmjs.com/package/pptx-glimpse)
 
@@ -23,9 +23,9 @@ _Upload a .pptx file → get SVG/PNG output instantly_
 
 pptx-glimpse is designed for two primary use cases:
 
-- **Frontend PPTX preview** — Render slide thumbnails without depending on
-  Microsoft Office or LibreOffice. The SVG output can be embedded directly
-  in web pages.
+- **Frontend PPTX preview** — Render slide thumbnails entirely client-side,
+  without a conversion server, Microsoft Office, or LibreOffice. The SVG output
+  can be embedded directly in web pages.
 - **AI image recognition** — Convert slides to PNG so that vision-capable LLMs
   can understand slide content and layout.
 
@@ -34,16 +34,20 @@ rather than pixel-perfect rendering of every PowerPoint feature.
 
 ## Why not LibreOffice?
 
-|              | LibreOffice                | pptx-glimpse                   |
-| ------------ | -------------------------- | ------------------------------ |
-| Install size | ~500 MB+                   | `npm install` (~30 MB)         |
-| Docker image | Large base image required  | Works in any Node.js image     |
-| Startup time | Process spawning overhead  | In-process, no spawning        |
-| Concurrency  | One process per conversion | Async, runs in your event loop |
+|              | LibreOffice                | pptx-glimpse                             |
+| ------------ | -------------------------- | ---------------------------------------- |
+| Install size | ~500 MB+                   | `npm install` (~30 MB)                   |
+| Docker image | Large base image required  | Works in Node.js images and browser apps |
+| Startup time | Process spawning overhead  | In-process, no spawning                  |
+| Concurrency  | One process per conversion | Async, runs in your event loop           |
 
 ## Requirements
 
-- **Node.js >= 22**
+- **Node.js >= 22** when using pptx-glimpse in Node.js.
+- **Browser usage** should provide font bytes with the `fonts` option; see
+  [Custom Font Loading](#custom-font-loading). PNG conversion in browser-like
+  runtimes also requires explicit resvg WASM initialization; see
+  [Browser resvg WASM Loading for PNG](#browser-resvg-wasm-loading-for-png).
 
 ## Installation
 
