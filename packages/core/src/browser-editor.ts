@@ -154,11 +154,9 @@ export class BrowserPptxEditorSession {
     const commands = proseMirrorDocJsonToEditorCommands(textBody, docJson);
     if (commands.length === 0) return this.response();
 
-    for (const command of commands) {
-      const result = this.#session.apply(command);
-      if (!result.ok) {
-        throw new Error(result.message);
-      }
+    const result = this.#session.applyAll(commands);
+    if (!result.ok) {
+      throw new Error(result.message);
     }
     await this.renderCurrentSlides();
     return this.response();
@@ -220,15 +218,20 @@ function shapeInfo(
   index: number,
   editableTransform = true,
 ): BrowserEditorShapeInfo[] {
+  const canEditTransform =
+    shape.kind !== "raw" &&
+    shape.transform !== undefined &&
+    editableTransform &&
+    isEditableTransformShape(shape);
   const base: BrowserEditorShapeInfo = {
     id: String(shape.nodeId ?? shape.handle?.nodeId ?? `${shape.kind}:${String(index)}`),
     kind: shape.kind,
     ...(shapeName(shape) !== undefined ? { name: shapeName(shape) } : {}),
     ...(shape.handle !== undefined ? { handle: shape.handle } : {}),
-    ...(shape.kind !== "raw" && shape.transform !== undefined
+    ...(canEditTransform
       ? {
           bounds: transformBoundsPx(shape.transform),
-          editableTransform: editableTransform && isEditableTransformShape(shape),
+          editableTransform: true,
         }
       : {}),
     ...("textBody" in shape && shape.textBody !== undefined
@@ -238,7 +241,7 @@ function shapeInfo(
           ),
         }
       : {}),
-    ...(shape.kind === "shape" && shape.textBody !== undefined && shape.transform !== undefined
+    ...(shape.kind === "shape" && canEditTransform && shape.textBody !== undefined
       ? editableTextBody(shape.textBody)
       : {}),
   };
