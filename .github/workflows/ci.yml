@@ -110,7 +110,7 @@ jobs:
 
       - name: Verify demo production samples
         if: matrix.node-version == 22
-        run: cd demo && npm install && npm run verify:samples
+        run: cd demo && npm ci && npx playwright install chromium && npm run verify:samples
 
   vrt:
     runs-on: ubuntu-latest

@@ -40,7 +40,24 @@ try {
     serverOutput += chunk.toString();
   });
 
-  await waitForHttpOk(baseUrl, () => serverOutput);
+  let serverReady = false;
+  const serverExitBeforeReady = new Promise((_, reject) => {
+    server.once("exit", (code, signal) => {
+      if (serverReady) return;
+      reject(
+        new Error(
+          `next start exited before becoming ready (code ${String(code)}, signal ${String(signal)})\n${serverOutput}`,
+        ),
+      );
+    });
+  });
+
+  await Promise.race([
+    waitForHttpOk(baseUrl, () => serverOutput).then(() => {
+      serverReady = true;
+    }),
+    serverExitBeforeReady,
+  ]);
 
   for (const sample of samples) {
     await assertSampleServed(baseUrl, sample.filename);

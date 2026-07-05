@@ -29,7 +29,7 @@
     "changeset": "changeset",
     "demo:dev": "cd demo && npm run dev",
     "demo:build": "pnpm run build && cd demo && npm install && npm run build",
-    "demo:verify-samples": "pnpm run build && pnpm exec playwright install chromium && cd demo && npm install && npm run verify:samples"
+    "demo:verify-samples": "pnpm run build && cd demo && npm ci && npx playwright install chromium && npm run verify:samples"
   },
   "packageManager": "pnpm@11.5.0",
   "engines": {
