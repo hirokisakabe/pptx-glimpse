@@ -8,12 +8,14 @@
  * non-bookkeeping raw parts prefer the raw package material preserved by the reader.
  * Only dirty scopes are updated according to supported PptxSourceModel operations.
  *
- * The current slice supports plain text-run replacement and top-level shape transform
- * offset/extent edits, reserializing dirty slide XML parts and replacing only the
- * targeted values via stable source handles.
- * Node-level XML splicing, precise unsupported raw-sidecar invalidation, and package
- * topology rewrites belong to later writer slices, but the API and dirty-scope tracking
- * remain shaped for that extension path.
+ * The current slice supports plain text-run replacement, paragraph replacement,
+ * top-level shape transform offset/extent edits, and slide duplicate/delete topology
+ * edits. Dirty slide XML parts are reserialized by replacing only targeted values via
+ * stable source handles; slide duplicate/delete patches presentation bookkeeping while
+ * preserving unrelated raw package material.
+ * Node-level XML splicing and precise unsupported raw-sidecar invalidation belong to
+ * later writer slices, but the API and dirty-scope tracking remain shaped for that
+ * extension path.
  */
 
 import { XMLBuilder } from "fast-xml-parser";

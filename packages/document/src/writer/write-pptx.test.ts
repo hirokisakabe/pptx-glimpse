@@ -150,6 +150,27 @@ function buildSlideTopologyFixture(): Uint8Array {
   });
 }
 
+function buildSlideTopologyFixtureWithRelationshipOverrides(): Uint8Array {
+  const entries = unzipSync(buildSlideTopologyFixture());
+  const relationshipContentType = "application/vnd.openxmlformats-package.relationships+xml";
+  const contentTypes = decoder
+    .decode(entries["[Content_Types].xml"])
+    .replace(`<Default Extension="rels" ContentType="${relationshipContentType}"/>`, "")
+    .replace(
+      `</Types>`,
+      `<Override PartName="/_rels/.rels" ContentType="${relationshipContentType}"/>` +
+        `<Override PartName="/ppt/_rels/presentation.xml.rels" ContentType="${relationshipContentType}"/>` +
+        `<Override PartName="/ppt/slides/_rels/slide1.xml.rels" ContentType="${relationshipContentType}"/>` +
+        `<Override PartName="/ppt/notesSlides/_rels/notesSlide1.xml.rels" ContentType="${relationshipContentType}"/>` +
+        `</Types>`,
+    );
+
+  return zipSync({
+    ...entries,
+    "[Content_Types].xml": encoder.encode(contentTypes),
+  });
+}
+
 function buildLayoutShowRoundTripFixture(): Uint8Array {
   return zipSync({
     "[Content_Types].xml": xml(
@@ -532,6 +553,36 @@ describe("writePptx - slide topology edits", () => {
         (override) => override.partName === "ppt/notesSlides/notesSlide1.xml",
       ),
     ).toBe(false);
+  });
+
+  it("keeps relationship content type overrides consistent when no rels default exists", () => {
+    const source = readPptx(buildSlideTopologyFixtureWithRelationshipOverrides());
+    const duplicated = readPptx(writePptx(duplicateSlide(source, source.slides[0].handle!)));
+    const deleted = readPptx(writePptx(deleteSlide(source, source.slides[0].handle!)));
+    const duplicatedOverrides = duplicated.packageGraph.contentTypes.overrides;
+    const deletedOverridePartNames = new Set(
+      deleted.packageGraph.contentTypes.overrides.map((override) => override.partName),
+    );
+
+    expect(
+      duplicated.packageGraph.contentTypes.defaults.some((entry) => entry.extension === "rels"),
+    ).toBe(false);
+    expect(duplicatedOverrides).toEqual(
+      expect.arrayContaining([
+        {
+          partName: "ppt/slides/_rels/slide3.xml.rels",
+          contentType: "application/vnd.openxmlformats-package.relationships+xml",
+        },
+        {
+          partName: "ppt/notesSlides/_rels/notesSlide2.xml.rels",
+          contentType: "application/vnd.openxmlformats-package.relationships+xml",
+        },
+      ]),
+    );
+    expect(deletedOverridePartNames.has("ppt/slides/slide1.xml")).toBe(false);
+    expect(deletedOverridePartNames.has("ppt/slides/_rels/slide1.xml.rels")).toBe(false);
+    expect(deletedOverridePartNames.has("ppt/notesSlides/notesSlide1.xml")).toBe(false);
+    expect(deletedOverridePartNames.has("ppt/notesSlides/_rels/notesSlide1.xml.rels")).toBe(false);
   });
 
   it("rejects deleting the last slide and duplicating a dirty slide", () => {

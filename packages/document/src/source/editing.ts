@@ -429,6 +429,14 @@ export function duplicateSlide(
               : relationship,
           ),
         };
+  const newRelationshipPartPaths = [
+    ...(newSlideRelationships === undefined
+      ? []
+      : [asPartPath(relationshipsPartPath(newSlidePartPath))]),
+    ...(notesCopy?.relationships === undefined
+      ? []
+      : [asPartPath(relationshipsPartPath(notesCopy.newPartPath))]),
+  ];
 
   const slideContentType =
     source.packageGraph.parts.find((part) => part.partPath === sourceSlide.partPath)?.contentType ??
@@ -482,6 +490,7 @@ export function duplicateSlide(
           ...(notesCopy === undefined
             ? []
             : [{ partName: notesCopy.newPartPath, contentType: notesCopy.contentType }]),
+          ...relationshipPartOverrides(source, newRelationshipPartPaths),
         ],
       },
       relationships: [
@@ -598,7 +607,9 @@ export function deleteSlide(source: PptxSourceModel, slideHandle: SourceHandle):
       contentTypes: {
         ...source.packageGraph.contentTypes,
         overrides: source.packageGraph.contentTypes.overrides.filter(
-          (override) => !removedPartPaths.has(override.partName),
+          (override) =>
+            !removedPartPaths.has(override.partName) &&
+            !removedRelationshipPartPaths.has(override.partName),
         ),
       },
       relationships: source.packageGraph.relationships
@@ -899,6 +910,26 @@ function nextNumberedPartPath(source: PptxSourceModel, prefix: string, suffix: s
     const candidate = asPartPath(`${prefix}${index}${suffix}`);
     if (!used.has(candidate)) return candidate;
   }
+}
+
+function relationshipPartOverrides(
+  source: PptxSourceModel,
+  partPaths: readonly PartPath[],
+): readonly { readonly partName: PartPath; readonly contentType: string }[] {
+  if (
+    source.packageGraph.contentTypes.defaults.some(
+      (entry) => entry.extension === "rels" && entry.contentType === RELS_CONTENT_TYPE,
+    )
+  ) {
+    return [];
+  }
+
+  const existingOverrides = new Set(
+    source.packageGraph.contentTypes.overrides.map((override) => override.partName),
+  );
+  return partPaths
+    .filter((partPath) => !existingOverrides.has(partPath))
+    .map((partName) => ({ partName, contentType: RELS_CONTENT_TYPE }));
 }
 
 function topologyEditPartPaths(edit: PptxSourceModelEdit): readonly PartPath[] {
