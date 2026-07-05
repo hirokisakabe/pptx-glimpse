@@ -7,7 +7,7 @@
 
 No LibreOffice required — just `npm install`.
 
-A lightweight JavaScript library that renders PowerPoint (.pptx) slides as SVG or PNG — in Node.js and in the browser.
+A lightweight JavaScript library that renders PowerPoint (.pptx) slides as SVG or PNG in Node.js and the browser.
 
 **[Try the Demo](https://glimpse.pptx.app/)** | [npm](https://www.npmjs.com/package/pptx-glimpse)
 
