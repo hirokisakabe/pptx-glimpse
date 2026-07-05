@@ -19,6 +19,10 @@
     "./png": {
       "types": "./dist/png.d.ts",
       "default": "./src/png.ts"
+    },
+    "./png/browser": {
+      "types": "./dist/png-browser.d.ts",
+      "default": "./src/png-browser.ts"
     }
   },
   "scripts": {

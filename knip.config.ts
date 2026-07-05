@@ -13,6 +13,9 @@ const config: KnipConfig = {
         "e2e/browser-standalone-viewer.playwright.ts",
       ],
     },
+    "packages/core": {
+      ignoreDependencies: ["@resvg/resvg-wasm"],
+    },
   },
 };
 

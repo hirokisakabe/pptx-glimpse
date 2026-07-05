@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
-import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -12,9 +13,15 @@ import { build } from "esbuild";
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
 const corePackageRoot = resolve(repoRoot, "packages/core");
+const documentPackageRoot = resolve(repoRoot, "packages/document");
+const editorCorePackageRoot = resolve(repoRoot, "packages/editor-core");
+const rendererPackageRoot = resolve(repoRoot, "packages/renderer");
 const sharedFixtures = resolve(repoRoot, "shared-fixtures");
+const vrtFixtures = resolve(repoRoot, "vrt/snapshot/fixtures");
 const execFileAsync = promisify(execFile);
+const coreRequire = createRequire(resolve(corePackageRoot, "package.json"));
 let coreDistBuildPromise: Promise<void> | null = null;
+let vrtFixturesPromise: Promise<void> | null = null;
 
 test("runs a browser-only PPTX to SVG viewer for shared fixtures", async ({ page }) => {
   const viewer = await startStandaloneViewer();
@@ -30,6 +37,48 @@ test("runs a browser-only PPTX to SVG viewer for shared fixtures", async ({ page
       const slideCount = await page.getByTestId("slide").count();
       expect(slideCount).toBeGreaterThan(0);
     }
+  } finally {
+    await viewer.close();
+  }
+});
+
+test("runs browser-only PPTX to SVG conversion for a VRT fixture", async ({ page }) => {
+  await ensureVrtFixtures();
+  const viewer = await startStandaloneViewer();
+  try {
+    await page.goto(viewer.url);
+
+    await page.getByTestId("pptx-input").setInputFiles(resolve(vrtFixtures, "shapes.pptx"));
+    await expect(page.getByTestId("status")).toContainText("slides rendered");
+    await expect(page.getByTestId("slide").first()).toBeVisible();
+    await expect(page.locator("svg").first()).toBeVisible();
+  } finally {
+    await viewer.close();
+  }
+});
+
+test("runs browser-only PPTX to PNG conversion after explicit WASM initialization", async ({
+  page,
+}) => {
+  const viewer = await startStandaloneViewer();
+  try {
+    await page.goto(viewer.url);
+
+    await page
+      .getByTestId("pptx-input")
+      .setInputFiles(resolve(sharedFixtures, "real-basic-theme.pptx"));
+    await expect(page.getByTestId("status")).toContainText("slides rendered");
+
+    const pngSmoke = await page.evaluate(() => {
+      return window.__pptxGlimpseSmoke?.runPngSmoke?.();
+    });
+
+    expect(pngSmoke).toEqual({
+      pngSignature: [0x89, 0x50, 0x4e, 0x47],
+      slideCount: 1,
+      width: 480,
+      height: 270,
+    });
   } finally {
     await viewer.close();
   }
@@ -65,6 +114,7 @@ interface ViewerServer {
 
 async function startStandaloneViewer(): Promise<ViewerServer> {
   const appBundle = await buildStandaloneViewerBundle();
+  const wasm = await readFile(coreRequire.resolve("@resvg/resvg-wasm/index_bg.wasm"));
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? "/", "http://127.0.0.1");
     if (url.pathname === "/" || url.pathname === "/index.html") {
@@ -75,6 +125,11 @@ async function startStandaloneViewer(): Promise<ViewerServer> {
     if (url.pathname === "/app.js") {
       response.setHeader("Content-Type", "text/javascript; charset=utf-8");
       response.end(appBundle);
+      return;
+    }
+    if (url.pathname === "/resvg.wasm") {
+      response.setHeader("Content-Type", "application/wasm");
+      response.end(wasm);
       return;
     }
     response.statusCode = 404;
@@ -117,11 +172,32 @@ async function buildStandaloneViewerBundle(): Promise<string> {
 }
 
 async function ensureCoreDist(): Promise<void> {
-  coreDistBuildPromise ??= execFileAsync("pnpm", ["run", "build"], {
-    cwd: repoRoot,
-    maxBuffer: 10 * 1024 * 1024,
-  }).then(() => undefined);
+  coreDistBuildPromise ??= (async () => {
+    await runPackageBuild(documentPackageRoot);
+    await runPackageBuild(editorCorePackageRoot);
+    await runPackageBuild(rendererPackageRoot);
+    await runPackageBuild(corePackageRoot);
+  })();
   await coreDistBuildPromise;
+}
+
+async function runPackageBuild(packageRoot: string): Promise<void> {
+  await execFileAsync(resolve(repoRoot, "node_modules/.bin/tsup"), ["--config", "tsup.config.ts"], {
+    cwd: packageRoot,
+    maxBuffer: 10 * 1024 * 1024,
+  });
+}
+
+async function ensureVrtFixtures(): Promise<void> {
+  vrtFixturesPromise ??= execFileAsync(
+    resolve(repoRoot, "node_modules/.bin/tsx"),
+    ["vrt/snapshot/create-fixtures.ts"],
+    {
+      cwd: repoRoot,
+      maxBuffer: 10 * 1024 * 1024,
+    },
+  ).then(() => undefined);
+  await vrtFixturesPromise;
 }
 
 async function createPackageResolveDir(): Promise<string> {
@@ -160,7 +236,7 @@ const viewerHtml = `<!doctype html>
 </html>`;
 
 const viewerAppSource = `
-import { convertPptxToSvg } from "pptx-glimpse";
+import { convertPptxToPng, convertPptxToSvg, initResvgWasm } from "pptx-glimpse";
 
 const pptxInput = document.getElementById("pptx-input");
 const fontInput = document.getElementById("font-input");
@@ -169,6 +245,8 @@ const status = document.getElementById("status");
 const slides = document.getElementById("slides");
 
 let fonts = [];
+let lastPptxInput = null;
+let resvgReady = null;
 
 fontInput.addEventListener("change", async () => {
   fonts = await Promise.all(
@@ -185,9 +263,14 @@ pptxInput.addEventListener("change", async () => {
   if (!file) return;
   status.textContent = "Converting";
   slides.textContent = "";
-  const input = new Uint8Array(await file.arrayBuffer());
+  lastPptxInput = new Uint8Array(await file.arrayBuffer());
+  const input = new Uint8Array(lastPptxInput);
   const report = await convertPptxToSvg(input, { fonts, skipSystemFonts: true });
-  window.__pptxGlimpseSmoke = { fontCount: fonts.length, slideCount: report.slides.length };
+  window.__pptxGlimpseSmoke = {
+    fontCount: fonts.length,
+    slideCount: report.slides.length,
+    runPngSmoke,
+  };
   slides.innerHTML = report.slides
     .map((slide) => '<article class="slide" data-testid="slide">' + slide.svg + "</article>")
     .join("");
@@ -198,6 +281,34 @@ pptxInput.addEventListener("change", async () => {
     " font file" +
     (fonts.length === 1 ? "" : "s");
 });
+
+async function runPngSmoke() {
+  if (!lastPptxInput) {
+    throw new Error("load a PPTX before running PNG smoke");
+  }
+  resvgReady ??= fetch("/resvg.wasm").then((response) => initResvgWasm(response));
+  await resvgReady;
+  const report = await convertPptxToPng(new Uint8Array(lastPptxInput), {
+    fonts,
+    skipSystemFonts: true,
+    slides: [1],
+    width: 480,
+  });
+  const slide = report.slides[0];
+  const signature = Array.from(slide.png.slice(0, 4));
+  window.__pptxGlimpseSmoke = {
+    ...window.__pptxGlimpseSmoke,
+    pngSignature: signature,
+    pngWidth: slide.width,
+    pngHeight: slide.height,
+  };
+  return {
+    pngSignature: signature,
+    slideCount: report.slides.length,
+    width: slide.width,
+    height: slide.height,
+  };
+}
 `;
 
 async function createTestFontBuffer(familyName: string): Promise<ArrayBuffer> {
@@ -271,6 +382,15 @@ declare global {
     __pptxGlimpseSmoke?: {
       fontCount: number;
       slideCount: number;
+      runPngSmoke?: () => Promise<{
+        pngSignature: number[];
+        slideCount: number;
+        width: number;
+        height: number;
+      }>;
+      pngSignature?: number[];
+      pngWidth?: number;
+      pngHeight?: number;
     };
   }
 }

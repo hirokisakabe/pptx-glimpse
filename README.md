@@ -189,14 +189,18 @@ const setup = await createOpentypeSetupFromBuffers([
 
 PNG conversion uses `@resvg/resvg-wasm`. In Node.js, `convertPptxToPng` initializes the bundled WASM automatically on first use. In browser-like runtimes that call the PNG conversion path, fetch or bundle the `.wasm` file yourself and pass it to `initResvgWasm` before PNG conversion so no Node.js filesystem loading is needed.
 
-The browser export currently exposes `initResvgWasm` for explicit WASM initialization, but `convertPptxToPng` remains unavailable from the browser export until the PNG result API and browser conversion verification are completed.
-
 ```typescript
-import { initResvgWasm } from "pptx-glimpse";
+import { convertPptxToPng, initResvgWasm } from "pptx-glimpse";
 
 // A Response can be passed directly.
 const wasmResponse = await fetch("/assets/resvg.wasm");
 await initResvgWasm(wasmResponse);
+
+const pptx = new Uint8Array(await pptxFile.arrayBuffer());
+const { slides } = await convertPptxToPng(pptx, {
+  fonts: loadedFonts,
+  skipSystemFonts: true,
+});
 ```
 
 `initResvgWasm` also accepts raw WASM bytes when your bundler or application already loaded them:
@@ -395,6 +399,13 @@ const { slides } = await convertPptxToSvg(pptx, {
 The local editor preview (`npm run dev -- <pptx-file>`) includes an MVP text editing
 overlay for text shapes. IME behavior is intentionally not automated in CI; verify IME
 composition manually as part of the release checklist before shipping editor changes.
+
+Browser conversion smoke tests run with Playwright and cover browser-only SVG conversion
+plus PNG conversion after explicit resvg WASM initialization:
+
+```bash
+npm run test:playwright
+```
 
 <details>
 <summary>Test rendering</summary>

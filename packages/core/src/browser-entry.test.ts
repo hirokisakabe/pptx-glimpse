@@ -7,10 +7,20 @@ import { describe, expect, it, vi } from "vitest";
 
 const resvgMocks = vi.hoisted(() => ({
   initWasm: vi.fn().mockResolvedValue(undefined),
+  MockResvg: class {
+    render() {
+      return {
+        asPng: () => new Uint8Array([0x89, 0x50, 0x4e, 0x47]),
+        width: 1,
+        height: 1,
+      };
+    }
+  },
 }));
 
 vi.mock("@resvg/resvg-wasm", () => ({
   initWasm: resvgMocks.initWasm,
+  Resvg: resvgMocks.MockResvg,
 }));
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -61,7 +71,7 @@ describe("browser entry", () => {
     const result = await build({
       stdin: {
         contents:
-          'import { convertPptxToSvg, initResvgWasm } from "pptx-glimpse"; console.log(convertPptxToSvg, initResvgWasm);',
+          'import { convertPptxToPng, convertPptxToSvg, initResvgWasm } from "pptx-glimpse"; console.log(convertPptxToPng, convertPptxToSvg, initResvgWasm);',
         resolveDir: here,
         sourcefile: "browser-entry-smoke.ts",
         loader: "ts",
@@ -91,6 +101,9 @@ describe("browser entry", () => {
             }));
             build.onResolve({ filter: /^@pptx-glimpse\/renderer\/png$/ }, () => ({
               path: resolve(packageRoot, "../renderer/src/png.ts"),
+            }));
+            build.onResolve({ filter: /^@pptx-glimpse\/renderer\/png\/browser$/ }, () => ({
+              path: resolve(packageRoot, "../renderer/src/png-browser.ts"),
             }));
           },
         },
