@@ -663,9 +663,11 @@ async function replaceSelectedImage(file) {
   if (!selectedShape?.handle || !selectedShape.editableImageReplacement) {
     throw new Error("Select an image shape before replacing media.");
   }
+  const handle = selectedShape.handle;
+  imageReplacementInput.disabled = true;
   const result = await editor.apply({
     kind: "replaceImage",
-    handle: selectedShape.handle,
+    handle,
     bytes: new Uint8Array(await file.arrayBuffer()),
   });
   render();

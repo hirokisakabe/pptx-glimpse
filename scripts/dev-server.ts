@@ -49,6 +49,7 @@ const EMU_PER_INCH = 914400;
 const DEFAULT_DPI = 96;
 const IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
 const MAX_JSON_BODY_BYTES = 20 * 1024 * 1024;
+const MAX_IMAGE_REPLACEMENT_BYTES = 5 * 1024 * 1024;
 
 const IMAGE_ACCEPT_BY_CONTENT_TYPE: Readonly<Record<string, string>> = {
   "image/png": "image/png,.png",
@@ -1028,6 +1029,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         kind: shape.kind,
         name: shape.name,
         handle: shape.handle,
+        editableTransform: shape.editableTransform,
         editableTextBody: shape.editableTextBody,
         editableImageReplacement: shape.editableImageReplacement,
         bounds: {
@@ -1148,23 +1150,25 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         setRectAttributes(box, selectedShape.bounds);
         overlay.appendChild(box);
 
-        ["nw", "ne", "sw", "se"].forEach(function (handle) {
-          var point = handlePoint(selectedShape.bounds, handle);
-          var rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-          rect.setAttribute("class", "selection-handle");
-          rect.setAttribute("data-testid", "selection-handle-" + handle);
-          rect.setAttribute("data-handle", handle);
-          rect.setAttribute("x", String(point.x - 4));
-          rect.setAttribute("y", String(point.y - 4));
-          rect.setAttribute("width", "8");
-          rect.setAttribute("height", "8");
-          rect.addEventListener("pointerdown", function (event) {
-            event.preventDefault();
-            event.stopPropagation();
-            beginDrag("resize", handle, event);
+        if (selectedShape.editableTransform) {
+          ["nw", "ne", "sw", "se"].forEach(function (handle) {
+            var point = handlePoint(selectedShape.bounds, handle);
+            var rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+            rect.setAttribute("class", "selection-handle");
+            rect.setAttribute("data-testid", "selection-handle-" + handle);
+            rect.setAttribute("data-handle", handle);
+            rect.setAttribute("x", String(point.x - 4));
+            rect.setAttribute("y", String(point.y - 4));
+            rect.setAttribute("width", "8");
+            rect.setAttribute("height", "8");
+            rect.addEventListener("pointerdown", function (event) {
+              event.preventDefault();
+              event.stopPropagation();
+              beginDrag("resize", handle, event);
+            });
+            overlay.appendChild(rect);
           });
-          overlay.appendChild(rect);
-        });
+        }
       }
 
       container.appendChild(overlay);
@@ -1199,7 +1203,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       selectedShapeKey = shapeKey(shape);
       selectedShape = cloneShape(shape);
       syncImageReplacementInput();
-      beginDrag("move", null, event);
+      if (shape.editableTransform) beginDrag("move", null, event);
       window.setTimeout(renderSelectionOverlay, 0);
       postJson("/api/editor/select", { handle: shape.handle })
         .then(function (data) {
@@ -1881,7 +1885,9 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
     }
 
     function applyShapeBoundsEdit(startBounds, nextBounds) {
-      if (!selectedShape || !selectedShape.handle) return Promise.resolve();
+      if (!selectedShape || !selectedShape.handle || !selectedShape.editableTransform) {
+        return Promise.resolve();
+      }
       var handle = selectedShape.handle;
       var changed =
         Math.round(startBounds.x) !== Math.round(nextBounds.x) ||
@@ -1927,12 +1933,19 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         setEditorMessage("Select an image shape before replacing media.", true);
         return Promise.resolve();
       }
+      if (file.size > ${String(MAX_IMAGE_REPLACEMENT_BYTES)}) {
+        setEditorMessage("Replacement image is too large.", true);
+        return Promise.resolve();
+      }
+      var handle = selectedShape.handle;
+      var input = document.getElementById("image-replacement-input");
+      if (input) input.disabled = true;
       return file.arrayBuffer()
         .then(function (buffer) {
           return postJson("/api/editor/command", {
             command: {
               kind: "replaceImage",
-              handle: selectedShape.handle,
+              handle: handle,
               bytes: Array.from(new Uint8Array(buffer))
             }
           });
@@ -2301,6 +2314,9 @@ function normalizeCommand(command: unknown): EditorCommand {
 
 function normalizeByteArray(value: unknown, field: string): Uint8Array {
   if (!Array.isArray(value)) throw new Error(`${field} must be an array of bytes`);
+  if (value.length > MAX_IMAGE_REPLACEMENT_BYTES) {
+    throw new Error(`${field} must not exceed ${String(MAX_IMAGE_REPLACEMENT_BYTES)} bytes`);
+  }
   return new Uint8Array(
     value.map((byte, index) => {
       if (!Number.isInteger(byte) || byte < 0 || byte > 255) {
