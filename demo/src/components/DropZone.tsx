@@ -78,7 +78,7 @@ export function DropZone({
         >
           Add fonts
         </button>
-        <div className="sample-actions" aria-label="Sample PPTX files">
+        <div className="sample-actions" role="group" aria-label="Sample PPTX files">
           {SAMPLE_PPTX_FILES.map((sample) => (
             <button
               className="file-label secondary"
