@@ -27,22 +27,28 @@ export function SlideViewer({
 
   return (
     <>
-      <div className="slide-nav">
-        <button disabled={currentIndex === 0} onClick={() => onNavigate(currentIndex - 1)}>
-          &laquo; Prev
+      <div className="slide-nav" aria-label="Slide navigation">
+        <button
+          aria-label="Previous slide"
+          disabled={currentIndex === 0}
+          onClick={() => onNavigate(currentIndex - 1)}
+        >
+          &larr;
         </button>
-        <span>
-          Slide {currentIndex + 1} / {slides.length}
+        <span data-testid="slide-counter">
+          Slide {slides[currentIndex].slideNumber} / {slides.length}
         </span>
         <button
+          aria-label="Next slide"
           disabled={currentIndex === slides.length - 1}
           onClick={() => onNavigate(currentIndex + 1)}
         >
-          Next &raquo;
+          &rarr;
         </button>
       </div>
       <div
         className="slide-container"
+        data-testid="slide-container"
         dangerouslySetInnerHTML={{ __html: slides[currentIndex].svg }}
       />
     </>

@@ -2,9 +2,8 @@ import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
 import { SITE_URL } from "@/lib/constants";
 import "./globals.css";
-const TITLE = "pptx-glimpse Demo – PPTX to SVG Converter";
-const DESCRIPTION =
-  "Upload a PPTX file and instantly preview slides as SVG. A free, open-source TypeScript library for converting PowerPoint presentations.";
+const TITLE = "pptx-glimpse Demo - Browser PPTX to SVG Viewer";
+const DESCRIPTION = "Open a PPTX file and preview slides as SVG with browser-only conversion.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),

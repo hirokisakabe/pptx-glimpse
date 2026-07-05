@@ -6,7 +6,7 @@ const jsonLd = {
   "@type": "SoftwareApplication",
   name: "pptx-glimpse",
   description:
-    "A TypeScript library that converts PowerPoint (PPTX) slides to SVG and PNG. Upload a file and preview instantly.",
+    "A TypeScript library that converts PowerPoint (PPTX) slides to SVG. Upload a file and preview it locally in the browser.",
   url: SITE_URL,
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Any",
@@ -27,8 +27,7 @@ export default function Home() {
       <header>
         <h1>pptx-glimpse</h1>
         <p className="description">
-          A lightweight JavaScript library for rendering PowerPoint (.pptx) files as SVG or PNG. No
-          LibreOffice required.
+          Preview PowerPoint slides as SVG in the browser. No upload service, no LibreOffice.
         </p>
       </header>
       <main>

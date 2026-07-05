@@ -4,106 +4,181 @@
   box-sizing: border-box;
 }
 
+:root {
+  --paper: #f4f6f1;
+  --surface: #ffffff;
+  --surface-2: #eef3f7;
+  --ink: #17212b;
+  --muted: #5e6d78;
+  --line: #cfd8dc;
+  --blueprint: #2454a6;
+  --amber: #b86b1f;
+  --green: #26745b;
+  --danger-bg: #fde8e1;
+  --danger: #9f2d14;
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: #f5f5f5;
-  color: #333;
+  background:
+    linear-gradient(90deg, rgba(36, 84, 166, 0.04) 1px, transparent 1px),
+    linear-gradient(rgba(36, 84, 166, 0.04) 1px, transparent 1px), var(--paper);
+  background-size: 28px 28px;
+  color: var(--ink);
   min-height: 100vh;
 }
 
 .app {
-  max-width: 1200px;
+  max-width: 1180px;
   margin: 0 auto;
-  padding: 2rem 1rem;
+  padding: 28px 16px;
 }
 
 header {
-  text-align: center;
-  margin-bottom: 2rem;
+  margin-bottom: 24px;
 }
 
 header h1 {
-  font-size: 2rem;
-  font-weight: 700;
-}
-
-header p {
-  color: #666;
-  margin-top: 0.5rem;
+  font-size: 2.4rem;
+  font-weight: 760;
+  line-height: 1;
+  letter-spacing: 0;
 }
 
 header .description {
-  font-size: 0.95rem;
-  color: #888;
-  margin-top: 0.25rem;
+  max-width: 620px;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1.55;
+  margin-top: 10px;
 }
 
 .drop-zone {
-  border: 3px dashed #ccc;
-  border-radius: 12px;
-  padding: 4rem 2rem;
-  text-align: center;
+  background: var(--surface);
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 34px;
   cursor: pointer;
+  display: grid;
+  gap: 20px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   transition:
     border-color 0.2s,
-    background 0.2s;
+    background 0.2s,
+    box-shadow 0.2s;
+}
+
+.drop-zone.compact {
+  margin-top: 18px;
+  padding: 18px;
 }
 
 .drop-zone.drag-over {
-  border-color: #4472c4;
-  background: #eef3fb;
+  border-color: var(--blueprint);
+  background: #f7fbff;
+  box-shadow: 0 0 0 4px rgba(36, 84, 166, 0.12);
 }
 
-.drop-zone p {
-  margin: 0.5rem 0;
-  color: #888;
+.drop-zone-title {
+  color: var(--ink);
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.drop-zone-note,
+.font-count {
+  color: var(--muted);
+  font-size: 0.92rem;
+  margin-top: 6px;
+}
+
+.file-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .file-label {
-  display: inline-block;
-  padding: 0.75rem 1.5rem;
-  background: #4472c4;
-  color: white;
+  border: 1px solid transparent;
   border-radius: 6px;
   cursor: pointer;
-  margin-top: 0.5rem;
-  transition: background 0.2s;
+  font: inherit;
+  font-weight: 650;
+  min-height: 40px;
+  padding: 0 15px;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
 }
 
-.file-label:hover {
-  background: #3561b0;
+.file-label.primary {
+  background: var(--blueprint);
+  color: white;
+}
+
+.file-label.primary:hover {
+  background: #183f80;
+}
+
+.file-label.secondary {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--ink);
+}
+
+.file-label.secondary:hover {
+  border-color: var(--amber);
 }
 
 .loading {
-  text-align: center;
-  padding: 4rem;
-  font-size: 1.2rem;
-  color: #666;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  display: flex;
+  gap: 12px;
+  padding: 28px;
+}
+
+.loading-mark {
+  animation: pulse 1.1s ease-in-out infinite;
+  background: var(--green);
+  border-radius: 999px;
+  height: 12px;
+  width: 12px;
 }
 
 .error {
-  text-align: center;
-  padding: 2rem;
-  color: #d32f2f;
-  background: #ffebee;
+  color: var(--danger);
+  background: var(--danger-bg);
   border-radius: 8px;
-  margin-top: 1rem;
+  margin-bottom: 14px;
+  padding: 16px;
 }
 
 .slide-nav {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 0 12px;
 }
 
 .slide-nav button {
-  padding: 0.5rem 1rem;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: white;
+  width: 40px;
+  height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
   cursor: pointer;
+  font-size: 1.2rem;
+}
+
+.slide-nav span {
+  color: var(--muted);
+  font-weight: 650;
 }
 
 .slide-nav button:disabled {
@@ -112,9 +187,9 @@ header .description {
 }
 
 .slide-container {
-  background: white;
+  background: var(--surface);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
   overflow: hidden;
 }
 
@@ -126,29 +201,29 @@ header .description {
 
 .thumbnail-strip {
   display: flex;
-  gap: 8px;
-  margin-top: 1rem;
+  gap: 10px;
+  margin-top: 14px;
   overflow-x: auto;
   padding: 8px 0;
 }
 
 .thumbnail {
   flex: 0 0 120px;
-  border: 2px solid transparent;
+  border: 2px solid var(--line);
   border-radius: 4px;
   overflow: hidden;
   cursor: pointer;
-  background: white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  background: var(--surface);
+  padding: 0;
   transition: border-color 0.2s;
 }
 
 .thumbnail.active {
-  border-color: #4472c4;
+  border-color: var(--blueprint);
 }
 
 .thumbnail:hover {
-  border-color: #90b0db;
+  border-color: var(--amber);
 }
 
 .thumbnail svg {
@@ -157,19 +232,66 @@ header .description {
   height: auto;
 }
 
+.viewer-summary {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.92rem;
+  gap: 10px;
+}
+
+.viewer-summary span {
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 6px 10px;
+}
+
 footer {
-  text-align: center;
   margin-top: 3rem;
   padding-top: 1rem;
-  border-top: 1px solid #e0e0e0;
-  color: #888;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
 }
 
 footer a {
-  color: #4472c4;
+  color: var(--blueprint);
   text-decoration: none;
 }
 
 footer a:hover {
   text-decoration: underline;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    transform: scale(0.85);
+    opacity: 0.55;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
+}
+
+@media (max-width: 720px) {
+  .drop-zone {
+    grid-template-columns: 1fr;
+    padding: 22px;
+  }
+
+  .file-actions {
+    width: 100%;
+  }
+
+  .file-label {
+    flex: 1 1 150px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-mark {
+    animation: none;
+  }
 }

@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { convertPptxToSvg, type FontBuffer } from "pptx-glimpse";
+
 import { DropZone } from "./DropZone";
 import { SlideViewer } from "./SlideViewer";
 import { ThumbnailStrip } from "./ThumbnailStrip";
@@ -17,29 +19,41 @@ export function UploadViewer() {
   const [slides, setSlides] = useState<Slide[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [errorMessage, setErrorMessage] = useState("");
+  const [fontFiles, setFontFiles] = useState<File[]>([]);
 
-  const handleFile = useCallback(async (file: File) => {
-    setPhase("loading");
-
-    try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch("/api/convert", { method: "POST", body: formData });
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.error || "Conversion failed");
-      }
-
-      setSlides(data.slides);
-      setCurrentIndex(0);
-      setPhase("viewing");
-    } catch (err) {
-      setErrorMessage(err instanceof Error ? err.message : String(err));
-      setPhase("error");
-    }
+  const handleFontFiles = useCallback((files: File[]) => {
+    setFontFiles(files);
   }, []);
+
+  const handleFile = useCallback(
+    async (file: File) => {
+      setPhase("loading");
+      setErrorMessage("");
+
+      try {
+        const [pptxBytes, fonts] = await Promise.all([
+          file.arrayBuffer(),
+          readFontBuffers(fontFiles),
+        ]);
+        const report = await convertPptxToSvg(new Uint8Array(pptxBytes), {
+          fonts,
+          skipSystemFonts: true,
+        });
+
+        if (report.slides.length === 0) {
+          throw new Error("No slides found in the selected file");
+        }
+
+        setSlides([...report.slides]);
+        setCurrentIndex(0);
+        setPhase("viewing");
+      } catch (err) {
+        setErrorMessage(err instanceof Error ? err.message : String(err));
+        setPhase("error");
+      }
+    },
+    [fontFiles],
+  );
 
   const handleNavigate = useCallback(
     (index: number) => {
@@ -52,8 +66,9 @@ export function UploadViewer() {
 
   if (phase === "loading") {
     return (
-      <div className="loading">
-        <p>Converting...</p>
+      <div className="loading" data-testid="viewer-status">
+        <div className="loading-mark" aria-hidden="true" />
+        <p>Converting in this browser...</p>
       </div>
     );
   }
@@ -61,8 +76,10 @@ export function UploadViewer() {
   if (phase === "error") {
     return (
       <>
-        <div className="error">Error: {errorMessage}</div>
-        <DropZone onFile={handleFile} />
+        <div className="error" data-testid="viewer-error">
+          {errorMessage}
+        </div>
+        <DropZone fontFiles={fontFiles} onFile={handleFile} onFontFiles={handleFontFiles} />
       </>
     );
   }
@@ -70,11 +87,25 @@ export function UploadViewer() {
   if (phase === "viewing") {
     return (
       <>
+        <div className="viewer-summary" data-testid="viewer-status">
+          <span>{slides.length} slides rendered</span>
+          <span>{fontFiles.length} font files loaded</span>
+        </div>
         <SlideViewer slides={slides} currentIndex={currentIndex} onNavigate={handleNavigate} />
         <ThumbnailStrip slides={slides} currentIndex={currentIndex} onSelect={handleNavigate} />
+        <DropZone compact fontFiles={fontFiles} onFile={handleFile} onFontFiles={handleFontFiles} />
       </>
     );
   }
 
-  return <DropZone onFile={handleFile} />;
+  return <DropZone fontFiles={fontFiles} onFile={handleFile} onFontFiles={handleFontFiles} />;
+}
+
+async function readFontBuffers(files: readonly File[]): Promise<FontBuffer[]> {
+  return Promise.all(
+    files.map(async (file) => ({
+      name: file.name.replace(/\.(?:ttf|otf|ttc)$/i, ""),
+      data: await file.arrayBuffer(),
+    })),
+  );
 }
