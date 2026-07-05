@@ -7,6 +7,9 @@
   "module": "./dist/index.js",
   "browser": "./dist/browser.js",
   "types": "./dist/index.d.ts",
+  "bin": {
+    "pptx-glimpse": "./dist/cli.js"
+  },
   "exports": {
     ".": {
       "browser": {
