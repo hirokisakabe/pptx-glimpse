@@ -25,6 +25,7 @@
     "vrt:lo:docker-build": "docker build -t pptx-glimpse-vrt docker/libreoffice-vrt",
     "vrt:lo:fixtures": "docker run --rm -v \"$(pwd)\":/workspace pptx-glimpse-vrt python3 /workspace/vrt/libreoffice/create_fixtures.py",
     "vrt:lo:update": "pnpm run vrt:lo:docker-build && pnpm run vrt:lo:fixtures && docker run --rm -v \"$(pwd)\":/workspace pptx-glimpse-vrt bash /workspace/vrt/libreoffice/update_snapshots.sh",
+    "vrt:editor-validity:fixtures": "docker run --rm -v \"$(pwd)\":/workspace pptx-glimpse-vrt python3 /workspace/vrt/editor-validity/create_fixtures.py",
     "test:package": "pnpm run build && bash scripts/test-package.sh",
     "changeset": "changeset",
     "demo:dev": "cd demo && npm run dev",

@@ -23,11 +23,6 @@ for pptx_file in "$FIXTURE_DIR"/*.pptx; do
     basename=$(basename "$pptx_file" .pptx)
     name="$basename"
 
-    if [[ "$name" == editor-validity-* ]]; then
-        echo "Skipping editor validity fixture: $pptx_file"
-        continue
-    fi
-
     echo "Rendering: $pptx_file"
 
     # Convert to PNG with LibreOffice headless

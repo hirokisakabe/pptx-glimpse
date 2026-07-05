@@ -11,5 +11,8 @@ vrt/snapshot/fixtures/
 vrt/libreoffice/diffs/
 vrt/libreoffice/snapshots/
 vrt/libreoffice/fixtures/
+vrt/editor-validity/diffs/
+vrt/editor-validity/fixtures/
 demo/.next/
 demo/node_modules/
+__pycache__/
