@@ -58,19 +58,17 @@ await writeFile("round-trip.pptx", output);
 ```ts
 import { readFile, writeFile } from "node:fs/promises";
 import {
-  createComputedView,
   readPptx,
   replaceTextRunPlainText,
   writePptx,
 } from "@pptx-glimpse/document";
 
 const source = readPptx(await readFile("input.pptx"));
-const computed = createComputedView(source);
-const firstTextRun = computed.slides
-  .flatMap((slide) => slide.elements)
-  .flatMap((element) =>
-    element.kind === "shape" && element.textBody !== undefined
-      ? element.textBody.paragraphs.flatMap((paragraph) => paragraph.runs)
+const firstTextRun = source.slides
+  .flatMap((slide) => slide.shapes)
+  .flatMap((shape) =>
+    shape.kind === "shape" && shape.textBody !== undefined
+      ? shape.textBody.paragraphs.flatMap((paragraph) => paragraph.runs)
       : [],
   )
   .find((run) => run.handle !== undefined);
