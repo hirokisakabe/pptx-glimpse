@@ -32,6 +32,7 @@ import type {
   SourceSlideMaster,
   SourceTheme,
 } from "./presentation.js";
+import type { SourceArrowEndpoint } from "./shapes.js";
 import type { Emu, Pt } from "./units.js";
 
 export interface PptxSourceModel {
@@ -54,6 +55,7 @@ export type PptxSourceModelEdit =
   | PptxSourceModelParagraphTextEdit
   | PptxSourceModelShapeTransformEdit
   | PptxSourceModelAddTextBoxEdit
+  | PptxSourceModelAddConnectorEdit
   | PptxSourceModelDeleteShapeEdit
   | PptxSourceModelAddEmptySlideFromLayoutEdit
   | PptxSourceModelDuplicateSlideEdit
@@ -114,6 +116,28 @@ export interface PptxSourceModelAddTextBoxEdit {
   readonly width: Emu;
   readonly height: Emu;
   readonly text: string;
+}
+
+export type ConnectorPresetGeometry = "straightConnector1" | "bentConnector3" | "curvedConnector3";
+
+export interface PptxSourceModelAddConnectorEdit {
+  readonly kind: "addConnector";
+  readonly slidePartPath: PartPath;
+  readonly shapeId: string;
+  readonly name: string;
+  readonly preset: ConnectorPresetGeometry;
+  readonly offsetX: Emu;
+  readonly offsetY: Emu;
+  readonly width: Emu;
+  readonly height: Emu;
+  readonly startShapeId: string;
+  readonly startConnectionSiteIndex: number;
+  readonly endShapeId: string;
+  readonly endConnectionSiteIndex: number;
+  readonly outline?: {
+    readonly headEnd?: SourceArrowEndpoint;
+    readonly tailEnd?: SourceArrowEndpoint;
+  };
 }
 
 export interface PptxSourceModelDeleteShapeEdit {

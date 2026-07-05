@@ -376,6 +376,7 @@ export interface SourceConnector {
   readonly kind: "connector";
   readonly nodeId?: SourceNodeId;
   readonly name?: string;
+  readonly connection?: SourceConnectorConnection;
   readonly transform?: SourceTransform;
   readonly geometry?: SourceGeometry;
   readonly outline?: SourceOutline;
@@ -383,6 +384,16 @@ export interface SourceConnector {
   readonly style?: SourceShapeStyle;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
+}
+
+export interface SourceConnectorConnection {
+  readonly start?: SourceConnectorConnectionEndpoint;
+  readonly end?: SourceConnectorConnectionEndpoint;
+}
+
+export interface SourceConnectorConnectionEndpoint {
+  readonly shapeId: SourceNodeId;
+  readonly connectionSiteIndex: number;
 }
 
 export interface SourceGroup {

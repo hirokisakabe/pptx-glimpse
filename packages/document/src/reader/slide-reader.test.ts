@@ -674,7 +674,9 @@ describe("readPptx - typed shape detail (synthetic)", () => {
     const source = readPptx(
       buildSyntheticPptx(
         `<p:cxnSp>` +
-          `<p:nvCxnSpPr><p:cNvPr id="50" name="Connector first"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>` +
+          `<p:nvCxnSpPr><p:cNvPr id="50" name="Connector first"/><p:cNvCxnSpPr>` +
+          `<a:stCxn id="53" idx="1"/><a:endCxn id="54" idx="3"/>` +
+          `</p:cNvCxnSpPr><p:nvPr/></p:nvCxnSpPr>` +
           `<p:spPr><a:xfrm><a:off x="1" y="2"/><a:ext cx="3" cy="4"/></a:xfrm>` +
           `<a:prstGeom prst="bentConnector3"><a:avLst><a:gd name="adj1" fmla="val 50000"/></a:avLst></a:prstGeom>` +
           `<a:ln w="12700"><a:solidFill><a:srgbClr val="FF0000"/></a:solidFill><a:prstDash val="dash"/><a:tailEnd type="triangle" w="med" len="med"/></a:ln>` +
@@ -714,6 +716,10 @@ describe("readPptx - typed shape detail (synthetic)", () => {
     >(source.slides[0].shapes);
     expect(connector).toMatchObject({
       name: "Connector first",
+      connection: {
+        start: { shapeId: "53", connectionSiteIndex: 1 },
+        end: { shapeId: "54", connectionSiteIndex: 3 },
+      },
       geometry: { preset: "bentConnector3", adjustValues: { adj1: 50000 } },
       outline: { width: 12700, dashStyle: "dash", tailEnd: { type: "triangle" } },
     });

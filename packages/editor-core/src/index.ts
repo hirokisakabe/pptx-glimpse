@@ -1,4 +1,6 @@
 import {
+  addConnector,
+  type AddConnectorInput,
   addEmptySlideFromLayout,
   type AddEmptySlideFromLayoutInput,
   addTextBox,
@@ -90,6 +92,11 @@ export interface AddTextBoxCommand extends AddTextBoxInput {
   readonly slideHandle: SourceHandle;
 }
 
+export interface AddConnectorCommand extends AddConnectorInput {
+  readonly kind: "addConnector";
+  readonly slideHandle: SourceHandle;
+}
+
 export interface DeleteShapeCommand {
   readonly kind: "deleteShape";
   readonly handle: SourceHandle;
@@ -118,6 +125,7 @@ export type EditorCommand =
   | ResizeShapeCommand
   | SetShapeTransformCommand
   | AddTextBoxCommand
+  | AddConnectorCommand
   | DeleteShapeCommand
   | AddEmptySlideFromLayoutCommand
   | DuplicateSlideCommand
@@ -300,6 +308,8 @@ function applyCommandToDocument(
       return setShapeTransform(document, command);
     case "addTextBox":
       return addTextBoxCommand(document, command);
+    case "addConnector":
+      return addConnectorCommand(document, command);
     case "deleteShape":
       return deleteShape(document, command.handle);
     case "addEmptySlideFromLayout":
@@ -323,6 +333,17 @@ function addTextBoxCommand(document: PptxSourceModel, command: AddTextBoxCommand
     throw new Error("addTextBox: name must be a non-empty string when provided");
   }
   return addTextBox(document, command.slideHandle, command);
+}
+
+function addConnectorCommand(
+  document: PptxSourceModel,
+  command: AddConnectorCommand,
+): PptxSourceModel {
+  requireFiniteEmu(command.offsetX, "addConnector", "offsetX");
+  requireFiniteEmu(command.offsetY, "addConnector", "offsetY");
+  requirePositiveFiniteEmu(command.width, "addConnector", "width");
+  requirePositiveFiniteEmu(command.height, "addConnector", "height");
+  return addConnector(document, command.slideHandle, command);
 }
 
 function setTextRunPropertiesCommand(
@@ -470,7 +491,7 @@ function requireEditableShapeTransform(
 
 function requireFiniteEmu(
   value: Emu,
-  commandName: "moveShape" | "resizeShape" | "setShapeTransform" | "addTextBox",
+  commandName: "moveShape" | "resizeShape" | "setShapeTransform" | "addTextBox" | "addConnector",
   fieldName: string,
 ): void {
   if (!Number.isFinite(value)) {
@@ -480,7 +501,7 @@ function requireFiniteEmu(
 
 function requirePositiveFiniteEmu(
   value: Emu,
-  commandName: "moveShape" | "resizeShape" | "setShapeTransform" | "addTextBox",
+  commandName: "moveShape" | "resizeShape" | "setShapeTransform" | "addTextBox" | "addConnector",
   fieldName: string,
 ): void {
   if (!Number.isFinite(value) || value <= 0) {

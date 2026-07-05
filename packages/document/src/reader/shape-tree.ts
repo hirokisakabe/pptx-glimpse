@@ -318,8 +318,10 @@ function parseConnector(
 ): SourceConnector {
   const nvCxnSpPr = getChild(cxnSp, "nvCxnSpPr");
   const cNvPr = getChild(nvCxnSpPr, "cNvPr");
+  const cNvCxnSpPr = getChild(nvCxnSpPr, "cNvCxnSpPr");
   const nodeId = sourceNodeId(cNvPr);
   const name = getAttr(cNvPr, "name");
+  const connection = parseConnectorConnection(cNvCxnSpPr);
   const spPr = getChild(cxnSp, "spPr");
   const transform = parseTransform(spPr);
   const geometry = parseGeometry(spPr, orderedNestedChildChildren(orderedNode, "cxnSp", "spPr"));
@@ -336,6 +338,7 @@ function parseConnector(
     kind: "connector",
     ...(nodeId !== undefined ? { nodeId } : {}),
     ...(name !== undefined ? { name } : {}),
+    ...(connection !== undefined ? { connection } : {}),
     ...(transform !== undefined ? { transform } : {}),
     ...(geometry !== undefined ? { geometry } : {}),
     ...(outline !== undefined ? { outline } : {}),
@@ -343,6 +346,31 @@ function parseConnector(
     ...(style !== undefined ? { style } : {}),
     handle: { partPath, ...(nodeId !== undefined ? { nodeId } : {}), orderingSlot },
     ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
+  };
+}
+
+function parseConnectorConnection(
+  cNvCxnSpPr: XmlNode | undefined,
+): SourceConnector["connection"] | undefined {
+  const start = parseConnectorConnectionEndpoint(getChild(cNvCxnSpPr, "stCxn"));
+  const end = parseConnectorConnectionEndpoint(getChild(cNvCxnSpPr, "endCxn"));
+  return start !== undefined || end !== undefined
+    ? {
+        ...(start !== undefined ? { start } : {}),
+        ...(end !== undefined ? { end } : {}),
+      }
+    : undefined;
+}
+
+function parseConnectorConnectionEndpoint(
+  node: XmlNode | undefined,
+): NonNullable<SourceConnector["connection"]>["start"] | undefined {
+  const shapeId = getAttr(node, "id");
+  const connectionSiteIndex = numericAttr(node, "idx");
+  if (shapeId === undefined || connectionSiteIndex === undefined) return undefined;
+  return {
+    shapeId: asSourceNodeId(shapeId),
+    connectionSiteIndex,
   };
 }
 

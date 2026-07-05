@@ -1,15 +1,19 @@
 import { asSourceNodeId } from "./handles.js";
 import type {
+  ConnectorPresetGeometry,
   EditableTextRunProperties,
   EditableTextRunProperty,
   Emu,
   PartPath,
   PartRelationships,
   PptxSourceModel,
+  PptxSourceModelAddConnectorEdit,
   PptxSourceModelEdit,
   RawPackagePart,
   Relationship,
   RelationshipId,
+  SourceArrowEndpoint,
+  SourceConnector,
   SourceHandle,
   SourceNodeId,
   SourceParagraph,
@@ -60,6 +64,13 @@ const EDITABLE_TEXT_RUN_PROPERTIES = [
   "typeface",
 ] as const satisfies readonly EditableTextRunProperty[];
 const EDITABLE_TEXT_RUN_PROPERTY_SET: ReadonlySet<string> = new Set(EDITABLE_TEXT_RUN_PROPERTIES);
+const CONNECTOR_PRESETS: ReadonlySet<ConnectorPresetGeometry> = new Set([
+  "straightConnector1",
+  "bentConnector3",
+  "curvedConnector3",
+]);
+const ARROW_TYPES = new Set(["triangle", "stealth", "diamond", "oval", "arrow"]);
+const ARROW_SIZES = new Set(["sm", "med", "lg"]);
 
 export function findTextRunBySourceHandle(
   source: PptxSourceModel,
@@ -326,6 +337,24 @@ export interface AddTextBoxInput extends UpdateShapeTransformInput {
   readonly name?: string;
 }
 
+export interface AddConnectorConnectionEndpointInput {
+  readonly shapeHandle: SourceHandle;
+  readonly connectionSiteIndex: number;
+}
+
+export interface AddConnectorOutlineInput {
+  readonly headEnd?: SourceArrowEndpoint;
+  readonly tailEnd?: SourceArrowEndpoint;
+}
+
+export interface AddConnectorInput extends UpdateShapeTransformInput {
+  readonly preset: ConnectorPresetGeometry;
+  readonly start: AddConnectorConnectionEndpointInput;
+  readonly end: AddConnectorConnectionEndpointInput;
+  readonly name?: string;
+  readonly outline?: AddConnectorOutlineInput;
+}
+
 export interface AddEmptySlideFromLayoutInput {
   readonly layoutPartPath: PartPath;
 }
@@ -444,6 +473,69 @@ export function addTextBox(
         height: input.height,
         text: input.text,
       },
+    ],
+  };
+}
+
+export function addConnector(
+  source: PptxSourceModel,
+  slideHandle: SourceHandle,
+  input: AddConnectorInput,
+): PptxSourceModel {
+  assertConnectorInput(input);
+  const slideIndex = source.slides.findIndex((slide) =>
+    sourceHandlesEqual(slide.handle, slideHandle),
+  );
+  if (slideIndex === -1) {
+    throw new Error("addConnector: slide handle was not found in PptxSourceModel source");
+  }
+
+  const slide = source.slides[slideIndex];
+  const startShape = requireConnectorTargetShape(slide, input.start.shapeHandle, "start");
+  const endShape = requireConnectorTargetShape(slide, input.end.shapeHandle, "end");
+  const shapeId = nextShapeId(slide.shapes, source.edits ?? [], slide.partPath);
+  const shapeIdValue = String(shapeId);
+  const name = input.name?.trim() || `Connector ${shapeIdValue}`;
+  const orderingSlot = nextOrderingSlot(slide.shapes);
+  const connector = createConnectorShape(
+    slide.partPath,
+    shapeId,
+    name,
+    orderingSlot,
+    startShape,
+    endShape,
+    input,
+  );
+  const slides = source.slides.map((candidate, index) =>
+    index === slideIndex
+      ? {
+          ...candidate,
+          shapes: [...candidate.shapes, connector],
+        }
+      : candidate,
+  );
+
+  return {
+    ...source,
+    slides,
+    edits: [
+      ...(source.edits ?? []),
+      {
+        kind: "addConnector",
+        slidePartPath: slide.partPath,
+        shapeId: shapeIdValue,
+        name,
+        preset: input.preset,
+        offsetX: input.offsetX,
+        offsetY: input.offsetY,
+        width: input.width,
+        height: input.height,
+        startShapeId: String(startShape.nodeId),
+        startConnectionSiteIndex: input.start.connectionSiteIndex,
+        endShapeId: String(endShape.nodeId),
+        endConnectionSiteIndex: input.end.connectionSiteIndex,
+        ...(input.outline !== undefined ? { outline: input.outline } : {}),
+      } satisfies PptxSourceModelAddConnectorEdit,
     ],
   };
 }
@@ -982,13 +1074,61 @@ function assertTextBoxInput(input: AddTextBoxInput): void {
   }
 }
 
-function assertFiniteEmu(value: Emu, operationName: "addTextBox", fieldName: string): void {
+function assertConnectorInput(input: AddConnectorInput): void {
+  assertFiniteEmu(input.offsetX, "addConnector", "offsetX");
+  assertFiniteEmu(input.offsetY, "addConnector", "offsetY");
+  assertPositiveFiniteEmu(input.width, "addConnector", "width");
+  assertPositiveFiniteEmu(input.height, "addConnector", "height");
+  if (!CONNECTOR_PRESETS.has(input.preset)) {
+    throw new Error(
+      "addConnector: preset must be straightConnector1, bentConnector3, or curvedConnector3",
+    );
+  }
+  assertConnectionSiteIndex(input.start.connectionSiteIndex, "start");
+  assertConnectionSiteIndex(input.end.connectionSiteIndex, "end");
+  if (input.name !== undefined && input.name.trim() === "") {
+    throw new Error("addConnector: name must be a non-empty string when provided");
+  }
+  assertArrowEndpoint(input.outline?.headEnd, "headEnd");
+  assertArrowEndpoint(input.outline?.tailEnd, "tailEnd");
+}
+
+function assertConnectionSiteIndex(value: number, fieldName: "start" | "end"): void {
+  if (!Number.isInteger(value) || value < 0) {
+    throw new Error(
+      `addConnector: ${fieldName}.connectionSiteIndex must be a non-negative integer`,
+    );
+  }
+}
+
+function assertArrowEndpoint(endpoint: SourceArrowEndpoint | undefined, fieldName: string): void {
+  if (endpoint === undefined) return;
+  if (!ARROW_TYPES.has(endpoint.type)) {
+    throw new Error(`addConnector: outline.${fieldName}.type is not supported`);
+  }
+  if (!ARROW_SIZES.has(endpoint.width)) {
+    throw new Error(`addConnector: outline.${fieldName}.width is not supported`);
+  }
+  if (!ARROW_SIZES.has(endpoint.length)) {
+    throw new Error(`addConnector: outline.${fieldName}.length is not supported`);
+  }
+}
+
+function assertFiniteEmu(
+  value: Emu,
+  operationName: "addTextBox" | "addConnector",
+  fieldName: string,
+): void {
   if (!Number.isFinite(value)) {
     throw new Error(`${operationName}: ${fieldName} must be a finite EMU value`);
   }
 }
 
-function assertPositiveFiniteEmu(value: Emu, operationName: "addTextBox", fieldName: string): void {
+function assertPositiveFiniteEmu(
+  value: Emu,
+  operationName: "addTextBox" | "addConnector",
+  fieldName: string,
+): void {
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error(`${operationName}: ${fieldName} must be a finite positive EMU value`);
   }
@@ -1040,6 +1180,61 @@ function createTextBoxShape(
   };
 }
 
+function createConnectorShape(
+  partPath: PartPath,
+  shapeId: SourceNodeId,
+  name: string,
+  orderingSlot: number,
+  startShape: SourceShape & { readonly nodeId: SourceNodeId },
+  endShape: SourceShape & { readonly nodeId: SourceNodeId },
+  input: AddConnectorInput,
+): SourceConnector {
+  const transform: SourceTransform = {
+    offsetX: input.offsetX,
+    offsetY: input.offsetY,
+    width: input.width,
+    height: input.height,
+  };
+  return {
+    kind: "connector",
+    nodeId: shapeId,
+    name,
+    connection: {
+      start: {
+        shapeId: startShape.nodeId,
+        connectionSiteIndex: input.start.connectionSiteIndex,
+      },
+      end: {
+        shapeId: endShape.nodeId,
+        connectionSiteIndex: input.end.connectionSiteIndex,
+      },
+    },
+    transform,
+    geometry: { preset: input.preset },
+    ...(input.outline !== undefined ? { outline: input.outline } : {}),
+    handle: { partPath, nodeId: shapeId, orderingSlot },
+  };
+}
+
+function requireConnectorTargetShape(
+  slide: SourceSlide,
+  handle: SourceHandle,
+  endpointName: "start" | "end",
+): SourceShape & { readonly nodeId: SourceNodeId } {
+  const shape = slide.shapes.find((candidate) => sourceHandlesEqual(candidate.handle, handle));
+  if (shape === undefined) {
+    throw new Error(`addConnector: ${endpointName} shape handle was not found on the target slide`);
+  }
+  if (shape.kind !== "shape") {
+    throw new Error(`addConnector: ${endpointName} target must be a top-level sp shape`);
+  }
+  const nodeId = shape.nodeId;
+  if (nodeId === undefined) {
+    throw new Error(`addConnector: ${endpointName} target shape requires a node id`);
+  }
+  return { ...shape, nodeId };
+}
+
 function nextShapeId(
   shapes: readonly SourceShapeNode[],
   edits: readonly PptxSourceModelEdit[],
@@ -1071,9 +1266,11 @@ function collectNumericShapeEditIds(
     const id =
       edit.kind === "addTextBox" && edit.slidePartPath === slidePartPath
         ? edit.shapeId
-        : edit.kind === "deleteShape" && edit.handle.partPath === slidePartPath
-          ? edit.handle.nodeId
-          : undefined;
+        : edit.kind === "addConnector" && edit.slidePartPath === slidePartPath
+          ? edit.shapeId
+          : edit.kind === "deleteShape" && edit.handle.partPath === slidePartPath
+            ? edit.handle.nodeId
+            : undefined;
     const numericId = Number(id);
     if (Number.isInteger(numericId) && numericId > 0) used.add(numericId);
   }
@@ -1289,6 +1486,7 @@ function topologyEditPartPaths(edit: PptxSourceModelEdit): readonly PartPath[] {
     case "deleteSlide":
       return [edit.slidePartPath];
     case "addTextBox":
+    case "addConnector":
       return [edit.slidePartPath];
     case "replaceTextRunPlainText":
     case "updateTextRunProperties":
@@ -1370,6 +1568,7 @@ function hasDirtyEditForPart(edits: readonly PptxSourceModelEdit[], partPath: Pa
       case "deleteShape":
         return edit.handle.partPath === partPath;
       case "addTextBox":
+      case "addConnector":
         return edit.slidePartPath === partPath;
       case "addEmptySlideFromLayout":
       case "duplicateSlide":
@@ -1394,6 +1593,7 @@ function editTargetsShape(edit: PptxSourceModelEdit, handle: SourceHandle): bool
     case "deleteShape":
       return sourceHandlesEqual(edit.handle, handle);
     case "addTextBox":
+    case "addConnector":
       return edit.slidePartPath === handle.partPath && edit.shapeId === String(handle.nodeId);
     case "addEmptySlideFromLayout":
     case "duplicateSlide":
@@ -1421,6 +1621,7 @@ function editIsInvalidatedByDeletedParts(
     case "updateShapeTransform":
       return partPaths.has(edit.handle.partPath);
     case "addTextBox":
+    case "addConnector":
       return partPaths.has(edit.slidePartPath);
     case "addEmptySlideFromLayout":
       return partPaths.has(edit.newSlidePartPath);
