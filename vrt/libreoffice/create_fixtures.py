@@ -201,6 +201,50 @@ def create_editor_validity_transform_fixture(filename, left, top, width, height)
     print(f"  Created: {filename}")
 
 
+def create_editor_validity_formatting_fixture(filename, *, expected):
+    """Fixture pair for editor-core run property validity checks."""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    title = slide.shapes.add_textbox(Inches(0.4), Inches(0.25), Inches(9.2), Inches(0.5))
+    title.text_frame.text = "LibreOffice editor validity: formatting"
+    title.text_frame.paragraphs[0].runs[0].font.size = Pt(18)
+
+    shape = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.8), Inches(1.4), Inches(8.2), Inches(2.0)
+    )
+    shape.name = "Editable Formatting Target"
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = RGBColor(0xFF, 0xF2, 0xCC)
+    shape.line.color.rgb = RGBColor(0xBF, 0x90, 0x00)
+    shape.line.width = Pt(1.5)
+
+    tf = shape.text_frame
+    tf.word_wrap = True
+    paragraph = tf.paragraphs[0]
+    paragraph.text = "Editable formatting target"
+    paragraph.alignment = PP_ALIGN.CENTER
+    run = paragraph.runs[0]
+
+    if expected:
+        run.font.name = "Liberation Serif"
+        run.font.size = Pt(30)
+        run.font.bold = False
+        run.font.italic = False
+        run.font.underline = False
+        run.font.color.rgb = RGBColor(0x9C, 0x00, 0x00)
+    else:
+        run.font.name = "Liberation Sans"
+        run.font.size = Pt(18)
+        run.font.bold = True
+        run.font.italic = True
+        run.font.underline = True
+        run.font.color.rgb = RGBColor(0x1F, 0x4E, 0x79)
+
+    prs.save(os.path.join(OUTPUT_DIR, filename))
+    print(f"  Created: {filename}")
+
+
 def create_editor_validity_fixtures():
     """PPTX source / expected pairs consumed by editor-validity.test.ts."""
     create_editor_validity_text_fixture(
@@ -224,6 +268,14 @@ def create_editor_validity_fixtures():
         Inches(2.1),
         Inches(3.2),
         Inches(1.6),
+    )
+    create_editor_validity_formatting_fixture(
+        "editor-validity-formatting-source.pptx",
+        expected=False,
+    )
+    create_editor_validity_formatting_fixture(
+        "editor-validity-formatting-expected.pptx",
+        expected=True,
     )
 
 

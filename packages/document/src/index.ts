@@ -60,6 +60,8 @@ export type {
   ContentTypes,
   Diagnostic,
   DiagnosticSeverity,
+  EditableTextRunProperties,
+  EditableTextRunProperty,
   Emu,
   HundredthPt,
   MediaPart,
@@ -74,6 +76,7 @@ export type {
   PptxSourceModelParagraphTextEdit,
   PptxSourceModelShapeTransformEdit,
   PptxSourceModelTextRunEdit,
+  PptxSourceModelTextRunPropertiesEdit,
   Pt,
   RawOoxmlNode,
   RawPackagePart,
@@ -164,11 +167,13 @@ export type {
   UpdateShapeTransformInput,
 } from "./source/index.js";
 export {
+  clearTextRunProperties,
   findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
   replaceParagraphPlainText,
   replaceTextRunPlainText,
+  setTextRunProperties,
   updateShapeTransform,
 } from "./source/index.js";
 export {

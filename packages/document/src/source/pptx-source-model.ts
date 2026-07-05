@@ -32,7 +32,7 @@ import type {
   SourceSlideMaster,
   SourceTheme,
 } from "./presentation.js";
-import type { Emu } from "./units.js";
+import type { Emu, Pt } from "./units.js";
 
 export interface PptxSourceModel {
   /** Structure of package part / relationship / content type / media. */
@@ -50,6 +50,7 @@ export interface PptxSourceModel {
 
 export type PptxSourceModelEdit =
   | PptxSourceModelTextRunEdit
+  | PptxSourceModelTextRunPropertiesEdit
   | PptxSourceModelParagraphTextEdit
   | PptxSourceModelShapeTransformEdit;
 
@@ -57,6 +58,30 @@ export interface PptxSourceModelTextRunEdit {
   readonly kind: "replaceTextRunPlainText";
   readonly handle: SourceHandle;
   readonly text: string;
+}
+
+export type EditableTextRunProperty =
+  | "bold"
+  | "italic"
+  | "underline"
+  | "fontSize"
+  | "color"
+  | "typeface";
+
+export interface EditableTextRunProperties {
+  readonly bold?: boolean;
+  readonly italic?: boolean;
+  readonly underline?: boolean;
+  readonly fontSize?: Pt;
+  readonly color?: { readonly kind: "srgb"; readonly hex: string };
+  readonly typeface?: string;
+}
+
+export interface PptxSourceModelTextRunPropertiesEdit {
+  readonly kind: "updateTextRunProperties";
+  readonly handle: SourceHandle;
+  readonly set?: EditableTextRunProperties;
+  readonly clear?: readonly EditableTextRunProperty[];
 }
 
 export interface PptxSourceModelParagraphTextEdit {

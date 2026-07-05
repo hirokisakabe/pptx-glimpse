@@ -1,6 +1,7 @@
 import {
   asEmu,
   asPartPath,
+  asPt,
   asSourceNodeId,
   findShapeNodeBySourceHandle,
   type PptxSourceModel,
@@ -165,6 +166,206 @@ describe("EditorSession text-run commands", () => {
     expect(firstRun(session.document).text).toBe("Original");
     expect(session.undoDepth).toBe(0);
     expect(session.redoDepth).toBe(0);
+  });
+});
+
+describe("EditorSession text run property commands", () => {
+  it("sets and clears supported run properties and persists them through write/read", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const handle = requireHandle(firstRun(source).handle);
+
+    const setDocument = expectApplied(
+      session.apply({
+        kind: "setTextRunProperties",
+        handle,
+        properties: {
+          bold: false,
+          italic: false,
+          underline: true,
+          fontSize: asPt(30),
+          color: { kind: "srgb", hex: "336699" },
+          typeface: "Liberation Sans",
+        },
+      }),
+    );
+    const clearedDocument = expectApplied(
+      session.apply({
+        kind: "clearTextRunProperties",
+        handle,
+        properties: ["italic", "fontSize", "color"],
+      }),
+    );
+    const reread = readPptx(writePptx(clearedDocument));
+
+    expect(firstRun(setDocument).properties).toMatchObject({
+      bold: false,
+      italic: false,
+      underline: true,
+      fontSize: 30,
+      color: { kind: "srgb", hex: "336699" },
+      typeface: "Liberation Sans",
+    });
+    expect(firstRun(reread).properties).toMatchObject({
+      bold: false,
+      underline: true,
+      typeface: "Liberation Sans",
+    });
+    expect(firstRun(reread).properties?.italic).toBeUndefined();
+    expect(firstRun(reread).properties?.fontSize).toBeUndefined();
+    expect(firstRun(reread).properties?.color).toBeUndefined();
+    expect(firstParagraph(reread).runs[1].properties).toMatchObject({
+      italic: true,
+      fontSize: 18,
+      typeface: "Arial",
+    });
+  });
+
+  it("undoes and redoes run property edits", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const handle = requireHandle(firstRun(source).handle);
+
+    expectApplied(
+      session.apply({
+        kind: "setTextRunProperties",
+        handle,
+        properties: { underline: true, color: { kind: "srgb", hex: "0088CC" } },
+      }),
+    );
+
+    const undone = expectHistory(session.undo());
+    const redone = expectHistory(session.redo());
+
+    expect(firstRun(undone).properties?.underline).toBeUndefined();
+    expect(firstRun(readPptx(writePptx(undone))).properties?.underline).toBeUndefined();
+    expect(firstRun(redone).properties).toMatchObject({
+      underline: true,
+      color: { kind: "srgb", hex: "0088CC" },
+    });
+    expect(firstRun(readPptx(writePptx(redone))).properties).toMatchObject({
+      underline: true,
+      color: { kind: "srgb", hex: "0088CC" },
+    });
+  });
+
+  it("rejects invalid run property commands without changing document state or undo history", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const before = session.document;
+    const handle = requireHandle(firstRun(source).handle);
+    const invalidHandle = {
+      partPath: asPartPath("ppt/slides/slide1.xml"),
+      nodeId: asSourceNodeId("text:shape:999:p:0:r:0"),
+      orderingSlot: 0,
+    } satisfies SourceHandle;
+
+    const invalidHex = session.apply({
+      kind: "setTextRunProperties",
+      handle,
+      properties: { color: { kind: "srgb", hex: "bad" } },
+    });
+    const invalidFontSize = session.apply({
+      kind: "setTextRunProperties",
+      handle,
+      properties: { fontSize: asPt(0) },
+    });
+    const emptyClearProperties = session.apply({
+      kind: "clearTextRunProperties",
+      handle,
+      properties: [],
+    });
+    const missingHandle = session.apply({
+      kind: "setTextRunProperties",
+      handle: invalidHandle,
+      properties: { bold: true },
+    });
+
+    for (const result of [invalidHex, invalidFontSize, emptyClearProperties, missingHandle]) {
+      expect(result).toMatchObject({ ok: false, code: "invalid-command" });
+    }
+    expect(session.document).toBe(before);
+    expect(firstRun(session.document).properties).toEqual(firstRun(source).properties);
+    expect(session.undoDepth).toBe(0);
+    expect(session.redoDepth).toBe(0);
+  });
+
+  it("keeps only the latest generated edit per run property while preserving independent properties", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const handle = requireHandle(firstRun(source).handle);
+
+    expectApplied(
+      session.apply({
+        kind: "setTextRunProperties",
+        handle,
+        properties: { bold: false, italic: false, fontSize: asPt(20) },
+      }),
+    );
+    const edited = expectApplied(
+      session.apply({
+        kind: "setTextRunProperties",
+        handle,
+        properties: { bold: true, color: { kind: "srgb", hex: "445566" } },
+      }),
+    );
+    const propertyEdits =
+      edited.edits?.filter((edit) => edit.kind === "updateTextRunProperties") ?? [];
+
+    expect(propertyEdits).toHaveLength(2);
+    expect(propertyEdits[0]).toMatchObject({ set: { italic: false, fontSize: 20 } });
+    expect(propertyEdits[1]).toMatchObject({
+      set: { bold: true, color: { kind: "srgb", hex: "445566" } },
+    });
+    expect(firstRun(readPptx(writePptx(edited))).properties).toMatchObject({
+      bold: true,
+      italic: false,
+      fontSize: 20,
+      color: { kind: "srgb", hex: "445566" },
+    });
+  });
+
+  it("passes property-style undo and redo checks for generated decoration command sequences", async () => {
+    const cases = [
+      [
+        { kind: "setTextRunProperties", properties: { bold: false } },
+        { kind: "setTextRunProperties", properties: { italic: true } },
+      ],
+      [
+        { kind: "setTextRunProperties", properties: { underline: true } },
+        { kind: "clearTextRunProperties", properties: ["underline"] },
+      ],
+      [
+        { kind: "clearTextRunProperties", properties: ["fontSize", "typeface"] },
+        { kind: "setTextRunProperties", properties: { fontSize: asPt(22), typeface: "Arial" } },
+      ],
+      [
+        { kind: "setTextRunProperties", properties: { color: { kind: "srgb", hex: "123ABC" } } },
+        { kind: "clearTextRunProperties", properties: ["color"] },
+      ],
+    ] as const;
+
+    for (const commands of cases) {
+      const source = readPptx(await buildTextEditFixture());
+      const session = createEditorSession(source);
+      const handle = requireHandle(firstRun(source).handle);
+      for (const command of commands) {
+        expectApplied(session.apply({ ...command, handle }));
+      }
+      const edited = session.document;
+
+      for (let i = 0; i < commands.length; i += 1) expectHistory(session.undo());
+      expect(firstRun(session.document).properties).toEqual(firstRun(source).properties);
+      expect(firstRun(readPptx(writePptx(session.document))).properties).toEqual(
+        firstRun(source).properties,
+      );
+
+      for (let i = 0; i < commands.length; i += 1) expectHistory(session.redo());
+      expect(firstRun(session.document).properties).toEqual(firstRun(edited).properties);
+      expect(firstRun(readPptx(writePptx(session.document))).properties).toEqual(
+        firstRun(readPptx(writePptx(edited))).properties,
+      );
+    }
   });
 });
 

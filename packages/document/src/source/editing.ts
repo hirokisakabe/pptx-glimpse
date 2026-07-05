@@ -1,15 +1,21 @@
 import { asSourceNodeId } from "./handles.js";
 import type {
+  EditableTextRunProperties,
+  EditableTextRunProperty,
   Emu,
   PptxSourceModel,
   SourceHandle,
   SourceParagraph,
+  SourceRunProperties,
   SourceShape,
   SourceShapeNode,
   SourceTextRun,
 } from "./index.js";
 
 type TransformableShapeNode = Exclude<SourceShapeNode, { readonly kind: "raw" }>;
+type MutableRunProperties = {
+  -readonly [K in keyof SourceRunProperties]?: SourceRunProperties[K];
+};
 
 export function findTextRunBySourceHandle(
   source: PptxSourceModel,
@@ -88,6 +94,28 @@ export function replaceTextRunPlainText(
   };
 }
 
+export function setTextRunProperties(
+  source: PptxSourceModel,
+  handle: SourceHandle,
+  properties: EditableTextRunProperties,
+): PptxSourceModel {
+  return updateTextRunProperties(source, handle, {
+    set: properties,
+    clear: [],
+  });
+}
+
+export function clearTextRunProperties(
+  source: PptxSourceModel,
+  handle: SourceHandle,
+  properties: readonly EditableTextRunProperty[],
+): PptxSourceModel {
+  return updateTextRunProperties(source, handle, {
+    set: {},
+    clear: properties,
+  });
+}
+
 export function replaceParagraphPlainText(
   source: PptxSourceModel,
   handle: SourceHandle,
@@ -143,6 +171,97 @@ export function replaceParagraphPlainText(
     slides,
     edits: [...(source.edits ?? []), { kind: "replaceParagraphPlainText", handle, text }],
   };
+}
+
+interface UpdateTextRunPropertiesPatch {
+  readonly set: EditableTextRunProperties;
+  readonly clear: readonly EditableTextRunProperty[];
+}
+
+function updateTextRunProperties(
+  source: PptxSourceModel,
+  handle: SourceHandle,
+  patch: UpdateTextRunPropertiesPatch,
+): PptxSourceModel {
+  assertEditableTextRunProperties(patch.set);
+  if (Object.values(patch.set).every((value) => value === undefined) && patch.clear.length === 0) {
+    throw new Error("updateTextRunProperties: patch must set or clear at least one property");
+  }
+
+  let updated = false;
+
+  const slides = source.slides.map((slide) => ({
+    ...slide,
+    shapes: slide.shapes.map((shape) => {
+      if (shape.kind !== "shape" || shape.textBody === undefined) return shape;
+
+      let shapeChanged = false;
+      const paragraphs = shape.textBody.paragraphs.map((paragraph) => {
+        let paragraphChanged = false;
+        const runs = paragraph.runs.map((run) => {
+          if (!sourceHandlesEqual(run.handle, handle)) return run;
+          updated = true;
+          paragraphChanged = true;
+          shapeChanged = true;
+          const properties = patchTextRunProperties(run.properties, patch);
+          return {
+            kind: run.kind,
+            text: run.text,
+            ...(run.handle !== undefined ? { handle: run.handle } : {}),
+            ...(run.rawSidecars !== undefined ? { rawSidecars: run.rawSidecars } : {}),
+            ...(properties !== undefined ? { properties } : {}),
+          } satisfies SourceTextRun;
+        });
+        return !paragraphChanged ? paragraph : ({ ...paragraph, runs } satisfies SourceParagraph);
+      });
+
+      if (!shapeChanged) return shape;
+      return {
+        ...shape,
+        textBody: {
+          ...shape.textBody,
+          paragraphs,
+        },
+      } satisfies SourceShape;
+    }),
+  }));
+
+  if (!updated) {
+    throw new Error(
+      "updateTextRunProperties: text run handle was not found in PptxSourceModel source",
+    );
+  }
+
+  return {
+    ...source,
+    slides,
+    edits: [
+      ...(source.edits ?? []),
+      {
+        kind: "updateTextRunProperties",
+        handle,
+        ...(Object.keys(patch.set).length > 0 ? { set: patch.set } : {}),
+        ...(patch.clear.length > 0 ? { clear: patch.clear } : {}),
+      },
+    ],
+  };
+}
+
+function patchTextRunProperties(
+  current: SourceRunProperties | undefined,
+  patch: UpdateTextRunPropertiesPatch,
+): SourceRunProperties | undefined {
+  const next: MutableRunProperties = { ...(current ?? {}) };
+  for (const property of patch.clear) {
+    delete next[property];
+  }
+  if (patch.set.bold !== undefined) next.bold = patch.set.bold;
+  if (patch.set.italic !== undefined) next.italic = patch.set.italic;
+  if (patch.set.underline !== undefined) next.underline = patch.set.underline;
+  if (patch.set.fontSize !== undefined) next.fontSize = patch.set.fontSize;
+  if (patch.set.color !== undefined) next.color = patch.set.color;
+  if (patch.set.typeface !== undefined) next.typeface = patch.set.typeface;
+  return Object.keys(next).length > 0 ? next : undefined;
 }
 
 export interface UpdateShapeTransformInput {
@@ -238,6 +357,17 @@ function findParagraphInShape(
   return shape.textBody?.paragraphs.find((paragraph) =>
     sourceHandlesEqual(paragraph.handle, handle),
   );
+}
+
+function assertEditableTextRunProperties(properties: EditableTextRunProperties): void {
+  if (properties.color !== undefined) {
+    if (properties.color.kind !== "srgb") {
+      throw new Error("updateTextRunProperties: only srgb text run color is supported");
+    }
+    if (!/^[0-9A-Fa-f]{6}$/.test(properties.color.hex)) {
+      throw new Error("updateTextRunProperties: srgb text run color must be a 6-digit hex value");
+    }
+  }
 }
 
 function createReplacementRunHandle(paragraph: SourceParagraph): SourceHandle | undefined {

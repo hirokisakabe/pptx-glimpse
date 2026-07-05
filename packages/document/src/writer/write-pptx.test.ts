@@ -5,13 +5,15 @@ import { unzipSync, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 
 // Import via the actual public surface (`@pptx-glimpse/document`).
-import { asEmu, asSourceNodeId, readPptx, writePptx } from "../index.js";
+import { asEmu, asPt, asSourceNodeId, readPptx, writePptx } from "../index.js";
 import {
+  clearTextRunProperties,
   findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
   replaceParagraphPlainText,
   replaceTextRunPlainText,
+  setTextRunProperties,
   type SourceShape,
   updateShapeTransform,
 } from "../index.js";
@@ -415,6 +417,135 @@ describe("writePptx - multiple text edits", () => {
     );
 
     expect(() => writePptx(edited)).toThrow(/conflicting text run and paragraph edits/);
+  });
+});
+
+describe("writePptx - text run property edits", () => {
+  it("Sets all supported text run properties and persists them after write/read", () => {
+    const source = readPptx(buildTextEditFixture());
+    const run = firstRun(source);
+
+    const edited = setTextRunProperties(source, run.handle!, {
+      bold: false,
+      italic: false,
+      underline: true,
+      fontSize: asPt(32),
+      color: { kind: "srgb", hex: "00aa44" },
+      typeface: "Liberation Sans",
+    });
+    const reread = readPptx(writePptx(edited));
+    const editedRun = firstRun(reread);
+
+    expect(firstRun(edited).properties).toMatchObject({
+      bold: false,
+      italic: false,
+      underline: true,
+      fontSize: 32,
+      color: { kind: "srgb", hex: "00aa44" },
+      typeface: "Liberation Sans",
+    });
+    expect(editedRun.properties).toMatchObject({
+      bold: false,
+      italic: false,
+      underline: true,
+      fontSize: 32,
+      color: { kind: "srgb", hex: "00AA44" },
+      typeface: "Liberation Sans",
+      typefaceEa: "Noto Sans JP",
+    });
+  });
+
+  it("Clears supported text run properties without removing unrelated rPr attributes or children", () => {
+    const source = readPptx(
+      buildTextEditFixtureFromSlide(
+        `<p:sp><p:nvSpPr><p:cNvPr id="70" name="Decorated"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+          `<p:txBody><a:bodyPr/><a:lstStyle/>` +
+          `<a:p><a:r><a:rPr lang="en-US" b="1" i="1" u="sng" sz="2400" spc="120">` +
+          `<a:solidFill><a:schemeClr val="accent1"><a:lumMod val="65000"/></a:schemeClr></a:solidFill>` +
+          `<a:latin typeface="Aptos"/><a:effectLst/><a:ea typeface="Noto Sans JP"/>` +
+          `</a:rPr><a:t>Original</a:t></a:r>` +
+          `<a:r><a:rPr b="1"><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill></a:rPr><a:t>Untouched</a:t></a:r>` +
+          `</a:p>` +
+          `</p:txBody></p:sp>`,
+      ),
+    );
+
+    const edited = clearTextRunProperties(source, firstRun(source).handle!, [
+      "bold",
+      "italic",
+      "underline",
+      "fontSize",
+      "color",
+      "typeface",
+    ]);
+    const output = writePptx(edited);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+    const reread = readPptx(output);
+
+    const properties = firstRun(reread).properties;
+    expect(properties).toMatchObject({ typefaceEa: "Noto Sans JP" });
+    expect(properties?.bold).toBeUndefined();
+    expect(properties?.italic).toBeUndefined();
+    expect(properties?.underline).toBeUndefined();
+    expect(properties?.fontSize).toBeUndefined();
+    expect(properties?.color).toBeUndefined();
+    expect(properties?.typeface).toBeUndefined();
+    expect(slideXml).toContain('lang="en-US"');
+    expect(slideXml).toContain('spc="120"');
+    expect(slideXml).toContain("<a:effectLst");
+    expect(slideXml).toContain('<a:ea typeface="Noto Sans JP"');
+    expect(firstParagraph(reread).runs[1].properties).toMatchObject({
+      bold: true,
+      color: { kind: "srgb", hex: "00FF00" },
+    });
+  });
+
+  it("Creates rPr when setting properties on a run without existing properties", () => {
+    const source = readPptx(buildSlotHandleTextEditFixture());
+    const edited = setTextRunProperties(source, firstRun(source).handle!, {
+      bold: true,
+      fontSize: asPt(18),
+      color: { kind: "srgb", hex: "112233" },
+    });
+    const output = writePptx(edited);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+
+    expect(slideXml.indexOf("<a:rPr")).toBeLessThan(slideXml.indexOf("<a:t>Original</a:t>"));
+    expect(firstRun(readPptx(output)).properties).toMatchObject({
+      bold: true,
+      fontSize: 18,
+      color: { kind: "srgb", hex: "112233" },
+    });
+  });
+
+  it("Applies text and property edits to the same run in one write", () => {
+    const source = readPptx(buildTextEditFixture());
+    const handle = firstRun(source).handle!;
+    const edited = setTextRunProperties(
+      replaceTextRunPlainText(source, handle, "Edited property text"),
+      handle,
+      { underline: true, color: { kind: "srgb", hex: "336699" } },
+    );
+    const reread = readPptx(writePptx(edited));
+
+    expect(firstRun(reread).text).toBe("Edited property text");
+    expect(firstRun(reread).properties).toMatchObject({
+      underline: true,
+      color: { kind: "srgb", hex: "336699" },
+    });
+  });
+
+  it("Rejects conflicting text run property and paragraph replacements for the same paragraph", () => {
+    const source = readPptx(buildTextEditFixture());
+    const paragraph = firstParagraph(source);
+    const edited = replaceParagraphPlainText(
+      setTextRunProperties(source, paragraph.runs[0].handle!, { bold: false }),
+      paragraph.handle!,
+      "Paragraph edit",
+    );
+
+    expect(() => writePptx(edited)).toThrow(/conflicting text run properties and paragraph edits/);
   });
 });
 

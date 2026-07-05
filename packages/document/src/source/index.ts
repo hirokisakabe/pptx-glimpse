@@ -5,11 +5,13 @@
 export type { Diagnostic, DiagnosticSeverity } from "./diagnostics.js";
 export type { UpdateShapeTransformInput } from "./editing.js";
 export {
+  clearTextRunProperties,
   findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
   replaceParagraphPlainText,
   replaceTextRunPlainText,
+  setTextRunProperties,
   updateShapeTransform,
 } from "./editing.js";
 export type {
@@ -32,11 +34,14 @@ export type {
   RelationshipTargetMode,
 } from "./package-graph.js";
 export type {
+  EditableTextRunProperties,
+  EditableTextRunProperty,
   PptxSourceModel,
   PptxSourceModelEdit,
   PptxSourceModelParagraphTextEdit,
   PptxSourceModelShapeTransformEdit,
   PptxSourceModelTextRunEdit,
+  PptxSourceModelTextRunPropertiesEdit,
 } from "./pptx-source-model.js";
 export type {
   SlideSize,

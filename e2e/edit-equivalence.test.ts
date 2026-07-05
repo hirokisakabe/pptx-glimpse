@@ -6,7 +6,8 @@ import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 
 import type { ConvertOptions } from "../packages/core/src/converter.js";
-import { replaceTextRunPlainText } from "../packages/document/src/index.js";
+import { asPt, replaceTextRunPlainText } from "../packages/document/src/index.js";
+import { createEditorSession } from "../packages/editor-core/src/index.js";
 import {
   assertEditEquivalence,
   defineEditEquivalenceTests,
@@ -22,16 +23,32 @@ import {
 } from "../vrt/snapshot/create-fixtures.js";
 import { unsafeVrtInteropAssertion } from "../vrt/unsafe-type-assertion.js";
 
+const TEST_FONT_FAMILY = "Pptx Glimpse Edit Equivalence";
+const TEST_FONT_DIR = join(tmpdir(), "pptx-glimpse-edit-equivalence-font-v2");
+const TEST_FONT_PATH = join(TEST_FONT_DIR, "PptxGlimpseEditEquivalence-Regular.ttf");
+
 const originalTextRunFixture = textRunFixture("source text-run fixture", "Original text");
 const editedTextRunFixture = textRunFixture("expected edited text-run fixture", "Edited text");
+const originalDecoratedRunFixture = textRunFixture(
+  "source text-run decoration fixture",
+  "Edited text",
+);
+const expectedDecoratedRunFixture = textRunFixture(
+  "expected decorated text-run fixture",
+  "Edited text",
+  {
+    bold: true,
+    italic: true,
+    underline: true,
+    fontSize: 32,
+    color: "9C0000",
+    typeface: TEST_FONT_FAMILY,
+  },
+);
 const mismatchedTextRunFixture = textRunFixture(
   "mismatched expected text-run fixture",
   "Alterd text",
 );
-
-const TEST_FONT_FAMILY = "Pptx Glimpse Edit Equivalence";
-const TEST_FONT_DIR = join(tmpdir(), "pptx-glimpse-edit-equivalence-font-v2");
-const TEST_FONT_PATH = join(TEST_FONT_DIR, "PptxGlimpseEditEquivalence-Regular.ttf");
 
 const replaceFirstRunWithEditedText = {
   name: "replace first text run with edited text",
@@ -45,12 +62,46 @@ const replaceFirstRunWithEditedText = {
   },
 } as const satisfies EditEquivalenceOperation;
 
+const decorateFirstRun = {
+  name: "set first text run decoration",
+  apply: (source) => {
+    const run =
+      source.slides[0]?.shapes[0]?.kind === "shape"
+        ? source.slides[0].shapes[0].textBody?.paragraphs[0]?.runs[0]
+        : undefined;
+    if (run?.handle === undefined) throw new Error("editable text run not found");
+    const session = createEditorSession(source);
+    const result = session.apply({
+      kind: "setTextRunProperties",
+      handle: run.handle,
+      properties: {
+        bold: true,
+        italic: true,
+        underline: true,
+        fontSize: asPt(32),
+        color: { kind: "srgb", hex: "9C0000" },
+        typeface: TEST_FONT_FAMILY,
+      },
+    });
+    if (!result.ok) throw new Error(result.message);
+    return result.document;
+  },
+} as const satisfies EditEquivalenceOperation;
+
 defineEditEquivalenceTests([
   {
     name: "text-run replacement",
     sourceFixture: originalTextRunFixture,
     operations: [replaceFirstRunWithEditedText],
     expectedFixture: editedTextRunFixture,
+    renderOptionsProvider: getTinyTestFontRenderOptions,
+    renderOptions: { width: 480 },
+  },
+  {
+    name: "text-run decoration",
+    sourceFixture: originalDecoratedRunFixture,
+    operations: [decorateFirstRun],
+    expectedFixture: expectedDecoratedRunFixture,
     renderOptionsProvider: getTinyTestFontRenderOptions,
     renderOptions: { width: 480 },
   },
@@ -71,14 +122,18 @@ describe("edit equivalence rendering oracle", { timeout: 60000 }, () => {
   });
 });
 
-function textRunFixture(name: string, text: string): EditEquivalenceFixture {
+function textRunFixture(
+  name: string,
+  text: string,
+  opts?: Parameters<typeof textBodyXmlHelper>[1],
+): EditEquivalenceFixture {
   return {
     name,
     create: async () =>
       await buildPptx({
         slides: [
           {
-            xml: wrapSlideXml(textRunShapeXml(text)),
+            xml: wrapSlideXml(textRunShapeXml(text, opts)),
             rels: slideRelsXml(),
           },
         ],
@@ -86,7 +141,20 @@ function textRunFixture(name: string, text: string): EditEquivalenceFixture {
   };
 }
 
-function textRunShapeXml(text: string): string {
+function textRunShapeXml(text: string, opts?: Parameters<typeof textBodyXmlHelper>[1]): string {
+  return decoratedTextRunShapeXml(text, {
+    fontSize: 28,
+    color: "FFFFFF",
+    typeface: TEST_FONT_FAMILY,
+    align: "ctr",
+    ...opts,
+  });
+}
+
+function decoratedTextRunShapeXml(
+  text: string,
+  opts: Parameters<typeof textBodyXmlHelper>[1],
+): string {
   return shapeXml(2, "Editable Text", {
     preset: "rect",
     x: 914400,
@@ -95,12 +163,7 @@ function textRunShapeXml(text: string): string {
     cy: 1371600,
     fillXml: `<a:solidFill><a:srgbClr val="4472C4"/></a:solidFill>`,
     outlineXml: `<a:ln w="12700"><a:solidFill><a:srgbClr val="2F528F"/></a:solidFill></a:ln>`,
-    textBodyXml: textBodyXmlHelper(text, {
-      fontSize: 28,
-      color: "FFFFFF",
-      typeface: TEST_FONT_FAMILY,
-      align: "ctr",
-    }),
+    textBodyXml: textBodyXmlHelper(text, opts),
   });
 }
 
