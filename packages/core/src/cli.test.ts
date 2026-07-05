@@ -69,13 +69,14 @@ describe("pptx-glimpse CLI", () => {
     const workspace = await createWorkspace();
     const pptxPath = await writeInput(workspace);
     const outDir = join(workspace, "nested", "out");
+    const streams = createStreams();
     const calls: ConvertOptions[] = [];
 
     const exitCode = await runCli(
       ["convert", pptxPath, "--slides", "1,3", "--out", outDir, "--log-level", "debug"],
       {
         cwd: workspace,
-        streams: createStreams().streams,
+        streams: streams.streams,
         converters: {
           convertPptxToSvg: (_input, options) => {
             calls.push(options ?? {});
@@ -100,6 +101,8 @@ describe("pptx-glimpse CLI", () => {
     expect(exitCode).toBe(0);
     expect(calls).toEqual([{ logLevel: "off", skipSystemFonts: true, slides: [1, 3] }]);
     expect(await sortedFiles(outDir)).toEqual(["deck-slide1.svg"]);
+    expect(streams.stderr).toContain("pptx-glimpse: 1 warning(s)");
+    expect(streams.stderr).toContain("pptx-glimpse: slide 1 renderer.test: Test warning");
   });
 
   it("prints help", async () => {

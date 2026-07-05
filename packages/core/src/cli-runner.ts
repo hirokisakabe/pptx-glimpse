@@ -146,6 +146,7 @@ async function runConvertCommand(
   const input = await readFile(options.inputPath);
   const basenameWithoutExtension = basename(options.inputPath, extname(options.inputPath));
   const conversionOptions: ConvertOptions = {
+    // Route diagnostics through the CLI streams below instead of converter console output.
     logLevel: "off",
     skipSystemFonts: true,
     ...(options.slides !== undefined ? { slides: options.slides } : {}),
