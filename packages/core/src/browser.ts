@@ -33,7 +33,7 @@ export type {
 } from "./svg-converter.js";
 export { convertPptxToSvg } from "./svg-converter.js";
 export type { SourceHandle } from "@pptx-glimpse/document";
-export type { EditorCommand } from "@pptx-glimpse/editor-core";
+export type { EditorCommand, EditorCommandWarning } from "@pptx-glimpse/editor-core";
 export type { FontMapping } from "@pptx-glimpse/renderer";
 export type { FontBuffer, OpentypeSetup } from "@pptx-glimpse/renderer";
 export type { LogLevel, WarningEntry, WarningSummary } from "@pptx-glimpse/renderer";

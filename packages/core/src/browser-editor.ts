@@ -11,6 +11,7 @@ import {
 import {
   createEditorSession,
   type EditorCommand,
+  type EditorCommandWarning,
   type PptxTextBodyProseMirrorDocJson,
   proseMirrorDocJsonToEditorCommands,
   textBodyToProseMirrorDocJson,
@@ -63,6 +64,7 @@ export interface BrowserEditorSlidesResponse {
   readonly slides: readonly SlideSvg[];
   readonly history: BrowserEditorHistoryState;
   readonly selection?: BrowserEditorSelectionInfo;
+  readonly warnings?: readonly EditorCommandWarning[];
 }
 
 export interface BrowserEditorSaveResponse {
@@ -113,11 +115,12 @@ export class BrowserPptxEditorSession {
     return this.#session.selection;
   }
 
-  response(): BrowserEditorSlidesResponse {
+  response(warnings?: readonly EditorCommandWarning[]): BrowserEditorSlidesResponse {
     return {
       slides: this.#slides,
       history: this.history,
       ...(this.selection !== undefined ? { selection: this.selection } : {}),
+      ...(warnings !== undefined && warnings.length > 0 ? { warnings } : {}),
     };
   }
 
@@ -143,7 +146,7 @@ export class BrowserPptxEditorSession {
       throw new Error(result.message);
     }
     await this.renderCurrentSlides();
-    return this.response();
+    return this.response(result.warnings);
   }
 
   async applyTextBodyDocJson(
@@ -159,7 +162,7 @@ export class BrowserPptxEditorSession {
       throw new Error(result.message);
     }
     await this.renderCurrentSlides();
-    return this.response();
+    return this.response(result.warnings);
   }
 
   selectShape(handle: SourceHandle): BrowserEditorSlidesResponse {

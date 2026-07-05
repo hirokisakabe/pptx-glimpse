@@ -1,3 +1,4 @@
+import { Buffer } from "node:buffer";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -11,7 +12,9 @@ import {
   type MediaPart,
   type PptxSourceModel,
   readPptx,
+  replaceImageBytes,
   replaceTextRunPlainText,
+  type SourceImage,
   type SourceParagraph,
   type SourceShape,
   type SourceShapeNode,
@@ -28,6 +31,9 @@ import { adaptComputedViewToRendererModel } from "./pptx-computed-view-renderer-
 
 const SHARED_FIXTURES = ["real-basic-theme.pptx", "real-product-page.pptx"] as const;
 const EDITED_TEXT = "Edited 470";
+const BLUE_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGNkYPjPAANMcBZeDgAx0wEH1s7nlgAAAABJRU5ErkJggg==";
+const BLUE_PNG = new Uint8Array(Buffer.from(BLUE_PNG_BASE64, "base64"));
 
 describe("PptxSourceModel PoC end-to-end round-trip", () => {
   it.each(SHARED_FIXTURES)(
@@ -156,6 +162,26 @@ describe("PptxSourceModel PoC end-to-end round-trip", () => {
 
     // No-edit writer output is asserted to keep public SVG stable for the
     // selected shared fixture, so this e2e coverage does not need VRT snapshots.
+  });
+
+  it("writes, re-reads, and renders one image replacement through convertPptxToSvg", async () => {
+    const input = readFixture("real-basic-theme.pptx");
+    const source = readPptx(input);
+    const image = firstImage(source);
+    const editedOutput = writePptx(replaceImageBytes(source, image.handle!, BLUE_PNG));
+    const reread = readPptx(editedOutput);
+    const rereadMedia = reread.packageGraph.media.find(
+      (part) => part.partPath === "ppt/media/image1.png",
+    );
+    const { slides } = await convertPptxToSvg(editedOutput, {
+      textOutput: "text",
+      skipSystemFonts: true,
+    });
+
+    expect(rereadMedia?.bytes).toEqual(BLUE_PNG);
+    expect(
+      slides.some((slide) => slide.svg.includes(`data:image/png;base64,${BLUE_PNG_BASE64}`)),
+    ).toBe(true);
   });
 
   it("writes, re-reads, and renders one shape xfrm edit through convertPptxToSvg", async () => {
@@ -316,6 +342,14 @@ function firstTransformShape(source: PptxSourceModel): {
     if (shape !== undefined) return { slideNumber, shape };
   }
   throw new Error("No editable shape transform found in selected PptxSourceModel fixture");
+}
+
+function firstImage(source: PptxSourceModel): SourceImage {
+  for (const slide of source.slides) {
+    const image = slide.shapes.find((shape): shape is SourceImage => shape.kind === "image");
+    if (image !== undefined) return image;
+  }
+  throw new Error("No editable image found in selected PptxSourceModel fixture");
 }
 
 type TransformEditableShape = SourceShapeNode & {
