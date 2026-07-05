@@ -11,6 +11,7 @@ const execFileAsync = promisify(execFile);
 const here = dirname(fileURLToPath(import.meta.url));
 const demoRoot = resolve(here, "..");
 const repoRoot = resolve(demoRoot, "..");
+const nextCli = resolve(demoRoot, "node_modules/next/dist/bin/next");
 const samples = [
   { id: "basic-theme", filename: "real-basic-theme.pptx" },
   { id: "product-page", filename: "real-product-page.pptx" },
@@ -27,10 +28,14 @@ try {
     maxBuffer: 20 * 1024 * 1024,
   });
 
-  server = spawn("npm", ["run", "start", "--", "--hostname", "127.0.0.1", "--port", String(port)], {
-    cwd: demoRoot,
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  server = spawn(
+    process.execPath,
+    [nextCli, "start", "--hostname", "127.0.0.1", "--port", String(port)],
+    {
+      cwd: demoRoot,
+      stdio: ["ignore", "pipe", "pipe"],
+    },
+  );
 
   let serverOutput = "";
   server.stdout.on("data", (chunk) => {
