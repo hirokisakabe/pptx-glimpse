@@ -340,7 +340,10 @@ function isEditableTransformShape(shape: SourceShapeNode): boolean {
 }
 
 function isDeletableShape(shape: SourceShapeNode): boolean {
-  return shape.kind === "shape" && isEditableTransformShape(shape);
+  if (shape.kind !== "shape" || shape.handle?.nodeId === undefined) {
+    return false;
+  }
+  return !shape.rawSidecars?.some((sidecar) => sidecar.node.name === "mc:AlternateContent");
 }
 
 function collectTextRuns(runs: readonly SourceTextRun[]): BrowserEditorTextRunInfo[] {

@@ -147,6 +147,24 @@ describe("BrowserPptxEditorSession", () => {
       editor.shapes(1).some((shape) => handleKey(shape.handle) === handleKey(addedShape.handle)),
     ).toBe(false);
   });
+
+  it("marks top-level text shapes without transform as deletable", async () => {
+    const editor = await createBrowserPptxEditorSession(
+      await buildShapeFixture({ includeNoTransformShape: true }),
+      {
+        skipSystemFonts: true,
+      },
+    );
+
+    const noTransformShape = editor.shapes(1).find((shape) => shape.name === "No Transform");
+    if (noTransformShape?.handle === undefined) throw new Error("no-transform shape not found");
+    expect(noTransformShape.bounds).toBeUndefined();
+    expect(noTransformShape.editableTransform).toBeUndefined();
+    expect(noTransformShape.editableDelete).toBe(true);
+
+    await editor.deleteShape(noTransformShape.handle);
+    expect(editor.shapes(1).find((shape) => shape.name === "No Transform")).toBeUndefined();
+  });
 });
 
 function xml(content: string): Uint8Array {
@@ -157,7 +175,9 @@ function pngBytes(base64: string): Uint8Array {
   return new Uint8Array(Buffer.from(base64, "base64"));
 }
 
-async function buildShapeFixture(): Promise<Uint8Array> {
+async function buildShapeFixture(
+  options: { includeNoTransformShape?: boolean } = {},
+): Promise<Uint8Array> {
   const zip = new JSZip();
   zip.file(
     "[Content_Types].xml",
@@ -206,6 +226,14 @@ async function buildShapeFixture(): Promise<Uint8Array> {
         `<a:p><a:r><a:rPr sz="2400"><a:latin typeface="Aptos"/></a:rPr><a:t>Original</a:t></a:r></a:p>` +
         `</p:txBody>` +
         `</p:sp>` +
+        (options.includeNoTransformShape
+          ? `<p:sp><p:nvSpPr><p:cNvPr id="11" name="No Transform"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+            `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+            `<p:txBody><a:bodyPr/><a:lstStyle/>` +
+            `<a:p><a:r><a:t>No transform</a:t></a:r></a:p>` +
+            `</p:txBody>` +
+            `</p:sp>`
+          : "") +
         `</p:spTree></p:cSld>` +
         `</p:sld>`,
     ),
