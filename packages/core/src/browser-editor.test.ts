@@ -69,6 +69,12 @@ describe("BrowserPptxEditorSession", () => {
     });
     const image = editor.shapes(1).find((shape) => shape.kind === "image");
     if (image?.handle === undefined) throw new Error("image handle not found");
+    expect(image.editableImageReplacement).toEqual({
+      contentType: "image/png",
+      accept: "image/png,.png",
+      mediaPartPath: "ppt/media/image1.png",
+      sharedReferenceCount: 2,
+    });
 
     const result = await editor.apply({
       kind: "replaceImage",

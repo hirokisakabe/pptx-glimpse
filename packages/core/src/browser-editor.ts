@@ -1,8 +1,13 @@
 import {
   findShapeNodeBySourceHandle,
+  type MediaPart,
+  type PartPath,
   type PptxSourceModel,
   readPptx,
+  type Relationship,
+  type RelationshipId,
   type SourceHandle,
+  type SourceImage,
   type SourceShapeNode,
   type SourceTextBody,
   type SourceTextRun,
@@ -18,9 +23,20 @@ import {
 } from "@pptx-glimpse/editor-core";
 
 import { type ConvertOptions, renderPptxSourceModelToSvg, type SlideSvg } from "./svg-converter.js";
+import { unsafeBrandAssertion } from "./unsafe-type-assertion.js";
 
 const EMU_PER_INCH = 914400;
 const DEFAULT_DPI = 96;
+const IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+
+const IMAGE_ACCEPT_BY_CONTENT_TYPE: Readonly<Record<string, string>> = {
+  "image/png": "image/png,.png",
+  "image/jpeg": "image/jpeg,.jpg,.jpeg",
+  "image/gif": "image/gif,.gif",
+  "image/bmp": "image/bmp,.bmp",
+  "image/tiff": "image/tiff,.tif,.tiff",
+  "image/webp": "image/webp,.webp",
+};
 
 export interface BrowserEditorHistoryState {
   readonly canUndo: boolean;
@@ -42,6 +58,13 @@ export interface BrowserEditorTextBodyInfo {
   readonly docJson: PptxTextBodyProseMirrorDocJson;
 }
 
+export interface BrowserEditorImageReplacementInfo {
+  readonly contentType: string;
+  readonly accept: string;
+  readonly mediaPartPath: string;
+  readonly sharedReferenceCount: number;
+}
+
 export interface BrowserEditorShapeBoundsPx {
   readonly x: number;
   readonly y: number;
@@ -58,6 +81,7 @@ export interface BrowserEditorShapeInfo {
   readonly editableTransform?: boolean;
   readonly textRuns?: readonly BrowserEditorTextRunInfo[];
   readonly editableTextBody?: BrowserEditorTextBodyInfo;
+  readonly editableImageReplacement?: BrowserEditorImageReplacementInfo;
 }
 
 export interface BrowserEditorSlidesResponse {
@@ -127,7 +151,7 @@ export class BrowserPptxEditorSession {
   shapes(slideNumber: number): readonly BrowserEditorShapeInfo[] {
     const slide = this.#session.document.slides[slideNumber - 1];
     if (slide === undefined) return [];
-    return slide.shapes.flatMap((shape, index) => shapeInfo(shape, index));
+    return slide.shapes.flatMap((shape, index) => shapeInfo(this.#session.document, shape, index));
   }
 
   async renderCurrentSlides(): Promise<readonly SlideSvg[]> {
@@ -217,6 +241,7 @@ export function createBrowserPptxEditorSession(
 }
 
 function shapeInfo(
+  source: PptxSourceModel,
   shape: SourceShapeNode,
   index: number,
   editableTransform = true,
@@ -247,12 +272,13 @@ function shapeInfo(
     ...(shape.kind === "shape" && canEditTransform && shape.textBody !== undefined
       ? editableTextBody(shape.textBody)
       : {}),
+    ...(shape.kind === "image" ? editableImageReplacement(source, shape) : {}),
   };
 
   if (shape.kind !== "group") return [base];
   return [
     base,
-    ...shape.children.flatMap((child, childIndex) => shapeInfo(child, childIndex, false)),
+    ...shape.children.flatMap((child, childIndex) => shapeInfo(source, child, childIndex, false)),
   ];
 }
 
@@ -282,6 +308,116 @@ function editableTextBody(
   } catch {
     return {};
   }
+}
+
+function editableImageReplacement(
+  source: PptxSourceModel,
+  image: SourceImage,
+): Partial<Pick<BrowserEditorShapeInfo, "editableImageReplacement">> {
+  const media = imageMediaPart(source, image);
+  if (media === undefined) return {};
+  const accept = IMAGE_ACCEPT_BY_CONTENT_TYPE[media.contentType];
+  if (accept === undefined) return {};
+
+  return {
+    editableImageReplacement: {
+      contentType: media.contentType,
+      accept,
+      mediaPartPath: media.partPath,
+      sharedReferenceCount: countImageReferencesToMedia(source, media.partPath),
+    },
+  };
+}
+
+function imageMediaPart(source: PptxSourceModel, image: SourceImage): MediaPart | undefined {
+  if (image.blipRelationshipId === undefined || image.handle?.partPath === undefined) {
+    return undefined;
+  }
+  const mediaPartPath = imageMediaPartPath(source, image.handle.partPath, image.blipRelationshipId);
+  if (mediaPartPath === undefined) return undefined;
+  return source.packageGraph.media.find((part) => part.partPath === mediaPartPath);
+}
+
+function imageMediaPartPath(
+  source: PptxSourceModel,
+  sourcePartPath: PartPath,
+  relationshipId: RelationshipId,
+): PartPath | undefined {
+  const relationships = source.packageGraph.relationships.find(
+    (candidate) => candidate.sourcePartPath === sourcePartPath,
+  );
+  const relationship = relationships?.relationships.find(
+    (candidate) => candidate.id === relationshipId && candidate.type === IMAGE_REL_TYPE,
+  );
+  if (relationship === undefined) return undefined;
+  return resolveInternalRelationshipTarget(sourcePartPath, relationship);
+}
+
+function countImageReferencesToMedia(source: PptxSourceModel, mediaPartPath: PartPath): number {
+  let count = 0;
+  for (const slide of source.slides) {
+    count += countImageReferencesInTree(source, slide.partPath, slide.shapes, mediaPartPath);
+  }
+  for (const layout of source.slideLayouts) {
+    count += countImageReferencesInTree(source, layout.partPath, layout.shapes, mediaPartPath);
+  }
+  for (const master of source.slideMasters) {
+    count += countImageReferencesInTree(source, master.partPath, master.shapes, mediaPartPath);
+  }
+  return count;
+}
+
+function countImageReferencesInTree(
+  source: PptxSourceModel,
+  sourcePartPath: PartPath,
+  shapes: readonly SourceShapeNode[],
+  mediaPartPath: PartPath,
+): number {
+  let count = 0;
+  for (const shape of shapes) {
+    if (shape.kind === "group") {
+      count += countImageReferencesInTree(source, sourcePartPath, shape.children, mediaPartPath);
+      continue;
+    }
+    if (shape.kind !== "image" || shape.blipRelationshipId === undefined) continue;
+    if (imageMediaPartPath(source, sourcePartPath, shape.blipRelationshipId) === mediaPartPath) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+function resolveInternalRelationshipTarget(
+  sourcePartPath: PartPath,
+  relationship: Relationship,
+): PartPath | undefined {
+  if (relationship.targetMode === "External") return undefined;
+  return unsafeBrandAssertion<PartPath>(
+    normalizePackagePath(
+      relationship.target.startsWith("/")
+        ? relationship.target.slice(1)
+        : joinPackageRelativeTarget(sourcePartPath, relationship.target),
+    ),
+  );
+}
+
+function joinPackageRelativeTarget(sourcePartPath: string, target: string): string {
+  const slash = sourcePartPath.lastIndexOf("/");
+  const baseDir = slash === -1 ? "" : sourcePartPath.slice(0, slash);
+  return baseDir === "" ? target : `${baseDir}/${target}`;
+}
+
+function normalizePackagePath(path: string): string {
+  const segments: string[] = [];
+  for (const segment of path.split("/")) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") {
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+  return segments.join("/");
 }
 
 function transformBoundsPx(transform: {
