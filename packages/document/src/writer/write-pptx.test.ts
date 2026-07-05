@@ -185,7 +185,9 @@ function buildUnreferencedLayoutFixture(): Uint8Array {
         `<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
         `<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>` +
         `<Override PartName="/ppt/slideLayouts/slideLayout2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>` +
+        `<Override PartName="/ppt/slideLayouts/slideLayout3.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>` +
         `<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>` +
+        `<Override PartName="/ppt/slideMasters/slideMaster2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>` +
         `</Types>`,
     ),
     "_rels/.rels": xml(
@@ -195,6 +197,7 @@ function buildUnreferencedLayoutFixture(): Uint8Array {
     ),
     "ppt/presentation.xml": xml(
       `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rIdMaster1"/><p:sldMasterId id="2147483649" r:id="rIdMaster2"/></p:sldMasterIdLst>` +
         `<p:sldIdLst><p:sldId id="256" r:id="rIdSlide1"/></p:sldIdLst>` +
         `<p:sldSz cx="9144000" cy="5143500"/>` +
         `</p:presentation>`,
@@ -202,6 +205,8 @@ function buildUnreferencedLayoutFixture(): Uint8Array {
     "ppt/_rels/presentation.xml.rels": xml(
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
         `<Relationship Id="rIdSlide1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>` +
+        `<Relationship Id="rIdMaster1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>` +
+        `<Relationship Id="rIdMaster2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster2.xml"/>` +
         `</Relationships>`,
     ),
     "ppt/slides/slide1.xml": xml(
@@ -234,6 +239,16 @@ function buildUnreferencedLayoutFixture(): Uint8Array {
         `<Relationship Id="rIdMaster" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster1.xml"/>` +
         `</Relationships>`,
     ),
+    "ppt/slideLayouts/slideLayout3.xml": xml(
+      `<p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" type="picTx">` +
+        `<p:cSld name="Unused Master Layout"><p:spTree/></p:cSld>` +
+        `</p:sldLayout>`,
+    ),
+    "ppt/slideLayouts/_rels/slideLayout3.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdMaster" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster2.xml"/>` +
+        `</Relationships>`,
+    ),
     "ppt/slideMasters/slideMaster1.xml": xml(
       `<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
         `<p:cSld><p:spTree/></p:cSld>` +
@@ -247,6 +262,17 @@ function buildUnreferencedLayoutFixture(): Uint8Array {
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
         `<Relationship Id="rIdLayout1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>` +
         `<Relationship Id="rIdLayout2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout2.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/slideMasters/slideMaster2.xml": xml(
+      `<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:cSld><p:spTree/></p:cSld>` +
+        `<p:sldLayoutIdLst><p:sldLayoutId id="2147483651" r:id="rIdLayout3"/></p:sldLayoutIdLst>` +
+        `</p:sldMaster>`,
+    ),
+    "ppt/slideMasters/_rels/slideMaster2.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdLayout3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout3.xml"/>` +
         `</Relationships>`,
     ),
   });
@@ -601,10 +627,10 @@ describe("writePptx - slide topology edits", () => {
   it("adds an empty slide that references a layout unused by existing slides", () => {
     const source = readPptx(buildUnreferencedLayoutFixture());
     const targetLayout = source.slideLayouts.find(
-      (layout) => layout.partPath === "ppt/slideLayouts/slideLayout2.xml",
+      (layout) => layout.partPath === "ppt/slideLayouts/slideLayout3.xml",
     );
     const edited = addEmptySlideFromLayout(source, {
-      layoutPartPath: asPartPath("ppt/slideLayouts/slideLayout2.xml"),
+      layoutPartPath: asPartPath("ppt/slideLayouts/slideLayout3.xml"),
     });
     const output = writePptx(edited);
     const entries = unzipSync(output);
@@ -619,13 +645,13 @@ describe("writePptx - slide topology edits", () => {
       "ppt/slides/slide1.xml",
       "ppt/slides/slide2.xml",
     ]);
-    expect(reread.slides[1]?.layoutPartPath).toBe("ppt/slideLayouts/slideLayout2.xml");
-    expect(presentationXml).toContain(`<p:sldId id="257" r:id="rId2"/>`);
+    expect(reread.slides[1]?.layoutPartPath).toBe("ppt/slideLayouts/slideLayout3.xml");
+    expect(presentationXml).toContain(`<p:sldId id="257" r:id="rId3"/>`);
     expect(presentationRels).toContain(
-      `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide2.xml"/>`,
+      `<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide2.xml"/>`,
     );
     expect(newSlideRels).toContain(
-      `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout2.xml"/>`,
+      `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout3.xml"/>`,
     );
     expect(newSlideXml).toContain("<p:cSld><p:spTree>");
     expect(newSlideXml).not.toContain("<p:sp>");

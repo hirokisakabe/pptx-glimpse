@@ -4,7 +4,7 @@
  * This surface is limited to the PptxSourceModel foundation that current
  * conversion, writer, and minimal editing workflows are allowed to depend on:
  * source model types, the PPTX reader, computed view generation, the writer,
- * and the narrow plain text-run edit operation.
+ * and focused text / shape / slide topology editing operations.
  *
  * Keep parser helpers, raw replacement/editing APIs, writer dirty-scope
  * implementation details, and other OOXML internals behind their owning

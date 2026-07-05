@@ -204,6 +204,13 @@ function readSlideHierarchy(
       ),
     );
   }
+  for (const masterPath of resolveAllRels(
+    relationships,
+    presentation.partPath,
+    SLIDE_MASTER_REL_TYPE,
+  )) {
+    masterPaths.add(masterPath);
+  }
 
   const slideMasters: SourceSlideMaster[] = [];
   const themePaths = new OrderedPathSet();
