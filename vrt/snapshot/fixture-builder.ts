@@ -266,11 +266,11 @@ export function textBodyXmlHelper(
 </p:txBody>`;
 }
 
-export function escapeXmlText(value: string): string {
+function escapeXmlText(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-export function escapeXmlAttribute(value: string): string {
+function escapeXmlAttribute(value: string): string {
   return escapeXmlText(value).replace(/"/g, "&quot;");
 }
 
@@ -311,7 +311,7 @@ export interface SlideData {
   rels: string;
 }
 
-export interface PptxBuildOptions {
+interface PptxBuildOptions {
   slides: SlideData[];
   charts?: Map<string, string>;
   media?: Map<string, Buffer>;
