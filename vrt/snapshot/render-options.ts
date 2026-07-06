@@ -272,18 +272,26 @@ async function ensureSourceFont(source: VrtFontSource): Promise<string> {
 
 async function downloadSourceFont(source: VrtFontSource): Promise<Buffer> {
   let lastStatus: number | undefined;
+  let lastError: unknown;
   for (let attempt = 1; attempt <= VRT_FONT_DOWNLOAD_ATTEMPTS; attempt += 1) {
-    const response = await fetch(source.url);
-    if (response.ok) return Buffer.from(await response.arrayBuffer());
+    try {
+      const response = await fetch(source.url);
+      if (response.ok) return Buffer.from(await response.arrayBuffer());
 
-    lastStatus = response.status;
-    if (attempt === VRT_FONT_DOWNLOAD_ATTEMPTS || !isRetryableFontDownloadStatus(lastStatus)) {
-      break;
+      lastStatus = response.status;
+      if (attempt === VRT_FONT_DOWNLOAD_ATTEMPTS || !isRetryableFontDownloadStatus(lastStatus)) {
+        break;
+      }
+      await delay(fontDownloadRetryDelayMs(response, attempt));
+    } catch (error) {
+      lastError = error;
+      if (attempt === VRT_FONT_DOWNLOAD_ATTEMPTS) break;
+      await delay(attempt * 1000);
     }
-    await delay(fontDownloadRetryDelayMs(response, attempt));
   }
 
-  throw new Error(`Failed to download VRT source font ${source.fileName}: ${lastStatus}`);
+  const reason = lastStatus ?? errorMessage(lastError);
+  throw new Error(`Failed to download VRT source font ${source.fileName}: ${reason}`);
 }
 
 function isRetryableFontDownloadStatus(status: number): boolean {
@@ -299,6 +307,10 @@ function fontDownloadRetryDelayMs(response: Response, attempt: number): number {
     }
   }
   return attempt * 1000;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function readBufferIfExists(path: string): Promise<Buffer | null> {

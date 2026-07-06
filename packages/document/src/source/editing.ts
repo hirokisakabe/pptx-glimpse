@@ -1117,6 +1117,8 @@ function startsWithBytes(bytes: Uint8Array, prefix: readonly number[]): boolean 
 function assertEditableTextRunProperties(properties: EditableTextRunProperties): void {
   for (const property of Object.keys(properties)) {
     assertEditableTextRunPropertyName(property);
+  }
+  for (const property of EDITABLE_TEXT_RUN_PROPERTIES) {
     validateEditableTextRunProperty(property, properties[property]);
   }
 }
