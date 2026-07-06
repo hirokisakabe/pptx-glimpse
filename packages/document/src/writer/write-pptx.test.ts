@@ -1103,6 +1103,43 @@ describe("writePptx - shape add/delete edits", () => {
     expect(decoder.decode(getEntry(output, "docProps/custom.xml"))).toContain("preserve-me");
   });
 
+  it("adds and deletes a free connector without native connection sites", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const edited = addConnector(source, source.slides[0].handle!, {
+      preset: "straightConnector1",
+      offsetX: asEmu(100),
+      offsetY: asEmu(200),
+      width: asEmu(700),
+      height: asEmu(800),
+      outline: {
+        tailEnd: { type: "triangle", width: "med", length: "med" },
+      },
+    });
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+    const added = findConnectorByName(reread, "Connector 31");
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+
+    expect(added).toMatchObject({
+      nodeId: "31",
+      name: "Connector 31",
+      geometry: { preset: "straightConnector1" },
+      outline: { tailEnd: { type: "triangle", width: "med", length: "med" } },
+    });
+    expect(added.connection).toBeUndefined();
+    expect(slideXml).toContain(`<p:cxnSp>`);
+    expect(slideXml).not.toContain(`<a:stCxn`);
+    expect(slideXml).not.toContain(`<a:endCxn`);
+
+    const persisted = readPptx(output);
+    const deleted = deleteShape(
+      persisted,
+      requireHandle(findConnectorByName(persisted, "Connector 31").handle),
+    );
+    const deletedOutput = writePptx(deleted);
+    expect(findConnectorByNameOptional(readPptx(deletedOutput), "Connector 31")).toBeUndefined();
+  });
+
   it("rejects deleting a shape referenced by a connector", () => {
     const source = readPptx(buildShapeDeleteFixture());
     const start = findShapeByName(source, "Delete Me");
@@ -1292,11 +1329,11 @@ describe("writePptx - shape add/delete edits", () => {
     expect(decoder.decode(getEntry(output, "docProps/custom.xml"))).toContain("preserve-me");
   });
 
-  it("rejects deleting pic and graphicFrame nodes through the sp-only delete API", () => {
+  it("rejects deleting pic and graphicFrame nodes through the sp/cxnSp delete API", () => {
     const source = readPptx(buildShapeDeleteFixture());
 
     expect(() => deleteShape(source, requireHandle(source.slides[0].shapes[1]?.handle))).toThrow(
-      /only top-level sp shapes/,
+      /only top-level sp or cxnSp shapes/,
     );
   });
 
@@ -1958,11 +1995,18 @@ function findShapeByName(source: ReturnType<typeof readPptx>, name: string): Sou
 }
 
 function findConnectorByName(source: ReturnType<typeof readPptx>, name: string): SourceConnector {
-  const connector = source.slides
-    .flatMap((slide) => slide.shapes)
-    .find((node): node is SourceConnector => node.kind === "connector" && node.name === name);
+  const connector = findConnectorByNameOptional(source, name);
   if (connector === undefined) throw new Error(`connector not found: ${name}`);
   return connector;
+}
+
+function findConnectorByNameOptional(
+  source: ReturnType<typeof readPptx>,
+  name: string,
+): SourceConnector | undefined {
+  return source.slides
+    .flatMap((slide) => slide.shapes)
+    .find((node): node is SourceConnector => node.kind === "connector" && node.name === name);
 }
 
 function requireShape(shape: SourceShape | undefined): SourceShape {

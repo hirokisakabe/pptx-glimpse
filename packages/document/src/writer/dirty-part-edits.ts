@@ -240,10 +240,16 @@ function applyAddConnectorEdit(root: XmlNode, edit: PptxSourceModelAddConnectorE
   if (locateShapeTreeNode(spTree, { nodeId: edit.shapeId }) !== undefined) {
     throw new Error(`writePptx: shape id '${edit.shapeId}' already exists in source XML`);
   }
-  if (locateShapeTreeNode(spTree, { nodeId: edit.startShapeId }) === undefined) {
+  if (
+    edit.startShapeId !== undefined &&
+    locateShapeTreeNode(spTree, { nodeId: edit.startShapeId }) === undefined
+  ) {
     throw new Error(`writePptx: connector start shape '${edit.startShapeId}' was not found`);
   }
-  if (locateShapeTreeNode(spTree, { nodeId: edit.endShapeId }) === undefined) {
+  if (
+    edit.endShapeId !== undefined &&
+    locateShapeTreeNode(spTree, { nodeId: edit.endShapeId }) === undefined
+  ) {
     throw new Error(`writePptx: connector end shape '${edit.endShapeId}' was not found`);
   }
 
@@ -256,7 +262,9 @@ function applyDeleteShapeEdit(root: XmlNode, edit: PptxSourceModelDeleteShapeEdi
   const cSld = getChild(slide, "cSld");
   const spTree = getChild(cSld, "spTree");
   if (!deleteShapeXml(spTree, locator.nodeId)) {
-    throw new Error(`writePptx: shape delete handle '${locator.nodeId}' no longer matches p:sp`);
+    throw new Error(
+      `writePptx: shape delete handle '${locator.nodeId}' no longer matches p:sp or p:cxnSp`,
+    );
   }
 }
 

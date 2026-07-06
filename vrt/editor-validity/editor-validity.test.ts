@@ -17,6 +17,7 @@ import {
   duplicateSlide,
   readPptx,
   replaceImageBytes,
+  type SourceConnector,
   type SourceHandle,
   type SourceImage,
   type SourceShape,
@@ -281,6 +282,53 @@ describeOrSkip("LibreOffice shape add/delete validity", { timeout: 120000 }, () 
     renderSingleWithLibreOffice(
       libreOfficeImage,
       "editor-validity-shape-connector-edited.pptx",
+      writePptx(edited),
+    );
+  });
+
+  it("opens PPTX after adding a free connector", () => {
+    const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
+    const source = readPptx(sourcePptx);
+    const edited = addConnector(source, requireHandle(source.slides[0]?.handle), {
+      preset: "straightConnector1",
+      offsetX: asEmu(914400),
+      offsetY: asEmu(1371600),
+      width: asEmu(3657600),
+      height: asEmu(914400),
+      outline: {
+        tailEnd: { type: "triangle", width: "med", length: "med" },
+      },
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-shape-free-connector-edited.pptx",
+      writePptx(edited),
+    );
+  });
+
+  it("opens PPTX after deleting a connector", () => {
+    const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
+    const source = readPptx(sourcePptx);
+    const withConnector = addConnector(source, requireHandle(source.slides[0]?.handle), {
+      preset: "straightConnector1",
+      offsetX: asEmu(914400),
+      offsetY: asEmu(1371600),
+      width: asEmu(3657600),
+      height: asEmu(914400),
+      outline: {
+        tailEnd: { type: "triangle", width: "med", length: "med" },
+      },
+    });
+    const persisted = readPptx(writePptx(withConnector));
+    const connector = persisted.slides[0]?.shapes.find(
+      (shape): shape is SourceConnector => shape.kind === "connector",
+    );
+    const edited = deleteShape(persisted, requireHandle(connector?.handle));
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-shape-connector-delete-edited.pptx",
       writePptx(edited),
     );
   });
