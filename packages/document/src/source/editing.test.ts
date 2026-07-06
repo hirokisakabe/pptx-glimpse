@@ -303,7 +303,7 @@ describe("editing shape operations", () => {
         offsetY: asEmu(600),
         width: asEmu(700),
         height: asEmu(800),
-        text: "Added",
+        text: "007",
       }),
     );
     const added = shapeByName(edited, "TextBox 31");
@@ -312,7 +312,7 @@ describe("editing shape operations", () => {
       source.slides[0].shapes.map((shape) => shape.kind !== "raw" && shape.name),
     ).not.toContain("TextBox 31");
     expect(added.nodeId).toBe("31");
-    expect(added.textBody?.paragraphs[0]?.runs[0]?.text).toBe("Added");
+    expect(added.textBody?.paragraphs[0]?.runs[0]?.text).toBe("007");
     expect(edited.edits?.at(-1)).toMatchObject({
       kind: "addTextBox",
       slidePartPath: "ppt/slides/slide1.xml",
