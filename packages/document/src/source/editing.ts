@@ -22,7 +22,13 @@ export {
   updateShapeTransform,
 } from "./shape-editing.js";
 export type { AddEmptySlideFromLayoutInput } from "./slide-topology.js";
-export { addEmptySlideFromLayout, deleteSlide, duplicateSlide } from "./slide-topology.js";
+export type { MoveSlideInput } from "./slide-topology.js";
+export {
+  addEmptySlideFromLayout,
+  deleteSlide,
+  duplicateSlide,
+  moveSlide,
+} from "./slide-topology.js";
 export {
   clearTextRunProperties,
   findParagraphBySourceHandle,

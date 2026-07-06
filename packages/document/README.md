@@ -21,6 +21,7 @@ import {
   addEmptySlideFromLayout,
   createComputedView,
   createPptx,
+  moveSlide,
   readPptx,
   replaceTextRunPlainText,
   writePptx,
@@ -34,7 +35,7 @@ The stable entry point includes:
 - `createComputedView(source, options?)` for deriving slide/layout/master/theme effective values without mutating the source
 - `writePptx(source)` for structural round-trip writing
 - Text editing helpers such as `replaceTextRunPlainText(source, handle, text)` and related source handle lookup types exported from the root entry point
-- Slide topology helpers such as `addEmptySlideFromLayout(source, { layoutPartPath })`; choose `layoutPartPath` from `source.slideLayouts`
+- Slide topology helpers such as `addEmptySlideFromLayout(source, { layoutPartPath })`, `duplicateSlide(source, slideHandle)`, `moveSlide(source, slideHandle, { toIndex })`, and `deleteSlide(source, slideHandle)`
 - Source model, computed view, and unit types needed to consume those APIs
 
 Parser helpers, raw replacement internals, writer dirty-scope implementation details, and OOXML implementation modules outside the package root are internal and may change without notice.

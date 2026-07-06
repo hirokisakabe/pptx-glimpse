@@ -27,6 +27,7 @@ import {
   findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
+  moveSlide,
   replaceImageBytes,
   replaceParagraphPlainText,
   replaceTextRunPlainText,
@@ -916,6 +917,32 @@ describe("writePptx - slide topology edits", () => {
         },
       ]),
     );
+  });
+
+  it("moves an existing slide by reordering presentation slide ids only", () => {
+    const source = readPptx(buildSlideTopologyFixture());
+    const edited = moveSlide(source, source.slides[0].handle!, { toIndex: 1 });
+    const output = writePptx(edited);
+    const entries = unzipSync(output);
+    const reread = readPptx(output);
+    const presentationXml = decoder.decode(getEntry(output, "ppt/presentation.xml"));
+    const presentationRels = decoder.decode(getEntry(output, "ppt/_rels/presentation.xml.rels"));
+
+    expect(reread.presentation.slidePartPaths).toEqual([
+      "ppt/slides/slide2.xml",
+      "ppt/slides/slide1.xml",
+    ]);
+    expect(
+      reread.slides.map((slide) => slide.shapes[0]?.kind === "shape" && slide.shapes[0].name),
+    ).toEqual(["Second", "Invisible Source"]);
+    expect(presentationXml.indexOf(`r:id="rIdSlide2"`)).toBeLessThan(
+      presentationXml.indexOf(`r:id="rIdSlide1"`),
+    );
+    expect(presentationRels).toContain(`Id="rIdSlide1"`);
+    expect(presentationRels).toContain(`Id="rIdSlide2"`);
+    expect(entries["ppt/slides/slide1.xml"]).toBeDefined();
+    expect(entries["ppt/slides/slide2.xml"]).toBeDefined();
+    expect(entries["ppt/notesSlides/notesSlide1.xml"]).toBeDefined();
   });
 
   it("deletes a slide and its notes part while keeping remaining slide order and orphan cleanup out of scope", () => {

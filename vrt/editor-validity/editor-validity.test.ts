@@ -15,6 +15,7 @@ import {
   deleteShape,
   deleteSlide,
   duplicateSlide,
+  moveSlide,
   readPptx,
   replaceImageBytes,
   type SourceConnector,
@@ -212,6 +213,21 @@ describeOrSkip("LibreOffice slide topology validity", { timeout: 120000 }, () =>
       libreOfficeImage,
       "editor-validity-slide-topology-edited.pptx",
       writePptx(deleted),
+    );
+  });
+
+  it("opens PPTX after moving a slide", () => {
+    const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
+    const source = readPptx(sourcePptx);
+    const duplicated = duplicateSlide(source, requireHandle(source.slides[0]?.handle));
+    const moved = moveSlide(duplicated, requireHandle(duplicated.slides[0]?.handle), {
+      toIndex: 1,
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-slide-move-edited.pptx",
+      writePptx(moved),
     );
   });
 });

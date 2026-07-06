@@ -1166,6 +1166,33 @@ describe("EditorSession slide topology commands", () => {
     expect(redone.presentation.slidePartPaths).toEqual(duplicated.presentation.slidePartPaths);
   });
 
+  it("moves a slide as one undoable command and persists it", async () => {
+    const source = readPptx(await buildTwoSlideFixture());
+    const session = createEditorSession(source);
+    const moved = expectApplied(
+      session.apply({
+        kind: "moveSlide",
+        handle: requireHandle(source.slides[0].handle),
+        toIndex: 1,
+      }),
+    );
+
+    expect(moved.presentation.slidePartPaths).toEqual([
+      "ppt/slides/slide2.xml",
+      "ppt/slides/slide1.xml",
+    ]);
+    expect(readPptx(writePptx(moved)).presentation.slidePartPaths).toEqual([
+      "ppt/slides/slide2.xml",
+      "ppt/slides/slide1.xml",
+    ]);
+    expect(session.undoDepth).toBe(1);
+
+    const undone = expectHistory(session.undo());
+    expect(undone.presentation.slidePartPaths).toEqual(source.presentation.slidePartPaths);
+    const redone = expectHistory(session.redo());
+    expect(redone.presentation.slidePartPaths).toEqual(moved.presentation.slidePartPaths);
+  });
+
   it("deletes a slide as one undoable command and rejects invalid slide deletes", async () => {
     const source = readPptx(await buildTwoSlideFixture());
     const session = createEditorSession(source);

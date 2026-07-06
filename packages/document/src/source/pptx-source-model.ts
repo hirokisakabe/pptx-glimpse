@@ -72,6 +72,7 @@ export type PptxSourceModelEdit =
   | PptxSourceModelReplaceImageEdit
   | PptxSourceModelAddEmptySlideFromLayoutEdit
   | PptxSourceModelDuplicateSlideEdit
+  | PptxSourceModelMoveSlideEdit
   | PptxSourceModelDeleteSlideEdit;
 
 export interface PptxSourceModelTextRunEdit {
@@ -169,6 +170,14 @@ export interface PptxSourceModelDuplicateSlideEdit {
   readonly newRelationshipId: RelationshipId;
   /** Numeric `p:sldId@id` assigned at edit time. The writer only applies it. */
   readonly newSlideNumericId: number;
+}
+
+export interface PptxSourceModelMoveSlideEdit {
+  readonly kind: "moveSlide";
+  readonly slidePartPath: PartPath;
+  readonly relationshipId: RelationshipId;
+  /** Zero-based final index in the slide list at the time this edit is applied. */
+  readonly toIndex: number;
 }
 
 export interface PptxSourceModelDeleteSlideEdit {

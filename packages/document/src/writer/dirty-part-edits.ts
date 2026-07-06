@@ -94,6 +94,7 @@ function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
     case "replaceImage":
     case "addEmptySlideFromLayout":
     case "duplicateSlide":
+    case "moveSlide":
     case "deleteSlide":
       throw new Error(`writePptx: edit kind '${edit.kind}' does not patch a dirty XML part`);
   }
