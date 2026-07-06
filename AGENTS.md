@@ -89,7 +89,9 @@ vrt/
 ├── snapshot/                                 # Standard VRT (self-comparison, Docker-based)
 │   ├── vrt-cases.ts                          # Shared test case definitions (VRT_CASES + SHARED_FIXTURE_CASES)
 │   ├── regression.test.ts                    # Test file
-│   ├── create-fixtures.ts                    # Fixture generation script
+│   ├── fixture-builder.ts                    # Shared PPTX fixture scaffolding
+│   ├── fixtures-src/                         # Domain-specific fixture creator modules
+│   ├── create-fixtures.ts                    # Fixture creator registry + entrypoint
 │   ├── update-snapshots.ts                   # Snapshot update script
 │   ├── docker-run.sh                         # Docker entrypoint (npm ci + exec)
 │   ├── diffs/                                # Diff images on test failure (gitignored)
@@ -133,7 +135,7 @@ npm run vrt:snapshot:update          # Generate fixtures + snapshots (Docker req
 
 When changes to the parser, renderer, or model affect rendering output:
 
-1. **Update fixtures** (if adding new features or modifying existing fixtures): Edit `vrt/snapshot/create-fixtures.ts` and run `npm run vrt:snapshot:update`
+1. **Update fixtures** (if adding new features or modifying existing fixtures): Edit the appropriate `vrt/snapshot/fixtures-src/*.ts` domain creator module and run `npm run vrt:snapshot:update`
 2. **Update snapshots**: `npm run vrt:snapshot:update` regenerates both fixtures and snapshots in Docker
 3. **Verify tests**: Confirm VRT tests pass in CI after pushing
 
@@ -142,10 +144,10 @@ When changes to the parser, renderer, or model affect rendering output:
 When adding a new rendering feature, **all 3 of the following** must be updated:
 
 1. **`vrt/snapshot/vrt-cases.ts`** — Add a new entry to the `VRT_CASES` array
-2. **`vrt/snapshot/create-fixtures.ts`** — Add a fixture creator function and register it in `FIXTURE_CREATORS`
+2. **`vrt/snapshot/fixtures-src/*.ts` + `vrt/snapshot/create-fixtures.ts`** — Add a fixture creator function to the appropriate domain module, export it through that module's creator map, and ensure the map is included in `FIXTURE_CREATORS`
 3. **`vrt/snapshot/snapshots/`** — Regenerate snapshots with `npm run vrt:snapshot:update`
 
-`VRT_CASES` is the single source of truth shared by both `create-fixtures.ts` and `regression.test.ts`. If a case is added to `VRT_CASES` without a corresponding creator in `FIXTURE_CREATORS`, the fixture generation script will fail with an error.
+`VRT_CASES` is the single source of truth shared by both `create-fixtures.ts` and `regression.test.ts`. If a case is added to `VRT_CASES` without a corresponding creator exported from `fixtures-src/` and included in `FIXTURE_CREATORS`, the fixture generation script will fail with an error.
 
 **Common mistake**: Modifying the parser or renderer but forgetting to update snapshots, causing VRT tests to fail. Always run `npm run vrt:snapshot:update` after making changes that affect rendering.
 
