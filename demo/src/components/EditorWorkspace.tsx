@@ -84,6 +84,7 @@ export function EditorWorkspace({
   const overlayRef = useRef<SVGSVGElement | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const busyRef = useRef(true);
 
   const currentSlide = slides[currentIndex];
   const selectedShape = useMemo(() => {
@@ -137,6 +138,7 @@ export function EditorWorkspace({
     let cancelled = false;
 
     async function openEditor() {
+      busyRef.current = true;
       setBusy(true);
       setLoadError("");
       setOperationError("");
@@ -158,7 +160,10 @@ export function EditorWorkspace({
       } catch (error) {
         if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
       } finally {
-        if (!cancelled) setBusy(false);
+        if (!cancelled) {
+          busyRef.current = false;
+          setBusy(false);
+        }
       }
     }
 
@@ -187,7 +192,8 @@ export function EditorWorkspace({
       success: string,
       preferredIndex = currentIndex,
     ) => {
-      if (editor === null) return;
+      if (editor === null || busyRef.current) return;
+      busyRef.current = true;
       setBusy(true);
       setOperationError("");
       try {
@@ -197,6 +203,7 @@ export function EditorWorkspace({
       } catch (error) {
         setOperationError(error instanceof Error ? error.message : String(error));
       } finally {
+        busyRef.current = false;
         setBusy(false);
       }
     },
@@ -214,6 +221,7 @@ export function EditorWorkspace({
 
   const handleSelectShape = useCallback(
     (shape: BrowserEditorShapeInfo, event?: React.PointerEvent<SVGRectElement>) => {
+      if (busyRef.current) return;
       if (shape.handle === undefined) return;
       editor?.selectShape(shape.handle);
       setSelectedShapeKey(shapeKey(shape));
@@ -259,18 +267,22 @@ export function EditorWorkspace({
         dragState.kind === "move"
           ? movedBounds(dragState.startBounds, dx, dy)
           : resizedBounds(dragState.startBounds, dragState.handle ?? "se", dx, dy);
-      if (nextBounds === undefined || sameBounds(dragState.startBounds, nextBounds)) return;
-      await applyCommand(
-        {
-          kind: "setShapeTransform",
-          handle: selectedShape.handle,
-          offsetX: pxToEmu(nextBounds.x),
-          offsetY: pxToEmu(nextBounds.y),
-          width: pxToEmu(nextBounds.width),
-          height: pxToEmu(nextBounds.height),
-        } satisfies ShapeTransformCommand,
-        "Shape updated",
-      );
+      try {
+        if (nextBounds === undefined || sameBounds(dragState.startBounds, nextBounds)) return;
+        await applyCommand(
+          {
+            kind: "setShapeTransform",
+            handle: selectedShape.handle,
+            offsetX: pxToEmu(nextBounds.x),
+            offsetY: pxToEmu(nextBounds.y),
+            width: pxToEmu(nextBounds.width),
+            height: pxToEmu(nextBounds.height),
+          } satisfies ShapeTransformCommand,
+          "Shape updated",
+        );
+      } finally {
+        setDraftBounds(null);
+      }
     },
     [applyCommand, selectedShape],
   );
@@ -298,6 +310,7 @@ export function EditorWorkspace({
 
   const handleResizeStart = useCallback(
     (handle: ResizeHandle, event: React.PointerEvent<SVGRectElement>) => {
+      if (busyRef.current) return;
       if (selectedShape?.bounds === undefined) return;
       event.preventDefault();
       event.stopPropagation();
@@ -422,20 +435,30 @@ export function EditorWorkspace({
   );
 
   const handleDownload = useCallback(() => {
-    if (editor === null) return;
-    const saved = editor.save();
-    setHistory(saved.history);
-    const href = URL.createObjectURL(
-      new Blob([uint8ArrayToArrayBuffer(saved.pptx)], {
-        type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-      }),
-    );
-    const link = document.createElement("a");
-    link.href = href;
-    link.download = editedFileName(fileName);
-    link.click();
-    URL.revokeObjectURL(href);
-    setMessage("PPTX downloaded");
+    if (editor === null || busyRef.current) return;
+    busyRef.current = true;
+    setBusy(true);
+    setOperationError("");
+    try {
+      const saved = editor.save();
+      setHistory(saved.history);
+      const href = URL.createObjectURL(
+        new Blob([uint8ArrayToArrayBuffer(saved.pptx)], {
+          type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        }),
+      );
+      const link = document.createElement("a");
+      link.href = href;
+      link.download = editedFileName(fileName);
+      link.click();
+      URL.revokeObjectURL(href);
+      setMessage("PPTX downloaded");
+    } catch (error) {
+      setOperationError(error instanceof Error ? error.message : String(error));
+    } finally {
+      busyRef.current = false;
+      setBusy(false);
+    }
   }, [editor, fileName]);
 
   if (loadError !== "") {
@@ -459,7 +482,7 @@ export function EditorWorkspace({
     <section className="editor-workspace" aria-label="PPTX editor" data-testid="editor-workspace">
       <div className="editor-topbar">
         <div className="mode-switch" role="group" aria-label="Demo mode">
-          <button type="button" onClick={onBackToViewer}>
+          <button disabled={busy} type="button" onClick={onBackToViewer}>
             View
           </button>
           <button aria-pressed="true" type="button">
@@ -470,7 +493,7 @@ export function EditorWorkspace({
           <span>{message}</span>
           {busy ? <span>Working...</span> : null}
         </div>
-        <button className="primary-action" type="button" onClick={handleDownload}>
+        <button className="primary-action" disabled={busy} type="button" onClick={handleDownload}>
           Download PPTX
         </button>
       </div>
@@ -483,6 +506,7 @@ export function EditorWorkspace({
               data-testid="editor-thumbnail"
               key={`${slide.slideNumber.toString()}-${index.toString()}`}
               type="button"
+              disabled={busy}
               onClick={() => setCurrentIndex(index)}
             >
               <span>Slide {slide.slideNumber}</span>
@@ -528,7 +552,7 @@ export function EditorWorkspace({
                     width={selectedShape.bounds.width}
                     height={selectedShape.bounds.height}
                   />
-                  {selectedShape.editableTransform
+                  {selectedShape.editableTransform && !busy
                     ? (["nw", "ne", "sw", "se"] as const).map((handle) => {
                         const point = handlePoint(selectedShape.bounds!, handle);
                         return (
@@ -555,18 +579,22 @@ export function EditorWorkspace({
           <div className="panel-group">
             <div className="panel-title">Slide</div>
             <div className="button-row">
-              <button type="button" onClick={handleDuplicateSlide}>
+              <button disabled={busy} type="button" onClick={handleDuplicateSlide}>
                 Duplicate
               </button>
-              <button disabled={slides.length <= 1} type="button" onClick={handleDeleteSlide}>
+              <button
+                disabled={busy || slides.length <= 1}
+                type="button"
+                onClick={handleDeleteSlide}
+              >
                 Delete
               </button>
             </div>
             <div className="button-row">
-              <button disabled={!history.canUndo} type="button" onClick={handleUndo}>
+              <button disabled={busy || !history.canUndo} type="button" onClick={handleUndo}>
                 Undo
               </button>
-              <button disabled={!history.canRedo} type="button" onClick={handleRedo}>
+              <button disabled={busy || !history.canRedo} type="button" onClick={handleRedo}>
                 Redo
               </button>
             </div>
@@ -574,11 +602,11 @@ export function EditorWorkspace({
 
           <div className="panel-group">
             <div className="panel-title">Shape</div>
-            <button type="button" onClick={handleAddTextBox}>
+            <button disabled={busy} type="button" onClick={handleAddTextBox}>
               Add text box
             </button>
             <button
-              disabled={selectedShape?.editableDelete !== true}
+              disabled={busy || selectedShape?.editableDelete !== true}
               type="button"
               onClick={handleDeleteShape}
             >
@@ -586,7 +614,7 @@ export function EditorWorkspace({
             </button>
             <button
               data-testid="replace-image-button"
-              disabled={selectedShape?.editableImageReplacement === undefined}
+              disabled={busy || selectedShape?.editableImageReplacement === undefined}
               type="button"
               onClick={() => imageInputRef.current?.click()}
             >
@@ -595,7 +623,7 @@ export function EditorWorkspace({
             <input
               ref={imageInputRef}
               data-testid="image-replacement-input"
-              disabled={selectedShape?.editableImageReplacement === undefined}
+              disabled={busy || selectedShape?.editableImageReplacement === undefined}
               hidden
               type="file"
               accept={selectedShape?.editableImageReplacement?.accept}
@@ -607,7 +635,7 @@ export function EditorWorkspace({
             <div className="panel-title">Text</div>
             <select
               data-testid="text-run-select"
-              disabled={textRuns.length === 0}
+              disabled={busy || textRuns.length === 0}
               value={Math.min(selectedRunIndex, Math.max(textRuns.length - 1, 0))}
               onChange={(event) => setSelectedRunIndex(Number(event.target.value))}
             >
@@ -620,31 +648,35 @@ export function EditorWorkspace({
             </select>
             <textarea
               data-testid="text-run-input"
-              disabled={selectedRun === undefined}
+              disabled={busy || selectedRun === undefined}
               rows={3}
               value={textValue}
               onChange={(event) => setTextValue(event.target.value)}
             />
-            <button disabled={selectedRun === undefined} type="button" onClick={handleApplyText}>
+            <button
+              disabled={busy || selectedRun === undefined}
+              type="button"
+              onClick={handleApplyText}
+            >
               Apply text
             </button>
             <div className="format-toolbar" role="group" aria-label="Text style">
               <button
-                disabled={selectedRun === undefined}
+                disabled={busy || selectedRun === undefined}
                 type="button"
                 onClick={() => handleApplyTextProperties({ bold: true })}
               >
                 B
               </button>
               <button
-                disabled={selectedRun === undefined}
+                disabled={busy || selectedRun === undefined}
                 type="button"
                 onClick={() => handleApplyTextProperties({ italic: true })}
               >
                 I
               </button>
               <button
-                disabled={selectedRun === undefined}
+                disabled={busy || selectedRun === undefined}
                 type="button"
                 onClick={() => handleApplyTextProperties({ underline: true })}
               >
@@ -652,7 +684,7 @@ export function EditorWorkspace({
               </button>
               <input
                 aria-label="Text color"
-                disabled={selectedRun === undefined}
+                disabled={busy || selectedRun === undefined}
                 type="color"
                 value={color}
                 onChange={(event) => {
@@ -666,14 +698,14 @@ export function EditorWorkspace({
             <div className="text-property-row">
               <input
                 aria-label="Font size"
-                disabled={selectedRun === undefined}
+                disabled={busy || selectedRun === undefined}
                 min={1}
                 type="number"
                 value={fontSize}
                 onChange={(event) => setFontSize(event.target.value)}
               />
               <button
-                disabled={selectedRun === undefined || !isPositiveFiniteNumber(fontSize)}
+                disabled={busy || selectedRun === undefined || !isPositiveFiniteNumber(fontSize)}
                 type="button"
                 onClick={() => handleApplyTextProperties({ fontSize: pt(Number(fontSize)) })}
               >
@@ -683,13 +715,13 @@ export function EditorWorkspace({
             <div className="text-property-row">
               <input
                 aria-label="Typeface"
-                disabled={selectedRun === undefined}
+                disabled={busy || selectedRun === undefined}
                 placeholder="Typeface"
                 value={typeface}
                 onChange={(event) => setTypeface(event.target.value)}
               />
               <button
-                disabled={selectedRun === undefined || typeface.trim() === ""}
+                disabled={busy || selectedRun === undefined || typeface.trim() === ""}
                 type="button"
                 onClick={() => handleApplyTextProperties({ typeface: typeface.trim() })}
               >
@@ -697,7 +729,7 @@ export function EditorWorkspace({
               </button>
             </div>
             <button
-              disabled={selectedRun === undefined}
+              disabled={busy || selectedRun === undefined}
               type="button"
               onClick={handleClearTextProperties}
             >

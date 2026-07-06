@@ -30,17 +30,28 @@ const BLUE_PNG = new Uint8Array(Buffer.from(BLUE_PNG_BASE64, "base64"));
 
 let coreDistBuildPromise: Promise<void> | null = null;
 let demoBuildPromise: Promise<void> | null = null;
+let demoServer: DemoServer | null = null;
+
+test.beforeAll(async () => {
+  test.setTimeout(240_000);
+  demoServer = await startDemoServer();
+});
+
+test.afterAll(async () => {
+  await demoServer?.close();
+  demoServer = null;
+});
 
 test("runs the public demo browser editor flow entirely client-side", async ({ page }) => {
   test.setTimeout(120_000);
-  const server = await startDemoServer();
+  if (demoServer === null) throw new Error("demo server was not started");
   const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-demo-editor-test-"));
   try {
     const savedPath = join(dir, "demo.edited.pptx");
     const replacementImagePath = join(dir, "replacement.png");
     await writeFile(replacementImagePath, BLUE_PNG);
 
-    await page.goto(server.url);
+    await page.goto(demoServer.url);
 
     await page.getByTestId("sample-basic-theme").click();
     await expect(page.getByTestId("viewer-status")).toContainText("slides rendered");
@@ -102,7 +113,6 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
     expect(addedShape.textBody?.paragraphs[0]?.runs[0]?.properties?.bold).toBe(true);
     expect(mediaBytes(saved, "ppt/media/image1.png")).toEqual(BLUE_PNG);
   } finally {
-    await server.close();
     await rm(dir, { recursive: true, force: true });
   }
 });
@@ -179,14 +189,16 @@ async function startDemoServer(): Promise<DemoServer> {
     ["run", "start", "--", "--hostname", "127.0.0.1", "--port", String(port)],
     { cwd: demoRoot },
   );
-  await waitForServerReady(child, port);
+  try {
+    await waitForServerReady(child, port);
+  } catch (error) {
+    await stopChild(child);
+    throw error;
+  }
   return {
     url: `http://127.0.0.1:${String(port)}`,
     close: async () => {
-      child.kill();
-      await new Promise<void>((resolveClose) => {
-        child.once("exit", () => resolveClose());
-      });
+      await stopChild(child);
     },
   };
 }
@@ -195,7 +207,7 @@ async function ensureDemoBuild(): Promise<void> {
   demoBuildPromise ??= (async () => {
     await ensureCoreDist();
     if (!existsSync(resolve(demoRoot, "node_modules/.bin/next"))) {
-      await execFileAsync("npm", ["install"], { cwd: demoRoot, maxBuffer: 20 * 1024 * 1024 });
+      await execFileAsync("npm", ["ci"], { cwd: demoRoot, maxBuffer: 20 * 1024 * 1024 });
     }
     await execFileAsync("npm", ["run", "build"], { cwd: demoRoot, maxBuffer: 20 * 1024 * 1024 });
   })();
@@ -239,6 +251,14 @@ async function closeServer(server: Server): Promise<void> {
       if (error) rejectClose(error);
       else resolveClose();
     });
+  });
+}
+
+async function stopChild(child: ReturnType<typeof execFile>): Promise<void> {
+  if (child.exitCode !== null) return;
+  await new Promise<void>((resolveExit) => {
+    child.once("exit", () => resolveExit());
+    child.kill();
   });
 }
 
