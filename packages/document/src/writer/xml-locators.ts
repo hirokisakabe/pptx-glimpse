@@ -1,8 +1,8 @@
 import { getAttr, getChild, getChildArray, localName, type XmlNode } from "../reader/xml.js";
 import type {
   PptxSourceModelParagraphTextEdit,
-  PptxSourceModelShapeTransformEdit,
   PptxSourceModelTextRunEdit,
+  SourceHandle,
 } from "../source/index.js";
 import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 
@@ -19,11 +19,9 @@ interface ShapeLocator {
   readonly nodeId: string;
 }
 
-export function parseShapeLocator(
-  handle: PptxSourceModelShapeTransformEdit["handle"],
-): ShapeLocator {
+export function parseShapeLocator(handle: SourceHandle, editName = "shape edit"): ShapeLocator {
   if (handle.nodeId !== undefined) return { nodeId: String(handle.nodeId) };
-  throw new Error("writePptx: shape transform edit requires nodeId in handle");
+  throw new Error(`writePptx: ${editName} requires nodeId in handle`);
 }
 
 export function parseTextRunLocator(

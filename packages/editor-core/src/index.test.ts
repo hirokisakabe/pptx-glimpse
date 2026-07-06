@@ -1308,6 +1308,181 @@ describe("EditorSession xfrm commands", () => {
   });
 });
 
+describe("EditorSession shape style commands", () => {
+  it("sets shape fill and shape or connector outlines and persists them through write/read", async () => {
+    const source = readPptx(await buildShapeStyleFixture());
+    const session = createEditorSession(source);
+    const shapeHandle = requireHandle(firstShape(source).handle);
+    const connectorHandle = requireHandle(findConnectorByName(source, "Connector").handle);
+
+    expectApplied(
+      session.apply({
+        kind: "setShapeFill",
+        handle: shapeHandle,
+        fill: { kind: "solid", color: { kind: "srgb", hex: "00aa44" } },
+      }),
+    );
+    expectApplied(
+      session.apply({
+        kind: "setShapeOutline",
+        handle: shapeHandle,
+        outline: {
+          width: asEmu(25400),
+          fill: { kind: "solid", color: { kind: "srgb", hex: "336699" } },
+        },
+      }),
+    );
+    const edited = expectApplied(
+      session.apply({
+        kind: "setShapeOutline",
+        handle: connectorHandle,
+        outline: {
+          width: asEmu(38100),
+          fill: { kind: "solid", color: { kind: "srgb", hex: "AA00FF" } },
+        },
+      }),
+    );
+    const reread = readPptx(writePptx(edited));
+
+    expect(firstShape(reread).fill).toEqual({
+      kind: "solid",
+      color: { kind: "srgb", hex: "00AA44" },
+    });
+    expect(firstShape(reread).outline).toMatchObject({
+      width: 25400,
+      fill: { kind: "solid", color: { kind: "srgb", hex: "336699" } },
+    });
+    expect(findConnectorByName(reread, "Connector").outline).toMatchObject({
+      width: 38100,
+      fill: { kind: "solid", color: { kind: "srgb", hex: "AA00FF" } },
+    });
+  });
+
+  it("undoes and redoes shape fill and noFill outline edits", async () => {
+    const source = readPptx(await buildShapeStyleFixture());
+    const session = createEditorSession(source);
+    const shapeHandle = requireHandle(firstShape(source).handle);
+
+    expectApplied(
+      session.applyAll([
+        { kind: "setShapeFill", handle: shapeHandle, fill: { kind: "none" } },
+        {
+          kind: "setShapeOutline",
+          handle: shapeHandle,
+          outline: { fill: { kind: "none" } },
+        },
+      ]),
+    );
+
+    const undone = expectHistory(session.undo());
+    const redone = expectHistory(session.redo());
+
+    expect(firstShape(undone).fill).toBeUndefined();
+    expect(firstShape(readPptx(writePptx(undone))).fill).toBeUndefined();
+    expect(firstShape(redone).fill).toEqual({ kind: "none" });
+    expect(firstShape(redone).outline).toMatchObject({ fill: { kind: "none" } });
+    expect(firstShape(readPptx(writePptx(redone))).fill).toEqual({ kind: "none" });
+    expect(firstShape(readPptx(writePptx(redone))).outline).toMatchObject({
+      fill: { kind: "none" },
+    });
+  });
+
+  it("keeps only the latest generated shape style edit per target", async () => {
+    const source = readPptx(await buildShapeStyleFixture());
+    const session = createEditorSession(source);
+    const shapeHandle = requireHandle(firstShape(source).handle);
+
+    expectApplied(
+      session.apply({
+        kind: "setShapeFill",
+        handle: shapeHandle,
+        fill: { kind: "solid", color: { kind: "srgb", hex: "111111" } },
+      }),
+    );
+    expectApplied(
+      session.apply({
+        kind: "setShapeFill",
+        handle: shapeHandle,
+        fill: { kind: "solid", color: { kind: "srgb", hex: "222222" } },
+      }),
+    );
+    expectApplied(
+      session.apply({
+        kind: "setShapeOutline",
+        handle: shapeHandle,
+        outline: { fill: { kind: "solid", color: { kind: "srgb", hex: "445566" } } },
+      }),
+    );
+    expectApplied(
+      session.apply({
+        kind: "setShapeOutline",
+        handle: shapeHandle,
+        outline: { width: asEmu(12700) },
+      }),
+    );
+    const edited = expectApplied(
+      session.apply({
+        kind: "setShapeOutline",
+        handle: shapeHandle,
+        outline: { width: asEmu(25400) },
+      }),
+    );
+
+    expect(edited.edits?.filter((edit) => edit.kind === "updateShapeFill")).toEqual([
+      {
+        kind: "updateShapeFill",
+        handle: shapeHandle,
+        fill: { kind: "solid", color: { kind: "srgb", hex: "222222" } },
+      },
+    ]);
+    expect(edited.edits?.filter((edit) => edit.kind === "updateShapeOutline")).toEqual([
+      {
+        kind: "updateShapeOutline",
+        handle: shapeHandle,
+        outline: {
+          fill: { kind: "solid", color: { kind: "srgb", hex: "445566" } },
+          width: 25400,
+        },
+      },
+    ]);
+    expect(firstShape(readPptx(writePptx(edited))).outline).toMatchObject({
+      fill: { kind: "solid", color: { kind: "srgb", hex: "445566" } },
+      width: 25400,
+    });
+  });
+
+  it("rejects invalid shape style commands without changing document state or undo history", async () => {
+    const source = readPptx(await buildShapeStyleFixture());
+    const session = createEditorSession(source);
+    const before = session.document;
+    const shapeHandle = requireHandle(firstShape(source).handle);
+    const connectorHandle = requireHandle(findConnectorByName(source, "Connector").handle);
+
+    const invalidFill = session.apply({
+      kind: "setShapeFill",
+      handle: shapeHandle,
+      fill: { kind: "solid", color: { kind: "srgb", hex: "bad" } },
+    });
+    const invalidOutline = session.apply({
+      kind: "setShapeOutline",
+      handle: shapeHandle,
+      outline: { width: asEmu(0) },
+    });
+    const connectorFill = session.apply({
+      kind: "setShapeFill",
+      handle: connectorHandle,
+      fill: { kind: "none" },
+    });
+
+    for (const result of [invalidFill, invalidOutline, connectorFill]) {
+      expect(result).toMatchObject({ ok: false, code: "invalid-command" });
+    }
+    expect(session.document).toBe(before);
+    expect(session.undoDepth).toBe(0);
+    expect(session.redoDepth).toBe(0);
+  });
+});
+
 describe("EditorSession slide topology commands", () => {
   it("adds an empty slide from a layout as one undoable command and persists it", async () => {
     const source = readPptx(await buildUnreferencedLayoutFixture());
@@ -1471,6 +1646,64 @@ async function buildTextEditFixture(): Promise<Uint8Array> {
         `<p:sp><p:nvSpPr><p:cNvPr id="11" name="No xfrm"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
         `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
         `<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>No xfrm</a:t></a:r></a:p></p:txBody></p:sp>` +
+        `</p:spTree></p:cSld>` +
+        `</p:sld>`,
+    ),
+  );
+
+  return zip.generateAsync({ type: "uint8array" });
+}
+
+async function buildShapeStyleFixture(): Promise<Uint8Array> {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    xml(
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>` +
+        `<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+        `</Types>`,
+    ),
+  );
+  zip.file(
+    "_rels/.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file(
+    "ppt/presentation.xml",
+    xml(
+      `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:sldIdLst><p:sldId id="256" r:id="rIdSlide1"/></p:sldIdLst>` +
+        `<p:sldSz cx="9144000" cy="5143500"/>` +
+        `</p:presentation>`,
+    ),
+  );
+  zip.file(
+    "ppt/_rels/presentation.xml.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdSlide1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file(
+    "ppt/slides/slide1.xml",
+    xml(
+      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">` +
+        `<p:cSld><p:spTree>` +
+        `<p:sp><p:nvSpPr><p:cNvPr id="10" name="Styled"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+        `<p:spPr><a:xfrm><a:off x="100" y="200"/><a:ext cx="300" cy="400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>` +
+        `<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Styled</a:t></a:r></a:p></p:txBody></p:sp>` +
+        `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="20" name="Connector"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>` +
+        `<p:spPr><a:xfrm><a:off x="500" y="600"/><a:ext cx="700" cy="800"/></a:xfrm>` +
+        `<a:prstGeom prst="straightConnector1"/><a:ln w="12700"><a:noFill/></a:ln></p:spPr>` +
+        `</p:cxnSp>` +
         `</p:spTree></p:cSld>` +
         `</p:sld>`,
     ),

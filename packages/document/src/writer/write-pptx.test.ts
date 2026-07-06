@@ -33,6 +33,8 @@ import {
   replaceParagraphPlainText,
   replaceTextRunPlainText,
   setParagraphProperties,
+  setShapeFill,
+  setShapeOutline,
   setTextRunProperties,
   type SourceConnector,
   type SourceShape,
@@ -458,6 +460,27 @@ function buildNumericLikeTextFixture(): Uint8Array {
       `<p:txBody><a:bodyPr/><a:lstStyle/>` +
       `<a:p><a:r><a:t>Original</a:t></a:r></a:p>` +
       `</p:txBody></p:sp>`,
+  );
+}
+
+function buildShapeStyleFixture(): Uint8Array {
+  return buildTextEditFixtureFromSlide(
+    `<p:sp><p:nvSpPr><p:cNvPr id="10" name="Styled"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+      `<p:spPr>` +
+      `<a:xfrm><a:off x="100" y="200"/><a:ext cx="300" cy="400"/></a:xfrm>` +
+      `<a:prstGeom prst="rect"/>` +
+      `<a:solidFill><a:srgbClr val="FF0000"/></a:solidFill>` +
+      `<a:ln w="12700"><a:solidFill><a:srgbClr val="0000FF"/></a:solidFill><a:prstDash val="dash"/></a:ln>` +
+      `</p:spPr>` +
+      `<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Styled</a:t></a:r></a:p></p:txBody>` +
+      `</p:sp>` +
+      `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="20" name="Connector"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>` +
+      `<p:spPr>` +
+      `<a:xfrm><a:off x="500" y="600"/><a:ext cx="700" cy="800"/></a:xfrm>` +
+      `<a:prstGeom prst="straightConnector1"/>` +
+      `<a:ln w="12700"><a:solidFill><a:srgbClr val="00FF00"/></a:solidFill><a:tailEnd type="triangle" w="med" len="med"/></a:ln>` +
+      `</p:spPr>` +
+      `</p:cxnSp>`,
   );
 }
 
@@ -1737,6 +1760,115 @@ describe("writePptx - text run property edits", () => {
     );
 
     expect(() => writePptx(edited)).toThrow(/conflicting text run properties and paragraph edits/);
+  });
+});
+
+describe("writePptx - shape fill and outline editing", () => {
+  it("Writes solid shape fill and outline color or width edits.", () => {
+    const source = readPptx(buildShapeStyleFixture());
+    const shape = findShapeByName(source, "Styled");
+    const edited = setShapeOutline(
+      setShapeFill(source, shape.handle!, {
+        kind: "solid",
+        color: { kind: "srgb", hex: "00aa44" },
+      }),
+      shape.handle!,
+      {
+        width: asEmu(25400),
+        fill: { kind: "solid", color: { kind: "srgb", hex: "336699" } },
+      },
+    );
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+    const rereadShape = findShapeByName(reread, "Styled");
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+
+    expect(rereadShape.fill).toEqual({
+      kind: "solid",
+      color: { kind: "srgb", hex: "00AA44" },
+    });
+    expect(rereadShape.outline).toMatchObject({
+      width: 25400,
+      fill: { kind: "solid", color: { kind: "srgb", hex: "336699" } },
+      dashStyle: "dash",
+    });
+    expect(slideXml).toContain(`<a:srgbClr val="00AA44"`);
+    expect(slideXml).toContain(`<a:ln w="25400">`);
+    expect(slideXml).toContain(`<a:prstDash val="dash"`);
+  });
+
+  it("Writes noFill for shape fill and connector outline while preserving connector details.", () => {
+    const source = readPptx(buildShapeStyleFixture());
+    const shape = findShapeByName(source, "Styled");
+    const connector = findConnectorByName(source, "Connector");
+    const edited = setShapeOutline(
+      setShapeFill(source, shape.handle!, { kind: "none" }),
+      connector.handle!,
+      { fill: { kind: "none" } },
+    );
+    const reread = readPptx(writePptx(edited));
+
+    expect(findShapeByName(reread, "Styled").fill).toEqual({ kind: "none" });
+    expect(findConnectorByName(reread, "Connector").outline).toMatchObject({
+      width: 12700,
+      fill: { kind: "none" },
+      tailEnd: { type: "triangle", width: "med", length: "med" },
+    });
+  });
+
+  it("Writes repeated direct helper shape style changes as compact final edits.", () => {
+    const source = readPptx(buildShapeStyleFixture());
+    const shape = findShapeByName(source, "Styled");
+    const edited = setShapeOutline(
+      setShapeFill(
+        setShapeOutline(
+          setShapeFill(source, shape.handle!, {
+            kind: "solid",
+            color: { kind: "srgb", hex: "00aa44" },
+          }),
+          shape.handle!,
+          { fill: { kind: "solid", color: { kind: "srgb", hex: "336699" } } },
+        ),
+        shape.handle!,
+        { kind: "none" },
+      ),
+      shape.handle!,
+      { width: asEmu(38100) },
+    );
+    const rereadShape = findShapeByName(readPptx(writePptx(edited)), "Styled");
+
+    expect(edited.edits).toHaveLength(2);
+    expect(rereadShape.fill).toEqual({ kind: "none" });
+    expect(rereadShape.outline).toMatchObject({
+      width: 38100,
+      fill: { kind: "solid", color: { kind: "srgb", hex: "336699" } },
+    });
+  });
+
+  it("Rejects conflicting shape fill and outline edit journals.", () => {
+    const source = readPptx(buildShapeStyleFixture());
+    const shape = findShapeByName(source, "Styled");
+    const withConflictingFillEdits = {
+      ...source,
+      edits: [
+        { kind: "updateShapeFill", handle: shape.handle!, fill: { kind: "none" } },
+        {
+          kind: "updateShapeFill",
+          handle: shape.handle!,
+          fill: { kind: "solid", color: { kind: "srgb", hex: "FFFFFF" } },
+        },
+      ],
+    } satisfies typeof source;
+    const withConflictingOutlineEdits = {
+      ...source,
+      edits: [
+        { kind: "updateShapeOutline", handle: shape.handle!, outline: { width: asEmu(1) } },
+        { kind: "updateShapeOutline", handle: shape.handle!, outline: { width: asEmu(2) } },
+      ],
+    } satisfies typeof source;
+
+    expect(() => writePptx(withConflictingFillEdits)).toThrow(/conflicting shape fill edits/);
+    expect(() => writePptx(withConflictingOutlineEdits)).toThrow(/conflicting shape outline edits/);
   });
 });
 

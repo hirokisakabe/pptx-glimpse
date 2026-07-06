@@ -19,6 +19,8 @@ export {
   addTextBox,
   deleteShape,
   findShapeNodeBySourceHandle,
+  setShapeFill,
+  setShapeOutline,
   updateShapeTransform,
 } from "./shape-editing.js";
 export type { AddEmptySlideFromLayoutInput } from "./slide-topology.js";

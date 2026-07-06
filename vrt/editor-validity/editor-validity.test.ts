@@ -326,6 +326,57 @@ describeOrSkip("LibreOffice shape add/delete validity", { timeout: 120000 }, () 
     );
   });
 
+  it("opens PPTX after editing shape fill and outline", () => {
+    const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
+    const source = readPptx(sourcePptx);
+    const shapes = source.slides[0]?.shapes.filter(
+      (shape): shape is SourceShape => shape.kind === "shape",
+    );
+    const firstShape = shapes?.[0];
+    const secondShape = shapes?.[1];
+    const session = createEditorSession(source);
+    const setFirstFill = session.apply({
+      kind: "setShapeFill",
+      handle: requireHandle(firstShape?.handle),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "00AA44" } },
+    });
+
+    if (!setFirstFill.ok) throw new Error(setFirstFill.message);
+
+    const setFirstOutline = session.apply({
+      kind: "setShapeOutline",
+      handle: requireHandle(firstShape?.handle),
+      outline: {
+        width: asEmu(25400),
+        fill: { kind: "solid", color: { kind: "srgb", hex: "336699" } },
+      },
+    });
+
+    if (!setFirstOutline.ok) throw new Error(setFirstOutline.message);
+
+    const setSecondNoFill = session.apply({
+      kind: "setShapeFill",
+      handle: requireHandle(secondShape?.handle),
+      fill: { kind: "none" },
+    });
+
+    if (!setSecondNoFill.ok) throw new Error(setSecondNoFill.message);
+
+    const setSecondNoOutline = session.apply({
+      kind: "setShapeOutline",
+      handle: requireHandle(secondShape?.handle),
+      outline: { fill: { kind: "none" } },
+    });
+
+    if (!setSecondNoOutline.ok) throw new Error(setSecondNoOutline.message);
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-shape-style-edited.pptx",
+      writePptx(setSecondNoOutline.document),
+    );
+  });
+
   it("opens PPTX after adding a free connector", () => {
     const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
     const source = readPptx(sourcePptx);

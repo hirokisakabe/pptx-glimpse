@@ -454,6 +454,13 @@ describe("createComputedView", () => {
           effectRef: { index: 1 },
         },
       }),
+      shape("Style line width override", {
+        transform: transform(64, 65, 66, 67),
+        outline: { width: asEmu(25400) },
+        style: {
+          lineRef: { index: 1, color: { kind: "srgb", hex: "ABCDEF" } },
+        },
+      }),
     ]);
     const sourceWithFormatScheme: PptxSourceModel = {
       ...source,
@@ -530,6 +537,13 @@ describe("createComputedView", () => {
     expect(findShape(slide.elements, "Style ref").outline?.fill).toMatchObject({
       kind: "solid",
       color: { hex: "#abcdef", alpha: 1 },
+    });
+    expect(findShape(slide.elements, "Style line width override").outline).toMatchObject({
+      width: 25400,
+      fill: {
+        kind: "solid",
+        color: { hex: "#abcdef", alpha: 1 },
+      },
     });
     expect(findShape(slide.elements, "Style ref").effects?.outerShadow).toMatchObject({
       blurRadius: 10,

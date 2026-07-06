@@ -17,12 +17,14 @@ import {
   replaceParagraphPlainText,
   replaceTextRunPlainText,
   setParagraphProperties,
+  setShapeFill,
+  setShapeOutline,
   setTextRunProperties,
   updateShapeTransform,
 } from "./editing.js";
 import { asPartPath, asRelationshipId, asSourceNodeId, type SourceHandle } from "./handles.js";
 import type { PptxSourceModel } from "./pptx-source-model.js";
-import type { SourceImage, SourceShape } from "./shapes.js";
+import type { SourceConnector, SourceImage, SourceShape } from "./shapes.js";
 import { asEmu, asPt } from "./units.js";
 
 const SLIDE_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.slide+xml";
@@ -381,6 +383,86 @@ describe("editing shape operations", () => {
 
     expect(repeated).toBe(edited);
     expect(repeated.edits).toHaveLength(1);
+  });
+
+  it("sets shape fill and shape or connector outlines idempotently", () => {
+    const source = buildSourceModel();
+    const shapeHandle = requireHandle(shapeByName(source, "Title").handle);
+    const withFill = expectNonMutating(source, () =>
+      setShapeFill(source, shapeHandle, {
+        kind: "solid",
+        color: { kind: "srgb", hex: "00aa44" },
+      }),
+    );
+    const withOutline = setShapeOutline(withFill, shapeHandle, {
+      width: asEmu(12700),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "336699" } },
+    });
+    const withoutFillOrOutline = setShapeOutline(
+      setShapeFill(withOutline, shapeHandle, { kind: "none" }),
+      shapeHandle,
+      { fill: { kind: "none" } },
+    );
+    const repeated = setShapeOutline(withoutFillOrOutline, shapeHandle, {
+      fill: { kind: "none" },
+    });
+
+    expect(shapeByName(source, "Title").fill).toBeUndefined();
+    expect(shapeByName(withFill, "Title").fill).toEqual({
+      kind: "solid",
+      color: { kind: "srgb", hex: "00aa44" },
+    });
+    expect(shapeByName(withOutline, "Title").outline).toEqual({
+      width: 12700,
+      fill: { kind: "solid", color: { kind: "srgb", hex: "336699" } },
+    });
+    expect(shapeByName(withoutFillOrOutline, "Title").fill).toEqual({ kind: "none" });
+    expect(shapeByName(withoutFillOrOutline, "Title").outline).toEqual({
+      width: 12700,
+      fill: { kind: "none" },
+    });
+    expect(repeated).toBe(withoutFillOrOutline);
+    expect(withoutFillOrOutline.edits).toEqual([
+      { kind: "updateShapeFill", handle: shapeHandle, fill: { kind: "none" } },
+      {
+        kind: "updateShapeOutline",
+        handle: shapeHandle,
+        outline: { width: asEmu(12700), fill: { kind: "none" } },
+      },
+    ]);
+  });
+
+  it("sets connector outlines without changing fill", () => {
+    const source = buildSourceModel();
+    const withConnector = addConnector(source, requireHandle(source.slides[0].handle), {
+      preset: "straightConnector1",
+      offsetX: asEmu(1),
+      offsetY: asEmu(2),
+      width: asEmu(3),
+      height: asEmu(4),
+      start: {
+        shapeHandle: requireHandle(shapeByName(source, "Title").handle),
+        connectionSiteIndex: 0,
+      },
+      end: {
+        shapeHandle: requireHandle(shapeByName(source, "Body").handle),
+        connectionSiteIndex: 0,
+      },
+    });
+    const connectorHandle = requireHandle(connectorByName(withConnector, "Connector 31").handle);
+
+    const edited = setShapeOutline(withConnector, connectorHandle, {
+      width: asEmu(19050),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "FF00AA" } },
+    });
+
+    expect(connectorByName(edited, "Connector 31").outline).toEqual({
+      width: 19050,
+      fill: { kind: "solid", color: { kind: "srgb", hex: "FF00AA" } },
+    });
+    expect(() => setShapeFill(edited, connectorHandle, { kind: "none" })).toThrow(
+      "setShapeFill: only top-level sp shapes support fill edits",
+    );
   });
 
   it("adds a text box with a collision-free id and finalized XML", () => {
@@ -1059,4 +1141,13 @@ function imageByName(source: PptxSourceModel, name: string): SourceImage {
     }
   }
   throw new Error(`test fixture image '${name}' is missing`);
+}
+
+function connectorByName(source: PptxSourceModel, name: string): SourceConnector {
+  for (const slide of source.slides) {
+    for (const shape of slide.shapes) {
+      if (shape.kind === "connector" && shape.name === name) return shape;
+    }
+  }
+  throw new Error(`test fixture connector '${name}' is missing`);
 }

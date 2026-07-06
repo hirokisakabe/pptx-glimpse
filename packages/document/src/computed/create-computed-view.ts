@@ -331,11 +331,7 @@ function computeConnectorElement(
     sourceNode: connector,
     ...(connector.transform !== undefined ? { transform: connector.transform } : {}),
     ...(connector.geometry !== undefined ? { geometry: connector.geometry } : {}),
-    ...(connector.outline !== undefined
-      ? { outline: computeOutline(context, connector.outline, partPath) }
-      : connector.style?.lineRef !== undefined
-        ? { outline: resolveLineReference(context, connector.style.lineRef, partPath) }
-        : {}),
+    ...computedOutlineProperty(context, connector.outline, connector.style?.lineRef, partPath),
     ...(effects !== undefined ? { effects } : {}),
   };
 }
@@ -406,11 +402,7 @@ function computeShapeElement(
       : shape.style?.fillRef !== undefined
         ? { fill: resolveFillReference(context, shape.style.fillRef, partPath) }
         : {}),
-    ...(shape.outline !== undefined
-      ? { outline: computeOutline(context, shape.outline, partPath) }
-      : shape.style?.lineRef !== undefined
-        ? { outline: resolveLineReference(context, shape.style.lineRef, partPath) }
-        : {}),
+    ...computedOutlineProperty(context, shape.outline, shape.style?.lineRef, partPath),
     ...(effects !== undefined ? { effects } : {}),
     ...(shape.textBody !== undefined
       ? {
@@ -742,6 +734,36 @@ function computeOutline(
     source: outline,
     ...(outline.width !== undefined ? { width: outline.width } : {}),
     ...(outline.fill !== undefined ? { fill: computeFill(context, outline.fill, partPath) } : {}),
+  };
+}
+
+function computedOutlineProperty(
+  context: ComputeContext,
+  outline: SourceOutline | undefined,
+  lineRef: SourceStyleReference | undefined,
+  partPath: PartPath,
+): { readonly outline?: ComputedOutline } {
+  const styleOutline =
+    lineRef !== undefined ? resolveLineReference(context, lineRef, partPath) : undefined;
+  if (outline === undefined) {
+    return styleOutline !== undefined ? { outline: styleOutline } : {};
+  }
+
+  const computed = mergeComputedOutline(styleOutline, computeOutline(context, outline, partPath));
+  return { outline: computed };
+}
+
+function mergeComputedOutline(
+  base: ComputedOutline | undefined,
+  override: ComputedOutline,
+): ComputedOutline {
+  if (base === undefined) return override;
+  const width = override.width ?? base.width;
+  const fill = override.fill ?? base.fill;
+  return {
+    source: { ...base.source, ...override.source },
+    ...(width !== undefined ? { width } : {}),
+    ...(fill !== undefined ? { fill } : {}),
   };
 }
 

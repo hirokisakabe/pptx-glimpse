@@ -9,6 +9,8 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
   const runKeys = new Set<string>();
   const paragraphKeys = new Set<string>();
   const shapeKeys = new Set<string>();
+  const shapeFillKeys = new Set<string>();
+  const shapeOutlineKeys = new Set<string>();
   const deletedShapeKeys = new Set<string>();
   const textRunEdits: PptxSourceModelTextRunEdit[] = [];
   const textRunPropertiesEdits: PptxSourceModelTextRunPropertiesEdit[] = [];
@@ -58,6 +60,26 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
           );
         }
         shapeKeys.add(key);
+        break;
+      }
+      case "updateShapeFill": {
+        const key = editHandleNodeKey(edit);
+        if (shapeFillKeys.has(key)) {
+          throw new Error(
+            `writePptx: conflicting shape fill edits for handle '${String(edit.handle.nodeId)}'`,
+          );
+        }
+        shapeFillKeys.add(key);
+        break;
+      }
+      case "updateShapeOutline": {
+        const key = editHandleNodeKey(edit);
+        if (shapeOutlineKeys.has(key)) {
+          throw new Error(
+            `writePptx: conflicting shape outline edits for handle '${String(edit.handle.nodeId)}'`,
+          );
+        }
+        shapeOutlineKeys.add(key);
         break;
       }
       case "deleteShape": {
