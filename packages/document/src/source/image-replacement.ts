@@ -1,4 +1,3 @@
-
 import { resolveInternalRelationshipTarget } from "./package-paths.js";
 import type {
   PartPath,

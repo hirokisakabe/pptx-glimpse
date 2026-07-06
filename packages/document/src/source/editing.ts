@@ -1,4 +1,3 @@
-
 /**
  * Public editing surface for PptxSourceModel.
  *

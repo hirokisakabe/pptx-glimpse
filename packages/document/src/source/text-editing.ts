@@ -1,4 +1,3 @@
-
 import { sourceHandlesEqual } from "./edit-descriptors.js";
 import { asSourceNodeId } from "./handles.js";
 import type {

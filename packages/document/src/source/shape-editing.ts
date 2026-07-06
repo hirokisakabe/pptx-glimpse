@@ -1,4 +1,3 @@
-
 import {
   editInsertedShape,
   editReservedShapeId,
