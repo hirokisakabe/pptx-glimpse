@@ -14,6 +14,11 @@
  * Unsupported OOXML, vendor extensions, mc:AlternateContent, and unsupported DrawingML
  * are not mixed into the typed operation API. They are preserved as raw sidecars or raw
  * package parts for structural round-tripping.
+ * Editing therefore carries a deliberate double representation: supported changes
+ * update typed nodes immediately and append edit records, while the writer later
+ * patches preserved raw bytes. Operations that cannot soundly merge those pending
+ * edits into raw material, such as duplicating a slide with dirty slide-part edits, are
+ * rejected at runtime instead of guessing.
  *
  * New-content edits (new slides, text boxes, connectors) finalize their XML and id
  * numbering at edit time and record them on the edit; the writer only applies
