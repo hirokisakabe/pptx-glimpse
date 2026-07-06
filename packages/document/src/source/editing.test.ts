@@ -129,6 +129,31 @@ describe("editing text operations", () => {
     expect(source.edits).toBeUndefined();
   });
 
+  it("supports text edits addressed by shapeSlot handles", () => {
+    const source = buildSourceModel();
+    const slotShape = shapeByName(source, "Slot Text");
+    const slotRun = slotShape.textBody?.paragraphs[0]?.runs[0];
+    const slotRunHandle = requireHandle(slotRun?.handle);
+
+    expect(slotRunHandle).toMatchObject({
+      partPath: "ppt/slides/slide1.xml",
+      nodeId: "text:shapeSlot:3:p:0:r:0",
+      orderingSlot: 0,
+    });
+    expect(findTextRunBySourceHandle(source, slotRunHandle)).toBe(slotRun);
+
+    const edited = expectNonMutating(source, () =>
+      replaceTextRunPlainText(source, slotRunHandle, "Slot Edited"),
+    );
+
+    expect(shapeByName(edited, "Slot Text").textBody?.paragraphs[0]?.runs[0]?.text).toBe(
+      "Slot Edited",
+    );
+    expect(edited.edits).toEqual([
+      { kind: "replaceTextRunPlainText", handle: slotRunHandle, text: "Slot Edited" },
+    ]);
+  });
+
   it("normalizes a paragraph replacement to one run and records the edit", () => {
     const source = buildSourceModel();
     const paragraphHandle = requireHandle(firstParagraph(source).handle);
@@ -615,6 +640,7 @@ function buildSourceModel(): PptxSourceModel {
           textShape(slide1Path, "10", "Title", 0),
           imageShape(slide1Path),
           textShape(slide1Path, "30", "Body", 2),
+          slotTextShape(slide1Path, 3),
         ],
         handle: { partPath: slide1Path },
       },
@@ -678,6 +704,35 @@ function textShape(
       ],
     },
     handle: handle(partPath, id, orderingSlot),
+  };
+}
+
+function slotTextShape(partPath: ReturnType<typeof asPartPath>, orderingSlot: number): SourceShape {
+  return {
+    kind: "shape",
+    name: "Slot Text",
+    transform: {
+      offsetX: asEmu(100),
+      offsetY: asEmu(200),
+      width: asEmu(3000),
+      height: asEmu(1000),
+    },
+    geometry: { preset: "rect" },
+    textBody: {
+      paragraphs: [
+        {
+          handle: handle(partPath, `text:shapeSlot:${orderingSlot}:p:0`, 0),
+          runs: [
+            {
+              kind: "textRun",
+              text: "Slot Original",
+              handle: handle(partPath, `text:shapeSlot:${orderingSlot}:p:0:r:0`, 0),
+            },
+          ],
+        },
+      ],
+    },
+    handle: { partPath, orderingSlot },
   };
 }
 
