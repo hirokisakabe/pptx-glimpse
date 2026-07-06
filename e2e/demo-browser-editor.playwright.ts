@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -24,6 +24,9 @@ const rendererPackageRoot = resolve(repoRoot, "packages/renderer");
 const corePackageRoot = resolve(repoRoot, "packages/core");
 const execFileAsync = promisify(execFile);
 const EMU_PER_PIXEL = 9525;
+const BLUE_PNG_BASE64 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGNkYPjPAANMcBZeDgAx0wEH1s7nlgAAAABJRU5ErkJggg==";
+const BLUE_PNG = new Uint8Array(Buffer.from(BLUE_PNG_BASE64, "base64"));
 
 let coreDistBuildPromise: Promise<void> | null = null;
 let demoBuildPromise: Promise<void> | null = null;
@@ -34,6 +37,9 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
   const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-demo-editor-test-"));
   try {
     const savedPath = join(dir, "demo.edited.pptx");
+    const replacementImagePath = join(dir, "replacement.png");
+    await writeFile(replacementImagePath, BLUE_PNG);
+
     await page.goto(server.url);
 
     await page.getByTestId("sample-basic-theme").click();
@@ -71,6 +77,16 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
     await page.getByRole("button", { name: "B", exact: true }).click();
     await expect(page.getByTestId("editor-status")).toContainText("Text style updated");
 
+    await page.getByRole("button", { name: "Delete shape" }).click();
+    await expect(page.getByTestId("editor-slide-frame")).not.toContainText("Added from demo e2e");
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(page.getByTestId("editor-slide-frame")).toContainText("Added from demo e2e");
+
+    await page.getByTestId("editor-thumbnail").nth(1).click();
+    await selectFirstReplaceableImage(page);
+    await page.getByTestId("image-replacement-input").setInputFiles(replacementImagePath);
+    await expect(page.getByTestId("editor-status")).toContainText("Image replaced");
+
     const download = page.waitForEvent("download");
     await page.getByRole("button", { name: "Download PPTX" }).click();
     await (await download).saveAs(savedPath);
@@ -84,6 +100,7 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
       height: 96 * EMU_PER_PIXEL,
     });
     expect(addedShape.textBody?.paragraphs[0]?.runs[0]?.properties?.bold).toBe(true);
+    expect(mediaBytes(saved, "ppt/media/image1.png")).toEqual(BLUE_PNG);
   } finally {
     await server.close();
     await rm(dir, { recursive: true, force: true });
@@ -101,6 +118,17 @@ async function dragSvgPoint(
   await page.mouse.down();
   await page.mouse.move(end.x, end.y, { steps: 6 });
   await page.mouse.up();
+}
+
+async function selectFirstReplaceableImage(page: Page): Promise<void> {
+  const hitAreas = page.getByTestId("shape-hit-area");
+  const imageButton = page.getByTestId("replace-image-button");
+  const count = await hitAreas.count();
+  for (let index = 0; index < count; index += 1) {
+    await hitAreas.nth(index).click();
+    if (!(await imageButton.isDisabled())) return;
+  }
+  throw new Error("replaceable image shape was not found");
 }
 
 async function svgPointToClient(
@@ -232,4 +260,10 @@ function shapeByText(source: PptxSourceModel, text: string): SourceShape {
     });
   if (shape === undefined) throw new Error(`shape not found: ${text}`);
   return shape;
+}
+
+function mediaBytes(source: PptxSourceModel, partPath: string): Uint8Array {
+  const media = source.packageGraph.media.find((part) => part.partPath === partPath);
+  if (media === undefined) throw new Error(`media not found: ${partPath}`);
+  return media.bytes;
 }

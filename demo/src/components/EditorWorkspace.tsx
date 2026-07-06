@@ -556,6 +556,7 @@ export function EditorWorkspace({
               Delete shape
             </button>
             <button
+              data-testid="replace-image-button"
               disabled={selectedShape?.editableImageReplacement === undefined}
               type="button"
               onClick={() => imageInputRef.current?.click()}
@@ -565,6 +566,7 @@ export function EditorWorkspace({
             <input
               ref={imageInputRef}
               data-testid="image-replacement-input"
+              disabled={selectedShape?.editableImageReplacement === undefined}
               hidden
               type="file"
               accept={selectedShape?.editableImageReplacement?.accept}
