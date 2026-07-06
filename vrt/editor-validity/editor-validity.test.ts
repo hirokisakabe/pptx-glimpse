@@ -151,6 +151,7 @@ const hasFixtures =
       existsSync(join(FIXTURE_DIR, testCase.expectedFixture)),
   );
 const describeOrSkip = libreOfficeImage !== undefined && hasFixtures ? describe : describe.skip;
+const describeFromScratchOrSkip = libreOfficeImage !== undefined ? describe : describe.skip;
 
 describeOrSkip("LibreOffice edited PPTX validity", { timeout: 120000 }, () => {
   for (const testCase of LO_EDITOR_VALIDITY_CASES) {
@@ -214,7 +215,7 @@ describeOrSkip("LibreOffice slide topology validity", { timeout: 120000 }, () =>
   });
 });
 
-describeOrSkip("LibreOffice shape add/delete validity", { timeout: 120000 }, () => {
+describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 120000 }, () => {
   it("opens from-scratch PPTX after adding a text box", () => {
     const source = createPptx();
     const edited = addTextBox(source, requireHandle(source.slides[0]?.handle), {
@@ -231,7 +232,9 @@ describeOrSkip("LibreOffice shape add/delete validity", { timeout: 120000 }, () 
       writePptx(edited),
     );
   });
+});
 
+describeOrSkip("LibreOffice shape add/delete validity", { timeout: 120000 }, () => {
   it("opens PPTX after adding a text box", () => {
     const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
     const source = readPptx(sourcePptx);

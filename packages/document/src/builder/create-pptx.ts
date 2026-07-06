@@ -29,6 +29,7 @@ import type {
   SlideSize,
   SourceColorMap,
   SourceTheme,
+  SourceThemeFormatScheme,
 } from "../source/index.js";
 import { asEmu, asPartPath, asRelationshipId } from "../source/index.js";
 
@@ -61,60 +62,11 @@ const THEME_PART = asPartPath("ppt/theme/theme1.xml");
 const APP_PROPS_PART = asPartPath("docProps/app.xml");
 const CORE_PROPS_PART = asPartPath("docProps/core.xml");
 
-const DEFAULT_SLIDE_SIZE: SlideSize = {
-  width: asEmu(9144000),
-  height: asEmu(5143500),
-};
-
-const DEFAULT_COLOR_MAP: SourceColorMap = {
-  mapping: {
-    bg1: "lt1",
-    tx1: "dk1",
-    bg2: "lt2",
-    tx2: "dk2",
-    accent1: "accent1",
-    accent2: "accent2",
-    accent3: "accent3",
-    accent4: "accent4",
-    accent5: "accent5",
-    accent6: "accent6",
-    hlink: "hlink",
-    folHlink: "folHlink",
-  },
-};
-
-const THEME_SOURCE: SourceTheme = {
-  partPath: THEME_PART,
-  name: "Office Theme",
-  colorScheme: {
-    colors: {
-      dk1: { kind: "system", value: "windowText", lastColor: "000000" },
-      lt1: { kind: "system", value: "window", lastColor: "FFFFFF" },
-      dk2: { kind: "srgb", hex: "44546A" },
-      lt2: { kind: "srgb", hex: "E7E6E6" },
-      accent1: { kind: "srgb", hex: "4472C4" },
-      accent2: { kind: "srgb", hex: "ED7D31" },
-      accent3: { kind: "srgb", hex: "A5A5A5" },
-      accent4: { kind: "srgb", hex: "FFC000" },
-      accent5: { kind: "srgb", hex: "5B9BD5" },
-      accent6: { kind: "srgb", hex: "70AD47" },
-      hlink: { kind: "srgb", hex: "0563C1" },
-      folHlink: { kind: "srgb", hex: "954F72" },
-    },
-  },
-  fontScheme: {
-    majorLatin: "Aptos Display",
-    minorLatin: "Aptos",
-    majorEastAsian: "",
-    minorEastAsian: "",
-    majorComplexScript: "",
-    minorComplexScript: "",
-  },
-  handle: { partPath: THEME_PART },
-};
+const DEFAULT_SLIDE_WIDTH = 9144000;
+const DEFAULT_SLIDE_HEIGHT = 5143500;
 
 export function createPptx(options: CreatePptxOptions = {}): PptxSourceModel {
-  const slideSize = options.slideSize ?? DEFAULT_SLIDE_SIZE;
+  const slideSize = normalizeSlideSize(options.slideSize);
   const overrides = createContentTypeOverrides();
   const rawParts = createRawParts(slideSize);
   const parts = createPackageParts(overrides);
@@ -162,13 +114,96 @@ export function createPptx(options: CreatePptxOptions = {}): PptxSourceModel {
         partPath: SLIDE_MASTER_PART,
         themePartPath: THEME_PART,
         layoutPartPaths: [SLIDE_LAYOUT_PART],
-        colorMap: DEFAULT_COLOR_MAP,
+        colorMap: createDefaultColorMap(),
         shapes: [],
         handle: { partPath: SLIDE_MASTER_PART },
       },
     ],
-    themes: [THEME_SOURCE],
+    themes: [createThemeSource()],
     diagnostics: [],
+  };
+}
+
+function normalizeSlideSize(slideSize: SlideSize | undefined): SlideSize {
+  const width = slideSize?.width ?? DEFAULT_SLIDE_WIDTH;
+  const height = slideSize?.height ?? DEFAULT_SLIDE_HEIGHT;
+  assertPositiveFiniteNumber(width, "slideSize.width");
+  assertPositiveFiniteNumber(height, "slideSize.height");
+  return { width: asEmu(width), height: asEmu(height) };
+}
+
+function assertPositiveFiniteNumber(value: unknown, fieldName: string): asserts value is number {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    throw new Error(`createPptx: ${fieldName} must be a finite positive EMU value`);
+  }
+}
+
+function createDefaultColorMap(): SourceColorMap {
+  return {
+    mapping: {
+      bg1: "lt1",
+      tx1: "dk1",
+      bg2: "lt2",
+      tx2: "dk2",
+      accent1: "accent1",
+      accent2: "accent2",
+      accent3: "accent3",
+      accent4: "accent4",
+      accent5: "accent5",
+      accent6: "accent6",
+      hlink: "hlink",
+      folHlink: "folHlink",
+    },
+  };
+}
+
+function createThemeSource(): SourceTheme {
+  return {
+    partPath: THEME_PART,
+    name: "Office Theme",
+    colorScheme: {
+      colors: {
+        dk1: { kind: "system", value: "windowText", lastColor: "000000" },
+        lt1: { kind: "system", value: "window", lastColor: "FFFFFF" },
+        dk2: { kind: "srgb", hex: "44546A" },
+        lt2: { kind: "srgb", hex: "E7E6E6" },
+        accent1: { kind: "srgb", hex: "4472C4" },
+        accent2: { kind: "srgb", hex: "ED7D31" },
+        accent3: { kind: "srgb", hex: "A5A5A5" },
+        accent4: { kind: "srgb", hex: "FFC000" },
+        accent5: { kind: "srgb", hex: "5B9BD5" },
+        accent6: { kind: "srgb", hex: "70AD47" },
+        hlink: { kind: "srgb", hex: "0563C1" },
+        folHlink: { kind: "srgb", hex: "954F72" },
+      },
+    },
+    fontScheme: {
+      majorLatin: "Aptos Display",
+      minorLatin: "Aptos",
+      majorEastAsian: "",
+      minorEastAsian: "",
+      majorComplexScript: "",
+      minorComplexScript: "",
+    },
+    formatScheme: createThemeFormatScheme(),
+    handle: { partPath: THEME_PART },
+  };
+}
+
+function createThemeFormatScheme(): SourceThemeFormatScheme {
+  const placeholderFill = {
+    kind: "solid" as const,
+    color: { kind: "scheme" as const, scheme: "phClr" },
+  };
+  return {
+    fillStyles: [placeholderFill, placeholderFill, placeholderFill],
+    lineStyles: [
+      { width: asEmu(6350), fill: placeholderFill, dashStyle: "solid" },
+      { width: asEmu(12700), fill: placeholderFill, dashStyle: "solid" },
+      { width: asEmu(19050), fill: placeholderFill, dashStyle: "solid" },
+    ],
+    effectStyles: [undefined, undefined, undefined],
+    backgroundFillStyles: [placeholderFill, placeholderFill, placeholderFill],
   };
 }
 
@@ -291,7 +326,7 @@ function createRawParts(slideSize: SlideSize): RawPackagePart[] {
     rawXml(SLIDE_LAYOUT_PART, SLIDE_LAYOUT_CONTENT_TYPE, slideLayoutXml()),
     rawXml(SLIDE_MASTER_PART, SLIDE_MASTER_CONTENT_TYPE, slideMasterXml()),
     rawXml(THEME_PART, THEME_CONTENT_TYPE, themeXml()),
-    rawXml(APP_PROPS_PART, APP_PROPS_CONTENT_TYPE, appPropertiesXml()),
+    rawXml(APP_PROPS_PART, APP_PROPS_CONTENT_TYPE, appPropertiesXml(slideSize)),
     rawXml(CORE_PROPS_PART, CORE_PROPS_CONTENT_TYPE, corePropertiesXml()),
   ];
 }
@@ -311,11 +346,21 @@ function presentationXml(slideSize: SlideSize): string {
       `xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">` +
       `<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>` +
       `<p:sldIdLst><p:sldId id="256" r:id="rId2"/></p:sldIdLst>` +
-      `<p:sldSz cx="${slideSize.width}" cy="${slideSize.height}" type="screen16x9"/>` +
+      `<p:sldSz cx="${slideSize.width}" cy="${slideSize.height}"${slideSizeTypeAttribute(
+        slideSize,
+      )}/>` +
       `<p:notesSz cx="6858000" cy="9144000"/>` +
       `<p:defaultTextStyle><a:defPPr><a:defRPr lang="en-US"/></a:defPPr></p:defaultTextStyle>` +
       `</p:presentation>`,
   );
+}
+
+function slideSizeTypeAttribute(slideSize: SlideSize): string {
+  return isDefaultSlideSize(slideSize) ? ` type="screen16x9"` : "";
+}
+
+function isDefaultSlideSize(slideSize: SlideSize): boolean {
+  return slideSize.width === DEFAULT_SLIDE_WIDTH && slideSize.height === DEFAULT_SLIDE_HEIGHT;
 }
 
 function slideXml(): string {
@@ -425,12 +470,14 @@ function formatSchemeXml(): string {
   );
 }
 
-function appPropertiesXml(): string {
+function appPropertiesXml(slideSize: SlideSize): string {
   return xmlPart(
     `<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties" ` +
       `xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">` +
       `<Application>pptx-glimpse</Application>` +
-      `<PresentationFormat>On-screen Show (16:9)</PresentationFormat>` +
+      (isDefaultSlideSize(slideSize)
+        ? `<PresentationFormat>On-screen Show (16:9)</PresentationFormat>`
+        : "") +
       `<Slides>1</Slides>` +
       `</Properties>`,
   );

@@ -587,6 +587,38 @@ describe("writePptx - from-scratch builder", () => {
     expect(computed.slideSize).toEqual({ width: asEmu(9144000), height: asEmu(5143500) });
     expect(computed.slides[0]?.elements).toHaveLength(1);
   });
+
+  it("writes custom slide size without fixed 16:9 metadata", () => {
+    const source = createPptx({
+      slideSize: { width: asEmu(7315200), height: asEmu(5486400) },
+    });
+    const output = writePptx(source);
+    const reread = readPptx(output);
+
+    expect(reread.presentation.slideSize).toEqual({
+      width: asEmu(7315200),
+      height: asEmu(5486400),
+    });
+    expect(decoder.decode(getEntry(output, "ppt/presentation.xml"))).toContain(
+      `<p:sldSz cx="7315200" cy="5486400"/>`,
+    );
+    expect(decoder.decode(getEntry(output, "docProps/app.xml"))).not.toContain(
+      "On-screen Show (16:9)",
+    );
+  });
+
+  it("rejects invalid custom slide sizes", () => {
+    expect(() =>
+      createPptx({
+        slideSize: { width: asEmu(Number.NaN), height: asEmu(5486400) },
+      }),
+    ).toThrow(/slideSize\.width/);
+    expect(() =>
+      createPptx({
+        slideSize: { width: asEmu(7315200), height: asEmu(0) },
+      }),
+    ).toThrow(/slideSize\.height/);
+  });
 });
 
 describe("writePptx - no-edit round-trip", () => {
