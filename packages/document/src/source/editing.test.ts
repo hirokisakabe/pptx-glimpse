@@ -11,6 +11,7 @@ import {
   findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
+  moveSlide,
   replaceImageBytes,
   replaceParagraphPlainText,
   replaceTextRunPlainText,
@@ -527,6 +528,41 @@ describe("editing media and slide topology operations", () => {
     });
   });
 
+  it("moves a slide to the requested final index without changing package parts", () => {
+    const source = buildSourceModel();
+    const edited = expectNonMutating(source, () =>
+      moveSlide(source, requireHandle(source.slides[0].handle), { toIndex: 1 }),
+    );
+
+    expect(source.presentation.slidePartPaths).toEqual([
+      "ppt/slides/slide1.xml",
+      "ppt/slides/slide2.xml",
+    ]);
+    expect(edited.presentation.slidePartPaths).toEqual([
+      "ppt/slides/slide2.xml",
+      "ppt/slides/slide1.xml",
+    ]);
+    expect(edited.slides.map((slide) => slide.partPath)).toEqual([
+      "ppt/slides/slide2.xml",
+      "ppt/slides/slide1.xml",
+    ]);
+    expect(edited.packageGraph.parts).toEqual(source.packageGraph.parts);
+    expect(edited.edits?.at(-1)).toEqual({
+      kind: "moveSlide",
+      slidePartPath: "ppt/slides/slide1.xml",
+      relationshipId: "rIdSlide1",
+      toIndex: 1,
+    });
+  });
+
+  it("treats moving a slide to its current index as a no-op", () => {
+    const source = buildSourceModel();
+    const edited = moveSlide(source, requireHandle(source.slides[1].handle), { toIndex: 1 });
+
+    expect(edited).toBe(source);
+    expect(edited.edits).toBeUndefined();
+  });
+
   it("deletes a slide while dropping pending edits invalidated by that part", () => {
     const source = buildSourceModel();
     const dirty = replaceTextRunPlainText(source, requireHandle(firstRun(source).handle), "Dirty");
@@ -585,6 +621,12 @@ describe("editing media and slide topology operations", () => {
     ).toThrow("duplicateSlide: duplicating a slide with pending dirty part edits is unsupported");
     expect(() => deleteSlide(singleSlide, requireHandle(singleSlide.slides[0].handle))).toThrow(
       "deleteSlide: cannot delete the last slide",
+    );
+    expect(() =>
+      moveSlide(source, { partPath: asPartPath("ppt/slides/missing.xml") }, { toIndex: 1 }),
+    ).toThrow("moveSlide: slide handle was not found in PptxSourceModel source");
+    expect(() => moveSlide(source, requireHandle(source.slides[0].handle), { toIndex: 2 })).toThrow(
+      "moveSlide: toIndex must be an integer slide index in range",
     );
   });
 });

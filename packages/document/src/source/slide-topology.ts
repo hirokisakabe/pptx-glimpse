@@ -47,6 +47,11 @@ export interface AddEmptySlideFromLayoutInput {
   readonly layoutPartPath: PartPath;
 }
 
+export interface MoveSlideInput {
+  /** Zero-based final slide index. */
+  readonly toIndex: number;
+}
+
 export function addEmptySlideFromLayout(
   source: PptxSourceModel,
   input: AddEmptySlideFromLayoutInput,
@@ -230,6 +235,52 @@ export function duplicateSlide(
   };
 }
 
+export function moveSlide(
+  source: PptxSourceModel,
+  slideHandle: SourceHandle,
+  input: MoveSlideInput,
+): PptxSourceModel {
+  assertValidSlideIndex(input.toIndex, source.slides.length, "moveSlide");
+  const slideIndex = source.slides.findIndex((slide) =>
+    sourceHandlesEqual(slide.handle, slideHandle),
+  );
+  if (slideIndex === -1) {
+    throw new Error("moveSlide: slide handle was not found in PptxSourceModel source");
+  }
+  if (slideIndex === input.toIndex) return source;
+
+  const slide = source.slides[slideIndex];
+  const presentationRels = requirePartRelationships(
+    source,
+    source.presentation.partPath,
+    "moveSlide",
+  );
+  const presentationRelationship = requireSlideRelationship(
+    source,
+    presentationRels,
+    slide.partPath,
+    "moveSlide",
+  );
+
+  return {
+    ...source,
+    presentation: {
+      ...source.presentation,
+      slidePartPaths: moveReadonly(source.presentation.slidePartPaths, slideIndex, input.toIndex),
+    },
+    slides: moveReadonly(source.slides, slideIndex, input.toIndex),
+    edits: [
+      ...(source.edits ?? []),
+      {
+        kind: "moveSlide",
+        slidePartPath: slide.partPath,
+        relationshipId: presentationRelationship.id,
+        toIndex: input.toIndex,
+      },
+    ],
+  };
+}
+
 export function deleteSlide(source: PptxSourceModel, slideHandle: SourceHandle): PptxSourceModel {
   if (source.slides.length <= 1) {
     throw new Error("deleteSlide: cannot delete the last slide");
@@ -398,4 +449,18 @@ function withShapePartPath(shape: SourceShapeNode, partPath: PartPath): SourceSh
       })),
     },
   };
+}
+
+function assertValidSlideIndex(index: number, slideCount: number, operationName: string): void {
+  if (!Number.isInteger(index) || index < 0 || index >= slideCount) {
+    throw new Error(`${operationName}: toIndex must be an integer slide index in range`);
+  }
+}
+
+function moveReadonly<T>(items: readonly T[], fromIndex: number, toIndex: number): readonly T[] {
+  const moved = [...items];
+  const [item] = moved.splice(fromIndex, 1);
+  if (item === undefined) return items;
+  moved.splice(toIndex, 0, item);
+  return moved;
 }
