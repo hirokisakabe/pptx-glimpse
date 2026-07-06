@@ -4,6 +4,7 @@ import { useCallback, useState } from "react";
 import { convertPptxToSvg, type FontBuffer } from "pptx-glimpse";
 
 import { DropZone, type SamplePptx } from "./DropZone";
+import { EditorWorkspace } from "./EditorWorkspace";
 import { SlideViewer } from "./SlideViewer";
 import { ThumbnailStrip } from "./ThumbnailStrip";
 
@@ -13,6 +14,7 @@ interface Slide {
 }
 
 type Phase = "upload" | "loading" | "viewing" | "error";
+type DemoMode = "view" | "edit";
 
 export function UploadViewer() {
   const [phase, setPhase] = useState<Phase>("upload");
@@ -20,7 +22,12 @@ export function UploadViewer() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [errorMessage, setErrorMessage] = useState("");
   const [fontFiles, setFontFiles] = useState<File[]>([]);
+  const [fontBuffers, setFontBuffers] = useState<FontBuffer[]>([]);
   const [renderedFontCount, setRenderedFontCount] = useState(0);
+  const [sourceFile, setSourceFile] = useState<{ fileName: string; bytes: Uint8Array } | null>(
+    null,
+  );
+  const [mode, setMode] = useState<DemoMode>("view");
 
   const handleFontFiles = useCallback((files: File[]) => {
     setFontFiles(files);
@@ -32,10 +39,11 @@ export function UploadViewer() {
       setErrorMessage("");
 
       try {
-        const [pptxBytes, fonts] = await Promise.all([
+        const [pptxArrayBuffer, fonts] = await Promise.all([
           file.arrayBuffer(),
           readFontBuffers(fontFiles),
         ]);
+        const pptxBytes = new Uint8Array(pptxArrayBuffer);
         const report = await convertPptxToSvg(new Uint8Array(pptxBytes), {
           fonts,
           skipSystemFonts: true,
@@ -46,8 +54,11 @@ export function UploadViewer() {
         }
 
         setSlides([...report.slides]);
+        setSourceFile({ fileName: file.name, bytes: pptxBytes });
+        setFontBuffers(fonts);
         setRenderedFontCount(fonts.length);
         setCurrentIndex(0);
+        setMode("view");
         setPhase("viewing");
       } catch (err) {
         setErrorMessage(err instanceof Error ? err.message : String(err));
@@ -114,14 +125,35 @@ export function UploadViewer() {
   }
 
   if (phase === "viewing") {
+    if (mode === "edit" && sourceFile !== null) {
+      return (
+        <EditorWorkspace
+          fileName={sourceFile.fileName}
+          fonts={fontBuffers}
+          pptxBytes={sourceFile.bytes}
+          onBackToViewer={() => setMode("view")}
+        />
+      );
+    }
+
     return (
       <>
-        <div className="viewer-summary" data-testid="viewer-status">
-          <span>{slides.length} slides rendered</span>
-          <span>
-            {renderedFontCount} font file{renderedFontCount === 1 ? "" : "s"} provided for this
-            render
-          </span>
+        <div className="viewer-toolbar">
+          <div className="viewer-summary" data-testid="viewer-status">
+            <span>{slides.length} slides rendered</span>
+            <span>
+              {renderedFontCount} font file{renderedFontCount === 1 ? "" : "s"} provided for this
+              render
+            </span>
+          </div>
+          <div className="mode-switch" role="group" aria-label="Demo mode">
+            <button aria-pressed="true" type="button">
+              View
+            </button>
+            <button data-testid="open-editor" type="button" onClick={() => setMode("edit")}>
+              Edit
+            </button>
+          </div>
         </div>
         <SlideViewer slides={slides} currentIndex={currentIndex} onNavigate={handleNavigate} />
         <ThumbnailStrip slides={slides} currentIndex={currentIndex} onSelect={handleNavigate} />
