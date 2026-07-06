@@ -1,4 +1,4 @@
-import { execFile } from "node:child_process";
+import { type ChildProcessWithoutNullStreams, execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
@@ -188,7 +188,7 @@ interface DemoServer {
 async function startDemoServer(): Promise<DemoServer> {
   await ensureDemoBuild();
   const port = await findFreePort();
-  const child = execFile(
+  const child = spawn(
     "npm",
     ["run", "start", "--", "--hostname", "127.0.0.1", "--port", String(port)],
     { cwd: demoRoot },
@@ -211,7 +211,7 @@ async function ensureDemoBuild(): Promise<void> {
   demoBuildPromise ??= (async () => {
     await ensureCoreDist();
     if (!existsSync(resolve(demoRoot, "node_modules/.bin/next"))) {
-      await execFileAsync("npm", ["ci"], { cwd: demoRoot, maxBuffer: 20 * 1024 * 1024 });
+      throw new Error("demo dependencies are not installed; run `cd demo && npm ci` first.");
     }
     await execFileAsync("npm", ["run", "build"], { cwd: demoRoot, maxBuffer: 20 * 1024 * 1024 });
   })();
@@ -258,22 +258,25 @@ async function closeServer(server: Server): Promise<void> {
   });
 }
 
-async function stopChild(child: ReturnType<typeof execFile>): Promise<void> {
-  if (child.exitCode !== null) return;
+async function stopChild(child: ChildProcessWithoutNullStreams): Promise<void> {
+  if (hasExited(child)) return;
   await new Promise<void>((resolveExit) => {
     child.once("exit", () => resolveExit());
     child.kill();
   });
 }
 
-async function waitForServerReady(child: ReturnType<typeof execFile>, port: number): Promise<void> {
+async function waitForServerReady(
+  child: ChildProcessWithoutNullStreams,
+  port: number,
+): Promise<void> {
   const output: string[] = [];
   child.stdout?.on("data", (chunk: Buffer) => output.push(chunk.toString()));
   child.stderr?.on("data", (chunk: Buffer) => output.push(chunk.toString()));
 
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
-    if (child.exitCode !== null) {
+    if (hasExited(child)) {
       throw new Error(`demo server exited early:\n${output.join("")}`);
     }
     try {
@@ -285,6 +288,10 @@ async function waitForServerReady(child: ReturnType<typeof execFile>, port: numb
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 250));
   }
   throw new Error(`demo server did not become ready:\n${output.join("")}`);
+}
+
+function hasExited(child: ChildProcessWithoutNullStreams): boolean {
+  return child.exitCode !== null || child.signalCode !== null;
 }
 
 function shapeByText(source: PptxSourceModel, text: string): SourceShape {
