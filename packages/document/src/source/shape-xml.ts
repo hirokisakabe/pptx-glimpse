@@ -186,7 +186,7 @@ export function parseShapeNodeXml(
   const nodes = parseShapeTree(
     parseXml(xml),
     partPath,
-    createSidecarIdFactory(`${partPath}#added-shape`),
+    createSidecarIdFactory(`${partPath}#added-shape-${orderingSlot}`),
   );
   const node = nodes[0];
   if (node === undefined || nodes.length !== 1) {

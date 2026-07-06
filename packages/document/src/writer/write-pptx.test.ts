@@ -1146,6 +1146,33 @@ describe("writePptx - shape add/delete edits", () => {
     expect(slideXml).toContain(connectorEdit.xml);
   });
 
+  it("round-trips added text box text that needs XML escaping and space preservation", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const text = ` A & B <C> "quoted" `;
+    const edited = addTextBox(source, source.slides[0].handle!, {
+      offsetX: asEmu(914400),
+      offsetY: asEmu(457200),
+      width: asEmu(2743200),
+      height: asEmu(914400),
+      text,
+      name: "Escaped TextBox",
+    });
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+
+    expect(
+      requireShape(findShapeByName(edited, "Escaped TextBox")).textBody?.paragraphs[0]?.runs[0]
+        ?.text,
+    ).toBe(text);
+    expect(
+      requireShape(findShapeByName(reread, "Escaped TextBox")).textBody?.paragraphs[0]?.runs[0]
+        ?.text,
+    ).toBe(text);
+    expect(slideXml).toContain(`xml:space="preserve"`);
+    expect(slideXml).toContain(`A &amp; B &lt;C&gt;`);
+  });
+
   it("deletes only the targeted sp shape while preserving other shapes and invisible slide material", () => {
     const source = readPptx(buildShapeDeleteFixture());
     const deleted = deleteShape(source, requireHandle(source.slides[0].shapes[0]?.handle));

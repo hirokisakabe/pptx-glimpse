@@ -15,6 +15,14 @@
  * are not mixed into the typed operation API. They are preserved as raw sidecars or raw
  * package parts for structural round-tripping.
  *
+ * New-content edits (new slides, text boxes, connectors) finalize their XML and id
+ * numbering at edit time and record them on the edit; the writer only applies
+ * insertion positions. To keep the edited in-memory model and the written XML derived
+ * from that single finalized fragment, `source/shape-xml.ts` and the edit-time slide
+ * id numbering intentionally reference the package-local reader. This is the one
+ * sanctioned source -> reader dependency; it stays inside `@pptx-glimpse/document`
+ * and does not change the package's external dependency direction.
+ *
  * PptxSourceModel must not include renderer-specific fallbacks, environment-specific
  * font substitution, SVG/PNG output, pixel-output values, or pom authoring primitives.
  * Slide/layout/master/theme cascades, relationship resolution, theme color resolution,
