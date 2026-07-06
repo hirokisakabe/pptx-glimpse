@@ -45,6 +45,7 @@ import type {
   SourceSlideMaster,
   SourceTheme,
 } from "./presentation.js";
+import type { SourceParagraphProperties } from "./shapes.js";
 import type { Emu, Pt } from "./units.js";
 
 export interface PptxSourceModel {
@@ -64,6 +65,7 @@ export interface PptxSourceModel {
 export type PptxSourceModelEdit =
   | PptxSourceModelTextRunEdit
   | PptxSourceModelTextRunPropertiesEdit
+  | PptxSourceModelParagraphPropertiesEdit
   | PptxSourceModelParagraphTextEdit
   | PptxSourceModelShapeTransformEdit
   | PptxSourceModelAddTextBoxEdit
@@ -103,6 +105,21 @@ export interface PptxSourceModelTextRunPropertiesEdit {
   readonly handle: SourceHandle;
   readonly set?: EditableTextRunProperties;
   readonly clear?: readonly EditableTextRunProperty[];
+}
+
+export type EditableParagraphProperty = "align" | "level" | "bullet";
+
+export interface EditableParagraphProperties {
+  readonly align?: SourceParagraphProperties["align"];
+  readonly level?: SourceParagraphProperties["level"];
+  readonly bullet?: SourceParagraphProperties["bullet"];
+}
+
+export interface PptxSourceModelParagraphPropertiesEdit {
+  readonly kind: "updateParagraphProperties";
+  readonly handle: SourceHandle;
+  readonly set?: EditableParagraphProperties;
+  readonly clear?: readonly EditableParagraphProperty[];
 }
 
 export interface PptxSourceModelParagraphTextEdit {

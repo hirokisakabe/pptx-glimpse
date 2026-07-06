@@ -16,6 +16,7 @@ export {
   addConnector,
   addEmptySlideFromLayout,
   addTextBox,
+  clearParagraphProperties,
   clearTextRunProperties,
   deleteShape,
   deleteSlide,
@@ -27,6 +28,7 @@ export {
   replaceImageBytes,
   replaceParagraphPlainText,
   replaceTextRunPlainText,
+  setParagraphProperties,
   setTextRunProperties,
   updateShapeTransform,
 } from "./editing.js";
@@ -51,6 +53,8 @@ export type {
 } from "./package-graph.js";
 export type {
   ConnectorPresetGeometry,
+  EditableParagraphProperties,
+  EditableParagraphProperty,
   EditableTextRunProperties,
   EditableTextRunProperty,
   PptxSourceModel,
@@ -62,6 +66,7 @@ export type {
   PptxSourceModelDuplicateSlideEdit,
   PptxSourceModelEdit,
   PptxSourceModelMoveSlideEdit,
+  PptxSourceModelParagraphPropertiesEdit,
   PptxSourceModelParagraphTextEdit,
   PptxSourceModelReplaceImageEdit,
   PptxSourceModelShapeTransformEdit,

@@ -4,6 +4,7 @@ import {
   addConnector,
   addEmptySlideFromLayout,
   addTextBox,
+  clearParagraphProperties,
   clearTextRunProperties,
   deleteShape,
   deleteSlide,
@@ -15,6 +16,7 @@ import {
   replaceImageBytes,
   replaceParagraphPlainText,
   replaceTextRunPlainText,
+  setParagraphProperties,
   setTextRunProperties,
   updateShapeTransform,
 } from "./editing.js";
@@ -217,6 +219,72 @@ describe("editing text operations", () => {
     ]);
   });
 
+  it("sets and clears paragraph properties in source and edit records", () => {
+    const source = buildSourceModel();
+    const paragraphHandle = requireHandle(firstParagraph(source).handle);
+
+    const set = expectNonMutating(source, () =>
+      setParagraphProperties(source, paragraphHandle, {
+        align: "right",
+        level: 2,
+        bullet: { type: "char", char: "\u2022" },
+      }),
+    );
+    const cleared = expectNonMutating(set, () =>
+      clearParagraphProperties(set, paragraphHandle, ["align"]),
+    );
+
+    expect(firstParagraph(set).properties).toMatchObject({
+      align: "right",
+      level: 2,
+      bullet: { type: "char", char: "\u2022" },
+    });
+    expect(firstParagraph(cleared).properties).toMatchObject({
+      level: 2,
+      bullet: { type: "char", char: "\u2022" },
+    });
+    expect(firstParagraph(cleared).properties?.align).toBeUndefined();
+    expect(cleared.edits?.map((edit) => edit.kind)).toEqual([
+      "updateParagraphProperties",
+      "updateParagraphProperties",
+    ]);
+    expect(cleared.edits?.[0]).toMatchObject({
+      kind: "updateParagraphProperties",
+      set: { align: "right", level: 2, bullet: { type: "char", char: "\u2022" } },
+    });
+    expect(cleared.edits?.[1]).toMatchObject({
+      kind: "updateParagraphProperties",
+      clear: ["align"],
+    });
+  });
+
+  it("returns the original source for equivalent paragraph properties", () => {
+    const source = buildSourceModel();
+    const paragraphHandle = requireHandle(firstParagraph(source).handle);
+    const set = setParagraphProperties(source, paragraphHandle, {
+      align: "center",
+      bullet: { type: "none" },
+    });
+
+    const repeated = setParagraphProperties(set, paragraphHandle, {
+      align: "center",
+      bullet: { type: "none" },
+    });
+
+    expect(repeated).toBe(set);
+    expect(repeated.edits).toHaveLength(1);
+  });
+
+  it("returns the original source when clearing paragraph properties that are already absent", () => {
+    const source = buildSourceModel();
+    const paragraphHandle = requireHandle(firstParagraph(source).handle);
+
+    const edited = clearParagraphProperties(source, paragraphHandle, ["bullet"]);
+
+    expect(edited).toBe(source);
+    expect(source.edits).toBeUndefined();
+  });
+
   it("rejects invalid text property patches with operation-specific errors", () => {
     const source = buildSourceModel();
     const runHandle = requireHandle(firstRun(source).handle);
@@ -231,6 +299,26 @@ describe("editing text operations", () => {
       // @ts-expect-error exercises runtime validation for JS callers.
       clearTextRunProperties(source, runHandle, ["strikethrough"]),
     ).toThrow("updateTextRunProperties: unsupported text run property 'strikethrough'");
+  });
+
+  it("rejects invalid paragraph property patches with operation-specific errors", () => {
+    const source = buildSourceModel();
+    const paragraphHandle = requireHandle(firstParagraph(source).handle);
+
+    expect(() =>
+      // @ts-expect-error exercises runtime validation for JS callers.
+      setParagraphProperties(source, paragraphHandle, { align: "middle" }),
+    ).toThrow("updateParagraphProperties: align must be left, center, right, or justify");
+    expect(() => setParagraphProperties(source, paragraphHandle, { level: 9 })).toThrow(
+      "updateParagraphProperties: level must be an integer from 0 to 8",
+    );
+    expect(() =>
+      setParagraphProperties(source, paragraphHandle, { bullet: { type: "char", char: "" } }),
+    ).toThrow("updateParagraphProperties: bullet.char must be a non-empty string");
+    expect(() =>
+      // @ts-expect-error exercises runtime validation for JS callers.
+      clearParagraphProperties(source, paragraphHandle, ["spacing"]),
+    ).toThrow("updateParagraphProperties: unsupported paragraph property 'spacing'");
   });
 });
 

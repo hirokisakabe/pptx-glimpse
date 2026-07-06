@@ -30,10 +30,12 @@ export {
   moveSlide,
 } from "./slide-topology.js";
 export {
+  clearParagraphProperties,
   clearTextRunProperties,
   findParagraphBySourceHandle,
   findTextRunBySourceHandle,
   replaceParagraphPlainText,
   replaceTextRunPlainText,
+  setParagraphProperties,
   setTextRunProperties,
 } from "./text-editing.js";

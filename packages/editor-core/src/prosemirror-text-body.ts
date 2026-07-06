@@ -2,8 +2,12 @@ import {
   asPartPath,
   asRelationshipId,
   asSourceNodeId,
+  type EditableParagraphProperties,
+  type EditableParagraphProperty,
+  type SourceAutoNumScheme,
   type SourceHandle,
   type SourceParagraph,
+  type SourceParagraphProperties,
   type SourceRunProperties,
   type SourceTextBody,
   type SourceTextRun,
@@ -41,9 +45,9 @@ export interface PptxTextBodyProseMirrorDocJson {
 
 export interface PptxTextBodyProseMirrorParagraphJson {
   readonly type: "paragraph";
-  /** Read-only source metadata. Formatting edits are not applied from ProseMirror JSON. */
   readonly attrs?: {
     readonly handle?: SourceHandle | null;
+    /** Source metadata plus editable paragraph properties. Only align / level / bullet are applied. */
     readonly properties?: unknown;
   };
   readonly content?: readonly PptxTextBodyProseMirrorTextJson[];
@@ -74,6 +78,16 @@ export type PptxTextBodyProseMirrorCommand =
       readonly kind: "replaceParagraphPlainText";
       readonly handle: SourceHandle;
       readonly text: string;
+    }
+  | {
+      readonly kind: "setParagraphProperties";
+      readonly handle: SourceHandle;
+      readonly properties: EditableParagraphProperties;
+    }
+  | {
+      readonly kind: "clearParagraphProperties";
+      readonly handle: SourceHandle;
+      readonly properties: readonly EditableParagraphProperty[];
     };
 
 interface RunGroup {
@@ -81,6 +95,24 @@ interface RunGroup {
   readonly properties?: SourceRunProperties;
   readonly text: string;
 }
+
+const EDITABLE_PARAGRAPH_PROPERTIES = [
+  "align",
+  "level",
+  "bullet",
+] as const satisfies readonly EditableParagraphProperty[];
+const AUTO_NUM_SCHEMES = [
+  "arabicPeriod",
+  "arabicParenR",
+  "romanUcPeriod",
+  "romanLcPeriod",
+  "alphaUcPeriod",
+  "alphaLcPeriod",
+  "alphaLcParenR",
+  "alphaUcParenR",
+  "arabicPlain",
+] as const satisfies readonly SourceAutoNumScheme[];
+const AUTO_NUM_SCHEME_SET: ReadonlySet<string> = new Set(AUTO_NUM_SCHEMES);
 
 export function textBodyToProseMirrorDocJson(
   textBody: SourceTextBody,
@@ -161,8 +193,12 @@ export function proseMirrorDocJsonToEditorCommands(
     (editedParagraph, paragraphIndex) => {
       const originalParagraph = originalTextBody.paragraphs[paragraphIndex];
       if (originalParagraph === undefined) return [];
+      const paragraphPropertyCommands = paragraphPropertiesToEditorCommands(
+        originalParagraph,
+        editedParagraph,
+      );
       if (paragraphRunHandlesMatch(originalParagraph, editedParagraph)) {
-        return editedParagraph.runs.flatMap<PptxTextBodyProseMirrorCommand>(
+        const textRunCommands = editedParagraph.runs.flatMap<PptxTextBodyProseMirrorCommand>(
           (editedRun, runIndex) => {
             const originalRun = originalParagraph.runs[runIndex];
             if (originalRun === undefined || editedRun.text === originalRun.text) return [];
@@ -180,6 +216,7 @@ export function proseMirrorDocJsonToEditorCommands(
             ];
           },
         );
+        return [...paragraphPropertyCommands, ...textRunCommands];
       }
 
       if (editedParagraph.handle === undefined) {
@@ -188,6 +225,7 @@ export function proseMirrorDocJsonToEditorCommands(
         );
       }
       return [
+        ...paragraphPropertyCommands,
         {
           kind: "replaceParagraphPlainText",
           handle: editedParagraph.handle,
@@ -208,13 +246,17 @@ function paragraphJsonToSourceParagraph(
   paragraphJson: PptxTextBodyProseMirrorParagraphJson,
 ): SourceParagraph {
   const groups = collectRunGroups(paragraphJson, originalParagraph);
+  const properties = paragraphPropertiesFromJson(
+    originalParagraph?.properties,
+    paragraphJson.attrs?.properties,
+  );
 
   return {
-    ...(originalParagraph ?? {}),
     runs: groups.map(sourceRunFromGroup),
-    ...(originalParagraph?.properties !== undefined
-      ? { properties: originalParagraph.properties }
+    ...(originalParagraph?.rawSidecars !== undefined
+      ? { rawSidecars: originalParagraph.rawSidecars }
       : {}),
+    ...(properties !== undefined ? { properties } : {}),
     ...(originalParagraph?.handle !== undefined
       ? { handle: originalParagraph.handle }
       : sourceHandleFromUnknown(paragraphJson.attrs?.handle) !== undefined
@@ -287,6 +329,131 @@ function paragraphPlainText(paragraph: SourceParagraph): string {
   return paragraph.runs.map((run) => run.text).join("");
 }
 
+function paragraphPropertiesToEditorCommands(
+  originalParagraph: SourceParagraph,
+  editedParagraph: SourceParagraph,
+): readonly PptxTextBodyProseMirrorCommand[] {
+  if (editedParagraph.handle === undefined) {
+    if (
+      paragraphEditablePropertiesEqual(originalParagraph.properties, editedParagraph.properties)
+    ) {
+      return [];
+    }
+    throw new Error("proseMirrorDocJsonToEditorCommands: changed paragraph has no source handle");
+  }
+
+  const set: MutableEditableParagraphProperties = {};
+  const clear: EditableParagraphProperty[] = [];
+  if (!stableValueEqual(originalParagraph.properties?.align, editedParagraph.properties?.align)) {
+    if (editedParagraph.properties?.align === undefined) clear.push("align");
+    else set.align = editedParagraph.properties.align;
+  }
+  if (!stableValueEqual(originalParagraph.properties?.level, editedParagraph.properties?.level)) {
+    if (editedParagraph.properties?.level === undefined) clear.push("level");
+    else set.level = editedParagraph.properties.level;
+  }
+  if (!stableValueEqual(originalParagraph.properties?.bullet, editedParagraph.properties?.bullet)) {
+    if (editedParagraph.properties?.bullet === undefined) clear.push("bullet");
+    else set.bullet = editedParagraph.properties.bullet;
+  }
+
+  const commands: PptxTextBodyProseMirrorCommand[] = [];
+  if (clear.length > 0) {
+    commands.push({
+      kind: "clearParagraphProperties",
+      handle: editedParagraph.handle,
+      properties: clear,
+    });
+  }
+  if (Object.keys(set).length > 0) {
+    commands.push({
+      kind: "setParagraphProperties",
+      handle: editedParagraph.handle,
+      properties: set,
+    });
+  }
+  return commands;
+}
+
+function paragraphPropertiesFromJson(
+  originalProperties: SourceParagraphProperties | undefined,
+  value: unknown,
+): SourceParagraphProperties | undefined {
+  if (!isRecord(value)) return originalProperties;
+  const next: MutableSourceParagraphProperties = { ...(originalProperties ?? {}) };
+  for (const property of EDITABLE_PARAGRAPH_PROPERTIES) {
+    if (!Object.prototype.hasOwnProperty.call(value, property)) {
+      delete next[property];
+      continue;
+    }
+    const propertyValue = value[property];
+    if (propertyValue === null || propertyValue === undefined) {
+      delete next[property];
+    } else if (property === "align") {
+      next.align = paragraphAlignFromUnknown(propertyValue);
+    } else if (property === "level") {
+      next.level = paragraphLevelFromUnknown(propertyValue);
+    } else {
+      next.bullet = paragraphBulletFromUnknown(propertyValue);
+    }
+  }
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
+function paragraphAlignFromUnknown(value: unknown): EditableParagraphProperties["align"] {
+  if (value === "left" || value === "center" || value === "right" || value === "justify") {
+    return value;
+  }
+  throw new Error("ProseMirror paragraph properties align must be left, center, right, or justify");
+}
+
+function paragraphLevelFromUnknown(value: unknown): EditableParagraphProperties["level"] {
+  if (typeof value === "number" && Number.isInteger(value) && value >= 0 && value <= 8) {
+    return value;
+  }
+  throw new Error("ProseMirror paragraph properties level must be an integer from 0 to 8");
+}
+
+function paragraphBulletFromUnknown(value: unknown): EditableParagraphProperties["bullet"] {
+  if (!isRecord(value) || typeof value.type !== "string") {
+    throw new Error("ProseMirror paragraph properties bullet must be an object");
+  }
+  if (value.type === "none") return { type: "none" };
+  if (value.type === "char") {
+    if (typeof value.char !== "string" || value.char.length === 0) {
+      throw new Error("ProseMirror paragraph properties bullet.char must be a non-empty string");
+    }
+    return { type: "char", char: value.char };
+  }
+  if (value.type === "autoNum") {
+    if (!isAutoNumScheme(value.scheme)) {
+      throw new Error("ProseMirror paragraph properties bullet.scheme is unsupported");
+    }
+    if (
+      typeof value.startAt !== "number" ||
+      !Number.isInteger(value.startAt) ||
+      value.startAt < 1
+    ) {
+      throw new Error("ProseMirror paragraph properties bullet.startAt must be positive");
+    }
+    return { type: "autoNum", scheme: value.scheme, startAt: value.startAt };
+  }
+  throw new Error("ProseMirror paragraph properties bullet.type is unsupported");
+}
+
+function isAutoNumScheme(value: unknown): value is SourceAutoNumScheme {
+  return typeof value === "string" && AUTO_NUM_SCHEME_SET.has(value);
+}
+
+function paragraphEditablePropertiesEqual(
+  left: SourceParagraphProperties | undefined,
+  right: SourceParagraphProperties | undefined,
+): boolean {
+  return EDITABLE_PARAGRAPH_PROPERTIES.every((property) =>
+    stableValueEqual(left?.[property], right?.[property]),
+  );
+}
+
 function parsePptxTextBodyProseMirrorDocJson(value: unknown): PptxTextBodyProseMirrorDocJson {
   if (!isRecord(value) || value.type !== "doc") {
     throw new Error("ProseMirror text body doc JSON must be a doc node");
@@ -294,7 +461,7 @@ function parsePptxTextBodyProseMirrorDocJson(value: unknown): PptxTextBodyProseM
   if (value.content !== undefined && readArray(value.content, isParagraphJson) === undefined) {
     throw new Error("ProseMirror text body doc JSON content must contain paragraph nodes");
   }
-  const content = readArray(value.content, isParagraphJson);
+  const content = readArray(value.content, isParagraphJson)?.map(normalizeParagraphJson);
   return {
     type: "doc",
     ...(content !== undefined ? { content } : {}),
@@ -307,6 +474,16 @@ function isParagraphJson(value: unknown): value is PptxTextBodyProseMirrorParagr
     return false;
   }
   return value.attrs === undefined || isRecord(value.attrs);
+}
+
+function normalizeParagraphJson(
+  value: PptxTextBodyProseMirrorParagraphJson,
+): PptxTextBodyProseMirrorParagraphJson {
+  return {
+    type: "paragraph",
+    ...(value.attrs !== undefined ? { attrs: value.attrs } : {}),
+    ...(value.content !== undefined ? { content: value.content } : {}),
+  };
 }
 
 function isTextJson(value: unknown): value is PptxTextBodyProseMirrorTextJson {
@@ -360,6 +537,31 @@ function sourceHandleKey(handle: SourceHandle): string {
   ].join("\u0000");
 }
 
+function stableValueEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right)) return false;
+    if (left.length !== right.length) return false;
+    return left.every((value, index) => stableValueEqual(value, right[index]));
+  }
+  if (isRecord(left) || isRecord(right)) {
+    if (!isRecord(left) || !isRecord(right)) return false;
+    const leftKeys = Object.keys(left).sort();
+    const rightKeys = Object.keys(right).sort();
+    if (!stableValueEqual(leftKeys, rightKeys)) return false;
+    return leftKeys.every((key) => stableValueEqual(left[key], right[key]));
+  }
+  return false;
+}
+
 function isRecord(value: unknown): value is { readonly [key: string]: unknown } {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
+
+type MutableSourceParagraphProperties = {
+  -readonly [K in keyof SourceParagraphProperties]?: SourceParagraphProperties[K];
+};
+
+type MutableEditableParagraphProperties = {
+  -readonly [K in keyof EditableParagraphProperties]?: EditableParagraphProperties[K];
+};
