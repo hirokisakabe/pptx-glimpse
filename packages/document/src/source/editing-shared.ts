@@ -11,7 +11,7 @@ import type {
 } from "./index.js";
 import { resolveInternalRelationshipTarget } from "./package-paths.js";
 
-export const textDecoder = new TextDecoder();
+const textDecoder = new TextDecoder();
 
 export const SLIDE_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.presentationml.slide+xml";

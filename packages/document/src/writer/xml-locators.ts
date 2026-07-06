@@ -15,7 +15,7 @@ export interface TextRunLocator {
 
 export type ParagraphTextLocator = Omit<TextRunLocator, "runIndex">;
 
-export interface ShapeLocator {
+interface ShapeLocator {
   readonly nodeId: string;
 }
 

@@ -59,7 +59,7 @@ export function serializeRawPackagePart(rawPart: RawPackagePart): Uint8Array {
   return encodeXml(XML_DECLARATION + serializeRawNode(rawPart.xml));
 }
 
-export function serializeRawNode(node: RawOoxmlNode): string {
+function serializeRawNode(node: RawOoxmlNode): string {
   const attributes =
     node.attributes === undefined
       ? ""
