@@ -20,6 +20,7 @@ Import supported APIs from the package root:
 import {
   addEmptySlideFromLayout,
   createComputedView,
+  createPptx,
   readPptx,
   replaceTextRunPlainText,
   writePptx,
@@ -29,6 +30,7 @@ import {
 The stable entry point includes:
 
 - `readPptx(input)` for reading PPTX bytes into a `PptxSourceModel`
+- `createPptx(options?)` for creating a minimal from-scratch `PptxSourceModel`
 - `createComputedView(source, options?)` for deriving slide/layout/master/theme effective values without mutating the source
 - `writePptx(source)` for structural round-trip writing
 - Text editing helpers such as `replaceTextRunPlainText(source, handle, text)` and related source handle lookup types exported from the root entry point
@@ -54,6 +56,30 @@ await writeFile("round-trip.pptx", output);
 ```
 
 `writePptx` targets structural round-trip preservation rather than byte-for-byte equality. Unedited package material is preserved where possible, and supported edits mark dirty PPTX parts for serialization.
+
+## From-Scratch PPTX
+
+```ts
+import { writeFile } from "node:fs/promises";
+import { addTextBox, asEmu, createPptx, writePptx } from "@pptx-glimpse/document";
+
+const source = createPptx();
+const firstSlide = source.slides[0];
+
+if (firstSlide?.handle === undefined) {
+  throw new Error("No slide was created");
+}
+
+const edited = addTextBox(source, firstSlide.handle, {
+  offsetX: asEmu(914400),
+  offsetY: asEmu(914400),
+  width: asEmu(3657600),
+  height: asEmu(914400),
+  text: "Hello from pptx-glimpse",
+});
+
+await writeFile("from-scratch.pptx", writePptx(edited));
+```
 
 ## Text-Run Edit
 
