@@ -28,6 +28,7 @@ const parser = new XMLParser({
   ignoreAttributes: false,
   attributeNamePrefix: "@_",
   parseAttributeValue: false,
+  parseTagValue: false,
   // Retain prefix. See the comment at the beginning of the file for the reason.
   removeNSPrefix: false,
   // Do not trim text run (`a:t`) to preserve significant white space at the beginning and end.

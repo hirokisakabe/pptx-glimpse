@@ -6,7 +6,15 @@ import { unzipSync, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 
 // Import via the actual public surface (`@pptx-glimpse/document`).
-import { asEmu, asPartPath, asPt, asSourceNodeId, readPptx, writePptx } from "../index.js";
+import {
+  asEmu,
+  asPartPath,
+  asPt,
+  asSourceNodeId,
+  createComputedView,
+  readPptx,
+  writePptx,
+} from "../index.js";
 import {
   addConnector,
   addEmptySlideFromLayout,
@@ -429,6 +437,21 @@ function buildMultipleTextEditFixture(): Uint8Array {
       `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
       `<p:txBody><a:bodyPr/><a:lstStyle/>` +
       `<a:p><a:r><a:t>Other shape</a:t></a:r></a:p>` +
+      `</p:txBody></p:sp>`,
+  );
+}
+
+function buildNumericLikeTextFixture(): Uint8Array {
+  return buildTextEditFixtureFromSlide(
+    `<p:sp><p:nvSpPr><p:cNvPr id="10" name="Numeric Text"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+      `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+      `<p:txBody><a:bodyPr/><a:lstStyle/>` +
+      `<a:p><a:r><a:t>007</a:t></a:r><a:r><a:t>1e5</a:t></a:r><a:r><a:t>12.50</a:t></a:r></a:p>` +
+      `</p:txBody></p:sp>` +
+      `<p:sp><p:nvSpPr><p:cNvPr id="11" name="Edit Me"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+      `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+      `<p:txBody><a:bodyPr/><a:lstStyle/>` +
+      `<a:p><a:r><a:t>Original</a:t></a:r></a:p>` +
       `</p:txBody></p:sp>`,
   );
 }
@@ -1227,6 +1250,26 @@ describe("writePptx - shape add/delete edits", () => {
 });
 
 describe("writePptx - one plain text-run edit", () => {
+  it("keeps numeric-like text strings in the source and computed view", () => {
+    const source = readPptx(buildNumericLikeTextFixture());
+    const shape = findShapeByName(source, "Numeric Text");
+    const computed = createComputedView(source);
+    const computedShape = computed.slides[0]?.elements.find(
+      (element) => element.kind === "shape" && element.sourceNode.name === "Numeric Text",
+    );
+
+    expect(shape.textBody?.paragraphs[0]?.runs.map((run) => run.text)).toEqual([
+      "007",
+      "1e5",
+      "12.50",
+    ]);
+    expect(
+      computedShape?.kind === "shape"
+        ? computedShape.textBody?.paragraphs[0]?.runs.map((run) => run.text)
+        : undefined,
+    ).toEqual(["007", "1e5", "12.50"]);
+  });
+
   it("Existing text run can be identified with stable source handle", () => {
     const source = readPptx(buildTextEditFixture());
     const run = firstRun(source);
@@ -1252,6 +1295,25 @@ describe("writePptx - one plain text-run edit", () => {
     expect(firstRun(edited).text).toBe("Edited text");
     expect(editedRun.text).toBe("Edited text");
     expect(firstParagraph(reread).runs[1].text).toBe(" Keep ");
+  });
+
+  it("does not transform unrelated numeric-like runs when writing a dirty slide", () => {
+    const source = readPptx(buildNumericLikeTextFixture());
+    const editRun = findShapeByName(source, "Edit Me").textBody?.paragraphs[0]?.runs[0];
+    if (editRun?.handle === undefined) throw new Error("edit run handle not found");
+
+    const edited = replaceTextRunPlainText(source, editRun.handle, "Dirty");
+    const output = writePptx(edited);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+    const reread = readPptx(output);
+
+    expect(slideXml).toContain("<a:t>007</a:t>");
+    expect(slideXml).toContain("<a:t>1e5</a:t>");
+    expect(slideXml).toContain("<a:t>12.50</a:t>");
+    expect(
+      findShapeByName(reread, "Numeric Text").textBody?.paragraphs[0]?.runs.map((run) => run.text),
+    ).toEqual(["007", "1e5", "12.50"]);
+    expect(findShapeByName(reread, "Edit Me").textBody?.paragraphs[0]?.runs[0]?.text).toBe("Dirty");
   });
 
   it("Writes dirty slide XML with a single XML declaration", () => {
