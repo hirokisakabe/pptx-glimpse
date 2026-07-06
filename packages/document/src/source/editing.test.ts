@@ -76,6 +76,17 @@ describe("editing text operations", () => {
     expect(source.edits).toBeUndefined();
   });
 
+  it("does not append another text run edit when the replacement is already applied", () => {
+    const source = buildSourceModel();
+    const runHandle = requireHandle(firstRun(source).handle);
+    const edited = replaceTextRunPlainText(source, runHandle, "Edited");
+
+    const repeated = replaceTextRunPlainText(edited, runHandle, "Edited");
+
+    expect(repeated).toBe(edited);
+    expect(repeated.edits).toHaveLength(1);
+  });
+
   it("sets and clears text run properties in source and edit records", () => {
     const source = buildSourceModel();
     const runHandle = requireHandle(firstRun(source).handle);
@@ -264,6 +275,23 @@ describe("editing shape operations", () => {
 
     expect(edited).toBe(source);
     expect(source.edits).toBeUndefined();
+  });
+
+  it("does not append another shape transform edit when the transform is already applied", () => {
+    const source = buildSourceModel();
+    const shapeHandle = requireHandle(shapeByName(source, "Title").handle);
+    const transform = {
+      offsetX: asEmu(11),
+      offsetY: asEmu(22),
+      width: asEmu(33),
+      height: asEmu(44),
+    };
+    const edited = updateShapeTransform(source, shapeHandle, transform);
+
+    const repeated = updateShapeTransform(edited, shapeHandle, transform);
+
+    expect(repeated).toBe(edited);
+    expect(repeated.edits).toHaveLength(1);
   });
 
   it("adds a text box with a collision-free id and finalized XML", () => {
