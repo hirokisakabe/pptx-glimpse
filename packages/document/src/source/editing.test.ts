@@ -261,11 +261,19 @@ describe("editing shape operations", () => {
     expect(edited.edits?.at(-1)).toHaveProperty("xml", expect.stringContaining("bentConnector3"));
   });
 
-  it("deletes an existing shape but cancels an addTextBox followed by deleteShape", () => {
+  it("deletes an existing shape, drops stale text edits, and cancels addTextBox followed by deleteShape", () => {
     const source = buildSourceModel();
     const existingHandle = requireHandle(shapeByName(source, "Title").handle);
 
     const deletedExisting = expectNonMutating(source, () => deleteShape(source, existingHandle));
+    const withTextEdit = replaceTextRunPlainText(
+      source,
+      requireHandle(firstRun(source).handle),
+      "Stale",
+    );
+    const deletedTextEditedShape = expectNonMutating(withTextEdit, () =>
+      deleteShape(withTextEdit, existingHandle),
+    );
     const withTextBox = addTextBox(source, requireHandle(source.slides[0].handle), {
       offsetX: asEmu(1),
       offsetY: asEmu(2),
@@ -282,6 +290,7 @@ describe("editing shape operations", () => {
       deletedExisting.slides[0].shapes.map((shape) => shape.kind !== "raw" && shape.name),
     ).not.toContain("Title");
     expect(deletedExisting.edits).toEqual([{ kind: "deleteShape", handle: existingHandle }]);
+    expect(deletedTextEditedShape.edits).toEqual([{ kind: "deleteShape", handle: existingHandle }]);
     expect(deletedAdded.edits).toEqual([]);
     expect(
       deletedAdded.slides[0].shapes.map((shape) => shape.kind !== "raw" && shape.name),
@@ -403,6 +412,12 @@ describe("editing media and slide topology operations", () => {
     ]);
     expect(edited.slides[1].partPath).toBe("ppt/slides/slide3.xml");
     expect(edited.slides[1].shapes[0]?.handle?.partPath).toBe("ppt/slides/slide3.xml");
+    const clonedShape = edited.slides[1].shapes[0];
+    if (clonedShape?.kind !== "shape") throw new Error("expected duplicated text shape");
+    expect(clonedShape.textBody?.paragraphs[0]?.handle?.partPath).toBe("ppt/slides/slide3.xml");
+    expect(clonedShape.textBody?.paragraphs[0]?.runs[0]?.handle?.partPath).toBe(
+      "ppt/slides/slide3.xml",
+    );
     expect(edited.edits?.at(-1)).toEqual({
       kind: "duplicateSlide",
       sourceSlidePartPath: "ppt/slides/slide1.xml",
@@ -645,18 +660,18 @@ function textShape(
     textBody: {
       paragraphs: [
         {
-          handle: handle(partPath, `text:${id}:p:0`, 0),
+          handle: handle(partPath, `text:shape:${id}:p:0`, 0),
           runs: [
             {
               kind: "textRun",
               text: "Original",
               properties: { bold: true, italic: true, fontSize: asPt(24), typeface: "Calibri" },
-              handle: handle(partPath, `text:${id}:p:0:r:0`, 0),
+              handle: handle(partPath, `text:shape:${id}:p:0:r:0`, 0),
             },
             {
               kind: "textRun",
               text: " Keep",
-              handle: handle(partPath, `text:${id}:p:0:r:1`, 1),
+              handle: handle(partPath, `text:shape:${id}:p:0:r:1`, 1),
             },
           ],
         },
