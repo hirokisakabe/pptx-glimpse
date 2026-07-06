@@ -1,5 +1,30 @@
 # pptx-glimpse
 
+## 3.1.0
+
+### Minor Changes
+
+- c93f354: Add browser editor image replacement UI support for selected picture shapes.
+- 224e24f: Add a standalone `pptx-glimpse` CLI with SVG and PNG conversion commands.
+- 1eed18e: Add browser editor text box insertion and selected shape deletion UI/API support.
+- f4fe770: Add browser editor slide duplicate and delete controls backed by slide handles.
+- f627f71: Add headless text run formatting edits for bold, italic, underline, font size, direct sRGB color, and latin typeface.
+- 3d61817: Add headless image media replacement for existing pic shapes, limited to same-format media byte swaps.
+- d6f238a: Add `renderPptxSourceModelToSvg` for rendering SVG slides directly from a parsed `PptxSourceModel` without re-reading PPTX bytes.
+
+### Patch Changes
+
+- f0136a9: Add headless slide duplicate/delete editing support with package relationship, content type, and ID management.
+- c57532b: Add headless empty slide creation from a slide layout, including writer package bookkeeping and editor-core command support.
+- Updated dependencies [f0136a9]
+- Updated dependencies [c57532b]
+- Updated dependencies [f627f71]
+- Updated dependencies [3d61817]
+- Updated dependencies [020f949]
+- Updated dependencies [69ae720]
+- Updated dependencies [8904a5c]
+  - @pptx-glimpse/document@0.2.0
+
 ## 3.0.0
 
 ### Major Changes

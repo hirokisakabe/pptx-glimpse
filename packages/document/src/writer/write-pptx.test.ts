@@ -1200,6 +1200,30 @@ describe("writePptx - shape add/delete edits", () => {
       /only top-level sp shapes/,
     );
   });
+
+  it("rejects conflicting shape additions for the same shape id", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const withTextBox = addTextBox(source, source.slides[0].handle!, {
+      offsetX: asEmu(100),
+      offsetY: asEmu(200),
+      width: asEmu(300),
+      height: asEmu(400),
+      text: "Added once",
+    });
+    const additions = withTextBox.edits?.filter((edit) => edit.kind === "addTextBox") ?? [];
+    const conflicted = { ...withTextBox, edits: [...(withTextBox.edits ?? []), ...additions] };
+
+    expect(() => writePptx(conflicted)).toThrow(/conflicting shape additions/);
+  });
+
+  it("rejects conflicting shape delete edits for the same handle", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const deleted = deleteShape(source, requireHandle(source.slides[0].shapes[0]?.handle));
+    const deletes = deleted.edits?.filter((edit) => edit.kind === "deleteShape") ?? [];
+    const conflicted = { ...deleted, edits: [...(deleted.edits ?? []), ...deletes] };
+
+    expect(() => writePptx(conflicted)).toThrow(/conflicting shape delete edits/);
+  });
 });
 
 describe("writePptx - one plain text-run edit", () => {
@@ -1621,6 +1645,28 @@ describe("writePptx - shape xfrm edit", () => {
       width: 3333,
       height: 4444,
     });
+  });
+
+  it("Rejects conflicting shape transform edits for the same shape", () => {
+    const source = readPptx(buildTextEditFixture());
+    const handle = firstShape(source).handle!;
+    const edited = updateShapeTransform(
+      updateShapeTransform(source, handle, {
+        offsetX: asEmu(1111),
+        offsetY: asEmu(2222),
+        width: asEmu(3333),
+        height: asEmu(4444),
+      }),
+      handle,
+      {
+        offsetX: asEmu(5555),
+        offsetY: asEmu(6666),
+        width: asEmu(7777),
+        height: asEmu(8888),
+      },
+    );
+
+    expect(() => writePptx(edited)).toThrow(/conflicting shape transform edits/);
   });
 
   it("Preserves unrelated package material while replacing only dirty slide XML", () => {

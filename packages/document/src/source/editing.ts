@@ -1,4 +1,14 @@
 import { getAttr, getChild, getChildArray, parseXml } from "../reader/xml.js";
+import {
+  editDirtyPartPath,
+  editInsertedShape,
+  editInsertedSlidePartPath,
+  editInvalidatingPartPaths,
+  editReservedPartPaths,
+  editReservedShapeId,
+  editTargetsShape,
+  sourceHandlesEqual,
+} from "./edit-descriptors.js";
 import { asSourceNodeId } from "./handles.js";
 import type {
   ConnectorPresetGeometry,
@@ -693,12 +703,14 @@ export function deleteShape(source: PptxSourceModel, handle: SourceHandle): Pptx
   }
 
   const retainedEdits = (source.edits ?? []).filter((edit) => !editTargetsShape(edit, handle));
-  const deletedInsertedShape = (source.edits ?? []).some(
-    (edit) =>
-      edit.kind === "addTextBox" &&
-      edit.slidePartPath === handle.partPath &&
-      edit.shapeId === String(handle.nodeId),
-  );
+  const deletedInsertedShape = (source.edits ?? []).some((edit) => {
+    const inserted = editInsertedShape(edit);
+    return (
+      inserted !== undefined &&
+      inserted.slidePartPath === handle.partPath &&
+      inserted.shapeId === String(handle.nodeId)
+    );
+  });
 
   return {
     ...source,
@@ -964,9 +976,7 @@ export function deleteSlide(source: PptxSourceModel, slideHandle: SourceHandle):
     (edit) => !editIsInvalidatedByDeletedParts(edit, removedPartPaths),
   );
   const deletedInsertedSlide = (source.edits ?? []).some(
-    (edit) =>
-      (edit.kind === "addEmptySlideFromLayout" || edit.kind === "duplicateSlide") &&
-      edit.newSlidePartPath === slide.partPath,
+    (edit) => editInsertedSlidePartPath(edit) === slide.partPath,
   );
 
   return {
@@ -1382,15 +1392,7 @@ function collectNumericShapeEditIds(
   used: Set<number>,
 ): void {
   for (const edit of edits) {
-    const id =
-      edit.kind === "addTextBox" && edit.slidePartPath === slidePartPath
-        ? edit.shapeId
-        : edit.kind === "addConnector" && edit.slidePartPath === slidePartPath
-          ? edit.shapeId
-          : edit.kind === "deleteShape" && edit.handle.partPath === slidePartPath
-            ? edit.handle.nodeId
-            : undefined;
-    const numericId = Number(id);
+    const numericId = Number(editReservedShapeId(edit, slidePartPath));
     if (Number.isInteger(numericId) && numericId > 0) used.add(numericId);
   }
 }
@@ -1453,16 +1455,6 @@ function findConnectorReferencingShape(
     }
   }
   return undefined;
-}
-
-function sourceHandlesEqual(left: SourceHandle | undefined, right: SourceHandle): boolean {
-  if (left === undefined) return false;
-  return (
-    left.partPath === right.partPath &&
-    left.nodeId === right.nodeId &&
-    left.relationshipId === right.relationshipId &&
-    left.orderingSlot === right.orderingSlot
-  );
 }
 
 interface NotesSlideCopy {
@@ -1614,7 +1606,7 @@ function nextNumberedPartPath(source: PptxSourceModel, prefix: string, suffix: s
     ...source.packageGraph.parts.map((part) => part.partPath),
     ...source.packageGraph.contentTypes.overrides.map((override) => override.partName),
     ...(source.packageGraph.rawParts ?? []).map((part) => part.partPath),
-    ...(source.edits?.flatMap((edit) => topologyEditPartPaths(edit)) ?? []),
+    ...(source.edits?.flatMap((edit) => editReservedPartPaths(edit)) ?? []),
   ]);
   const pattern = new RegExp(`^${escapeRegExp(prefix)}(\\d+)${escapeRegExp(suffix)}$`);
   const max = [...used].reduce((current, path) => {
@@ -1645,27 +1637,6 @@ function relationshipPartOverrides(
   return partPaths
     .filter((partPath) => !existingOverrides.has(partPath))
     .map((partName) => ({ partName, contentType: RELS_CONTENT_TYPE }));
-}
-
-function topologyEditPartPaths(edit: PptxSourceModelEdit): readonly PartPath[] {
-  switch (edit.kind) {
-    case "addEmptySlideFromLayout":
-      return [edit.layoutPartPath, edit.newSlidePartPath];
-    case "duplicateSlide":
-      return [edit.sourceSlidePartPath, edit.newSlidePartPath];
-    case "deleteSlide":
-      return [edit.slidePartPath];
-    case "addTextBox":
-    case "addConnector":
-      return [edit.slidePartPath];
-    case "replaceTextRunPlainText":
-    case "updateTextRunProperties":
-    case "replaceParagraphPlainText":
-    case "updateShapeTransform":
-    case "deleteShape":
-    case "replaceImage":
-      return [];
-  }
 }
 
 function relativeTarget(sourcePartPath: PartPath, targetPartPath: PartPath): string {
@@ -1730,84 +1701,14 @@ function insertAtReadonly<T>(items: readonly T[], index: number, item: T): reado
 }
 
 function hasDirtyEditForPart(edits: readonly PptxSourceModelEdit[], partPath: PartPath): boolean {
-  return edits.some((edit) => {
-    switch (edit.kind) {
-      case "replaceTextRunPlainText":
-      case "updateTextRunProperties":
-      case "replaceParagraphPlainText":
-      case "updateShapeTransform":
-      case "deleteShape":
-        return edit.handle.partPath === partPath;
-      case "replaceImage":
-        return false;
-      case "addTextBox":
-      case "addConnector":
-        return edit.slidePartPath === partPath;
-      case "addEmptySlideFromLayout":
-      case "duplicateSlide":
-      case "deleteSlide":
-        return false;
-    }
-  });
-}
-
-function editTargetsShape(edit: PptxSourceModelEdit, handle: SourceHandle): boolean {
-  switch (edit.kind) {
-    case "replaceTextRunPlainText":
-    case "updateTextRunProperties":
-      return (
-        edit.handle.partPath === handle.partPath && textRunShapeId(edit.handle) === handle.nodeId
-      );
-    case "replaceParagraphPlainText":
-      return (
-        edit.handle.partPath === handle.partPath && paragraphShapeId(edit.handle) === handle.nodeId
-      );
-    case "updateShapeTransform":
-    case "deleteShape":
-      return sourceHandlesEqual(edit.handle, handle);
-    case "replaceImage":
-      return sourceHandlesEqual(edit.handle, handle);
-    case "addTextBox":
-    case "addConnector":
-      return edit.slidePartPath === handle.partPath && edit.shapeId === String(handle.nodeId);
-    case "addEmptySlideFromLayout":
-    case "duplicateSlide":
-    case "deleteSlide":
-      return false;
-  }
-}
-
-function textRunShapeId(handle: SourceHandle): string | undefined {
-  return /^text:shape:([^:]+):p:\d+:r:\d+$/.exec(String(handle.nodeId ?? ""))?.[1];
-}
-
-function paragraphShapeId(handle: SourceHandle): string | undefined {
-  return /^text:shape:([^:]+):p:\d+$/.exec(String(handle.nodeId ?? ""))?.[1];
+  return edits.some((edit) => editDirtyPartPath(edit) === partPath);
 }
 
 function editIsInvalidatedByDeletedParts(
   edit: PptxSourceModelEdit,
   partPaths: ReadonlySet<string>,
 ): boolean {
-  switch (edit.kind) {
-    case "replaceTextRunPlainText":
-    case "updateTextRunProperties":
-    case "replaceParagraphPlainText":
-    case "updateShapeTransform":
-    case "replaceImage":
-      return partPaths.has(edit.handle.partPath);
-    case "addTextBox":
-    case "addConnector":
-      return partPaths.has(edit.slidePartPath);
-    case "addEmptySlideFromLayout":
-      return partPaths.has(edit.newSlidePartPath);
-    case "deleteShape":
-      return partPaths.has(edit.handle.partPath);
-    case "duplicateSlide":
-      return partPaths.has(edit.newSlidePartPath);
-    case "deleteSlide":
-      return partPaths.has(edit.slidePartPath);
-  }
+  return editInvalidatingPartPaths(edit).some((partPath) => partPaths.has(partPath));
 }
 
 function escapeRegExp(value: string): string {
