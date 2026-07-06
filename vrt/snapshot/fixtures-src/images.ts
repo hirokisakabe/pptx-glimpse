@@ -1,5 +1,6 @@
 import sharp from "sharp";
 
+import type { FixtureCreatorMap } from "../fixture-builder.js";
 import {
   buildPptx,
   gridPosition,
@@ -50,8 +51,6 @@ async function createImageFixture(): Promise<void> {
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }], media });
   savePptx(buffer, "image.pptx");
 }
-
-// --- 11. Tables ---
 
 function radialGradientFillXml(
   stops: { pos: number; color: string }[],
@@ -228,8 +227,6 @@ async function createPatternImageFillFixture(): Promise<void> {
   savePptx(buffer, "pattern-image-fill.pptx");
 }
 
-// --- SmartArt Fixture ---
-
 async function createImageCropFixture(): Promise<void> {
   const imgSize = 100;
   const pixels = Buffer.alloc(imgSize * imgSize * 4);
@@ -299,8 +296,6 @@ async function createImageCropFixture(): Promise<void> {
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }], media });
   savePptx(buffer, "image-crop.pptx");
 }
-
-// --- Placeholder Overlap (Master/Layout/Slide element overlap + showMasterSp) ---
 
 async function createBlipEffectsFixture(): Promise<void> {
   // Generate a small test image (colored grid)
@@ -476,8 +471,6 @@ async function createImageStretchTileFixture(): Promise<void> {
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }], media });
   savePptx(buffer, "image-stretch-tile.pptx");
 }
-
-// --- Shape Hyperlink & Text Outline ---
 
 export const imageFixtureCreators: FixtureCreatorMap = {
   "image.pptx": createImageFixture,

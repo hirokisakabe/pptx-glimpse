@@ -1,3 +1,4 @@
+import type { FixtureCreatorMap } from "../fixture-builder.js";
 import {
   buildPptx,
   NS,
@@ -139,8 +140,6 @@ async function createPlaceholderOverlapFixture(): Promise<void> {
   savePptx(buffer, "placeholder-overlap.pptx");
 }
 
-// --- Paragraph Spacing ---
-
 async function createPlaceholderInheritanceExtendedFixture(): Promise<void> {
   // slideMaster with txStyles: titleStyle(36pt), bodyStyle lvl1-5, otherStyle(14pt)
   const customSlideMaster = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -251,8 +250,6 @@ async function createPlaceholderInheritanceExtendedFixture(): Promise<void> {
   });
   savePptx(buffer, "placeholder-inheritance-extended.pptx");
 }
-
-// --- Table with table style border (no inline borders) ---
 
 async function createPlaceholderGeometryInheritanceFixture(): Promise<void> {
   // Define placeholder position and size in slide layout

@@ -1,3 +1,4 @@
+import type { FixtureCreatorMap } from "../fixture-builder.js";
 import {
   buildPptx,
   gridPosition,
@@ -105,8 +106,6 @@ async function createTextFixture(): Promise<void> {
   });
   savePptx(buffer, "text.pptx");
 }
-
-// --- 4. Transform ---
 
 function bulletParagraphsXml(
   items: {
@@ -363,8 +362,6 @@ async function createBulletsFixture(): Promise<void> {
   });
   savePptx(buffer, "bullets.pptx");
 }
-
-// --- 13. Flowchart Shapes ---
 
 function multiRunTextBodyXml(
   paragraphs: {
@@ -658,8 +655,6 @@ async function createWordWrapFixture(): Promise<void> {
   savePptx(buffer, "word-wrap.pptx");
 }
 
-// --- 18. Background blipFill ---
-
 async function createTextDecorationFixture(): Promise<void> {
   let id = 2;
   const shapes: string[] = [];
@@ -744,8 +739,6 @@ async function createTextDecorationFixture(): Promise<void> {
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
   savePptx(buffer, "text-decoration.pptx");
 }
-
-// --- 21. Slide Size 4:3 ---
 
 async function createThemeFontFixture(): Promise<void> {
   const customTheme = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -1046,8 +1039,6 @@ async function createTextStyleInheritanceFixture(): Promise<void> {
   savePptx(buffer, "text-style-inheritance.pptx");
 }
 
-// --- Z-order mixed (cross-type element ordering) ---
-
 async function createParagraphSpacingFixture(): Promise<void> {
   let id = 2;
   const shapes: string[] = [];
@@ -1211,8 +1202,6 @@ async function createParagraphSpacingFixture(): Promise<void> {
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
   savePptx(buffer, "paragraph-spacing.pptx");
 }
-
-// --- Text Advanced (field codes, line breaks, tab stops) ---
 
 async function createTextAdvancedFixture(): Promise<void> {
   let id = 2;
@@ -1794,8 +1783,6 @@ async function createSpAutofitFixture(): Promise<void> {
   savePptx(buffer, "sp-autofit.pptx");
 }
 
-// --- Style Reference ---
-
 async function createStyleReferenceFixture(): Promise<void> {
   // Custom theme with fmtScheme containing fill/line/effect styles
   const styleRefTheme = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -2247,8 +2234,6 @@ async function createVerticalTextFixture(): Promise<void> {
   savePptx(buffer, "vertical-text.pptx");
 }
 
-// --- Charts 3D Fallback ---
-
 async function createMultiLangFontFixture(): Promise<void> {
   const shapes: string[] = [];
 
@@ -2357,8 +2342,6 @@ async function createMultiLangFontFixture(): Promise<void> {
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
   savePptx(buffer, "multi-lang-font.pptx");
 }
-
-// --- Placeholder Inheritance Extended ---
 
 async function createInterleavedBulletPprFixture(): Promise<void> {
   const bulletItems = [

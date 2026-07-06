@@ -1,3 +1,4 @@
+import type { FixtureCreatorMap, GridPos } from "../fixture-builder.js";
 import {
   buildPptx,
   COLORS,
@@ -72,8 +73,6 @@ async function createShapesFixture(): Promise<void> {
   });
   savePptx(buffer, "shapes.pptx");
 }
-
-// --- 2. Fill and Lines ---
 
 async function createFillAndLinesFixture(): Promise<void> {
   // Slide 1: Fill types
@@ -284,8 +283,6 @@ async function createFillAndLinesFixture(): Promise<void> {
   savePptx(buffer, "fill-and-lines.pptx");
 }
 
-// --- 3. Text ---
-
 async function createTransformFixture(): Promise<void> {
   let id = 2;
   const shapes: string[] = [];
@@ -326,8 +323,6 @@ async function createTransformFixture(): Promise<void> {
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
   savePptx(buffer, "transform.pptx");
 }
-
-// --- 5. Background ---
 
 async function createGroupsFixture(): Promise<void> {
   // Slide 1: Group containing a rect, ellipse, and text shape
@@ -512,8 +507,6 @@ async function createGroupsFixture(): Promise<void> {
   savePptx(buffer, "groups.pptx");
 }
 
-// --- 7. Charts ---
-
 async function createConnectorsFixture(): Promise<void> {
   // Row 1: Basic connectors (straight, dash, dot)
   const basicConnectors = [
@@ -606,8 +599,6 @@ async function createConnectorsFixture(): Promise<void> {
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
   savePptx(buffer, "connectors.pptx");
 }
-
-// --- 9. Custom Geometry ---
 
 async function createCustomGeometryFixture(): Promise<void> {
   // A custom star-like path and a custom curve
@@ -753,8 +744,6 @@ async function createCustomGeometryFixture(): Promise<void> {
   savePptx(buffer, "custom-geometry.pptx");
 }
 
-// --- 10. Image ---
-
 async function createFlowchartFixture(): Promise<void> {
   const flowchartPresets1 = [
     "flowChartProcess",
@@ -821,8 +810,6 @@ async function createFlowchartFixture(): Promise<void> {
   savePptx(buffer, "flowchart.pptx");
 }
 
-// --- 14. Callout and Arc Shapes ---
-
 async function createCalloutsArcsFixture(): Promise<void> {
   const presets = [
     "wedgeRectCallout",
@@ -860,8 +847,6 @@ async function createCalloutsArcsFixture(): Promise<void> {
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
   savePptx(buffer, "callouts-arcs.pptx");
 }
-
-// --- 15. Extended Arrows and Stars ---
 
 async function createArrowsStarsFixture(): Promise<void> {
   const arrowPresets = [
@@ -945,8 +930,6 @@ async function createArrowsStarsFixture(): Promise<void> {
   savePptx(buffer, "arrows-stars.pptx");
 }
 
-// --- 16. Math and Other Shapes ---
-
 async function createMathOtherFixture(): Promise<void> {
   const mathPresets = [
     "mathPlus",
@@ -1028,8 +1011,6 @@ async function createMathOtherFixture(): Promise<void> {
   });
   savePptx(buffer, "math-other.pptx");
 }
-
-// --- 17. Word Wrap ---
 
 function gridPosition43(
   col: number,
@@ -1212,8 +1193,6 @@ async function createSlideSize43Fixture(): Promise<void> {
 }
 
 // --- Main ---
-// --- 21. Effects ---
-
 async function createEffectsFixture(): Promise<void> {
   let id = 2;
   const shapes: string[] = [];
@@ -1376,8 +1355,6 @@ async function createColorTransformsFixture(): Promise<void> {
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
   savePptx(buffer, "color-transforms.pptx");
 }
-
-// --- Table Complex Merge ---
 
 export const shapeFixtureCreators: FixtureCreatorMap = {
   "shapes.pptx": createShapesFixture,

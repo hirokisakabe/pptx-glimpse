@@ -1,5 +1,6 @@
 import sharp from "sharp";
 
+import type { FixtureCreatorMap } from "../fixture-builder.js";
 import {
   buildPptx,
   gradientFillXml,
@@ -62,8 +63,6 @@ async function createBackgroundFixture(): Promise<void> {
   });
   savePptx(buffer, "background.pptx");
 }
-
-// --- 6. Groups ---
 
 async function createBackgroundBlipFillFixture(): Promise<void> {
   // Generate a gradient-like test image for background
@@ -139,8 +138,6 @@ async function createBackgroundBlipFillFixture(): Promise<void> {
   });
   savePptx(buffer, "background-blipfill.pptx");
 }
-
-// --- 19. Composite (Shape + Text + Fill + Transform) ---
 
 export const backgroundFixtureCreators: FixtureCreatorMap = {
   "background.pptx": createBackgroundFixture,

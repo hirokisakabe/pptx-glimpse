@@ -1,3 +1,4 @@
+import type { FixtureCreatorMap } from "../fixture-builder.js";
 import {
   buildPptx,
   gradientFillXml,
@@ -365,8 +366,6 @@ async function createCompositeFixture(): Promise<void> {
   savePptx(buffer, "composite.pptx");
 }
 
-// --- 20. Text Decoration (superscript / subscript) ---
-
 async function createHyperlinksFixture(): Promise<void> {
   const margin = 457200; // 0.5 inch
   const shapeW = 8229600; // 8.5 inch
@@ -501,8 +500,6 @@ async function createHyperlinksFixture(): Promise<void> {
   const buffer = await buildPptx({ slides: [{ xml: slide, rels }] });
   savePptx(buffer, "hyperlinks.pptx");
 }
-
-// --- Pattern / Image Fill / Radial Gradient ---
 
 async function createSmartArtFixture(): Promise<void> {
   const margin = 300000;
@@ -661,8 +658,6 @@ async function createSmartArtFixture(): Promise<void> {
 
   savePptx(buffer, "smartart.pptx");
 }
-
-// --- Image Crop (srcRect) ---
 
 export const miscFixtureCreators: FixtureCreatorMap = {
   "composite.pptx": createCompositeFixture,

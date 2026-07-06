@@ -1,5 +1,6 @@
 import sharp from "sharp";
 
+import type { FixtureCreatorMap } from "../fixture-builder.js";
 import {
   buildPptx,
   outlineXml,
@@ -176,8 +177,6 @@ async function createTablesFixture(): Promise<void> {
   savePptx(buffer, "tables.pptx");
 }
 
-// --- 12. Bullets and Numbering ---
-
 async function createTableComplexMergeFixture(): Promise<void> {
   const margin = 300000;
 
@@ -272,8 +271,6 @@ async function createTableComplexMergeFixture(): Promise<void> {
   savePptx(buffer, "table-complex-merge.pptx");
 }
 
-// --- Multi Language Font ---
-
 function tableCellXmlNoBorder(
   text: string,
   opts?: {
@@ -352,8 +349,6 @@ async function createTableStyleBorderFixture(): Promise<void> {
   });
   savePptx(buffer, "table-style-border.pptx");
 }
-
-// --- Theme Font References Fixture ---
 
 async function createZOrderMixedFixture(): Promise<void> {
   // Generate image (blue gradient)

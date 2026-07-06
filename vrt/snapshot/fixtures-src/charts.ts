@@ -1,3 +1,4 @@
+import type { FixtureCreatorMap, SlideData } from "../fixture-builder.js";
 import {
   buildPptx,
   NS,
@@ -441,8 +442,6 @@ async function createChartsFixture(): Promise<void> {
   savePptx(buffer, "charts.pptx");
 }
 
-// --- 8. Connectors ---
-
 async function createCharts3dFallbackFixture(): Promise<void> {
   const charts = new Map<string, string>();
   const slides: SlideData[] = [];
@@ -565,8 +564,6 @@ async function createCharts3dFallbackFixture(): Promise<void> {
   });
   savePptx(buffer, "charts-3d-fallback.pptx");
 }
-
-// --- Color Transforms ---
 
 export const chartFixtureCreators: FixtureCreatorMap = {
   "charts.pptx": createChartsFixture,
