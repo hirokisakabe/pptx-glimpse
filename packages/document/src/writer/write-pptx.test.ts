@@ -12,6 +12,7 @@ import {
   asPt,
   asSourceNodeId,
   createComputedView,
+  createPptx,
   readPptx,
   writePptx,
 } from "../index.js";
@@ -33,6 +34,7 @@ import {
   type SourceConnector,
   type SourceShape,
   type SourceShapeNode,
+  type SourceTextRun,
   updateShapeTransform,
 } from "../index.js";
 
@@ -544,6 +546,48 @@ function getEntry(output: Uint8Array, path: string): Uint8Array {
   if (entry === undefined) throw new Error(`missing zip entry: ${path}`);
   return entry;
 }
+
+function findTextRun(source: ReturnType<typeof readPptx>, text: string): SourceTextRun {
+  for (const slide of source.slides) {
+    for (const shape of slide.shapes) {
+      if (shape.kind !== "shape") continue;
+      for (const paragraph of shape.textBody?.paragraphs ?? []) {
+        const run = paragraph.runs.find((candidate) => candidate.text === text);
+        if (run !== undefined) return run;
+      }
+    }
+  }
+  throw new Error(`text run not found: ${text}`);
+}
+
+describe("writePptx - from-scratch builder", () => {
+  it("writes a new presentation after adding a text box through public APIs", () => {
+    const source = createPptx();
+    const slideHandle = source.slides[0]?.handle;
+    if (slideHandle === undefined) throw new Error("createPptx should create a first slide");
+
+    const edited = addTextBox(source, slideHandle, {
+      offsetX: asEmu(914400),
+      offsetY: asEmu(914400),
+      width: asEmu(3657600),
+      height: asEmu(914400),
+      text: "Hello from scratch",
+    });
+
+    const reread = readPptx(writePptx(edited));
+    expect(reread.diagnostics).toEqual([]);
+    expect(reread.presentation.slidePartPaths).toEqual([asPartPath("ppt/slides/slide1.xml")]);
+    expect(reread.slides).toHaveLength(1);
+    expect(reread.slideLayouts).toHaveLength(1);
+    expect(reread.slideMasters).toHaveLength(1);
+    expect(reread.themes).toHaveLength(1);
+    expect(findTextRun(reread, "Hello from scratch").text).toBe("Hello from scratch");
+
+    const computed = createComputedView(reread);
+    expect(computed.slideSize).toEqual({ width: asEmu(9144000), height: asEmu(5143500) });
+    expect(computed.slides[0]?.elements).toHaveLength(1);
+  });
+});
 
 describe("writePptx - no-edit round-trip", () => {
   it("You can write no-edit PPTX from PptxSourceModel source and reload it.", () => {

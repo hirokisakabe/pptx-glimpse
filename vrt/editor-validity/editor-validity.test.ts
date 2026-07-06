@@ -11,6 +11,7 @@ import {
   addTextBox,
   asEmu,
   asPt,
+  createPptx,
   deleteShape,
   deleteSlide,
   duplicateSlide,
@@ -214,6 +215,23 @@ describeOrSkip("LibreOffice slide topology validity", { timeout: 120000 }, () =>
 });
 
 describeOrSkip("LibreOffice shape add/delete validity", { timeout: 120000 }, () => {
+  it("opens from-scratch PPTX after adding a text box", () => {
+    const source = createPptx();
+    const edited = addTextBox(source, requireHandle(source.slides[0]?.handle), {
+      offsetX: asEmu(914400),
+      offsetY: asEmu(914400),
+      width: asEmu(3657600),
+      height: asEmu(914400),
+      text: "LibreOffice from-scratch text box",
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-from-scratch-text-box.pptx",
+      writePptx(edited),
+    );
+  });
+
   it("opens PPTX after adding a text box", () => {
     const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
     const source = readPptx(sourcePptx);
