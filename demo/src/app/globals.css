@@ -247,10 +247,309 @@ header .description {
   gap: 10px;
 }
 
+.viewer-toolbar {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
 .viewer-summary span {
   background: var(--surface-2);
   border-radius: 999px;
   padding: 6px 10px;
+}
+
+.mode-switch {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  display: inline-grid;
+  grid-auto-flow: column;
+  overflow: hidden;
+}
+
+.mode-switch button {
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  min-height: 36px;
+  padding: 0 14px;
+}
+
+.mode-switch button:first-child {
+  border-left: 0;
+}
+
+.mode-switch button[aria-pressed="true"] {
+  background: var(--blueprint);
+  color: white;
+}
+
+.editor-workspace {
+  display: grid;
+  gap: 12px;
+}
+
+.editor-topbar {
+  align-items: center;
+  display: grid;
+  gap: 12px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.editor-status {
+  color: var(--muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.9rem;
+  gap: 8px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.editor-status span {
+  background: var(--surface-2);
+  border-radius: 999px;
+  padding: 6px 10px;
+}
+
+.primary-action,
+.editor-panel button,
+.button-row button {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  min-height: 36px;
+  padding: 0 12px;
+}
+
+.primary-action {
+  background: var(--green);
+  border-color: transparent;
+  color: white;
+}
+
+.editor-panel button,
+.button-row button {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.editor-panel button:disabled,
+.button-row button:disabled,
+.format-toolbar button:disabled,
+.text-property-row button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.editor-shell {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 140px minmax(0, 1fr) 280px;
+  min-height: 620px;
+}
+
+.editor-thumbnails {
+  background: rgba(255, 255, 255, 0.58);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.editor-thumbnail {
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  gap: 4px;
+  margin-bottom: 8px;
+  padding: 4px;
+  text-align: left;
+  width: 100%;
+}
+
+.editor-thumbnail.active {
+  border-color: var(--blueprint);
+  color: var(--blueprint);
+}
+
+.editor-thumbnail svg {
+  display: block;
+  height: auto;
+  width: 100%;
+}
+
+.editor-stage {
+  align-items: center;
+  background:
+    linear-gradient(90deg, rgba(23, 33, 43, 0.05) 1px, transparent 1px),
+    linear-gradient(rgba(23, 33, 43, 0.05) 1px, transparent 1px), #dfe8ed;
+  background-size: 20px 20px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+  overflow: auto;
+  padding: 18px;
+}
+
+.editor-slide-frame {
+  background: var(--surface);
+  border: 1px solid #b8c4ca;
+  box-shadow: 0 12px 28px rgba(23, 33, 43, 0.18);
+  max-width: 100%;
+  position: relative;
+  width: min(960px, 100%);
+}
+
+.editor-slide-frame svg:not(.editor-selection-overlay) {
+  display: block;
+  height: auto;
+  width: 100%;
+}
+
+.editor-selection-overlay {
+  height: 100%;
+  inset: 0;
+  overflow: visible;
+  position: absolute;
+  touch-action: none;
+  width: 100%;
+  z-index: 2;
+}
+
+.shape-hit-area {
+  cursor: move;
+  fill: transparent;
+  pointer-events: all;
+}
+
+.selection-box {
+  fill: none;
+  pointer-events: none;
+  stroke: var(--green);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.selection-handle {
+  fill: var(--surface);
+  pointer-events: all;
+  stroke: var(--green);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.selection-handle.nw,
+.selection-handle.se {
+  cursor: nwse-resize;
+}
+
+.selection-handle.ne,
+.selection-handle.sw {
+  cursor: nesw-resize;
+}
+
+.editor-panel {
+  align-content: start;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.panel-group {
+  border-bottom: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  padding-bottom: 12px;
+}
+
+.panel-group:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.panel-title {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.button-row,
+.format-toolbar,
+.text-property-row {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.format-toolbar {
+  grid-template-columns: repeat(3, 36px) 44px;
+}
+
+.editor-panel select,
+.editor-panel textarea,
+.editor-panel input[type="number"],
+.editor-panel input[type="text"],
+.text-property-row input {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  font: inherit;
+  min-height: 36px;
+  min-width: 0;
+  padding: 7px 9px;
+  width: 100%;
+}
+
+.editor-panel textarea {
+  line-height: 1.4;
+  resize: vertical;
+}
+
+.format-toolbar button {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--ink);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 850;
+  min-height: 36px;
+}
+
+.format-toolbar input[type="color"] {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  height: 36px;
+  padding: 2px;
+  width: 44px;
+}
+
+.compact-error {
+  margin-bottom: 0;
 }
 
 footer {
@@ -285,6 +584,31 @@ footer a:hover {
   .drop-zone {
     grid-template-columns: 1fr;
     padding: 22px;
+  }
+
+  .viewer-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .editor-topbar {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .editor-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .editor-thumbnails {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+  }
+
+  .editor-thumbnail {
+    flex: 0 0 120px;
+    margin-bottom: 0;
   }
 
   .file-actions {
