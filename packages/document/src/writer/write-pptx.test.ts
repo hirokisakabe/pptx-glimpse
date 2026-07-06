@@ -1674,6 +1674,35 @@ describe("writePptx - shape fill and outline editing", () => {
     });
   });
 
+  it("Writes repeated direct helper shape style changes as compact final edits.", () => {
+    const source = readPptx(buildShapeStyleFixture());
+    const shape = findShapeByName(source, "Styled");
+    const edited = setShapeOutline(
+      setShapeFill(
+        setShapeOutline(
+          setShapeFill(source, shape.handle!, {
+            kind: "solid",
+            color: { kind: "srgb", hex: "00aa44" },
+          }),
+          shape.handle!,
+          { fill: { kind: "solid", color: { kind: "srgb", hex: "336699" } } },
+        ),
+        shape.handle!,
+        { kind: "none" },
+      ),
+      shape.handle!,
+      { width: asEmu(38100) },
+    );
+    const rereadShape = findShapeByName(readPptx(writePptx(edited)), "Styled");
+
+    expect(edited.edits).toHaveLength(2);
+    expect(rereadShape.fill).toEqual({ kind: "none" });
+    expect(rereadShape.outline).toMatchObject({
+      width: 38100,
+      fill: { kind: "solid", color: { kind: "srgb", hex: "336699" } },
+    });
+  });
+
   it("Rejects conflicting shape fill and outline edit journals.", () => {
     const source = readPptx(buildShapeStyleFixture());
     const shape = findShapeByName(source, "Styled");

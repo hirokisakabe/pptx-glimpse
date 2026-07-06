@@ -14,6 +14,7 @@ import type {
   PptxSourceModel,
   PptxSourceModelAddConnectorEdit,
   PptxSourceModelEdit,
+  PptxSourceModelShapeOutlineEdit,
   SourceArrowEndpoint,
   SourceConnector,
   SourceFill,
@@ -192,7 +193,7 @@ export function setShapeFill(
   return {
     ...source,
     slides,
-    edits: [...(source.edits ?? []), { kind: "updateShapeFill", handle, fill }],
+    edits: appendShapeFillEdit(source.edits ?? [], handle, fill),
   };
 }
 
@@ -245,7 +246,7 @@ export function setShapeOutline(
   return {
     ...source,
     slides,
-    edits: [...(source.edits ?? []), { kind: "updateShapeOutline", handle, outline }],
+    edits: appendShapeOutlineEdit(source.edits ?? [], handle, outline),
   };
 }
 
@@ -451,6 +452,55 @@ function patchSourceOutline(
     ...(current ?? {}),
     ...(patch.width !== undefined ? { width: patch.width } : {}),
     ...(patch.fill !== undefined ? { fill: toSourceFill(patch.fill) } : {}),
+  };
+}
+
+function appendShapeFillEdit(
+  edits: readonly PptxSourceModelEdit[],
+  handle: SourceHandle,
+  fill: EditableShapeFill,
+): PptxSourceModelEdit[] {
+  const retainedEdits = edits.filter(
+    (edit) => edit.kind !== "updateShapeFill" || !sourceHandlesEqual(edit.handle, handle),
+  );
+  return [...retainedEdits, { kind: "updateShapeFill", handle, fill }];
+}
+
+function appendShapeOutlineEdit(
+  edits: readonly PptxSourceModelEdit[],
+  handle: SourceHandle,
+  outline: EditableShapeOutline,
+): PptxSourceModelEdit[] {
+  let outlineEdit: PptxSourceModelShapeOutlineEdit = {
+    kind: "updateShapeOutline",
+    handle,
+    outline,
+  };
+  const retainedEdits: PptxSourceModelEdit[] = [];
+
+  for (const edit of edits) {
+    if (edit.kind !== "updateShapeOutline" || !sourceHandlesEqual(edit.handle, handle)) {
+      retainedEdits.push(edit);
+      continue;
+    }
+    outlineEdit = {
+      ...outlineEdit,
+      outline: mergeEditableShapeOutline(edit.outline, outlineEdit.outline),
+    };
+  }
+
+  return [...retainedEdits, outlineEdit];
+}
+
+function mergeEditableShapeOutline(
+  base: EditableShapeOutline,
+  patch: EditableShapeOutline,
+): EditableShapeOutline {
+  return {
+    ...(base.width !== undefined ? { width: base.width } : {}),
+    ...(base.fill !== undefined ? { fill: base.fill } : {}),
+    ...(patch.width !== undefined ? { width: patch.width } : {}),
+    ...(patch.fill !== undefined ? { fill: patch.fill } : {}),
   };
 }
 

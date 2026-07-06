@@ -333,11 +333,13 @@ describe("editing shape operations", () => {
       fill: { kind: "none" },
     });
     expect(repeated).toBe(withoutFillOrOutline);
-    expect(withoutFillOrOutline.edits?.map((edit) => edit.kind)).toEqual([
-      "updateShapeFill",
-      "updateShapeOutline",
-      "updateShapeFill",
-      "updateShapeOutline",
+    expect(withoutFillOrOutline.edits).toEqual([
+      { kind: "updateShapeFill", handle: shapeHandle, fill: { kind: "none" } },
+      {
+        kind: "updateShapeOutline",
+        handle: shapeHandle,
+        outline: { width: asEmu(12700), fill: { kind: "none" } },
+      },
     ]);
   });
 
