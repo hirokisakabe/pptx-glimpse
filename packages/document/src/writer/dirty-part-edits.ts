@@ -1,6 +1,8 @@
 import { getChild, getChildArray, localName, parseXml, type XmlNode } from "../reader/xml.js";
 import { editDirtyPartPath } from "../source/edit-descriptors.js";
 import type {
+  EditableShapeFill,
+  EditableShapeOutline,
   EditableTextRunProperties,
   PartPath,
   PptxSourceModel,
@@ -9,9 +11,12 @@ import type {
   PptxSourceModelDeleteShapeEdit,
   PptxSourceModelEdit,
   PptxSourceModelParagraphTextEdit,
+  PptxSourceModelShapeFillEdit,
+  PptxSourceModelShapeOutlineEdit,
   PptxSourceModelShapeTransformEdit,
   PptxSourceModelTextRunEdit,
   PptxSourceModelTextRunPropertiesEdit,
+  SourceHandle,
 } from "../source/index.js";
 import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import {
@@ -37,6 +42,15 @@ import {
   xmlNodeIsEmpty,
 } from "./xml-node-utils.js";
 import { encodeXml, textDecoder, XML_DECLARATION, xmlBuilder } from "./xml-serialization.js";
+
+const FILL_CHILD_LOCAL_NAMES: ReadonlySet<string> = new Set([
+  "noFill",
+  "solidFill",
+  "gradFill",
+  "blipFill",
+  "pattFill",
+  "grpFill",
+]);
 
 export function serializeDirtyXmlPart(
   source: PptxSourceModel,
@@ -81,6 +95,12 @@ function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
       return;
     case "updateShapeTransform":
       applyShapeTransformEdit(root, edit);
+      return;
+    case "updateShapeFill":
+      applyShapeFillEdit(root, edit);
+      return;
+    case "updateShapeOutline":
+      applyShapeOutlineEdit(root, edit);
       return;
     case "addTextBox":
       applyAddTextBoxEdit(root, edit);
@@ -189,7 +209,7 @@ function locateTextRun(
 }
 
 function applyShapeTransformEdit(root: XmlNode, edit: PptxSourceModelShapeTransformEdit): void {
-  const locator = parseShapeLocator(edit.handle);
+  const locator = parseShapeLocator(edit.handle, "shape transform edit");
   const slide = getChild(root, "sld");
   const cSld = getChild(slide, "cSld");
   const spTree = getChild(cSld, "spTree");
@@ -214,6 +234,25 @@ function applyShapeTransformEdit(root: XmlNode, edit: PptxSourceModelShapeTransf
   off["@_y"] = String(edit.offsetY);
   ext["@_cx"] = String(edit.width);
   ext["@_cy"] = String(edit.height);
+}
+
+function applyShapeFillEdit(root: XmlNode, edit: PptxSourceModelShapeFillEdit): void {
+  const shape = locateEditableShapeTreeNode(root, edit.handle, "shape fill edit");
+  if (shape.localName === "cxnSp") {
+    throw new Error(
+      `writePptx: shape fill handle '${String(edit.handle.nodeId)}' references a connector`,
+    );
+  }
+
+  const spPr = ensureShapeProperties(shape.node);
+  replaceFillChild(spPr, edit.fill);
+}
+
+function applyShapeOutlineEdit(root: XmlNode, edit: PptxSourceModelShapeOutlineEdit): void {
+  const shape = locateEditableShapeTreeNode(root, edit.handle, "shape outline edit");
+  const spPr = ensureShapeProperties(shape.node);
+  const ln = ensureLineProperties(spPr);
+  applyOutlinePatch(ln, edit.outline);
 }
 
 function applyAddTextBoxEdit(root: XmlNode, edit: PptxSourceModelAddTextBoxEdit): void {
@@ -251,13 +290,151 @@ function applyAddConnectorEdit(root: XmlNode, edit: PptxSourceModelAddConnectorE
 }
 
 function applyDeleteShapeEdit(root: XmlNode, edit: PptxSourceModelDeleteShapeEdit): void {
-  const locator = parseShapeLocator(edit.handle);
+  const locator = parseShapeLocator(edit.handle, "shape delete edit");
   const slide = getChild(root, "sld");
   const cSld = getChild(slide, "cSld");
   const spTree = getChild(cSld, "spTree");
   if (!deleteShapeXml(spTree, locator.nodeId)) {
     throw new Error(`writePptx: shape delete handle '${locator.nodeId}' no longer matches p:sp`);
   }
+}
+
+interface ShapeTreeNodeLocation {
+  readonly node: XmlNode;
+  readonly localName: string;
+}
+
+function locateEditableShapeTreeNode(
+  root: XmlNode,
+  handle: SourceHandle,
+  editName: string,
+): ShapeTreeNodeLocation {
+  const locator = parseShapeLocator(handle, editName);
+  const slide = getChild(root, "sld");
+  const cSld = getChild(slide, "cSld");
+  const spTree = getChild(cSld, "spTree");
+  const shape = locateShapeTreeNodeWithLocalName(spTree, locator.nodeId);
+  if (shape === undefined) {
+    throw new Error(
+      `writePptx: ${editName} handle '${String(handle.nodeId)}' no longer matches source XML`,
+    );
+  }
+  if (shape.localName !== "sp" && shape.localName !== "cxnSp") {
+    throw new Error(
+      `writePptx: ${editName} handle '${String(handle.nodeId)}' does not reference p:sp or p:cxnSp`,
+    );
+  }
+  return shape;
+}
+
+function locateShapeTreeNodeWithLocalName(
+  spTree: XmlNode | undefined,
+  nodeId: string,
+): ShapeTreeNodeLocation | undefined {
+  if (spTree === undefined) return undefined;
+  for (const key of Object.keys(spTree)) {
+    if (key.startsWith("@_")) continue;
+    const keyLocalName = localName(key);
+    const value = spTree[key];
+    const items = Array.isArray(value) ? value : [value];
+    for (const item of items) {
+      const node = unsafeOoxmlBoundaryAssertion<XmlNode>(item);
+      const nonVisualProperties =
+        getChild(node, "nvSpPr") ??
+        getChild(node, "nvPicPr") ??
+        getChild(node, "nvCxnSpPr") ??
+        getChild(node, "nvGrpSpPr") ??
+        getChild(node, "nvGraphicFramePr");
+      if (getChild(nonVisualProperties, "cNvPr")?.["@_id"] === nodeId) {
+        return { node, localName: keyLocalName };
+      }
+    }
+  }
+  return undefined;
+}
+
+function ensureShapeProperties(shape: XmlNode): XmlNode {
+  const existing = getChild(shape, "spPr");
+  if (existing !== undefined) return existing;
+
+  const entries: [string, unknown][] = [];
+  let inserted = false;
+  for (const [key, value] of Object.entries(shape)) {
+    entries.push([key, value]);
+    if (!inserted && !key.startsWith("@_") && localName(key).startsWith("nv")) {
+      entries.push(["p:spPr", {}]);
+      inserted = true;
+    }
+  }
+  if (!inserted) entries.push(["p:spPr", {}]);
+  replaceNodeEntries(shape, entries);
+  return getChild(shape, "spPr") ?? {};
+}
+
+function ensureLineProperties(spPr: XmlNode): XmlNode {
+  const existing = getChild(spPr, "ln");
+  if (existing !== undefined) return existing;
+
+  insertChildByOrder(spPr, "a:ln", {}, (name) =>
+    ["effectLst", "effectDag", "scene3d", "sp3d", "extLst"].includes(name),
+  );
+  return getChild(spPr, "ln") ?? {};
+}
+
+function applyOutlinePatch(ln: XmlNode, outline: EditableShapeOutline): void {
+  if (outline.width !== undefined) ln["@_w"] = String(outline.width);
+  if (outline.fill !== undefined) replaceFillChild(ln, outline.fill);
+}
+
+function replaceFillChild(parent: XmlNode, fill: EditableShapeFill): void {
+  const fillNode =
+    fill.kind === "none"
+      ? { key: "a:noFill", value: {} }
+      : {
+          key: "a:solidFill",
+          value: { "a:srgbClr": { "@_val": fill.color.hex.toUpperCase() } },
+        };
+
+  const entries = Object.entries(parent).filter(
+    ([key]) => key.startsWith("@_") || !FILL_CHILD_LOCAL_NAMES.has(localName(key)),
+  );
+  replaceNodeEntries(parent, entries);
+  insertChildByOrder(parent, fillNode.key, fillNode.value, (name) =>
+    [
+      "ln",
+      "effectLst",
+      "effectDag",
+      "scene3d",
+      "sp3d",
+      "extLst",
+      "prstDash",
+      "custDash",
+      "round",
+      "bevel",
+      "miter",
+      "headEnd",
+      "tailEnd",
+    ].includes(name),
+  );
+}
+
+function insertChildByOrder(
+  node: XmlNode,
+  key: string,
+  value: XmlNode,
+  shouldInsertBefore: (local: string) => boolean,
+): void {
+  const entries: [string, unknown][] = [];
+  let inserted = false;
+  for (const [entryKey, entryValue] of Object.entries(node)) {
+    if (!inserted && !entryKey.startsWith("@_") && shouldInsertBefore(localName(entryKey))) {
+      entries.push([key, value]);
+      inserted = true;
+    }
+    entries.push([entryKey, entryValue]);
+  }
+  if (!inserted) entries.push([key, value]);
+  replaceNodeEntries(node, entries);
 }
 
 /**

@@ -9,6 +9,8 @@ import {
   deleteShape,
   deleteSlide,
   duplicateSlide,
+  type EditableShapeFill,
+  type EditableShapeOutline,
   type EditableTextRunProperties,
   type EditableTextRunProperty,
   type Emu,
@@ -16,12 +18,16 @@ import {
   type PptxSourceModel,
   type PptxSourceModelEdit,
   type PptxSourceModelParagraphTextEdit,
+  type PptxSourceModelShapeFillEdit,
+  type PptxSourceModelShapeOutlineEdit,
   type PptxSourceModelShapeTransformEdit,
   type PptxSourceModelTextRunEdit,
   type PptxSourceModelTextRunPropertiesEdit,
   replaceImageBytes,
   replaceParagraphPlainText,
   replaceTextRunPlainText,
+  setShapeFill,
+  setShapeOutline,
   setTextRunProperties,
   type SourceHandle,
   type SourceShapeNode,
@@ -88,6 +94,18 @@ export interface SetShapeTransformCommand {
   readonly height: Emu;
 }
 
+export interface SetShapeFillCommand {
+  readonly kind: "setShapeFill";
+  readonly handle: SourceHandle;
+  readonly fill: EditableShapeFill;
+}
+
+export interface SetShapeOutlineCommand {
+  readonly kind: "setShapeOutline";
+  readonly handle: SourceHandle;
+  readonly outline: EditableShapeOutline;
+}
+
 export interface AddTextBoxCommand extends AddTextBoxInput {
   readonly kind: "addTextBox";
   readonly slideHandle: SourceHandle;
@@ -131,6 +149,8 @@ export type EditorCommand =
   | MoveShapeCommand
   | ResizeShapeCommand
   | SetShapeTransformCommand
+  | SetShapeFillCommand
+  | SetShapeOutlineCommand
   | AddTextBoxCommand
   | AddConnectorCommand
   | DeleteShapeCommand
@@ -331,6 +351,10 @@ function applyCommandToDocument(
       return resizeShape(document, command);
     case "setShapeTransform":
       return setShapeTransform(document, command);
+    case "setShapeFill":
+      return setShapeFillCommand(document, command);
+    case "setShapeOutline":
+      return setShapeOutlineCommand(document, command);
     case "addTextBox":
       return addTextBoxCommand(document, command);
     case "addConnector":
@@ -487,6 +511,22 @@ function setShapeTransform(
   });
 }
 
+function setShapeFillCommand(
+  document: PptxSourceModel,
+  command: SetShapeFillCommand,
+): PptxSourceModel {
+  validateShapeFill(command.fill, "setShapeFill");
+  return setShapeFill(document, command.handle, command.fill);
+}
+
+function setShapeOutlineCommand(
+  document: PptxSourceModel,
+  command: SetShapeOutlineCommand,
+): PptxSourceModel {
+  validateShapeOutline(command.outline, "setShapeOutline");
+  return setShapeOutline(document, command.handle, command.outline);
+}
+
 const EDITABLE_TEXT_RUN_PROPERTIES = [
   "bold",
   "italic",
@@ -547,6 +587,32 @@ function requireBooleanOrUndefined(
   }
 }
 
+function validateShapeOutline(outline: EditableShapeOutline, commandName: "setShapeOutline"): void {
+  if (outline.width === undefined && outline.fill === undefined) {
+    throw new Error(`${commandName}: outline must set width or fill`);
+  }
+  if (outline.width !== undefined) {
+    requirePositiveFiniteEmu(outline.width, commandName, "width");
+  }
+  if (outline.fill !== undefined) validateShapeFill(outline.fill, commandName);
+}
+
+function validateShapeFill(
+  fill: EditableShapeFill,
+  commandName: "setShapeFill" | "setShapeOutline",
+): void {
+  if (fill.kind === "none") return;
+  if (fill.kind !== "solid") {
+    throw new Error(`${commandName}: only solid and none fills are supported`);
+  }
+  if (fill.color.kind !== "srgb") {
+    throw new Error(`${commandName}: only srgb solid fill colors are supported`);
+  }
+  if (!/^[0-9A-Fa-f]{6}$/.test(fill.color.hex)) {
+    throw new Error(`${commandName}: color.hex must be a 6-digit hex value`);
+  }
+}
+
 function requireEditableShapeTransform(
   document: PptxSourceModel,
   handle: SourceHandle,
@@ -564,7 +630,13 @@ function requireEditableShapeTransform(
 
 function requireFiniteEmu(
   value: Emu,
-  commandName: "moveShape" | "resizeShape" | "setShapeTransform" | "addTextBox" | "addConnector",
+  commandName:
+    | "moveShape"
+    | "resizeShape"
+    | "setShapeTransform"
+    | "setShapeOutline"
+    | "addTextBox"
+    | "addConnector",
   fieldName: string,
 ): void {
   if (!Number.isFinite(value)) {
@@ -574,7 +646,13 @@ function requireFiniteEmu(
 
 function requirePositiveFiniteEmu(
   value: Emu,
-  commandName: "moveShape" | "resizeShape" | "setShapeTransform" | "addTextBox" | "addConnector",
+  commandName:
+    | "moveShape"
+    | "resizeShape"
+    | "setShapeTransform"
+    | "setShapeOutline"
+    | "addTextBox"
+    | "addConnector",
   fieldName: string,
 ): void {
   if (!Number.isFinite(value) || value <= 0) {
@@ -596,6 +674,8 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
   const seenTextRunProperties = new Map<string, Set<EditableTextRunProperty>>();
   const seenParagraphs = new Set<string>();
   const seenShapeTransforms = new Set<string>();
+  const seenShapeFills = new Set<string>();
+  const seenShapeOutlines = new Set<string>();
   const normalizedReversed: PptxSourceModelEdit[] = [];
   let changed = false;
 
@@ -645,6 +725,22 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
       }
       seenShapeTransforms.add(key);
     }
+    if (edit.kind === "updateShapeFill") {
+      const key = editHandleNodeKey(edit);
+      if (seenShapeFills.has(key)) {
+        changed = true;
+        continue;
+      }
+      seenShapeFills.add(key);
+    }
+    if (edit.kind === "updateShapeOutline") {
+      const key = editHandleNodeKey(edit);
+      if (seenShapeOutlines.has(key)) {
+        changed = true;
+        continue;
+      }
+      seenShapeOutlines.add(key);
+    }
     normalizedReversed.push(edit);
   }
 
@@ -664,7 +760,9 @@ function editHandleNodeKey(
     | PptxSourceModelTextRunEdit
     | PptxSourceModelParagraphTextEdit
     | PptxSourceModelTextRunPropertiesEdit
-    | PptxSourceModelShapeTransformEdit,
+    | PptxSourceModelShapeTransformEdit
+    | PptxSourceModelShapeFillEdit
+    | PptxSourceModelShapeOutlineEdit,
 ): string {
   return [
     edit.handle.partPath,

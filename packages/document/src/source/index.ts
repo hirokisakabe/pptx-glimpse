@@ -25,6 +25,8 @@ export {
   replaceImageBytes,
   replaceParagraphPlainText,
   replaceTextRunPlainText,
+  setShapeFill,
+  setShapeOutline,
   setTextRunProperties,
   updateShapeTransform,
 } from "./editing.js";
@@ -49,6 +51,8 @@ export type {
 } from "./package-graph.js";
 export type {
   ConnectorPresetGeometry,
+  EditableShapeFill,
+  EditableShapeOutline,
   EditableTextRunProperties,
   EditableTextRunProperty,
   PptxSourceModel,
@@ -61,6 +65,8 @@ export type {
   PptxSourceModelEdit,
   PptxSourceModelParagraphTextEdit,
   PptxSourceModelReplaceImageEdit,
+  PptxSourceModelShapeFillEdit,
+  PptxSourceModelShapeOutlineEdit,
   PptxSourceModelShapeTransformEdit,
   PptxSourceModelTextRunEdit,
   PptxSourceModelTextRunPropertiesEdit,

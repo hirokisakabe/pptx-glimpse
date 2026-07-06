@@ -66,6 +66,8 @@ export type PptxSourceModelEdit =
   | PptxSourceModelTextRunPropertiesEdit
   | PptxSourceModelParagraphTextEdit
   | PptxSourceModelShapeTransformEdit
+  | PptxSourceModelShapeFillEdit
+  | PptxSourceModelShapeOutlineEdit
   | PptxSourceModelAddTextBoxEdit
   | PptxSourceModelAddConnectorEdit
   | PptxSourceModelDeleteShapeEdit
@@ -117,6 +119,27 @@ export interface PptxSourceModelShapeTransformEdit {
   readonly offsetY: Emu;
   readonly width: Emu;
   readonly height: Emu;
+}
+
+export type EditableShapeFill =
+  | { readonly kind: "none" }
+  | { readonly kind: "solid"; readonly color: { readonly kind: "srgb"; readonly hex: string } };
+
+export interface EditableShapeOutline {
+  readonly width?: Emu;
+  readonly fill?: EditableShapeFill;
+}
+
+export interface PptxSourceModelShapeFillEdit {
+  readonly kind: "updateShapeFill";
+  readonly handle: SourceHandle;
+  readonly fill: EditableShapeFill;
+}
+
+export interface PptxSourceModelShapeOutlineEdit {
+  readonly kind: "updateShapeOutline";
+  readonly handle: SourceHandle;
+  readonly outline: EditableShapeOutline;
 }
 
 export interface PptxSourceModelAddTextBoxEdit {
