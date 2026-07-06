@@ -18,6 +18,7 @@ import {
   replaceImageBytes,
   type SourceHandle,
   type SourceImage,
+  type SourceParagraph,
   type SourceShape,
   type SourceShapeNode,
   type SourceTextRun,
@@ -43,6 +44,7 @@ const TRANSFORM_EDIT = {
   height: asEmu(1463040),
 } as const;
 const FORMATTING_EDITED_VALUE = "Editable formatting target";
+const PARAGRAPH_EDITED_VALUE = "Paragraph properties target";
 const BLUE_PNG = new Uint8Array(
   Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGNkYPjPAANMcBZeDgAx0wEH1s7nlgAAAABJRU5ErkJggg==",
@@ -127,6 +129,28 @@ const LO_EDITOR_VALIDITY_CASES = [
 
       if (!clearResult.ok) throw new Error(clearResult.message);
       return writePptx(clearResult.document);
+    },
+  },
+  {
+    name: "paragraph properties",
+    sourceFixture: "editor-validity-paragraph-source.pptx",
+    expectedFixture: "editor-validity-paragraph-expected.pptx",
+    createEditedPptx: (input: Uint8Array) => {
+      const source = readPptx(input);
+      const session = createEditorSession(source);
+      const paragraph = findParagraph(source, PARAGRAPH_EDITED_VALUE);
+      const setResult = session.apply({
+        kind: "setParagraphProperties",
+        handle: requireHandle(paragraph.handle),
+        properties: {
+          align: "right",
+          level: 1,
+          bullet: { type: "char", char: "\u2022" },
+        },
+      });
+
+      if (!setResult.ok) throw new Error(setResult.message);
+      return writePptx(setResult.document);
     },
   },
   {
@@ -385,6 +409,18 @@ function findTextRun(source: ReturnType<typeof readPptx>, text: string): SourceT
     }
   }
   throw new Error(`Text run not found: ${text}`);
+}
+
+function findParagraph(source: ReturnType<typeof readPptx>, text: string): SourceParagraph {
+  for (const slide of source.slides) {
+    for (const shape of flattenShapes(slide.shapes)) {
+      const paragraph = shape.textBody?.paragraphs.find(
+        (candidate) => candidate.runs.map((run) => run.text).join("") === text,
+      );
+      if (paragraph !== undefined) return paragraph;
+    }
+  }
+  throw new Error(`Paragraph not found: ${text}`);
 }
 
 function findShapeByName(shapes: readonly SourceShapeNode[], name: string): SourceShape {

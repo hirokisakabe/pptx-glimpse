@@ -24,10 +24,12 @@ export {
 export type { AddEmptySlideFromLayoutInput } from "./slide-topology.js";
 export { addEmptySlideFromLayout, deleteSlide, duplicateSlide } from "./slide-topology.js";
 export {
+  clearParagraphProperties,
   clearTextRunProperties,
   findParagraphBySourceHandle,
   findTextRunBySourceHandle,
   replaceParagraphPlainText,
   replaceTextRunPlainText,
+  setParagraphProperties,
   setTextRunProperties,
 } from "./text-editing.js";

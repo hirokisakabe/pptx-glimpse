@@ -19,6 +19,7 @@ import {
   addConnector,
   addEmptySlideFromLayout,
   addTextBox,
+  clearParagraphProperties,
   clearTextRunProperties,
   deleteShape,
   deleteSlide,
@@ -29,6 +30,7 @@ import {
   replaceImageBytes,
   replaceParagraphPlainText,
   replaceTextRunPlainText,
+  setParagraphProperties,
   setTextRunProperties,
   type SourceConnector,
   type SourceShape,
@@ -1595,6 +1597,115 @@ describe("writePptx - text run property edits", () => {
     );
 
     expect(() => writePptx(edited)).toThrow(/conflicting text run properties and paragraph edits/);
+  });
+});
+
+describe("writePptx - paragraph property edits", () => {
+  it("Sets paragraph alignment, bullet, and level and persists them after write/read", () => {
+    const source = readPptx(buildTextEditFixture());
+    const paragraph = firstParagraph(source);
+
+    const edited = setParagraphProperties(source, paragraph.handle!, {
+      align: "right",
+      level: 2,
+      bullet: { type: "char", char: "\u2022" },
+    });
+    const output = writePptx(edited);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+    const reread = readPptx(output);
+
+    expect(firstParagraph(edited).properties).toMatchObject({
+      align: "right",
+      level: 2,
+      bullet: { type: "char", char: "\u2022" },
+    });
+    expect(firstParagraph(reread).properties).toMatchObject({
+      align: "right",
+      level: 2,
+      bullet: { type: "char", char: "\u2022" },
+    });
+    expect(slideXml).toContain('<a:pPr algn="r" lvl="2">');
+    expect(slideXml).toContain('<a:buChar char="\u2022"');
+  });
+
+  it("Writes explicit buNone when removing bullets and supports auto-number bullets", () => {
+    const source = readPptx(
+      buildTextEditFixtureFromSlide(
+        `<p:sp><p:nvSpPr><p:cNvPr id="72" name="Paragraph props"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+          `<p:txBody><a:bodyPr/><a:lstStyle/>` +
+          `<a:p><a:pPr><a:buChar char="&#x2022;"/></a:pPr><a:r><a:t>Bullet</a:t></a:r></a:p>` +
+          `<a:p><a:r><a:t>Numbered</a:t></a:r></a:p>` +
+          `</p:txBody></p:sp>`,
+      ),
+    );
+
+    const first = firstParagraph(source);
+    const second = firstShape(source).textBody!.paragraphs[1];
+    const edited = setParagraphProperties(
+      setParagraphProperties(source, first.handle!, { bullet: { type: "none" } }),
+      second.handle!,
+      { level: 1, bullet: { type: "autoNum", scheme: "alphaLcParenR", startAt: 3 } },
+    );
+    const output = writePptx(edited);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+    const reread = readPptx(output);
+
+    expect(firstShape(reread).textBody!.paragraphs[0].properties).toMatchObject({
+      bullet: { type: "none" },
+    });
+    expect(firstShape(reread).textBody!.paragraphs[1].properties).toMatchObject({
+      level: 1,
+      bullet: { type: "autoNum", scheme: "alphaLcParenR", startAt: 3 },
+    });
+    expect(slideXml).toContain("<a:buNone");
+    expect(slideXml).toContain('<a:buAutoNum type="alphaLcParenR" startAt="3"');
+  });
+
+  it("Clears only requested paragraph properties and preserves unedited paragraphs", () => {
+    const source = readPptx(
+      buildTextEditFixtureFromSlide(
+        `<p:sp><p:nvSpPr><p:cNvPr id="73" name="Preserve paragraph props"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+          `<p:txBody><a:bodyPr/><a:lstStyle/>` +
+          `<a:p><a:pPr algn="ctr" lvl="2"><a:lnSpc><a:spcPct val="90000"/></a:lnSpc><a:buChar char="&#x2022;"/></a:pPr><a:r><a:t>Edit</a:t></a:r></a:p>` +
+          `<a:p><a:pPr algn="r" lvl="1"><a:buChar char="&#x25E6;"/></a:pPr><a:r><a:t>Keep</a:t></a:r></a:p>` +
+          `</p:txBody></p:sp>`,
+      ),
+    );
+    const edited = clearParagraphProperties(source, firstParagraph(source).handle!, ["align"]);
+    const output = writePptx(edited);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+    const reread = readPptx(output);
+
+    expect(firstParagraph(reread).properties).toMatchObject({
+      level: 2,
+      bullet: { type: "char", char: "\u2022" },
+      lineSpacing: { type: "pct", value: 90000 },
+    });
+    expect(firstParagraph(reread).properties?.align).toBeUndefined();
+    expect(firstShape(reread).textBody!.paragraphs[1].properties).toMatchObject({
+      align: "right",
+      level: 1,
+      bullet: { type: "char", char: "\u25E6" },
+    });
+    expect(slideXml).toContain('<a:lnSpc><a:spcPct val="90000"');
+    expect(slideXml).toContain('<a:pPr algn="r" lvl="1"');
+  });
+
+  it("Rejects no-op paragraph property edits constructed directly in an edit journal", () => {
+    const source = readPptx(buildTextEditFixture());
+    const edited = {
+      ...source,
+      edits: [
+        {
+          kind: "updateParagraphProperties",
+          handle: firstParagraph(source).handle!,
+        },
+      ],
+    } satisfies typeof source;
+
+    expect(() => writePptx(edited)).toThrow(/must set or clear at least one property/);
   });
 });
 

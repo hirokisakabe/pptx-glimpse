@@ -1,6 +1,7 @@
 import { getChild, getChildArray, localName, parseXml, type XmlNode } from "../reader/xml.js";
 import { editDirtyPartPath } from "../source/edit-descriptors.js";
 import type {
+  EditableParagraphProperties,
   EditableTextRunProperties,
   PartPath,
   PptxSourceModel,
@@ -8,6 +9,7 @@ import type {
   PptxSourceModelAddTextBoxEdit,
   PptxSourceModelDeleteShapeEdit,
   PptxSourceModelEdit,
+  PptxSourceModelParagraphPropertiesEdit,
   PptxSourceModelParagraphTextEdit,
   PptxSourceModelShapeTransformEdit,
   PptxSourceModelTextRunEdit,
@@ -75,6 +77,9 @@ function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
       return;
     case "updateTextRunProperties":
       applyTextRunPropertiesEdit(root, edit);
+      return;
+    case "updateParagraphProperties":
+      applyParagraphPropertiesEdit(root, edit);
       return;
     case "replaceParagraphPlainText":
       applyParagraphTextEdit(root, edit);
@@ -172,6 +177,41 @@ function applyParagraphTextEdit(root: XmlNode, edit: PptxSourceModelParagraphTex
   }
 
   replaceParagraphRunsWithSingleTextRun(paragraph, edit.text);
+}
+
+function applyParagraphPropertiesEdit(
+  root: XmlNode,
+  edit: PptxSourceModelParagraphPropertiesEdit,
+): void {
+  assertParagraphPropertiesEdit(edit);
+  const locator = parseParagraphLocator(edit.handle.nodeId);
+  const slide = getChild(root, "sld");
+  const cSld = getChild(slide, "cSld");
+  const spTree = getChild(cSld, "spTree");
+  const shape = locateShape(spTree, locator);
+  const paragraphs = getChildArray(getChild(shape, "txBody"), "p");
+  const target = locateParagraphPropertiesForEdit(paragraphs, locator);
+
+  if (target === undefined) {
+    throw new Error(
+      `writePptx: paragraph properties handle '${edit.handle.nodeId}' no longer matches source XML`,
+    );
+  }
+
+  const set = edit.set ?? {};
+  const hasSet = hasParagraphPropertiesSetValues(set);
+  const existingParagraphProperties = target.properties;
+  if (existingParagraphProperties === undefined && !hasSet) return;
+
+  const pPr = existingParagraphProperties ?? ensureParagraphProperties(target.paragraph);
+  let cleared = false;
+  for (const property of edit.clear ?? []) {
+    cleared = clearParagraphProperty(pPr, property) || cleared;
+  }
+  if (set.align !== undefined) pPr["@_algn"] = paragraphAlignOoxmlValue(set.align);
+  if (set.level !== undefined) pPr["@_lvl"] = String(set.level);
+  if (set.bullet !== undefined) setParagraphBullet(pPr, set.bullet);
+  if (!hasSet && cleared && xmlNodeIsEmpty(pPr)) deleteParagraphProperties(target.paragraph, pPr);
 }
 
 function locateTextRun(
@@ -341,11 +381,139 @@ function hasTextRunPropertiesSetValues(properties: EditableTextRunProperties): b
   );
 }
 
+function hasParagraphPropertiesSetValues(properties: EditableParagraphProperties): boolean {
+  return (
+    properties.align !== undefined ||
+    properties.level !== undefined ||
+    properties.bullet !== undefined
+  );
+}
+
 function assertTextRunPropertiesEdit(edit: PptxSourceModelTextRunPropertiesEdit): void {
   const clear = edit.clear ?? [];
   if (!hasTextRunPropertiesSetValues(edit.set ?? {}) && clear.length === 0) {
     throw new Error("writePptx: text run properties edit must set or clear at least one property");
   }
+}
+
+function assertParagraphPropertiesEdit(edit: PptxSourceModelParagraphPropertiesEdit): void {
+  const clear = edit.clear ?? [];
+  if (!hasParagraphPropertiesSetValues(edit.set ?? {}) && clear.length === 0) {
+    throw new Error("writePptx: paragraph properties edit must set or clear at least one property");
+  }
+}
+
+interface ParagraphPropertiesTarget {
+  readonly paragraph: XmlNode;
+  readonly properties?: XmlNode;
+}
+
+function locateParagraphPropertiesForEdit(
+  paragraphs: readonly XmlNode[],
+  locator: ParagraphTextLocator,
+): ParagraphPropertiesTarget | undefined {
+  let logicalParagraphIndex = 0;
+  for (const paragraph of paragraphs) {
+    const logicalCount = getLogicalParagraphCount(paragraph);
+    if (
+      locator.paragraphIndex >= logicalParagraphIndex &&
+      locator.paragraphIndex < logicalParagraphIndex + logicalCount
+    ) {
+      if (logicalCount === 1) {
+        return { paragraph, properties: getChild(paragraph, "pPr") };
+      }
+      const relativeIndex = locator.paragraphIndex - logicalParagraphIndex;
+      return {
+        paragraph,
+        properties: getBulletParagraphProperties(paragraph)[relativeIndex],
+      };
+    }
+    logicalParagraphIndex += logicalCount;
+  }
+  return undefined;
+}
+
+function getBulletParagraphProperties(paragraph: XmlNode): readonly XmlNode[] {
+  return getChildArray(paragraph, "pPr").filter(
+    (properties) =>
+      getChild(properties, "buChar") !== undefined ||
+      getChild(properties, "buAutoNum") !== undefined,
+  );
+}
+
+function ensureParagraphProperties(paragraph: XmlNode): XmlNode {
+  const existing = getChild(paragraph, "pPr");
+  if (existing !== undefined) return existing;
+
+  const entries: [string, unknown][] = [];
+  let inserted = false;
+  for (const [key, value] of Object.entries(paragraph)) {
+    if (!inserted && !key.startsWith("@_")) {
+      entries.push(["a:pPr", {}]);
+      inserted = true;
+    }
+    entries.push([key, value]);
+  }
+  if (!inserted) entries.push(["a:pPr", {}]);
+  replaceNodeEntries(paragraph, entries);
+  return getChild(paragraph, "pPr") ?? {};
+}
+
+function deleteParagraphProperties(paragraph: XmlNode, pPr: XmlNode): void {
+  if (getChild(paragraph, "pPr") === pPr) deleteChild(paragraph, "pPr");
+}
+
+function clearParagraphProperty(
+  pPr: XmlNode,
+  property: NonNullable<PptxSourceModelParagraphPropertiesEdit["clear"]>[number],
+): boolean {
+  switch (property) {
+    case "align":
+      if (pPr["@_algn"] === undefined) return false;
+      delete pPr["@_algn"];
+      return true;
+    case "level":
+      if (pPr["@_lvl"] === undefined) return false;
+      delete pPr["@_lvl"];
+      return true;
+    case "bullet":
+      return deleteParagraphBullet(pPr);
+  }
+}
+
+function deleteParagraphBullet(pPr: XmlNode): boolean {
+  const deletedNone = deleteChild(pPr, "buNone");
+  const deletedChar = deleteChild(pPr, "buChar");
+  const deletedAutoNum = deleteChild(pPr, "buAutoNum");
+  return deletedNone || deletedChar || deletedAutoNum;
+}
+
+function setParagraphBullet(
+  pPr: XmlNode,
+  bullet: NonNullable<EditableParagraphProperties["bullet"]>,
+): void {
+  deleteParagraphBullet(pPr);
+  if (bullet.type === "none") {
+    replaceChild(pPr, "buNone", {});
+    return;
+  }
+  if (bullet.type === "char") {
+    replaceChild(pPr, "buChar", { "@_char": bullet.char });
+    return;
+  }
+  replaceChild(pPr, "buAutoNum", {
+    "@_type": bullet.scheme,
+    "@_startAt": String(bullet.startAt),
+  });
+}
+
+function paragraphAlignOoxmlValue(
+  align: NonNullable<EditableParagraphProperties["align"]>,
+): string {
+  if (align === "center") return "ctr";
+  if (align === "right") return "r";
+  if (align === "justify") return "just";
+  return "l";
 }
 
 function replaceParagraphRunsWithSingleTextRun(paragraph: XmlNode, text: string): void {

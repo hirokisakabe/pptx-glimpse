@@ -92,6 +92,18 @@ const EDIT_KIND_DESCRIPTORS: {
     insertedSlidePartPath: () => undefined,
     insertedShape: () => undefined,
   },
+  updateParagraphProperties: {
+    reservedPartPaths: () => [],
+    dirtyPartPath: (edit) => edit.handle.partPath,
+    targetsShape: (edit, shapeHandle) =>
+      edit.handle.partPath === shapeHandle.partPath &&
+      paragraphShapeId(edit.handle) === shapeHandle.nodeId,
+    invalidatingPartPaths: (edit) => [edit.handle.partPath],
+    reservedShapeId: () => undefined,
+    slideTopologyOperation: () => undefined,
+    insertedSlidePartPath: () => undefined,
+    insertedShape: () => undefined,
+  },
   replaceParagraphPlainText: {
     reservedPartPaths: () => [],
     dirtyPartPath: (edit) => edit.handle.partPath,
