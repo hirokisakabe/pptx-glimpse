@@ -1,3 +1,14 @@
+import { getAttr, getChild, getChildArray, parseXml } from "../reader/xml.js";
+import {
+  editDirtyPartPath,
+  editInsertedShape,
+  editInsertedSlidePartPath,
+  editInvalidatingPartPaths,
+  editReservedPartPaths,
+  editReservedShapeId,
+  editTargetsShape,
+  sourceHandlesEqual,
+} from "./edit-descriptors.js";
 import { asSourceNodeId } from "./handles.js";
 import type {
   ConnectorPresetGeometry,
@@ -18,14 +29,12 @@ import type {
   SourceHandle,
   SourceImage,
   SourceNodeId,
-  SourceOutline,
   SourceParagraph,
   SourceRunProperties,
   SourceShape,
   SourceShapeNode,
   SourceSlide,
   SourceTextRun,
-  SourceTransform,
 } from "./index.js";
 import { asRelationshipId } from "./index.js";
 import {
@@ -38,6 +47,7 @@ import {
   removePartRelationship,
 } from "./package-graph-mutations.js";
 import { resolveInternalRelationshipTarget } from "./package-paths.js";
+import { buildConnectorXml, buildTextBoxXml, parseShapeNodeXml } from "./shape-xml.js";
 
 type TransformableShapeNode = Exclude<SourceShapeNode, { readonly kind: "raw" }>;
 type MutableRunProperties = {
@@ -46,6 +56,8 @@ type MutableRunProperties = {
 type MutableEditableTextRunProperties = {
   -readonly [K in keyof EditableTextRunProperties]?: EditableTextRunProperties[K];
 };
+
+const textDecoder = new TextDecoder();
 
 const SLIDE_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.slide+xml";
 const NOTES_SLIDE_CONTENT_TYPE =
@@ -83,9 +95,6 @@ const CONNECTOR_PRESETS: ReadonlySet<ConnectorPresetGeometry> = new Set([
 ]);
 const ARROW_TYPES = new Set(["triangle", "stealth", "diamond", "oval", "arrow"]);
 const ARROW_SIZES = new Set(["sm", "med", "lg"]);
-const DEFAULT_CONNECTOR_OUTLINE: SourceOutline = {
-  fill: { kind: "solid", color: { kind: "srgb", hex: "000000" } },
-};
 
 export function findTextRunBySourceHandle(
   source: PptxSourceModel,
@@ -462,7 +471,16 @@ export function addTextBox(
   const shapeIdValue = String(shapeId);
   const name = input.name?.trim() || `TextBox ${shapeIdValue}`;
   const orderingSlot = nextOrderingSlot(slide.shapes);
-  const shape = createTextBoxShape(slide.partPath, shapeId, name, orderingSlot, input);
+  const xml = buildTextBoxXml({
+    shapeId: shapeIdValue,
+    name,
+    offsetX: input.offsetX,
+    offsetY: input.offsetY,
+    width: input.width,
+    height: input.height,
+    text: input.text,
+  });
+  const shape = parseShapeNodeXml(xml, slide.partPath, orderingSlot);
   const slides = source.slides.map((candidate, index) =>
     index === slideIndex
       ? {
@@ -481,12 +499,7 @@ export function addTextBox(
         kind: "addTextBox",
         slidePartPath: slide.partPath,
         shapeId: shapeIdValue,
-        name,
-        offsetX: input.offsetX,
-        offsetY: input.offsetY,
-        width: input.width,
-        height: input.height,
-        text: input.text,
+        xml,
       },
     ],
   };
@@ -512,15 +525,23 @@ export function addConnector(
   const shapeIdValue = String(shapeId);
   const name = input.name?.trim() || `Connector ${shapeIdValue}`;
   const orderingSlot = nextOrderingSlot(slide.shapes);
-  const connector = createConnectorShape(
-    slide.partPath,
-    shapeId,
+  const startShapeId = String(startShape.nodeId);
+  const endShapeId = String(endShape.nodeId);
+  const xml = buildConnectorXml({
+    shapeId: shapeIdValue,
     name,
-    orderingSlot,
-    startShape,
-    endShape,
-    input,
-  );
+    preset: input.preset,
+    offsetX: input.offsetX,
+    offsetY: input.offsetY,
+    width: input.width,
+    height: input.height,
+    startShapeId,
+    startConnectionSiteIndex: input.start.connectionSiteIndex,
+    endShapeId,
+    endConnectionSiteIndex: input.end.connectionSiteIndex,
+    ...(input.outline !== undefined ? { outline: input.outline } : {}),
+  });
+  const connector = parseShapeNodeXml(xml, slide.partPath, orderingSlot);
   const slides = source.slides.map((candidate, index) =>
     index === slideIndex
       ? {
@@ -539,17 +560,9 @@ export function addConnector(
         kind: "addConnector",
         slidePartPath: slide.partPath,
         shapeId: shapeIdValue,
-        name,
-        preset: input.preset,
-        offsetX: input.offsetX,
-        offsetY: input.offsetY,
-        width: input.width,
-        height: input.height,
-        startShapeId: String(startShape.nodeId),
-        startConnectionSiteIndex: input.start.connectionSiteIndex,
-        endShapeId: String(endShape.nodeId),
-        endConnectionSiteIndex: input.end.connectionSiteIndex,
-        ...(input.outline !== undefined ? { outline: input.outline } : {}),
+        startShapeId,
+        endShapeId,
+        xml,
       } satisfies PptxSourceModelAddConnectorEdit,
     ],
   };
@@ -573,11 +586,12 @@ export function addEmptySlideFromLayout(
   );
   const newSlidePartPath = nextNumberedPartPath(
     source.packageGraph,
-    editReservedPartPaths(source),
+    source.edits?.flatMap((edit) => editReservedPartPaths(edit)) ?? [],
     "ppt/slides/slide",
     ".xml",
   );
   const newPresentationRelationshipId = nextRelationshipId(presentationRels.relationships);
+  const newSlideNumericId = nextSlideNumericId(source, "addEmptySlideFromLayout");
   const newSlide: SourceSlide = {
     partPath: newSlidePartPath,
     layoutPartPath: layout.partPath,
@@ -620,6 +634,7 @@ export function addEmptySlideFromLayout(
         layoutPartPath: layout.partPath,
         newSlidePartPath,
         newRelationshipId: newPresentationRelationshipId,
+        newSlideNumericId,
       },
     ],
   };
@@ -668,12 +683,14 @@ export function deleteShape(source: PptxSourceModel, handle: SourceHandle): Pptx
   }
 
   const retainedEdits = (source.edits ?? []).filter((edit) => !editTargetsShape(edit, handle));
-  const deletedInsertedShape = (source.edits ?? []).some(
-    (edit) =>
-      edit.kind === "addTextBox" &&
-      edit.slidePartPath === handle.partPath &&
-      edit.shapeId === String(handle.nodeId),
-  );
+  const deletedInsertedShape = (source.edits ?? []).some((edit) => {
+    const inserted = editInsertedShape(edit);
+    return (
+      inserted !== undefined &&
+      inserted.slidePartPath === handle.partPath &&
+      inserted.shapeId === String(handle.nodeId)
+    );
+  });
 
   return {
     ...source,
@@ -763,11 +780,12 @@ export function duplicateSlide(
   );
   const newSlidePartPath = nextNumberedPartPath(
     source.packageGraph,
-    editReservedPartPaths(source),
+    source.edits?.flatMap((edit) => editReservedPartPaths(edit)) ?? [],
     "ppt/slides/slide",
     ".xml",
   );
   const newPresentationRelationshipId = nextRelationshipId(presentationRels.relationships);
+  const newSlideNumericId = nextSlideNumericId(source, "duplicateSlide");
   const notesCopy = createNotesSlideCopy(
     source,
     sourceSlide,
@@ -832,6 +850,7 @@ export function duplicateSlide(
         sourceRelationshipId: sourcePresentationRelationship.id,
         newSlidePartPath,
         newRelationshipId: newPresentationRelationshipId,
+        newSlideNumericId,
       },
     ],
   };
@@ -876,9 +895,7 @@ export function deleteSlide(source: PptxSourceModel, slideHandle: SourceHandle):
     (edit) => !editIsInvalidatedByDeletedParts(edit, removedPartPathSet),
   );
   const deletedInsertedSlide = (source.edits ?? []).some(
-    (edit) =>
-      (edit.kind === "addEmptySlideFromLayout" || edit.kind === "duplicateSlide") &&
-      edit.newSlidePartPath === slide.partPath,
+    (edit) => editInsertedSlidePartPath(edit) === slide.partPath,
   );
   const packageGraph = removePartRelationship(
     removePackageParts(source.packageGraph, removedPartPaths),
@@ -1223,96 +1240,6 @@ function assertPositiveFiniteEmu(
   }
 }
 
-function createTextBoxShape(
-  partPath: PartPath,
-  shapeId: SourceNodeId,
-  name: string,
-  orderingSlot: number,
-  input: AddTextBoxInput,
-): SourceShape {
-  const transform: SourceTransform = {
-    offsetX: input.offsetX,
-    offsetY: input.offsetY,
-    width: input.width,
-    height: input.height,
-  };
-  return {
-    kind: "shape",
-    nodeId: shapeId,
-    name,
-    transform,
-    geometry: { preset: "rect" },
-    textBody: {
-      handle: { partPath, nodeId: asSourceNodeId(`text:shape:${shapeId}`), orderingSlot },
-      paragraphs: [
-        {
-          handle: {
-            partPath,
-            nodeId: asSourceNodeId(`text:shape:${shapeId}:p:0`),
-            orderingSlot: 0,
-          },
-          runs: [
-            {
-              kind: "textRun",
-              text: input.text,
-              handle: {
-                partPath,
-                nodeId: asSourceNodeId(`text:shape:${shapeId}:p:0:r:0`),
-                orderingSlot: 0,
-              },
-            },
-          ],
-        },
-      ],
-    },
-    handle: { partPath, nodeId: shapeId, orderingSlot },
-  };
-}
-
-function createConnectorShape(
-  partPath: PartPath,
-  shapeId: SourceNodeId,
-  name: string,
-  orderingSlot: number,
-  startShape: SourceShape & { readonly nodeId: SourceNodeId },
-  endShape: SourceShape & { readonly nodeId: SourceNodeId },
-  input: AddConnectorInput,
-): SourceConnector {
-  const transform: SourceTransform = {
-    offsetX: input.offsetX,
-    offsetY: input.offsetY,
-    width: input.width,
-    height: input.height,
-  };
-  return {
-    kind: "connector",
-    nodeId: shapeId,
-    name,
-    connection: {
-      start: {
-        shapeId: startShape.nodeId,
-        connectionSiteIndex: input.start.connectionSiteIndex,
-      },
-      end: {
-        shapeId: endShape.nodeId,
-        connectionSiteIndex: input.end.connectionSiteIndex,
-      },
-    },
-    transform,
-    geometry: { preset: input.preset },
-    outline: createConnectorOutline(input.outline),
-    handle: { partPath, nodeId: shapeId, orderingSlot },
-  };
-}
-
-function createConnectorOutline(input: AddConnectorOutlineInput | undefined): SourceOutline {
-  return {
-    ...DEFAULT_CONNECTOR_OUTLINE,
-    ...(input?.headEnd !== undefined ? { headEnd: input.headEnd } : {}),
-    ...(input?.tailEnd !== undefined ? { tailEnd: input.tailEnd } : {}),
-  };
-}
-
 function requireConnectorTargetShape(
   slide: SourceSlide,
   handle: SourceHandle,
@@ -1358,15 +1285,7 @@ function collectNumericShapeEditIds(
   used: Set<number>,
 ): void {
   for (const edit of edits) {
-    const id =
-      edit.kind === "addTextBox" && edit.slidePartPath === slidePartPath
-        ? edit.shapeId
-        : edit.kind === "addConnector" && edit.slidePartPath === slidePartPath
-          ? edit.shapeId
-          : edit.kind === "deleteShape" && edit.handle.partPath === slidePartPath
-            ? edit.handle.nodeId
-            : undefined;
-    const numericId = Number(id);
+    const numericId = Number(editReservedShapeId(edit, slidePartPath));
     if (Number.isInteger(numericId) && numericId > 0) used.add(numericId);
   }
 }
@@ -1431,16 +1350,6 @@ function findConnectorReferencingShape(
   return undefined;
 }
 
-function sourceHandlesEqual(left: SourceHandle | undefined, right: SourceHandle): boolean {
-  if (left === undefined) return false;
-  return (
-    left.partPath === right.partPath &&
-    left.nodeId === right.nodeId &&
-    left.relationshipId === right.relationshipId &&
-    left.orderingSlot === right.orderingSlot
-  );
-}
-
 interface NotesSlideCopy {
   readonly slideRelationshipId: RelationshipId;
   readonly newPartPath: PartPath;
@@ -1468,7 +1377,7 @@ function createNotesSlideCopy(
     NOTES_SLIDE_CONTENT_TYPE;
   const newPartPath = nextNumberedPartPath(
     source.packageGraph,
-    editReservedPartPaths(source),
+    source.edits?.flatMap((edit) => editReservedPartPaths(edit)) ?? [],
     "ppt/notesSlides/notesSlide",
     ".xml",
   );
@@ -1533,7 +1442,7 @@ function requireSlideRelationship(
 function requireRawBinaryPart(
   source: PptxSourceModel,
   partPath: PartPath,
-  operationName: "duplicateSlide",
+  operationName: "addEmptySlideFromLayout" | "duplicateSlide",
 ): Extract<RawPackagePart, { readonly kind: "binary" }> {
   const rawPart = source.packageGraph.rawParts?.find((part) => part.partPath === partPath);
   if (rawPart === undefined) {
@@ -1547,6 +1456,37 @@ function requireRawBinaryPart(
   return rawPart;
 }
 
+/**
+ * Assigns the numeric `p:sldId@id` for a new slide at edit time by reading the
+ * preserved presentation XML and the ids already claimed by pending slide edits.
+ * Ids freed by pending deletes are intentionally never reused.
+ */
+function nextSlideNumericId(
+  source: PptxSourceModel,
+  operationName: "addEmptySlideFromLayout" | "duplicateSlide",
+): number {
+  const rawPart = requireRawBinaryPart(source, source.presentation.partPath, operationName);
+  const root = parseXml(textDecoder.decode(rawPart.bytes));
+  const presentation = getChild(root, "presentation");
+  if (presentation === undefined) {
+    throw new Error(`${operationName}: presentation part does not contain p:presentation root`);
+  }
+  const used = new Set<number>();
+  for (const item of getChildArray(getChild(presentation, "sldIdLst"), "sldId")) {
+    const id = Number(getAttr(item, "id"));
+    if (Number.isFinite(id)) used.add(id);
+  }
+  for (const edit of source.edits ?? []) {
+    if (edit.kind === "addEmptySlideFromLayout" || edit.kind === "duplicateSlide") {
+      used.add(edit.newSlideNumericId);
+    }
+  }
+  const max = Math.max(255, ...used);
+  for (let candidate = max + 1; ; candidate += 1) {
+    if (!used.has(candidate)) return candidate;
+  }
+}
+
 function presentationSlideRelationship(
   source: PptxSourceModel,
   relationshipId: RelationshipId,
@@ -1557,32 +1497,6 @@ function presentationSlideRelationship(
     type: SLIDE_REL_TYPE,
     target: relativeTarget(source.presentation.partPath, slidePartPath),
   };
-}
-
-/** Part paths that the edit journal still references and must not be reused. */
-function editReservedPartPaths(source: PptxSourceModel): readonly PartPath[] {
-  return source.edits?.flatMap((edit) => topologyEditPartPaths(edit)) ?? [];
-}
-
-function topologyEditPartPaths(edit: PptxSourceModelEdit): readonly PartPath[] {
-  switch (edit.kind) {
-    case "addEmptySlideFromLayout":
-      return [edit.layoutPartPath, edit.newSlidePartPath];
-    case "duplicateSlide":
-      return [edit.sourceSlidePartPath, edit.newSlidePartPath];
-    case "deleteSlide":
-      return [edit.slidePartPath];
-    case "addTextBox":
-    case "addConnector":
-      return [edit.slidePartPath];
-    case "replaceTextRunPlainText":
-    case "updateTextRunProperties":
-    case "replaceParagraphPlainText":
-    case "updateShapeTransform":
-    case "deleteShape":
-    case "replaceImage":
-      return [];
-  }
 }
 
 function relativeTarget(sourcePartPath: PartPath, targetPartPath: PartPath): string {
@@ -1647,82 +1561,12 @@ function insertAtReadonly<T>(items: readonly T[], index: number, item: T): reado
 }
 
 function hasDirtyEditForPart(edits: readonly PptxSourceModelEdit[], partPath: PartPath): boolean {
-  return edits.some((edit) => {
-    switch (edit.kind) {
-      case "replaceTextRunPlainText":
-      case "updateTextRunProperties":
-      case "replaceParagraphPlainText":
-      case "updateShapeTransform":
-      case "deleteShape":
-        return edit.handle.partPath === partPath;
-      case "replaceImage":
-        return false;
-      case "addTextBox":
-      case "addConnector":
-        return edit.slidePartPath === partPath;
-      case "addEmptySlideFromLayout":
-      case "duplicateSlide":
-      case "deleteSlide":
-        return false;
-    }
-  });
-}
-
-function editTargetsShape(edit: PptxSourceModelEdit, handle: SourceHandle): boolean {
-  switch (edit.kind) {
-    case "replaceTextRunPlainText":
-    case "updateTextRunProperties":
-      return (
-        edit.handle.partPath === handle.partPath && textRunShapeId(edit.handle) === handle.nodeId
-      );
-    case "replaceParagraphPlainText":
-      return (
-        edit.handle.partPath === handle.partPath && paragraphShapeId(edit.handle) === handle.nodeId
-      );
-    case "updateShapeTransform":
-    case "deleteShape":
-      return sourceHandlesEqual(edit.handle, handle);
-    case "replaceImage":
-      return sourceHandlesEqual(edit.handle, handle);
-    case "addTextBox":
-    case "addConnector":
-      return edit.slidePartPath === handle.partPath && edit.shapeId === String(handle.nodeId);
-    case "addEmptySlideFromLayout":
-    case "duplicateSlide":
-    case "deleteSlide":
-      return false;
-  }
-}
-
-function textRunShapeId(handle: SourceHandle): string | undefined {
-  return /^text:shape:([^:]+):p:\d+:r:\d+$/.exec(String(handle.nodeId ?? ""))?.[1];
-}
-
-function paragraphShapeId(handle: SourceHandle): string | undefined {
-  return /^text:shape:([^:]+):p:\d+$/.exec(String(handle.nodeId ?? ""))?.[1];
+  return edits.some((edit) => editDirtyPartPath(edit) === partPath);
 }
 
 function editIsInvalidatedByDeletedParts(
   edit: PptxSourceModelEdit,
   partPaths: ReadonlySet<string>,
 ): boolean {
-  switch (edit.kind) {
-    case "replaceTextRunPlainText":
-    case "updateTextRunProperties":
-    case "replaceParagraphPlainText":
-    case "updateShapeTransform":
-    case "replaceImage":
-      return partPaths.has(edit.handle.partPath);
-    case "addTextBox":
-    case "addConnector":
-      return partPaths.has(edit.slidePartPath);
-    case "addEmptySlideFromLayout":
-      return partPaths.has(edit.newSlidePartPath);
-    case "deleteShape":
-      return partPaths.has(edit.handle.partPath);
-    case "duplicateSlide":
-      return partPaths.has(edit.newSlidePartPath);
-    case "deleteSlide":
-      return partPaths.has(edit.slidePartPath);
-  }
+  return editInvalidatingPartPaths(edit).some((partPath) => partPaths.has(partPath));
 }

@@ -15,6 +15,14 @@
  * are not mixed into the typed operation API. They are preserved as raw sidecars or raw
  * package parts for structural round-tripping.
  *
+ * New-content edits (new slides, text boxes, connectors) finalize their XML and id
+ * numbering at edit time and record them on the edit; the writer only applies
+ * insertion positions. To keep the edited in-memory model and the written XML derived
+ * from that single finalized fragment, `source/shape-xml.ts` and the edit-time slide
+ * id numbering intentionally reference the package-local reader. This is the one
+ * sanctioned source -> reader dependency; it stays inside `@pptx-glimpse/document`
+ * and does not change the package's external dependency direction.
+ *
  * PptxSourceModel must not include renderer-specific fallbacks, environment-specific
  * font substitution, SVG/PNG output, pixel-output values, or pom authoring primitives.
  * Slide/layout/master/theme cascades, relationship resolution, theme color resolution,
@@ -32,7 +40,6 @@ import type {
   SourceSlideMaster,
   SourceTheme,
 } from "./presentation.js";
-import type { SourceArrowEndpoint } from "./shapes.js";
 import type { Emu, Pt } from "./units.js";
 
 export interface PptxSourceModel {
@@ -111,12 +118,8 @@ export interface PptxSourceModelAddTextBoxEdit {
   readonly kind: "addTextBox";
   readonly slidePartPath: PartPath;
   readonly shapeId: string;
-  readonly name: string;
-  readonly offsetX: Emu;
-  readonly offsetY: Emu;
-  readonly width: Emu;
-  readonly height: Emu;
-  readonly text: string;
+  /** Serialized `p:sp` fragment finalized at edit time. The writer only splices it. */
+  readonly xml: string;
 }
 
 export type ConnectorPresetGeometry = "straightConnector1" | "bentConnector3" | "curvedConnector3";
@@ -125,20 +128,10 @@ export interface PptxSourceModelAddConnectorEdit {
   readonly kind: "addConnector";
   readonly slidePartPath: PartPath;
   readonly shapeId: string;
-  readonly name: string;
-  readonly preset: ConnectorPresetGeometry;
-  readonly offsetX: Emu;
-  readonly offsetY: Emu;
-  readonly width: Emu;
-  readonly height: Emu;
   readonly startShapeId: string;
-  readonly startConnectionSiteIndex: number;
   readonly endShapeId: string;
-  readonly endConnectionSiteIndex: number;
-  readonly outline?: {
-    readonly headEnd?: SourceArrowEndpoint;
-    readonly tailEnd?: SourceArrowEndpoint;
-  };
+  /** Serialized `p:cxnSp` fragment finalized at edit time. The writer only splices it. */
+  readonly xml: string;
 }
 
 export interface PptxSourceModelDeleteShapeEdit {
@@ -159,6 +152,8 @@ export interface PptxSourceModelAddEmptySlideFromLayoutEdit {
   readonly layoutPartPath: PartPath;
   readonly newSlidePartPath: PartPath;
   readonly newRelationshipId: RelationshipId;
+  /** Numeric `p:sldId@id` assigned at edit time. The writer only applies it. */
+  readonly newSlideNumericId: number;
 }
 
 export interface PptxSourceModelDuplicateSlideEdit {
@@ -167,6 +162,8 @@ export interface PptxSourceModelDuplicateSlideEdit {
   readonly sourceRelationshipId: RelationshipId;
   readonly newSlidePartPath: PartPath;
   readonly newRelationshipId: RelationshipId;
+  /** Numeric `p:sldId@id` assigned at edit time. The writer only applies it. */
+  readonly newSlideNumericId: number;
 }
 
 export interface PptxSourceModelDeleteSlideEdit {

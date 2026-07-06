@@ -18,7 +18,7 @@ export default defineConfig({
     include: [
       "packages/*/src/**/*.test.ts",
       "e2e/**/*.test.ts",
-      "vrt/libreoffice/editor-validity.test.ts",
+      "vrt/editor-validity/editor-validity.test.ts",
     ],
     testTimeout: 30000,
     coverage: {

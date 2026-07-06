@@ -5,8 +5,12 @@ import { describe, expect, it } from "vitest";
 
 import { type ConvertOptions, convertPptxToPng } from "../packages/core/src/converter.js";
 import { type PptxSourceModel, readPptx, writePptx } from "../packages/document/src/index.js";
-import { compareImageBuffers, type CompareOptions, type CompareResult } from "./compare-utils.js";
-import { getVrtRenderOptions } from "./snapshot/render-options.js";
+import {
+  compareImageBuffers,
+  type CompareOptions,
+  type CompareResult,
+} from "../vrt/compare-utils.js";
+import { getVrtRenderOptions } from "../vrt/snapshot/render-options.js";
 
 type MaybePromise<T> = T | Promise<T>;
 
