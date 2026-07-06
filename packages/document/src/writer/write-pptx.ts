@@ -16,6 +16,8 @@
  * bookkeeping while preserving unrelated raw package material. Per-edit-kind traits
  * (dirty part, topology operation, and so on) come from the descriptor table in
  * `../source/edit-descriptors.ts`; this file keeps only the exhaustive apply switch.
+ * Small package-bookkeeping XML parts are still serialized with handwritten strings so
+ * their emitted attribute/order shape stays deterministic across builder changes.
  * New-content edits (new slides, text boxes, connectors) finalize their XML and id
  * numbering at edit time in `source/editing.ts` / `source/shape-xml.ts`; this writer
  * never generates new-content XML and only applies insertion positions (`p:spTree`

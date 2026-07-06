@@ -66,6 +66,16 @@ describe("editing text operations", () => {
     ]);
   });
 
+  it("returns the original source when replacing a text run with the same text", () => {
+    const source = buildSourceModel();
+    const runHandle = requireHandle(firstRun(source).handle);
+
+    const edited = replaceTextRunPlainText(source, runHandle, firstRun(source).text);
+
+    expect(edited).toBe(source);
+    expect(source.edits).toBeUndefined();
+  });
+
   it("sets and clears text run properties in source and edit records", () => {
     const source = buildSourceModel();
     const runHandle = requireHandle(firstRun(source).handle);
@@ -124,6 +134,25 @@ describe("editing text operations", () => {
     const runHandle = requireHandle(firstRun(source).handle);
 
     const edited = clearTextRunProperties(source, runHandle, ["underline"]);
+
+    expect(edited).toBe(source);
+    expect(source.edits).toBeUndefined();
+  });
+
+  it("returns the original source for equivalent text properties with different key order", () => {
+    const source = structuredClone(buildSourceModel());
+    const runHandle = requireHandle(firstRun(source).handle);
+    (firstRun(source) as { properties?: unknown }).properties = {
+      color: { hex: "00aa44", kind: "srgb" },
+      bold: true,
+      italic: true,
+      fontSize: asPt(24),
+      typeface: "Calibri",
+    };
+
+    const edited = setTextRunProperties(source, runHandle, {
+      color: { kind: "srgb", hex: "00aa44" },
+    });
 
     expect(edited).toBe(source);
     expect(source.edits).toBeUndefined();
@@ -218,6 +247,23 @@ describe("editing shape operations", () => {
     expect(edited.edits).toEqual([
       { kind: "updateShapeTransform", handle: shapeHandle, ...transform },
     ]);
+  });
+
+  it("returns the original source when updating a shape transform to the same values", () => {
+    const source = buildSourceModel();
+    const shape = shapeByName(source, "Title");
+    const shapeHandle = requireHandle(shape.handle);
+    const transform = {
+      offsetX: shape.transform!.offsetX,
+      offsetY: shape.transform!.offsetY,
+      width: shape.transform!.width,
+      height: shape.transform!.height,
+    };
+
+    const edited = updateShapeTransform(source, shapeHandle, transform);
+
+    expect(edited).toBe(source);
+    expect(source.edits).toBeUndefined();
   });
 
   it("adds a text box with a collision-free id and finalized XML", () => {

@@ -1,3 +1,14 @@
+/**
+ * Editing helpers for PptxSourceModel.
+ *
+ * Supported edits update the typed source model immediately and append a compact edit
+ * record that lets the writer patch raw package bytes later. That double
+ * representation is deliberate: the typed model is convenient for callers, while raw
+ * bytes preserve unsupported OOXML. Operations that would need to merge pending dirty
+ * slide edits back into a raw clone, such as duplicating a dirty slide, fail fast until
+ * a future writer slice can reconcile both representations.
+ */
+
 import { getAttr, getChild, getChildArray, parseXml } from "../reader/xml.js";
 import {
   editDirtyPartPath,
@@ -151,13 +162,16 @@ export function replaceTextRunPlainText(
   handle: SourceHandle,
   text: string,
 ): PptxSourceModel {
-  const result = mapMatchingTextRun(source, handle, (run) => ({ ...run, text }));
+  const result = mapMatchingTextRun(source, handle, (run) =>
+    run.text === text ? run : { ...run, text },
+  );
 
   if (!result.matched) {
     throw new Error(
       "replaceTextRunPlainText: text run handle was not found in PptxSourceModel source",
     );
   }
+  if (!result.changed) return source;
 
   return {
     ...source,
@@ -431,19 +445,23 @@ export function updateShapeTransform(
     throw new Error("updateShapeTransform: shape transform edit requires a node id");
   }
 
-  let updated = false;
+  let matched = false;
+  let changed = false;
 
-  const slides = source.slides.map((slide) => ({
-    ...slide,
-    shapes: slide.shapes.map((shape) => {
+  const slides = source.slides.map((slide) => {
+    let slideChanged = false;
+    const shapes = slide.shapes.map((shape) => {
       if (!sourceHandlesEqual(shape.handle, handle)) return shape;
+      matched = true;
       if (hasAlternateContentSidecar(shape)) {
         throw new Error("updateShapeTransform: shapes inside AlternateContent are not supported");
       }
       if (!hasEditableTransform(shape)) {
         throw new Error("updateShapeTransform: shape handle does not reference a shape with xfrm");
       }
-      updated = true;
+      if (shapeTransformPositionAndSizeEqual(shape.transform, transform)) return shape;
+      changed = true;
+      slideChanged = true;
       return {
         ...shape,
         transform: {
@@ -454,15 +472,17 @@ export function updateShapeTransform(
           height: transform.height,
         },
       };
-    }),
-  }));
+    });
+    return slideChanged ? { ...slide, shapes } : slide;
+  });
 
-  if (!updated) {
+  if (!matched) {
     if (source.slides.some((slide) => hasNestedShapeNodeWithHandle(slide.shapes, handle))) {
       throw new Error("updateShapeTransform: nested group shape editing is not supported");
     }
     throw new Error("updateShapeTransform: shape handle was not found in PptxSourceModel source");
   }
+  if (!changed) return source;
 
   return {
     ...source,
@@ -917,6 +937,10 @@ export function deleteSlide(source: PptxSourceModel, slideHandle: SourceHandle):
       const target = resolveInternalRelationshipTarget(slide.partPath, relationship);
       return target === undefined ? [] : [target];
     }) ?? [];
+  // This topology operation removes the slide and its directly attached notes slide
+  // only. It intentionally does not sweep now-orphaned media parts because raw or
+  // unsupported parts may still reference them; media reference counting remains local
+  // to replaceImageBytes.
   const removedPartPaths = [slide.partPath, ...notesPartPaths];
   const removedPartPathSet = new Set<string>(removedPartPaths);
   const retainedEdits = (source.edits ?? []).filter(
@@ -1073,10 +1097,28 @@ function imageRelationshipKey(partPath: PartPath, relationshipId: RelationshipId
 
 function findImagesInTree(shapes: readonly SourceShapeNode[]): SourceImage[] {
   return shapes.flatMap((shape): SourceImage[] => {
-    if (shape.kind === "image") return [shape];
-    if (shape.kind === "group") return findImagesInTree(shape.children);
-    return [];
+    switch (shape.kind) {
+      case "image":
+        return [shape];
+      case "group":
+        return findImagesInTree(shape.children);
+      case "shape":
+      case "connector":
+      case "table":
+      case "chart":
+      case "smartArt":
+      case "raw":
+        // The denominator is for replaceImageBytes' p:pic targets only. Other typed
+        // nodes, image fills, and raw/unsupported relationship users are preserved but
+        // are not replaceImageBytes targets in this editing slice.
+        return [];
+    }
+    return assertNeverShapeNode(shape);
   });
+}
+
+function assertNeverShapeNode(shape: never): never {
+  throw new Error(`editing: unhandled source shape node kind '${String(shape)}'`);
 }
 
 function detectImageContentType(bytes: Uint8Array): string | undefined {
@@ -1182,7 +1224,40 @@ function textRunPropertiesEqual(
   left: SourceRunProperties | undefined,
   right: SourceRunProperties | undefined,
 ): boolean {
-  return JSON.stringify(left ?? {}) === JSON.stringify(right ?? {});
+  return stableValueEqual(left ?? {}, right ?? {});
+}
+
+function stableValueEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right)) return false;
+    if (left.length !== right.length) return false;
+    return left.every((value, index) => stableValueEqual(value, right[index]));
+  }
+  if (isPlainRecord(left) || isPlainRecord(right)) {
+    if (!isPlainRecord(left) || !isPlainRecord(right)) return false;
+    const leftKeys = Object.keys(left).sort();
+    const rightKeys = Object.keys(right).sort();
+    if (!stableValueEqual(leftKeys, rightKeys)) return false;
+    return leftKeys.every((key) => stableValueEqual(left[key], right[key]));
+  }
+  return false;
+}
+
+function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown>> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function shapeTransformPositionAndSizeEqual(
+  current: TransformableShapeNode["transform"],
+  next: UpdateShapeTransformInput,
+): boolean {
+  return (
+    current?.offsetX === next.offsetX &&
+    current.offsetY === next.offsetY &&
+    current.width === next.width &&
+    current.height === next.height
+  );
 }
 
 function createReplacementRunHandle(paragraph: SourceParagraph): SourceHandle | undefined {
@@ -1254,21 +1329,13 @@ function assertArrowEndpoint(endpoint: SourceArrowEndpoint | undefined, fieldNam
   }
 }
 
-function assertFiniteEmu(
-  value: Emu,
-  operationName: "addTextBox" | "addConnector",
-  fieldName: string,
-): void {
+function assertFiniteEmu(value: Emu, operationName: string, fieldName: string): void {
   if (!Number.isFinite(value)) {
     throw new Error(`${operationName}: ${fieldName} must be a finite EMU value`);
   }
 }
 
-function assertPositiveFiniteEmu(
-  value: Emu,
-  operationName: "addTextBox" | "addConnector",
-  fieldName: string,
-): void {
+function assertPositiveFiniteEmu(value: Emu, operationName: string, fieldName: string): void {
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error(`${operationName}: ${fieldName} must be a finite positive EMU value`);
   }
@@ -1444,7 +1511,7 @@ function createNotesSlideCopy(
 function requirePartRelationships(
   source: PptxSourceModel,
   partPath: PartPath,
-  operationName: "addEmptySlideFromLayout" | "duplicateSlide" | "deleteSlide" | "replaceImageBytes",
+  operationName: string,
 ): PartRelationships {
   const relationships = source.packageGraph.relationships.find(
     (candidate) => candidate.sourcePartPath === partPath,
@@ -1459,7 +1526,7 @@ function requireSlideRelationship(
   source: PptxSourceModel,
   relationships: PartRelationships,
   slidePartPath: PartPath,
-  operationName: "addEmptySlideFromLayout" | "duplicateSlide" | "deleteSlide",
+  operationName: string,
 ): Relationship {
   const relationship = relationships.relationships.find(
     (candidate) =>
@@ -1476,7 +1543,7 @@ function requireSlideRelationship(
 function requireRawBinaryPart(
   source: PptxSourceModel,
   partPath: PartPath,
-  operationName: "addEmptySlideFromLayout" | "duplicateSlide",
+  operationName: string,
 ): Extract<RawPackagePart, { readonly kind: "binary" }> {
   const rawPart = source.packageGraph.rawParts?.find((part) => part.partPath === partPath);
   if (rawPart === undefined) {
@@ -1495,10 +1562,7 @@ function requireRawBinaryPart(
  * preserved presentation XML and the ids already claimed by pending slide edits.
  * Ids freed by pending deletes are intentionally never reused.
  */
-function nextSlideNumericId(
-  source: PptxSourceModel,
-  operationName: "addEmptySlideFromLayout" | "duplicateSlide",
-): number {
+function nextSlideNumericId(source: PptxSourceModel, operationName: string): number {
   const rawPart = requireRawBinaryPart(source, source.presentation.partPath, operationName);
   const root = parseXml(textDecoder.decode(rawPart.bytes));
   const presentation = getChild(root, "presentation");
