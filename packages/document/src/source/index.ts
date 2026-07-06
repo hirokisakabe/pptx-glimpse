@@ -9,6 +9,7 @@ export type {
   AddConnectorOutlineInput,
   AddEmptySlideFromLayoutInput,
   AddTextBoxInput,
+  MoveSlideInput,
   UpdateShapeTransformInput,
 } from "./editing.js";
 export {
@@ -23,6 +24,7 @@ export {
   findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
+  moveSlide,
   replaceImageBytes,
   replaceParagraphPlainText,
   replaceTextRunPlainText,
@@ -63,6 +65,7 @@ export type {
   PptxSourceModelDeleteSlideEdit,
   PptxSourceModelDuplicateSlideEdit,
   PptxSourceModelEdit,
+  PptxSourceModelMoveSlideEdit,
   PptxSourceModelParagraphPropertiesEdit,
   PptxSourceModelParagraphTextEdit,
   PptxSourceModelReplaceImageEdit,

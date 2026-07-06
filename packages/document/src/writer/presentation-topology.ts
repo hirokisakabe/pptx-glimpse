@@ -48,6 +48,9 @@ export function serializePresentationWithSlideTopologyEdits(
       case "removeSlide":
         removeSlideId(sldIdLst, operation.relationshipId);
         break;
+      case "moveSlide":
+        moveSlideId(sldIdLst, operation.relationshipId, operation.toIndex);
+        break;
     }
   }
 
@@ -104,6 +107,26 @@ function insertSlideIdAfter(
 function removeSlideId(sldIdLst: XmlNode, relationshipId: RelationshipId): void {
   const { key, items } = slideIdEntries(sldIdLst);
   sldIdLst[key] = items.filter((item) => getRelationshipAttr(item) !== relationshipId);
+}
+
+function moveSlideId(sldIdLst: XmlNode, relationshipId: RelationshipId, toIndex: number): void {
+  const { key, items } = slideIdEntries(sldIdLst);
+  const fromIndex = items.findIndex((item) => getRelationshipAttr(item) === relationshipId);
+  if (fromIndex === -1) {
+    throw new Error(
+      `writePptx: slide relationship '${relationshipId}' was not found in p:sldIdLst`,
+    );
+  }
+  if (toIndex < 0 || toIndex >= items.length) {
+    throw new Error(`writePptx: slide move target index '${toIndex}' is out of range`);
+  }
+  if (fromIndex === toIndex) return;
+
+  const moved = [...items];
+  const [item] = moved.splice(fromIndex, 1);
+  if (item === undefined) return;
+  moved.splice(toIndex, 0, item);
+  sldIdLst[key] = moved;
 }
 
 function slideIdEntries(sldIdLst: XmlNode): { readonly key: string; readonly items: XmlNode[] } {

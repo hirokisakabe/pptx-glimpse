@@ -36,6 +36,12 @@ const DEFAULT_TEXT_BOX_BOUNDS_PX = {
   height: 72,
 };
 const DEFAULT_TEXT_BOX_TEXT = "New text box";
+const DEFAULT_CONNECTOR_BOUNDS_PX = {
+  x: 144,
+  y: 144,
+  width: 288,
+  height: 96,
+};
 const IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
 
 const IMAGE_ACCEPT_BY_CONTENT_TYPE: Readonly<Record<string, string>> = {
@@ -104,6 +110,14 @@ export interface BrowserEditorAddTextBoxOptions {
   readonly width?: number;
   readonly height?: number;
   readonly text?: string;
+  readonly name?: string;
+}
+
+export interface BrowserEditorAddConnectorOptions {
+  readonly x?: number;
+  readonly y?: number;
+  readonly width?: number;
+  readonly height?: number;
   readonly name?: string;
 }
 
@@ -220,6 +234,36 @@ export class BrowserPptxEditorSession {
       width: pxToEmu(options.width ?? DEFAULT_TEXT_BOX_BOUNDS_PX.width),
       height: pxToEmu(options.height ?? DEFAULT_TEXT_BOX_BOUNDS_PX.height),
       text: options.text ?? DEFAULT_TEXT_BOX_TEXT,
+      ...(options.name !== undefined ? { name: options.name } : {}),
+    });
+    if (!result.ok) {
+      throw new Error(result.message);
+    }
+    this.#selectNewShape(slideNumber, existingShapeKeys);
+    await this.renderCurrentSlides();
+    return this.response(result.warnings);
+  }
+
+  async addConnector(
+    slideNumber = 1,
+    options: BrowserEditorAddConnectorOptions = {},
+  ): Promise<BrowserEditorSlidesResponse> {
+    const slide = this.#session.document.slides[slideNumber - 1];
+    if (slide?.handle === undefined) {
+      throw new Error("addConnector: slide handle was not found in PptxSourceModel source");
+    }
+    const existingShapeKeys = new Set(slide.shapes.map(shapeSourceKey));
+    const result = this.#session.apply({
+      kind: "addConnector",
+      slideHandle: slide.handle,
+      preset: "straightConnector1",
+      offsetX: pxToEmu(options.x ?? DEFAULT_CONNECTOR_BOUNDS_PX.x),
+      offsetY: pxToEmu(options.y ?? DEFAULT_CONNECTOR_BOUNDS_PX.y),
+      width: pxToEmu(options.width ?? DEFAULT_CONNECTOR_BOUNDS_PX.width),
+      height: pxToEmu(options.height ?? DEFAULT_CONNECTOR_BOUNDS_PX.height),
+      outline: {
+        tailEnd: { type: "triangle", width: "med", length: "med" },
+      },
       ...(options.name !== undefined ? { name: options.name } : {}),
     });
     if (!result.ok) {
@@ -382,10 +426,13 @@ function isDeletableShape(
   shape: SourceShapeNode,
   slideShapes: readonly SourceShapeNode[],
 ): boolean {
-  if (shape.kind !== "shape" || shape.handle?.nodeId === undefined) {
+  if (
+    (shape.kind !== "shape" && shape.kind !== "connector") ||
+    shape.handle?.nodeId === undefined
+  ) {
     return false;
   }
-  if (isShapeReferencedByConnector(shape, slideShapes)) {
+  if (shape.kind === "shape" && isShapeReferencedByConnector(shape, slideShapes)) {
     return false;
   }
   return !shape.rawSidecars?.some((sidecar) => sidecar.node.name === "mc:AlternateContent");

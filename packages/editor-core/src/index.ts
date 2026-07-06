@@ -16,6 +16,8 @@ import {
   type EditableTextRunProperty,
   type Emu,
   findShapeNodeBySourceHandle,
+  moveSlide,
+  type MoveSlideInput,
   type PptxSourceModel,
   type PptxSourceModelEdit,
   type PptxSourceModelParagraphPropertiesEdit,
@@ -135,6 +137,11 @@ export interface DuplicateSlideCommand {
   readonly handle: SourceHandle;
 }
 
+export interface MoveSlideCommand extends MoveSlideInput {
+  readonly kind: "moveSlide";
+  readonly handle: SourceHandle;
+}
+
 export interface DeleteSlideCommand {
   readonly kind: "deleteSlide";
   readonly handle: SourceHandle;
@@ -156,6 +163,7 @@ export type EditorCommand =
   | ReplaceImageCommand
   | AddEmptySlideFromLayoutCommand
   | DuplicateSlideCommand
+  | MoveSlideCommand
   | DeleteSlideCommand;
 
 export type EditorApplyCommandResult =
@@ -366,6 +374,8 @@ function applyCommandToDocument(
       return addEmptySlideFromLayout(document, command);
     case "duplicateSlide":
       return duplicateSlide(document, command.handle);
+    case "moveSlide":
+      return moveSlide(document, command.handle, command);
     case "deleteSlide":
       return deleteSlide(document, command.handle);
   }
