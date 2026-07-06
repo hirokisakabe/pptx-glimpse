@@ -13,6 +13,7 @@ import {
 
 const EMU_PER_PIXEL = 9525;
 const MIN_SHAPE_SIZE = 8;
+const MAX_IMAGE_REPLACEMENT_BYTES = 5 * 1024 * 1024;
 
 type EditorSession = Awaited<ReturnType<typeof createBrowserPptxEditorSession>>;
 type ShapeTransformCommand = Extract<EditorCommand, { readonly kind: "setShapeTransform" }>;
@@ -182,7 +183,7 @@ export function EditorWorkspace({
 
   const runEditorOperation = useCallback(
     async (
-      operation: (session: EditorSession) => Promise<void> | void,
+      operation: (session: EditorSession) => Promise<string | void> | string | void,
       success: string,
       preferredIndex = currentIndex,
     ) => {
@@ -190,9 +191,9 @@ export function EditorWorkspace({
       setBusy(true);
       setOperationError("");
       try {
-        await operation(editor);
+        const messageOverride = await operation(editor);
         syncFromEditor(editor, preferredIndex);
-        setMessage(success);
+        setMessage(messageOverride ?? success);
       } catch (error) {
         setOperationError(error instanceof Error ? error.message : String(error));
       } finally {
@@ -206,7 +207,7 @@ export function EditorWorkspace({
     (command: EditorCommand, success: string) =>
       runEditorOperation(async (session) => {
         const result = await session.apply(command);
-        setMessage(commandMessage(success, result.warnings));
+        return commandMessage(success, result.warnings);
       }, success),
     [runEditorOperation],
   );
@@ -241,16 +242,23 @@ export function EditorWorkspace({
   const finishDrag = useCallback(
     async (event: PointerEvent) => {
       const dragState = dragStateRef.current;
+      const point = eventPoint(overlayRef.current, event.clientX, event.clientY);
       if (
         dragState === null ||
         event.pointerId !== dragState.pointerId ||
-        selectedShape?.handle === undefined
+        selectedShape?.handle === undefined ||
+        point === null
       ) {
         return;
       }
       dragStateRef.current = null;
 
-      const nextBounds = selectedShape.bounds;
+      const dx = point.x - dragState.startPoint.x;
+      const dy = point.y - dragState.startPoint.y;
+      const nextBounds =
+        dragState.kind === "move"
+          ? movedBounds(dragState.startBounds, dx, dy)
+          : resizedBounds(dragState.startBounds, dragState.handle ?? "se", dx, dy);
       if (nextBounds === undefined || sameBounds(dragState.startBounds, nextBounds)) return;
       await applyCommand(
         {
@@ -272,11 +280,19 @@ export function EditorWorkspace({
     const up = (event: PointerEvent) => {
       void finishDrag(event);
     };
+    const cancelDrag = () => {
+      dragStateRef.current = null;
+      setDraftBounds(null);
+    };
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
+    window.addEventListener("pointercancel", cancelDrag);
+    window.addEventListener("blur", cancelDrag);
     return () => {
       window.removeEventListener("pointermove", move);
       window.removeEventListener("pointerup", up);
+      window.removeEventListener("pointercancel", cancelDrag);
+      window.removeEventListener("blur", cancelDrag);
     };
   }, [finishDrag, updateDrag]);
 
@@ -383,6 +399,16 @@ export function EditorWorkspace({
       const file = event.target.files?.[0];
       event.target.value = "";
       if (file === undefined || selectedShape?.handle === undefined) return;
+      const replacement = selectedShape.editableImageReplacement;
+      if (replacement === undefined) return;
+      if (file.size > MAX_IMAGE_REPLACEMENT_BYTES) {
+        setOperationError("Replacement image must be 5 MB or smaller.");
+        return;
+      }
+      if (file.type !== "" && file.type !== replacement.contentType) {
+        setOperationError(`Replacement image must use ${replacement.contentType}.`);
+        return;
+      }
       await applyCommand(
         {
           kind: "replaceImage",
@@ -479,6 +505,9 @@ export function EditorWorkspace({
                 return (
                   <rect
                     className="shape-hit-area"
+                    data-editable-image-replacement={
+                      shape.editableImageReplacement !== undefined ? "true" : undefined
+                    }
                     data-testid="shape-hit-area"
                     key={`${shapeKey(shape)}-${index.toString()}`}
                     x={shape.bounds.x}
@@ -644,7 +673,7 @@ export function EditorWorkspace({
                 onChange={(event) => setFontSize(event.target.value)}
               />
               <button
-                disabled={selectedRun === undefined || Number(fontSize) <= 0}
+                disabled={selectedRun === undefined || !isPositiveFiniteNumber(fontSize)}
                 type="button"
                 onClick={() => handleApplyTextProperties({ fontSize: pt(Number(fontSize)) })}
               >
@@ -789,6 +818,11 @@ function pt(value: number): NonNullable<TextRunProperties["fontSize"]> {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
+}
+
+function isPositiveFiniteNumber(value: string): boolean {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0;
 }
 
 function viewBoxFromSvg(svg: string): string {

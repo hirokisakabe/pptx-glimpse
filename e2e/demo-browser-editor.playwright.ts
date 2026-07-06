@@ -121,14 +121,28 @@ async function dragSvgPoint(
 }
 
 async function selectFirstReplaceableImage(page: Page): Promise<void> {
-  const hitAreas = page.getByTestId("shape-hit-area");
+  const hitAreas = page.locator(
+    '[data-testid="shape-hit-area"][data-editable-image-replacement="true"]',
+  );
   const imageButton = page.getByTestId("replace-image-button");
   const count = await hitAreas.count();
-  for (let index = 0; index < count; index += 1) {
-    await hitAreas.nth(index).click();
-    if (!(await imageButton.isDisabled())) return;
-  }
-  throw new Error("replaceable image shape was not found");
+  if (count === 0) throw new Error("replaceable image shape was not found");
+  const bounds = await hitAreas.first().evaluate((element) => {
+    if (!(element instanceof SVGRectElement)) throw new Error("shape hit area is not a rect");
+    return {
+      x: element.x.baseVal.value,
+      y: element.y.baseVal.value,
+      width: element.width.baseVal.value,
+      height: element.height.baseVal.value,
+    };
+  });
+  const point = await svgPointToClient(
+    page,
+    bounds.x + bounds.width / 2,
+    bounds.y + bounds.height / 2,
+  );
+  await page.mouse.click(point.x, point.y);
+  await expect(imageButton).toBeEnabled();
 }
 
 async function svgPointToClient(
