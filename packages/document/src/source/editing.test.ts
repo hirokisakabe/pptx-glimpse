@@ -699,6 +699,17 @@ describe("editing shape operations", () => {
           ...formattedInput,
           paragraphs: [
             {
+              runs: [{ text: "bad char spacing range", properties: { charSpacing: 400001 } }],
+            },
+          ],
+        },
+        expected: /charSpacing must be between -400000 and 400000/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          paragraphs: [
+            {
               runs: [
                 {
                   text: "bad gradient",

@@ -105,21 +105,13 @@ export interface UpdateShapeTransformInput {
   readonly height: Emu;
 }
 
-export interface AddTextBoxBaseInput extends UpdateShapeTransformInput {
+export interface AddTextBoxInput extends UpdateShapeTransformInput {
+  readonly text?: string;
+  readonly paragraphs?: readonly AddTextBoxParagraphInput[];
   readonly body?: AddTextBoxBodyPropertiesInput;
   readonly rotation?: NonNullable<SourceShape["transform"]>["rotation"];
   readonly name?: string;
 }
-
-export type AddTextBoxInput =
-  | (AddTextBoxBaseInput & {
-      readonly text: string;
-      readonly paragraphs?: never;
-    })
-  | (AddTextBoxBaseInput & {
-      readonly paragraphs: readonly AddTextBoxParagraphInput[];
-      readonly text?: never;
-    });
 
 export interface AddConnectorConnectionEndpointInput {
   readonly shapeHandle: SourceHandle;
@@ -788,7 +780,7 @@ function assertTextBoxRunProperties(properties: unknown, path: string): void {
     assertTextBoxOutline(outline, `${path}.properties.outline`);
   }
   if (charSpacing !== undefined) {
-    assertFiniteIntegerNumber(charSpacing, "addTextBox", `${path}.properties.charSpacing`);
+    assertTextPointNumber(charSpacing, "addTextBox", `${path}.properties.charSpacing`);
   }
 }
 
@@ -965,6 +957,13 @@ function assertPositiveFiniteIntegerNumber(
 ): void {
   if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
     throw new Error(`${operationName}: ${fieldName} must be a finite positive integer`);
+  }
+}
+
+function assertTextPointNumber(value: unknown, operationName: string, fieldName: string): void {
+  assertFiniteIntegerNumber(value, operationName, fieldName);
+  if (typeof value !== "number" || value < -400000 || value > 400000) {
+    throw new Error(`${operationName}: ${fieldName} must be between -400000 and 400000`);
   }
 }
 

@@ -125,10 +125,10 @@ export interface SetShapeOutlineCommand {
   readonly outline: EditableShapeOutline;
 }
 
-export type AddTextBoxCommand = AddTextBoxInput & {
+export interface AddTextBoxCommand extends AddTextBoxInput {
   readonly kind: "addTextBox";
   readonly slideHandle: SourceHandle;
-};
+}
 
 export interface AddConnectorCommand extends AddConnectorInput {
   readonly kind: "addConnector";

@@ -85,6 +85,7 @@ export interface TextBoxRunPropertiesInput {
   readonly highlight?: TextBoxColorInput;
   readonly glow?: TextBoxGlowInput;
   readonly outline?: TextBoxOutlineInput;
+  /** OOXML ST_TextPoint value for `a:rPr@spc` (-400000..400000, 100 = 1 pt). */
   readonly charSpacing?: number;
 }
 
@@ -254,7 +255,9 @@ function createTextRunPropertiesXml(
     ...(properties.fontSize !== undefined
       ? { "@_sz": String(Math.round(properties.fontSize * 100)) }
       : {}),
-    ...(properties.charSpacing !== undefined ? { "@_spc": String(properties.charSpacing) } : {}),
+    ...(properties.charSpacing !== undefined
+      ? { "@_spc": textPointToken(properties.charSpacing) }
+      : {}),
     ...(properties.outline !== undefined
       ? { "a:ln": createTextOutlineXml(properties.outline) }
       : {}),
@@ -337,6 +340,13 @@ function underlineStyleToken(underline: boolean | TextBoxUnderlineInput): TextBo
 function baselineToken(baseline: TextBoxBaselineInput): number {
   if (baseline === "superscript") return 30000;
   return -25000;
+}
+
+function textPointToken(value: number): string {
+  if (!Number.isInteger(value) || value < -400000 || value > 400000) {
+    throw new Error("buildTextBoxXml: charSpacing must be an integer between -400000 and 400000");
+  }
+  return String(value);
 }
 
 function boolToken(value: boolean): "1" | "0" {
