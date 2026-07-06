@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, unlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
 
 import JSZip from "jszip";
@@ -18,6 +19,7 @@ type VrtRenderOptions = Pick<ConvertOptions, "fontDirs" | "skipSystemFonts">;
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const VRT_FONT_GENERATOR_VERSION = 7;
+const VRT_FONT_DOWNLOAD_ATTEMPTS = 4;
 const VRT_FONT_DIR = join(tmpdir(), `pptx-glimpse-vrt-fonts-v${VRT_FONT_GENERATOR_VERSION}`);
 const VRT_FONT_SOURCE_DIR = join(
   tmpdir(),
@@ -244,13 +246,11 @@ async function loadSourceFonts(): Promise<Map<VrtFontSourceId, OpentypeFullFont>
   const opentype: { parse: (buffer: ArrayBuffer) => OpentypeFullFont } =
     await import("opentype.js");
   const fonts = new Map<VrtFontSourceId, OpentypeFullFont>();
-  await Promise.all(
-    VRT_FONT_SOURCES.map(async (source) => {
-      const sourcePath = await ensureSourceFont(source);
-      const sourceBuffer = await readFile(sourcePath);
-      fonts.set(source.id, opentype.parse(toArrayBuffer(sourceBuffer)));
-    }),
-  );
+  for (const source of VRT_FONT_SOURCES) {
+    const sourcePath = await ensureSourceFont(source);
+    const sourceBuffer = await readFile(sourcePath);
+    fonts.set(source.id, opentype.parse(toArrayBuffer(sourceBuffer)));
+  }
   return fonts;
 }
 
@@ -259,11 +259,7 @@ async function ensureSourceFont(source: VrtFontSource): Promise<string> {
   const existing = await readBufferIfExists(path);
   if (existing !== null && sha256(existing) === source.sha256) return path;
 
-  const response = await fetch(source.url);
-  if (!response.ok) {
-    throw new Error(`Failed to download VRT source font ${source.fileName}: ${response.status}`);
-  }
-  const buffer = Buffer.from(await response.arrayBuffer());
+  const buffer = await downloadSourceFont(source);
   const actualSha256 = sha256(buffer);
   if (actualSha256 !== source.sha256) {
     throw new Error(
@@ -272,6 +268,49 @@ async function ensureSourceFont(source: VrtFontSource): Promise<string> {
   }
   await writeFile(path, buffer);
   return path;
+}
+
+async function downloadSourceFont(source: VrtFontSource): Promise<Buffer> {
+  let lastStatus: number | undefined;
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= VRT_FONT_DOWNLOAD_ATTEMPTS; attempt += 1) {
+    try {
+      const response = await fetch(source.url);
+      if (response.ok) return Buffer.from(await response.arrayBuffer());
+
+      lastStatus = response.status;
+      if (attempt === VRT_FONT_DOWNLOAD_ATTEMPTS || !isRetryableFontDownloadStatus(lastStatus)) {
+        break;
+      }
+      await delay(fontDownloadRetryDelayMs(response, attempt));
+    } catch (error) {
+      lastError = error;
+      if (attempt === VRT_FONT_DOWNLOAD_ATTEMPTS) break;
+      await delay(attempt * 1000);
+    }
+  }
+
+  const reason = lastStatus ?? errorMessage(lastError);
+  throw new Error(`Failed to download VRT source font ${source.fileName}: ${reason}`);
+}
+
+function isRetryableFontDownloadStatus(status: number): boolean {
+  return status === 429 || status >= 500;
+}
+
+function fontDownloadRetryDelayMs(response: Response, attempt: number): number {
+  const retryAfter = response.headers.get("retry-after");
+  if (retryAfter !== null) {
+    const retryAfterSeconds = Number(retryAfter);
+    if (Number.isFinite(retryAfterSeconds) && retryAfterSeconds >= 0) {
+      return retryAfterSeconds * 1000;
+    }
+  }
+  return attempt * 1000;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 async function readBufferIfExists(path: string): Promise<Buffer | null> {
