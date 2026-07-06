@@ -8,7 +8,6 @@ import type {
   RawPackagePart,
   Relationship,
   RelationshipId,
-  SourceShapeNode,
 } from "./index.js";
 import { resolveInternalRelationshipTarget } from "./package-paths.js";
 

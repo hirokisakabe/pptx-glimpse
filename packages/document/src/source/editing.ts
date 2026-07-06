@@ -6,6 +6,7 @@
  * while preserving the historical ./editing.js import path.
  */
 
+export { replaceImageBytes } from "./image-replacement.js";
 export type {
   AddConnectorConnectionEndpointInput,
   AddConnectorInput,
@@ -22,7 +23,6 @@ export {
 } from "./shape-editing.js";
 export type { AddEmptySlideFromLayoutInput } from "./slide-topology.js";
 export { addEmptySlideFromLayout, deleteSlide, duplicateSlide } from "./slide-topology.js";
-export { replaceImageBytes } from "./image-replacement.js";
 export {
   clearTextRunProperties,
   findParagraphBySourceHandle,

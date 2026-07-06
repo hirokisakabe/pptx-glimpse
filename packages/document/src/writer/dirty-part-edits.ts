@@ -14,7 +14,16 @@ import type {
   PptxSourceModelTextRunPropertiesEdit,
 } from "../source/index.js";
 import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
-import { encodeXml, textDecoder, XML_DECLARATION, xmlBuilder } from "./xml-serialization.js";
+import {
+  deleteShapeXml,
+  getShapeTransformNode,
+  locateShape,
+  locateShapeTreeNode,
+  type ParagraphTextLocator,
+  parseParagraphLocator,
+  parseShapeLocator,
+  parseTextRunLocator,
+} from "./xml-locators.js";
 import {
   appendChild,
   cloneXmlNode,
@@ -27,16 +36,7 @@ import {
   textRequiresPreserve,
   xmlNodeIsEmpty,
 } from "./xml-node-utils.js";
-import {
-  deleteShapeXml,
-  locateShape,
-  locateShapeTreeNode,
-  parseParagraphLocator,
-  parseShapeLocator,
-  parseTextRunLocator,
-  getShapeTransformNode,
-  type ParagraphTextLocator,
-} from "./xml-locators.js";
+import { encodeXml, textDecoder, XML_DECLARATION, xmlBuilder } from "./xml-serialization.js";
 
 export function serializeDirtyXmlPart(
   source: PptxSourceModel,

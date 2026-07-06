@@ -1,4 +1,9 @@
-import { resolveInternalRelationshipTarget } from "./package-paths.js";
+import {
+  assertNeverShapeNode,
+  copyBytes,
+  IMAGE_REL_TYPE,
+  requirePartRelationships,
+} from "./editing-shared.js";
 import type {
   PartPath,
   PptxSourceModel,
@@ -8,12 +13,7 @@ import type {
   SourceImage,
   SourceShapeNode,
 } from "./index.js";
-import {
-  assertNeverShapeNode,
-  copyBytes,
-  IMAGE_REL_TYPE,
-  requirePartRelationships,
-} from "./editing-shared.js";
+import { resolveInternalRelationshipTarget } from "./package-paths.js";
 import { findShapeNodeBySourceHandle } from "./shape-editing.js";
 
 export function replaceImageBytes(

@@ -3,6 +3,25 @@ import {
   editReservedPartPaths,
   sourceHandlesEqual,
 } from "./edit-descriptors.js";
+import {
+  cloneJson,
+  copyBytes,
+  editIsInvalidatedByDeletedParts,
+  EMPTY_SLIDE_XML,
+  hasDirtyEditForPart,
+  insertAtReadonly,
+  nextSlideNumericId,
+  NOTES_SLIDE_CONTENT_TYPE,
+  NOTES_SLIDE_REL_TYPE,
+  presentationSlideRelationship,
+  relativeTarget,
+  requirePartRelationships,
+  requireRawBinaryPart,
+  requireSlideRelationship,
+  SLIDE_CONTENT_TYPE,
+  SLIDE_LAYOUT_REL_TYPE,
+  SLIDE_REL_TYPE,
+} from "./editing-shared.js";
 import type {
   PartPath,
   PartRelationships,
@@ -23,25 +42,6 @@ import {
   removePartRelationship,
 } from "./package-graph-mutations.js";
 import { resolveInternalRelationshipTarget } from "./package-paths.js";
-import {
-  cloneJson,
-  copyBytes,
-  editIsInvalidatedByDeletedParts,
-  EMPTY_SLIDE_XML,
-  hasDirtyEditForPart,
-  insertAtReadonly,
-  nextSlideNumericId,
-  NOTES_SLIDE_CONTENT_TYPE,
-  NOTES_SLIDE_REL_TYPE,
-  presentationSlideRelationship,
-  relativeTarget,
-  requirePartRelationships,
-  requireRawBinaryPart,
-  requireSlideRelationship,
-  SLIDE_CONTENT_TYPE,
-  SLIDE_LAYOUT_REL_TYPE,
-  SLIDE_REL_TYPE,
-} from "./editing-shared.js";
 
 export interface AddEmptySlideFromLayoutInput {
   readonly layoutPartPath: PartPath;

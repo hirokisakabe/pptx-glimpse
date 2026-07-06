@@ -2,12 +2,12 @@ import { getChild, getNamespacedAttr, parseXml, type XmlNode } from "../reader/x
 import type { SlideTopologyOperation } from "../source/edit-descriptors.js";
 import type { PptxSourceModel, RelationshipId } from "../source/index.js";
 import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
-import { encodeXml, textDecoder, XML_DECLARATION, xmlBuilder } from "./xml-serialization.js";
 import {
   namespacedAttributeKey,
   namespacedChildKey,
   stripXmlProcessingInstruction,
 } from "./xml-node-utils.js";
+import { encodeXml, textDecoder, XML_DECLARATION, xmlBuilder } from "./xml-serialization.js";
 
 export function serializePresentationWithSlideTopologyEdits(
   source: PptxSourceModel,
