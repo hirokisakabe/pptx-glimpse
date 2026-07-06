@@ -675,7 +675,8 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
   const seenParagraphs = new Set<string>();
   const seenShapeTransforms = new Set<string>();
   const seenShapeFills = new Set<string>();
-  const seenShapeOutlines = new Set<string>();
+  const seenShapeOutlineProperties = new Map<string, Set<EditableShapeOutlineProperty>>();
+  const normalizedShapeOutlineEdits = new Map<string, MutableShapeOutlineEdit>();
   const normalizedReversed: PptxSourceModelEdit[] = [];
   let changed = false;
 
@@ -734,12 +735,22 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
       seenShapeFills.add(key);
     }
     if (edit.kind === "updateShapeOutline") {
-      const key = editHandleNodeKey(edit);
-      if (seenShapeOutlines.has(key)) {
+      const normalized = normalizeShapeOutlineEdit(
+        edit,
+        seenShapeOutlineProperties,
+        normalizedShapeOutlineEdits,
+      );
+      if (normalized === undefined) {
         changed = true;
         continue;
       }
-      seenShapeOutlines.add(key);
+      if (normalized.merged) {
+        changed = true;
+        continue;
+      }
+      if (!editorEditsEqual(normalized.edit, edit)) changed = true;
+      normalizedReversed.push(normalized.edit);
+      continue;
     }
     normalizedReversed.push(edit);
   }
@@ -842,3 +853,63 @@ function normalizeTextRunPropertiesEdit(
 type MutableEditableTextRunProperties = {
   -readonly [K in keyof EditableTextRunProperties]?: EditableTextRunProperties[K];
 };
+
+type EditableShapeOutlineProperty = keyof EditableShapeOutline;
+
+type MutableShapeOutline = {
+  -readonly [K in keyof EditableShapeOutline]?: EditableShapeOutline[K];
+};
+
+interface MutableShapeOutlineEdit {
+  readonly kind: "updateShapeOutline";
+  readonly handle: SourceHandle;
+  outline: MutableShapeOutline;
+}
+
+type ShapeOutlineNormalizationResult =
+  | {
+      readonly edit: MutableShapeOutlineEdit;
+      readonly merged: false;
+    }
+  | {
+      readonly merged: true;
+    };
+
+function normalizeShapeOutlineEdit(
+  edit: PptxSourceModelShapeOutlineEdit,
+  seenShapeOutlineProperties: Map<string, Set<EditableShapeOutlineProperty>>,
+  normalizedShapeOutlineEdits: Map<string, MutableShapeOutlineEdit>,
+): ShapeOutlineNormalizationResult | undefined {
+  const key = editHandleNodeKey(edit);
+  let seenProperties = seenShapeOutlineProperties.get(key);
+  if (seenProperties === undefined) {
+    seenProperties = new Set();
+    seenShapeOutlineProperties.set(key, seenProperties);
+  }
+
+  const outline: MutableShapeOutline = {};
+  if (edit.outline.width !== undefined && !seenProperties.has("width")) {
+    seenProperties.add("width");
+    outline.width = edit.outline.width;
+  }
+  if (edit.outline.fill !== undefined && !seenProperties.has("fill")) {
+    seenProperties.add("fill");
+    outline.fill = edit.outline.fill;
+  }
+
+  if (Object.keys(outline).length === 0) return undefined;
+
+  const existing = normalizedShapeOutlineEdits.get(key);
+  if (existing !== undefined) {
+    existing.outline = { ...outline, ...existing.outline };
+    return { merged: true };
+  }
+
+  const normalized: MutableShapeOutlineEdit = {
+    kind: "updateShapeOutline",
+    handle: edit.handle,
+    outline,
+  };
+  normalizedShapeOutlineEdits.set(key, normalized);
+  return { edit: normalized, merged: false };
+}

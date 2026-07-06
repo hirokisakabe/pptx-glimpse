@@ -1217,6 +1217,13 @@ describe("EditorSession shape style commands", () => {
       session.apply({
         kind: "setShapeOutline",
         handle: shapeHandle,
+        outline: { fill: { kind: "solid", color: { kind: "srgb", hex: "445566" } } },
+      }),
+    );
+    expectApplied(
+      session.apply({
+        kind: "setShapeOutline",
+        handle: shapeHandle,
         outline: { width: asEmu(12700) },
       }),
     );
@@ -1236,8 +1243,19 @@ describe("EditorSession shape style commands", () => {
       },
     ]);
     expect(edited.edits?.filter((edit) => edit.kind === "updateShapeOutline")).toEqual([
-      { kind: "updateShapeOutline", handle: shapeHandle, outline: { width: 25400 } },
+      {
+        kind: "updateShapeOutline",
+        handle: shapeHandle,
+        outline: {
+          fill: { kind: "solid", color: { kind: "srgb", hex: "445566" } },
+          width: 25400,
+        },
+      },
     ]);
+    expect(firstShape(readPptx(writePptx(edited))).outline).toMatchObject({
+      fill: { kind: "solid", color: { kind: "srgb", hex: "445566" } },
+      width: 25400,
+    });
   });
 
   it("rejects invalid shape style commands without changing document state or undo history", async () => {
