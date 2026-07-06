@@ -14,6 +14,7 @@ import {
   asPt,
   asRelationshipId,
   asSourceNodeId,
+  type ConnectorPresetGeometry,
   type EditableTextRunProperties,
   type EditableTextRunProperty,
   findShapeNodeBySourceHandle,
@@ -22,6 +23,7 @@ import {
   readPptx,
   type Relationship,
   type RelationshipId,
+  type SourceArrowEndpoint,
   type SourceHandle,
   type SourceImage,
   type SourceShapeNode,
@@ -2663,17 +2665,20 @@ function normalizeCommand(command: unknown): EditorCommand {
     if (command.name !== undefined && typeof command.name !== "string") {
       throw new Error("addConnector.name must be a string");
     }
+    const outline = normalizeConnectorOutline(command.outline);
     return {
       kind: "addConnector",
       slideHandle: normalizeHandle(command.slideHandle),
-      preset: "straightConnector1",
+      preset: normalizeConnectorPreset(command.preset),
       offsetX: asEmu(requireFiniteNumber(command.offsetX, "addConnector.offsetX")),
       offsetY: asEmu(requireFiniteNumber(command.offsetY, "addConnector.offsetY")),
       width: asEmu(requireFinitePositiveNumber(command.width, "addConnector.width")),
       height: asEmu(requireFinitePositiveNumber(command.height, "addConnector.height")),
-      outline: {
-        tailEnd: { type: "triangle", width: "med", length: "med" },
-      },
+      ...(command.start !== undefined
+        ? { start: normalizeConnectorEndpoint(command.start, "start") }
+        : {}),
+      ...(command.end !== undefined ? { end: normalizeConnectorEndpoint(command.end, "end") } : {}),
+      ...(outline !== undefined ? { outline } : {}),
       ...(typeof command.name === "string" ? { name: command.name } : {}),
     };
   }
@@ -2771,6 +2776,92 @@ function normalizeSrgbColor(value: unknown): { kind: "srgb"; hex: string } {
     throw new Error("setTextRunProperties.color.hex must be six hex digits");
   }
   return { kind: "srgb", hex: value.hex.toUpperCase() };
+}
+
+function normalizeConnectorPreset(value: unknown): ConnectorPresetGeometry {
+  const preset = value ?? "straightConnector1";
+  switch (preset) {
+    case "straightConnector1":
+    case "bentConnector3":
+    case "curvedConnector3":
+      return preset;
+  }
+  throw new Error(
+    "addConnector.preset must be straightConnector1, bentConnector3, or curvedConnector3",
+  );
+}
+
+function normalizeConnectorEndpoint(
+  value: unknown,
+  field: "start" | "end",
+): {
+  shapeHandle: SourceHandle;
+  connectionSiteIndex: number;
+} {
+  if (!isRecord(value)) throw new Error(`addConnector.${field} must be an object`);
+  const connectionSiteIndex = value.connectionSiteIndex;
+  if (!Number.isInteger(connectionSiteIndex) || connectionSiteIndex < 0) {
+    throw new Error(`addConnector.${field}.connectionSiteIndex must be a non-negative integer`);
+  }
+  return {
+    shapeHandle: normalizeHandle(value.shapeHandle),
+    connectionSiteIndex,
+  };
+}
+
+function normalizeConnectorOutline(
+  value: unknown,
+): { headEnd?: SourceArrowEndpoint; tailEnd?: SourceArrowEndpoint } | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new Error("addConnector.outline must be an object");
+  const headEnd = normalizeArrowEndpoint(value.headEnd, "headEnd");
+  const tailEnd = normalizeArrowEndpoint(value.tailEnd, "tailEnd");
+  return {
+    ...(headEnd !== undefined ? { headEnd } : {}),
+    ...(tailEnd !== undefined ? { tailEnd } : {}),
+  };
+}
+
+function normalizeArrowEndpoint(
+  value: unknown,
+  field: "headEnd" | "tailEnd",
+): SourceArrowEndpoint | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) throw new Error(`addConnector.outline.${field} must be an object`);
+  return {
+    type: normalizeArrowType(value.type, field),
+    width: normalizeArrowSize(value.width, field, "width"),
+    length: normalizeArrowSize(value.length, field, "length"),
+  };
+}
+
+function normalizeArrowType(
+  value: unknown,
+  field: "headEnd" | "tailEnd",
+): SourceArrowEndpoint["type"] {
+  switch (value) {
+    case "triangle":
+    case "stealth":
+    case "diamond":
+    case "oval":
+    case "arrow":
+      return value;
+  }
+  throw new Error(`addConnector.outline.${field}.type is not supported`);
+}
+
+function normalizeArrowSize(
+  value: unknown,
+  field: "headEnd" | "tailEnd",
+  sizeField: "width" | "length",
+): SourceArrowEndpoint["width"] {
+  switch (value) {
+    case "sm":
+    case "med":
+    case "lg":
+      return value;
+  }
+  throw new Error(`addConnector.outline.${field}.${sizeField} is not supported`);
 }
 
 function normalizeTextRunPropertyNames(value: unknown): EditableTextRunProperty[] {

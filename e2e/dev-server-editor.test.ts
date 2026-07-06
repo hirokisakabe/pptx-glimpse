@@ -376,6 +376,49 @@ describe("dev server editor API", () => {
     }
   });
 
+  it("preserves addConnector command options through the editor API", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-dev-server-connector-command-test-"));
+    try {
+      const sourcePath = join(dir, "fixture.pptx");
+      const savedPath = join(dir, "saved.pptx");
+      await writeFile(sourcePath, await buildTextEditFixture());
+
+      const backend = await DevEditorBackend.load(sourcePath, renderPreview);
+      const server = createServer(createDevServerRequestHandler(backend, "fixture.pptx"));
+      servers.push(server);
+      const baseUrl = await listen(server);
+      const slideHandle = backend.slides[0]?.handle;
+
+      await postJson<SlidesResponse>(`${baseUrl}/api/editor/command`, {
+        command: {
+          kind: "addConnector",
+          slideHandle,
+          preset: "curvedConnector3",
+          offsetX: 168 * 9525,
+          offsetY: 160 * 9525,
+          width: 336 * 9525,
+          height: 120 * 9525,
+          outline: {
+            headEnd: { type: "oval", width: "lg", length: "sm" },
+          },
+          name: "Curved connector",
+        },
+      });
+
+      await postJson<SaveResponse>(`${baseUrl}/api/editor/save`, { path: savedPath });
+      const connector = connectorByName(readPptx(await readFile(savedPath)), "Curved connector");
+      expect(connector.geometry).toMatchObject({ preset: "curvedConnector3" });
+      expect(connector.outline?.headEnd).toMatchObject({
+        type: "oval",
+        width: "lg",
+        length: "sm",
+      });
+      expect(connector.outline?.tailEnd).toBeUndefined();
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
   it("does not expose connector-referenced shapes as deletable through the editor API", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-dev-server-connector-test-"));
     try {
