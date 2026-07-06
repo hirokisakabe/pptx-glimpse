@@ -133,8 +133,8 @@ export interface PptxSourceModelAddConnectorEdit {
   readonly kind: "addConnector";
   readonly slidePartPath: PartPath;
   readonly shapeId: string;
-  readonly startShapeId: string;
-  readonly endShapeId: string;
+  readonly startShapeId?: string;
+  readonly endShapeId?: string;
   /** Serialized `p:cxnSp` fragment finalized at edit time. The writer only splices it. */
   readonly xml: string;
 }

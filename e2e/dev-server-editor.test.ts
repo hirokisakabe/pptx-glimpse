@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import {
   type PptxSourceModel,
   readPptx,
+  type SourceConnector,
   type SourceTextRun,
 } from "../packages/document/src/index.js";
 import { createDevServerRequestHandler, DevEditorBackend } from "../scripts/dev-server.js";
@@ -289,6 +290,87 @@ describe("dev server editor API", () => {
       const redone = await postJson<SlidesResponse>(`${baseUrl}/api/editor/redo`, {});
       expect(redone.slides[0].svg).not.toContain("New text box");
       expect(redone.history).toMatchObject({ canUndo: true, canRedo: false });
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("adds, selects, moves, saves, deletes, undoes, and redoes a connector through the editor API", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-dev-server-connector-add-test-"));
+    try {
+      const sourcePath = join(dir, "fixture.pptx");
+      const savedPath = join(dir, "saved.pptx");
+      await writeFile(sourcePath, await buildTextEditFixture());
+
+      const backend = await DevEditorBackend.load(sourcePath, renderPreview);
+      const server = createServer(createDevServerRequestHandler(backend, "fixture.pptx"));
+      servers.push(server);
+      const baseUrl = await listen(server);
+
+      const added = await postJson<SlidesResponse>(`${baseUrl}/api/editor/add-connector`, {
+        slide: 1,
+      });
+      expect(added.selection?.shapeHandle).toBeDefined();
+      expect(added.history).toMatchObject({ canUndo: true, canRedo: false });
+
+      const shapes = await getJson<ShapesResponse>(`${baseUrl}/api/editor/shapes?slide=1`);
+      const connector = shapes.shapes.find((shape) => shape.kind === "connector");
+      expect(connector).toMatchObject({
+        name: "Connector 11",
+        bounds: { x: 144, y: 144, width: 288, height: 96 },
+        editableDelete: true,
+      });
+
+      const moved = await postJson<SlidesResponse>(`${baseUrl}/api/editor/command`, {
+        command: {
+          kind: "setShapeTransform",
+          handle: connector?.handle,
+          offsetX: 168 * 9525,
+          offsetY: 160 * 9525,
+          width: 336 * 9525,
+          height: 120 * 9525,
+        },
+      });
+      expect(moved.history).toMatchObject({ canUndo: true, canRedo: false });
+
+      await postJson<SaveResponse>(`${baseUrl}/api/editor/save`, { path: savedPath });
+      expect(
+        connectorByName(readPptx(await readFile(savedPath)), "Connector 11").transform,
+      ).toMatchObject({
+        offsetX: 168 * 9525,
+        offsetY: 160 * 9525,
+        width: 336 * 9525,
+        height: 120 * 9525,
+      });
+
+      const deleted = await postJson<SlidesResponse>(`${baseUrl}/api/editor/command`, {
+        command: {
+          kind: "deleteShape",
+          handle: connector?.handle,
+        },
+      });
+      expect(deleted.selection).toBeUndefined();
+      expect(
+        (await getJson<ShapesResponse>(`${baseUrl}/api/editor/shapes?slide=1`)).shapes.find(
+          (shape) => shape.kind === "connector",
+        ),
+      ).toBeUndefined();
+
+      const undone = await postJson<SlidesResponse>(`${baseUrl}/api/editor/undo`, {});
+      expect(undone.history).toMatchObject({ canUndo: true, canRedo: true });
+      expect(
+        (await getJson<ShapesResponse>(`${baseUrl}/api/editor/shapes?slide=1`)).shapes.find(
+          (shape) => shape.kind === "connector",
+        ),
+      ).toBeDefined();
+
+      const redone = await postJson<SlidesResponse>(`${baseUrl}/api/editor/redo`, {});
+      expect(redone.history).toMatchObject({ canUndo: true, canRedo: false });
+      expect(
+        (await getJson<ShapesResponse>(`${baseUrl}/api/editor/shapes?slide=1`)).shapes.find(
+          (shape) => shape.kind === "connector",
+        ),
+      ).toBeUndefined();
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -683,4 +765,12 @@ function mediaBytes(source: PptxSourceModel, partPath: string): Uint8Array {
   const media = source.packageGraph.media.find((part) => part.partPath === partPath);
   if (media === undefined) throw new Error(`media not found: ${partPath}`);
   return media.bytes;
+}
+
+function connectorByName(source: PptxSourceModel, name: string): SourceConnector {
+  const connector = source.slides[0]?.shapes.find(
+    (node): node is SourceConnector => node.kind === "connector" && node.name === name,
+  );
+  if (connector === undefined) throw new Error(`connector not found: ${name}`);
+  return connector;
 }

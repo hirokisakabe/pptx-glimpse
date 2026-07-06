@@ -55,6 +55,12 @@ const DEFAULT_TEXT_BOX_BOUNDS_PX = {
   height: 72,
 };
 const DEFAULT_TEXT_BOX_TEXT = "New text box";
+const DEFAULT_CONNECTOR_BOUNDS_PX = {
+  x: 144,
+  y: 144,
+  width: 288,
+  height: 96,
+};
 const IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
 const MAX_JSON_BODY_BYTES = 20 * 1024 * 1024;
 const MAX_IMAGE_REPLACEMENT_BYTES = 5 * 1024 * 1024;
@@ -272,6 +278,35 @@ export class DevEditorBackend {
     });
   }
 
+  async addConnector(slideNumber: number): Promise<EditorSlidesResponse> {
+    return this.#enqueueMutation(async () => {
+      const slide = this.#session.document.slides[slideNumber - 1];
+      if (slide?.handle === undefined) {
+        throw new Error("addConnector: slide handle was not found in PptxSourceModel source");
+      }
+      const existingShapeKeys = new Set(slide.shapes.map(shapeSourceKey));
+      const result = this.#session.apply({
+        kind: "addConnector",
+        slideHandle: slide.handle,
+        preset: "straightConnector1",
+        offsetX: pxToEmu(DEFAULT_CONNECTOR_BOUNDS_PX.x),
+        offsetY: pxToEmu(DEFAULT_CONNECTOR_BOUNDS_PX.y),
+        width: pxToEmu(DEFAULT_CONNECTOR_BOUNDS_PX.width),
+        height: pxToEmu(DEFAULT_CONNECTOR_BOUNDS_PX.height),
+        outline: {
+          tailEnd: { type: "triangle", width: "med", length: "med" },
+        },
+      });
+      if (!result.ok) {
+        throw new Error(result.message);
+      }
+      this.#selectNewShape(slideNumber, existingShapeKeys);
+      this.#dirty = true;
+      await this.renderCurrentSlides();
+      return this.response();
+    });
+  }
+
   async applyTextBodyDocJson(
     handle: SourceHandle,
     docJson: unknown,
@@ -458,10 +493,13 @@ function isDeletableShape(
   shape: SourceShapeNode,
   slideShapes: readonly SourceShapeNode[],
 ): boolean {
-  if (shape.kind !== "shape" || shape.handle?.nodeId === undefined) {
+  if (
+    (shape.kind !== "shape" && shape.kind !== "connector") ||
+    shape.handle?.nodeId === undefined
+  ) {
     return false;
   }
-  if (isShapeReferencedByConnector(shape, slideShapes)) {
+  if (shape.kind === "shape" && isShapeReferencedByConnector(shape, slideShapes)) {
     return false;
   }
   return !shape.rawSidecars?.some((sidecar) => sidecar.node.name === "mc:AlternateContent");
@@ -1024,6 +1062,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
       <label>Image<input id="image-replacement-input" data-testid="image-replacement-input" type="file" disabled></label>
       <div id="editor-actions">
         <button id="add-text-box-button" type="button">Add text box</button>
+        <button id="add-connector-button" type="button">Add connector</button>
         <button id="delete-shape-button" type="button" disabled>Delete shape</button>
         <button id="undo-button" type="button">Undo</button>
         <button id="redo-button" type="button">Redo</button>
@@ -2084,6 +2123,23 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         });
     }
 
+    function addConnector() {
+      if (activeTextEditor) {
+        commitTextEditor()
+          .then(addConnector)
+          .catch(function () {});
+        return;
+      }
+      postJson("/api/editor/add-connector", { slide: currentIndex + 1 })
+        .then(function (data) {
+          applyEditorResponse(data);
+          setEditorMessage("Connector added", false);
+        })
+        .catch(function (err) {
+          setEditorMessage(err.message, true);
+        });
+    }
+
     function deleteSelectedShape() {
       if (activeTextEditor || !selectedShape || !selectedShape.handle || !selectedShape.editableDelete) {
         return;
@@ -2281,6 +2337,7 @@ function generateHtml(slides: SlideSvg[], pptxName: string): string {
         });
     });
     document.getElementById("add-text-box-button").addEventListener("click", addTextBox);
+    document.getElementById("add-connector-button").addEventListener("click", addConnector);
     document.getElementById("delete-shape-button").addEventListener("click", deleteSelectedShape);
     document.getElementById("undo-button").addEventListener("click", function () {
       postJson("/api/editor/undo")
@@ -2453,6 +2510,13 @@ async function handleRequest(
     return;
   }
 
+  if (url.pathname === "/api/editor/add-connector" && req.method === "POST") {
+    const body = await readJsonBody(req);
+    const slideNumber = isRecord(body) ? body.slide : undefined;
+    sendJson(res, 200, await backend.addConnector(normalizeSlideNumber(slideNumber)));
+    return;
+  }
+
   if (url.pathname === "/api/editor/text-body" && req.method === "POST") {
     const body = await readJsonBody(req);
     const handle = normalizeHandle(isRecord(body) ? body.handle : undefined);
@@ -2592,6 +2656,24 @@ function normalizeCommand(command: unknown): EditorCommand {
       width: asEmu(requireFinitePositiveNumber(command.width, "addTextBox.width")),
       height: asEmu(requireFinitePositiveNumber(command.height, "addTextBox.height")),
       text,
+      ...(typeof command.name === "string" ? { name: command.name } : {}),
+    };
+  }
+  if (command.kind === "addConnector") {
+    if (command.name !== undefined && typeof command.name !== "string") {
+      throw new Error("addConnector.name must be a string");
+    }
+    return {
+      kind: "addConnector",
+      slideHandle: normalizeHandle(command.slideHandle),
+      preset: "straightConnector1",
+      offsetX: asEmu(requireFiniteNumber(command.offsetX, "addConnector.offsetX")),
+      offsetY: asEmu(requireFiniteNumber(command.offsetY, "addConnector.offsetY")),
+      width: asEmu(requireFinitePositiveNumber(command.width, "addConnector.width")),
+      height: asEmu(requireFinitePositiveNumber(command.height, "addConnector.height")),
+      outline: {
+        tailEnd: { type: "triangle", width: "med", length: "med" },
+      },
       ...(typeof command.name === "string" ? { name: command.name } : {}),
     };
   }

@@ -10,6 +10,7 @@ import JSZip from "jszip";
 import {
   type PptxSourceModel,
   readPptx,
+  type SourceConnector,
   type SourceShape,
 } from "../packages/document/src/index.js";
 
@@ -182,6 +183,87 @@ test("adds, edits, moves, resizes, saves, and deletes a text box from the UI", a
     await expect(page.locator("#editor-message")).toContainText(savedPath);
     saved = readPptx(await readFile(savedPath));
     expect(findShapeByText(saved, "Added edited")).toBeUndefined();
+  } finally {
+    if (serverProcess !== undefined) {
+      serverProcess.kill();
+      await waitForExit(serverProcess);
+    }
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("adds, moves, resizes, saves, deletes, undoes, and redoes a connector from the UI", async ({
+  page,
+}) => {
+  const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-editor-connector-test-"));
+  let serverProcess: ChildProcessWithoutNullStreams | undefined;
+  try {
+    const sourcePath = join(dir, "fixture.pptx");
+    const savedPath = join(dir, "fixture.edited.pptx");
+    await writeFile(sourcePath, await buildShapeFixture());
+
+    const port = await findFreePort();
+    serverProcess = await startDevServer(sourcePath, port);
+    const baseUrl = `http://127.0.0.1:${String(port)}`;
+
+    await page.goto(baseUrl);
+    await expect(page.getByTestId("shape-hit-area").first()).toBeVisible();
+
+    const addResponse = page.waitForResponse(
+      (response) => response.url().endsWith("/api/editor/add-connector") && response.ok(),
+    );
+    await page.getByRole("button", { name: "Add connector" }).click();
+    await addResponse;
+    await expect(page.getByTestId("selection-box")).toHaveAttribute("x", "144");
+    await expect(page.getByTestId("selection-box")).toHaveAttribute("y", "144");
+
+    await dragSvgPoint(page, { x: 240, y: 192 }, { x: 264, y: 208 });
+    await expect(page.getByTestId("selection-box")).toHaveAttribute("x", "168");
+    await expect(page.getByTestId("selection-box")).toHaveAttribute("y", "160");
+
+    await dragSvgPoint(page, { x: 456, y: 256 }, { x: 504, y: 280 });
+    await expect(page.getByTestId("selection-box")).toHaveAttribute("width", "336");
+    await expect(page.getByTestId("selection-box")).toHaveAttribute("height", "120");
+
+    const undoResponse = page.waitForResponse(
+      (response) => response.url().endsWith("/api/editor/undo") && response.ok(),
+    );
+    await page.getByRole("button", { name: "Undo" }).click();
+    await undoResponse;
+    await expect(page.getByTestId("selection-box")).toHaveAttribute("width", "288");
+
+    const redoResponse = page.waitForResponse(
+      (response) => response.url().endsWith("/api/editor/redo") && response.ok(),
+    );
+    await page.getByRole("button", { name: "Redo" }).click();
+    await redoResponse;
+    await expect(page.getByTestId("selection-box")).toHaveAttribute("width", "336");
+
+    await page.getByRole("button", { name: "Save" }).click();
+    await expect(page.locator("#editor-message")).toContainText(savedPath);
+
+    const saved = readPptx(await readFile(savedPath));
+    expect(connectorByName(saved, "Connector 11").transform).toMatchObject({
+      offsetX: 168 * EMU_PER_PIXEL,
+      offsetY: 160 * EMU_PER_PIXEL,
+      width: 336 * EMU_PER_PIXEL,
+      height: 120 * EMU_PER_PIXEL,
+    });
+
+    const deleteResponse = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/api/editor/command") &&
+        response.request().method() === "POST" &&
+        response.ok(),
+    );
+    await page.getByRole("button", { name: "Delete shape" }).click();
+    await deleteResponse;
+    await expect(page.getByTestId("selection-box")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(page.getByTestId("shape-hit-area")).toHaveCount(2);
+    await page.getByRole("button", { name: "Redo" }).click();
+    await expect(page.getByTestId("shape-hit-area")).toHaveCount(1);
   } finally {
     if (serverProcess !== undefined) {
       serverProcess.kill();
@@ -582,6 +664,14 @@ function firstShape(source: PptxSourceModel): SourceShape {
   const shape = source.slides[0]?.shapes.find((node): node is SourceShape => node.kind === "shape");
   if (shape === undefined) throw new Error("fixture shape not found");
   return shape;
+}
+
+function connectorByName(source: PptxSourceModel, name: string): SourceConnector {
+  const connector = source.slides[0]?.shapes.find(
+    (node): node is SourceConnector => node.kind === "connector" && node.name === name,
+  );
+  if (connector === undefined) throw new Error(`connector not found: ${name}`);
+  return connector;
 }
 
 function firstText(source: PptxSourceModel): string {

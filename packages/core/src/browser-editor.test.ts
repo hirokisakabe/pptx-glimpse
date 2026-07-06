@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
 
-import { asEmu, readPptx, type SourceShape } from "@pptx-glimpse/document";
+import { asEmu, readPptx, type SourceConnector, type SourceShape } from "@pptx-glimpse/document";
 import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
 
@@ -152,6 +152,54 @@ describe("BrowserPptxEditorSession", () => {
     expect(
       editor.shapes(1).some((shape) => handleKey(shape.handle) === handleKey(addedShape.handle)),
     ).toBe(false);
+  });
+
+  it("adds, selects, moves, resizes, saves, deletes, undoes, and redoes a connector", async () => {
+    const editor = await createBrowserPptxEditorSession(await buildShapeFixture(), {
+      skipSystemFonts: true,
+    });
+
+    const addedResponse = await editor.addConnector(1);
+    const addedHandle = addedResponse.selection?.shapeHandle;
+    if (addedHandle === undefined) throw new Error("added connector was not selected");
+    const addedConnector = editor
+      .shapes(1)
+      .find((shape) => handleKey(shape.handle) === handleKey(addedHandle));
+    if (addedConnector?.handle === undefined) throw new Error("added connector handle not found");
+    expect(addedConnector).toMatchObject({
+      kind: "connector",
+      bounds: { x: 144, y: 144, width: 288, height: 96 },
+      editableDelete: true,
+      editableTransform: true,
+    });
+
+    await editor.apply({
+      kind: "setShapeTransform",
+      handle: addedConnector.handle,
+      offsetX: asEmu(168 * 9525),
+      offsetY: asEmu(160 * 9525),
+      width: asEmu(336 * 9525),
+      height: asEmu(120 * 9525),
+    });
+
+    const saved = readPptx(editor.save().pptx);
+    const savedConnector = connectorByName(saved, "Connector 11");
+    expect(savedConnector.transform).toMatchObject({
+      offsetX: 168 * 9525,
+      offsetY: 160 * 9525,
+      width: 336 * 9525,
+      height: 120 * 9525,
+    });
+    expect(savedConnector.outline?.tailEnd).toMatchObject({ type: "triangle" });
+
+    const deleted = await editor.deleteSelectedShape();
+    expect(deleted.selection).toBeUndefined();
+    expect(editor.shapes(1).find((shape) => shape.name === "Connector 11")).toBeUndefined();
+
+    await editor.undo();
+    expect(editor.shapes(1).find((shape) => shape.name === "Connector 11")).toBeDefined();
+    await editor.redo();
+    expect(editor.shapes(1).find((shape) => shape.name === "Connector 11")).toBeUndefined();
   });
 
   it("marks top-level text shapes without transform as deletable", async () => {
@@ -485,6 +533,14 @@ function shapeByText(source: ReturnType<typeof readPptx>, text: string): SourceS
   );
   if (shape === undefined) throw new Error(`shape text not found: ${text}`);
   return shape;
+}
+
+function connectorByName(source: ReturnType<typeof readPptx>, name: string): SourceConnector {
+  const connector = source.slides[0]?.shapes.find(
+    (node): node is SourceConnector => node.kind === "connector" && node.name === name,
+  );
+  if (connector === undefined) throw new Error(`connector not found: ${name}`);
+  return connector;
 }
 
 function handleKey(handle: unknown): string {
