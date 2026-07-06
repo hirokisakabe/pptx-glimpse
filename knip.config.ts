@@ -12,6 +12,7 @@ const config: KnipConfig = {
         "e2e/dev-server-editor.playwright.ts",
         "e2e/browser-standalone-viewer.playwright.ts",
         "e2e/browser-standalone-editor.playwright.ts",
+        "e2e/demo-browser-editor.playwright.ts",
       ],
     },
     "packages/core": {
