@@ -5,7 +5,8 @@
  * at once: parts / contentTypes.overrides / relationships / rawParts. These
  * helpers own that invariant so each editing operation does not have to
  * re-implement it by hand. All functions return a new PackageGraph and never
- * mutate their input.
+ * mutate their input. The media list is out of scope: none of these helpers
+ * touch `graph.media`.
  */
 
 import { asPartPath, asRelationshipId, type PartPath, type RelationshipId } from "./handles.js";
@@ -96,11 +97,18 @@ export function removePackageParts(
     relationships: graph.relationships.filter(
       (relationships) => !removedPartPaths.has(relationships.sourcePartPath),
     ),
-    rawParts: graph.rawParts?.filter((part) => !removedPartPaths.has(part.partPath)),
+    rawParts: graph.rawParts?.filter(
+      (part) =>
+        !removedPartPaths.has(part.partPath) && !removedRelationshipPartPaths.has(part.partPath),
+    ),
   };
 }
 
-/** Appends one relationship to the `.rels` owned by sourcePartPath. */
+/**
+ * Appends one relationship to the `.rels` owned by sourcePartPath. No-op when
+ * the graph has no relationships entry for that part; callers must ensure the
+ * entry exists beforehand.
+ */
 export function addPartRelationship(
   graph: PackageGraph,
   sourcePartPath: PartPath,
@@ -119,7 +127,10 @@ export function addPartRelationship(
   };
 }
 
-/** Removes one relationship by id from the `.rels` owned by sourcePartPath. */
+/**
+ * Removes one relationship by id from the `.rels` owned by sourcePartPath.
+ * No-op when the graph has no relationships entry for that part.
+ */
 export function removePartRelationship(
   graph: PackageGraph,
   sourcePartPath: PartPath,
@@ -142,7 +153,8 @@ export function removePartRelationship(
 
 /**
  * Shared "max trailing number + 1" allocator: scan used names with the pattern
- * (capture group 1 must be the number), continue after the maximum, and skip
+ * (capture group 1 must be the number; the pattern must not carry the g / y
+ * flags, which would make exec stateful), continue after the maximum, and skip
  * candidates that are still taken.
  */
 export function nextNumberedName(

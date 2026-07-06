@@ -147,6 +147,20 @@ describe("removePackageParts", () => {
           },
         ],
       },
+      rawParts: [
+        {
+          kind: "binary",
+          partPath: asPartPath("ppt/slides/slide1.xml"),
+          contentType: SLIDE_CONTENT_TYPE,
+          bytes: new Uint8Array([1]),
+        },
+        {
+          kind: "binary",
+          partPath: asPartPath("ppt/slides/_rels/slide1.xml.rels"),
+          contentType: RELS_CONTENT_TYPE,
+          bytes: new Uint8Array([2]),
+        },
+      ],
     });
     const next = removePackageParts(graph, [asPartPath("ppt/slides/slide1.xml")]);
 
@@ -156,6 +170,21 @@ describe("removePackageParts", () => {
       "ppt/presentation.xml",
     ]);
     expect(next.rawParts).toEqual([]);
+  });
+
+  it("Keep rawParts undefined when the graph preserves no raw package material", () => {
+    const graph = buildGraph({ rawParts: undefined });
+
+    expect(removePackageParts(graph, [asPartPath("ppt/slides/slide1.xml")]).rawParts).toBe(
+      undefined,
+    );
+    expect(
+      addPackagePart(graph, {
+        partPath: asPartPath("ppt/slides/slide2.xml"),
+        contentType: SLIDE_CONTENT_TYPE,
+        bytes: new Uint8Array([2]),
+      }).rawParts,
+    ).toHaveLength(1);
   });
 });
 
@@ -182,6 +211,17 @@ describe("addPartRelationship / removePartRelationship", () => {
     expect(removed.relationships[0].relationships.map((relationship) => relationship.id)).toEqual([
       "rId2",
     ]);
+  });
+
+  it("Return the graph unchanged when no relationships entry owns the source part", () => {
+    const graph = buildGraph();
+    const next = addPartRelationship(graph, asPartPath("ppt/unknown.xml"), {
+      id: asRelationshipId("rId9"),
+      type: SLIDE_REL_TYPE,
+      target: "slides/slide9.xml",
+    });
+
+    expect(next.relationships).toEqual(graph.relationships);
   });
 });
 
@@ -215,6 +255,20 @@ describe("numbering helpers", () => {
     );
     expect(nextNumberedPartPath(graph, [], "ppt/notesSlides/notesSlide", ".xml")).toBe(
       "ppt/notesSlides/notesSlide1.xml",
+    );
+
+    const withRawOnlyPart = buildGraph({
+      rawParts: [
+        {
+          kind: "binary",
+          partPath: asPartPath("ppt/slides/slide9.xml"),
+          contentType: SLIDE_CONTENT_TYPE,
+          bytes: new Uint8Array([1]),
+        },
+      ],
+    });
+    expect(nextNumberedPartPath(withRawOnlyPart, [], "ppt/slides/slide", ".xml")).toBe(
+      "ppt/slides/slide10.xml",
     );
   });
 
