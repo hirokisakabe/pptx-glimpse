@@ -3,14 +3,17 @@
  *
  * This surface is limited to the PptxSourceModel foundation that current
  * conversion, writer, and minimal editing workflows are allowed to depend on:
- * source model types, the PPTX reader, computed view generation, the writer,
- * and focused text / shape / slide topology editing operations.
+ * source model types, the PPTX reader, from-scratch source factory, computed
+ * view generation, the writer, and focused text / shape / slide topology
+ * editing operations.
  *
  * Keep parser helpers, raw replacement/editing APIs, writer dirty-scope
  * implementation details, and other OOXML internals behind their owning
  * modules until those contracts are intentionally promoted.
  */
 
+export type { CreatePptxOptions } from "./builder/index.js";
+export { createPptx } from "./builder/index.js";
 export type {
   ComputedBackground,
   ComputedBlipEffects,
@@ -66,6 +69,8 @@ export type {
   ContentTypes,
   Diagnostic,
   DiagnosticSeverity,
+  EditableParagraphProperties,
+  EditableParagraphProperty,
   EditableShapeFill,
   EditableShapeOutline,
   EditableTextRunProperties,
@@ -73,6 +78,7 @@ export type {
   Emu,
   HundredthPt,
   MediaPart,
+  MoveSlideInput,
   OoxmlAngle,
   OoxmlPercent,
   PackageGraph,
@@ -87,6 +93,8 @@ export type {
   PptxSourceModelDeleteSlideEdit,
   PptxSourceModelDuplicateSlideEdit,
   PptxSourceModelEdit,
+  PptxSourceModelMoveSlideEdit,
+  PptxSourceModelParagraphPropertiesEdit,
   PptxSourceModelParagraphTextEdit,
   PptxSourceModelReplaceImageEdit,
   PptxSourceModelShapeFillEdit,
@@ -189,6 +197,7 @@ export {
   addConnector,
   addEmptySlideFromLayout,
   addTextBox,
+  clearParagraphProperties,
   clearTextRunProperties,
   deleteShape,
   deleteSlide,
@@ -196,9 +205,11 @@ export {
   findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
+  moveSlide,
   replaceImageBytes,
   replaceParagraphPlainText,
   replaceTextRunPlainText,
+  setParagraphProperties,
   setShapeFill,
   setShapeOutline,
   setTextRunProperties,

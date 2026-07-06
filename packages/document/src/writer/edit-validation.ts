@@ -40,6 +40,8 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
       case "updateTextRunProperties":
         textRunPropertiesEdits.push(edit);
         break;
+      case "updateParagraphProperties":
+        break;
       case "replaceParagraphPlainText": {
         const key = editHandleNodeKey(edit);
         if (paragraphKeys.has(key)) {
@@ -93,6 +95,7 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
       case "replaceImage":
       case "addEmptySlideFromLayout":
       case "duplicateSlide":
+      case "moveSlide":
       case "deleteSlide":
         break;
     }

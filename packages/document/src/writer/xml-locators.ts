@@ -108,19 +108,25 @@ export function locateShapeTreeNode(
 export function deleteShapeXml(spTree: XmlNode | undefined, nodeId: string): boolean {
   if (spTree === undefined) return false;
   const entry = Object.entries(spTree).find(
-    ([key]) => !key.startsWith("@_") && localName(key) === "sp",
+    ([key, value]) =>
+      !key.startsWith("@_") &&
+      (localName(key) === "sp" || localName(key) === "cxnSp") &&
+      getShapeTreeNodes(value).some((shape) => getShapeTreeNodeId(shape) === nodeId),
   );
   if (entry === undefined) return false;
 
   const [key, value] = entry;
-  const shapes = Array.isArray(value) ? unsafeOoxmlBoundaryAssertion<unknown[]>(value) : [value];
-  const nextShapes = shapes.filter(
-    (shape) => getShapeTreeNodeId(unsafeOoxmlBoundaryAssertion<XmlNode>(shape)) !== nodeId,
-  );
+  const shapes = getShapeTreeNodes(value);
+  const nextShapes = shapes.filter((shape) => getShapeTreeNodeId(shape) !== nodeId);
   if (nextShapes.length === shapes.length) return false;
   if (nextShapes.length === 0) delete spTree[key];
   else spTree[key] = Array.isArray(value) ? nextShapes : nextShapes[0];
   return true;
+}
+
+function getShapeTreeNodes(value: unknown): XmlNode[] {
+  const items = Array.isArray(value) ? unsafeOoxmlBoundaryAssertion<unknown[]>(value) : [value];
+  return items.map((item) => unsafeOoxmlBoundaryAssertion<XmlNode>(item));
 }
 
 function getShapeByOrderingSlot(

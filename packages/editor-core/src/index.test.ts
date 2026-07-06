@@ -434,6 +434,130 @@ describe("EditorSession text run property commands", () => {
   });
 });
 
+describe("EditorSession paragraph property commands", () => {
+  it("applies paragraph alignment and bullet edits and persists them through write/read", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const handle = requireHandle(firstParagraph(source).handle);
+
+    const edited = expectApplied(
+      session.apply({
+        kind: "setParagraphProperties",
+        handle,
+        properties: {
+          align: "right",
+          level: 2,
+          bullet: { type: "char", char: "\u2022" },
+        },
+      }),
+    );
+    const reread = readPptx(writePptx(edited));
+
+    expect(firstParagraph(session.document).properties).toMatchObject({
+      align: "right",
+      level: 2,
+      bullet: { type: "char", char: "\u2022" },
+    });
+    expect(firstParagraph(reread).properties).toMatchObject({
+      align: "right",
+      level: 2,
+      bullet: { type: "char", char: "\u2022" },
+    });
+  });
+
+  it("undoes and redoes paragraph property edits", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const handle = requireHandle(firstParagraph(source).handle);
+
+    expectApplied(
+      session.apply({
+        kind: "setParagraphProperties",
+        handle,
+        properties: { align: "justify", bullet: { type: "none" } },
+      }),
+    );
+
+    const undone = expectHistory(session.undo());
+    const redone = expectHistory(session.redo());
+
+    expect(firstParagraph(undone).properties).toEqual(firstParagraph(source).properties);
+    expect(firstParagraph(readPptx(writePptx(undone))).properties).toEqual(
+      firstParagraph(source).properties,
+    );
+    expect(firstParagraph(redone).properties).toMatchObject({
+      align: "justify",
+      bullet: { type: "none" },
+    });
+    expect(firstParagraph(readPptx(writePptx(redone))).properties).toMatchObject({
+      align: "justify",
+      bullet: { type: "none" },
+    });
+  });
+
+  it("keeps only the latest paragraph property edits and skips same-value repeats", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const handle = requireHandle(firstParagraph(source).handle);
+
+    expectApplied(
+      session.apply({
+        kind: "setParagraphProperties",
+        handle,
+        properties: { align: "left", level: 1, bullet: { type: "char", char: "\u2022" } },
+      }),
+    );
+    const edited = expectApplied(
+      session.apply({
+        kind: "setParagraphProperties",
+        handle,
+        properties: { align: "right", bullet: { type: "none" } },
+      }),
+    );
+    const repeated = expectApplied(
+      session.apply({
+        kind: "setParagraphProperties",
+        handle,
+        properties: { align: "right", bullet: { type: "none" } },
+      }),
+    );
+    const propertyEdits =
+      repeated.edits?.filter((edit) => edit.kind === "updateParagraphProperties") ?? [];
+
+    expect(repeated).toBe(edited);
+    expect(propertyEdits).toHaveLength(2);
+    expect(propertyEdits[0]).toMatchObject({ set: { level: 1 } });
+    expect(propertyEdits[1]).toMatchObject({
+      set: { align: "right", bullet: { type: "none" } },
+    });
+  });
+
+  it("rejects invalid paragraph property commands without changing history", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const before = session.document;
+    const handle = requireHandle(firstParagraph(source).handle);
+
+    const invalidAlign = session.apply({
+      kind: "setParagraphProperties",
+      handle,
+      // @ts-expect-error exercises runtime validation for JS callers.
+      properties: { align: "middle" },
+    });
+    const invalidClear = session.apply({
+      kind: "clearParagraphProperties",
+      handle,
+      // @ts-expect-error exercises runtime validation for JS callers.
+      properties: ["spacing"],
+    });
+
+    expect(invalidAlign).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(invalidClear).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(session.document).toBe(before);
+    expect(session.undoDepth).toBe(0);
+  });
+});
+
 describe("ProseMirror text body conversion", () => {
   it("round-trips paragraph and run text with source properties", async () => {
     const source = readPptx(await buildTextEditFixture());
@@ -526,6 +650,75 @@ describe("ProseMirror text body conversion", () => {
       },
     ]);
     expect(firstParagraph(reread).runs.map((run) => run.text)).toEqual([" Keep Original"]);
+  });
+
+  it("turns paragraph property attr changes into editor commands", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const textBody = firstTextBody(source);
+    const docJson = textBodyToProseMirrorDocJson(textBody);
+    const paragraph = docJson.content?.[0];
+    if (paragraph === undefined) throw new Error("text body doc fixture is missing paragraph");
+    const editedJson = {
+      type: "doc",
+      content: [
+        {
+          ...paragraph,
+          attrs: {
+            ...paragraph.attrs,
+            properties: {
+              ...firstParagraph(source).properties,
+              align: "right",
+              level: 1,
+              bullet: { type: "char", char: "\u2022" },
+            },
+          },
+        },
+      ],
+    };
+    const commands = proseMirrorDocJsonToEditorCommands(textBody, editedJson);
+    const session = createEditorSession(source);
+
+    expect(commands).toEqual([
+      {
+        kind: "setParagraphProperties",
+        handle: firstParagraph(source).handle,
+        properties: { align: "right", level: 1, bullet: { type: "char", char: "\u2022" } },
+      },
+    ]);
+    expectApplied(session.applyAll(commands));
+    expect(firstParagraph(readPptx(writePptx(session.document))).properties).toMatchObject({
+      align: "right",
+      level: 1,
+      bullet: { type: "char", char: "\u2022" },
+    });
+  });
+
+  it("clears paragraph property attrs removed from ProseMirror JSON", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const textBody = firstTextBody(source);
+    const docJson = textBodyToProseMirrorDocJson(textBody);
+    const paragraph = docJson.content?.[0];
+    if (paragraph === undefined) throw new Error("text body doc fixture is missing paragraph");
+    const editedJson = {
+      type: "doc",
+      content: [
+        {
+          ...paragraph,
+          attrs: {
+            ...paragraph.attrs,
+            properties: {},
+          },
+        },
+      ],
+    };
+
+    expect(proseMirrorDocJsonToEditorCommands(textBody, editedJson)).toEqual([
+      {
+        kind: "clearParagraphProperties",
+        handle: firstParagraph(source).handle,
+        properties: ["align"],
+      },
+    ]);
   });
 
   it("rejects text bodies with empty or unsupported run-like content", async () => {
@@ -1339,6 +1532,33 @@ describe("EditorSession slide topology commands", () => {
     expect(undone.presentation.slidePartPaths).toEqual(source.presentation.slidePartPaths);
     const redone = expectHistory(session.redo());
     expect(redone.presentation.slidePartPaths).toEqual(duplicated.presentation.slidePartPaths);
+  });
+
+  it("moves a slide as one undoable command and persists it", async () => {
+    const source = readPptx(await buildTwoSlideFixture());
+    const session = createEditorSession(source);
+    const moved = expectApplied(
+      session.apply({
+        kind: "moveSlide",
+        handle: requireHandle(source.slides[0].handle),
+        toIndex: 1,
+      }),
+    );
+
+    expect(moved.presentation.slidePartPaths).toEqual([
+      "ppt/slides/slide2.xml",
+      "ppt/slides/slide1.xml",
+    ]);
+    expect(readPptx(writePptx(moved)).presentation.slidePartPaths).toEqual([
+      "ppt/slides/slide2.xml",
+      "ppt/slides/slide1.xml",
+    ]);
+    expect(session.undoDepth).toBe(1);
+
+    const undone = expectHistory(session.undo());
+    expect(undone.presentation.slidePartPaths).toEqual(source.presentation.slidePartPaths);
+    const redone = expectHistory(session.redo());
+    expect(redone.presentation.slidePartPaths).toEqual(moved.presentation.slidePartPaths);
   });
 
   it("deletes a slide as one undoable command and rejects invalid slide deletes", async () => {

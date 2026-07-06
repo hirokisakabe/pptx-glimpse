@@ -11,13 +11,17 @@ import {
   addTextBox,
   asEmu,
   asPt,
+  createPptx,
   deleteShape,
   deleteSlide,
   duplicateSlide,
+  moveSlide,
   readPptx,
   replaceImageBytes,
+  type SourceConnector,
   type SourceHandle,
   type SourceImage,
+  type SourceParagraph,
   type SourceShape,
   type SourceShapeNode,
   type SourceTextRun,
@@ -43,6 +47,7 @@ const TRANSFORM_EDIT = {
   height: asEmu(1463040),
 } as const;
 const FORMATTING_EDITED_VALUE = "Editable formatting target";
+const PARAGRAPH_EDITED_VALUE = "Paragraph properties target";
 const BLUE_PNG = new Uint8Array(
   Buffer.from(
     "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGNkYPjPAANMcBZeDgAx0wEH1s7nlgAAAABJRU5ErkJggg==",
@@ -130,6 +135,28 @@ const LO_EDITOR_VALIDITY_CASES = [
     },
   },
   {
+    name: "paragraph properties",
+    sourceFixture: "editor-validity-paragraph-source.pptx",
+    expectedFixture: "editor-validity-paragraph-expected.pptx",
+    createEditedPptx: (input: Uint8Array) => {
+      const source = readPptx(input);
+      const session = createEditorSession(source);
+      const paragraph = findParagraph(source, PARAGRAPH_EDITED_VALUE);
+      const setResult = session.apply({
+        kind: "setParagraphProperties",
+        handle: requireHandle(paragraph.handle),
+        properties: {
+          align: "right",
+          level: 1,
+          bullet: { type: "char", char: "\u2022" },
+        },
+      });
+
+      if (!setResult.ok) throw new Error(setResult.message);
+      return writePptx(setResult.document);
+    },
+  },
+  {
     name: "image replacement",
     sourceFixture: "editor-validity-image-source.pptx",
     expectedFixture: "editor-validity-image-expected.pptx",
@@ -150,6 +177,7 @@ const hasFixtures =
       existsSync(join(FIXTURE_DIR, testCase.expectedFixture)),
   );
 const describeOrSkip = libreOfficeImage !== undefined && hasFixtures ? describe : describe.skip;
+const describeFromScratchOrSkip = libreOfficeImage !== undefined ? describe : describe.skip;
 
 describeOrSkip("LibreOffice edited PPTX validity", { timeout: 120000 }, () => {
   for (const testCase of LO_EDITOR_VALIDITY_CASES) {
@@ -209,6 +237,40 @@ describeOrSkip("LibreOffice slide topology validity", { timeout: 120000 }, () =>
       libreOfficeImage,
       "editor-validity-slide-topology-edited.pptx",
       writePptx(deleted),
+    );
+  });
+
+  it("opens PPTX after moving a slide", () => {
+    const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
+    const source = readPptx(sourcePptx);
+    const duplicated = duplicateSlide(source, requireHandle(source.slides[0]?.handle));
+    const moved = moveSlide(duplicated, requireHandle(duplicated.slides[0]?.handle), {
+      toIndex: 1,
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-slide-move-edited.pptx",
+      writePptx(moved),
+    );
+  });
+});
+
+describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 120000 }, () => {
+  it("opens from-scratch PPTX after adding a text box", () => {
+    const source = createPptx();
+    const edited = addTextBox(source, requireHandle(source.slides[0]?.handle), {
+      offsetX: asEmu(914400),
+      offsetY: asEmu(914400),
+      width: asEmu(3657600),
+      height: asEmu(914400),
+      text: "LibreOffice from-scratch text box",
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-from-scratch-text-box.pptx",
+      writePptx(edited),
     );
   });
 });
@@ -312,6 +374,53 @@ describeOrSkip("LibreOffice shape add/delete validity", { timeout: 120000 }, () 
       libreOfficeImage,
       "editor-validity-shape-style-edited.pptx",
       writePptx(setSecondNoOutline.document),
+    );
+  });
+
+  it("opens PPTX after adding a free connector", () => {
+    const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
+    const source = readPptx(sourcePptx);
+    const edited = addConnector(source, requireHandle(source.slides[0]?.handle), {
+      preset: "straightConnector1",
+      offsetX: asEmu(914400),
+      offsetY: asEmu(1371600),
+      width: asEmu(3657600),
+      height: asEmu(914400),
+      outline: {
+        tailEnd: { type: "triangle", width: "med", length: "med" },
+      },
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-shape-free-connector-edited.pptx",
+      writePptx(edited),
+    );
+  });
+
+  it("opens PPTX after deleting a connector", () => {
+    const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
+    const source = readPptx(sourcePptx);
+    const withConnector = addConnector(source, requireHandle(source.slides[0]?.handle), {
+      preset: "straightConnector1",
+      offsetX: asEmu(914400),
+      offsetY: asEmu(1371600),
+      width: asEmu(3657600),
+      height: asEmu(914400),
+      outline: {
+        tailEnd: { type: "triangle", width: "med", length: "med" },
+      },
+    });
+    const persisted = readPptx(writePptx(withConnector));
+    const connector = persisted.slides[0]?.shapes.find(
+      (shape): shape is SourceConnector => shape.kind === "connector",
+    );
+    const edited = deleteShape(persisted, requireHandle(connector?.handle));
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-shape-connector-delete-edited.pptx",
+      writePptx(edited),
     );
   });
 
@@ -436,6 +545,18 @@ function findTextRun(source: ReturnType<typeof readPptx>, text: string): SourceT
     }
   }
   throw new Error(`Text run not found: ${text}`);
+}
+
+function findParagraph(source: ReturnType<typeof readPptx>, text: string): SourceParagraph {
+  for (const slide of source.slides) {
+    for (const shape of flattenShapes(slide.shapes)) {
+      const paragraph = shape.textBody?.paragraphs.find(
+        (candidate) => candidate.runs.map((run) => run.text).join("") === text,
+      );
+      if (paragraph !== undefined) return paragraph;
+    }
+  }
+  throw new Error(`Paragraph not found: ${text}`);
 }
 
 function findShapeByName(shapes: readonly SourceShapeNode[], name: string): SourceShape {

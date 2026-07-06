@@ -20,6 +20,7 @@ from pptx import Presentation
 from pptx.dml.color import RGBColor
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import PP_ALIGN
+from pptx.oxml.xmlchemy import OxmlElement
 from pptx.util import Emu, Inches, Pt
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
@@ -179,6 +180,44 @@ def create_editor_validity_formatting_fixture(filename, *, expected):
     print(f"  Created: {filename}")
 
 
+def create_editor_validity_paragraph_fixture(filename, *, expected):
+    """Fixture pair for editor-core paragraph property validity checks."""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    title = slide.shapes.add_textbox(Inches(0.4), Inches(0.25), Inches(9.2), Inches(0.5))
+    title.text_frame.text = "LibreOffice editor validity: paragraph"
+    title.text_frame.paragraphs[0].runs[0].font.size = Pt(18)
+
+    shape = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.9), Inches(1.3), Inches(8.0), Inches(2.0)
+    )
+    shape.name = "Editable Paragraph Target"
+    shape.fill.solid()
+    shape.fill.fore_color.rgb = RGBColor(0xDE, 0xEB, 0xF7)
+    shape.line.color.rgb = RGBColor(0x2F, 0x75, 0xB5)
+    shape.line.width = Pt(1.5)
+
+    tf = shape.text_frame
+    tf.word_wrap = True
+    paragraph = tf.paragraphs[0]
+    paragraph.text = "Paragraph properties target"
+    paragraph.alignment = PP_ALIGN.RIGHT if expected else PP_ALIGN.LEFT
+    paragraph.level = 1 if expected else 0
+    if expected:
+        p_pr = paragraph._p.get_or_add_pPr()
+        bu_char = OxmlElement("a:buChar")
+        bu_char.set("char", "\u2022")
+        p_pr.insert(0, bu_char)
+    run = paragraph.runs[0]
+    run.font.name = "Liberation Sans"
+    run.font.size = Pt(24)
+    run.font.color.rgb = RGBColor(0x1F, 0x4E, 0x79)
+
+    prs.save(os.path.join(OUTPUT_DIR, filename))
+    print(f"  Created: {filename}")
+
+
 def create_editor_validity_image_fixture(filename, image_base64):
     """Fixture pair for editor-core image replacement validity checks."""
     prs = new_presentation()
@@ -234,6 +273,14 @@ def create_editor_validity_fixtures():
     )
     create_editor_validity_formatting_fixture(
         "editor-validity-formatting-expected.pptx",
+        expected=True,
+    )
+    create_editor_validity_paragraph_fixture(
+        "editor-validity-paragraph-source.pptx",
+        expected=False,
+    )
+    create_editor_validity_paragraph_fixture(
+        "editor-validity-paragraph-expected.pptx",
         expected=True,
     )
     create_editor_validity_image_fixture(

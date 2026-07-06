@@ -12,6 +12,7 @@ import {
   asPt,
   asSourceNodeId,
   createComputedView,
+  createPptx,
   readPptx,
   writePptx,
 } from "../index.js";
@@ -19,6 +20,7 @@ import {
   addConnector,
   addEmptySlideFromLayout,
   addTextBox,
+  clearParagraphProperties,
   clearTextRunProperties,
   deleteShape,
   deleteSlide,
@@ -26,15 +28,18 @@ import {
   findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
+  moveSlide,
   replaceImageBytes,
   replaceParagraphPlainText,
   replaceTextRunPlainText,
+  setParagraphProperties,
   setShapeFill,
   setShapeOutline,
   setTextRunProperties,
   type SourceConnector,
   type SourceShape,
   type SourceShapeNode,
+  type SourceTextRun,
   updateShapeTransform,
 } from "../index.js";
 
@@ -568,6 +573,80 @@ function getEntry(output: Uint8Array, path: string): Uint8Array {
   return entry;
 }
 
+function findTextRun(source: ReturnType<typeof readPptx>, text: string): SourceTextRun {
+  for (const slide of source.slides) {
+    for (const shape of slide.shapes) {
+      if (shape.kind !== "shape") continue;
+      for (const paragraph of shape.textBody?.paragraphs ?? []) {
+        const run = paragraph.runs.find((candidate) => candidate.text === text);
+        if (run !== undefined) return run;
+      }
+    }
+  }
+  throw new Error(`text run not found: ${text}`);
+}
+
+describe("writePptx - from-scratch builder", () => {
+  it("writes a new presentation after adding a text box through public APIs", () => {
+    const source = createPptx();
+    const slideHandle = source.slides[0]?.handle;
+    if (slideHandle === undefined) throw new Error("createPptx should create a first slide");
+
+    const edited = addTextBox(source, slideHandle, {
+      offsetX: asEmu(914400),
+      offsetY: asEmu(914400),
+      width: asEmu(3657600),
+      height: asEmu(914400),
+      text: "Hello from scratch",
+    });
+
+    const reread = readPptx(writePptx(edited));
+    expect(reread.diagnostics).toEqual([]);
+    expect(reread.presentation.slidePartPaths).toEqual([asPartPath("ppt/slides/slide1.xml")]);
+    expect(reread.slides).toHaveLength(1);
+    expect(reread.slideLayouts).toHaveLength(1);
+    expect(reread.slideMasters).toHaveLength(1);
+    expect(reread.themes).toHaveLength(1);
+    expect(findTextRun(reread, "Hello from scratch").text).toBe("Hello from scratch");
+
+    const computed = createComputedView(reread);
+    expect(computed.slideSize).toEqual({ width: asEmu(9144000), height: asEmu(5143500) });
+    expect(computed.slides[0]?.elements).toHaveLength(1);
+  });
+
+  it("writes custom slide size without fixed 16:9 metadata", () => {
+    const source = createPptx({
+      slideSize: { width: asEmu(7315200), height: asEmu(5486400) },
+    });
+    const output = writePptx(source);
+    const reread = readPptx(output);
+
+    expect(reread.presentation.slideSize).toEqual({
+      width: asEmu(7315200),
+      height: asEmu(5486400),
+    });
+    expect(decoder.decode(getEntry(output, "ppt/presentation.xml"))).toContain(
+      `<p:sldSz cx="7315200" cy="5486400"/>`,
+    );
+    expect(decoder.decode(getEntry(output, "docProps/app.xml"))).not.toContain(
+      "On-screen Show (16:9)",
+    );
+  });
+
+  it("rejects invalid custom slide sizes", () => {
+    expect(() =>
+      createPptx({
+        slideSize: { width: asEmu(Number.NaN), height: asEmu(5486400) },
+      }),
+    ).toThrow(/slideSize\.width/);
+    expect(() =>
+      createPptx({
+        slideSize: { width: asEmu(7315200), height: asEmu(0) },
+      }),
+    ).toThrow(/slideSize\.height/);
+  });
+});
+
 describe("writePptx - no-edit round-trip", () => {
   it("You can write no-edit PPTX from PptxSourceModel source and reload it.", () => {
     const input = buildRoundTripFixture();
@@ -865,6 +944,32 @@ describe("writePptx - slide topology edits", () => {
     );
   });
 
+  it("moves an existing slide by reordering presentation slide ids only", () => {
+    const source = readPptx(buildSlideTopologyFixture());
+    const edited = moveSlide(source, source.slides[0].handle!, { toIndex: 1 });
+    const output = writePptx(edited);
+    const entries = unzipSync(output);
+    const reread = readPptx(output);
+    const presentationXml = decoder.decode(getEntry(output, "ppt/presentation.xml"));
+    const presentationRels = decoder.decode(getEntry(output, "ppt/_rels/presentation.xml.rels"));
+
+    expect(reread.presentation.slidePartPaths).toEqual([
+      "ppt/slides/slide2.xml",
+      "ppt/slides/slide1.xml",
+    ]);
+    expect(
+      reread.slides.map((slide) => slide.shapes[0]?.kind === "shape" && slide.shapes[0].name),
+    ).toEqual(["Second", "Invisible Source"]);
+    expect(presentationXml.indexOf(`r:id="rIdSlide2"`)).toBeLessThan(
+      presentationXml.indexOf(`r:id="rIdSlide1"`),
+    );
+    expect(presentationRels).toContain(`Id="rIdSlide1"`);
+    expect(presentationRels).toContain(`Id="rIdSlide2"`);
+    expect(entries["ppt/slides/slide1.xml"]).toBeDefined();
+    expect(entries["ppt/slides/slide2.xml"]).toBeDefined();
+    expect(entries["ppt/notesSlides/notesSlide1.xml"]).toBeDefined();
+  });
+
   it("deletes a slide and its notes part while keeping remaining slide order and orphan cleanup out of scope", () => {
     const source = readPptx(buildSlideTopologyFixture());
     const edited = deleteSlide(source, source.slides[0].handle!);
@@ -1048,6 +1153,43 @@ describe("writePptx - shape add/delete edits", () => {
     expect(slideXml).toContain(`<a:prstGeom prst="bentConnector3"`);
     expect(slideXml).toContain(`<a:tailEnd type="triangle" w="med" len="lg"`);
     expect(decoder.decode(getEntry(output, "docProps/custom.xml"))).toContain("preserve-me");
+  });
+
+  it("adds and deletes a free connector without native connection sites", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const edited = addConnector(source, source.slides[0].handle!, {
+      preset: "straightConnector1",
+      offsetX: asEmu(100),
+      offsetY: asEmu(200),
+      width: asEmu(700),
+      height: asEmu(800),
+      outline: {
+        tailEnd: { type: "triangle", width: "med", length: "med" },
+      },
+    });
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+    const added = findConnectorByName(reread, "Connector 31");
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+
+    expect(added).toMatchObject({
+      nodeId: "31",
+      name: "Connector 31",
+      geometry: { preset: "straightConnector1" },
+      outline: { tailEnd: { type: "triangle", width: "med", length: "med" } },
+    });
+    expect(added.connection).toBeUndefined();
+    expect(slideXml).toContain(`<p:cxnSp>`);
+    expect(slideXml).not.toContain(`<a:stCxn`);
+    expect(slideXml).not.toContain(`<a:endCxn`);
+
+    const persisted = readPptx(output);
+    const deleted = deleteShape(
+      persisted,
+      requireHandle(findConnectorByName(persisted, "Connector 31").handle),
+    );
+    const deletedOutput = writePptx(deleted);
+    expect(findConnectorByNameOptional(readPptx(deletedOutput), "Connector 31")).toBeUndefined();
   });
 
   it("rejects deleting a shape referenced by a connector", () => {
@@ -1239,11 +1381,11 @@ describe("writePptx - shape add/delete edits", () => {
     expect(decoder.decode(getEntry(output, "docProps/custom.xml"))).toContain("preserve-me");
   });
 
-  it("rejects deleting pic and graphicFrame nodes through the sp-only delete API", () => {
+  it("rejects deleting pic and graphicFrame nodes through the sp/cxnSp delete API", () => {
     const source = readPptx(buildShapeDeleteFixture());
 
     expect(() => deleteShape(source, requireHandle(source.slides[0].shapes[1]?.handle))).toThrow(
-      /only top-level sp shapes/,
+      /only top-level sp or cxnSp shapes/,
     );
   });
 
@@ -1730,6 +1872,115 @@ describe("writePptx - shape fill and outline editing", () => {
   });
 });
 
+describe("writePptx - paragraph property edits", () => {
+  it("Sets paragraph alignment, bullet, and level and persists them after write/read", () => {
+    const source = readPptx(buildTextEditFixture());
+    const paragraph = firstParagraph(source);
+
+    const edited = setParagraphProperties(source, paragraph.handle!, {
+      align: "right",
+      level: 2,
+      bullet: { type: "char", char: "\u2022" },
+    });
+    const output = writePptx(edited);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+    const reread = readPptx(output);
+
+    expect(firstParagraph(edited).properties).toMatchObject({
+      align: "right",
+      level: 2,
+      bullet: { type: "char", char: "\u2022" },
+    });
+    expect(firstParagraph(reread).properties).toMatchObject({
+      align: "right",
+      level: 2,
+      bullet: { type: "char", char: "\u2022" },
+    });
+    expect(slideXml).toContain('<a:pPr algn="r" lvl="2">');
+    expect(slideXml).toContain('<a:buChar char="\u2022"');
+  });
+
+  it("Writes explicit buNone when removing bullets and supports auto-number bullets", () => {
+    const source = readPptx(
+      buildTextEditFixtureFromSlide(
+        `<p:sp><p:nvSpPr><p:cNvPr id="72" name="Paragraph props"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+          `<p:txBody><a:bodyPr/><a:lstStyle/>` +
+          `<a:p><a:pPr><a:buChar char="&#x2022;"/></a:pPr><a:r><a:t>Bullet</a:t></a:r></a:p>` +
+          `<a:p><a:r><a:t>Numbered</a:t></a:r></a:p>` +
+          `</p:txBody></p:sp>`,
+      ),
+    );
+
+    const first = firstParagraph(source);
+    const second = firstShape(source).textBody!.paragraphs[1];
+    const edited = setParagraphProperties(
+      setParagraphProperties(source, first.handle!, { bullet: { type: "none" } }),
+      second.handle!,
+      { level: 1, bullet: { type: "autoNum", scheme: "alphaLcParenR", startAt: 3 } },
+    );
+    const output = writePptx(edited);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+    const reread = readPptx(output);
+
+    expect(firstShape(reread).textBody!.paragraphs[0].properties).toMatchObject({
+      bullet: { type: "none" },
+    });
+    expect(firstShape(reread).textBody!.paragraphs[1].properties).toMatchObject({
+      level: 1,
+      bullet: { type: "autoNum", scheme: "alphaLcParenR", startAt: 3 },
+    });
+    expect(slideXml).toContain("<a:buNone");
+    expect(slideXml).toContain('<a:buAutoNum type="alphaLcParenR" startAt="3"');
+  });
+
+  it("Clears only requested paragraph properties and preserves unedited paragraphs", () => {
+    const source = readPptx(
+      buildTextEditFixtureFromSlide(
+        `<p:sp><p:nvSpPr><p:cNvPr id="73" name="Preserve paragraph props"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:prstGeom prst="rect"/></p:spPr>` +
+          `<p:txBody><a:bodyPr/><a:lstStyle/>` +
+          `<a:p><a:pPr algn="ctr" lvl="2"><a:lnSpc><a:spcPct val="90000"/></a:lnSpc><a:buChar char="&#x2022;"/></a:pPr><a:r><a:t>Edit</a:t></a:r></a:p>` +
+          `<a:p><a:pPr algn="r" lvl="1"><a:buChar char="&#x25E6;"/></a:pPr><a:r><a:t>Keep</a:t></a:r></a:p>` +
+          `</p:txBody></p:sp>`,
+      ),
+    );
+    const edited = clearParagraphProperties(source, firstParagraph(source).handle!, ["align"]);
+    const output = writePptx(edited);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+    const reread = readPptx(output);
+
+    expect(firstParagraph(reread).properties).toMatchObject({
+      level: 2,
+      bullet: { type: "char", char: "\u2022" },
+      lineSpacing: { type: "pct", value: 90000 },
+    });
+    expect(firstParagraph(reread).properties?.align).toBeUndefined();
+    expect(firstShape(reread).textBody!.paragraphs[1].properties).toMatchObject({
+      align: "right",
+      level: 1,
+      bullet: { type: "char", char: "\u25E6" },
+    });
+    expect(slideXml).toContain('<a:lnSpc><a:spcPct val="90000"');
+    expect(slideXml).toContain('<a:pPr algn="r" lvl="1"');
+  });
+
+  it("Rejects no-op paragraph property edits constructed directly in an edit journal", () => {
+    const source = readPptx(buildTextEditFixture());
+    const edited = {
+      ...source,
+      edits: [
+        {
+          kind: "updateParagraphProperties",
+          handle: firstParagraph(source).handle!,
+        },
+      ],
+    } satisfies typeof source;
+
+    expect(() => writePptx(edited)).toThrow(/must set or clear at least one property/);
+  });
+});
+
 describe("writePptx - paragraph text replacement", () => {
   it("Normalizes a multi-run paragraph to one run using the first run properties.", () => {
     const input = buildTextEditFixture();
@@ -2014,11 +2265,18 @@ function findShapeByName(source: ReturnType<typeof readPptx>, name: string): Sou
 }
 
 function findConnectorByName(source: ReturnType<typeof readPptx>, name: string): SourceConnector {
-  const connector = source.slides
-    .flatMap((slide) => slide.shapes)
-    .find((node): node is SourceConnector => node.kind === "connector" && node.name === name);
+  const connector = findConnectorByNameOptional(source, name);
   if (connector === undefined) throw new Error(`connector not found: ${name}`);
   return connector;
+}
+
+function findConnectorByNameOptional(
+  source: ReturnType<typeof readPptx>,
+  name: string,
+): SourceConnector | undefined {
+  return source.slides
+    .flatMap((slide) => slide.shapes)
+    .find((node): node is SourceConnector => node.kind === "connector" && node.name === name);
 }
 
 function requireShape(shape: SourceShape | undefined): SourceShape {

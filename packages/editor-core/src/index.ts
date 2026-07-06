@@ -5,18 +5,24 @@ import {
   type AddEmptySlideFromLayoutInput,
   addTextBox,
   type AddTextBoxInput,
+  clearParagraphProperties,
   clearTextRunProperties,
   deleteShape,
   deleteSlide,
   duplicateSlide,
+  type EditableParagraphProperties,
+  type EditableParagraphProperty,
   type EditableShapeFill,
   type EditableShapeOutline,
   type EditableTextRunProperties,
   type EditableTextRunProperty,
   type Emu,
   findShapeNodeBySourceHandle,
+  moveSlide,
+  type MoveSlideInput,
   type PptxSourceModel,
   type PptxSourceModelEdit,
+  type PptxSourceModelParagraphPropertiesEdit,
   type PptxSourceModelParagraphTextEdit,
   type PptxSourceModelShapeFillEdit,
   type PptxSourceModelShapeOutlineEdit,
@@ -26,6 +32,7 @@ import {
   replaceImageBytes,
   replaceParagraphPlainText,
   replaceTextRunPlainText,
+  setParagraphProperties,
   setShapeFill,
   setShapeOutline,
   setTextRunProperties,
@@ -69,6 +76,18 @@ export interface ClearTextRunPropertiesCommand {
   readonly kind: "clearTextRunProperties";
   readonly handle: SourceHandle;
   readonly properties: readonly EditableTextRunProperty[];
+}
+
+export interface SetParagraphPropertiesCommand {
+  readonly kind: "setParagraphProperties";
+  readonly handle: SourceHandle;
+  readonly properties: EditableParagraphProperties;
+}
+
+export interface ClearParagraphPropertiesCommand {
+  readonly kind: "clearParagraphProperties";
+  readonly handle: SourceHandle;
+  readonly properties: readonly EditableParagraphProperty[];
 }
 
 export interface MoveShapeCommand {
@@ -136,6 +155,11 @@ export interface DuplicateSlideCommand {
   readonly handle: SourceHandle;
 }
 
+export interface MoveSlideCommand extends MoveSlideInput {
+  readonly kind: "moveSlide";
+  readonly handle: SourceHandle;
+}
+
 export interface DeleteSlideCommand {
   readonly kind: "deleteSlide";
   readonly handle: SourceHandle;
@@ -146,6 +170,8 @@ export type EditorCommand =
   | ReplaceParagraphPlainTextCommand
   | SetTextRunPropertiesCommand
   | ClearTextRunPropertiesCommand
+  | SetParagraphPropertiesCommand
+  | ClearParagraphPropertiesCommand
   | MoveShapeCommand
   | ResizeShapeCommand
   | SetShapeTransformCommand
@@ -157,6 +183,7 @@ export type EditorCommand =
   | ReplaceImageCommand
   | AddEmptySlideFromLayoutCommand
   | DuplicateSlideCommand
+  | MoveSlideCommand
   | DeleteSlideCommand;
 
 export type EditorApplyCommandResult =
@@ -345,6 +372,10 @@ function applyCommandToDocument(
       return setTextRunPropertiesCommand(document, command);
     case "clearTextRunProperties":
       return clearTextRunPropertiesCommand(document, command);
+    case "setParagraphProperties":
+      return setParagraphPropertiesCommand(document, command);
+    case "clearParagraphProperties":
+      return clearParagraphPropertiesCommand(document, command);
     case "moveShape":
       return moveShape(document, command);
     case "resizeShape":
@@ -367,6 +398,8 @@ function applyCommandToDocument(
       return addEmptySlideFromLayout(document, command);
     case "duplicateSlide":
       return duplicateSlide(document, command.handle);
+    case "moveSlide":
+      return moveSlide(document, command.handle, command);
     case "deleteSlide":
       return deleteSlide(document, command.handle);
   }
@@ -467,6 +500,30 @@ function clearTextRunPropertiesCommand(
   return clearTextRunProperties(document, command.handle, command.properties);
 }
 
+function setParagraphPropertiesCommand(
+  document: PptxSourceModel,
+  command: SetParagraphPropertiesCommand,
+): PptxSourceModel {
+  requireNonEmptyParagraphPropertySet(command.properties, "setParagraphProperties");
+  validateParagraphPropertySet(command.properties, "setParagraphProperties");
+  return setParagraphProperties(document, command.handle, command.properties);
+}
+
+function clearParagraphPropertiesCommand(
+  document: PptxSourceModel,
+  command: ClearParagraphPropertiesCommand,
+): PptxSourceModel {
+  if (command.properties.length === 0) {
+    throw new Error("clearParagraphProperties: properties must contain at least one property name");
+  }
+  for (const property of command.properties) {
+    if (!EDITABLE_PARAGRAPH_PROPERTY_SET.has(property)) {
+      throw new Error(`clearParagraphProperties: unsupported paragraph property '${property}'`);
+    }
+  }
+  return clearParagraphProperties(document, command.handle, command.properties);
+}
+
 function moveShape(document: PptxSourceModel, command: MoveShapeCommand): PptxSourceModel {
   requireFiniteEmu(command.offsetX, "moveShape", "offsetX");
   requireFiniteEmu(command.offsetY, "moveShape", "offsetY");
@@ -536,6 +593,24 @@ const EDITABLE_TEXT_RUN_PROPERTIES = [
   "typeface",
 ] as const satisfies readonly EditableTextRunProperty[];
 const EDITABLE_TEXT_RUN_PROPERTY_SET: ReadonlySet<string> = new Set(EDITABLE_TEXT_RUN_PROPERTIES);
+const EDITABLE_PARAGRAPH_PROPERTIES = [
+  "align",
+  "level",
+  "bullet",
+] as const satisfies readonly EditableParagraphProperty[];
+const EDITABLE_PARAGRAPH_PROPERTY_SET: ReadonlySet<string> = new Set(EDITABLE_PARAGRAPH_PROPERTIES);
+const PARAGRAPH_ALIGN_VALUES = new Set(["left", "center", "right", "justify"]);
+const AUTO_NUM_SCHEMES = new Set([
+  "arabicPeriod",
+  "arabicParenR",
+  "romanUcPeriod",
+  "romanLcPeriod",
+  "alphaUcPeriod",
+  "alphaLcPeriod",
+  "alphaLcParenR",
+  "alphaUcParenR",
+  "arabicPlain",
+]);
 
 function requireNonEmptyPropertySet(
   properties: EditableTextRunProperties,
@@ -575,6 +650,61 @@ function validateTextRunPropertySet(
       throw new Error(`${commandName}: color.hex must be a 6-digit hex value`);
     }
   }
+}
+
+function requireNonEmptyParagraphPropertySet(
+  properties: EditableParagraphProperties,
+  commandName: "setParagraphProperties",
+): void {
+  if (Object.values(properties).every((value) => value === undefined)) {
+    throw new Error(`${commandName}: properties must contain at least one defined property`);
+  }
+}
+
+function validateParagraphPropertySet(
+  properties: EditableParagraphProperties,
+  commandName: "setParagraphProperties",
+): void {
+  for (const property of Object.keys(properties)) {
+    if (!EDITABLE_PARAGRAPH_PROPERTY_SET.has(property)) {
+      throw new Error(`${commandName}: unsupported paragraph property '${property}'`);
+    }
+  }
+  if (properties.align !== undefined && !PARAGRAPH_ALIGN_VALUES.has(properties.align)) {
+    throw new Error(`${commandName}: align must be left, center, right, or justify`);
+  }
+  if (
+    properties.level !== undefined &&
+    (!Number.isInteger(properties.level) || properties.level < 0 || properties.level > 8)
+  ) {
+    throw new Error(`${commandName}: level must be an integer from 0 to 8`);
+  }
+  if (properties.bullet !== undefined) {
+    validateParagraphBullet(properties.bullet, commandName);
+  }
+}
+
+function validateParagraphBullet(
+  bullet: NonNullable<EditableParagraphProperties["bullet"]>,
+  commandName: "setParagraphProperties",
+): void {
+  if (bullet.type === "none") return;
+  if (bullet.type === "char") {
+    if (bullet.char.length === 0) {
+      throw new Error(`${commandName}: bullet.char must be a non-empty string`);
+    }
+    return;
+  }
+  if (bullet.type === "autoNum") {
+    if (!AUTO_NUM_SCHEMES.has(bullet.scheme)) {
+      throw new Error(`${commandName}: unsupported bullet auto-numbering scheme`);
+    }
+    if (!Number.isInteger(bullet.startAt) || bullet.startAt < 1) {
+      throw new Error(`${commandName}: bullet.startAt must be a positive integer`);
+    }
+    return;
+  }
+  throw new Error(`${commandName}: unsupported bullet type`);
 }
 
 function requireBooleanOrUndefined(
@@ -672,6 +802,7 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
 
   const seenTextRuns = new Set<string>();
   const seenTextRunProperties = new Map<string, Set<EditableTextRunProperty>>();
+  const seenParagraphProperties = new Map<string, Set<EditableParagraphProperty>>();
   const seenParagraphs = new Set<string>();
   const seenShapeTransforms = new Set<string>();
   const seenShapeFills = new Set<string>();
@@ -702,6 +833,16 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
         continue;
       }
       const normalized = normalizeTextRunPropertiesEdit(edit, seenTextRunProperties);
+      if (normalized === undefined) {
+        changed = true;
+        continue;
+      }
+      if (!editorEditsEqual(normalized, edit)) changed = true;
+      normalizedReversed.push(normalized);
+      continue;
+    }
+    if (edit.kind === "updateParagraphProperties") {
+      const normalized = normalizeParagraphPropertiesEdit(edit, seenParagraphProperties);
       if (normalized === undefined) {
         changed = true;
         continue;
@@ -770,6 +911,7 @@ function editHandleNodeKey(
   edit:
     | PptxSourceModelTextRunEdit
     | PptxSourceModelParagraphTextEdit
+    | PptxSourceModelParagraphPropertiesEdit
     | PptxSourceModelTextRunPropertiesEdit
     | PptxSourceModelShapeTransformEdit
     | PptxSourceModelShapeFillEdit
@@ -850,6 +992,44 @@ function normalizeTextRunPropertiesEdit(
   return normalized;
 }
 
+function normalizeParagraphPropertiesEdit(
+  edit: PptxSourceModelParagraphPropertiesEdit,
+  seenParagraphProperties: Map<string, Set<EditableParagraphProperty>>,
+): PptxSourceModelParagraphPropertiesEdit | undefined {
+  const key = editHandleNodeKey(edit);
+  let seenProperties = seenParagraphProperties.get(key);
+  if (seenProperties === undefined) {
+    seenProperties = new Set();
+    seenParagraphProperties.set(key, seenProperties);
+  }
+
+  const set: MutableEditableParagraphProperties = {};
+  if (edit.set?.align !== undefined && !seenProperties.has("align")) {
+    seenProperties.add("align");
+    set.align = edit.set.align;
+  }
+  if (edit.set?.level !== undefined && !seenProperties.has("level")) {
+    seenProperties.add("level");
+    set.level = edit.set.level;
+  }
+  if (edit.set?.bullet !== undefined && !seenProperties.has("bullet")) {
+    seenProperties.add("bullet");
+    set.bullet = edit.set.bullet;
+  }
+
+  const clear = (edit.clear ?? []).filter((property) => !seenProperties.has(property));
+  for (const property of clear) seenProperties.add(property);
+
+  if (clear.length === 0 && Object.keys(set).length === 0) return undefined;
+  const normalized: PptxSourceModelParagraphPropertiesEdit = {
+    kind: "updateParagraphProperties",
+    handle: edit.handle,
+    ...(Object.keys(set).length > 0 ? { set } : {}),
+    ...(clear.length > 0 ? { clear } : {}),
+  };
+  return normalized;
+}
+
 type MutableEditableTextRunProperties = {
   -readonly [K in keyof EditableTextRunProperties]?: EditableTextRunProperties[K];
 };
@@ -913,3 +1093,7 @@ function normalizeShapeOutlineEdit(
   normalizedShapeOutlineEdits.set(key, normalized);
   return { edit: normalized, merged: false };
 }
+
+type MutableEditableParagraphProperties = {
+  -readonly [K in keyof EditableParagraphProperties]?: EditableParagraphProperties[K];
+};

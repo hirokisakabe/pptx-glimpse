@@ -45,6 +45,7 @@ import type {
   SourceSlideMaster,
   SourceTheme,
 } from "./presentation.js";
+import type { SourceParagraphProperties } from "./shapes.js";
 import type { Emu, Pt } from "./units.js";
 
 export interface PptxSourceModel {
@@ -64,6 +65,7 @@ export interface PptxSourceModel {
 export type PptxSourceModelEdit =
   | PptxSourceModelTextRunEdit
   | PptxSourceModelTextRunPropertiesEdit
+  | PptxSourceModelParagraphPropertiesEdit
   | PptxSourceModelParagraphTextEdit
   | PptxSourceModelShapeTransformEdit
   | PptxSourceModelShapeFillEdit
@@ -74,6 +76,7 @@ export type PptxSourceModelEdit =
   | PptxSourceModelReplaceImageEdit
   | PptxSourceModelAddEmptySlideFromLayoutEdit
   | PptxSourceModelDuplicateSlideEdit
+  | PptxSourceModelMoveSlideEdit
   | PptxSourceModelDeleteSlideEdit;
 
 export interface PptxSourceModelTextRunEdit {
@@ -104,6 +107,21 @@ export interface PptxSourceModelTextRunPropertiesEdit {
   readonly handle: SourceHandle;
   readonly set?: EditableTextRunProperties;
   readonly clear?: readonly EditableTextRunProperty[];
+}
+
+export type EditableParagraphProperty = "align" | "level" | "bullet";
+
+export interface EditableParagraphProperties {
+  readonly align?: SourceParagraphProperties["align"];
+  readonly level?: SourceParagraphProperties["level"];
+  readonly bullet?: SourceParagraphProperties["bullet"];
+}
+
+export interface PptxSourceModelParagraphPropertiesEdit {
+  readonly kind: "updateParagraphProperties";
+  readonly handle: SourceHandle;
+  readonly set?: EditableParagraphProperties;
+  readonly clear?: readonly EditableParagraphProperty[];
 }
 
 export interface PptxSourceModelParagraphTextEdit {
@@ -156,8 +174,8 @@ export interface PptxSourceModelAddConnectorEdit {
   readonly kind: "addConnector";
   readonly slidePartPath: PartPath;
   readonly shapeId: string;
-  readonly startShapeId: string;
-  readonly endShapeId: string;
+  readonly startShapeId?: string;
+  readonly endShapeId?: string;
   /** Serialized `p:cxnSp` fragment finalized at edit time. The writer only splices it. */
   readonly xml: string;
 }
@@ -192,6 +210,14 @@ export interface PptxSourceModelDuplicateSlideEdit {
   readonly newRelationshipId: RelationshipId;
   /** Numeric `p:sldId@id` assigned at edit time. The writer only applies it. */
   readonly newSlideNumericId: number;
+}
+
+export interface PptxSourceModelMoveSlideEdit {
+  readonly kind: "moveSlide";
+  readonly slidePartPath: PartPath;
+  readonly relationshipId: RelationshipId;
+  /** Zero-based final index in the slide list at the time this edit is applied. */
+  readonly toIndex: number;
 }
 
 export interface PptxSourceModelDeleteSlideEdit {

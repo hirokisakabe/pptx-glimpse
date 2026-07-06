@@ -33,6 +33,11 @@ export type SlideTopologyOperation =
   | {
       readonly kind: "removeSlide";
       readonly relationshipId: RelationshipId;
+    }
+  | {
+      readonly kind: "moveSlide";
+      readonly relationshipId: RelationshipId;
+      readonly toIndex: number;
     };
 
 /** Shape inserted by an edit, identified by its slide part and shape id. */
@@ -86,6 +91,18 @@ const EDIT_KIND_DESCRIPTORS: {
     targetsShape: (edit, shapeHandle) =>
       edit.handle.partPath === shapeHandle.partPath &&
       textRunShapeId(edit.handle) === shapeHandle.nodeId,
+    invalidatingPartPaths: (edit) => [edit.handle.partPath],
+    reservedShapeId: () => undefined,
+    slideTopologyOperation: () => undefined,
+    insertedSlidePartPath: () => undefined,
+    insertedShape: () => undefined,
+  },
+  updateParagraphProperties: {
+    reservedPartPaths: () => [],
+    dirtyPartPath: (edit) => edit.handle.partPath,
+    targetsShape: (edit, shapeHandle) =>
+      edit.handle.partPath === shapeHandle.partPath &&
+      paragraphShapeId(edit.handle) === shapeHandle.nodeId,
     invalidatingPartPaths: (edit) => [edit.handle.partPath],
     reservedShapeId: () => undefined,
     slideTopologyOperation: () => undefined,
@@ -206,6 +223,20 @@ const EDIT_KIND_DESCRIPTORS: {
       newSlideNumericId: edit.newSlideNumericId,
     }),
     insertedSlidePartPath: (edit) => edit.newSlidePartPath,
+    insertedShape: () => undefined,
+  },
+  moveSlide: {
+    reservedPartPaths: (edit) => [edit.slidePartPath],
+    dirtyPartPath: () => undefined,
+    targetsShape: () => false,
+    invalidatingPartPaths: (edit) => [edit.slidePartPath],
+    reservedShapeId: () => undefined,
+    slideTopologyOperation: (edit) => ({
+      kind: "moveSlide",
+      relationshipId: edit.relationshipId,
+      toIndex: edit.toIndex,
+    }),
+    insertedSlidePartPath: () => undefined,
     insertedShape: () => undefined,
   },
   deleteSlide: {

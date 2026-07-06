@@ -360,6 +360,7 @@ const editorHtml = `<!doctype html>
         <input data-testid="pptx-input" id="pptx-input" type="file" accept=".pptx">
         <button id="undo-button" type="button" disabled>Undo</button>
         <button id="redo-button" type="button" disabled>Redo</button>
+        <button id="add-connector-button" type="button" disabled>Add connector</button>
         <input data-testid="image-replacement-input" id="image-replacement-input" type="file" disabled>
         <button id="download-button" type="button" disabled>Download</button>
         <div data-testid="status" id="status">Ready</div>
@@ -379,6 +380,7 @@ const message = document.getElementById("message");
 const container = document.getElementById("slide-container");
 const undoButton = document.getElementById("undo-button");
 const redoButton = document.getElementById("redo-button");
+const addConnectorButton = document.getElementById("add-connector-button");
 const downloadButton = document.getElementById("download-button");
 const imageReplacementInput = document.getElementById("image-replacement-input");
 const EMU_PER_PIXEL = 9525;
@@ -402,6 +404,7 @@ pptxInput.addEventListener("change", async () => {
   });
   render();
   status.textContent = editor.slides.length + " slide" + (editor.slides.length === 1 ? "" : "s") + " ready";
+  addConnectorButton.disabled = false;
   downloadButton.disabled = false;
 });
 
@@ -417,6 +420,17 @@ redoButton.addEventListener("click", async () => {
   await editor.redo();
   render();
   message.textContent = "Redone";
+});
+
+addConnectorButton.addEventListener("click", async () => {
+  if (!editor) return;
+  try {
+    await editor.addConnector(1);
+    render();
+    message.textContent = "Connector added";
+  } catch (error) {
+    message.textContent = error instanceof Error ? error.message : String(error);
+  }
 });
 
 imageReplacementInput.addEventListener("change", async () => {
