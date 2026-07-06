@@ -129,6 +129,7 @@ developer machine's full OS font inventory.
 ```bash
 npm run vrt:snapshot:docker-build   # Build the Docker image
 npm run vrt:snapshot:update          # Generate fixtures + snapshots (Docker required)
+npm run vrt:snapshot:update -- shapes text  # Regenerate only the named VRT cases
 ```
 
 ### VRT Update Procedure
@@ -136,7 +137,7 @@ npm run vrt:snapshot:update          # Generate fixtures + snapshots (Docker req
 When changes to the parser, renderer, or model affect rendering output:
 
 1. **Update fixtures** (if adding new features or modifying existing fixtures): Edit the appropriate `vrt/snapshot/fixtures-src/*.ts` domain creator module and run `npm run vrt:snapshot:update`
-2. **Update snapshots**: `npm run vrt:snapshot:update` regenerates both fixtures and snapshots in Docker
+2. **Update snapshots**: `npm run vrt:snapshot:update` regenerates both fixtures and snapshots in Docker. To update only specific cases, pass the `vrt/snapshot/vrt-cases.ts` `name` values, e.g. `npm run vrt:snapshot:update -- shapes text`.
 3. **Verify tests**: Confirm VRT tests pass in CI after pushing
 
 ### 3 Locations That Must Stay in Sync

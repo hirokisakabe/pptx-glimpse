@@ -1,7 +1,7 @@
 /**
  * PPTX fixture generation script for VRT (Visual Regression Testing)
  *
- * Usage: npx tsx vrt/snapshot/create-fixtures.ts
+ * Usage: npx tsx vrt/snapshot/create-fixtures.ts [case-name...]
  */
 import { pathToFileURL } from "url";
 
@@ -14,7 +14,7 @@ import { placeholderFixtureCreators } from "./fixtures-src/placeholder.js";
 import { shapeFixtureCreators } from "./fixtures-src/shapes.js";
 import { tableFixtureCreators } from "./fixtures-src/tables.js";
 import { textFixtureCreators } from "./fixtures-src/text.js";
-import { VRT_CASES } from "./vrt-cases.js";
+import { resolveGeneratedVrtCases } from "./vrt-cases.js";
 
 export {
   buildPptx,
@@ -36,9 +36,12 @@ const FIXTURE_CREATORS: FixtureCreatorMap = {
 };
 
 async function main(): Promise<void> {
+  const caseNames = process.argv.slice(2);
+  const selectedCases = resolveGeneratedVrtCases(caseNames);
+
   console.log("Creating VRT fixtures...\n");
 
-  for (const { fixture } of VRT_CASES) {
+  for (const { fixture } of selectedCases) {
     const creator = FIXTURE_CREATORS[fixture];
     if (!creator) {
       throw new Error(
@@ -50,9 +53,16 @@ async function main(): Promise<void> {
     await creator();
   }
 
+  if (caseNames.length > 0 && selectedCases.length === 0) {
+    console.log("No generated VRT fixtures selected.");
+  }
+
   console.log("\nDone!");
 }
 
 if (process.argv[1] !== undefined && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch(console.error);
+  main().catch((error: unknown) => {
+    console.error(error);
+    process.exit(1);
+  });
 }

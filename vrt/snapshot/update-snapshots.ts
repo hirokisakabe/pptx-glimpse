@@ -4,7 +4,7 @@ import { fileURLToPath } from "url";
 
 import { convertPptxToPng } from "../../packages/core/src/converter.js";
 import { getVrtRenderOptions } from "./render-options.js";
-import { SHARED_FIXTURE_CASES } from "./vrt-cases.js";
+import { resolveSnapshotCases, SHARED_FIXTURE_CASES, VRT_CASES } from "./vrt-cases.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const FIXTURE_DIR = join(__dirname, "fixtures");
@@ -51,26 +51,43 @@ async function main(): Promise<void> {
   mkdirSync(SNAPSHOT_DIR, { recursive: true });
 
   const tasks: (() => Promise<number>)[] = [];
+  const caseNames = process.argv.slice(2);
 
-  // Generated fixtures
-  const fixtures = existsSync(FIXTURE_DIR)
-    ? readdirSync(FIXTURE_DIR).filter((f) => f.endsWith(".pptx"))
-    : [];
+  if (caseNames.length > 0) {
+    const selectedCases = resolveSnapshotCases(caseNames);
+    const generatedCaseNames = new Set(VRT_CASES.map(({ name }) => name));
 
-  for (const fixture of fixtures.sort()) {
-    const name = fixture.replace(".pptx", "");
-    const fixturePath = join(FIXTURE_DIR, fixture);
-    tasks.push(() => processFixture(fixturePath, name));
-  }
+    for (const { name, fixture } of selectedCases) {
+      const fixturePath = generatedCaseNames.has(name)
+        ? join(FIXTURE_DIR, fixture)
+        : join(SHARED_FIXTURE_DIR, fixture);
 
-  // Shared fixtures
-  for (const { name, fixture } of SHARED_FIXTURE_CASES) {
-    const fixturePath = join(SHARED_FIXTURE_DIR, fixture);
-    if (!existsSync(fixturePath)) {
-      console.warn(`  Skipped (not found): ${fixturePath}`);
-      continue;
+      if (!existsSync(fixturePath)) {
+        throw new Error(`Selected VRT fixture not found for "${name}": ${fixturePath}`);
+      }
+      tasks.push(() => processFixture(fixturePath, name));
     }
-    tasks.push(() => processFixture(fixturePath, name));
+  } else {
+    // Generated fixtures
+    const fixtures = existsSync(FIXTURE_DIR)
+      ? readdirSync(FIXTURE_DIR).filter((f) => f.endsWith(".pptx"))
+      : [];
+
+    for (const fixture of fixtures.sort()) {
+      const name = fixture.replace(".pptx", "");
+      const fixturePath = join(FIXTURE_DIR, fixture);
+      tasks.push(() => processFixture(fixturePath, name));
+    }
+
+    // Shared fixtures
+    for (const { name, fixture } of SHARED_FIXTURE_CASES) {
+      const fixturePath = join(SHARED_FIXTURE_DIR, fixture);
+      if (!existsSync(fixturePath)) {
+        console.warn(`  Skipped (not found): ${fixturePath}`);
+        continue;
+      }
+      tasks.push(() => processFixture(fixturePath, name));
+    }
   }
 
   if (tasks.length === 0) {
@@ -84,4 +101,7 @@ async function main(): Promise<void> {
   console.log(`\nDone! Updated ${totalSlides} snapshot(s).`);
 }
 
-main().catch(console.error);
+main().catch((error: unknown) => {
+  console.error(error);
+  process.exit(1);
+});
