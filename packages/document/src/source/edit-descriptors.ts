@@ -22,11 +22,13 @@ export type SlideTopologyOperation =
   | {
       readonly kind: "appendSlide";
       readonly newRelationshipId: RelationshipId;
+      readonly newSlideNumericId: number;
     }
   | {
       readonly kind: "insertSlideAfter";
       readonly sourceRelationshipId: RelationshipId;
       readonly newRelationshipId: RelationshipId;
+      readonly newSlideNumericId: number;
     }
   | {
       readonly kind: "removeSlide";
@@ -166,6 +168,7 @@ const EDIT_KIND_DESCRIPTORS: {
     slideTopologyOperation: (edit) => ({
       kind: "appendSlide",
       newRelationshipId: edit.newRelationshipId,
+      newSlideNumericId: edit.newSlideNumericId,
     }),
     insertedSlidePartPath: (edit) => edit.newSlidePartPath,
     insertedShape: () => undefined,
@@ -180,6 +183,7 @@ const EDIT_KIND_DESCRIPTORS: {
       kind: "insertSlideAfter",
       sourceRelationshipId: edit.sourceRelationshipId,
       newRelationshipId: edit.newRelationshipId,
+      newSlideNumericId: edit.newSlideNumericId,
     }),
     insertedSlidePartPath: (edit) => edit.newSlidePartPath,
     insertedShape: () => undefined,

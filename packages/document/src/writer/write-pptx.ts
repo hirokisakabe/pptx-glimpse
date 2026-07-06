@@ -16,6 +16,10 @@
  * bookkeeping while preserving unrelated raw package material. Per-edit-kind traits
  * (dirty part, topology operation, and so on) come from the descriptor table in
  * `../source/edit-descriptors.ts`; this file keeps only the exhaustive apply switch.
+ * New-content edits (new slides, text boxes, connectors) finalize their XML and id
+ * numbering at edit time in `source/editing.ts` / `source/shape-xml.ts`; this writer
+ * never generates new-content XML and only applies insertion positions (`p:spTree`
+ * splice and `p:sldIdLst` patching).
  * Node-level XML splicing and precise unsupported raw-sidecar invalidation belong to
  * later writer slices, but the API and dirty-scope tracking remain shaped for that
  * extension path.
@@ -233,10 +237,15 @@ function serializePresentationWithSlideTopologyEdits(
   for (const operation of operations) {
     switch (operation.kind) {
       case "appendSlide":
-        appendSlideId(sldIdLst, operation.newRelationshipId);
+        appendSlideId(sldIdLst, operation.newRelationshipId, operation.newSlideNumericId);
         break;
       case "insertSlideAfter":
-        insertSlideIdAfter(sldIdLst, operation.sourceRelationshipId, operation.newRelationshipId);
+        insertSlideIdAfter(
+          sldIdLst,
+          operation.sourceRelationshipId,
+          operation.newRelationshipId,
+          operation.newSlideNumericId,
+        );
         break;
       case "removeSlide":
         removeSlideId(sldIdLst, operation.relationshipId);
@@ -256,13 +265,17 @@ function ensureSlideIdList(presentation: XmlNode): XmlNode {
   return created;
 }
 
-function appendSlideId(sldIdLst: XmlNode, newRelationshipId: RelationshipId): void {
+function appendSlideId(
+  sldIdLst: XmlNode,
+  newRelationshipId: RelationshipId,
+  newSlideNumericId: number,
+): void {
   const { key, items } = slideIdEntries(sldIdLst);
   if (items.some((item) => getRelationshipAttr(item) === newRelationshipId)) return;
   const relationshipAttrKey =
     items[0] === undefined ? "@_r:id" : namespacedAttributeKey(items[0], "r:id", "id");
   const newNode: XmlNode = {
-    "@_id": String(nextSlideNumericId(items)),
+    "@_id": String(newSlideNumericId),
     [relationshipAttrKey]: newRelationshipId,
   };
   sldIdLst[key] = [...items, newNode];
@@ -272,6 +285,7 @@ function insertSlideIdAfter(
   sldIdLst: XmlNode,
   sourceRelationshipId: RelationshipId,
   newRelationshipId: RelationshipId,
+  newSlideNumericId: number,
 ): void {
   const { key, items } = slideIdEntries(sldIdLst);
   const sourceIndex = items.findIndex((item) => getRelationshipAttr(item) === sourceRelationshipId);
@@ -281,10 +295,9 @@ function insertSlideIdAfter(
     );
   }
   if (items.some((item) => getRelationshipAttr(item) === newRelationshipId)) return;
-  const newSlideId = String(nextSlideNumericId(items));
   const relationshipAttrKey = namespacedAttributeKey(items[sourceIndex], "r:id", "id");
   const newNode: XmlNode = {
-    "@_id": newSlideId,
+    "@_id": String(newSlideNumericId),
     [relationshipAttrKey]: newRelationshipId,
   };
   sldIdLst[key] = [...items.slice(0, sourceIndex + 1), newNode, ...items.slice(sourceIndex + 1)];
@@ -305,19 +318,6 @@ function slideIdEntries(sldIdLst: XmlNode): { readonly key: string; readonly ite
       ? unsafeOoxmlBoundaryAssertion<XmlNode[]>(value)
       : [unsafeOoxmlBoundaryAssertion<XmlNode>(value)],
   };
-}
-
-function nextSlideNumericId(items: readonly XmlNode[]): number {
-  const used = new Set(
-    items.flatMap((item) => {
-      const id = Number(getAttr(item, "id"));
-      return Number.isFinite(id) ? [id] : [];
-    }),
-  );
-  const max = Math.max(255, ...used);
-  for (let candidate = max + 1; ; candidate += 1) {
-    if (!used.has(candidate)) return candidate;
-  }
 }
 
 function getRelationshipAttr(node: XmlNode): string | undefined {
@@ -476,7 +476,7 @@ function applyAddTextBoxEdit(root: XmlNode, edit: PptxSourceModelAddTextBoxEdit)
     throw new Error(`writePptx: shape id '${edit.shapeId}' already exists in source XML`);
   }
 
-  appendChild(spTree, "p:sp", createTextBoxXml(edit));
+  appendChild(spTree, "p:sp", parseShapeFragmentXml(edit.xml, "sp"));
 }
 
 function applyAddConnectorEdit(root: XmlNode, edit: PptxSourceModelAddConnectorEdit): void {
@@ -496,7 +496,7 @@ function applyAddConnectorEdit(root: XmlNode, edit: PptxSourceModelAddConnectorE
     throw new Error(`writePptx: connector end shape '${edit.endShapeId}' was not found`);
   }
 
-  appendChild(spTree, "p:cxnSp", createConnectorXml(edit));
+  appendChild(spTree, "p:cxnSp", parseShapeFragmentXml(edit.xml, "cxnSp"));
 }
 
 function applyDeleteShapeEdit(root: XmlNode, edit: PptxSourceModelDeleteShapeEdit): void {
@@ -509,116 +509,19 @@ function applyDeleteShapeEdit(root: XmlNode, edit: PptxSourceModelDeleteShapeEdi
   }
 }
 
-function createTextBoxXml(edit: PptxSourceModelAddTextBoxEdit): XmlNode {
-  return {
-    "p:nvSpPr": {
-      "p:cNvPr": {
-        "@_id": edit.shapeId,
-        "@_name": edit.name,
-      },
-      "p:cNvSpPr": {
-        "@_txBox": "1",
-      },
-      "p:nvPr": {},
-    },
-    "p:spPr": {
-      "a:xfrm": {
-        "a:off": {
-          "@_x": String(edit.offsetX),
-          "@_y": String(edit.offsetY),
-        },
-        "a:ext": {
-          "@_cx": String(edit.width),
-          "@_cy": String(edit.height),
-        },
-      },
-      "a:prstGeom": {
-        "@_prst": "rect",
-        "a:avLst": {},
-      },
-      "a:noFill": {},
-      "a:ln": {
-        "a:noFill": {},
-      },
-    },
-    "p:txBody": {
-      "a:bodyPr": {
-        "@_wrap": "square",
-      },
-      "a:lstStyle": {},
-      "a:p": {
-        "a:r": {
-          "a:t": textElementValue(undefined, edit.text),
-        },
-        "a:endParaRPr": {},
-      },
-    },
-  };
-}
-
-function createConnectorXml(edit: PptxSourceModelAddConnectorEdit): XmlNode {
-  return {
-    "p:nvCxnSpPr": {
-      "p:cNvPr": {
-        "@_id": edit.shapeId,
-        "@_name": edit.name,
-      },
-      "p:cNvCxnSpPr": {
-        "a:stCxn": {
-          "@_id": edit.startShapeId,
-          "@_idx": String(edit.startConnectionSiteIndex),
-        },
-        "a:endCxn": {
-          "@_id": edit.endShapeId,
-          "@_idx": String(edit.endConnectionSiteIndex),
-        },
-      },
-      "p:nvPr": {},
-    },
-    "p:spPr": {
-      "a:xfrm": {
-        "a:off": {
-          "@_x": String(edit.offsetX),
-          "@_y": String(edit.offsetY),
-        },
-        "a:ext": {
-          "@_cx": String(edit.width),
-          "@_cy": String(edit.height),
-        },
-      },
-      "a:prstGeom": {
-        "@_prst": edit.preset,
-        "a:avLst": {},
-      },
-      "a:ln": createConnectorLineXml(edit),
-    },
-  };
-}
-
-function createConnectorLineXml(edit: PptxSourceModelAddConnectorEdit): XmlNode {
-  return {
-    "a:solidFill": {
-      "a:srgbClr": {
-        "@_val": "000000",
-      },
-    },
-    ...(edit.outline?.headEnd !== undefined
-      ? { "a:headEnd": createArrowEndpointXml(edit.outline.headEnd) }
-      : {}),
-    ...(edit.outline?.tailEnd !== undefined
-      ? { "a:tailEnd": createArrowEndpointXml(edit.outline.tailEnd) }
-      : {}),
-  };
-}
-
-function createArrowEndpointXml(
-  endpoint: NonNullable<NonNullable<PptxSourceModelAddConnectorEdit["outline"]>["headEnd"]>,
-): XmlNode {
-  return {
-    "@_type": endpoint.type,
-    "@_w": endpoint.width,
-    "@_len": endpoint.length,
-  };
+/**
+ * Parse a shape XML fragment finalized at edit time and return its single root
+ * element. The writer does not generate shape XML content; it only splices the
+ * pre-serialized fragment into the target `p:spTree`.
+ */
+function parseShapeFragmentXml(xml: string, rootLocalName: "sp" | "cxnSp"): XmlNode {
+  const node = getChild(parseXml(xml), rootLocalName);
+  if (node === undefined) {
+    throw new Error(
+      `writePptx: shape edit XML fragment does not contain a '${rootLocalName}' root element`,
+    );
+  }
+  return node;
 }
 
 interface TextRunLocator {

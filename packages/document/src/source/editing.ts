@@ -1,3 +1,4 @@
+import { getAttr, getChild, getChildArray, parseXml } from "../reader/xml.js";
 import {
   editDirtyPartPath,
   editInsertedShape,
@@ -28,17 +29,16 @@ import type {
   SourceHandle,
   SourceImage,
   SourceNodeId,
-  SourceOutline,
   SourceParagraph,
   SourceRunProperties,
   SourceShape,
   SourceShapeNode,
   SourceSlide,
   SourceTextRun,
-  SourceTransform,
 } from "./index.js";
 import { asPartPath, asRelationshipId } from "./index.js";
 import { relationshipsPartPath, resolveInternalRelationshipTarget } from "./package-paths.js";
+import { buildConnectorXml, buildTextBoxXml, parseShapeNodeXml } from "./shape-xml.js";
 
 type TransformableShapeNode = Exclude<SourceShapeNode, { readonly kind: "raw" }>;
 type MutableRunProperties = {
@@ -47,6 +47,8 @@ type MutableRunProperties = {
 type MutableEditableTextRunProperties = {
   -readonly [K in keyof EditableTextRunProperties]?: EditableTextRunProperties[K];
 };
+
+const textDecoder = new TextDecoder();
 
 const RELS_CONTENT_TYPE = "application/vnd.openxmlformats-package.relationships+xml";
 const SLIDE_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.slide+xml";
@@ -85,9 +87,6 @@ const CONNECTOR_PRESETS: ReadonlySet<ConnectorPresetGeometry> = new Set([
 ]);
 const ARROW_TYPES = new Set(["triangle", "stealth", "diamond", "oval", "arrow"]);
 const ARROW_SIZES = new Set(["sm", "med", "lg"]);
-const DEFAULT_CONNECTOR_OUTLINE: SourceOutline = {
-  fill: { kind: "solid", color: { kind: "srgb", hex: "000000" } },
-};
 
 export function findTextRunBySourceHandle(
   source: PptxSourceModel,
@@ -464,7 +463,16 @@ export function addTextBox(
   const shapeIdValue = String(shapeId);
   const name = input.name?.trim() || `TextBox ${shapeIdValue}`;
   const orderingSlot = nextOrderingSlot(slide.shapes);
-  const shape = createTextBoxShape(slide.partPath, shapeId, name, orderingSlot, input);
+  const xml = buildTextBoxXml({
+    shapeId: shapeIdValue,
+    name,
+    offsetX: input.offsetX,
+    offsetY: input.offsetY,
+    width: input.width,
+    height: input.height,
+    text: input.text,
+  });
+  const shape = parseShapeNodeXml(xml, slide.partPath, orderingSlot);
   const slides = source.slides.map((candidate, index) =>
     index === slideIndex
       ? {
@@ -483,12 +491,7 @@ export function addTextBox(
         kind: "addTextBox",
         slidePartPath: slide.partPath,
         shapeId: shapeIdValue,
-        name,
-        offsetX: input.offsetX,
-        offsetY: input.offsetY,
-        width: input.width,
-        height: input.height,
-        text: input.text,
+        xml,
       },
     ],
   };
@@ -514,15 +517,23 @@ export function addConnector(
   const shapeIdValue = String(shapeId);
   const name = input.name?.trim() || `Connector ${shapeIdValue}`;
   const orderingSlot = nextOrderingSlot(slide.shapes);
-  const connector = createConnectorShape(
-    slide.partPath,
-    shapeId,
+  const startShapeId = String(startShape.nodeId);
+  const endShapeId = String(endShape.nodeId);
+  const xml = buildConnectorXml({
+    shapeId: shapeIdValue,
     name,
-    orderingSlot,
-    startShape,
-    endShape,
-    input,
-  );
+    preset: input.preset,
+    offsetX: input.offsetX,
+    offsetY: input.offsetY,
+    width: input.width,
+    height: input.height,
+    startShapeId,
+    startConnectionSiteIndex: input.start.connectionSiteIndex,
+    endShapeId,
+    endConnectionSiteIndex: input.end.connectionSiteIndex,
+    ...(input.outline !== undefined ? { outline: input.outline } : {}),
+  });
+  const connector = parseShapeNodeXml(xml, slide.partPath, orderingSlot);
   const slides = source.slides.map((candidate, index) =>
     index === slideIndex
       ? {
@@ -541,17 +552,9 @@ export function addConnector(
         kind: "addConnector",
         slidePartPath: slide.partPath,
         shapeId: shapeIdValue,
-        name,
-        preset: input.preset,
-        offsetX: input.offsetX,
-        offsetY: input.offsetY,
-        width: input.width,
-        height: input.height,
-        startShapeId: String(startShape.nodeId),
-        startConnectionSiteIndex: input.start.connectionSiteIndex,
-        endShapeId: String(endShape.nodeId),
-        endConnectionSiteIndex: input.end.connectionSiteIndex,
-        ...(input.outline !== undefined ? { outline: input.outline } : {}),
+        startShapeId,
+        endShapeId,
+        xml,
       } satisfies PptxSourceModelAddConnectorEdit,
     ],
   };
@@ -575,6 +578,7 @@ export function addEmptySlideFromLayout(
   );
   const newSlidePartPath = nextNumberedPartPath(source, "ppt/slides/slide", ".xml");
   const newPresentationRelationshipId = nextRelationshipId(presentationRels.relationships);
+  const newSlideNumericId = nextSlideNumericId(source, "addEmptySlideFromLayout");
   const newSlideRelationshipsPartPath = asPartPath(relationshipsPartPath(newSlidePartPath));
   const newSlide: SourceSlide = {
     partPath: newSlidePartPath,
@@ -650,6 +654,7 @@ export function addEmptySlideFromLayout(
         layoutPartPath: layout.partPath,
         newSlidePartPath,
         newRelationshipId: newPresentationRelationshipId,
+        newSlideNumericId,
       },
     ],
   };
@@ -795,6 +800,7 @@ export function duplicateSlide(
   );
   const newSlidePartPath = nextNumberedPartPath(source, "ppt/slides/slide", ".xml");
   const newPresentationRelationshipId = nextRelationshipId(presentationRels.relationships);
+  const newSlideNumericId = nextSlideNumericId(source, "duplicateSlide");
   const notesCopy = createNotesSlideCopy(
     source,
     sourceSlide,
@@ -923,6 +929,7 @@ export function duplicateSlide(
         sourceRelationshipId: sourcePresentationRelationship.id,
         newSlidePartPath,
         newRelationshipId: newPresentationRelationshipId,
+        newSlideNumericId,
       },
     ],
   };
@@ -1338,96 +1345,6 @@ function assertPositiveFiniteEmu(
   }
 }
 
-function createTextBoxShape(
-  partPath: PartPath,
-  shapeId: SourceNodeId,
-  name: string,
-  orderingSlot: number,
-  input: AddTextBoxInput,
-): SourceShape {
-  const transform: SourceTransform = {
-    offsetX: input.offsetX,
-    offsetY: input.offsetY,
-    width: input.width,
-    height: input.height,
-  };
-  return {
-    kind: "shape",
-    nodeId: shapeId,
-    name,
-    transform,
-    geometry: { preset: "rect" },
-    textBody: {
-      handle: { partPath, nodeId: asSourceNodeId(`text:shape:${shapeId}`), orderingSlot },
-      paragraphs: [
-        {
-          handle: {
-            partPath,
-            nodeId: asSourceNodeId(`text:shape:${shapeId}:p:0`),
-            orderingSlot: 0,
-          },
-          runs: [
-            {
-              kind: "textRun",
-              text: input.text,
-              handle: {
-                partPath,
-                nodeId: asSourceNodeId(`text:shape:${shapeId}:p:0:r:0`),
-                orderingSlot: 0,
-              },
-            },
-          ],
-        },
-      ],
-    },
-    handle: { partPath, nodeId: shapeId, orderingSlot },
-  };
-}
-
-function createConnectorShape(
-  partPath: PartPath,
-  shapeId: SourceNodeId,
-  name: string,
-  orderingSlot: number,
-  startShape: SourceShape & { readonly nodeId: SourceNodeId },
-  endShape: SourceShape & { readonly nodeId: SourceNodeId },
-  input: AddConnectorInput,
-): SourceConnector {
-  const transform: SourceTransform = {
-    offsetX: input.offsetX,
-    offsetY: input.offsetY,
-    width: input.width,
-    height: input.height,
-  };
-  return {
-    kind: "connector",
-    nodeId: shapeId,
-    name,
-    connection: {
-      start: {
-        shapeId: startShape.nodeId,
-        connectionSiteIndex: input.start.connectionSiteIndex,
-      },
-      end: {
-        shapeId: endShape.nodeId,
-        connectionSiteIndex: input.end.connectionSiteIndex,
-      },
-    },
-    transform,
-    geometry: { preset: input.preset },
-    outline: createConnectorOutline(input.outline),
-    handle: { partPath, nodeId: shapeId, orderingSlot },
-  };
-}
-
-function createConnectorOutline(input: AddConnectorOutlineInput | undefined): SourceOutline {
-  return {
-    ...DEFAULT_CONNECTOR_OUTLINE,
-    ...(input?.headEnd !== undefined ? { headEnd: input.headEnd } : {}),
-    ...(input?.tailEnd !== undefined ? { tailEnd: input.tailEnd } : {}),
-  };
-}
-
 function requireConnectorTargetShape(
   slide: SourceSlide,
   handle: SourceHandle,
@@ -1627,7 +1544,7 @@ function requireSlideRelationship(
 function requireRawBinaryPart(
   source: PptxSourceModel,
   partPath: PartPath,
-  operationName: "duplicateSlide",
+  operationName: "addEmptySlideFromLayout" | "duplicateSlide",
 ): Extract<RawPackagePart, { readonly kind: "binary" }> {
   const rawPart = source.packageGraph.rawParts?.find((part) => part.partPath === partPath);
   if (rawPart === undefined) {
@@ -1639,6 +1556,37 @@ function requireRawBinaryPart(
     );
   }
   return rawPart;
+}
+
+/**
+ * Assigns the numeric `p:sldId@id` for a new slide at edit time by reading the
+ * preserved presentation XML and the ids already claimed by pending slide edits.
+ * Ids freed by pending deletes are intentionally never reused.
+ */
+function nextSlideNumericId(
+  source: PptxSourceModel,
+  operationName: "addEmptySlideFromLayout" | "duplicateSlide",
+): number {
+  const rawPart = requireRawBinaryPart(source, source.presentation.partPath, operationName);
+  const root = parseXml(textDecoder.decode(rawPart.bytes));
+  const presentation = getChild(root, "presentation");
+  if (presentation === undefined) {
+    throw new Error(`${operationName}: presentation part does not contain p:presentation root`);
+  }
+  const used = new Set<number>();
+  for (const item of getChildArray(getChild(presentation, "sldIdLst"), "sldId")) {
+    const id = Number(getAttr(item, "id"));
+    if (Number.isFinite(id)) used.add(id);
+  }
+  for (const edit of source.edits ?? []) {
+    if (edit.kind === "addEmptySlideFromLayout" || edit.kind === "duplicateSlide") {
+      used.add(edit.newSlideNumericId);
+    }
+  }
+  const max = Math.max(255, ...used);
+  for (let candidate = max + 1; ; candidate += 1) {
+    if (!used.has(candidate)) return candidate;
+  }
 }
 
 function nextRelationshipId(relationships: readonly Relationship[]): RelationshipId {
