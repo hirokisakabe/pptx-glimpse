@@ -70,3 +70,49 @@ export const VRT_CASES = [
   { name: "placeholder-empty-on-slide", fixture: "placeholder-empty-on-slide.pptx" },
   { name: "interleaved-bullet-ppr", fixture: "interleaved-bullet-ppr.pptx" },
 ] as const;
+
+export const SNAPSHOT_CASES = [...VRT_CASES, ...SHARED_FIXTURE_CASES] as const;
+
+function formatCaseNameList(caseNames: readonly string[]): string {
+  return caseNames.map((name) => `"${name}"`).join(", ");
+}
+
+export function resolveSnapshotCases(
+  caseNames: readonly string[],
+): (typeof SNAPSHOT_CASES)[number][] {
+  const casesByName = new Map(SNAPSHOT_CASES.map((vrtCase) => [vrtCase.name, vrtCase]));
+  const unknownNames = caseNames.filter((caseName) => !casesByName.has(caseName));
+
+  if (unknownNames.length > 0) {
+    throw new Error(
+      `Unknown VRT snapshot case name(s): ${formatCaseNameList(unknownNames)}. Check vrt/snapshot/vrt-cases.ts for valid case names.`,
+    );
+  }
+
+  const selectedCases: (typeof SNAPSHOT_CASES)[number][] = [];
+  const seenNames = new Set<string>();
+
+  for (const caseName of caseNames) {
+    if (seenNames.has(caseName)) {
+      continue;
+    }
+    seenNames.add(caseName);
+    const vrtCase = casesByName.get(caseName);
+    if (vrtCase !== undefined) {
+      selectedCases.push(vrtCase);
+    }
+  }
+
+  return selectedCases;
+}
+
+export function resolveGeneratedVrtCases(
+  caseNames: readonly string[],
+): (typeof VRT_CASES)[number][] {
+  if (caseNames.length === 0) {
+    return [...VRT_CASES];
+  }
+
+  const selectedNames = new Set(resolveSnapshotCases(caseNames).map(({ name }) => name));
+  return VRT_CASES.filter(({ name }) => selectedNames.has(name));
+}
