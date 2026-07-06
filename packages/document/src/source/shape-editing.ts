@@ -63,10 +63,6 @@ export interface AddConnectorInput extends UpdateShapeTransformInput {
   readonly outline?: AddConnectorOutlineInput;
 }
 
-export interface AddEmptySlideFromLayoutInput {
-  readonly layoutPartPath: PartPath;
-}
-
 export function findShapeNodeBySourceHandle(
   source: PptxSourceModel,
   handle: SourceHandle,
