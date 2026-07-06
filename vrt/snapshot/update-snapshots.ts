@@ -63,8 +63,7 @@ async function main(): Promise<void> {
         : join(SHARED_FIXTURE_DIR, fixture);
 
       if (!existsSync(fixturePath)) {
-        console.warn(`  Skipped (not found): ${fixturePath}`);
-        continue;
+        throw new Error(`Selected VRT fixture not found for "${name}": ${fixturePath}`);
       }
       tasks.push(() => processFixture(fixturePath, name));
     }

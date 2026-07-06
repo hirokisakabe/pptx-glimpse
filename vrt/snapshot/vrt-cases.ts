@@ -71,16 +71,18 @@ export const VRT_CASES = [
   { name: "interleaved-bullet-ppr", fixture: "interleaved-bullet-ppr.pptx" },
 ] as const;
 
-export const SNAPSHOT_CASES = [...VRT_CASES, ...SHARED_FIXTURE_CASES] as const;
+const SNAPSHOT_CASES = [...VRT_CASES, ...SHARED_FIXTURE_CASES] as const;
+
+type SnapshotCase = (typeof SNAPSHOT_CASES)[number];
 
 function formatCaseNameList(caseNames: readonly string[]): string {
   return caseNames.map((name) => `"${name}"`).join(", ");
 }
 
-export function resolveSnapshotCases(
-  caseNames: readonly string[],
-): (typeof SNAPSHOT_CASES)[number][] {
-  const casesByName = new Map(SNAPSHOT_CASES.map((vrtCase) => [vrtCase.name, vrtCase]));
+export function resolveSnapshotCases(caseNames: readonly string[]): SnapshotCase[] {
+  const casesByName = new Map<string, SnapshotCase>(
+    SNAPSHOT_CASES.map((vrtCase) => [vrtCase.name, vrtCase] as const),
+  );
   const unknownNames = caseNames.filter((caseName) => !casesByName.has(caseName));
 
   if (unknownNames.length > 0) {
@@ -89,7 +91,7 @@ export function resolveSnapshotCases(
     );
   }
 
-  const selectedCases: (typeof SNAPSHOT_CASES)[number][] = [];
+  const selectedCases: SnapshotCase[] = [];
   const seenNames = new Set<string>();
 
   for (const caseName of caseNames) {
