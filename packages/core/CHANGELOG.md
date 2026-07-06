@@ -1,5 +1,23 @@
 # pptx-glimpse
 
+## 3.2.0
+
+### Minor Changes
+
+- 27fb259: Add a headless `moveSlide` edit operation for reordering existing slides and preserving the updated slide order when writing PPTX files.
+- d131e50: Add browser editor support for inserting free connector arrows and allow connector shapes to be deleted through the editing APIs.
+- 675d0f0: Add paragraph property editing APIs for alignment, bullet, and paragraph level updates.
+- 10c2b13: Add document-layer editing helpers for shape fill and outline styles, including srgb solid fills, line color and width, and noFill.
+
+### Patch Changes
+
+- Updated dependencies [27fb259]
+- Updated dependencies [c35eec8]
+- Updated dependencies [d131e50]
+- Updated dependencies [675d0f0]
+- Updated dependencies [10c2b13]
+  - @pptx-glimpse/document@0.4.0
+
 ## 3.1.1
 
 ### Patch Changes

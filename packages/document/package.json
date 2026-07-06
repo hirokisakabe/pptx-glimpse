@@ -1,6 +1,6 @@
 {
   "name": "@pptx-glimpse/document",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "PptxSourceModel and OOXML document foundation for pptx-glimpse.",
   "keywords": [
     "pptx",

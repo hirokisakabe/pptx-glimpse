@@ -1,6 +1,6 @@
 {
   "name": "@pptx-glimpse/editor-core",
-  "version": "0.0.3",
+  "version": "0.0.4",
   "private": true,
   "description": "Headless editor command layer for PptxSourceModel.",
   "type": "module",

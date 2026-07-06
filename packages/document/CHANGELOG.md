@@ -1,5 +1,15 @@
 # @pptx-glimpse/document
 
+## 0.4.0
+
+### Minor Changes
+
+- 27fb259: Add a headless `moveSlide` edit operation for reordering existing slides and preserving the updated slide order when writing PPTX files.
+- c35eec8: Add `createPptx()` for constructing a minimal from-scratch `PptxSourceModel` that can be edited with `addTextBox()` and written with `writePptx()`.
+- d131e50: Add browser editor support for inserting free connector arrows and allow connector shapes to be deleted through the editing APIs.
+- 675d0f0: Add paragraph property editing APIs for alignment, bullet, and paragraph level updates.
+- 10c2b13: Add document-layer editing helpers for shape fill and outline styles, including srgb solid fills, line color and width, and noFill.
+
 ## 0.3.0
 
 ### Minor Changes
