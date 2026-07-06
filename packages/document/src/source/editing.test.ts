@@ -25,7 +25,7 @@ import {
 import { asPartPath, asRelationshipId, asSourceNodeId, type SourceHandle } from "./handles.js";
 import type { PptxSourceModel } from "./pptx-source-model.js";
 import type { SourceConnector, SourceImage, SourceShape } from "./shapes.js";
-import { asEmu, asPt } from "./units.js";
+import { asEmu, asHundredthPt, asOoxmlAngle, asOoxmlPercent, asPt } from "./units.js";
 
 const SLIDE_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.slide+xml";
 const PRESENTATION_CONTENT_TYPE =
@@ -490,6 +490,167 @@ describe("editing shape operations", () => {
       shapeId: "31",
     });
     expect(edited.edits?.at(-1)).toHaveProperty("xml", expect.stringContaining("TextBox 31"));
+  });
+
+  it("rejects invalid formatted text box inputs before editing", () => {
+    const source = buildSourceModel();
+    const slideHandle = requireHandle(source.slides[0].handle);
+    const formattedInput: Parameters<typeof addTextBox>[2] = {
+      offsetX: asEmu(500),
+      offsetY: asEmu(600),
+      width: asEmu(700),
+      height: asEmu(800),
+      paragraphs: [
+        {
+          properties: { align: "center", lineSpacing: asHundredthPt(1800) },
+          runs: [
+            {
+              text: "formatted",
+              properties: {
+                bold: true,
+                gradientFill: {
+                  angle: asOoxmlAngle(0),
+                  stops: [
+                    { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FF0000" } },
+                    {
+                      position: asOoxmlPercent(100000),
+                      color: { kind: "srgb", hex: "0000FF" },
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    expect(() =>
+      addTextBox(source, slideHandle, {
+        ...formattedInput,
+        rotation: asOoxmlAngle(1.5),
+      }),
+    ).toThrow(/rotation must be a finite integer/);
+    expect(() =>
+      addTextBox(source, slideHandle, {
+        ...formattedInput,
+        paragraphs: [
+          {
+            runs: [
+              {
+                text: "bad boolean",
+                properties: {
+                  // @ts-expect-error Runtime validation rejects non-boolean flags from JS callers.
+                  bold: "false",
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow(/bold must be a boolean value/);
+    expect(() =>
+      addTextBox(source, slideHandle, {
+        ...formattedInput,
+        paragraphs: [
+          {
+            runs: [
+              {
+                text: "bad underline",
+                properties: {
+                  // @ts-expect-error Runtime validation rejects non-object underline values.
+                  underline: "sng",
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow(/underline must be a boolean or underline options object/);
+    expect(() =>
+      addTextBox(source, slideHandle, {
+        ...formattedInput,
+        paragraphs: [
+          {
+            properties: { lineSpacing: asHundredthPt(1.5) },
+            runs: [{ text: "bad line spacing" }],
+          },
+        ],
+      }),
+    ).toThrow(/lineSpacing must be a finite positive integer/);
+    expect(() =>
+      addTextBox(source, slideHandle, {
+        ...formattedInput,
+        paragraphs: [
+          {
+            runs: [
+              {
+                text: "bad char spacing",
+                properties: { charSpacing: 1.5 },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow(/charSpacing must be a finite integer/);
+    expect(() =>
+      addTextBox(source, slideHandle, {
+        ...formattedInput,
+        paragraphs: [
+          {
+            runs: [
+              {
+                text: "bad gradient",
+                properties: {
+                  gradientFill: {
+                    stops: [
+                      { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FF0000" } },
+                      {
+                        position: asOoxmlPercent(100.5),
+                        color: { kind: "srgb", hex: "0000FF" },
+                      },
+                    ],
+                  },
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow(/position must be a finite integer/);
+    expect(() =>
+      addTextBox(source, slideHandle, {
+        ...formattedInput,
+        paragraphs: [
+          {
+            runs: [
+              {
+                text: "bad baseline",
+                properties: {
+                  // @ts-expect-error Runtime validation rejects ambiguous numeric baseline values.
+                  baseline: 30,
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow(/baseline must be subscript or superscript/);
+    expect(() =>
+      addTextBox(source, slideHandle, {
+        ...formattedInput,
+        paragraphs: [
+          {
+            runs: [
+              {
+                text: "bad color",
+                properties: { color: { kind: "srgb", hex: "#112233" } },
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow(/color must be an srgb 6-digit hex color/);
   });
 
   it("adds a connector using source target handles and records finalized XML", () => {

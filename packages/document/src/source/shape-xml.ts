@@ -60,7 +60,7 @@ export interface TextBoxUnderlineInput {
   readonly color?: TextBoxColorInput;
 }
 
-export type TextBoxBaselineInput = "subscript" | "superscript" | number;
+export type TextBoxBaselineInput = "subscript" | "superscript";
 
 export interface TextBoxGlowInput {
   readonly radius: Emu;
@@ -255,11 +255,17 @@ function createTextRunPropertiesXml(
       ? { "@_sz": String(Math.round(properties.fontSize * 100)) }
       : {}),
     ...(properties.charSpacing !== undefined ? { "@_spc": String(properties.charSpacing) } : {}),
+    ...(properties.outline !== undefined
+      ? { "a:ln": createTextOutlineXml(properties.outline) }
+      : {}),
     ...(properties.color !== undefined
       ? { "a:solidFill": createSolidFillXml(properties.color) }
       : {}),
     ...(properties.gradientFill !== undefined
       ? { "a:gradFill": createGradientFillXml(properties.gradientFill) }
+      : {}),
+    ...(properties.glow !== undefined
+      ? { "a:effectLst": { "a:glow": createGlowXml(properties.glow) } }
       : {}),
     ...(properties.highlight !== undefined
       ? { "a:highlight": createColorXml(properties.highlight) }
@@ -268,12 +274,6 @@ function createTextRunPropertiesXml(
     typeof properties.underline !== "boolean" &&
     properties.underline.color !== undefined
       ? { "a:uFill": { "a:solidFill": createSolidFillXml(properties.underline.color) } }
-      : {}),
-    ...(properties.outline !== undefined
-      ? { "a:ln": createTextOutlineXml(properties.outline) }
-      : {}),
-    ...(properties.glow !== undefined
-      ? { "a:effectLst": { "a:glow": createGlowXml(properties.glow) } }
       : {}),
     ...(properties.fontFace !== undefined
       ? {
@@ -290,6 +290,9 @@ function createSolidFillXml(color: TextBoxColorInput): Record<string, unknown> {
 }
 
 function createColorXml(color: TextBoxColorInput): Record<string, unknown> {
+  if (!/^[0-9A-Fa-f]{6}$/.test(color.hex)) {
+    throw new Error("buildTextBoxXml: color hex must be a 6-digit RGB value");
+  }
   return {
     "a:srgbClr": {
       "@_val": color.hex.toUpperCase(),
@@ -333,8 +336,7 @@ function underlineStyleToken(underline: boolean | TextBoxUnderlineInput): TextBo
 
 function baselineToken(baseline: TextBoxBaselineInput): number {
   if (baseline === "superscript") return 30000;
-  if (baseline === "subscript") return -25000;
-  return baseline;
+  return -25000;
 }
 
 function boolToken(value: boolean): "1" | "0" {

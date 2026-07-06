@@ -658,7 +658,7 @@ function assertTextBoxInput(input: AddTextBoxInput): void {
   assertPositiveFiniteEmu(input.width, "addTextBox", "width");
   assertPositiveFiniteEmu(input.height, "addTextBox", "height");
   if (input.rotation !== undefined) {
-    assertFiniteNumber(input.rotation, "addTextBox", "rotation");
+    assertFiniteIntegerNumber(input.rotation, "addTextBox", "rotation");
   }
   if (input.text !== undefined && input.paragraphs !== undefined) {
     throw new Error("addTextBox: specify either text or paragraphs, not both");
@@ -711,7 +711,7 @@ function assertTextBoxParagraphProperties(
     throw new Error(`addTextBox: paragraphs[${paragraphIndex}].properties.align is not supported`);
   }
   if (properties.lineSpacing !== undefined) {
-    assertFiniteNumber(
+    assertPositiveFiniteIntegerNumber(
       properties.lineSpacing,
       "addTextBox",
       `paragraphs[${paragraphIndex}].properties.lineSpacing`,
@@ -738,6 +738,9 @@ function assertTextBoxRunProperties(
   if (properties.fontSize !== undefined) {
     assertPositiveFiniteNumber(properties.fontSize, "addTextBox", `${path}.properties.fontSize`);
   }
+  assertBooleanOrUndefined(properties.bold, "addTextBox", `${path}.properties.bold`);
+  assertBooleanOrUndefined(properties.italic, "addTextBox", `${path}.properties.italic`);
+  assertBooleanOrUndefined(properties.strike, "addTextBox", `${path}.properties.strike`);
   if (properties.color !== undefined)
     assertTextBoxColor(properties.color, `${path}.properties.color`);
   if (properties.gradientFill !== undefined) {
@@ -760,7 +763,11 @@ function assertTextBoxRunProperties(
     assertTextBoxOutline(properties.outline, `${path}.properties.outline`);
   }
   if (properties.charSpacing !== undefined) {
-    assertFiniteNumber(properties.charSpacing, "addTextBox", `${path}.properties.charSpacing`);
+    assertFiniteIntegerNumber(
+      properties.charSpacing,
+      "addTextBox",
+      `${path}.properties.charSpacing`,
+    );
   }
 }
 
@@ -774,9 +781,10 @@ function assertTextBoxGradientFill(fill: AddTextBoxGradientFillInput, path: stri
   if (!isArrayValue(fill.stops) || fill.stops.length < 2) {
     throw new Error(`addTextBox: ${path}.stops must contain at least two stops`);
   }
-  if (fill.angle !== undefined) assertFiniteNumber(fill.angle, "addTextBox", `${path}.angle`);
+  if (fill.angle !== undefined)
+    assertFiniteIntegerNumber(fill.angle, "addTextBox", `${path}.angle`);
   fill.stops.forEach((stop: AddTextBoxGradientFillInput["stops"][number], index: number) => {
-    assertFiniteNumber(stop.position, "addTextBox", `${path}.stops[${index}].position`);
+    assertFiniteIntegerNumber(stop.position, "addTextBox", `${path}.stops[${index}].position`);
     if (stop.position < 0 || stop.position > 100000) {
       throw new Error(`addTextBox: ${path}.stops[${index}].position must be between 0 and 100000`);
     }
@@ -790,16 +798,22 @@ function isArrayValue(value: unknown): boolean {
 
 function assertTextBoxUnderline(underline: boolean | AddTextBoxUnderlineInput, path: string): void {
   if (typeof underline === "boolean") return;
-  const style = underline.style ?? "sng";
+  if (!isPlainRecord(underline)) {
+    throw new Error(`addTextBox: ${path} must be a boolean or underline options object`);
+  }
+  const underlineOptions: AddTextBoxUnderlineInput = underline;
+  const style = underlineOptions.style ?? "sng";
   if (!UNDERLINE_STYLES.has(style)) {
     throw new Error(`addTextBox: ${path}.style is not supported`);
   }
-  if (underline.color !== undefined) assertTextBoxColor(underline.color, `${path}.color`);
+  if (underlineOptions.color !== undefined) {
+    assertTextBoxColor(underlineOptions.color, `${path}.color`);
+  }
 }
 
 function assertTextBoxBaseline(baseline: AddTextBoxBaselineInput, path: string): void {
   if (baseline === "subscript" || baseline === "superscript") return;
-  assertFiniteNumber(baseline, "addTextBox", path);
+  throw new Error(`addTextBox: ${path} must be subscript or superscript`);
 }
 
 function assertTextBoxGlow(glow: AddTextBoxGlowInput, path: string): void {
@@ -878,15 +892,31 @@ function assertArrowEndpoint(endpoint: SourceArrowEndpoint | undefined, fieldNam
   }
 }
 
-function assertFiniteNumber(value: number, operationName: string, fieldName: string): void {
-  if (!Number.isFinite(value)) {
-    throw new Error(`${operationName}: ${fieldName} must be a finite number`);
+function assertBooleanOrUndefined(value: unknown, operationName: string, fieldName: string): void {
+  if (value !== undefined && typeof value !== "boolean") {
+    throw new Error(`${operationName}: ${fieldName} must be a boolean value`);
+  }
+}
+
+function assertFiniteIntegerNumber(value: number, operationName: string, fieldName: string): void {
+  if (!Number.isInteger(value)) {
+    throw new Error(`${operationName}: ${fieldName} must be a finite integer`);
   }
 }
 
 function assertPositiveFiniteNumber(value: number, operationName: string, fieldName: string): void {
   if (!Number.isFinite(value) || value <= 0) {
     throw new Error(`${operationName}: ${fieldName} must be a finite positive number`);
+  }
+}
+
+function assertPositiveFiniteIntegerNumber(
+  value: number,
+  operationName: string,
+  fieldName: string,
+): void {
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${operationName}: ${fieldName} must be a finite positive integer`);
   }
 }
 
