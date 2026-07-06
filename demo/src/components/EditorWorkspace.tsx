@@ -42,6 +42,7 @@ interface TextRunOption {
 interface DragState {
   readonly kind: "move" | "resize";
   readonly handle?: ResizeHandle;
+  readonly shapeHandle: SourceHandle;
   readonly pointerId: number;
   readonly startPoint: Point;
   readonly startBounds: BrowserEditorShapeBoundsPx;
@@ -227,7 +228,7 @@ export function EditorWorkspace({
       setSelectedShapeKey(shapeKey(shape));
       setDraftBounds(null);
       if (event !== undefined && shape.editableTransform && shape.bounds !== undefined) {
-        beginDrag("move", undefined, event, shape.bounds, dragStateRef, overlayRef);
+        beginDrag("move", undefined, shape.handle, event, shape.bounds, dragStateRef, overlayRef);
       }
     },
     [editor],
@@ -250,16 +251,13 @@ export function EditorWorkspace({
   const finishDrag = useCallback(
     async (event: PointerEvent) => {
       const dragState = dragStateRef.current;
+      if (dragState === null || event.pointerId !== dragState.pointerId) return;
+      dragStateRef.current = null;
       const point = eventPoint(overlayRef.current, event.clientX, event.clientY);
-      if (
-        dragState === null ||
-        event.pointerId !== dragState.pointerId ||
-        selectedShape?.handle === undefined ||
-        point === null
-      ) {
+      if (point === null) {
+        setDraftBounds(null);
         return;
       }
-      dragStateRef.current = null;
 
       const dx = point.x - dragState.startPoint.x;
       const dy = point.y - dragState.startPoint.y;
@@ -272,7 +270,7 @@ export function EditorWorkspace({
         await applyCommand(
           {
             kind: "setShapeTransform",
-            handle: selectedShape.handle,
+            handle: dragState.shapeHandle,
             offsetX: pxToEmu(nextBounds.x),
             offsetY: pxToEmu(nextBounds.y),
             width: pxToEmu(nextBounds.width),
@@ -284,7 +282,7 @@ export function EditorWorkspace({
         setDraftBounds(null);
       }
     },
-    [applyCommand, selectedShape],
+    [applyCommand],
   );
 
   useEffect(() => {
@@ -311,10 +309,18 @@ export function EditorWorkspace({
   const handleResizeStart = useCallback(
     (handle: ResizeHandle, event: React.PointerEvent<SVGRectElement>) => {
       if (busyRef.current) return;
-      if (selectedShape?.bounds === undefined) return;
+      if (selectedShape?.bounds === undefined || selectedShape.handle === undefined) return;
       event.preventDefault();
       event.stopPropagation();
-      beginDrag("resize", handle, event, selectedShape.bounds, dragStateRef, overlayRef);
+      beginDrag(
+        "resize",
+        handle,
+        selectedShape.handle,
+        event,
+        selectedShape.bounds,
+        dragStateRef,
+        overlayRef,
+      );
     },
     [selectedShape],
   );
@@ -422,11 +428,17 @@ export function EditorWorkspace({
         setOperationError(`Replacement image must use ${replacement.contentType}.`);
         return;
       }
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const detectedContentType = detectImageContentType(bytes);
+      if (detectedContentType !== replacement.contentType) {
+        setOperationError(`Replacement image must use ${replacement.contentType}.`);
+        return;
+      }
       await applyCommand(
         {
           kind: "replaceImage",
           handle: selectedShape.handle,
-          bytes: new Uint8Array(await file.arrayBuffer()),
+          bytes,
         },
         "Image replaced",
       );
@@ -451,7 +463,7 @@ export function EditorWorkspace({
       link.href = href;
       link.download = editedFileName(fileName);
       link.click();
-      URL.revokeObjectURL(href);
+      window.setTimeout(() => URL.revokeObjectURL(href), 0);
       setMessage("PPTX downloaded");
     } catch (error) {
       setOperationError(error instanceof Error ? error.message : String(error));
@@ -751,6 +763,7 @@ export function EditorWorkspace({
 function beginDrag(
   kind: "move" | "resize",
   handle: ResizeHandle | undefined,
+  shapeHandle: SourceHandle,
   event: React.PointerEvent<SVGRectElement>,
   startBounds: BrowserEditorShapeBoundsPx,
   dragStateRef: React.MutableRefObject<DragState | null>,
@@ -762,6 +775,7 @@ function beginDrag(
   dragStateRef.current = {
     kind,
     handle,
+    shapeHandle,
     pointerId: event.pointerId,
     startPoint,
     startBounds,
@@ -858,7 +872,15 @@ function isPositiveFiniteNumber(value: string): boolean {
 }
 
 function viewBoxFromSvg(svg: string): string {
-  return svg.match(/\sviewBox="([^"]+)"/)?.[1] ?? "0 0 960 540";
+  const fallback = svg.match(/\sviewBox="([^"]+)"/)?.[1] ?? "0 0 960 540";
+  if (typeof DOMParser === "undefined") return fallback;
+  const parsed = new DOMParser().parseFromString(svg, "image/svg+xml");
+  const root = parsed.documentElement;
+  const viewBox = root.getAttribute("viewBox");
+  if (viewBox !== null && viewBox.trim() !== "") return viewBox;
+  const width = parsePositiveSvgLength(root.getAttribute("width"));
+  const height = parsePositiveSvgLength(root.getAttribute("height"));
+  return width === undefined || height === undefined ? fallback : `0 0 ${width} ${height}`;
 }
 
 function editedFileName(fileName: string): string {
@@ -886,4 +908,45 @@ function uint8ArrayToArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   const copy = new Uint8Array(bytes.byteLength);
   copy.set(bytes);
   return copy.buffer;
+}
+
+function parsePositiveSvgLength(value: string | null): number | undefined {
+  if (value === null) return undefined;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function detectImageContentType(bytes: Uint8Array): string | undefined {
+  if (startsWithBytes(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
+    return "image/png";
+  }
+  if (startsWithBytes(bytes, [0xff, 0xd8, 0xff])) return "image/jpeg";
+  if (
+    startsWithBytes(bytes, [0x47, 0x49, 0x46, 0x38, 0x37, 0x61]) ||
+    startsWithBytes(bytes, [0x47, 0x49, 0x46, 0x38, 0x39, 0x61])
+  ) {
+    return "image/gif";
+  }
+  if (startsWithBytes(bytes, [0x42, 0x4d])) return "image/bmp";
+  if (
+    startsWithBytes(bytes, [0x49, 0x49, 0x2a, 0x00]) ||
+    startsWithBytes(bytes, [0x4d, 0x4d, 0x00, 0x2a])
+  ) {
+    return "image/tiff";
+  }
+  if (
+    startsWithBytes(bytes, [0x52, 0x49, 0x46, 0x46]) &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
+  ) {
+    return "image/webp";
+  }
+  return undefined;
+}
+
+function startsWithBytes(bytes: Uint8Array, prefix: readonly number[]): boolean {
+  if (bytes.length < prefix.length) return false;
+  return prefix.every((value, index) => bytes[index] === value);
 }

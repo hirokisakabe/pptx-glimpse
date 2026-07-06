@@ -93,7 +93,10 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
     await page.getByRole("button", { name: "Undo" }).click();
     await expect(page.getByTestId("editor-slide-frame")).toContainText("Added from demo e2e");
 
-    await page.getByTestId("editor-thumbnail").nth(1).click();
+    const secondThumbnail = page.getByTestId("editor-thumbnail").nth(1);
+    await expect(secondThumbnail).toBeEnabled();
+    await secondThumbnail.click();
+    await expect(secondThumbnail).toHaveClass(/active/);
     await selectFirstReplaceableImage(page);
     await page.getByTestId("image-replacement-input").setInputFiles(replacementImagePath);
     await expect(page.getByTestId("editor-status")).toContainText("Image replaced");
@@ -135,6 +138,7 @@ async function selectFirstReplaceableImage(page: Page): Promise<void> {
     '[data-testid="shape-hit-area"][data-editable-image-replacement="true"]',
   );
   const imageButton = page.getByTestId("replace-image-button");
+  await expect(hitAreas.first()).toBeVisible();
   const count = await hitAreas.count();
   if (count === 0) throw new Error("replaceable image shape was not found");
   const bounds = await hitAreas.first().evaluate((element) => {
