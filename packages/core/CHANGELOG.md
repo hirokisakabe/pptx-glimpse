@@ -1,5 +1,16 @@
 # pptx-glimpse
 
+## 3.1.1
+
+### Patch Changes
+
+- 7f46470: Preserve numeric-like OOXML text values such as `007`, `1e5`, and `12.50` when reading and writing PPTX slides.
+- c50dc1a: Unify new-content edit XML generation at edit time: `addTextBox` / `addConnector` now finalize their shape XML fragment on the edit record and derive the in-memory shape from it, and `addEmptySlideFromLayout` / `duplicateSlide` assign the new `p:sldId` numeric id at edit time. The writer no longer generates new-content XML and only applies insertion positions. The `addTextBox` / `addConnector` / `addEmptySlideFromLayout` / `duplicateSlide` edit record shapes changed accordingly.
+- Updated dependencies [c5f2302]
+- Updated dependencies [7f46470]
+- Updated dependencies [c50dc1a]
+  - @pptx-glimpse/document@0.3.0
+
 ## 3.1.0
 
 ### Minor Changes

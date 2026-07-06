@@ -57,8 +57,8 @@ export interface AddConnectorOutlineInput {
 
 export interface AddConnectorInput extends UpdateShapeTransformInput {
   readonly preset: ConnectorPresetGeometry;
-  readonly start: AddConnectorConnectionEndpointInput;
-  readonly end: AddConnectorConnectionEndpointInput;
+  readonly start?: AddConnectorConnectionEndpointInput;
+  readonly end?: AddConnectorConnectionEndpointInput;
   readonly name?: string;
   readonly outline?: AddConnectorOutlineInput;
 }
@@ -205,14 +205,20 @@ export function addConnector(
   }
 
   const slide = source.slides[slideIndex];
-  const startShape = requireConnectorTargetShape(slide, input.start.shapeHandle, "start");
-  const endShape = requireConnectorTargetShape(slide, input.end.shapeHandle, "end");
+  const startShape =
+    input.start !== undefined
+      ? requireConnectorTargetShape(slide, input.start.shapeHandle, "start")
+      : undefined;
+  const endShape =
+    input.end !== undefined
+      ? requireConnectorTargetShape(slide, input.end.shapeHandle, "end")
+      : undefined;
   const shapeId = nextShapeId(slide.shapes, source.edits ?? [], slide.partPath);
   const shapeIdValue = String(shapeId);
   const name = input.name?.trim() || `Connector ${shapeIdValue}`;
   const orderingSlot = nextOrderingSlot(slide.shapes);
-  const startShapeId = String(startShape.nodeId);
-  const endShapeId = String(endShape.nodeId);
+  const startShapeId = startShape !== undefined ? String(startShape.nodeId) : undefined;
+  const endShapeId = endShape !== undefined ? String(endShape.nodeId) : undefined;
   const xml = buildConnectorXml({
     shapeId: shapeIdValue,
     name,
@@ -221,10 +227,18 @@ export function addConnector(
     offsetY: input.offsetY,
     width: input.width,
     height: input.height,
-    startShapeId,
-    startConnectionSiteIndex: input.start.connectionSiteIndex,
-    endShapeId,
-    endConnectionSiteIndex: input.end.connectionSiteIndex,
+    ...(startShapeId !== undefined && input.start !== undefined
+      ? {
+          startShapeId,
+          startConnectionSiteIndex: input.start.connectionSiteIndex,
+        }
+      : {}),
+    ...(endShapeId !== undefined && input.end !== undefined
+      ? {
+          endShapeId,
+          endConnectionSiteIndex: input.end.connectionSiteIndex,
+        }
+      : {}),
     ...(input.outline !== undefined ? { outline: input.outline } : {}),
   });
   const connector = parseShapeNodeXml(xml, slide.partPath, orderingSlot);
@@ -246,8 +260,8 @@ export function addConnector(
         kind: "addConnector",
         slidePartPath: slide.partPath,
         shapeId: shapeIdValue,
-        startShapeId,
-        endShapeId,
+        ...(startShapeId !== undefined ? { startShapeId } : {}),
+        ...(endShapeId !== undefined ? { endShapeId } : {}),
         xml,
       } satisfies PptxSourceModelAddConnectorEdit,
     ],
@@ -266,8 +280,8 @@ export function deleteShape(source: PptxSourceModel, handle: SourceHandle): Pptx
     const nextShapes = slide.shapes.filter((shape) => {
       if (!sourceHandlesEqual(shape.handle, handle)) return true;
       found = shape;
-      if (shape.kind !== "shape") {
-        throw new Error("deleteShape: only top-level sp shapes can be deleted");
+      if (shape.kind !== "shape" && shape.kind !== "connector") {
+        throw new Error("deleteShape: only top-level sp or cxnSp shapes can be deleted");
       }
       if (hasAlternateContentSidecar(shape)) {
         throw new Error("deleteShape: shapes inside AlternateContent are not supported");
@@ -362,8 +376,9 @@ function assertConnectorInput(input: AddConnectorInput): void {
       "addConnector: preset must be straightConnector1, bentConnector3, or curvedConnector3",
     );
   }
-  assertConnectionSiteIndex(input.start.connectionSiteIndex, "start");
-  assertConnectionSiteIndex(input.end.connectionSiteIndex, "end");
+  if (input.start !== undefined)
+    assertConnectionSiteIndex(input.start.connectionSiteIndex, "start");
+  if (input.end !== undefined) assertConnectionSiteIndex(input.end.connectionSiteIndex, "end");
   if (input.name !== undefined && input.name.trim() === "") {
     throw new Error("addConnector: name must be a non-empty string when provided");
   }

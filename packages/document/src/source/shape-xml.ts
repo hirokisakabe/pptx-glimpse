@@ -37,10 +37,10 @@ interface ConnectorXmlParams {
   readonly offsetY: Emu;
   readonly width: Emu;
   readonly height: Emu;
-  readonly startShapeId: string;
-  readonly startConnectionSiteIndex: number;
-  readonly endShapeId: string;
-  readonly endConnectionSiteIndex: number;
+  readonly startShapeId?: string;
+  readonly startConnectionSiteIndex?: number;
+  readonly endShapeId?: string;
+  readonly endConnectionSiteIndex?: number;
   readonly outline?: {
     readonly headEnd?: SourceArrowEndpoint;
     readonly tailEnd?: SourceArrowEndpoint;
@@ -111,16 +111,7 @@ export function buildConnectorXml(params: ConnectorXmlParams): string {
           "@_id": params.shapeId,
           "@_name": params.name,
         },
-        "p:cNvCxnSpPr": {
-          "a:stCxn": {
-            "@_id": params.startShapeId,
-            "@_idx": String(params.startConnectionSiteIndex),
-          },
-          "a:endCxn": {
-            "@_id": params.endShapeId,
-            "@_idx": String(params.endConnectionSiteIndex),
-          },
-        },
+        "p:cNvCxnSpPr": createConnectorConnectionXml(params),
         "p:nvPr": {},
       },
       "p:spPr": {
@@ -142,6 +133,27 @@ export function buildConnectorXml(params: ConnectorXmlParams): string {
       },
     },
   });
+}
+
+function createConnectorConnectionXml(params: ConnectorXmlParams): Record<string, unknown> {
+  return {
+    ...(params.startShapeId !== undefined && params.startConnectionSiteIndex !== undefined
+      ? {
+          "a:stCxn": {
+            "@_id": params.startShapeId,
+            "@_idx": String(params.startConnectionSiteIndex),
+          },
+        }
+      : {}),
+    ...(params.endShapeId !== undefined && params.endConnectionSiteIndex !== undefined
+      ? {
+          "a:endCxn": {
+            "@_id": params.endShapeId,
+            "@_idx": String(params.endConnectionSiteIndex),
+          },
+        }
+      : {}),
+  };
 }
 
 function createConnectorLineXml(params: ConnectorXmlParams): Record<string, unknown> {

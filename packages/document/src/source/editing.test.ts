@@ -11,6 +11,7 @@ import {
   findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
+  moveSlide,
   replaceImageBytes,
   replaceParagraphPlainText,
   replaceTextRunPlainText,
@@ -360,7 +361,39 @@ describe("editing shape operations", () => {
     expect(edited.edits?.at(-1)).toHaveProperty("xml", expect.stringContaining("bentConnector3"));
   });
 
-  it("deletes an existing shape, drops stale text edits, and cancels addTextBox followed by deleteShape", () => {
+  it("adds a free connector without native connection sites", () => {
+    const source = buildSourceModel();
+
+    const edited = expectNonMutating(source, () =>
+      addConnector(source, requireHandle(source.slides[0].handle), {
+        preset: "straightConnector1",
+        offsetX: asEmu(10),
+        offsetY: asEmu(20),
+        width: asEmu(30),
+        height: asEmu(40),
+        outline: { tailEnd: { type: "triangle", width: "med", length: "med" } },
+      }),
+    );
+    const connector = edited.slides[0].shapes.at(-1);
+
+    expect(connector).toMatchObject({
+      kind: "connector",
+      nodeId: "31",
+      name: "Connector 31",
+      geometry: { preset: "straightConnector1" },
+      outline: { tailEnd: { type: "triangle" } },
+    });
+    expect(connector).not.toHaveProperty("connection.start");
+    expect(edited.edits?.at(-1)).toMatchObject({
+      kind: "addConnector",
+      slidePartPath: "ppt/slides/slide1.xml",
+      shapeId: "31",
+    });
+    expect(edited.edits?.at(-1)).not.toHaveProperty("startShapeId");
+    expect(edited.edits?.at(-1)).not.toHaveProperty("endShapeId");
+  });
+
+  it("deletes an existing shape, drops stale text edits, and cancels added shapes followed by deleteShape", () => {
     const source = buildSourceModel();
     const existingHandle = requireHandle(shapeByName(source, "Title").handle);
 
@@ -384,6 +417,24 @@ describe("editing shape operations", () => {
     const deletedAdded = expectNonMutating(withTextBox, () =>
       deleteShape(withTextBox, requireHandle(shapeByName(withTextBox, "Temporary").handle)),
     );
+    const withConnector = addConnector(source, requireHandle(source.slides[0].handle), {
+      preset: "straightConnector1",
+      offsetX: asEmu(1),
+      offsetY: asEmu(2),
+      width: asEmu(3),
+      height: asEmu(4),
+      name: "Temporary connector",
+    });
+    const deletedAddedConnector = expectNonMutating(withConnector, () =>
+      deleteShape(
+        withConnector,
+        requireHandle(
+          withConnector.slides[0].shapes.find(
+            (shape) => shape.kind === "connector" && shape.name === "Temporary connector",
+          )?.handle,
+        ),
+      ),
+    );
 
     expect(
       deletedExisting.slides[0].shapes.map((shape) => shape.kind !== "raw" && shape.name),
@@ -394,6 +445,10 @@ describe("editing shape operations", () => {
     expect(
       deletedAdded.slides[0].shapes.map((shape) => shape.kind !== "raw" && shape.name),
     ).not.toContain("Temporary");
+    expect(deletedAddedConnector.edits).toEqual([]);
+    expect(
+      deletedAddedConnector.slides[0].shapes.map((shape) => shape.kind !== "raw" && shape.name),
+    ).not.toContain("Temporary connector");
   });
 
   it("rejects unsupported shape edits with stable error messages", () => {
@@ -410,7 +465,7 @@ describe("editing shape operations", () => {
       }),
     ).toThrow("updateShapeTransform: shape transform edit requires a node id");
     expect(() => deleteShape(source, imageHandle)).toThrow(
-      "deleteShape: only top-level sp shapes can be deleted",
+      "deleteShape: only top-level sp or cxnSp shapes can be deleted",
     );
     expect(() =>
       addConnector(source, requireHandle(source.slides[0].handle), {
@@ -527,6 +582,41 @@ describe("editing media and slide topology operations", () => {
     });
   });
 
+  it("moves a slide to the requested final index without changing package parts", () => {
+    const source = buildSourceModel();
+    const edited = expectNonMutating(source, () =>
+      moveSlide(source, requireHandle(source.slides[0].handle), { toIndex: 1 }),
+    );
+
+    expect(source.presentation.slidePartPaths).toEqual([
+      "ppt/slides/slide1.xml",
+      "ppt/slides/slide2.xml",
+    ]);
+    expect(edited.presentation.slidePartPaths).toEqual([
+      "ppt/slides/slide2.xml",
+      "ppt/slides/slide1.xml",
+    ]);
+    expect(edited.slides.map((slide) => slide.partPath)).toEqual([
+      "ppt/slides/slide2.xml",
+      "ppt/slides/slide1.xml",
+    ]);
+    expect(edited.packageGraph.parts).toEqual(source.packageGraph.parts);
+    expect(edited.edits?.at(-1)).toEqual({
+      kind: "moveSlide",
+      slidePartPath: "ppt/slides/slide1.xml",
+      relationshipId: "rIdSlide1",
+      toIndex: 1,
+    });
+  });
+
+  it("treats moving a slide to its current index as a no-op", () => {
+    const source = buildSourceModel();
+    const edited = moveSlide(source, requireHandle(source.slides[1].handle), { toIndex: 1 });
+
+    expect(edited).toBe(source);
+    expect(edited.edits).toBeUndefined();
+  });
+
   it("deletes a slide while dropping pending edits invalidated by that part", () => {
     const source = buildSourceModel();
     const dirty = replaceTextRunPlainText(source, requireHandle(firstRun(source).handle), "Dirty");
@@ -585,6 +675,12 @@ describe("editing media and slide topology operations", () => {
     ).toThrow("duplicateSlide: duplicating a slide with pending dirty part edits is unsupported");
     expect(() => deleteSlide(singleSlide, requireHandle(singleSlide.slides[0].handle))).toThrow(
       "deleteSlide: cannot delete the last slide",
+    );
+    expect(() =>
+      moveSlide(source, { partPath: asPartPath("ppt/slides/missing.xml") }, { toIndex: 1 }),
+    ).toThrow("moveSlide: slide handle was not found in PptxSourceModel source");
+    expect(() => moveSlide(source, requireHandle(source.slides[0].handle), { toIndex: 2 })).toThrow(
+      "moveSlide: toIndex must be an integer slide index in range",
     );
   });
 });

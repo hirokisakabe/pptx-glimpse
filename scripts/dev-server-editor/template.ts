@@ -53,6 +53,7 @@ ${DEV_EDITOR_STYLES}\
       <label>Image<input id="image-replacement-input" data-testid="image-replacement-input" type="file" disabled></label>
       <div id="editor-actions">
         <button id="add-text-box-button" type="button">Add text box</button>
+        <button id="add-connector-button" type="button">Add connector</button>
         <button id="delete-shape-button" type="button" disabled>Delete shape</button>
         <button id="undo-button" type="button">Undo</button>
         <button id="redo-button" type="button">Redo</button>

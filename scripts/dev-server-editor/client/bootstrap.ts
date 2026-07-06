@@ -34,6 +34,7 @@ export const DEV_EDITOR_BOOTSTRAP_SCRIPT = `    renderThumbnails();
         });
     });
     document.getElementById("add-text-box-button").addEventListener("click", addTextBox);
+    document.getElementById("add-connector-button").addEventListener("click", addConnector);
     document.getElementById("delete-shape-button").addEventListener("click", deleteSelectedShape);
     document.getElementById("undo-button").addEventListener("click", function () {
       postJson("/api/editor/undo")

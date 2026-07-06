@@ -33,6 +33,11 @@ export type SlideTopologyOperation =
   | {
       readonly kind: "removeSlide";
       readonly relationshipId: RelationshipId;
+    }
+  | {
+      readonly kind: "moveSlide";
+      readonly relationshipId: RelationshipId;
+      readonly toIndex: number;
     };
 
 /** Shape inserted by an edit, identified by its slide part and shape id. */
@@ -186,6 +191,20 @@ const EDIT_KIND_DESCRIPTORS: {
       newSlideNumericId: edit.newSlideNumericId,
     }),
     insertedSlidePartPath: (edit) => edit.newSlidePartPath,
+    insertedShape: () => undefined,
+  },
+  moveSlide: {
+    reservedPartPaths: (edit) => [edit.slidePartPath],
+    dirtyPartPath: () => undefined,
+    targetsShape: () => false,
+    invalidatingPartPaths: (edit) => [edit.slidePartPath],
+    reservedShapeId: () => undefined,
+    slideTopologyOperation: (edit) => ({
+      kind: "moveSlide",
+      relationshipId: edit.relationshipId,
+      toIndex: edit.toIndex,
+    }),
+    insertedSlidePartPath: () => undefined,
     insertedShape: () => undefined,
   },
   deleteSlide: {

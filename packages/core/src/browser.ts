@@ -8,6 +8,7 @@ import {
 import { type ConvertOptions, convertPptxToSvg as convertPptxToSvgBase } from "./svg-converter.js";
 
 export type {
+  BrowserEditorAddConnectorOptions,
   BrowserEditorAddTextBoxOptions,
   BrowserEditorHistoryState,
   BrowserEditorImageReplacementInfo,

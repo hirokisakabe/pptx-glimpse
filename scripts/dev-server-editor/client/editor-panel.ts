@@ -64,6 +64,23 @@ export const DEV_EDITOR_PANEL_COMMANDS_SCRIPT = `    function addTextBox() {
         });
     }
 
+    function addConnector() {
+      if (activeTextEditor) {
+        commitTextEditor()
+          .then(addConnector)
+          .catch(function () {});
+        return;
+      }
+      postJson("/api/editor/add-connector", { slide: currentIndex + 1 })
+        .then(function (data) {
+          applyEditorResponse(data);
+          setEditorMessage("Connector added", false);
+        })
+        .catch(function (err) {
+          setEditorMessage(err.message, true);
+        });
+    }
+
     function deleteSelectedShape() {
       if (activeTextEditor || !selectedShape || !selectedShape.handle || !selectedShape.editableDelete) {
         return;
