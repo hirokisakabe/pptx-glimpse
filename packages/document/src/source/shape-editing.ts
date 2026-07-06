@@ -1,3 +1,17 @@
+/**
+ * Shape editing and authoring operations for PptxSourceModel.
+ *
+ * Text-box authoring intentionally stays on the existing `addTextBox` operation
+ * instead of introducing a second rich-text builder. The adopted API keeps the simple
+ * `text` shortcut for one unformatted run and adds structured `paragraphs`, `body`,
+ * and `rotation` options for formatted text boxes. This mirrors the source model
+ * hierarchy (`a:rPr` / `a:pPr` / `a:bodyPr` / `a:xfrm`) while preserving edit-time XML
+ * finalization. The alternatives considered were a fluent text builder and a raw OOXML
+ * escape hatch. A fluent builder would add another mutable authoring layer before the
+ * source model has broader primitive coverage, and raw OOXML would shift validity and
+ * escaping responsibility to consumers, so both were rejected for this slice.
+ */
+
 import {
   editInsertedShape,
   editReservedShapeId,
@@ -26,7 +40,34 @@ import type {
   SourceSlide,
 } from "./index.js";
 import { nextNumberedName } from "./package-graph-mutations.js";
+import type {
+  TextBoxBaselineInput,
+  TextBoxBodyPropertiesInput,
+  TextBoxColorInput,
+  TextBoxGlowInput,
+  TextBoxGradientFillInput,
+  TextBoxOutlineInput,
+  TextBoxParagraphInput,
+  TextBoxParagraphPropertiesInput,
+  TextBoxRunInput,
+  TextBoxRunPropertiesInput,
+  TextBoxUnderlineInput,
+  TextBoxUnderlineStyle,
+} from "./shape-xml.js";
 import { buildConnectorXml, buildTextBoxXml, parseShapeNodeXml } from "./shape-xml.js";
+
+export type AddTextBoxBaselineInput = TextBoxBaselineInput;
+export type AddTextBoxBodyPropertiesInput = TextBoxBodyPropertiesInput;
+export type AddTextBoxColorInput = TextBoxColorInput;
+export type AddTextBoxGlowInput = TextBoxGlowInput;
+export type AddTextBoxGradientFillInput = TextBoxGradientFillInput;
+export type AddTextBoxOutlineInput = TextBoxOutlineInput;
+export type AddTextBoxParagraphInput = TextBoxParagraphInput;
+export type AddTextBoxParagraphPropertiesInput = TextBoxParagraphPropertiesInput;
+export type AddTextBoxRunInput = TextBoxRunInput;
+export type AddTextBoxRunPropertiesInput = TextBoxRunPropertiesInput;
+export type AddTextBoxUnderlineInput = TextBoxUnderlineInput;
+export type AddTextBoxUnderlineStyle = TextBoxUnderlineStyle;
 
 type TransformableShapeNode = Exclude<SourceShapeNode, { readonly kind: "raw" }>;
 
@@ -37,6 +78,25 @@ const CONNECTOR_PRESETS: ReadonlySet<ConnectorPresetGeometry> = new Set([
 ]);
 const ARROW_TYPES = new Set(["triangle", "stealth", "diamond", "oval", "arrow"]);
 const ARROW_SIZES = new Set(["sm", "med", "lg"]);
+const UNDERLINE_STYLES: ReadonlySet<AddTextBoxUnderlineStyle> = new Set([
+  "sng",
+  "dbl",
+  "heavy",
+  "dotted",
+  "dottedHeavy",
+  "dash",
+  "dashHeavy",
+  "dashLong",
+  "dashLongHeavy",
+  "dotDash",
+  "dotDashHeavy",
+  "dotDotDash",
+  "dotDotDashHeavy",
+  "wavy",
+  "wavyHeavy",
+  "wavyDbl",
+  "none",
+]);
 
 export interface UpdateShapeTransformInput {
   readonly offsetX: Emu;
@@ -46,7 +106,10 @@ export interface UpdateShapeTransformInput {
 }
 
 export interface AddTextBoxInput extends UpdateShapeTransformInput {
-  readonly text: string;
+  readonly text?: string;
+  readonly paragraphs?: readonly AddTextBoxParagraphInput[];
+  readonly body?: AddTextBoxBodyPropertiesInput;
+  readonly rotation?: NonNullable<SourceShape["transform"]>["rotation"];
   readonly name?: string;
 }
 
@@ -275,7 +338,9 @@ export function addTextBox(
     offsetY: input.offsetY,
     width: input.width,
     height: input.height,
-    text: input.text,
+    ...(input.rotation !== undefined ? { rotation: input.rotation } : {}),
+    ...(input.paragraphs !== undefined ? { paragraphs: input.paragraphs } : { text: input.text }),
+    ...(input.body !== undefined ? { body: input.body } : {}),
   });
   const shape = parseShapeNodeXml(xml, slide.partPath, orderingSlot);
   const slides = source.slides.map((candidate, index) =>
@@ -592,11 +657,183 @@ function assertTextBoxInput(input: AddTextBoxInput): void {
   assertFiniteEmu(input.offsetY, "addTextBox", "offsetY");
   assertPositiveFiniteEmu(input.width, "addTextBox", "width");
   assertPositiveFiniteEmu(input.height, "addTextBox", "height");
-  if (typeof input.text !== "string") {
-    throw new Error("addTextBox: text must be a string");
+  if (input.rotation !== undefined) {
+    assertFiniteNumber(input.rotation, "addTextBox", "rotation");
+  }
+  if (input.text !== undefined && input.paragraphs !== undefined) {
+    throw new Error("addTextBox: specify either text or paragraphs, not both");
+  }
+  if (input.text === undefined && input.paragraphs === undefined) {
+    throw new Error("addTextBox: text or paragraphs must be provided");
+  }
+  if (input.text !== undefined && typeof input.text !== "string") {
+    throw new Error("addTextBox: text must be a string when provided");
+  }
+  if (input.paragraphs !== undefined) {
+    assertTextBoxParagraphs(input.paragraphs);
+  }
+  if (input.body !== undefined) {
+    assertTextBoxBody(input.body);
   }
   if (input.name !== undefined && input.name.trim() === "") {
     throw new Error("addTextBox: name must be a non-empty string when provided");
+  }
+}
+
+function assertTextBoxParagraphs(paragraphs: readonly AddTextBoxParagraphInput[]): void {
+  if (!isArrayValue(paragraphs) || paragraphs.length === 0) {
+    throw new Error("addTextBox: paragraphs must contain at least one paragraph");
+  }
+  paragraphs.forEach((paragraph: AddTextBoxParagraphInput, paragraphIndex: number) => {
+    const runs: readonly AddTextBoxRunInput[] = paragraph.runs;
+    if (!isArrayValue(runs) || runs.length === 0) {
+      throw new Error(
+        `addTextBox: paragraphs[${paragraphIndex}].runs must contain at least one run`,
+      );
+    }
+    assertTextBoxParagraphProperties(paragraph.properties, paragraphIndex);
+    runs.forEach((run, runIndex) => assertTextBoxRun(run, paragraphIndex, runIndex));
+  });
+}
+
+function assertTextBoxParagraphProperties(
+  properties: AddTextBoxParagraphPropertiesInput | undefined,
+  paragraphIndex: number,
+): void {
+  if (properties === undefined) return;
+  if (
+    properties.align !== undefined &&
+    properties.align !== "left" &&
+    properties.align !== "center" &&
+    properties.align !== "right" &&
+    properties.align !== "justify"
+  ) {
+    throw new Error(`addTextBox: paragraphs[${paragraphIndex}].properties.align is not supported`);
+  }
+  if (properties.lineSpacing !== undefined) {
+    assertFiniteNumber(
+      properties.lineSpacing,
+      "addTextBox",
+      `paragraphs[${paragraphIndex}].properties.lineSpacing`,
+    );
+  }
+}
+
+function assertTextBoxRun(run: AddTextBoxRunInput, paragraphIndex: number, runIndex: number): void {
+  const path = `paragraphs[${paragraphIndex}].runs[${runIndex}]`;
+  if (typeof run.text !== "string") {
+    throw new Error(`addTextBox: ${path}.text must be a string`);
+  }
+  assertTextBoxRunProperties(run.properties, path);
+}
+
+function assertTextBoxRunProperties(
+  properties: AddTextBoxRunPropertiesInput | undefined,
+  path: string,
+): void {
+  if (properties === undefined) return;
+  if (properties.fontFace !== undefined && properties.fontFace.trim() === "") {
+    throw new Error(`addTextBox: ${path}.properties.fontFace must be a non-empty string`);
+  }
+  if (properties.fontSize !== undefined) {
+    assertPositiveFiniteNumber(properties.fontSize, "addTextBox", `${path}.properties.fontSize`);
+  }
+  if (properties.color !== undefined)
+    assertTextBoxColor(properties.color, `${path}.properties.color`);
+  if (properties.gradientFill !== undefined) {
+    if (properties.color !== undefined) {
+      throw new Error(`addTextBox: ${path}.properties cannot set both color and gradientFill`);
+    }
+    assertTextBoxGradientFill(properties.gradientFill, `${path}.properties.gradientFill`);
+  }
+  if (properties.underline !== undefined) {
+    assertTextBoxUnderline(properties.underline, `${path}.properties.underline`);
+  }
+  if (properties.baseline !== undefined) {
+    assertTextBoxBaseline(properties.baseline, `${path}.properties.baseline`);
+  }
+  if (properties.highlight !== undefined) {
+    assertTextBoxColor(properties.highlight, `${path}.properties.highlight`);
+  }
+  if (properties.glow !== undefined) assertTextBoxGlow(properties.glow, `${path}.properties.glow`);
+  if (properties.outline !== undefined) {
+    assertTextBoxOutline(properties.outline, `${path}.properties.outline`);
+  }
+  if (properties.charSpacing !== undefined) {
+    assertFiniteNumber(properties.charSpacing, "addTextBox", `${path}.properties.charSpacing`);
+  }
+}
+
+function assertTextBoxColor(color: AddTextBoxColorInput, path: string): void {
+  if (color.kind !== "srgb" || !/^[0-9A-Fa-f]{6}$/.test(color.hex)) {
+    throw new Error(`addTextBox: ${path} must be an srgb 6-digit hex color`);
+  }
+}
+
+function assertTextBoxGradientFill(fill: AddTextBoxGradientFillInput, path: string): void {
+  if (!isArrayValue(fill.stops) || fill.stops.length < 2) {
+    throw new Error(`addTextBox: ${path}.stops must contain at least two stops`);
+  }
+  if (fill.angle !== undefined) assertFiniteNumber(fill.angle, "addTextBox", `${path}.angle`);
+  fill.stops.forEach((stop: AddTextBoxGradientFillInput["stops"][number], index: number) => {
+    assertFiniteNumber(stop.position, "addTextBox", `${path}.stops[${index}].position`);
+    if (stop.position < 0 || stop.position > 100000) {
+      throw new Error(`addTextBox: ${path}.stops[${index}].position must be between 0 and 100000`);
+    }
+    assertTextBoxColor(stop.color, `${path}.stops[${index}].color`);
+  });
+}
+
+function isArrayValue(value: unknown): boolean {
+  return Array.isArray(value);
+}
+
+function assertTextBoxUnderline(underline: boolean | AddTextBoxUnderlineInput, path: string): void {
+  if (typeof underline === "boolean") return;
+  const style = underline.style ?? "sng";
+  if (!UNDERLINE_STYLES.has(style)) {
+    throw new Error(`addTextBox: ${path}.style is not supported`);
+  }
+  if (underline.color !== undefined) assertTextBoxColor(underline.color, `${path}.color`);
+}
+
+function assertTextBoxBaseline(baseline: AddTextBoxBaselineInput, path: string): void {
+  if (baseline === "subscript" || baseline === "superscript") return;
+  assertFiniteNumber(baseline, "addTextBox", path);
+}
+
+function assertTextBoxGlow(glow: AddTextBoxGlowInput, path: string): void {
+  assertPositiveFiniteEmu(glow.radius, "addTextBox", `${path}.radius`);
+  assertTextBoxColor(glow.color, `${path}.color`);
+}
+
+function assertTextBoxOutline(outline: AddTextBoxOutlineInput, path: string): void {
+  if (outline.width === undefined && outline.color === undefined) {
+    throw new Error(`addTextBox: ${path} must set width or color`);
+  }
+  if (outline.width !== undefined) {
+    assertPositiveFiniteEmu(outline.width, "addTextBox", `${path}.width`);
+  }
+  if (outline.color !== undefined) assertTextBoxColor(outline.color, `${path}.color`);
+}
+
+function assertTextBoxBody(body: AddTextBoxBodyPropertiesInput): void {
+  if (
+    body.anchor !== undefined &&
+    body.anchor !== "top" &&
+    body.anchor !== "middle" &&
+    body.anchor !== "bottom"
+  ) {
+    throw new Error("addTextBox: body.anchor is not supported");
+  }
+  if (body.marginLeft !== undefined)
+    assertFiniteEmu(body.marginLeft, "addTextBox", "body.marginLeft");
+  if (body.marginRight !== undefined) {
+    assertFiniteEmu(body.marginRight, "addTextBox", "body.marginRight");
+  }
+  if (body.marginTop !== undefined) assertFiniteEmu(body.marginTop, "addTextBox", "body.marginTop");
+  if (body.marginBottom !== undefined) {
+    assertFiniteEmu(body.marginBottom, "addTextBox", "body.marginBottom");
   }
 }
 
@@ -638,6 +875,18 @@ function assertArrowEndpoint(endpoint: SourceArrowEndpoint | undefined, fieldNam
   }
   if (!ARROW_SIZES.has(endpoint.length)) {
     throw new Error(`addConnector: outline.${fieldName}.length is not supported`);
+  }
+}
+
+function assertFiniteNumber(value: number, operationName: string, fieldName: string): void {
+  if (!Number.isFinite(value)) {
+    throw new Error(`${operationName}: ${fieldName} must be a finite number`);
+  }
+}
+
+function assertPositiveFiniteNumber(value: number, operationName: string, fieldName: string): void {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`${operationName}: ${fieldName} must be a finite positive number`);
   }
 }
 

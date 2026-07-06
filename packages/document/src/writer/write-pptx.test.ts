@@ -8,6 +8,9 @@ import { describe, expect, it } from "vitest";
 // Import via the actual public surface (`@pptx-glimpse/document`).
 import {
   asEmu,
+  asHundredthPt,
+  asOoxmlAngle,
+  asOoxmlPercent,
   asPartPath,
   asPt,
   asSourceNodeId,
@@ -612,6 +615,144 @@ describe("writePptx - from-scratch builder", () => {
     const computed = createComputedView(reread);
     expect(computed.slideSize).toEqual({ width: asEmu(9144000), height: asEmu(5143500) });
     expect(computed.slides[0]?.elements).toHaveLength(1);
+  });
+
+  it("writes formatted text box rPr, pPr, bodyPr, and xfrm from public APIs", () => {
+    const source = createPptx();
+    const slideHandle = source.slides[0]?.handle;
+    if (slideHandle === undefined) throw new Error("createPptx should create a first slide");
+
+    const edited = addTextBox(source, slideHandle, {
+      offsetX: asEmu(914400),
+      offsetY: asEmu(457200),
+      width: asEmu(4572000),
+      height: asEmu(1828800),
+      rotation: asOoxmlAngle(5400000),
+      name: "Formatted TextBox",
+      body: {
+        anchor: "middle",
+        marginLeft: asEmu(91440),
+        marginRight: asEmu(182880),
+        marginTop: asEmu(45720),
+        marginBottom: asEmu(68580),
+      },
+      paragraphs: [
+        {
+          properties: {
+            align: "center",
+            lineSpacing: asHundredthPt(1800),
+          },
+          runs: [
+            {
+              text: "Solid styled",
+              properties: {
+                fontFace: "Aptos",
+                fontSize: asPt(28),
+                color: { kind: "srgb", hex: "112233" },
+                bold: true,
+                italic: true,
+                underline: { style: "dbl", color: { kind: "srgb", hex: "445566" } },
+                strike: true,
+                highlight: { kind: "srgb", hex: "ffff00" },
+                glow: { radius: asEmu(25400), color: { kind: "srgb", hex: "00aaff" } },
+                outline: { width: asEmu(12700), color: { kind: "srgb", hex: "aa00aa" } },
+                charSpacing: 120,
+              },
+            },
+            {
+              text: " gradient",
+              properties: {
+                gradientFill: {
+                  angle: asOoxmlAngle(2700000),
+                  stops: [
+                    { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "ff0000" } },
+                    {
+                      position: asOoxmlPercent(100000),
+                      color: { kind: "srgb", hex: "0000ff" },
+                    },
+                  ],
+                },
+                baseline: "superscript",
+              },
+            },
+          ],
+        },
+        {
+          properties: {
+            align: "right",
+            lineSpacing: asHundredthPt(2400),
+          },
+          runs: [
+            {
+              text: "Subscript line",
+              properties: {
+                baseline: "subscript",
+                underline: true,
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+    const added = requireShape(findShapeByName(reread, "Formatted TextBox"));
+
+    expect(reread.diagnostics).toEqual([]);
+    expect(added.transform).toMatchObject({ rotation: 5400000 });
+    expect(added.textBody?.properties).toMatchObject({
+      anchor: "middle",
+      marginLeft: 91440,
+      marginRight: 182880,
+      marginTop: 45720,
+      marginBottom: 68580,
+    });
+    expect(added.textBody?.paragraphs).toHaveLength(2);
+    expect(added.textBody?.paragraphs[0]?.properties).toMatchObject({
+      align: "center",
+      lineSpacing: { type: "pts", value: 1800 },
+    });
+    expect(added.textBody?.paragraphs[0]?.runs.map((run) => run.text)).toEqual([
+      "Solid styled",
+      " gradient",
+    ]);
+    expect(added.textBody?.paragraphs[1]?.properties).toMatchObject({
+      align: "right",
+      lineSpacing: { type: "pts", value: 2400 },
+    });
+    expect(slideXml).toContain(`<a:xfrm rot="5400000">`);
+    expect(slideXml).toContain(
+      `<a:bodyPr wrap="square" anchor="ctr" lIns="91440" rIns="182880" tIns="45720" bIns="68580"/>`,
+    );
+    expect(slideXml).toContain(`<a:pPr algn="ctr"><a:lnSpc><a:spcPts val="1800"/>`);
+    expect(slideXml).toContain(`<a:pPr algn="r"><a:lnSpc><a:spcPts val="2400"/>`);
+    expect(slideXml).toContain(`b="1"`);
+    expect(slideXml).toContain(`i="1"`);
+    expect(slideXml).toContain(`u="dbl"`);
+    expect(slideXml).toContain(`strike="sngStrike"`);
+    expect(slideXml).toContain(`sz="2800"`);
+    expect(slideXml).toContain(`spc="120"`);
+    expect(slideXml).toContain(`<a:solidFill><a:srgbClr val="112233"/></a:solidFill>`);
+    expect(slideXml).toContain(
+      `<a:uFill><a:solidFill><a:srgbClr val="445566"/></a:solidFill></a:uFill>`,
+    );
+    expect(slideXml).toContain(`<a:highlight><a:srgbClr val="FFFF00"/></a:highlight>`);
+    expect(slideXml).toContain(
+      `<a:ln w="12700"><a:solidFill><a:srgbClr val="AA00AA"/></a:solidFill></a:ln>`,
+    );
+    expect(slideXml).toContain(
+      `<a:effectLst><a:glow rad="25400"><a:srgbClr val="00AAFF"/></a:glow></a:effectLst>`,
+    );
+    expect(slideXml).toContain(`<a:latin typeface="Aptos"/>`);
+    expect(slideXml).toContain(`<a:ea typeface="Aptos"/>`);
+    expect(slideXml).toContain(`<a:cs typeface="Aptos"/>`);
+    expect(slideXml).toContain(`<a:gradFill><a:gsLst>`);
+    expect(slideXml).toContain(`<a:gs pos="0"><a:srgbClr val="FF0000"/></a:gs>`);
+    expect(slideXml).toContain(`<a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs>`);
+    expect(slideXml).toContain(`<a:lin ang="2700000" scaled="1"/>`);
+    expect(slideXml).toContain(`baseline="30000"`);
+    expect(slideXml).toContain(`baseline="-25000"`);
   });
 
   it("writes custom slide size without fixed 16:9 metadata", () => {
