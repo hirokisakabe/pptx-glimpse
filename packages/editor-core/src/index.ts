@@ -456,7 +456,7 @@ function addTextBoxCommand(document: PptxSourceModel, command: AddTextBoxCommand
   requireFiniteEmu(command.offsetY, "addTextBox", "offsetY");
   requirePositiveFiniteEmu(command.width, "addTextBox", "width");
   requirePositiveFiniteEmu(command.height, "addTextBox", "height");
-  if (typeof command.text !== "string") {
+  if (command.text !== undefined && typeof command.text !== "string") {
     throw new Error("addTextBox: text must be a string");
   }
   if (command.name !== undefined && command.name.trim() === "") {

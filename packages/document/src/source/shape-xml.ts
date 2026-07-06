@@ -16,8 +16,101 @@ import { parseShapeTree } from "../reader/shape-tree.js";
 import { parseXml } from "../reader/xml.js";
 import type { PartPath } from "./handles.js";
 import type { ConnectorPresetGeometry } from "./pptx-source-model.js";
-import type { SourceArrowEndpoint, SourceShapeNode } from "./shapes.js";
-import type { Emu } from "./units.js";
+import type {
+  SourceArrowEndpoint,
+  SourceShapeNode,
+  SourceTextAlign,
+  SourceVerticalAnchor,
+} from "./shapes.js";
+import type { Emu, HundredthPt, OoxmlAngle, OoxmlPercent, Pt } from "./units.js";
+
+export type TextBoxColorInput = { readonly kind: "srgb"; readonly hex: string };
+
+export interface TextBoxGradientStopInput {
+  readonly position: OoxmlPercent;
+  readonly color: TextBoxColorInput;
+}
+
+export interface TextBoxGradientFillInput {
+  readonly stops: readonly TextBoxGradientStopInput[];
+  readonly angle?: OoxmlAngle;
+}
+
+export type TextBoxUnderlineStyle =
+  | "sng"
+  | "dbl"
+  | "heavy"
+  | "dotted"
+  | "dottedHeavy"
+  | "dash"
+  | "dashHeavy"
+  | "dashLong"
+  | "dashLongHeavy"
+  | "dotDash"
+  | "dotDashHeavy"
+  | "dotDotDash"
+  | "dotDotDashHeavy"
+  | "wavy"
+  | "wavyHeavy"
+  | "wavyDbl"
+  | "none";
+
+export interface TextBoxUnderlineInput {
+  readonly style?: TextBoxUnderlineStyle;
+  readonly color?: TextBoxColorInput;
+}
+
+export type TextBoxBaselineInput = "subscript" | "superscript";
+
+export interface TextBoxGlowInput {
+  readonly radius: Emu;
+  readonly color: TextBoxColorInput;
+}
+
+export interface TextBoxOutlineInput {
+  readonly width?: Emu;
+  readonly color?: TextBoxColorInput;
+}
+
+export interface TextBoxRunPropertiesInput {
+  readonly fontFace?: string;
+  readonly fontSize?: Pt;
+  readonly color?: TextBoxColorInput;
+  readonly gradientFill?: TextBoxGradientFillInput;
+  readonly bold?: boolean;
+  readonly italic?: boolean;
+  readonly underline?: boolean | TextBoxUnderlineInput;
+  readonly strike?: boolean;
+  readonly baseline?: TextBoxBaselineInput;
+  readonly highlight?: TextBoxColorInput;
+  readonly glow?: TextBoxGlowInput;
+  readonly outline?: TextBoxOutlineInput;
+  /** OOXML ST_TextPoint value for `a:rPr@spc` (-400000..400000, 100 = 1 pt). */
+  readonly charSpacing?: number;
+}
+
+export interface TextBoxRunInput {
+  readonly text: string;
+  readonly properties?: TextBoxRunPropertiesInput;
+}
+
+export interface TextBoxParagraphPropertiesInput {
+  readonly align?: SourceTextAlign;
+  readonly lineSpacing?: HundredthPt;
+}
+
+export interface TextBoxParagraphInput {
+  readonly runs: readonly TextBoxRunInput[];
+  readonly properties?: TextBoxParagraphPropertiesInput;
+}
+
+export interface TextBoxBodyPropertiesInput {
+  readonly anchor?: SourceVerticalAnchor;
+  readonly marginLeft?: Emu;
+  readonly marginRight?: Emu;
+  readonly marginTop?: Emu;
+  readonly marginBottom?: Emu;
+}
 
 interface TextBoxXmlParams {
   readonly shapeId: string;
@@ -26,7 +119,10 @@ interface TextBoxXmlParams {
   readonly offsetY: Emu;
   readonly width: Emu;
   readonly height: Emu;
-  readonly text: string;
+  readonly rotation?: OoxmlAngle;
+  readonly text?: string;
+  readonly paragraphs?: readonly TextBoxParagraphInput[];
+  readonly body?: TextBoxBodyPropertiesInput;
 }
 
 interface ConnectorXmlParams {
@@ -55,6 +151,7 @@ const xmlBuilder = new XMLBuilder({
 });
 
 export function buildTextBoxXml(params: TextBoxXmlParams): string {
+  const paragraphs = params.paragraphs ?? [{ runs: [{ text: params.text ?? "" }] }];
   return xmlBuilder.build({
     "p:sp": {
       "p:nvSpPr": {
@@ -69,6 +166,7 @@ export function buildTextBoxXml(params: TextBoxXmlParams): string {
       },
       "p:spPr": {
         "a:xfrm": {
+          ...(params.rotation !== undefined ? { "@_rot": String(params.rotation) } : {}),
           "a:off": {
             "@_x": String(params.offsetX),
             "@_y": String(params.offsetY),
@@ -88,19 +186,195 @@ export function buildTextBoxXml(params: TextBoxXmlParams): string {
         },
       },
       "p:txBody": {
-        "a:bodyPr": {
-          "@_wrap": "square",
-        },
+        "a:bodyPr": createTextBodyPropertiesXml(params.body),
         "a:lstStyle": {},
-        "a:p": {
-          "a:r": {
-            "a:t": textElementValue(params.text),
-          },
-          "a:endParaRPr": {},
-        },
+        "a:p": paragraphs.map(createParagraphXml),
       },
     },
   });
+}
+
+function createTextBodyPropertiesXml(
+  body: TextBoxBodyPropertiesInput | undefined,
+): Record<string, unknown> {
+  return {
+    "@_wrap": "square",
+    ...(body?.anchor !== undefined ? { "@_anchor": verticalAnchorToken(body.anchor) } : {}),
+    ...(body?.marginLeft !== undefined ? { "@_lIns": String(body.marginLeft) } : {}),
+    ...(body?.marginRight !== undefined ? { "@_rIns": String(body.marginRight) } : {}),
+    ...(body?.marginTop !== undefined ? { "@_tIns": String(body.marginTop) } : {}),
+    ...(body?.marginBottom !== undefined ? { "@_bIns": String(body.marginBottom) } : {}),
+  };
+}
+
+function createParagraphXml(paragraph: TextBoxParagraphInput): Record<string, unknown> {
+  return {
+    ...(paragraph.properties !== undefined
+      ? { "a:pPr": createParagraphPropertiesXml(paragraph.properties) }
+      : {}),
+    "a:r": paragraph.runs.map(createTextRunXml),
+    "a:endParaRPr": {},
+  };
+}
+
+function createParagraphPropertiesXml(
+  properties: TextBoxParagraphPropertiesInput,
+): Record<string, unknown> {
+  return {
+    ...(properties.align !== undefined ? { "@_algn": textAlignToken(properties.align) } : {}),
+    ...(properties.lineSpacing !== undefined
+      ? { "a:lnSpc": { "a:spcPts": { "@_val": String(properties.lineSpacing) } } }
+      : {}),
+  };
+}
+
+function createTextRunXml(run: TextBoxRunInput): Record<string, unknown> {
+  return {
+    ...(run.properties !== undefined
+      ? { "a:rPr": createTextRunPropertiesXml(run.properties) }
+      : {}),
+    "a:t": textElementValue(run.text),
+  };
+}
+
+function createTextRunPropertiesXml(
+  properties: TextBoxRunPropertiesInput,
+): Record<string, unknown> {
+  return {
+    ...(properties.bold !== undefined ? { "@_b": boolToken(properties.bold) } : {}),
+    ...(properties.italic !== undefined ? { "@_i": boolToken(properties.italic) } : {}),
+    ...(properties.underline !== undefined
+      ? { "@_u": underlineStyleToken(properties.underline) }
+      : {}),
+    ...(properties.strike !== undefined
+      ? { "@_strike": properties.strike ? "sngStrike" : "noStrike" }
+      : {}),
+    ...(properties.baseline !== undefined
+      ? { "@_baseline": String(baselineToken(properties.baseline)) }
+      : {}),
+    ...(properties.fontSize !== undefined
+      ? { "@_sz": String(Math.round(properties.fontSize * 100)) }
+      : {}),
+    ...(properties.charSpacing !== undefined
+      ? { "@_spc": textPointToken(properties.charSpacing) }
+      : {}),
+    ...(properties.outline !== undefined
+      ? { "a:ln": createTextOutlineXml(properties.outline) }
+      : {}),
+    ...(properties.color !== undefined
+      ? { "a:solidFill": createSolidFillXml(properties.color) }
+      : {}),
+    ...(properties.gradientFill !== undefined
+      ? { "a:gradFill": createGradientFillXml(properties.gradientFill) }
+      : {}),
+    ...(properties.glow !== undefined
+      ? { "a:effectLst": { "a:glow": createGlowXml(properties.glow) } }
+      : {}),
+    ...(properties.highlight !== undefined
+      ? { "a:highlight": createColorXml(properties.highlight) }
+      : {}),
+    ...(properties.underline !== undefined &&
+    typeof properties.underline !== "boolean" &&
+    properties.underline.color !== undefined
+      ? { "a:uFill": { "a:solidFill": createSolidFillXml(properties.underline.color) } }
+      : {}),
+    ...(properties.fontFace !== undefined
+      ? {
+          "a:latin": { "@_typeface": properties.fontFace },
+          "a:ea": { "@_typeface": properties.fontFace },
+          "a:cs": { "@_typeface": properties.fontFace },
+        }
+      : {}),
+  };
+}
+
+function createSolidFillXml(color: TextBoxColorInput): Record<string, unknown> {
+  return createColorXml(color);
+}
+
+function createColorXml(color: TextBoxColorInput): Record<string, unknown> {
+  if (!/^[0-9A-Fa-f]{6}$/.test(color.hex)) {
+    throw new Error("buildTextBoxXml: color hex must be a 6-digit RGB value");
+  }
+  return {
+    "a:srgbClr": {
+      "@_val": color.hex.toUpperCase(),
+    },
+  };
+}
+
+function createGradientFillXml(fill: TextBoxGradientFillInput): Record<string, unknown> {
+  return {
+    "a:gsLst": {
+      "a:gs": fill.stops.map((stop) => ({
+        "@_pos": String(stop.position),
+        ...createColorXml(stop.color),
+      })),
+    },
+    "a:lin": {
+      "@_ang": String(fill.angle ?? 0),
+      "@_scaled": "1",
+    },
+  };
+}
+
+function createTextOutlineXml(outline: TextBoxOutlineInput): Record<string, unknown> {
+  return {
+    ...(outline.width !== undefined ? { "@_w": String(outline.width) } : {}),
+    ...(outline.color !== undefined ? { "a:solidFill": createSolidFillXml(outline.color) } : {}),
+  };
+}
+
+function createGlowXml(glow: TextBoxGlowInput): Record<string, unknown> {
+  return {
+    "@_rad": String(glow.radius),
+    ...createColorXml(glow.color),
+  };
+}
+
+function underlineStyleToken(underline: boolean | TextBoxUnderlineInput): TextBoxUnderlineStyle {
+  if (typeof underline === "boolean") return underline ? "sng" : "none";
+  return underline.style ?? "sng";
+}
+
+function baselineToken(baseline: TextBoxBaselineInput): number {
+  if (baseline === "superscript") return 30000;
+  return -25000;
+}
+
+function textPointToken(value: number): string {
+  if (!Number.isInteger(value) || value < -400000 || value > 400000) {
+    throw new Error("buildTextBoxXml: charSpacing must be an integer between -400000 and 400000");
+  }
+  return String(value);
+}
+
+function boolToken(value: boolean): "1" | "0" {
+  return value ? "1" : "0";
+}
+
+function textAlignToken(align: SourceTextAlign): "l" | "ctr" | "r" | "just" {
+  switch (align) {
+    case "left":
+      return "l";
+    case "center":
+      return "ctr";
+    case "right":
+      return "r";
+    case "justify":
+      return "just";
+  }
+}
+
+function verticalAnchorToken(anchor: SourceVerticalAnchor): "t" | "ctr" | "b" {
+  switch (anchor) {
+    case "top":
+      return "t";
+    case "middle":
+      return "ctr";
+    case "bottom":
+      return "b";
+  }
 }
 
 export function buildConnectorXml(params: ConnectorXmlParams): string {

@@ -25,7 +25,7 @@ import {
 import { asPartPath, asRelationshipId, asSourceNodeId, type SourceHandle } from "./handles.js";
 import type { PptxSourceModel } from "./pptx-source-model.js";
 import type { SourceConnector, SourceImage, SourceShape } from "./shapes.js";
-import { asEmu, asPt } from "./units.js";
+import { asEmu, asHundredthPt, asOoxmlAngle, asOoxmlPercent, asPt } from "./units.js";
 
 const SLIDE_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.slide+xml";
 const PRESENTATION_CONTENT_TYPE =
@@ -492,6 +492,339 @@ describe("editing shape operations", () => {
     expect(edited.edits?.at(-1)).toHaveProperty("xml", expect.stringContaining("TextBox 31"));
   });
 
+  it("adds a formatted text box through finalized XML and source model parsing", () => {
+    const source = buildSourceModel();
+
+    const edited = expectNonMutating(source, () =>
+      addTextBox(source, requireHandle(source.slides[0].handle), {
+        offsetX: asEmu(500),
+        offsetY: asEmu(600),
+        width: asEmu(700),
+        height: asEmu(800),
+        rotation: asOoxmlAngle(900000),
+        name: "Formatted TextBox",
+        body: {
+          anchor: "middle",
+          marginLeft: asEmu(1000),
+          marginRight: asEmu(2000),
+          marginTop: asEmu(3000),
+          marginBottom: asEmu(4000),
+        },
+        paragraphs: [
+          {
+            properties: { align: "center", lineSpacing: asHundredthPt(1800) },
+            runs: [
+              {
+                text: "Gradient",
+                properties: {
+                  fontFace: "Aptos",
+                  fontSize: asPt(24),
+                  bold: true,
+                  gradientFill: {
+                    angle: asOoxmlAngle(5400000),
+                    stops: [
+                      { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FF0000" } },
+                      {
+                        position: asOoxmlPercent(100000),
+                        color: { kind: "srgb", hex: "0000FF" },
+                      },
+                    ],
+                  },
+                },
+              },
+              {
+                text: " solid",
+                properties: {
+                  italic: true,
+                  color: { kind: "srgb", hex: "00AA44" },
+                },
+              },
+            ],
+          },
+          {
+            runs: [{ text: "Second paragraph" }],
+          },
+        ],
+      }),
+    );
+    const added = shapeByName(edited, "Formatted TextBox");
+    const lastEdit = edited.edits?.at(-1);
+    if (lastEdit?.kind !== "addTextBox") {
+      throw new Error("expected addTextBox edit");
+    }
+    const xml = lastEdit.xml;
+
+    expect(added.transform).toMatchObject({
+      offsetX: 500,
+      offsetY: 600,
+      width: 700,
+      height: 800,
+      rotation: 900000,
+    });
+    expect(added.textBody?.properties).toMatchObject({
+      anchor: "middle",
+      marginLeft: 1000,
+      marginRight: 2000,
+      marginTop: 3000,
+      marginBottom: 4000,
+    });
+    expect(added.textBody?.paragraphs).toHaveLength(2);
+    expect(added.textBody?.paragraphs[0]?.properties).toMatchObject({
+      align: "center",
+      lineSpacing: { type: "pts", value: 1800 },
+    });
+    expect(added.textBody?.paragraphs[0]?.runs.map((run) => run.text)).toEqual([
+      "Gradient",
+      " solid",
+    ]);
+    expect(added.textBody?.paragraphs[0]?.runs[0]?.properties).toMatchObject({
+      bold: true,
+      fontSize: 24,
+      typeface: "Aptos",
+    });
+    expect(added.textBody?.paragraphs[0]?.runs[1]?.properties).toMatchObject({
+      italic: true,
+      color: { kind: "srgb", hex: "00AA44" },
+    });
+    expect(added.textBody?.paragraphs[1]?.runs[0]?.text).toBe("Second paragraph");
+    expect(xml).toContain("<a:gradFill");
+    expect(xml).toContain('<a:pPr algn="ctr">');
+    expect(xml).toContain('anchor="ctr" lIns="1000" rIns="2000"');
+  });
+
+  it("rejects invalid formatted text box inputs before editing", () => {
+    const source = buildSourceModel();
+    const slideHandle = requireHandle(source.slides[0].handle);
+    const formattedInput: Parameters<typeof addTextBox>[2] = {
+      offsetX: asEmu(500),
+      offsetY: asEmu(600),
+      width: asEmu(700),
+      height: asEmu(800),
+      paragraphs: [
+        {
+          properties: { align: "center", lineSpacing: asHundredthPt(1800) },
+          runs: [
+            {
+              text: "formatted",
+              properties: {
+                bold: true,
+                gradientFill: {
+                  angle: asOoxmlAngle(0),
+                  stops: [
+                    { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FF0000" } },
+                    {
+                      position: asOoxmlPercent(100000),
+                      color: { kind: "srgb", hex: "0000FF" },
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const invalidCases: readonly {
+      readonly input: Parameters<typeof addTextBox>[2];
+      readonly expected: RegExp;
+    }[] = [
+      {
+        input: { ...formattedInput, rotation: asOoxmlAngle(1.5) },
+        expected: /rotation must be a finite integer/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          paragraphs: [
+            {
+              runs: [
+                {
+                  text: "bad boolean",
+                  properties: {
+                    // @ts-expect-error Runtime validation rejects non-boolean flags from JS callers.
+                    bold: "false",
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        expected: /bold must be a boolean value/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          paragraphs: [
+            {
+              runs: [
+                {
+                  text: "bad underline",
+                  properties: {
+                    // @ts-expect-error Runtime validation rejects non-object underline values.
+                    underline: "sng",
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        expected: /underline must be a boolean or underline options object/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          paragraphs: [
+            {
+              properties: { lineSpacing: asHundredthPt(1.5) },
+              runs: [{ text: "bad line spacing" }],
+            },
+          ],
+        },
+        expected: /lineSpacing must be a finite positive integer/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          paragraphs: [
+            {
+              runs: [{ text: "bad char spacing", properties: { charSpacing: 1.5 } }],
+            },
+          ],
+        },
+        expected: /charSpacing must be a finite integer/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          paragraphs: [
+            {
+              runs: [{ text: "bad char spacing range", properties: { charSpacing: 400001 } }],
+            },
+          ],
+        },
+        expected: /charSpacing must be between -400000 and 400000/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          paragraphs: [
+            {
+              runs: [
+                {
+                  text: "bad gradient",
+                  properties: {
+                    gradientFill: {
+                      stops: [
+                        { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FF0000" } },
+                        {
+                          position: asOoxmlPercent(100.5),
+                          color: { kind: "srgb", hex: "0000FF" },
+                        },
+                      ],
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        expected: /position must be a finite integer/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          paragraphs: [
+            {
+              runs: [
+                {
+                  text: "bad baseline",
+                  properties: {
+                    // @ts-expect-error Runtime validation rejects ambiguous numeric baseline values.
+                    baseline: 30,
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        expected: /baseline must be subscript or superscript/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          paragraphs: [
+            {
+              runs: [
+                {
+                  text: "bad color",
+                  properties: { color: { kind: "srgb", hex: "#112233" } },
+                },
+              ],
+            },
+          ],
+        },
+        expected: /color must be an srgb 6-digit hex color/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          // @ts-expect-error Runtime validation rejects null body values from JS callers.
+          body: null,
+        },
+        expected: /body must be an object/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          // @ts-expect-error Runtime validation rejects null paragraph values from JS callers.
+          paragraphs: [null],
+        },
+        expected: /paragraphs\[0\] must be an object/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          paragraphs: [
+            {
+              runs: [
+                {
+                  text: "bad properties",
+                  // @ts-expect-error Runtime validation rejects null properties from JS callers.
+                  properties: null,
+                },
+              ],
+            },
+          ],
+        },
+        expected: /properties must be an object/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          paragraphs: [
+            {
+              runs: [
+                {
+                  text: "bad color object",
+                  properties: {
+                    // @ts-expect-error Runtime validation rejects null colors from JS callers.
+                    color: null,
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        expected: /color must be an srgb 6-digit hex color/,
+      },
+    ];
+
+    invalidCases.forEach(({ input, expected }) => {
+      expectInvalidEdit(source, () => addTextBox(source, slideHandle, input), expected);
+    });
+  });
+
   it("adds a connector using source target handles and records finalized XML", () => {
     const source = buildSourceModel();
     const start = shapeByName(source, "Title");
@@ -862,6 +1195,17 @@ function expectNonMutating(source: PptxSourceModel, edit: () => PptxSourceModel)
   expect(source).toEqual(before);
   if (edited !== source) expect(edited).not.toBe(source);
   return edited;
+}
+
+function expectInvalidEdit(
+  source: PptxSourceModel,
+  edit: () => PptxSourceModel,
+  expected: RegExp | string,
+): void {
+  const before = structuredClone(source);
+
+  expect(edit).toThrow(expected);
+  expect(source).toEqual(before);
 }
 
 function buildSourceModel(): PptxSourceModel {

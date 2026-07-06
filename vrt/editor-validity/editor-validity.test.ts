@@ -10,6 +10,9 @@ import {
   addEmptySlideFromLayout,
   addTextBox,
   asEmu,
+  asHundredthPt,
+  asOoxmlAngle,
+  asOoxmlPercent,
   asPt,
   createPptx,
   deleteShape,
@@ -270,6 +273,73 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
     renderSingleWithLibreOffice(
       libreOfficeImage,
       "editor-validity-from-scratch-text-box.pptx",
+      writePptx(edited),
+    );
+  });
+
+  it("opens from-scratch PPTX after adding a formatted text box", () => {
+    const source = createPptx();
+    const edited = addTextBox(source, requireHandle(source.slides[0]?.handle), {
+      offsetX: asEmu(914400),
+      offsetY: asEmu(914400),
+      width: asEmu(5486400),
+      height: asEmu(1828800),
+      rotation: asOoxmlAngle(900000),
+      body: {
+        anchor: "middle",
+        marginLeft: asEmu(91440),
+        marginRight: asEmu(91440),
+        marginTop: asEmu(45720),
+        marginBottom: asEmu(45720),
+      },
+      paragraphs: [
+        {
+          properties: { align: "center", lineSpacing: asHundredthPt(1800) },
+          runs: [
+            {
+              text: "Formatted ",
+              properties: {
+                fontFace: "Liberation Sans",
+                fontSize: asPt(24),
+                color: { kind: "srgb", hex: "112233" },
+                bold: true,
+                italic: true,
+                underline: { style: "sng", color: { kind: "srgb", hex: "445566" } },
+                strike: true,
+                highlight: { kind: "srgb", hex: "ffff00" },
+                glow: { radius: asEmu(12700), color: { kind: "srgb", hex: "00aaff" } },
+                outline: { width: asEmu(6350), color: { kind: "srgb", hex: "aa00aa" } },
+                charSpacing: 80,
+              },
+            },
+            {
+              text: "gradient",
+              properties: {
+                gradientFill: {
+                  angle: asOoxmlAngle(2700000),
+                  stops: [
+                    { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "ff0000" } },
+                    {
+                      position: asOoxmlPercent(100000),
+                      color: { kind: "srgb", hex: "0000ff" },
+                    },
+                  ],
+                },
+                baseline: "superscript",
+              },
+            },
+          ],
+        },
+        {
+          properties: { align: "right", lineSpacing: asHundredthPt(2200) },
+          runs: [{ text: "Subscript", properties: { baseline: "subscript" } }],
+        },
+      ],
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-from-scratch-formatted-text-box.pptx",
       writePptx(edited),
     );
   });
