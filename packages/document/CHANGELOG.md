@@ -1,5 +1,11 @@
 # @pptx-glimpse/document
 
+## 0.5.0
+
+### Minor Changes
+
+- ef9b64e: Add from-scratch text box formatting options for runs, paragraphs, text bodies, and rotation.
+
 ## 0.4.0
 
 ### Minor Changes
