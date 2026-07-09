@@ -1125,6 +1125,26 @@ describe("editing shape operations", () => {
         },
       }),
     ).toThrow("addShape: fill.stops must contain at least two stops");
+    expect(() =>
+      addShape(source, requireHandle(source.slides[0].handle), {
+        preset: "rect",
+        offsetX: asEmu(1),
+        offsetY: asEmu(2),
+        width: asEmu(3),
+        height: asEmu(4),
+        body: { anchor: "middle" },
+      }),
+    ).toThrow("addShape: body requires text or paragraphs");
+    expect(() =>
+      addShape(source, requireHandle(source.slides[0].handle), {
+        preset: "rect",
+        offsetX: asEmu(1),
+        offsetY: asEmu(2),
+        width: asEmu(3),
+        height: asEmu(4),
+        effects: {},
+      }),
+    ).toThrow("addShape: effects must set glow");
   });
 });
 

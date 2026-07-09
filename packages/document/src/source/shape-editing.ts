@@ -807,6 +807,9 @@ function assertShapeInput(input: AddShapeInput): void {
   if (input.text !== undefined && typeof input.text !== "string") {
     throw new Error("addShape: text must be a string when provided");
   }
+  if (input.body !== undefined && input.text === undefined && input.paragraphs === undefined) {
+    throw new Error("addShape: body requires text or paragraphs");
+  }
   if (input.paragraphs !== undefined) {
     assertTextBoxParagraphs(input.paragraphs, "addShape");
   }
@@ -1131,6 +1134,9 @@ function assertShapeOutline(outline: unknown): void {
 function assertShapeEffects(effects: unknown): void {
   if (!isPlainRecord(effects)) {
     throw new Error("addShape: effects must be an object");
+  }
+  if (effects.glow === undefined) {
+    throw new Error("addShape: effects must set glow");
   }
   if (effects.glow !== undefined) assertTextBoxGlow(effects.glow, "effects.glow", "addShape");
 }
