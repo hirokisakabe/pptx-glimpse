@@ -1,8 +1,8 @@
 /**
  * Edit-time XML finalization for newly added shapes.
  *
- * New-content edits (text box / connector additions) finalize their `p:sp` /
- * `p:cxnSp` XML fragment here at edit time. The serialized fragment stored on the
+ * New-content edits (text box / connector / picture additions) finalize their `p:sp` /
+ * `p:cxnSp` / `p:pic` XML fragment here at edit time. The serialized fragment stored on the
  * edit is the single source of truth: the in-memory `SourceShapeNode` for the edited
  * model is derived by parsing the fragment with the same reader used for regular
  * PPTX input, and the writer only splices the fragment into the target `p:spTree`
@@ -14,10 +14,11 @@ import { XMLBuilder } from "fast-xml-parser";
 import { createSidecarIdFactory } from "../reader/raw-node.js";
 import { parseShapeTree } from "../reader/shape-tree.js";
 import { parseXml } from "../reader/xml.js";
-import type { PartPath } from "./handles.js";
+import type { PartPath, RelationshipId } from "./handles.js";
 import type { ConnectorPresetGeometry } from "./pptx-source-model.js";
 import type {
   SourceArrowEndpoint,
+  SourceImageCrop,
   SourceShapeNode,
   SourceTextAlign,
   SourceVerticalAnchor,
@@ -141,6 +142,18 @@ interface ConnectorXmlParams {
     readonly headEnd?: SourceArrowEndpoint;
     readonly tailEnd?: SourceArrowEndpoint;
   };
+}
+
+interface PictureXmlParams {
+  readonly shapeId: string;
+  readonly name: string;
+  readonly relationshipId: RelationshipId;
+  readonly offsetX: Emu;
+  readonly offsetY: Emu;
+  readonly width: Emu;
+  readonly height: Emu;
+  readonly rotation?: OoxmlAngle;
+  readonly crop?: SourceImageCrop;
 }
 
 const xmlBuilder = new XMLBuilder({
@@ -407,6 +420,58 @@ export function buildConnectorXml(params: ConnectorXmlParams): string {
       },
     },
   });
+}
+
+export function buildPictureXml(params: PictureXmlParams): string {
+  return xmlBuilder.build({
+    "p:pic": {
+      "p:nvPicPr": {
+        "p:cNvPr": {
+          "@_id": params.shapeId,
+          "@_name": params.name,
+        },
+        "p:cNvPicPr": {},
+        "p:nvPr": {},
+      },
+      "p:blipFill": {
+        "a:blip": {
+          "@_r:embed": params.relationshipId,
+        },
+        ...(params.crop !== undefined
+          ? { "a:srcRect": createSourceRectangleXml(params.crop) }
+          : {}),
+        "a:stretch": {
+          "a:fillRect": {},
+        },
+      },
+      "p:spPr": {
+        "a:xfrm": {
+          ...(params.rotation !== undefined ? { "@_rot": String(params.rotation) } : {}),
+          "a:off": {
+            "@_x": String(params.offsetX),
+            "@_y": String(params.offsetY),
+          },
+          "a:ext": {
+            "@_cx": String(params.width),
+            "@_cy": String(params.height),
+          },
+        },
+        "a:prstGeom": {
+          "@_prst": "rect",
+          "a:avLst": {},
+        },
+      },
+    },
+  });
+}
+
+function createSourceRectangleXml(crop: SourceImageCrop): Record<string, unknown> {
+  return {
+    ...(crop.left !== undefined ? { "@_l": String(crop.left) } : {}),
+    ...(crop.top !== undefined ? { "@_t": String(crop.top) } : {}),
+    ...(crop.right !== undefined ? { "@_r": String(crop.right) } : {}),
+    ...(crop.bottom !== undefined ? { "@_b": String(crop.bottom) } : {}),
+  };
 }
 
 function createConnectorConnectionXml(params: ConnectorXmlParams): Record<string, unknown> {

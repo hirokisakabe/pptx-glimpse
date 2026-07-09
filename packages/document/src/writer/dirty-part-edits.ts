@@ -8,6 +8,7 @@ import type {
   PartPath,
   PptxSourceModel,
   PptxSourceModelAddConnectorEdit,
+  PptxSourceModelAddPictureEdit,
   PptxSourceModelAddTextBoxEdit,
   PptxSourceModelDeleteShapeEdit,
   PptxSourceModelEdit,
@@ -112,6 +113,9 @@ function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
       return;
     case "addConnector":
       applyAddConnectorEdit(root, edit);
+      return;
+    case "addPicture":
+      applyAddPictureEdit(root, edit);
       return;
     case "deleteShape":
       applyDeleteShapeEdit(root, edit);
@@ -336,6 +340,20 @@ function applyAddConnectorEdit(root: XmlNode, edit: PptxSourceModelAddConnectorE
   appendChild(spTree, "p:cxnSp", parseShapeFragmentXml(edit.xml, "cxnSp"));
 }
 
+function applyAddPictureEdit(root: XmlNode, edit: PptxSourceModelAddPictureEdit): void {
+  const slide = getChild(root, "sld");
+  const cSld = getChild(slide, "cSld");
+  const spTree = getChild(cSld, "spTree");
+  if (spTree === undefined) {
+    throw new Error(`writePptx: slide '${edit.slidePartPath}' has no spTree`);
+  }
+  if (locateShapeTreeNode(spTree, { nodeId: edit.shapeId }) !== undefined) {
+    throw new Error(`writePptx: shape id '${edit.shapeId}' already exists in source XML`);
+  }
+
+  appendChild(spTree, "p:pic", parseShapeFragmentXml(edit.xml, "pic"));
+}
+
 function applyDeleteShapeEdit(root: XmlNode, edit: PptxSourceModelDeleteShapeEdit): void {
   const locator = parseShapeLocator(edit.handle, "shape delete edit");
   const slide = getChild(root, "sld");
@@ -491,7 +509,7 @@ function insertChildByOrder(
  * element. The writer does not generate shape XML content; it only splices the
  * pre-serialized fragment into the target `p:spTree`.
  */
-function parseShapeFragmentXml(xml: string, rootLocalName: "sp" | "cxnSp"): XmlNode {
+function parseShapeFragmentXml(xml: string, rootLocalName: "sp" | "cxnSp" | "pic"): XmlNode {
   const node = getChild(parseXml(xml), rootLocalName);
   if (node === undefined) {
     throw new Error(
