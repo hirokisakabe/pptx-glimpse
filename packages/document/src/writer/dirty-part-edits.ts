@@ -8,6 +8,7 @@ import type {
   PartPath,
   PptxSourceModel,
   PptxSourceModelAddConnectorEdit,
+  PptxSourceModelAddShapeEdit,
   PptxSourceModelAddTextBoxEdit,
   PptxSourceModelDeleteShapeEdit,
   PptxSourceModelEdit,
@@ -109,6 +110,9 @@ function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
       return;
     case "addTextBox":
       applyAddTextBoxEdit(root, edit);
+      return;
+    case "addShape":
+      applyAddShapeEdit(root, edit);
       return;
     case "addConnector":
       applyAddConnectorEdit(root, edit);
@@ -297,6 +301,17 @@ function applyShapeOutlineEdit(root: XmlNode, edit: PptxSourceModelShapeOutlineE
 }
 
 function applyAddTextBoxEdit(root: XmlNode, edit: PptxSourceModelAddTextBoxEdit): void {
+  applyAddSpEdit(root, edit);
+}
+
+function applyAddShapeEdit(root: XmlNode, edit: PptxSourceModelAddShapeEdit): void {
+  applyAddSpEdit(root, edit);
+}
+
+function applyAddSpEdit(
+  root: XmlNode,
+  edit: PptxSourceModelAddTextBoxEdit | PptxSourceModelAddShapeEdit,
+): void {
   const slide = getChild(root, "sld");
   const cSld = getChild(slide, "cSld");
   const spTree = getChild(cSld, "spTree");

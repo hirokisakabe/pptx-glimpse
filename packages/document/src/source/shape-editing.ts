@@ -1,6 +1,12 @@
 /**
  * Shape editing and authoring operations for PptxSourceModel.
  *
+ * Preset-geometry shape authoring uses the same edit-time XML finalization model as
+ * text boxes and connectors. The API deliberately keeps the preset name as a
+ * pass-through string because OOXML preset coverage is broader than the initial pom
+ * swap needs, while styling inputs stay inside the typed subset that the source reader
+ * can parse back into `SourceShape`.
+ *
  * Text-box authoring intentionally stays on the existing `addTextBox` operation
  * instead of introducing a second rich-text builder. The adopted API keeps the simple
  * `text` shortcut for one unformatted run and adds structured `paragraphs`, `body`,
@@ -27,6 +33,7 @@ import type {
   PartPath,
   PptxSourceModel,
   PptxSourceModelAddConnectorEdit,
+  PptxSourceModelAddShapeEdit,
   PptxSourceModelEdit,
   PptxSourceModelShapeOutlineEdit,
   SourceArrowEndpoint,
@@ -41,6 +48,12 @@ import type {
 } from "./index.js";
 import { nextNumberedName } from "./package-graph-mutations.js";
 import type {
+  ShapeColorInput,
+  ShapeEffectsInput,
+  ShapeFillInput,
+  ShapeGlowInput,
+  ShapeGradientFillInput,
+  ShapeOutlineInput,
   TextBoxBaselineInput,
   TextBoxBodyPropertiesInput,
   TextBoxColorInput,
@@ -54,7 +67,12 @@ import type {
   TextBoxUnderlineInput,
   TextBoxUnderlineStyle,
 } from "./shape-xml.js";
-import { buildConnectorXml, buildTextBoxXml, parseShapeNodeXml } from "./shape-xml.js";
+import {
+  buildConnectorXml,
+  buildShapeXml,
+  buildTextBoxXml,
+  parseShapeNodeXml,
+} from "./shape-xml.js";
 
 export type AddTextBoxBaselineInput = TextBoxBaselineInput;
 export type AddTextBoxBodyPropertiesInput = TextBoxBodyPropertiesInput;
@@ -68,6 +86,17 @@ export type AddTextBoxRunInput = TextBoxRunInput;
 export type AddTextBoxRunPropertiesInput = TextBoxRunPropertiesInput;
 export type AddTextBoxUnderlineInput = TextBoxUnderlineInput;
 export type AddTextBoxUnderlineStyle = TextBoxUnderlineStyle;
+export type AddShapeBodyPropertiesInput = TextBoxBodyPropertiesInput;
+export type AddShapeColorInput = ShapeColorInput;
+export type AddShapeEffectsInput = ShapeEffectsInput;
+export type AddShapeFillInput = ShapeFillInput;
+export type AddShapeGlowInput = ShapeGlowInput;
+export type AddShapeGradientFillInput = ShapeGradientFillInput;
+export type AddShapeOutlineInput = ShapeOutlineInput;
+export type AddShapeParagraphInput = TextBoxParagraphInput;
+export type AddShapeParagraphPropertiesInput = TextBoxParagraphPropertiesInput;
+export type AddShapeRunInput = TextBoxRunInput;
+export type AddShapeRunPropertiesInput = TextBoxRunPropertiesInput;
 
 type TransformableShapeNode = Exclude<SourceShapeNode, { readonly kind: "raw" }>;
 
@@ -78,6 +107,16 @@ const CONNECTOR_PRESETS: ReadonlySet<ConnectorPresetGeometry> = new Set([
 ]);
 const ARROW_TYPES = new Set(["triangle", "stealth", "diamond", "oval", "arrow"]);
 const ARROW_SIZES = new Set(["sm", "med", "lg"]);
+const DASH_STYLES = new Set([
+  "solid",
+  "dash",
+  "dot",
+  "dashDot",
+  "lgDash",
+  "lgDashDot",
+  "sysDash",
+  "sysDot",
+]);
 const UNDERLINE_STYLES: ReadonlySet<string> = new Set<AddTextBoxUnderlineStyle>([
   "sng",
   "dbl",
@@ -109,6 +148,18 @@ export interface AddTextBoxInput extends UpdateShapeTransformInput {
   readonly text?: string;
   readonly paragraphs?: readonly AddTextBoxParagraphInput[];
   readonly body?: AddTextBoxBodyPropertiesInput;
+  readonly rotation?: NonNullable<SourceShape["transform"]>["rotation"];
+  readonly name?: string;
+}
+
+export interface AddShapeInput extends UpdateShapeTransformInput {
+  readonly preset: string;
+  readonly fill?: AddShapeFillInput;
+  readonly outline?: AddShapeOutlineInput;
+  readonly effects?: AddShapeEffectsInput;
+  readonly text?: string;
+  readonly paragraphs?: readonly AddShapeParagraphInput[];
+  readonly body?: AddShapeBodyPropertiesInput;
   readonly rotation?: NonNullable<SourceShape["transform"]>["rotation"];
   readonly name?: string;
 }
@@ -363,6 +414,65 @@ export function addTextBox(
         shapeId: shapeIdValue,
         xml,
       },
+    ],
+  };
+}
+
+export function addShape(
+  source: PptxSourceModel,
+  slideHandle: SourceHandle,
+  input: AddShapeInput,
+): PptxSourceModel {
+  assertShapeInput(input);
+  const slideIndex = source.slides.findIndex((slide) =>
+    sourceHandlesEqual(slide.handle, slideHandle),
+  );
+  if (slideIndex === -1) {
+    throw new Error("addShape: slide handle was not found in PptxSourceModel source");
+  }
+
+  const slide = source.slides[slideIndex];
+  const shapeId = nextShapeId(slide.shapes, source.edits ?? [], slide.partPath);
+  const shapeIdValue = String(shapeId);
+  const name = input.name?.trim() || `Shape ${shapeIdValue}`;
+  const orderingSlot = nextOrderingSlot(slide.shapes);
+  const xml = buildShapeXml({
+    shapeId: shapeIdValue,
+    name,
+    preset: input.preset,
+    offsetX: input.offsetX,
+    offsetY: input.offsetY,
+    width: input.width,
+    height: input.height,
+    ...(input.rotation !== undefined ? { rotation: input.rotation } : {}),
+    ...(input.fill !== undefined ? { fill: input.fill } : {}),
+    ...(input.outline !== undefined ? { outline: input.outline } : {}),
+    ...(input.effects !== undefined ? { effects: input.effects } : {}),
+    ...(input.paragraphs !== undefined ? { paragraphs: input.paragraphs } : {}),
+    ...(input.text !== undefined ? { text: input.text } : {}),
+    ...(input.body !== undefined ? { body: input.body } : {}),
+  });
+  const shape = parseShapeNodeXml(xml, slide.partPath, orderingSlot);
+  const slides = source.slides.map((candidate, index) =>
+    index === slideIndex
+      ? {
+          ...candidate,
+          shapes: [...candidate.shapes, shape],
+        }
+      : candidate,
+  );
+
+  return {
+    ...source,
+    slides,
+    edits: [
+      ...(source.edits ?? []),
+      {
+        kind: "addShape",
+        slidePartPath: slide.partPath,
+        shapeId: shapeIdValue,
+        xml,
+      } satisfies PptxSourceModelAddShapeEdit,
     ],
   };
 }
@@ -680,29 +790,67 @@ function assertTextBoxInput(input: AddTextBoxInput): void {
   }
 }
 
-function assertTextBoxParagraphs(paragraphs: readonly AddTextBoxParagraphInput[]): void {
+function assertShapeInput(input: AddShapeInput): void {
+  assertFiniteEmu(input.offsetX, "addShape", "offsetX");
+  assertFiniteEmu(input.offsetY, "addShape", "offsetY");
+  assertPositiveFiniteEmu(input.width, "addShape", "width");
+  assertPositiveFiniteEmu(input.height, "addShape", "height");
+  if (typeof input.preset !== "string" || input.preset.trim() === "") {
+    throw new Error("addShape: preset must be a non-empty string");
+  }
+  if (input.rotation !== undefined) {
+    assertFiniteIntegerNumber(input.rotation, "addShape", "rotation");
+  }
+  if (input.text !== undefined && input.paragraphs !== undefined) {
+    throw new Error("addShape: specify either text or paragraphs, not both");
+  }
+  if (input.text !== undefined && typeof input.text !== "string") {
+    throw new Error("addShape: text must be a string when provided");
+  }
+  if (input.paragraphs !== undefined) {
+    assertTextBoxParagraphs(input.paragraphs, "addShape");
+  }
+  if (input.body !== undefined) {
+    assertTextBoxBody(input.body, "body", "addShape");
+  }
+  if (input.name !== undefined && input.name.trim() === "") {
+    throw new Error("addShape: name must be a non-empty string when provided");
+  }
+  if (input.fill !== undefined) assertShapeFill(input.fill, "fill");
+  if (input.outline !== undefined) assertShapeOutline(input.outline);
+  if (input.effects !== undefined) assertShapeEffects(input.effects);
+}
+
+function assertTextBoxParagraphs(
+  paragraphs: readonly TextBoxParagraphInput[],
+  operationName = "addTextBox",
+): void {
   if (!isArrayValue(paragraphs) || paragraphs.length === 0) {
-    throw new Error("addTextBox: paragraphs must contain at least one paragraph");
+    throw new Error(`${operationName}: paragraphs must contain at least one paragraph`);
   }
   paragraphs.forEach((paragraph: unknown, paragraphIndex: number) => {
     if (!isPlainRecord(paragraph)) {
-      throw new Error(`addTextBox: paragraphs[${paragraphIndex}] must be an object`);
+      throw new Error(`${operationName}: paragraphs[${paragraphIndex}] must be an object`);
     }
     const runs = paragraph.runs;
     if (!isArrayValue(runs) || runs.length === 0) {
       throw new Error(
-        `addTextBox: paragraphs[${paragraphIndex}].runs must contain at least one run`,
+        `${operationName}: paragraphs[${paragraphIndex}].runs must contain at least one run`,
       );
     }
-    assertTextBoxParagraphProperties(paragraph.properties, paragraphIndex);
-    runs.forEach((run, runIndex) => assertTextBoxRun(run, paragraphIndex, runIndex));
+    assertTextBoxParagraphProperties(paragraph.properties, paragraphIndex, operationName);
+    runs.forEach((run, runIndex) => assertTextBoxRun(run, paragraphIndex, runIndex, operationName));
   });
 }
 
-function assertTextBoxParagraphProperties(properties: unknown, paragraphIndex: number): void {
+function assertTextBoxParagraphProperties(
+  properties: unknown,
+  paragraphIndex: number,
+  operationName = "addTextBox",
+): void {
   if (properties === undefined) return;
   if (!isPlainRecord(properties)) {
-    throw new Error(`addTextBox: paragraphs[${paragraphIndex}].properties must be an object`);
+    throw new Error(`${operationName}: paragraphs[${paragraphIndex}].properties must be an object`);
   }
   const align = properties.align;
   const lineSpacing = properties.lineSpacing;
@@ -713,32 +861,43 @@ function assertTextBoxParagraphProperties(properties: unknown, paragraphIndex: n
     align !== "right" &&
     align !== "justify"
   ) {
-    throw new Error(`addTextBox: paragraphs[${paragraphIndex}].properties.align is not supported`);
+    throw new Error(
+      `${operationName}: paragraphs[${paragraphIndex}].properties.align is not supported`,
+    );
   }
   if (lineSpacing !== undefined) {
     assertPositiveFiniteIntegerNumber(
       lineSpacing,
-      "addTextBox",
+      operationName,
       `paragraphs[${paragraphIndex}].properties.lineSpacing`,
     );
   }
 }
 
-function assertTextBoxRun(run: unknown, paragraphIndex: number, runIndex: number): void {
+function assertTextBoxRun(
+  run: unknown,
+  paragraphIndex: number,
+  runIndex: number,
+  operationName = "addTextBox",
+): void {
   const path = `paragraphs[${paragraphIndex}].runs[${runIndex}]`;
   if (!isPlainRecord(run)) {
-    throw new Error(`addTextBox: ${path} must be an object`);
+    throw new Error(`${operationName}: ${path} must be an object`);
   }
   if (typeof run.text !== "string") {
-    throw new Error(`addTextBox: ${path}.text must be a string`);
+    throw new Error(`${operationName}: ${path}.text must be a string`);
   }
-  assertTextBoxRunProperties(run.properties, path);
+  assertTextBoxRunProperties(run.properties, path, operationName);
 }
 
-function assertTextBoxRunProperties(properties: unknown, path: string): void {
+function assertTextBoxRunProperties(
+  properties: unknown,
+  path: string,
+  operationName = "addTextBox",
+): void {
   if (properties === undefined) return;
   if (!isPlainRecord(properties)) {
-    throw new Error(`addTextBox: ${path}.properties must be an object`);
+    throw new Error(`${operationName}: ${path}.properties must be an object`);
   }
   const fontFace = properties.fontFace;
   const fontSize = properties.fontSize;
@@ -751,72 +910,80 @@ function assertTextBoxRunProperties(properties: unknown, path: string): void {
   const outline = properties.outline;
   const charSpacing = properties.charSpacing;
   if (fontFace !== undefined && (typeof fontFace !== "string" || fontFace.trim() === "")) {
-    throw new Error(`addTextBox: ${path}.properties.fontFace must be a non-empty string`);
+    throw new Error(`${operationName}: ${path}.properties.fontFace must be a non-empty string`);
   }
   if (fontSize !== undefined) {
-    assertPositiveFiniteNumber(fontSize, "addTextBox", `${path}.properties.fontSize`);
+    assertPositiveFiniteNumber(fontSize, operationName, `${path}.properties.fontSize`);
   }
-  assertBooleanOrUndefined(properties.bold, "addTextBox", `${path}.properties.bold`);
-  assertBooleanOrUndefined(properties.italic, "addTextBox", `${path}.properties.italic`);
-  assertBooleanOrUndefined(properties.strike, "addTextBox", `${path}.properties.strike`);
-  if (color !== undefined) assertTextBoxColor(color, `${path}.properties.color`);
+  assertBooleanOrUndefined(properties.bold, operationName, `${path}.properties.bold`);
+  assertBooleanOrUndefined(properties.italic, operationName, `${path}.properties.italic`);
+  assertBooleanOrUndefined(properties.strike, operationName, `${path}.properties.strike`);
+  if (color !== undefined) assertTextBoxColor(color, `${path}.properties.color`, operationName);
   if (gradientFill !== undefined) {
     if (color !== undefined) {
-      throw new Error(`addTextBox: ${path}.properties cannot set both color and gradientFill`);
+      throw new Error(
+        `${operationName}: ${path}.properties cannot set both color and gradientFill`,
+      );
     }
-    assertTextBoxGradientFill(gradientFill, `${path}.properties.gradientFill`);
+    assertTextBoxGradientFill(gradientFill, `${path}.properties.gradientFill`, operationName);
   }
   if (underline !== undefined) {
-    assertTextBoxUnderline(underline, `${path}.properties.underline`);
+    assertTextBoxUnderline(underline, `${path}.properties.underline`, operationName);
   }
   if (baseline !== undefined) {
-    assertTextBoxBaseline(baseline, `${path}.properties.baseline`);
+    assertTextBoxBaseline(baseline, `${path}.properties.baseline`, operationName);
   }
   if (highlight !== undefined) {
-    assertTextBoxColor(highlight, `${path}.properties.highlight`);
+    assertTextBoxColor(highlight, `${path}.properties.highlight`, operationName);
   }
-  if (glow !== undefined) assertTextBoxGlow(glow, `${path}.properties.glow`);
+  if (glow !== undefined) assertTextBoxGlow(glow, `${path}.properties.glow`, operationName);
   if (outline !== undefined) {
-    assertTextBoxOutline(outline, `${path}.properties.outline`);
+    assertTextBoxOutline(outline, `${path}.properties.outline`, operationName);
   }
   if (charSpacing !== undefined) {
-    assertTextPointNumber(charSpacing, "addTextBox", `${path}.properties.charSpacing`);
+    assertTextPointNumber(charSpacing, operationName, `${path}.properties.charSpacing`);
   }
 }
 
-function assertTextBoxColor(color: unknown, path: string): void {
+function assertTextBoxColor(color: unknown, path: string, operationName = "addTextBox"): void {
   if (!isPlainRecord(color)) {
-    throw new Error(`addTextBox: ${path} must be an srgb 6-digit hex color`);
+    throw new Error(`${operationName}: ${path} must be an srgb 6-digit hex color`);
   }
   if (
     color.kind !== "srgb" ||
     typeof color.hex !== "string" ||
     !/^[0-9A-Fa-f]{6}$/.test(color.hex)
   ) {
-    throw new Error(`addTextBox: ${path} must be an srgb 6-digit hex color`);
+    throw new Error(`${operationName}: ${path} must be an srgb 6-digit hex color`);
   }
 }
 
-function assertTextBoxGradientFill(fill: unknown, path: string): void {
+function assertTextBoxGradientFill(
+  fill: unknown,
+  path: string,
+  operationName = "addTextBox",
+): void {
   if (!isPlainRecord(fill)) {
-    throw new Error(`addTextBox: ${path} must be a gradient fill object`);
+    throw new Error(`${operationName}: ${path} must be a gradient fill object`);
   }
   const stops = fill.stops;
   if (!isArrayValue(stops) || stops.length < 2) {
-    throw new Error(`addTextBox: ${path}.stops must contain at least two stops`);
+    throw new Error(`${operationName}: ${path}.stops must contain at least two stops`);
   }
   if (fill.angle !== undefined)
-    assertFiniteIntegerNumber(fill.angle, "addTextBox", `${path}.angle`);
+    assertFiniteIntegerNumber(fill.angle, operationName, `${path}.angle`);
   stops.forEach((stop: unknown, index: number) => {
     if (!isPlainRecord(stop)) {
-      throw new Error(`addTextBox: ${path}.stops[${index}] must be an object`);
+      throw new Error(`${operationName}: ${path}.stops[${index}] must be an object`);
     }
     const position = stop.position;
-    assertFiniteIntegerNumber(position, "addTextBox", `${path}.stops[${index}].position`);
+    assertFiniteIntegerNumber(position, operationName, `${path}.stops[${index}].position`);
     if (typeof position !== "number" || position < 0 || position > 100000) {
-      throw new Error(`addTextBox: ${path}.stops[${index}].position must be between 0 and 100000`);
+      throw new Error(
+        `${operationName}: ${path}.stops[${index}].position must be between 0 and 100000`,
+      );
     }
-    assertTextBoxColor(stop.color, `${path}.stops[${index}].color`);
+    assertTextBoxColor(stop.color, `${path}.stops[${index}].color`, operationName);
   });
 }
 
@@ -824,49 +991,58 @@ function isArrayValue(value: unknown): value is readonly unknown[] {
   return Array.isArray(value);
 }
 
-function assertTextBoxUnderline(underline: unknown, path: string): void {
+function assertTextBoxUnderline(
+  underline: unknown,
+  path: string,
+  operationName = "addTextBox",
+): void {
   if (typeof underline === "boolean") return;
   if (!isPlainRecord(underline)) {
-    throw new Error(`addTextBox: ${path} must be a boolean or underline options object`);
+    throw new Error(`${operationName}: ${path} must be a boolean or underline options object`);
   }
   const style = underline.style ?? "sng";
   if (typeof style !== "string" || !UNDERLINE_STYLES.has(style)) {
-    throw new Error(`addTextBox: ${path}.style is not supported`);
+    throw new Error(`${operationName}: ${path}.style is not supported`);
   }
   if (underline.color !== undefined) {
-    assertTextBoxColor(underline.color, `${path}.color`);
+    assertTextBoxColor(underline.color, `${path}.color`, operationName);
   }
 }
 
-function assertTextBoxBaseline(baseline: unknown, path: string): void {
+function assertTextBoxBaseline(
+  baseline: unknown,
+  path: string,
+  operationName = "addTextBox",
+): void {
   if (baseline === "subscript" || baseline === "superscript") return;
-  throw new Error(`addTextBox: ${path} must be subscript or superscript`);
+  throw new Error(`${operationName}: ${path} must be subscript or superscript`);
 }
 
-function assertTextBoxGlow(glow: unknown, path: string): void {
+function assertTextBoxGlow(glow: unknown, path: string, operationName = "addTextBox"): void {
   if (!isPlainRecord(glow)) {
-    throw new Error(`addTextBox: ${path} must be an object`);
+    throw new Error(`${operationName}: ${path} must be an object`);
   }
-  assertPositiveFiniteEmu(glow.radius, "addTextBox", `${path}.radius`);
-  assertTextBoxColor(glow.color, `${path}.color`);
+  assertPositiveFiniteEmu(glow.radius, operationName, `${path}.radius`);
+  assertTextBoxColor(glow.color, `${path}.color`, operationName);
 }
 
-function assertTextBoxOutline(outline: unknown, path: string): void {
+function assertTextBoxOutline(outline: unknown, path: string, operationName = "addTextBox"): void {
   if (!isPlainRecord(outline)) {
-    throw new Error(`addTextBox: ${path} must be an object`);
+    throw new Error(`${operationName}: ${path} must be an object`);
   }
   if (outline.width === undefined && outline.color === undefined) {
-    throw new Error(`addTextBox: ${path} must set width or color`);
+    throw new Error(`${operationName}: ${path} must set width or color`);
   }
   if (outline.width !== undefined) {
-    assertPositiveFiniteEmu(outline.width, "addTextBox", `${path}.width`);
+    assertPositiveFiniteEmu(outline.width, operationName, `${path}.width`);
   }
-  if (outline.color !== undefined) assertTextBoxColor(outline.color, `${path}.color`);
+  if (outline.color !== undefined)
+    assertTextBoxColor(outline.color, `${path}.color`, operationName);
 }
 
-function assertTextBoxBody(body: unknown, path: string): void {
+function assertTextBoxBody(body: unknown, path: string, operationName = "addTextBox"): void {
   if (!isPlainRecord(body)) {
-    throw new Error(`addTextBox: ${path} must be an object`);
+    throw new Error(`${operationName}: ${path} must be an object`);
   }
   if (
     body.anchor !== undefined &&
@@ -874,16 +1050,17 @@ function assertTextBoxBody(body: unknown, path: string): void {
     body.anchor !== "middle" &&
     body.anchor !== "bottom"
   ) {
-    throw new Error("addTextBox: body.anchor is not supported");
+    throw new Error(`${operationName}: body.anchor is not supported`);
   }
   if (body.marginLeft !== undefined)
-    assertFiniteEmu(body.marginLeft, "addTextBox", "body.marginLeft");
+    assertFiniteEmu(body.marginLeft, operationName, "body.marginLeft");
   if (body.marginRight !== undefined) {
-    assertFiniteEmu(body.marginRight, "addTextBox", "body.marginRight");
+    assertFiniteEmu(body.marginRight, operationName, "body.marginRight");
   }
-  if (body.marginTop !== undefined) assertFiniteEmu(body.marginTop, "addTextBox", "body.marginTop");
+  if (body.marginTop !== undefined)
+    assertFiniteEmu(body.marginTop, operationName, "body.marginTop");
   if (body.marginBottom !== undefined) {
-    assertFiniteEmu(body.marginBottom, "addTextBox", "body.marginBottom");
+    assertFiniteEmu(body.marginBottom, operationName, "body.marginBottom");
   }
 }
 
@@ -903,8 +1080,59 @@ function assertConnectorInput(input: AddConnectorInput): void {
   if (input.name !== undefined && input.name.trim() === "") {
     throw new Error("addConnector: name must be a non-empty string when provided");
   }
-  assertArrowEndpoint(input.outline?.headEnd, "headEnd");
-  assertArrowEndpoint(input.outline?.tailEnd, "tailEnd");
+  assertArrowEndpoint(input.outline?.headEnd, "headEnd", "addConnector");
+  assertArrowEndpoint(input.outline?.tailEnd, "tailEnd", "addConnector");
+}
+
+function assertShapeFill(fill: unknown, path: string): void {
+  if (!isPlainRecord(fill)) {
+    throw new Error(`addShape: ${path} must be a fill object`);
+  }
+  switch (fill.kind) {
+    case "none":
+      return;
+    case "solid":
+      assertTextBoxColor(fill.color, `${path}.color`, "addShape");
+      return;
+    case "gradient":
+      assertTextBoxGradientFill(fill, path, "addShape");
+      return;
+    default:
+      throw new Error(`addShape: ${path}.kind is not supported`);
+  }
+}
+
+function assertShapeOutline(outline: unknown): void {
+  if (!isPlainRecord(outline)) {
+    throw new Error("addShape: outline must be an object");
+  }
+  if (
+    outline.width === undefined &&
+    outline.fill === undefined &&
+    outline.dash === undefined &&
+    outline.headEnd === undefined &&
+    outline.tailEnd === undefined
+  ) {
+    throw new Error("addShape: outline must set width, fill, dash, headEnd, or tailEnd");
+  }
+  if (outline.width !== undefined) {
+    assertPositiveFiniteEmu(outline.width, "addShape", "outline.width");
+  }
+  if (outline.fill !== undefined) assertShapeFill(outline.fill, "outline.fill");
+  if (outline.dash !== undefined) {
+    if (typeof outline.dash !== "string" || !DASH_STYLES.has(outline.dash)) {
+      throw new Error("addShape: outline.dash is not supported");
+    }
+  }
+  assertArrowEndpoint(outline.headEnd, "headEnd", "addShape");
+  assertArrowEndpoint(outline.tailEnd, "tailEnd", "addShape");
+}
+
+function assertShapeEffects(effects: unknown): void {
+  if (!isPlainRecord(effects)) {
+    throw new Error("addShape: effects must be an object");
+  }
+  if (effects.glow !== undefined) assertTextBoxGlow(effects.glow, "effects.glow", "addShape");
 }
 
 function assertConnectionSiteIndex(value: number, fieldName: "start" | "end"): void {
@@ -915,16 +1143,23 @@ function assertConnectionSiteIndex(value: number, fieldName: "start" | "end"): v
   }
 }
 
-function assertArrowEndpoint(endpoint: SourceArrowEndpoint | undefined, fieldName: string): void {
+function assertArrowEndpoint(
+  endpoint: unknown,
+  fieldName: string,
+  operationName: "addConnector" | "addShape",
+): void {
   if (endpoint === undefined) return;
-  if (!ARROW_TYPES.has(endpoint.type)) {
-    throw new Error(`addConnector: outline.${fieldName}.type is not supported`);
+  if (!isPlainRecord(endpoint)) {
+    throw new Error(`${operationName}: outline.${fieldName} must be an object`);
   }
-  if (!ARROW_SIZES.has(endpoint.width)) {
-    throw new Error(`addConnector: outline.${fieldName}.width is not supported`);
+  if (typeof endpoint.type !== "string" || !ARROW_TYPES.has(endpoint.type)) {
+    throw new Error(`${operationName}: outline.${fieldName}.type is not supported`);
   }
-  if (!ARROW_SIZES.has(endpoint.length)) {
-    throw new Error(`addConnector: outline.${fieldName}.length is not supported`);
+  if (typeof endpoint.width !== "string" || !ARROW_SIZES.has(endpoint.width)) {
+    throw new Error(`${operationName}: outline.${fieldName}.width is not supported`);
+  }
+  if (typeof endpoint.length !== "string" || !ARROW_SIZES.has(endpoint.length)) {
+    throw new Error(`${operationName}: outline.${fieldName}.length is not supported`);
   }
 }
 
