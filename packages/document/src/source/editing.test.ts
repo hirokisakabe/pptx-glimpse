@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   addConnector,
   addEmptySlideFromLayout,
+  addShape,
   addTextBox,
   clearParagraphProperties,
   clearTextRunProperties,
@@ -592,6 +593,93 @@ describe("editing shape operations", () => {
     expect(xml).toContain('anchor="ctr" lIns="1000" rIns="2000"');
   });
 
+  it("adds preset geometry shapes with finalized XML and parsed source styling", () => {
+    const source = buildSourceModel();
+
+    const withRect = addShape(source, requireHandle(source.slides[0].handle), {
+      preset: " rect ",
+      offsetX: asEmu(100),
+      offsetY: asEmu(200),
+      width: asEmu(300),
+      height: asEmu(400),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "112233" } },
+      name: "Shape rect",
+    });
+    const withRoundRect = addShape(withRect, requireHandle(withRect.slides[0].handle), {
+      preset: "roundRect",
+      offsetX: asEmu(500),
+      offsetY: asEmu(600),
+      width: asEmu(700),
+      height: asEmu(800),
+      name: "Shape roundRect",
+    });
+    const withEllipse = addShape(withRoundRect, requireHandle(withRoundRect.slides[0].handle), {
+      preset: "ellipse",
+      offsetX: asEmu(900),
+      offsetY: asEmu(1000),
+      width: asEmu(1100),
+      height: asEmu(1200),
+      name: "Shape ellipse",
+    });
+    const edited = expectNonMutating(withEllipse, () =>
+      addShape(withEllipse, requireHandle(withEllipse.slides[0].handle), {
+        preset: "line",
+        offsetX: asEmu(1300),
+        offsetY: asEmu(1400),
+        width: asEmu(1500),
+        height: asEmu(1600),
+        rotation: asOoxmlAngle(900000),
+        outline: {
+          width: asEmu(12700),
+          fill: { kind: "solid", color: { kind: "srgb", hex: "00AAFF" } },
+          dash: "dash",
+          headEnd: { type: "oval", width: "sm", length: "sm" },
+          tailEnd: { type: "triangle", width: "med", length: "lg" },
+        },
+        effects: {
+          glow: { radius: asEmu(25400), color: { kind: "srgb", hex: "FF00AA" } },
+        },
+        paragraphs: [{ runs: [{ text: "Line label" }] }],
+        name: "Shape line",
+      }),
+    );
+    const rect = shapeByName(edited, "Shape rect");
+    const line = shapeByName(edited, "Shape line");
+    const lastEdit = edited.edits?.at(-1);
+    if (lastEdit?.kind !== "addShape") throw new Error("expected addShape edit");
+
+    expect(
+      ["Shape rect", "Shape roundRect", "Shape ellipse", "Shape line"].map(
+        (name) => shapeByName(edited, name).geometry,
+      ),
+    ).toEqual([
+      { preset: "rect" },
+      { preset: "roundRect" },
+      { preset: "ellipse" },
+      { preset: "line" },
+    ]);
+    expect(rect.fill).toEqual({ kind: "solid", color: { kind: "srgb", hex: "112233" } });
+    expect(line.transform).toMatchObject({ rotation: 900000 });
+    expect(line.outline).toMatchObject({
+      width: 12700,
+      fill: { kind: "solid", color: { kind: "srgb", hex: "00AAFF" } },
+      dashStyle: "dash",
+      headEnd: { type: "oval", width: "sm", length: "sm" },
+      tailEnd: { type: "triangle", width: "med", length: "lg" },
+    });
+    expect(line.effects?.glow).toEqual({
+      radius: 25400,
+      color: { kind: "srgb", hex: "FF00AA" },
+    });
+    expect(line.textBody?.paragraphs[0]?.runs[0]?.text).toBe("Line label");
+    expect(lastEdit.xml).toContain(`<a:prstGeom prst="line"`);
+    expect(edited.edits?.find((edit) => edit.kind === "addShape")?.xml).toContain(
+      `<a:prstGeom prst="rect"`,
+    );
+    expect(lastEdit.xml).toContain(`<a:prstDash val="dash"`);
+    expect(lastEdit.xml).toContain(`<a:tailEnd type="triangle" w="med" len="lg"`);
+  });
+
   it("rejects invalid formatted text box inputs before editing", () => {
     const source = buildSourceModel();
     const slideHandle = requireHandle(source.slides[0].handle);
@@ -938,6 +1026,17 @@ describe("editing shape operations", () => {
         ),
       ),
     );
+    const withShape = addShape(source, requireHandle(source.slides[0].handle), {
+      preset: "rect",
+      offsetX: asEmu(1),
+      offsetY: asEmu(2),
+      width: asEmu(3),
+      height: asEmu(4),
+      name: "Temporary shape",
+    });
+    const deletedAddedShape = expectNonMutating(withShape, () =>
+      deleteShape(withShape, requireHandle(shapeByName(withShape, "Temporary shape").handle)),
+    );
 
     expect(
       deletedExisting.slides[0].shapes.map((shape) => shape.kind !== "raw" && shape.name),
@@ -952,6 +1051,10 @@ describe("editing shape operations", () => {
     expect(
       deletedAddedConnector.slides[0].shapes.map((shape) => shape.kind !== "raw" && shape.name),
     ).not.toContain("Temporary connector");
+    expect(deletedAddedShape.edits).toEqual([]);
+    expect(
+      deletedAddedShape.slides[0].shapes.map((shape) => shape.kind !== "raw" && shape.name),
+    ).not.toContain("Temporary shape");
   });
 
   it("rejects unsupported shape edits with stable error messages", () => {
@@ -990,6 +1093,62 @@ describe("editing shape operations", () => {
     ).toThrow(
       "addConnector: preset must be straightConnector1, bentConnector3, or curvedConnector3",
     );
+    expect(() =>
+      addShape(source, requireHandle(source.slides[0].handle), {
+        preset: "",
+        offsetX: asEmu(1),
+        offsetY: asEmu(2),
+        width: asEmu(3),
+        height: asEmu(4),
+      }),
+    ).toThrow("addShape: preset must be a non-empty string");
+    expect(() =>
+      addShape(source, requireHandle(source.slides[0].handle), {
+        preset: "rect",
+        offsetX: asEmu(1),
+        offsetY: asEmu(2),
+        width: asEmu(3),
+        height: asEmu(4),
+        outline: {
+          // @ts-expect-error Runtime validation rejects unsupported dash values.
+          dash: "badDash",
+        },
+      }),
+    ).toThrow("addShape: outline.dash is not supported");
+    expect(() =>
+      addShape(source, requireHandle(source.slides[0].handle), {
+        preset: "rect",
+        offsetX: asEmu(1),
+        offsetY: asEmu(2),
+        width: asEmu(3),
+        height: asEmu(4),
+        fill: {
+          kind: "gradient",
+          stops: [{ position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FF0000" } }],
+        },
+      }),
+    ).toThrow("addShape: fill.stops must contain at least two stops");
+    expect(() =>
+      addShape(source, requireHandle(source.slides[0].handle), {
+        preset: "rect",
+        offsetX: asEmu(1),
+        offsetY: asEmu(2),
+        width: asEmu(3),
+        height: asEmu(4),
+        body: { anchor: "middle" },
+      }),
+    ).toThrow("addShape: body requires text or paragraphs");
+    expect(() =>
+      addShape(source, requireHandle(source.slides[0].handle), {
+        preset: "rect",
+        offsetX: asEmu(1),
+        offsetY: asEmu(2),
+        width: asEmu(3),
+        height: asEmu(4),
+        // @ts-expect-error Runtime validation rejects empty effects from JS callers.
+        effects: {},
+      }),
+    ).toThrow("addShape: effects must set glow");
   });
 });
 

@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import {
   addConnector,
   addEmptySlideFromLayout,
+  addShape,
   addTextBox,
   asEmu,
   asHundredthPt,
@@ -360,6 +361,43 @@ describeOrSkip("LibreOffice shape add/delete validity", { timeout: 120000 }, () 
     renderSingleWithLibreOffice(
       libreOfficeImage,
       "editor-validity-shape-add-edited.pptx",
+      writePptx(edited),
+    );
+  });
+
+  it("opens PPTX after adding a preset geometry shape", () => {
+    const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
+    const source = readPptx(sourcePptx);
+    const edited = addShape(source, requireHandle(source.slides[0]?.handle), {
+      preset: "roundRect",
+      offsetX: asEmu(914400),
+      offsetY: asEmu(914400),
+      width: asEmu(3657600),
+      height: asEmu(914400),
+      rotation: asOoxmlAngle(900000),
+      fill: {
+        kind: "gradient",
+        angle: asOoxmlAngle(2700000),
+        stops: [
+          { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FF0000" } },
+          { position: asOoxmlPercent(100000), color: { kind: "srgb", hex: "0000FF" } },
+        ],
+      },
+      outline: {
+        width: asEmu(12700),
+        fill: { kind: "solid", color: { kind: "srgb", hex: "00AA44" } },
+        dash: "dash",
+        tailEnd: { type: "triangle", width: "med", length: "lg" },
+      },
+      effects: {
+        glow: { radius: asEmu(25400), color: { kind: "srgb", hex: "AA00AA" } },
+      },
+      paragraphs: [{ runs: [{ text: "LibreOffice added shape" }] }],
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-shape-add-preset-edited.pptx",
       writePptx(edited),
     );
   });

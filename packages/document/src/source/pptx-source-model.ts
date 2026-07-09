@@ -20,7 +20,7 @@
  * edits into raw material, such as duplicating a slide with dirty slide-part edits, are
  * rejected at runtime instead of guessing.
  *
- * New-content edits (new slides, text boxes, connectors, pictures) finalize their XML and id
+ * New-content edits (new slides, text boxes, shapes, connectors, pictures) finalize their XML and id
  * numbering at edit time and record them on the edit; the writer only applies
  * insertion positions. To keep the edited in-memory model and the written XML derived
  * from that single finalized fragment, `source/shape-xml.ts` and the edit-time slide
@@ -70,6 +70,7 @@ export type PptxSourceModelEdit =
   | PptxSourceModelShapeTransformEdit
   | PptxSourceModelShapeFillEdit
   | PptxSourceModelShapeOutlineEdit
+  | PptxSourceModelAddShapeEdit
   | PptxSourceModelAddTextBoxEdit
   | PptxSourceModelAddConnectorEdit
   | PptxSourceModelAddPictureEdit
@@ -163,6 +164,14 @@ export interface PptxSourceModelShapeOutlineEdit {
 
 export interface PptxSourceModelAddTextBoxEdit {
   readonly kind: "addTextBox";
+  readonly slidePartPath: PartPath;
+  readonly shapeId: string;
+  /** Serialized `p:sp` fragment finalized at edit time. The writer only splices it. */
+  readonly xml: string;
+}
+
+export interface PptxSourceModelAddShapeEdit {
+  readonly kind: "addShape";
   readonly slidePartPath: PartPath;
   readonly shapeId: string;
   /** Serialized `p:sp` fragment finalized at edit time. The writer only splices it. */

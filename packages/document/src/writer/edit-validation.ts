@@ -18,6 +18,7 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
   for (const edit of edits) {
     switch (edit.kind) {
       case "addTextBox":
+      case "addShape":
       case "addConnector":
       case "addPicture": {
         const key = [edit.slidePartPath, edit.shapeId].join("\u0000");
