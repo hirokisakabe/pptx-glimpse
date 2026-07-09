@@ -42,23 +42,6 @@ export function setChildText(node: XmlNode, name: string, text: string): void {
     : text;
 }
 
-export function appendChild(node: XmlNode, preferredKey: string, value: XmlNode): void {
-  const local = localName(preferredKey);
-  const existingKey = Object.keys(node).find(
-    (key) => !key.startsWith("@_") && localName(key) === local,
-  );
-  if (existingKey === undefined) {
-    node[preferredKey] = [value];
-    return;
-  }
-
-  const current = node[existingKey];
-  const currentItems = Array.isArray(current)
-    ? unsafeOoxmlBoundaryAssertion<unknown[]>(current)
-    : [current];
-  node[existingKey] = [...currentItems, value];
-}
-
 export function ensureChild(node: XmlNode, name: string): XmlNode {
   const existing = getChild(node, name);
   if (existing !== undefined) return existing;
