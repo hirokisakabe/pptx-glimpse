@@ -33,7 +33,6 @@ import {
   parseTextRunLocator,
 } from "./xml-locators.js";
 import {
-  appendChild,
   cloneXmlNode,
   deleteChild,
   ensureChild,
@@ -311,7 +310,7 @@ function applyAddTextBoxEdit(root: XmlNode, edit: PptxSourceModelAddTextBoxEdit)
     throw new Error(`writePptx: shape id '${edit.shapeId}' already exists in source XML`);
   }
 
-  appendChild(spTree, "p:sp", parseShapeFragmentXml(edit.xml, "sp"));
+  appendShapeTreeNodeAtEnd(spTree, "p:sp", parseShapeFragmentXml(edit.xml, "sp"));
 }
 
 function applyAddConnectorEdit(root: XmlNode, edit: PptxSourceModelAddConnectorEdit): void {
@@ -337,11 +336,12 @@ function applyAddConnectorEdit(root: XmlNode, edit: PptxSourceModelAddConnectorE
     throw new Error(`writePptx: connector end shape '${edit.endShapeId}' was not found`);
   }
 
-  appendChild(spTree, "p:cxnSp", parseShapeFragmentXml(edit.xml, "cxnSp"));
+  appendShapeTreeNodeAtEnd(spTree, "p:cxnSp", parseShapeFragmentXml(edit.xml, "cxnSp"));
 }
 
 function applyAddPictureEdit(root: XmlNode, edit: PptxSourceModelAddPictureEdit): void {
   const slide = getChild(root, "sld");
+  if (slide !== undefined) ensurePictureNamespaces(slide);
   const cSld = getChild(slide, "cSld");
   const spTree = getChild(cSld, "spTree");
   if (spTree === undefined) {
@@ -351,7 +351,33 @@ function applyAddPictureEdit(root: XmlNode, edit: PptxSourceModelAddPictureEdit)
     throw new Error(`writePptx: shape id '${edit.shapeId}' already exists in source XML`);
   }
 
-  appendChild(spTree, "p:pic", parseShapeFragmentXml(edit.xml, "pic"));
+  appendShapeTreeNodeAtEnd(spTree, "p:pic", parseShapeFragmentXml(edit.xml, "pic"));
+}
+
+function ensurePictureNamespaces(slide: XmlNode): void {
+  slide["@_xmlns:a"] ??= "http://schemas.openxmlformats.org/drawingml/2006/main";
+  slide["@_xmlns:r"] ??= "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+}
+
+function appendShapeTreeNodeAtEnd(spTree: XmlNode, preferredKey: string, value: XmlNode): void {
+  const local = localName(preferredKey);
+  const retainedEntries: [string, unknown][] = [];
+  const existingValues: unknown[] = [];
+  let existingKey = preferredKey;
+
+  for (const [key, entryValue] of Object.entries(spTree)) {
+    if (!key.startsWith("@_") && localName(key) === local) {
+      existingKey = key;
+      if (Array.isArray(entryValue)) {
+        existingValues.push(...unsafeOoxmlBoundaryAssertion<unknown[]>(entryValue));
+      }
+      else existingValues.push(entryValue);
+      continue;
+    }
+    retainedEntries.push([key, entryValue]);
+  }
+
+  replaceNodeEntries(spTree, [...retainedEntries, [existingKey, [...existingValues, value]]]);
 }
 
 function applyDeleteShapeEdit(root: XmlNode, edit: PptxSourceModelDeleteShapeEdit): void {

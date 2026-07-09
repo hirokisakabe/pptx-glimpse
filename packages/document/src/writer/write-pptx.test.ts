@@ -694,6 +694,26 @@ describe("writePptx - from-scratch builder", () => {
     ]);
   });
 
+  it("keeps added pictures at the serialized shape-tree end and adds missing relationship namespace", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const edited = addPicture(source, source.slides[0].handle!, {
+      bytes: RED_PNG,
+      offsetX: asEmu(900),
+      offsetY: asEmu(1000),
+      width: asEmu(1100),
+      height: asEmu(1200),
+      name: "Appended Picture",
+    });
+    const slideXml = decoder.decode(getEntry(writePptx(edited), "ppt/slides/slide1.xml"));
+
+    expect(slideXml).toContain(
+      `xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"`,
+    );
+    expect(slideXml.indexOf(`name="Appended Picture"`)).toBeGreaterThan(
+      slideXml.indexOf(`name="Keep Shape"`),
+    );
+  });
+
   it("writes formatted text box rPr, pPr, bodyPr, and xfrm from public APIs", () => {
     const source = createPptx();
     const slideHandle = source.slides[0]?.handle;
