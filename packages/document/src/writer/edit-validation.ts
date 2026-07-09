@@ -19,7 +19,8 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
     switch (edit.kind) {
       case "addTextBox":
       case "addShape":
-      case "addConnector": {
+      case "addConnector":
+      case "addPicture": {
         const key = [edit.slidePartPath, edit.shapeId].join("\u0000");
         if (addedShapeKeys.has(key)) {
           throw new Error(`writePptx: conflicting shape additions for shape id '${edit.shapeId}'`);

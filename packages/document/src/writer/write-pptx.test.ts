@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 // Import via the actual public surface (`@pptx-glimpse/document`).
 import {
+  addPicture,
   asEmu,
   asHundredthPt,
   asOoxmlAngle,
@@ -616,6 +617,102 @@ describe("writePptx - from-scratch builder", () => {
     const computed = createComputedView(reread);
     expect(computed.slideSize).toEqual({ width: asEmu(9144000), height: asEmu(5143500) });
     expect(computed.slides[0]?.elements).toHaveLength(1);
+  });
+
+  it("writes added PNG and JPEG pictures with media parts, content types, and slide rels", () => {
+    const source = createPptx();
+    const slideHandle = source.slides[0]?.handle;
+    if (slideHandle === undefined) throw new Error("createPptx should create a first slide");
+
+    const withPng = addPicture(source, slideHandle, {
+      bytes: RED_PNG,
+      offsetX: asEmu(914400),
+      offsetY: asEmu(457200),
+      width: asEmu(1828800),
+      height: asEmu(1371600),
+      rotation: asOoxmlAngle(600000),
+      crop: {
+        left: asOoxmlPercent(1000),
+        top: asOoxmlPercent(2000),
+        right: asOoxmlPercent(3000),
+        bottom: asOoxmlPercent(4000),
+      },
+      name: "Product PNG",
+    });
+    const edited = addPicture(withPng, slideHandle, {
+      bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xdb, 1, 2, 3]),
+      offsetX: asEmu(3200400),
+      offsetY: asEmu(457200),
+      width: asEmu(1828800),
+      height: asEmu(1371600),
+      name: "Product JPEG",
+    });
+
+    const output = writePptx(edited);
+    const contentTypesXml = decoder.decode(getEntry(output, "[Content_Types].xml"));
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+    const slideRelsXml = decoder.decode(getEntry(output, "ppt/slides/_rels/slide1.xml.rels"));
+    const reread = readPptx(output);
+
+    expect(getEntry(output, "ppt/media/image1.png")).toEqual(RED_PNG);
+    expect(getEntry(output, "ppt/media/image1.jpeg")).toEqual(
+      new Uint8Array([0xff, 0xd8, 0xff, 0xdb, 1, 2, 3]),
+    );
+    expect(contentTypesXml).toContain(`<Default Extension="png" ContentType="image/png"/>`);
+    expect(contentTypesXml).toContain(`<Default Extension="jpeg" ContentType="image/jpeg"/>`);
+    expect(slideRelsXml).toContain(
+      `<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>`,
+    );
+    expect(slideRelsXml).toContain(
+      `<Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.jpeg"/>`,
+    );
+    expect(slideXml).toContain(`<p:cNvPr id="1" name="Product PNG"/>`);
+    expect(slideXml).toContain(`<a:blip r:embed="rId2"/>`);
+    expect(slideXml).toContain(`<a:srcRect l="1000" t="2000" r="3000" b="4000"/>`);
+    expect(slideXml).toContain(`<a:xfrm rot="600000">`);
+    expect(slideXml).toContain(`<p:cNvPr id="2" name="Product JPEG"/>`);
+    expect(slideXml).toContain(`<a:blip r:embed="rId3"/>`);
+    expect(reread.packageGraph.media).toEqual([
+      { partPath: "ppt/media/image1.png", contentType: "image/png", bytes: RED_PNG },
+      {
+        partPath: "ppt/media/image1.jpeg",
+        contentType: "image/jpeg",
+        bytes: new Uint8Array([0xff, 0xd8, 0xff, 0xdb, 1, 2, 3]),
+      },
+    ]);
+    expect(reread.slides[0]?.shapes).toMatchObject([
+      {
+        kind: "image",
+        name: "Product PNG",
+        blipRelationshipId: "rId2",
+        crop: { left: 1000, top: 2000, right: 3000, bottom: 4000 },
+      },
+      {
+        kind: "image",
+        name: "Product JPEG",
+        blipRelationshipId: "rId3",
+      },
+    ]);
+  });
+
+  it("keeps added pictures at the serialized shape-tree end and adds missing relationship namespace", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const edited = addPicture(source, source.slides[0].handle!, {
+      bytes: RED_PNG,
+      offsetX: asEmu(900),
+      offsetY: asEmu(1000),
+      width: asEmu(1100),
+      height: asEmu(1200),
+      name: "Appended Picture",
+    });
+    const slideXml = decoder.decode(getEntry(writePptx(edited), "ppt/slides/slide1.xml"));
+
+    expect(slideXml).toContain(
+      `xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"`,
+    );
+    expect(slideXml.indexOf(`name="Appended Picture"`)).toBeGreaterThan(
+      slideXml.indexOf(`name="Keep Shape"`),
+    );
   });
 
   it("writes formatted text box rPr, pPr, bodyPr, and xfrm from public APIs", () => {
@@ -1537,6 +1634,34 @@ describe("writePptx - shape add/delete edits", () => {
     expect(findShapeByName(reread, "TextBox 31").textBody?.paragraphs[0]?.runs[0]?.text).toBe(
       "Added after delete",
     );
+    expect(() => findShapeByName(reread, "Keep Shape")).toThrow(/shape not found/);
+  });
+
+  it("does not reuse a pending-deleted shape id when adding a picture", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const deletedMaxIdShape = deleteShape(
+      source,
+      requireHandle(findShapeByName(source, "Keep Shape").handle),
+    );
+    const edited = addPicture(deletedMaxIdShape, deletedMaxIdShape.slides[0].handle!, {
+      bytes: RED_PNG,
+      offsetX: asEmu(900),
+      offsetY: asEmu(1000),
+      width: asEmu(1100),
+      height: asEmu(1200),
+    });
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+    const picture = reread.slides[0]?.shapes.find(
+      (shape) => shape.kind === "image" && shape.name === "Picture 31",
+    );
+
+    expect(picture).toMatchObject({
+      kind: "image",
+      nodeId: "31",
+      name: "Picture 31",
+      blipRelationshipId: "rId1",
+    });
     expect(() => findShapeByName(reread, "Keep Shape")).toThrow(/shape not found/);
   });
 

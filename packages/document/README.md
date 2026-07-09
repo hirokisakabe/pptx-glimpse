@@ -35,6 +35,7 @@ The stable entry point includes:
 - `createComputedView(source, options?)` for deriving slide/layout/master/theme effective values without mutating the source
 - `writePptx(source)` for structural round-trip writing
 - Text editing helpers such as `replaceTextRunPlainText(source, handle, text)` and related source handle lookup types exported from the root entry point
+- From-scratch authoring helpers such as `addTextBox(source, slideHandle, input)` and `addPicture(source, slideHandle, input)`
 - Slide topology helpers such as `addEmptySlideFromLayout(source, { layoutPartPath })`, `duplicateSlide(source, slideHandle)`, `moveSlide(source, slideHandle, { toIndex })`, and `deleteSlide(source, slideHandle)`
 - Source model, computed view, and unit types needed to consume those APIs
 
