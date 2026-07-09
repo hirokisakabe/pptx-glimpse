@@ -83,7 +83,7 @@ export interface ShapeGlowInput {
 }
 
 export interface ShapeEffectsInput {
-  readonly glow?: ShapeGlowInput;
+  readonly glow: ShapeGlowInput;
 }
 
 export interface ShapeOutlineInput {

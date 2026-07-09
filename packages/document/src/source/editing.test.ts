@@ -597,7 +597,7 @@ describe("editing shape operations", () => {
     const source = buildSourceModel();
 
     const withRect = addShape(source, requireHandle(source.slides[0].handle), {
-      preset: "rect",
+      preset: " rect ",
       offsetX: asEmu(100),
       offsetY: asEmu(200),
       width: asEmu(300),
@@ -673,6 +673,9 @@ describe("editing shape operations", () => {
     });
     expect(line.textBody?.paragraphs[0]?.runs[0]?.text).toBe("Line label");
     expect(lastEdit.xml).toContain(`<a:prstGeom prst="line"`);
+    expect(edited.edits?.find((edit) => edit.kind === "addShape")?.xml).toContain(
+      `<a:prstGeom prst="rect"`,
+    );
     expect(lastEdit.xml).toContain(`<a:prstDash val="dash"`);
     expect(lastEdit.xml).toContain(`<a:tailEnd type="triangle" w="med" len="lg"`);
   });
@@ -1142,6 +1145,7 @@ describe("editing shape operations", () => {
         offsetY: asEmu(2),
         width: asEmu(3),
         height: asEmu(4),
+        // @ts-expect-error Runtime validation rejects empty effects from JS callers.
         effects: {},
       }),
     ).toThrow("addShape: effects must set glow");

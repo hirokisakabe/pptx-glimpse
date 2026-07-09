@@ -435,11 +435,12 @@ export function addShape(
   const shapeId = nextShapeId(slide.shapes, source.edits ?? [], slide.partPath);
   const shapeIdValue = String(shapeId);
   const name = input.name?.trim() || `Shape ${shapeIdValue}`;
+  const preset = input.preset.trim();
   const orderingSlot = nextOrderingSlot(slide.shapes);
   const xml = buildShapeXml({
     shapeId: shapeIdValue,
     name,
-    preset: input.preset,
+    preset,
     offsetX: input.offsetX,
     offsetY: input.offsetY,
     width: input.width,
