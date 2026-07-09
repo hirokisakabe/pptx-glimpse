@@ -1,8 +1,8 @@
 /**
  * Edit-time XML finalization for newly added shapes.
  *
- * New-content edits (text box / connector additions) finalize their `p:sp` /
- * `p:cxnSp` XML fragment here at edit time. The serialized fragment stored on the
+ * New-content edits (text box / preset shape / connector additions) finalize their
+ * `p:sp` / `p:cxnSp` XML fragment here at edit time. The serialized fragment stored on the
  * edit is the single source of truth: the in-memory `SourceShapeNode` for the edited
  * model is derived by parsing the fragment with the same reader used for regular
  * PPTX input, and the writer only splices the fragment into the target `p:spTree`
@@ -18,6 +18,7 @@ import type { PartPath } from "./handles.js";
 import type { ConnectorPresetGeometry } from "./pptx-source-model.js";
 import type {
   SourceArrowEndpoint,
+  SourceDashStyle,
   SourceShapeNode,
   SourceTextAlign,
   SourceVerticalAnchor,
@@ -65,6 +66,32 @@ export type TextBoxBaselineInput = "subscript" | "superscript";
 export interface TextBoxGlowInput {
   readonly radius: Emu;
   readonly color: TextBoxColorInput;
+}
+
+export type ShapeColorInput = TextBoxColorInput;
+
+export type ShapeGradientFillInput = TextBoxGradientFillInput;
+
+export type ShapeFillInput =
+  | { readonly kind: "none" }
+  | { readonly kind: "solid"; readonly color: ShapeColorInput }
+  | ({ readonly kind: "gradient" } & ShapeGradientFillInput);
+
+export interface ShapeGlowInput {
+  readonly radius: Emu;
+  readonly color: ShapeColorInput;
+}
+
+export interface ShapeEffectsInput {
+  readonly glow: ShapeGlowInput;
+}
+
+export interface ShapeOutlineInput {
+  readonly width?: Emu;
+  readonly fill?: ShapeFillInput;
+  readonly dash?: SourceDashStyle;
+  readonly headEnd?: SourceArrowEndpoint;
+  readonly tailEnd?: SourceArrowEndpoint;
 }
 
 export interface TextBoxOutlineInput {
@@ -120,6 +147,23 @@ interface TextBoxXmlParams {
   readonly width: Emu;
   readonly height: Emu;
   readonly rotation?: OoxmlAngle;
+  readonly text?: string;
+  readonly paragraphs?: readonly TextBoxParagraphInput[];
+  readonly body?: TextBoxBodyPropertiesInput;
+}
+
+interface ShapeXmlParams {
+  readonly shapeId: string;
+  readonly name: string;
+  readonly preset: string;
+  readonly offsetX: Emu;
+  readonly offsetY: Emu;
+  readonly width: Emu;
+  readonly height: Emu;
+  readonly rotation?: OoxmlAngle;
+  readonly fill?: ShapeFillInput;
+  readonly outline?: ShapeOutlineInput;
+  readonly effects?: ShapeEffectsInput;
   readonly text?: string;
   readonly paragraphs?: readonly TextBoxParagraphInput[];
   readonly body?: TextBoxBodyPropertiesInput;
@@ -190,6 +234,54 @@ export function buildTextBoxXml(params: TextBoxXmlParams): string {
         "a:lstStyle": {},
         "a:p": paragraphs.map(createParagraphXml),
       },
+    },
+  });
+}
+
+export function buildShapeXml(params: ShapeXmlParams): string {
+  const paragraphs =
+    params.paragraphs ?? (params.text !== undefined ? [{ runs: [{ text: params.text }] }] : []);
+  return xmlBuilder.build({
+    "p:sp": {
+      "p:nvSpPr": {
+        "p:cNvPr": {
+          "@_id": params.shapeId,
+          "@_name": params.name,
+        },
+        "p:cNvSpPr": {},
+        "p:nvPr": {},
+      },
+      "p:spPr": {
+        "a:xfrm": {
+          ...(params.rotation !== undefined ? { "@_rot": String(params.rotation) } : {}),
+          "a:off": {
+            "@_x": String(params.offsetX),
+            "@_y": String(params.offsetY),
+          },
+          "a:ext": {
+            "@_cx": String(params.width),
+            "@_cy": String(params.height),
+          },
+        },
+        "a:prstGeom": {
+          "@_prst": params.preset,
+          "a:avLst": {},
+        },
+        ...createShapeFillChildXml(params.fill),
+        ...(params.outline !== undefined ? { "a:ln": createShapeLineXml(params.outline) } : {}),
+        ...(params.effects?.glow !== undefined
+          ? { "a:effectLst": { "a:glow": createGlowXml(params.effects.glow) } }
+          : {}),
+      },
+      ...(paragraphs.length > 0
+        ? {
+            "p:txBody": {
+              "a:bodyPr": createTextBodyPropertiesXml(params.body),
+              "a:lstStyle": {},
+              "a:p": paragraphs.map(createParagraphXml),
+            },
+          }
+        : {}),
     },
   });
 }
@@ -315,6 +407,32 @@ function createGradientFillXml(fill: TextBoxGradientFillInput): Record<string, u
       "@_ang": String(fill.angle ?? 0),
       "@_scaled": "1",
     },
+  };
+}
+
+function createShapeFillChildXml(fill: ShapeFillInput | undefined): Record<string, unknown> {
+  if (fill === undefined) return {};
+  switch (fill.kind) {
+    case "none":
+      return { "a:noFill": {} };
+    case "solid":
+      return { "a:solidFill": createSolidFillXml(fill.color) };
+    case "gradient":
+      return { "a:gradFill": createGradientFillXml(fill) };
+  }
+}
+
+function createShapeLineXml(outline: ShapeOutlineInput): Record<string, unknown> {
+  return {
+    ...(outline.width !== undefined ? { "@_w": String(outline.width) } : {}),
+    ...createShapeFillChildXml(outline.fill),
+    ...(outline.dash !== undefined ? { "a:prstDash": { "@_val": outline.dash } } : {}),
+    ...(outline.headEnd !== undefined
+      ? { "a:headEnd": createArrowEndpointXml(outline.headEnd) }
+      : {}),
+    ...(outline.tailEnd !== undefined
+      ? { "a:tailEnd": createArrowEndpointXml(outline.tailEnd) }
+      : {}),
   };
 }
 

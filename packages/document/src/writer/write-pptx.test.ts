@@ -22,6 +22,7 @@ import {
 import {
   addConnector,
   addEmptySlideFromLayout,
+  addShape,
   addTextBox,
   clearParagraphProperties,
   clearTextRunProperties,
@@ -753,6 +754,126 @@ describe("writePptx - from-scratch builder", () => {
     expect(slideXml).toContain(`<a:lin ang="2700000" scaled="1"/>`);
     expect(slideXml).toContain(`baseline="30000"`);
     expect(slideXml).toContain(`baseline="-25000"`);
+  });
+
+  it("writes preset geometry shapes with fill, line, glow, rotation, and text", () => {
+    const source = createPptx();
+    const slideHandle = source.slides[0]?.handle;
+    if (slideHandle === undefined) throw new Error("createPptx should create a first slide");
+
+    const withSolid = addShape(source, slideHandle, {
+      preset: "rect",
+      offsetX: asEmu(1000),
+      offsetY: asEmu(2000),
+      width: asEmu(3000),
+      height: asEmu(4000),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "112233" } },
+      name: "Solid Rect",
+    });
+    const edited = addShape(withSolid, withSolid.slides[0].handle!, {
+      preset: "roundRect",
+      offsetX: asEmu(914400),
+      offsetY: asEmu(457200),
+      width: asEmu(2743200),
+      height: asEmu(914400),
+      rotation: asOoxmlAngle(5400000),
+      fill: {
+        kind: "gradient",
+        angle: asOoxmlAngle(2700000),
+        stops: [
+          { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "ff0000" } },
+          { position: asOoxmlPercent(100000), color: { kind: "srgb", hex: "0000ff" } },
+        ],
+      },
+      outline: {
+        width: asEmu(12700),
+        fill: { kind: "solid", color: { kind: "srgb", hex: "00aa44" } },
+        dash: "dash",
+        headEnd: { type: "oval", width: "sm", length: "sm" },
+        tailEnd: { type: "triangle", width: "med", length: "lg" },
+      },
+      effects: {
+        glow: { radius: asEmu(25400), color: { kind: "srgb", hex: "aa00aa" } },
+      },
+      body: { anchor: "middle" },
+      paragraphs: [
+        {
+          properties: { align: "center" },
+          runs: [{ text: "Shape label", properties: { bold: true } }],
+        },
+      ],
+      name: "Styled Shape",
+    });
+    const lineShape = addShape(edited, edited.slides[0].handle!, {
+      preset: "line",
+      offsetX: asEmu(1),
+      offsetY: asEmu(2),
+      width: asEmu(3),
+      height: asEmu(4),
+      outline: {
+        tailEnd: { type: "triangle", width: "med", length: "med" },
+      },
+      name: "Line Shape",
+    });
+    const ellipseShape = addShape(lineShape, lineShape.slides[0].handle!, {
+      preset: "ellipse",
+      offsetX: asEmu(5),
+      offsetY: asEmu(6),
+      width: asEmu(7),
+      height: asEmu(8),
+      name: "Ellipse Shape",
+    });
+    const output = writePptx(ellipseShape);
+    const reread = readPptx(output);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+    const solid = requireShape(findShapeByName(reread, "Solid Rect"));
+    const styled = requireShape(findShapeByName(reread, "Styled Shape"));
+
+    expect(reread.diagnostics).toEqual([]);
+    expect(solid).toMatchObject({
+      geometry: { preset: "rect" },
+      fill: { kind: "solid", color: { kind: "srgb", hex: "112233" } },
+    });
+    expect(styled).toMatchObject({
+      geometry: { preset: "roundRect" },
+      transform: { rotation: 5400000 },
+      fill: {
+        kind: "gradient",
+        gradientType: "linear",
+        angle: 2700000,
+      },
+      outline: {
+        width: 12700,
+        fill: { kind: "solid", color: { kind: "srgb", hex: "00AA44" } },
+        dashStyle: "dash",
+        headEnd: { type: "oval", width: "sm", length: "sm" },
+        tailEnd: { type: "triangle", width: "med", length: "lg" },
+      },
+      effects: {
+        glow: { radius: 25400, color: { kind: "srgb", hex: "AA00AA" } },
+      },
+    });
+    expect(styled.textBody?.paragraphs[0]?.runs[0]?.text).toBe("Shape label");
+    expect(findShapeByName(reread, "Line Shape").geometry).toEqual({ preset: "line" });
+    expect(findShapeByName(reread, "Ellipse Shape").geometry).toEqual({ preset: "ellipse" });
+    expect(slideXml).toContain(`<a:prstGeom prst="rect"`);
+    expect(slideXml).toContain(`<a:prstGeom prst="roundRect"`);
+    expect(slideXml).toContain(`<a:prstGeom prst="line"`);
+    expect(slideXml).toContain(`<a:prstGeom prst="ellipse"`);
+    expect(slideXml).toContain(`<a:solidFill><a:srgbClr val="112233"/></a:solidFill>`);
+    expect(slideXml).toContain(`<a:gradFill><a:gsLst>`);
+    expect(slideXml).toContain(`<a:lin ang="2700000" scaled="1"/>`);
+    expect(slideXml).toContain(
+      `<a:ln w="12700"><a:solidFill><a:srgbClr val="00AA44"/></a:solidFill><a:prstDash val="dash"/>`,
+    );
+    expect(slideXml).toContain(`<a:headEnd type="oval" w="sm" len="sm"`);
+    expect(slideXml).toContain(`<a:tailEnd type="triangle" w="med" len="lg"`);
+    expect(slideXml).toContain(
+      `<a:effectLst><a:glow rad="25400"><a:srgbClr val="AA00AA"/></a:glow></a:effectLst>`,
+    );
+    expect(slideXml).toContain(`<p:txBody>`);
+    expect(slideXml).toContain(`<a:t>Shape label</a:t>`);
+    expect(slideXml).toContain(`<a:xfrm rot="5400000">`);
   });
 
   it("writes custom slide size without fixed 16:9 metadata", () => {
