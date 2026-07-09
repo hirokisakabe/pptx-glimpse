@@ -370,8 +370,7 @@ function appendShapeTreeNodeAtEnd(spTree: XmlNode, preferredKey: string, value: 
       existingKey = key;
       if (Array.isArray(entryValue)) {
         existingValues.push(...unsafeOoxmlBoundaryAssertion<unknown[]>(entryValue));
-      }
-      else existingValues.push(entryValue);
+      } else existingValues.push(entryValue);
       continue;
     }
     retainedEntries.push([key, entryValue]);
