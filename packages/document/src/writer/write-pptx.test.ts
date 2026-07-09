@@ -1496,6 +1496,34 @@ describe("writePptx - shape add/delete edits", () => {
     expect(() => findShapeByName(reread, "Keep Shape")).toThrow(/shape not found/);
   });
 
+  it("does not reuse a pending-deleted shape id when adding a picture", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const deletedMaxIdShape = deleteShape(
+      source,
+      requireHandle(findShapeByName(source, "Keep Shape").handle),
+    );
+    const edited = addPicture(deletedMaxIdShape, deletedMaxIdShape.slides[0].handle!, {
+      bytes: RED_PNG,
+      offsetX: asEmu(900),
+      offsetY: asEmu(1000),
+      width: asEmu(1100),
+      height: asEmu(1200),
+    });
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+    const picture = reread.slides[0]?.shapes.find(
+      (shape) => shape.kind === "image" && shape.name === "Picture 31",
+    );
+
+    expect(picture).toMatchObject({
+      kind: "image",
+      nodeId: "31",
+      name: "Picture 31",
+      blipRelationshipId: "rId1",
+    });
+    expect(() => findShapeByName(reread, "Keep Shape")).toThrow(/shape not found/);
+  });
+
   it("cancels the add edit when a newly-added text box is deleted before write", () => {
     const source = readPptx(buildShapeDeleteFixture());
     const withTextBox = addTextBox(source, source.slides[0].handle!, {

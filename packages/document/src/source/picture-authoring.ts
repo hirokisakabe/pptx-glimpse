@@ -1,4 +1,4 @@
-import { sourceHandlesEqual } from "./edit-descriptors.js";
+import { editReservedShapeId, sourceHandlesEqual } from "./edit-descriptors.js";
 import { copyBytes, IMAGE_REL_TYPE, relativeTarget } from "./editing-shared.js";
 import { asPartPath, type PartPath } from "./handles.js";
 import type {
@@ -229,22 +229,20 @@ function nextMediaPartPath(
 
 function nextPictureShapeId(source: PptxSourceModel, slidePartPath: PartPath): string {
   const slide = source.slides.find((candidate) => candidate.partPath === slidePartPath);
-  const used = new Set<string>();
+  const used = new Set<number>();
   if (slide !== undefined) collectShapeIds(slide.shapes, used);
   for (const edit of source.edits ?? []) {
-    if (
-      (edit.kind === "addTextBox" || edit.kind === "addConnector" || edit.kind === "addPicture") &&
-      edit.slidePartPath === slidePartPath
-    ) {
-      used.add(edit.shapeId);
-    }
+    const numericId = Number(editReservedShapeId(edit, slidePartPath));
+    if (Number.isInteger(numericId) && numericId > 0) used.add(numericId);
   }
-  return nextNumberedName(used, /^(\d+)$/, String);
+  const usedNames = new Set([...used].map(String));
+  return nextNumberedName(usedNames, /^(\d+)$/, String);
 }
 
-function collectShapeIds(shapes: readonly SourceShapeNode[], used: Set<string>): void {
+function collectShapeIds(shapes: readonly SourceShapeNode[], used: Set<number>): void {
   for (const shape of shapes) {
-    if (shape.nodeId !== undefined && /^\d+$/.test(shape.nodeId)) used.add(shape.nodeId);
+    const numericId = Number(shape.nodeId);
+    if (Number.isInteger(numericId) && numericId > 0) used.add(numericId);
     if (shape.kind === "group") collectShapeIds(shape.children, used);
   }
 }
