@@ -1,5 +1,12 @@
 # @pptx-glimpse/document
 
+## 0.6.0
+
+### Minor Changes
+
+- f20f4b4: Add `addPicture` for from-scratch writer flows, including PNG/JPEG media part creation, slide image relationships, content type registration, and `p:pic` XML generation.
+- 1d69ee3: Add a from-scratch writer API for preset geometry shapes with fill, line, glow, rotation, and text body options.
+
 ## 0.5.0
 
 ### Minor Changes
