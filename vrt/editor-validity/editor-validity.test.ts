@@ -9,6 +9,7 @@ import {
   addConnector,
   addEmptySlideFromLayout,
   addShape,
+  addTable,
   addTextBox,
   asEmu,
   asHundredthPt,
@@ -341,6 +342,33 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
     renderSingleWithLibreOffice(
       libreOfficeImage,
       "editor-validity-from-scratch-formatted-text-box.pptx",
+      writePptx(edited),
+    );
+  });
+
+  it("opens from-scratch PPTX after adding a native table", () => {
+    const source = createPptx();
+    const edited = addTable(source, requireHandle(source.slides[0]?.handle), {
+      offsetX: asEmu(914400),
+      offsetY: asEmu(914400),
+      width: asEmu(5486400),
+      height: asEmu(1828800),
+      columnWidths: [asEmu(2743200), asEmu(2743200)],
+      rows: [
+        {
+          height: asEmu(914400),
+          cells: [{ text: "Native table", fill: "4472C4", colspan: 2 }, {}],
+        },
+        {
+          height: asEmu(914400),
+          cells: [{ text: "LibreOffice" }, { text: "validity" }],
+        },
+      ],
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-from-scratch-native-table.pptx",
       writePptx(edited),
     );
   });
