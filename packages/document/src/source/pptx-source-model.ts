@@ -75,6 +75,7 @@ export type PptxSourceModelEdit =
   | PptxSourceModelAddConnectorEdit
   | PptxSourceModelAddPictureEdit
   | PptxSourceModelAddChartEdit
+  | PptxSourceModelAddTableEdit
   | PptxSourceModelDeleteShapeEdit
   | PptxSourceModelReplaceImageEdit
   | PptxSourceModelAddEmptySlideFromLayoutEdit
@@ -209,6 +210,14 @@ export interface PptxSourceModelAddChartEdit {
   readonly relationshipId: RelationshipId;
   readonly chartPartPath: PartPath;
   readonly workbookPartPath: PartPath;
+  /** Serialized `p:graphicFrame` fragment finalized at edit time. */
+  readonly xml: string;
+}
+
+export interface PptxSourceModelAddTableEdit {
+  readonly kind: "addTable";
+  readonly slidePartPath: PartPath;
+  readonly shapeId: string;
   /** Serialized `p:graphicFrame` fragment finalized at edit time. */
   readonly xml: string;
 }

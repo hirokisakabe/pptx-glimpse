@@ -11,6 +11,7 @@ import type {
   PptxSourceModelAddConnectorEdit,
   PptxSourceModelAddPictureEdit,
   PptxSourceModelAddShapeEdit,
+  PptxSourceModelAddTableEdit,
   PptxSourceModelAddTextBoxEdit,
   PptxSourceModelDeleteShapeEdit,
   PptxSourceModelEdit,
@@ -114,6 +115,9 @@ function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
       return;
     case "addShape":
       applyAddShapeEdit(root, edit);
+      return;
+    case "addTable":
+      applyAddTableEdit(root, edit);
       return;
     case "addConnector":
       applyAddConnectorEdit(root, edit);
@@ -313,6 +317,22 @@ function applyAddTextBoxEdit(root: XmlNode, edit: PptxSourceModelAddTextBoxEdit)
 
 function applyAddShapeEdit(root: XmlNode, edit: PptxSourceModelAddShapeEdit): void {
   applyAddSpEdit(root, edit);
+}
+
+function applyAddTableEdit(root: XmlNode, edit: PptxSourceModelAddTableEdit): void {
+  const slide = getChild(root, "sld");
+  if (slide !== undefined) ensurePictureNamespaces(slide);
+  const spTree = getChild(getChild(slide, "cSld"), "spTree");
+  if (spTree === undefined)
+    throw new Error(`writePptx: slide '${edit.slidePartPath}' has no spTree`);
+  if (locateShapeTreeNode(spTree, { nodeId: edit.shapeId }) !== undefined) {
+    throw new Error(`writePptx: shape id '${edit.shapeId}' already exists in source XML`);
+  }
+  appendShapeTreeNodeAtEnd(
+    spTree,
+    "p:graphicFrame",
+    parseShapeFragmentXml(edit.xml, "graphicFrame"),
+  );
 }
 
 function applyAddSpEdit(

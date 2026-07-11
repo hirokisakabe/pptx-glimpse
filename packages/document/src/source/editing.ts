@@ -68,6 +68,15 @@ export {
   duplicateSlide,
   moveSlide,
 } from "./slide-topology.js";
+export type {
+  AddTableBorderInput,
+  AddTableCellInput,
+  AddTableInput,
+  AddTableRowInput,
+  AddTableRunInput,
+  AddTableRunPropertiesInput,
+} from "./table-authoring.js";
+export { addTable } from "./table-authoring.js";
 export {
   clearParagraphProperties,
   clearTextRunProperties,
