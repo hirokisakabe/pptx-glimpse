@@ -21,6 +21,7 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
       case "addShape":
       case "addConnector":
       case "addPicture":
+      case "addChart":
       case "addTable": {
         const key = [edit.slidePartPath, edit.shapeId].join("\u0000");
         if (addedShapeKeys.has(key)) {

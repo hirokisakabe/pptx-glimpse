@@ -39,6 +39,32 @@ const CONVERTER_TEST_SCOPE = [
   "existing SVG to PNG conversion",
 ] as const;
 
+describe("native chart writer renderer integration", () => {
+  it("renders every chart type produced by the document builder", async () => {
+    const source = document.createPptx();
+    const handle = source.slides[0]?.handle;
+    if (handle === undefined) throw new Error("createPptx should create a slide");
+    const types = ["bar", "line", "pie", "area", "doughnut", "radar"] as const;
+    const edited = types.reduce(
+      (current, chartType, index) =>
+        document.addChart(current, handle, {
+          chartType,
+          offsetX: document.asEmu(index * 1400000),
+          offsetY: document.asEmu(400000),
+          width: document.asEmu(1300000),
+          height: document.asEmu(1800000),
+          title: `Native ${chartType}`,
+          series: [{ name: "Series", categories: ["A", "B", "C"], values: [1, 3, 2] }],
+        }),
+      source,
+    );
+
+    const result = await convertPptxToSvg(document.writePptx(edited));
+    expect(result.slides).toHaveLength(1);
+    for (const chartType of types) expect(result.slides[0]?.svg).toContain(`Native ${chartType}`);
+  });
+});
+
 const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>

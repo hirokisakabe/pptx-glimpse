@@ -58,6 +58,10 @@ export { createComputedView } from "./computed/index.js";
 export type { ReadPptxInput } from "./reader/index.js";
 export { readPptx } from "./reader/index.js";
 export type {
+  AddChartAxisInput,
+  AddChartInput,
+  AddChartPlotLayoutInput,
+  AddChartSeriesInput,
   AddConnectorConnectionEndpointInput,
   AddConnectorInput,
   AddConnectorOutlineInput,
@@ -111,6 +115,9 @@ export type {
   HundredthPt,
   MediaPart,
   MoveSlideInput,
+  NativeChartLegendPosition,
+  NativeChartType,
+  NativeRadarStyle,
   OoxmlAngle,
   OoxmlPercent,
   PackageGraph,
@@ -118,6 +125,7 @@ export type {
   PartPath,
   PartRelationships,
   PptxSourceModel,
+  PptxSourceModelAddChartEdit,
   PptxSourceModelAddConnectorEdit,
   PptxSourceModelAddEmptySlideFromLayoutEdit,
   PptxSourceModelAddPictureEdit,
@@ -229,6 +237,7 @@ export type {
   UpdateShapeTransformInput,
 } from "./source/index.js";
 export {
+  addChart,
   addConnector,
   addEmptySlideFromLayout,
   addPicture,

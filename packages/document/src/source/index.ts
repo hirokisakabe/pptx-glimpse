@@ -4,6 +4,10 @@
 
 export type { Diagnostic, DiagnosticSeverity } from "./diagnostics.js";
 export type {
+  AddChartAxisInput,
+  AddChartInput,
+  AddChartPlotLayoutInput,
+  AddChartSeriesInput,
   AddConnectorConnectionEndpointInput,
   AddConnectorInput,
   AddConnectorOutlineInput,
@@ -42,9 +46,13 @@ export type {
   AddTextBoxUnderlineInput,
   AddTextBoxUnderlineStyle,
   MoveSlideInput,
+  NativeChartLegendPosition,
+  NativeChartType,
+  NativeRadarStyle,
   UpdateShapeTransformInput,
 } from "./editing.js";
 export {
+  addChart,
   addConnector,
   addEmptySlideFromLayout,
   addPicture,
@@ -97,6 +105,7 @@ export type {
   EditableTextRunProperties,
   EditableTextRunProperty,
   PptxSourceModel,
+  PptxSourceModelAddChartEdit,
   PptxSourceModelAddConnectorEdit,
   PptxSourceModelAddEmptySlideFromLayoutEdit,
   PptxSourceModelAddPictureEdit,
