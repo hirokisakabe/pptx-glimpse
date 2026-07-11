@@ -6,6 +6,7 @@ import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  addChart,
   addConnector,
   addEmptySlideFromLayout,
   addShape,
@@ -261,6 +262,33 @@ describeOrSkip("LibreOffice slide topology validity", { timeout: 120000 }, () =>
 });
 
 describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 120000 }, () => {
+  it("opens from-scratch PPTX with native charts and embedded workbooks", () => {
+    const source = createPptx();
+    const handle = requireHandle(source.slides[0]?.handle);
+    const types = ["bar", "line", "pie", "area", "doughnut", "radar"] as const;
+    const edited = types.reduce(
+      (current, chartType, index) =>
+        addChart(current, handle, {
+          chartType,
+          offsetX: asEmu(index * 1400000),
+          offsetY: asEmu(400000),
+          width: asEmu(1300000),
+          height: asEmu(1800000),
+          title: chartType,
+          series: [
+            { name: "Plan", categories: ["Q1", "Q2", "Q3"], values: [10, 20, 15] },
+            { name: "Actual", categories: ["Q1", "Q2", "Q3"], values: [12, 18, 17] },
+          ],
+        }),
+      source,
+    );
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-from-scratch-native-charts.pptx",
+      writePptx(edited),
+    );
+  });
+
   it("opens from-scratch PPTX after adding a text box", () => {
     const source = createPptx();
     const edited = addTextBox(source, requireHandle(source.slides[0]?.handle), {

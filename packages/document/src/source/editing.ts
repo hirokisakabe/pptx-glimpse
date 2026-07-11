@@ -6,6 +6,16 @@
  * evolve independently while preserving the historical ./editing.js import path.
  */
 
+export type {
+  AddChartAxisInput,
+  AddChartInput,
+  AddChartPlotLayoutInput,
+  AddChartSeriesInput,
+  NativeChartLegendPosition,
+  NativeChartType,
+  NativeRadarStyle,
+} from "./chart-authoring.js";
+export { addChart } from "./chart-authoring.js";
 export { replaceImageBytes } from "./image-replacement.js";
 export type { AddPictureCropInput, AddPictureInput } from "./picture-authoring.js";
 export { addPicture } from "./picture-authoring.js";

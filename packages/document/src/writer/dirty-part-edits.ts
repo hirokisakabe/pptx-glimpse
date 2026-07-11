@@ -7,6 +7,7 @@ import type {
   EditableTextRunProperties,
   PartPath,
   PptxSourceModel,
+  PptxSourceModelAddChartEdit,
   PptxSourceModelAddConnectorEdit,
   PptxSourceModelAddPictureEdit,
   PptxSourceModelAddShapeEdit,
@@ -119,6 +120,9 @@ function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
       return;
     case "addPicture":
       applyAddPictureEdit(root, edit);
+      return;
+    case "addChart":
+      applyAddChartEdit(root, edit);
       return;
     case "deleteShape":
       applyDeleteShapeEdit(root, edit);
@@ -369,6 +373,22 @@ function applyAddPictureEdit(root: XmlNode, edit: PptxSourceModelAddPictureEdit)
   appendShapeTreeNodeAtEnd(spTree, "p:pic", parseShapeFragmentXml(edit.xml, "pic"));
 }
 
+function applyAddChartEdit(root: XmlNode, edit: PptxSourceModelAddChartEdit): void {
+  const slide = getChild(root, "sld");
+  if (slide !== undefined) ensurePictureNamespaces(slide);
+  const spTree = getChild(getChild(slide, "cSld"), "spTree");
+  if (spTree === undefined)
+    throw new Error(`writePptx: slide '${edit.slidePartPath}' has no spTree`);
+  if (locateShapeTreeNode(spTree, { nodeId: edit.shapeId }) !== undefined) {
+    throw new Error(`writePptx: shape id '${edit.shapeId}' already exists in source XML`);
+  }
+  appendShapeTreeNodeAtEnd(
+    spTree,
+    "p:graphicFrame",
+    parseShapeFragmentXml(edit.xml, "graphicFrame"),
+  );
+}
+
 function ensurePictureNamespaces(slide: XmlNode): void {
   slide["@_xmlns:a"] ??= "http://schemas.openxmlformats.org/drawingml/2006/main";
   slide["@_xmlns:r"] ??= "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
@@ -549,7 +569,10 @@ function insertChildByOrder(
  * element. The writer does not generate shape XML content; it only splices the
  * pre-serialized fragment into the target `p:spTree`.
  */
-function parseShapeFragmentXml(xml: string, rootLocalName: "sp" | "cxnSp" | "pic"): XmlNode {
+function parseShapeFragmentXml(
+  xml: string,
+  rootLocalName: "sp" | "cxnSp" | "pic" | "graphicFrame",
+): XmlNode {
   const node = getChild(parseXml(xml), rootLocalName);
   if (node === undefined) {
     throw new Error(

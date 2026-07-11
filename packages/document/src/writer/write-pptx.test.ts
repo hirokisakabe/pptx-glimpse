@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 // Import via the actual public surface (`@pptx-glimpse/document`).
 import {
+  addChart,
   addPicture,
   asEmu,
   asHundredthPt,
@@ -592,6 +593,83 @@ function findTextRun(source: ReturnType<typeof readPptx>, text: string): SourceT
 }
 
 describe("writePptx - from-scratch builder", () => {
+  it("writes all native chart types with editable workbooks and consistent package metadata", () => {
+    const source = createPptx();
+    const slideHandle = source.slides[0]?.handle;
+    if (slideHandle === undefined) throw new Error("createPptx should create a first slide");
+    const types = ["bar", "line", "pie", "area", "doughnut", "radar"] as const;
+    const edited = types.reduce(
+      (current, chartType, index) =>
+        addChart(current, slideHandle, {
+          chartType,
+          offsetX: asEmu(index * 1200000),
+          offsetY: asEmu(200000),
+          width: asEmu(1100000),
+          height: asEmu(1800000),
+          title: `${chartType} title`,
+          showLegend: true,
+          legendPosition: "b",
+          series: [
+            { name: "Revenue", categories: ["Q1", "Q2"], values: [10, 20], color: "#4472C4" },
+            { name: "Cost", categories: ["Q1", "Q2"], values: [7, 12], color: "ED7D31" },
+          ],
+          ...(chartType === "radar" ? { radarStyle: "filled" as const } : {}),
+          ...(chartType === "doughnut" ? { holeSize: 60 } : {}),
+          ...(chartType === "bar"
+            ? {
+                categoryAxis: { hidden: true, lineVisible: false, gridLinesVisible: false },
+                valueAxis: { hidden: true, lineVisible: false, gridLinesVisible: false },
+                plotLayout: { x: 0, y: 0, width: 1, height: 1 },
+              }
+            : {}),
+        }),
+      source,
+    );
+
+    const output = writePptx(edited);
+    const archive = unzipSync(output);
+    const contentTypes = decoder.decode(archive["[Content_Types].xml"]);
+    const slideXml = decoder.decode(archive["ppt/slides/slide1.xml"]);
+    const slideRels = decoder.decode(archive["ppt/slides/_rels/slide1.xml.rels"]);
+    expect(contentTypes.match(/drawingml\.chart\+xml/g)).toHaveLength(6);
+    expect(contentTypes.match(/spreadsheetml\.sheet/g)).toHaveLength(6);
+    expect(slideXml.match(/<c:chart /g)).toHaveLength(6);
+    expect(slideRels.match(/relationships\/chart/g)).toHaveLength(6);
+
+    for (let index = 1; index <= 6; index += 1) {
+      const chartXml = decoder.decode(archive[`ppt/charts/chart${index}.xml`]);
+      const chartRels = decoder.decode(archive[`ppt/charts/_rels/chart${index}.xml.rels`]);
+      const workbook = archive[`ppt/embeddings/Microsoft_Excel_Worksheet${index}.xlsx`];
+      expect(chartXml).toContain(`<c:${types[index - 1]}Chart>`);
+      expect(chartXml).toContain("Sheet1!$B$2:$B$3");
+      expect(chartXml).toContain(`<c:v>Revenue</c:v>`);
+      expect(chartXml).toContain(`<c:v>Q2</c:v>`);
+      expect(chartXml).toContain(`<c:v>20</c:v>`);
+      expect(chartRels).toContain(`Target="../embeddings/Microsoft_Excel_Worksheet${index}.xlsx"`);
+      const worksheet = decoder.decode(unzipSync(workbook)["xl/worksheets/sheet1.xml"]);
+      expect(worksheet).toContain(`<t>Revenue</t>`);
+      expect(worksheet).toContain(`<t>Q2</t>`);
+      expect(worksheet).toContain(`<c r="B3"><v>20</v></c>`);
+    }
+    expect(decoder.decode(archive["ppt/charts/chart1.xml"])).toContain(`<c:manualLayout>`);
+    expect(decoder.decode(archive["ppt/charts/chart1.xml"])).toContain(`<c:delete val="1"/>`);
+    expect(decoder.decode(archive["ppt/charts/chart5.xml"])).toContain(`<c:holeSize val="60"/>`);
+    expect(decoder.decode(archive["ppt/charts/chart6.xml"])).toContain(
+      `<c:radarStyle val="filled"/>`,
+    );
+
+    const reread = readPptx(output);
+    expect(reread.diagnostics).toEqual([]);
+    expect(createComputedView(reread).slides[0]?.elements.map((element) => element.kind)).toEqual(
+      types.map(() => "chart"),
+    );
+    expect(
+      createComputedView(reread).slides[0]?.elements.map((element) =>
+        element.kind === "chart" ? element.chartData?.chartType : undefined,
+      ),
+    ).toEqual(types);
+  });
+
   it("writes a new presentation after adding a text box through public APIs", () => {
     const source = createPptx();
     const slideHandle = source.slides[0]?.handle;

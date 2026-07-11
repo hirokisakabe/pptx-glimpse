@@ -199,6 +199,22 @@ const EDIT_KIND_DESCRIPTORS: {
     insertedSlidePartPath: () => undefined,
     insertedShape: (edit) => ({ slidePartPath: edit.slidePartPath, shapeId: edit.shapeId }),
   },
+  addChart: {
+    reservedPartPaths: (edit) => [edit.slidePartPath, edit.chartPartPath, edit.workbookPartPath],
+    dirtyPartPath: (edit) => edit.slidePartPath,
+    targetsShape: (edit, shapeHandle) =>
+      edit.slidePartPath === shapeHandle.partPath && edit.shapeId === String(shapeHandle.nodeId),
+    invalidatingPartPaths: (edit) => [
+      edit.slidePartPath,
+      edit.chartPartPath,
+      edit.workbookPartPath,
+    ],
+    reservedShapeId: (edit, slidePartPath) =>
+      edit.slidePartPath === slidePartPath ? edit.shapeId : undefined,
+    slideTopologyOperation: () => undefined,
+    insertedSlidePartPath: () => undefined,
+    insertedShape: (edit) => ({ slidePartPath: edit.slidePartPath, shapeId: edit.shapeId }),
+  },
   deleteShape: {
     reservedPartPaths: () => [],
     dirtyPartPath: (edit) => edit.handle.partPath,
