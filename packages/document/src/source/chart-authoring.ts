@@ -1,5 +1,6 @@
 import { zipSync } from "fflate";
 
+import { getAttr, getChild, parseXml } from "../reader/xml.js";
 import { editReservedShapeId, sourceHandlesEqual } from "./edit-descriptors.js";
 import { relativeTarget } from "./editing-shared.js";
 import { asRelationshipId, type PartPath } from "./handles.js";
@@ -72,6 +73,19 @@ const CHART_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/re
 const PACKAGE_REL_TYPE =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package";
 const encoder = new TextEncoder();
+const decoder = new TextDecoder();
+const CHART_TYPES: ReadonlySet<string> = new Set([
+  "bar",
+  "line",
+  "pie",
+  "area",
+  "doughnut",
+  "radar",
+]);
+const LEGEND_POSITIONS: ReadonlySet<string> = new Set(["b", "t", "l", "r", "tr"]);
+const RADAR_STYLES: ReadonlySet<string> = new Set(["standard", "marker", "filled"]);
+const XLSX_MAX_SERIES = 16_383;
+const XLSX_MAX_DATA_POINTS = 1_048_575;
 
 export function addChart(
   source: PptxSourceModel,
@@ -243,7 +257,7 @@ function buildSeriesXml(
 }
 
 function stringCache(values: readonly string[]): string {
-  return `<c:strCache><c:ptCount val="${values.length}"/>${values.map((value, index) => `<c:pt idx="${index}"><c:v>${escapeXml(value)}</c:v></c:pt>`).join("")}</c:strCache>`;
+  return `<c:strCache><c:ptCount val="${values.length}"/>${values.map((value, index) => `<c:pt idx="${index}">${textElement("c:v", value)}</c:pt>`).join("")}</c:strCache>`;
 }
 
 function numberCache(values: readonly number[]): string {
@@ -261,7 +275,7 @@ function axisShapeProperties(visible: boolean | undefined): string {
 }
 
 function buildTitleXml(title: string): string {
-  return `<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/><a:t>${escapeXml(title)}</a:t></a:r></a:p></c:rich></c:tx><c:layout/><c:overlay val="0"/></c:title>`;
+  return `<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/>${textElement("a:t", title)}</a:r></a:p></c:rich></c:tx><c:layout/><c:overlay val="0"/></c:title>`;
 }
 
 function buildManualLayout(layout: AddChartPlotLayoutInput): string {
@@ -275,13 +289,13 @@ function buildEmbeddedWorkbook(series: readonly AddChartSeriesInput[]): Uint8Arr
   const cells: string[] = [`<c r="A1" t="inlineStr"><is><t>Category</t></is></c>`];
   series.forEach((item, index) =>
     cells.push(
-      `<c r="${spreadsheetColumn(index + 2)}1" t="inlineStr"><is><t>${escapeXml(item.name ?? `Series ${index + 1}`)}</t></is></c>`,
+      `<c r="${spreadsheetColumn(index + 2)}1" t="inlineStr"><is>${textElement("t", item.name ?? `Series ${index + 1}`)}</is></c>`,
     ),
   );
   const rowXml = [`<row r="1">${cells.join("")}</row>`];
   for (let row = 0; row < rows; row += 1) {
     const rowCells = [
-      `<c r="A${row + 2}" t="inlineStr"><is><t>${escapeXml(series[0].categories[row])}</t></is></c>`,
+      `<c r="A${row + 2}" t="inlineStr"><is>${textElement("t", series[0].categories[row])}</is></c>`,
     ];
     series.forEach((item, index) =>
       rowCells.push(
@@ -325,6 +339,18 @@ function relationshipGroup(graph: PackageGraph, partPath: PartPath): PartRelatio
 
 function nextChartShapeId(source: PptxSourceModel, slidePartPath: PartPath): string {
   const used = new Set<string>();
+  const rawSlide = source.packageGraph.rawParts?.find((part) => part.partPath === slidePartPath);
+  if (rawSlide?.kind === "binary") {
+    const root = parseXml(decoder.decode(rawSlide.bytes));
+    const rootId = getAttr(
+      getChild(
+        getChild(getChild(getChild(getChild(root, "sld"), "cSld"), "spTree"), "nvGrpSpPr"),
+        "cNvPr",
+      ),
+      "id",
+    );
+    if (rootId !== undefined) used.add(rootId);
+  }
   const collect = (shapes: readonly SourceShapeNode[]) =>
     shapes.forEach((shape) => {
       if (shape.nodeId !== undefined) used.add(String(shape.nodeId));
@@ -343,6 +369,11 @@ function nextOrderingSlot(shapes: readonly { readonly handle?: SourceHandle }[])
 }
 
 function assertChartInput(input: AddChartInput): void {
+  if (!CHART_TYPES.has(input.chartType)) throw new Error("addChart: unsupported chartType");
+  if (input.legendPosition !== undefined && !LEGEND_POSITIONS.has(input.legendPosition))
+    throw new Error("addChart: unsupported legendPosition");
+  if (input.radarStyle !== undefined && !RADAR_STYLES.has(input.radarStyle))
+    throw new Error("addChart: unsupported radarStyle");
   for (const [field, value] of [
     ["offsetX", input.offsetX],
     ["offsetY", input.offsetY],
@@ -357,8 +388,15 @@ function assertChartInput(input: AddChartInput): void {
       throw new Error(`addChart: ${field} must be a finite positive EMU value`);
   }
   if (input.series.length === 0) throw new Error("addChart: series must not be empty");
+  if (input.series.length > XLSX_MAX_SERIES)
+    throw new Error(`addChart: series must not exceed ${XLSX_MAX_SERIES}`);
   const count = input.series[0].categories.length;
   if (count === 0) throw new Error("addChart: series categories must not be empty");
+  if (count > XLSX_MAX_DATA_POINTS)
+    throw new Error(`addChart: data points must not exceed ${XLSX_MAX_DATA_POINTS}`);
+  for (const text of [input.name, input.title, input.categoryAxis?.title, input.valueAxis?.title]) {
+    if (text !== undefined) assertValidXmlText(text);
+  }
   input.series.forEach((series) => {
     if (series.categories.length !== count || series.values.length !== count)
       throw new Error("addChart: every series must have matching category and value counts");
@@ -366,6 +404,8 @@ function assertChartInput(input: AddChartInput): void {
       throw new Error("addChart: every series must use identical category labels");
     if (series.values.some((value) => !Number.isFinite(value)))
       throw new Error("addChart: values must be finite numbers");
+    if (series.name !== undefined) assertValidXmlText(series.name);
+    series.categories.forEach(assertValidXmlText);
     if (series.color !== undefined) normalizeColor(series.color);
   });
   if (input.radarStyle !== undefined && input.chartType !== "radar")
@@ -405,4 +445,25 @@ function escapeXml(value: string): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
+}
+
+function textElement(tag: string, value: string): string {
+  const preserve = value.startsWith(" ") || value.endsWith(" ") ? ` xml:space="preserve"` : "";
+  return `<${tag}${preserve}>${escapeXml(value)}</${tag}>`;
+}
+
+function assertValidXmlText(value: string): void {
+  for (let index = 0; index < value.length; index += 1) {
+    const codePoint = value.codePointAt(index);
+    if (codePoint === undefined) continue;
+    const valid =
+      codePoint === 0x9 ||
+      codePoint === 0xa ||
+      codePoint === 0xd ||
+      (codePoint >= 0x20 && codePoint <= 0xd7ff) ||
+      (codePoint >= 0xe000 && codePoint <= 0xfffd) ||
+      (codePoint >= 0x10000 && codePoint <= 0x10ffff);
+    if (!valid) throw new Error("addChart: text contains a character forbidden by XML 1.0");
+    if (codePoint > 0xffff) index += 1;
+  }
 }

@@ -670,6 +670,41 @@ describe("writePptx - from-scratch builder", () => {
     ).toEqual(types);
   });
 
+  it("avoids the shape-tree root ID and rejects package-breaking chart inputs", () => {
+    const source = readPptx(buildShapeDeleteFixture());
+    const edited = addChart(source, source.slides[0].handle!, {
+      chartType: "bar",
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(1000),
+      height: asEmu(1000),
+      series: [{ categories: [" A "], values: [1], name: " Series " }],
+    });
+    const output = writePptx(edited);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+    const chartXml = decoder.decode(getEntry(output, "ppt/charts/chart1.xml"));
+    const worksheet = decoder.decode(
+      unzipSync(getEntry(output, "ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx"))[
+        "xl/worksheets/sheet1.xml"
+      ],
+    );
+    expect(slideXml).toContain(`<p:cNvPr id="31" name="Chart 31"/>`);
+    expect(chartXml).toContain(`<c:v xml:space="preserve"> Series </c:v>`);
+    expect(worksheet).toContain(`<t xml:space="preserve"> A </t>`);
+
+    const valid = {
+      chartType: "bar",
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(1000),
+      height: asEmu(1000),
+      series: [{ categories: ["A"], values: [1] }],
+    } as const;
+    expect(() =>
+      addChart(source, source.slides[0].handle!, { ...valid, title: "bad\u0000" }),
+    ).toThrow(/forbidden by XML 1.0/);
+  });
+
   it("writes a new presentation after adding a text box through public APIs", () => {
     const source = createPptx();
     const slideHandle = source.slides[0]?.handle;
