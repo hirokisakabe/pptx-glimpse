@@ -64,6 +64,7 @@ describe("addTable", () => {
     expect(slideXml).toContain('rowSpan="2"');
     expect(slideXml).toContain('vMerge="1"');
     expect(slideXml).toContain('<a:hlinkClick r:id="rId2"');
+    expect(slideXml).toContain('xml:space="preserve">Native ');
     expect(relsXml).toContain('Id="rId2"');
     expect(relsXml).toContain('Target="https://example.com/table"');
     expect(relsXml).toContain('TargetMode="External"');
@@ -76,5 +77,28 @@ describe("addTable", () => {
     expect(table?.table.rows[0].cells[0]).toMatchObject({ gridSpan: 2 });
     expect(table?.table.rows[0].cells[1]).toMatchObject({ hMerge: true });
     expect(table?.table.rows[1].cells[2]).toMatchObject({ vMerge: true });
+  });
+
+  it("rejects invalid and ambiguous spans", () => {
+    const source = createPptx();
+    const base = {
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(200),
+      height: asEmu(100),
+      columnWidths: [asEmu(100), asEmu(100)],
+    } as const;
+    expect(() =>
+      addTable(source, source.slides[0].handle!, {
+        ...base,
+        rows: [{ height: asEmu(100), cells: [{ colspan: 1.5 }, {}] }],
+      }),
+    ).toThrow("spans must be positive integers");
+    expect(() =>
+      addTable(source, source.slides[0].handle!, {
+        ...base,
+        rows: [{ height: asEmu(100), cells: [{ colspan: 2 }, { text: "covered" }] }],
+      }),
+    ).toThrow("cells covered by a span must be empty placeholders");
   });
 });

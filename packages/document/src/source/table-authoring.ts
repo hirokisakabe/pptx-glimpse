@@ -202,7 +202,7 @@ function cellXml(
           ...(run.properties !== undefined || run.hyperlink !== undefined
             ? { "a:rPr": runPropertiesXml(run, links) }
             : {}),
-          "a:t": run.text,
+          "a:t": textElementValue(run.text),
         })),
         "a:endParaRPr": {},
       },
@@ -220,6 +220,13 @@ function computeMergeFlags(
   const result = new Map<string, { horizontal: boolean; vertical: boolean }>();
   input.rows.forEach((row, rowIndex) =>
     row.cells.forEach((cell, columnIndex) => {
+      const currentKey = `${rowIndex}:${columnIndex}`;
+      if (result.has(currentKey)) {
+        if (!isEmptyMergeContinuation(cell)) {
+          throw new Error("addTable: cells covered by a span must be empty placeholders");
+        }
+        return;
+      }
       const colspan = cell.colspan ?? 1;
       const rowspan = cell.rowspan ?? 1;
       if (
@@ -284,6 +291,14 @@ function colorXml(hex: string): Record<string, unknown> {
   if (!/^[0-9a-f]{6}$/i.test(hex)) throw new Error("addTable: colors must be 6-digit RGB hex");
   return { "a:srgbClr": { "@_val": hex.toUpperCase() } };
 }
+function textElementValue(text: string): unknown {
+  return text.startsWith(" ") || text.endsWith(" ")
+    ? { "@_xml:space": "preserve", "#text": text }
+    : text;
+}
+function isEmptyMergeContinuation(cell: AddTableCellInput): boolean {
+  return Object.keys(cell).length === 0;
+}
 function assertInput(input: AddTableInput): void {
   for (const [name, value] of Object.entries({
     offsetX: input.offsetX,
@@ -309,8 +324,24 @@ function assertInput(input: AddTableInput): void {
     for (const cell of row.cells) {
       if (cell.text !== undefined && cell.runs !== undefined)
         throw new Error("addTable: specify cell text or runs, not both");
-      if ((cell.colspan ?? 1) < 1 || (cell.rowspan ?? 1) < 1)
+      if (
+        !Number.isInteger(cell.colspan ?? 1) ||
+        !Number.isInteger(cell.rowspan ?? 1) ||
+        (cell.colspan ?? 1) < 1 ||
+        (cell.rowspan ?? 1) < 1
+      )
         throw new Error("addTable: spans must be positive integers");
+      if (cell.runs?.length === 0) throw new Error("addTable: runs must not be empty");
+      for (const run of cell.runs ?? []) {
+        if (typeof run.text !== "string") throw new Error("addTable: run text must be a string");
+        if (run.hyperlink !== undefined && run.hyperlink.trim().length === 0)
+          throw new Error("addTable: hyperlink must not be empty");
+        if (
+          run.properties?.fontSize !== undefined &&
+          (!Number.isFinite(run.properties.fontSize) || run.properties.fontSize <= 0)
+        )
+          throw new Error("addTable: font size must be positive");
+      }
     }
   }
 }
