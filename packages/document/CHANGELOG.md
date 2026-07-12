@@ -1,5 +1,12 @@
 # @pptx-glimpse/document
 
+## 0.7.0
+
+### Minor Changes
+
+- b954ce5: from-scratch writer に、セル書式・結合・ハイパーリンクを含む native Table 生成 API を追加
+- 514df94: from-scratch writer に native Chart と編集可能な embedded workbook の生成 API を追加しました。
+
 ## 0.6.0
 
 ### Minor Changes
