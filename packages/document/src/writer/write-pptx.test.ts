@@ -903,6 +903,14 @@ describe("writePptx - from-scratch builder", () => {
       width: asEmu(300),
       height: asEmu(100),
     });
+    for (let index = 0; index < 4; index += 1) {
+      source = addSlideNumber(source, layoutHandle, {
+        offsetX: asEmu(60 + index),
+        offsetY: asEmu(70),
+        width: asEmu(300),
+        height: asEmu(100),
+      });
+    }
     source = addSlideNumber(source, masterHandle, {
       offsetX: asEmu(50),
       offsetY: asEmu(60),
@@ -916,7 +924,9 @@ describe("writePptx - from-scratch builder", () => {
     const layoutRels = decoder.decode(
       getEntry(output, "ppt/slideLayouts/_rels/slideLayout1.xml.rels"),
     );
-    const layoutFieldId = layoutXml.match(/<a:fld id="([^"]+)" type="slidenum"/)?.[1];
+    const layoutFieldIds = [...layoutXml.matchAll(/<a:fld id="([^"]+)" type="slidenum"/g)].map(
+      (match) => match[1],
+    );
     const masterFieldId = masterXml.match(/<a:fld id="([^"]+)" type="slidenum"/)?.[1];
     const reread = readPptx(output);
 
@@ -924,10 +934,11 @@ describe("writePptx - from-scratch builder", () => {
     expect(layoutXml).toContain("<p:cxnSp>");
     expect(layoutXml).toContain("<p:pic>");
     expect(layoutRels).toContain('Target="../media/image1.png"');
-    expect(layoutFieldId).toBeDefined();
+    expect(layoutFieldIds).toHaveLength(5);
+    expect(new Set(layoutFieldIds).size).toBe(5);
     expect(masterFieldId).toBeDefined();
-    expect(layoutFieldId).not.toBe(masterFieldId);
-    expect(reread.slideLayouts[0]?.shapes).toHaveLength(5);
+    expect(layoutFieldIds).not.toContain(masterFieldId);
+    expect(reread.slideLayouts[0]?.shapes).toHaveLength(9);
     expect(reread.slideMasters[0]?.shapes).toHaveLength(1);
     expect(reread.diagnostics).toEqual([]);
   });

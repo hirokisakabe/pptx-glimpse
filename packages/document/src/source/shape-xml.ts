@@ -313,10 +313,7 @@ function slideNumberFieldId(partPath: PartPath, shapeId: string): string {
     partHash = Math.imul(partHash, 16777619);
   }
   const prefix = (partHash >>> 0).toString(16).padStart(8, "0");
-  const suffix = shapeId
-    .replaceAll(/[^0-9A-Fa-f]/g, "")
-    .slice(-12)
-    .padStart(12, "0");
+  const suffix = Number.parseInt(shapeId, 10).toString(16).slice(-12).padStart(12, "0");
   return `{${prefix}-0000-4000-8000-${suffix}}`;
 }
 
