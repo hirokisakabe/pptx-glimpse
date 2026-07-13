@@ -1256,6 +1256,14 @@ describe("editing shape operations", () => {
     expect(() =>
       addShape(source, requireHandle(source.slides[0].handle), {
         ...baseShape,
+        geometry: { kind: "preset", preset: "roundRect", adjustValues: { " adj ": 25000 } },
+      }),
+    ).toThrow(
+      "addShape: geometry.adjustValues names must be non-empty and have no surrounding whitespace",
+    );
+    expect(() =>
+      addShape(source, requireHandle(source.slides[0].handle), {
+        ...baseShape,
         geometry: { kind: "custom", paths: [] },
       }),
     ).toThrow("addShape: geometry.paths must contain at least one path");

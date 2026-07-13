@@ -927,8 +927,10 @@ function assertShapeGeometry(geometry: unknown): asserts geometry is AddShapeGeo
         throw new Error("addShape: geometry.adjustValues must be an object");
       }
       for (const [name, value] of Object.entries(geometry.adjustValues)) {
-        if (name.trim() === "") {
-          throw new Error("addShape: geometry.adjustValues names must be non-empty");
+        if (name.trim() === "" || name !== name.trim()) {
+          throw new Error(
+            "addShape: geometry.adjustValues names must be non-empty and have no surrounding whitespace",
+          );
         }
         assertFiniteIntegerNumber(value, "addShape", `geometry.adjustValues.${name}`);
       }
