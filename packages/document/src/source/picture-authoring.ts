@@ -45,6 +45,13 @@ interface DetectedImageType {
   readonly extension: "png" | "jpeg";
 }
 
+interface PictureAuthoringTarget {
+  readonly kind: "slide" | "layout" | "master";
+  readonly index: number;
+  readonly partPath: PartPath;
+  readonly shapes: readonly SourceShapeNode[];
+}
+
 const IMAGE_MEDIA_PREFIX = "ppt/media/image";
 const RELS_CONTENT_TYPE = "application/vnd.openxmlformats-package.relationships+xml";
 
@@ -59,17 +66,16 @@ export function addPicture(
     throw new Error("addPicture: unsupported or unknown image format");
   }
 
-  const slideIndex = source.slides.findIndex((slide) =>
-    sourceHandlesEqual(slide.handle, slideHandle),
-  );
-  if (slideIndex === -1) {
-    throw new Error("addPicture: slide handle was not found in PptxSourceModel source");
+  const target = findPictureAuthoringTarget(source, slideHandle);
+  if (target === undefined) {
+    throw new Error(
+      "addPicture: slide, layout, or master handle was not found in PptxSourceModel source",
+    );
   }
 
-  const slide = source.slides[slideIndex];
-  const shapeId = nextPictureShapeId(source, slide.partPath);
+  const shapeId = nextPictureShapeId(source, target.partPath, target.shapes);
   const shapeIdValue = String(shapeId);
-  const relationshipGroup = relationshipGroupForSlide(source.packageGraph, slide.partPath);
+  const relationshipGroup = relationshipGroupForPart(source.packageGraph, target.partPath);
   const relationshipId = nextRelationshipId(relationshipGroup.relationships);
   const mediaPartPath = nextMediaPartPath(source.packageGraph, source.edits ?? [], imageType);
   const media: MediaPart = {
@@ -80,10 +86,10 @@ export function addPicture(
   const relationship: Relationship = {
     id: relationshipId,
     type: IMAGE_REL_TYPE,
-    target: relativeTarget(slide.partPath, mediaPartPath),
+    target: relativeTarget(target.partPath, mediaPartPath),
   };
   const name = input.name?.trim() || `Picture ${shapeIdValue}`;
-  const orderingSlot = nextOrderingSlot(slide.shapes);
+  const orderingSlot = nextOrderingSlot(target.shapes);
   const xml = buildPictureXml({
     shapeId: shapeIdValue,
     name,
@@ -95,14 +101,14 @@ export function addPicture(
     ...(input.rotation !== undefined ? { rotation: input.rotation } : {}),
     ...(input.crop !== undefined ? { crop: input.crop } : {}),
   });
-  const picture = parseShapeNodeXml(xml, slide.partPath, orderingSlot);
+  const picture = parseShapeNodeXml(xml, target.partPath, orderingSlot);
   if (picture.kind !== "image") {
     throw new Error("addPicture: finalized picture XML did not parse as a p:pic image");
   }
 
   const edit = {
     kind: "addPicture",
-    slidePartPath: slide.partPath,
+    slidePartPath: target.partPath,
     shapeId: shapeIdValue,
     relationshipId,
     mediaPartPath,
@@ -111,21 +117,13 @@ export function addPicture(
   } satisfies PptxSourceModelAddPictureEdit;
 
   return {
-    ...source,
+    ...withPictureAuthoringTargetShapes(source, target, [...target.shapes, picture]),
     packageGraph: addPicturePackageGraphEntries(
       source.packageGraph,
-      slide.partPath,
+      target.partPath,
       media,
       imageType.extension,
       relationship,
-    ),
-    slides: source.slides.map((candidate, index) =>
-      index === slideIndex
-        ? {
-            ...candidate,
-            shapes: [...candidate.shapes, picture],
-          }
-        : candidate,
     ),
     edits: [...(source.edits ?? []), edit],
   };
@@ -138,7 +136,7 @@ function addPicturePackageGraphEntries(
   extension: string,
   relationship: Relationship,
 ): PackageGraph {
-  const relationshipGroup = relationshipGroupForSlide(graph, slidePartPath);
+  const relationshipGroup = relationshipGroupForPart(graph, slidePartPath);
   const relationshipPartPath = asPartPath(relationshipsPartPath(slidePartPath));
   const hasRelationshipGroup = graph.relationships.some(
     (candidate) => candidate.sourcePartPath === slidePartPath,
@@ -190,10 +188,7 @@ function addPicturePackageGraphEntries(
   };
 }
 
-function relationshipGroupForSlide(
-  graph: PackageGraph,
-  slidePartPath: PartPath,
-): PartRelationships {
+function relationshipGroupForPart(graph: PackageGraph, slidePartPath: PartPath): PartRelationships {
   return (
     graph.relationships.find((candidate) => candidate.sourcePartPath === slidePartPath) ?? {
       sourcePartPath: slidePartPath,
@@ -227,10 +222,13 @@ function nextMediaPartPath(
   return nextNumberedPartPath(graph, reserved, IMAGE_MEDIA_PREFIX, `.${imageType.extension}`);
 }
 
-function nextPictureShapeId(source: PptxSourceModel, slidePartPath: PartPath): string {
-  const slide = source.slides.find((candidate) => candidate.partPath === slidePartPath);
+function nextPictureShapeId(
+  source: PptxSourceModel,
+  slidePartPath: PartPath,
+  shapes: readonly SourceShapeNode[],
+): string {
   const used = new Set<number>();
-  if (slide !== undefined) collectShapeIds(slide.shapes, used);
+  collectShapeIds(shapes, used);
   for (const edit of source.edits ?? []) {
     const numericId = Number(editReservedShapeId(edit, slidePartPath));
     if (Number.isInteger(numericId) && numericId > 0) used.add(numericId);
@@ -312,4 +310,60 @@ function detectSupportedImageType(bytes: Uint8Array): DetectedImageType | undefi
 function startsWithBytes(bytes: Uint8Array, prefix: readonly number[]): boolean {
   if (bytes.length < prefix.length) return false;
   return prefix.every((value, index) => bytes[index] === value);
+}
+
+function findPictureAuthoringTarget(
+  source: PptxSourceModel,
+  handle: SourceHandle,
+): PictureAuthoringTarget | undefined {
+  const groups = [
+    { kind: "slide" as const, values: source.slides },
+    { kind: "layout" as const, values: source.slideLayouts },
+    { kind: "master" as const, values: source.slideMasters },
+  ];
+  for (const group of groups) {
+    const index = group.values.findIndex((candidate) =>
+      sourceHandlesEqual(candidate.handle, handle),
+    );
+    if (index >= 0) {
+      const candidate = group.values[index];
+      return {
+        kind: group.kind,
+        index,
+        partPath: candidate.partPath,
+        shapes: candidate.shapes,
+      };
+    }
+  }
+  return undefined;
+}
+
+function withPictureAuthoringTargetShapes(
+  source: PptxSourceModel,
+  target: PictureAuthoringTarget,
+  shapes: readonly SourceShapeNode[],
+): PptxSourceModel {
+  switch (target.kind) {
+    case "slide":
+      return {
+        ...source,
+        slides: source.slides.map((candidate, index) =>
+          index === target.index ? { ...candidate, shapes } : candidate,
+        ),
+      };
+    case "layout":
+      return {
+        ...source,
+        slideLayouts: source.slideLayouts.map((candidate, index) =>
+          index === target.index ? { ...candidate, shapes } : candidate,
+        ),
+      };
+    case "master":
+      return {
+        ...source,
+        slideMasters: source.slideMasters.map((candidate, index) =>
+          index === target.index ? { ...candidate, shapes } : candidate,
+        ),
+      };
+  }
 }

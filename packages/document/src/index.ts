@@ -12,7 +12,13 @@
  * modules until those contracts are intentionally promoted.
  */
 
-export type { CreatePptxOptions } from "./builder/index.js";
+export type {
+  CreatePptxBackground,
+  CreatePptxOptions,
+  CreatePptxSlideLayoutOptions,
+  CreatePptxSlideMasterOptions,
+  SlideLayoutMargin,
+} from "./builder/index.js";
 export { createPptx } from "./builder/index.js";
 export type {
   ComputedBackground,
@@ -80,6 +86,7 @@ export type {
   AddShapeParagraphPropertiesInput,
   AddShapeRunInput,
   AddShapeRunPropertiesInput,
+  AddSlideNumberInput,
   AddTableBorderInput,
   AddTableCellInput,
   AddTableInput,
@@ -242,6 +249,7 @@ export {
   addEmptySlideFromLayout,
   addPicture,
   addShape,
+  addSlideNumber,
   addTable,
   addTextBox,
   clearParagraphProperties,

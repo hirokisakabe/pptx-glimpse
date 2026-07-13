@@ -16,6 +16,7 @@ import type {
   SourceFill,
   SourceOutline,
   SourceShapeNode,
+  SourceTextBodyProperties,
   SourceTextStyle,
 } from "./shapes.js";
 import type { Emu } from "./units.js";
@@ -84,6 +85,8 @@ export interface SourceTheme {
 /** Slide master part. References the theme and child layouts. */
 export interface SourceSlideMaster {
   readonly partPath: PartPath;
+  /** Author-visible name from `p:cSld@name`. */
+  readonly name?: string;
   /** Theme part referenced by this master. */
   readonly themePartPath?: PartPath;
   /** Layout parts belonging to this master. */
@@ -106,6 +109,8 @@ export interface SourceMasterTextStyles {
 /** Slide layout part. References the parent master. */
 export interface SourceSlideLayout {
   readonly partPath: PartPath;
+  /** Author-visible name from `p:cSld@name`. */
+  readonly name?: string;
   /** Parent slide master part for this layout. */
   readonly masterPartPath: PartPath;
   /** layout type (`p:sldLayout@type`). */
@@ -118,6 +123,12 @@ export interface SourceSlideLayout {
   /** `p:sldLayout@showMasterSp` (master shape visibility). */
   readonly showMasterShapes?: boolean;
   readonly shapes: readonly SourceShapeNode[];
+  /**
+   * From-scratch authoring default applied to text-bearing shapes added to slides that
+   * reference this layout. PowerPoint has no package-level layout margin property, so
+   * the resolved values are materialized into each authored shape's `a:bodyPr`.
+   */
+  readonly defaultTextBodyProperties?: SourceTextBodyProperties;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
 }

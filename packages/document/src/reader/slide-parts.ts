@@ -107,6 +107,7 @@ export function parseSlideLayout(
   orderedSpTree?: readonly XmlOrderedNode[],
 ): SourceSlideLayout {
   const cSld = getChild(root, "cSld");
+  const name = getAttr(cSld, "name");
   const type = getAttr(root, "type");
   const show = booleanAttr(root, "show");
   const background = parseBackground(getChild(cSld, "bg"), nextId);
@@ -116,6 +117,7 @@ export function parseSlideLayout(
   return {
     partPath,
     masterPartPath,
+    ...(name !== undefined ? { name } : {}),
     ...(type !== undefined ? { type } : {}),
     ...(show !== undefined ? { show } : {}),
     ...(background !== undefined ? { background } : {}),
@@ -136,12 +138,14 @@ export function parseSlideMaster(
   orderedSpTree?: readonly XmlOrderedNode[],
 ): SourceSlideMaster {
   const cSld = getChild(root, "cSld");
+  const name = getAttr(cSld, "name");
   const background = parseBackground(getChild(cSld, "bg"), nextId);
   const colorMap = parseColorMap(getChild(root, "clrMap"));
   const txStyles = parseMasterTextStyles(getChild(root, "txStyles"));
 
   return {
     partPath,
+    ...(name !== undefined ? { name } : {}),
     ...(themePartPath !== undefined ? { themePartPath } : {}),
     layoutPartPaths,
     ...(background !== undefined ? { background } : {}),

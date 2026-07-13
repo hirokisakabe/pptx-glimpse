@@ -9,7 +9,9 @@ import {
   addChart,
   addConnector,
   addEmptySlideFromLayout,
+  addPicture,
   addShape,
+  addSlideNumber,
   addTable,
   addTextBox,
   asEmu,
@@ -398,6 +400,72 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
       libreOfficeImage,
       "editor-validity-from-scratch-native-table.pptx",
       writePptx(edited),
+    );
+  });
+
+  it("opens a from-scratch PPTX with authored master objects and multiple slides", () => {
+    let source = createPptx({
+      slideMaster: {
+        name: "LibreOffice Authored Master",
+        background: { kind: "solid", color: { kind: "srgb", hex: "F1F5F9" } },
+      },
+      slideLayout: {
+        name: "LibreOffice Authored Layout",
+        margin: {
+          left: asEmu(120000),
+          right: asEmu(120000),
+          top: asEmu(80000),
+          bottom: asEmu(80000),
+        },
+      },
+    });
+    const masterHandle = requireHandle(source.slideMasters[0]?.handle);
+    const layout = source.slideLayouts[0];
+    if (layout === undefined) throw new Error("createPptx should create a layout");
+    source = addTextBox(source, masterHandle, {
+      offsetX: asEmu(300000),
+      offsetY: asEmu(180000),
+      width: asEmu(3000000),
+      height: asEmu(500000),
+      text: "Inherited master object",
+    });
+    source = addShape(source, masterHandle, {
+      preset: "rect",
+      offsetX: asEmu(0),
+      offsetY: asEmu(5000000),
+      width: asEmu(9144000),
+      height: asEmu(143500),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "4472C4" } },
+    });
+    source = addConnector(source, masterHandle, {
+      preset: "straightConnector1",
+      offsetX: asEmu(300000),
+      offsetY: asEmu(800000),
+      width: asEmu(2500000),
+      height: asEmu(1),
+    });
+    source = addPicture(source, masterHandle, {
+      bytes: BLUE_PNG,
+      offsetX: asEmu(8200000),
+      offsetY: asEmu(180000),
+      width: asEmu(500000),
+      height: asEmu(500000),
+    });
+    source = addSlideNumber(source, masterHandle, {
+      offsetX: asEmu(8200000),
+      offsetY: asEmu(4650000),
+      width: asEmu(500000),
+      height: asEmu(300000),
+      align: "right",
+      properties: { fontSize: asPt(12), color: { kind: "srgb", hex: "334155" } },
+    });
+    source = addEmptySlideFromLayout(source, { layoutPartPath: layout.partPath });
+    source = addEmptySlideFromLayout(source, { layoutPartPath: layout.partPath });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-from-scratch-authored-master.pptx",
+      writePptx(source),
     );
   });
 });

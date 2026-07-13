@@ -44,7 +44,6 @@ import type {
   SourceOutline,
   SourceShape,
   SourceShapeNode,
-  SourceSlide,
 } from "./index.js";
 import { nextNumberedName } from "./package-graph-mutations.js";
 import type {
@@ -70,6 +69,7 @@ import type {
 import {
   buildConnectorXml,
   buildShapeXml,
+  buildSlideNumberXml,
   buildTextBoxXml,
   parseShapeNodeXml,
 } from "./shape-xml.js";
@@ -164,6 +164,13 @@ export interface AddShapeInput extends UpdateShapeTransformInput {
   readonly name?: string;
 }
 
+export interface AddSlideNumberInput extends UpdateShapeTransformInput {
+  readonly properties?: AddTextBoxRunPropertiesInput;
+  readonly body?: AddTextBoxBodyPropertiesInput;
+  readonly align?: "left" | "center" | "right";
+  readonly name?: string;
+}
+
 export interface AddConnectorConnectionEndpointInput {
   readonly shapeHandle: SourceHandle;
   readonly connectionSiteIndex: number;
@@ -184,12 +191,19 @@ export interface AddConnectorInput extends UpdateShapeTransformInput {
 
 type StyleEditableShapeNode = SourceShape | SourceConnector;
 
+interface AuthoringTarget {
+  readonly kind: "slide" | "layout" | "master";
+  readonly index: number;
+  readonly partPath: PartPath;
+  readonly shapes: readonly SourceShapeNode[];
+}
+
 export function findShapeNodeBySourceHandle(
   source: PptxSourceModel,
   handle: SourceHandle,
 ): SourceShapeNode | undefined {
-  for (const slide of source.slides) {
-    const shape = findShapeNodeInTree(slide.shapes, handle);
+  for (const container of [...source.slides, ...source.slideLayouts, ...source.slideMasters]) {
+    const shape = findShapeNodeInTree(container.shapes, handle);
     if (shape !== undefined) return shape;
   }
   return undefined;
@@ -370,18 +384,17 @@ export function addTextBox(
   input: AddTextBoxInput,
 ): PptxSourceModel {
   assertTextBoxInput(input);
-  const slideIndex = source.slides.findIndex((slide) =>
-    sourceHandlesEqual(slide.handle, slideHandle),
-  );
-  if (slideIndex === -1) {
-    throw new Error("addTextBox: slide handle was not found in PptxSourceModel source");
+  const target = findAuthoringTarget(source, slideHandle);
+  if (target === undefined) {
+    throw new Error(
+      "addTextBox: slide, layout, or master handle was not found in PptxSourceModel source",
+    );
   }
-
-  const slide = source.slides[slideIndex];
-  const shapeId = nextShapeId(slide.shapes, source.edits ?? [], slide.partPath);
+  const body = mergeTextBodyProperties(defaultTextBodyProperties(source, target), input.body);
+  const shapeId = nextShapeId(target.shapes, source.edits ?? [], target.partPath);
   const shapeIdValue = String(shapeId);
   const name = input.name?.trim() || `TextBox ${shapeIdValue}`;
-  const orderingSlot = nextOrderingSlot(slide.shapes);
+  const orderingSlot = nextOrderingSlot(target.shapes);
   const xml = buildTextBoxXml({
     shapeId: shapeIdValue,
     name,
@@ -391,29 +404,57 @@ export function addTextBox(
     height: input.height,
     ...(input.rotation !== undefined ? { rotation: input.rotation } : {}),
     ...(input.paragraphs !== undefined ? { paragraphs: input.paragraphs } : { text: input.text }),
-    ...(input.body !== undefined ? { body: input.body } : {}),
+    ...(body !== undefined ? { body } : {}),
   });
-  const shape = parseShapeNodeXml(xml, slide.partPath, orderingSlot);
-  const slides = source.slides.map((candidate, index) =>
-    index === slideIndex
-      ? {
-          ...candidate,
-          shapes: [...candidate.shapes, shape],
-        }
-      : candidate,
-  );
+  const shape = parseShapeNodeXml(xml, target.partPath, orderingSlot);
 
   return {
-    ...source,
-    slides,
+    ...withAuthoringTargetShapes(source, target, [...target.shapes, shape]),
     edits: [
       ...(source.edits ?? []),
       {
         kind: "addTextBox",
-        slidePartPath: slide.partPath,
+        slidePartPath: target.partPath,
         shapeId: shapeIdValue,
         xml,
       },
+    ],
+  };
+}
+
+export function addSlideNumber(
+  source: PptxSourceModel,
+  targetHandle: SourceHandle,
+  input: AddSlideNumberInput,
+): PptxSourceModel {
+  assertSlideNumberInput(input);
+  const target = findAuthoringTarget(source, targetHandle);
+  if (target === undefined || target.kind === "slide") {
+    throw new Error(
+      "addSlideNumber: layout or master handle was not found in PptxSourceModel source",
+    );
+  }
+  const shapeId = nextShapeId(target.shapes, source.edits ?? [], target.partPath);
+  const shapeIdValue = String(shapeId);
+  const name = input.name?.trim() || `Slide Number ${shapeIdValue}`;
+  const orderingSlot = nextOrderingSlot(target.shapes);
+  const xml = buildSlideNumberXml({
+    shapeId: shapeIdValue,
+    name,
+    offsetX: input.offsetX,
+    offsetY: input.offsetY,
+    width: input.width,
+    height: input.height,
+    ...(input.properties !== undefined ? { properties: input.properties } : {}),
+    ...(input.body !== undefined ? { body: input.body } : {}),
+    ...(input.align !== undefined ? { align: input.align } : {}),
+  });
+  const shape = parseShapeNodeXml(xml, target.partPath, orderingSlot);
+  return {
+    ...withAuthoringTargetShapes(source, target, [...target.shapes, shape]),
+    edits: [
+      ...(source.edits ?? []),
+      { kind: "addTextBox", slidePartPath: target.partPath, shapeId: shapeIdValue, xml },
     ],
   };
 }
@@ -424,19 +465,18 @@ export function addShape(
   input: AddShapeInput,
 ): PptxSourceModel {
   assertShapeInput(input);
-  const slideIndex = source.slides.findIndex((slide) =>
-    sourceHandlesEqual(slide.handle, slideHandle),
-  );
-  if (slideIndex === -1) {
-    throw new Error("addShape: slide handle was not found in PptxSourceModel source");
+  const target = findAuthoringTarget(source, slideHandle);
+  if (target === undefined) {
+    throw new Error(
+      "addShape: slide, layout, or master handle was not found in PptxSourceModel source",
+    );
   }
-
-  const slide = source.slides[slideIndex];
-  const shapeId = nextShapeId(slide.shapes, source.edits ?? [], slide.partPath);
+  const body = mergeTextBodyProperties(defaultTextBodyProperties(source, target), input.body);
+  const shapeId = nextShapeId(target.shapes, source.edits ?? [], target.partPath);
   const shapeIdValue = String(shapeId);
   const name = input.name?.trim() || `Shape ${shapeIdValue}`;
   const preset = input.preset.trim();
-  const orderingSlot = nextOrderingSlot(slide.shapes);
+  const orderingSlot = nextOrderingSlot(target.shapes);
   const xml = buildShapeXml({
     shapeId: shapeIdValue,
     name,
@@ -451,26 +491,17 @@ export function addShape(
     ...(input.effects !== undefined ? { effects: input.effects } : {}),
     ...(input.paragraphs !== undefined ? { paragraphs: input.paragraphs } : {}),
     ...(input.text !== undefined ? { text: input.text } : {}),
-    ...(input.body !== undefined ? { body: input.body } : {}),
+    ...(body !== undefined ? { body } : {}),
   });
-  const shape = parseShapeNodeXml(xml, slide.partPath, orderingSlot);
-  const slides = source.slides.map((candidate, index) =>
-    index === slideIndex
-      ? {
-          ...candidate,
-          shapes: [...candidate.shapes, shape],
-        }
-      : candidate,
-  );
+  const shape = parseShapeNodeXml(xml, target.partPath, orderingSlot);
 
   return {
-    ...source,
-    slides,
+    ...withAuthoringTargetShapes(source, target, [...target.shapes, shape]),
     edits: [
       ...(source.edits ?? []),
       {
         kind: "addShape",
-        slidePartPath: slide.partPath,
+        slidePartPath: target.partPath,
         shapeId: shapeIdValue,
         xml,
       } satisfies PptxSourceModelAddShapeEdit,
@@ -484,26 +515,24 @@ export function addConnector(
   input: AddConnectorInput,
 ): PptxSourceModel {
   assertConnectorInput(input);
-  const slideIndex = source.slides.findIndex((slide) =>
-    sourceHandlesEqual(slide.handle, slideHandle),
-  );
-  if (slideIndex === -1) {
-    throw new Error("addConnector: slide handle was not found in PptxSourceModel source");
+  const target = findAuthoringTarget(source, slideHandle);
+  if (target === undefined) {
+    throw new Error(
+      "addConnector: slide, layout, or master handle was not found in PptxSourceModel source",
+    );
   }
-
-  const slide = source.slides[slideIndex];
   const startShape =
     input.start !== undefined
-      ? requireConnectorTargetShape(slide, input.start.shapeHandle, "start")
+      ? requireConnectorTargetShape(target, input.start.shapeHandle, "start")
       : undefined;
   const endShape =
     input.end !== undefined
-      ? requireConnectorTargetShape(slide, input.end.shapeHandle, "end")
+      ? requireConnectorTargetShape(target, input.end.shapeHandle, "end")
       : undefined;
-  const shapeId = nextShapeId(slide.shapes, source.edits ?? [], slide.partPath);
+  const shapeId = nextShapeId(target.shapes, source.edits ?? [], target.partPath);
   const shapeIdValue = String(shapeId);
   const name = input.name?.trim() || `Connector ${shapeIdValue}`;
-  const orderingSlot = nextOrderingSlot(slide.shapes);
+  const orderingSlot = nextOrderingSlot(target.shapes);
   const startShapeId = startShape !== undefined ? String(startShape.nodeId) : undefined;
   const endShapeId = endShape !== undefined ? String(endShape.nodeId) : undefined;
   const xml = buildConnectorXml({
@@ -528,24 +557,15 @@ export function addConnector(
       : {}),
     ...(input.outline !== undefined ? { outline: input.outline } : {}),
   });
-  const connector = parseShapeNodeXml(xml, slide.partPath, orderingSlot);
-  const slides = source.slides.map((candidate, index) =>
-    index === slideIndex
-      ? {
-          ...candidate,
-          shapes: [...candidate.shapes, connector],
-        }
-      : candidate,
-  );
+  const connector = parseShapeNodeXml(xml, target.partPath, orderingSlot);
 
   return {
-    ...source,
-    slides,
+    ...withAuthoringTargetShapes(source, target, [...target.shapes, connector]),
     edits: [
       ...(source.edits ?? []),
       {
         kind: "addConnector",
-        slidePartPath: slide.partPath,
+        slidePartPath: target.partPath,
         shapeId: shapeIdValue,
         ...(startShapeId !== undefined ? { startShapeId } : {}),
         ...(endShapeId !== undefined ? { endShapeId } : {}),
@@ -788,6 +808,28 @@ function assertTextBoxInput(input: AddTextBoxInput): void {
   }
   if (input.name !== undefined && input.name.trim() === "") {
     throw new Error("addTextBox: name must be a non-empty string when provided");
+  }
+}
+
+function assertSlideNumberInput(input: AddSlideNumberInput): void {
+  assertFiniteEmu(input.offsetX, "addSlideNumber", "offsetX");
+  assertFiniteEmu(input.offsetY, "addSlideNumber", "offsetY");
+  assertPositiveFiniteEmu(input.width, "addSlideNumber", "width");
+  assertPositiveFiniteEmu(input.height, "addSlideNumber", "height");
+  if (input.properties !== undefined) {
+    assertTextBoxRunProperties(input.properties, "properties", "addSlideNumber");
+  }
+  if (input.body !== undefined) assertTextBoxBody(input.body, "body", "addSlideNumber");
+  if (
+    input.align !== undefined &&
+    input.align !== "left" &&
+    input.align !== "center" &&
+    input.align !== "right"
+  ) {
+    throw new Error("addSlideNumber: align is not supported");
+  }
+  if (input.name !== undefined && input.name.trim() === "") {
+    throw new Error("addSlideNumber: name must be a non-empty string when provided");
   }
 }
 
@@ -1222,13 +1264,15 @@ function assertPositiveFiniteEmu(value: unknown, operationName: string, fieldNam
 }
 
 function requireConnectorTargetShape(
-  slide: SourceSlide,
+  target: AuthoringTarget,
   handle: SourceHandle,
   endpointName: "start" | "end",
 ): SourceShape & { readonly nodeId: SourceNodeId } {
-  const shape = slide.shapes.find((candidate) => sourceHandlesEqual(candidate.handle, handle));
+  const shape = target.shapes.find((candidate) => sourceHandlesEqual(candidate.handle, handle));
   if (shape === undefined) {
-    throw new Error(`addConnector: ${endpointName} shape handle was not found on the target slide`);
+    throw new Error(
+      `addConnector: ${endpointName} shape handle was not found on the target drawing part`,
+    );
   }
   if (shape.kind !== "shape") {
     throw new Error(`addConnector: ${endpointName} target must be a top-level sp shape`);
@@ -1238,6 +1282,83 @@ function requireConnectorTargetShape(
     throw new Error(`addConnector: ${endpointName} target shape requires a node id`);
   }
   return { ...shape, nodeId };
+}
+
+function findAuthoringTarget(
+  source: PptxSourceModel,
+  handle: SourceHandle,
+): AuthoringTarget | undefined {
+  const slideIndex = source.slides.findIndex((candidate) =>
+    sourceHandlesEqual(candidate.handle, handle),
+  );
+  if (slideIndex >= 0) {
+    const slide = source.slides[slideIndex];
+    return { kind: "slide", index: slideIndex, partPath: slide.partPath, shapes: slide.shapes };
+  }
+  const layoutIndex = source.slideLayouts.findIndex((candidate) =>
+    sourceHandlesEqual(candidate.handle, handle),
+  );
+  if (layoutIndex >= 0) {
+    const layout = source.slideLayouts[layoutIndex];
+    return { kind: "layout", index: layoutIndex, partPath: layout.partPath, shapes: layout.shapes };
+  }
+  const masterIndex = source.slideMasters.findIndex((candidate) =>
+    sourceHandlesEqual(candidate.handle, handle),
+  );
+  if (masterIndex >= 0) {
+    const master = source.slideMasters[masterIndex];
+    return { kind: "master", index: masterIndex, partPath: master.partPath, shapes: master.shapes };
+  }
+  return undefined;
+}
+
+function withAuthoringTargetShapes(
+  source: PptxSourceModel,
+  target: AuthoringTarget,
+  shapes: readonly SourceShapeNode[],
+): PptxSourceModel {
+  switch (target.kind) {
+    case "slide":
+      return {
+        ...source,
+        slides: source.slides.map((candidate, index) =>
+          index === target.index ? { ...candidate, shapes } : candidate,
+        ),
+      };
+    case "layout":
+      return {
+        ...source,
+        slideLayouts: source.slideLayouts.map((candidate, index) =>
+          index === target.index ? { ...candidate, shapes } : candidate,
+        ),
+      };
+    case "master":
+      return {
+        ...source,
+        slideMasters: source.slideMasters.map((candidate, index) =>
+          index === target.index ? { ...candidate, shapes } : candidate,
+        ),
+      };
+  }
+}
+
+function defaultTextBodyProperties(
+  source: PptxSourceModel,
+  target: AuthoringTarget,
+): AddTextBoxBodyPropertiesInput | undefined {
+  if (target.kind !== "slide") return undefined;
+  const slide = source.slides[target.index];
+  return source.slideLayouts.find((layout) => layout.partPath === slide.layoutPartPath)
+    ?.defaultTextBodyProperties;
+}
+
+function mergeTextBodyProperties(
+  defaults: AddTextBoxBodyPropertiesInput | undefined,
+  explicit: AddTextBoxBodyPropertiesInput | undefined,
+): AddTextBoxBodyPropertiesInput | undefined {
+  if (defaults === undefined) return explicit;
+  if (explicit === undefined) return defaults;
+  return { ...defaults, ...explicit };
 }
 
 function nextShapeId(

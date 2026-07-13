@@ -153,6 +153,18 @@ interface TextBoxXmlParams {
   readonly body?: TextBoxBodyPropertiesInput;
 }
 
+interface SlideNumberXmlParams {
+  readonly shapeId: string;
+  readonly name: string;
+  readonly offsetX: Emu;
+  readonly offsetY: Emu;
+  readonly width: Emu;
+  readonly height: Emu;
+  readonly body?: TextBoxBodyPropertiesInput;
+  readonly properties?: TextBoxRunPropertiesInput;
+  readonly align?: SourceTextAlign;
+}
+
 interface ShapeXmlParams {
   readonly shapeId: string;
   readonly name: string;
@@ -249,6 +261,56 @@ export function buildTextBoxXml(params: TextBoxXmlParams): string {
       },
     },
   });
+}
+
+export function buildSlideNumberXml(params: SlideNumberXmlParams): string {
+  return xmlBuilder.build({
+    "p:sp": {
+      "p:nvSpPr": {
+        "p:cNvPr": { "@_id": params.shapeId, "@_name": params.name },
+        "p:cNvSpPr": { "a:spLocks": { "@_noGrp": "1" } },
+        "p:nvPr": {},
+      },
+      "p:spPr": {
+        "a:xfrm": {
+          "a:off": { "@_x": String(params.offsetX), "@_y": String(params.offsetY) },
+          "a:ext": { "@_cx": String(params.width), "@_cy": String(params.height) },
+        },
+        "a:prstGeom": { "@_prst": "rect", "a:avLst": {} },
+        "a:noFill": {},
+        "a:ln": { "a:noFill": {} },
+      },
+      "p:txBody": {
+        "a:bodyPr": createTextBodyPropertiesXml(params.body),
+        "a:lstStyle": {},
+        "a:p": {
+          ...(params.align !== undefined
+            ? { "a:pPr": createParagraphPropertiesXml({ align: params.align }) }
+            : {}),
+          "a:fld": {
+            "@_id": slideNumberFieldId(params.shapeId),
+            "@_type": "slidenum",
+            "a:rPr": {
+              "@_lang": "en-US",
+              ...(params.properties !== undefined
+                ? createTextRunPropertiesXml(params.properties)
+                : {}),
+            },
+            "a:t": "1",
+          },
+          "a:endParaRPr": { "@_lang": "en-US" },
+        },
+      },
+    },
+  });
+}
+
+function slideNumberFieldId(shapeId: string): string {
+  const suffix = shapeId
+    .replaceAll(/[^0-9A-Fa-f]/g, "")
+    .slice(-12)
+    .padStart(12, "0");
+  return `{00000000-0000-0000-0000-${suffix}}`;
 }
 
 export function buildShapeXml(params: ShapeXmlParams): string {

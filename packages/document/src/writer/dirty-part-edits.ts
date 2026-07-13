@@ -339,11 +339,11 @@ function applyAddSpEdit(
   root: XmlNode,
   edit: PptxSourceModelAddTextBoxEdit | PptxSourceModelAddShapeEdit,
 ): void {
-  const slide = getChild(root, "sld");
-  const cSld = getChild(slide, "cSld");
+  const drawingPart = getDrawingPartRoot(root);
+  const cSld = getChild(drawingPart, "cSld");
   const spTree = getChild(cSld, "spTree");
   if (spTree === undefined) {
-    throw new Error(`writePptx: slide '${edit.slidePartPath}' has no spTree`);
+    throw new Error(`writePptx: drawing part '${edit.slidePartPath}' has no spTree`);
   }
   if (locateShapeTreeNode(spTree, { nodeId: edit.shapeId }) !== undefined) {
     throw new Error(`writePptx: shape id '${edit.shapeId}' already exists in source XML`);
@@ -353,11 +353,11 @@ function applyAddSpEdit(
 }
 
 function applyAddConnectorEdit(root: XmlNode, edit: PptxSourceModelAddConnectorEdit): void {
-  const slide = getChild(root, "sld");
-  const cSld = getChild(slide, "cSld");
+  const drawingPart = getDrawingPartRoot(root);
+  const cSld = getChild(drawingPart, "cSld");
   const spTree = getChild(cSld, "spTree");
   if (spTree === undefined) {
-    throw new Error(`writePptx: slide '${edit.slidePartPath}' has no spTree`);
+    throw new Error(`writePptx: drawing part '${edit.slidePartPath}' has no spTree`);
   }
   if (locateShapeTreeNode(spTree, { nodeId: edit.shapeId }) !== undefined) {
     throw new Error(`writePptx: shape id '${edit.shapeId}' already exists in source XML`);
@@ -379,18 +379,22 @@ function applyAddConnectorEdit(root: XmlNode, edit: PptxSourceModelAddConnectorE
 }
 
 function applyAddPictureEdit(root: XmlNode, edit: PptxSourceModelAddPictureEdit): void {
-  const slide = getChild(root, "sld");
-  if (slide !== undefined) ensurePictureNamespaces(slide);
-  const cSld = getChild(slide, "cSld");
+  const drawingPart = getDrawingPartRoot(root);
+  if (drawingPart !== undefined) ensurePictureNamespaces(drawingPart);
+  const cSld = getChild(drawingPart, "cSld");
   const spTree = getChild(cSld, "spTree");
   if (spTree === undefined) {
-    throw new Error(`writePptx: slide '${edit.slidePartPath}' has no spTree`);
+    throw new Error(`writePptx: drawing part '${edit.slidePartPath}' has no spTree`);
   }
   if (locateShapeTreeNode(spTree, { nodeId: edit.shapeId }) !== undefined) {
     throw new Error(`writePptx: shape id '${edit.shapeId}' already exists in source XML`);
   }
 
   appendShapeTreeNodeAtEnd(spTree, "p:pic", parseShapeFragmentXml(edit.xml, "pic"));
+}
+
+function getDrawingPartRoot(root: XmlNode): XmlNode | undefined {
+  return getChild(root, "sld") ?? getChild(root, "sldLayout") ?? getChild(root, "sldMaster");
 }
 
 function applyAddChartEdit(root: XmlNode, edit: PptxSourceModelAddChartEdit): void {
