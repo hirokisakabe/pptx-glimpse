@@ -1032,6 +1032,34 @@ describe("writePptx - from-scratch builder", () => {
     expect(writtenSlideXml).not.toContain("<p:bg");
   });
 
+  it("preserves a namespace declared locally on an existing slide background", () => {
+    const archive = unzipSync(writePptx(createPptx()));
+    const slidePartPath = "ppt/slides/slide1.xml";
+    const presentationNamespace = "http://schemas.openxmlformats.org/presentationml/2006/main";
+    const existingBackground =
+      `<x:bg xmlns:x="${presentationNamespace}"><x:bgPr>` +
+      `<a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:effectLst/>` +
+      `</x:bgPr></x:bg>`;
+    const slideXml = decoder
+      .decode(archive[slidePartPath])
+      .replace("<p:spTree>", `${existingBackground}<p:spTree>`);
+    const source = readPptx(zipSync({ ...archive, [slidePartPath]: encoder.encode(slideXml) }));
+    const edited = setSlideBackground(source, source.slides[0].handle!, {
+      kind: "solid",
+      color: { kind: "srgb", hex: "112233" },
+    });
+    const output = writePptx(edited);
+    const writtenSlideXml = decoder.decode(unzipSync(output)[slidePartPath]);
+    const reread = readPptx(output);
+
+    expect(writtenSlideXml).toContain(`<x:bg xmlns:x="${presentationNamespace}"><x:bgPr>`);
+    expect(reread.diagnostics).toEqual([]);
+    expect(reread.slides[0].background).toMatchObject({
+      kind: "fill",
+      fill: { kind: "solid", color: { kind: "srgb", hex: "112233" } },
+    });
+  });
+
   it("rejects authoring a background when the slide has no shape tree", () => {
     const archive = unzipSync(writePptx(createPptx()));
     const slidePartPath = "ppt/slides/slide1.xml";

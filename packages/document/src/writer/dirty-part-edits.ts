@@ -484,8 +484,14 @@ function applySetSlideBackgroundEdit(
   const existingBackgroundKey = Object.keys(cSld).find(
     (key) => !key.startsWith("@_") && localName(key) === "bg",
   );
+  const existingBackground = getChild(cSld, "bg");
   const backgroundKey = existingBackgroundKey ?? qualifiedSiblingName(cSldKey, "bg");
-  const background = remapElementPrefix(parsedBackground, "p", elementPrefix(backgroundKey));
+  const remappedBackground = remapElementPrefix(
+    parsedBackground,
+    "p",
+    elementPrefix(backgroundKey),
+  );
+  const background = preserveNamespaceDeclarations(existingBackground, remappedBackground);
 
   const entries: [string, unknown][] = [];
   let inserted = false;
@@ -525,6 +531,23 @@ function remapElementPrefix(value: unknown, from: string, to: string): unknown {
       return [remappedKey, remapElementPrefix(entry, from, to)];
     }),
   );
+}
+
+function preserveNamespaceDeclarations(
+  existing: XmlNode | undefined,
+  replacement: unknown,
+): unknown {
+  if (existing === undefined || typeof replacement !== "object" || replacement === null) {
+    return replacement;
+  }
+  const declarations = Object.entries(existing).filter(
+    ([key]) => key === "@_xmlns" || key.startsWith("@_xmlns:"),
+  );
+  if (declarations.length === 0) return replacement;
+  return {
+    ...Object.fromEntries(declarations),
+    ...unsafeOoxmlBoundaryAssertion<XmlNode>(replacement),
+  };
 }
 
 interface ShapeTreeNodeLocation {
