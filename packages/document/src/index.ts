@@ -251,6 +251,7 @@ export type {
   SourceThemeFontScheme,
   SourceThemeFormatScheme,
   SourceTransform,
+  SourceUnderlineStyle,
   SourceVerticalAnchor,
   UpdateShapeTransformInput,
 } from "./source/index.js";

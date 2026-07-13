@@ -815,6 +815,10 @@ function parseTableCell(
   );
   const fill = parseFill(tcPr, nextId);
   const borders = parseCellBorders(tcPr, nextId);
+  const marginLeft = numericAttr(tcPr, "marL");
+  const marginRight = numericAttr(tcPr, "marR");
+  const marginTop = numericAttr(tcPr, "marT");
+  const marginBottom = numericAttr(tcPr, "marB");
   const rawSidecars = [
     ...collectUnknownSidecars(tc, KNOWN_TABLE_CELL_CHILDREN, nextId),
     ...collectUnknownSidecars(tcPr, KNOWN_TABLE_CELL_PROPERTIES_CHILDREN, nextId),
@@ -824,6 +828,10 @@ function parseTableCell(
     ...(textBody !== undefined ? { textBody } : {}),
     ...(fill !== undefined ? { fill } : {}),
     ...(borders !== undefined ? { borders } : {}),
+    ...(marginLeft !== undefined ? { marginLeft: asEmu(marginLeft) } : {}),
+    ...(marginRight !== undefined ? { marginRight: asEmu(marginRight) } : {}),
+    ...(marginTop !== undefined ? { marginTop: asEmu(marginTop) } : {}),
+    ...(marginBottom !== undefined ? { marginBottom: asEmu(marginBottom) } : {}),
     gridSpan: numericAttr(tc, "gridSpan") ?? 1,
     rowSpan: numericAttr(tc, "rowSpan") ?? 1,
     hMerge: isTrue(getAttr(tc, "hMerge") ?? getAttr(tcPr, "hMerge")),

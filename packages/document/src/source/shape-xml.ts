@@ -13,7 +13,7 @@ import { XMLBuilder } from "fast-xml-parser";
 
 import { createSidecarIdFactory } from "../reader/raw-node.js";
 import { parseShapeTree } from "../reader/shape-tree.js";
-import { parseXml } from "../reader/xml.js";
+import { parseXml, parseXmlOrdered } from "../reader/xml.js";
 import type { PartPath, RelationshipId } from "./handles.js";
 import type { ConnectorPresetGeometry } from "./pptx-source-model.js";
 import type {
@@ -23,6 +23,7 @@ import type {
   SourceImageCrop,
   SourceShapeNode,
   SourceTextAlign,
+  SourceUnderlineStyle,
   SourceVerticalAnchor,
 } from "./shapes.js";
 import type { Emu, HundredthPt, OoxmlAngle, OoxmlPercent, Pt } from "./units.js";
@@ -39,24 +40,7 @@ export interface TextBoxGradientFillInput {
   readonly angle?: OoxmlAngle;
 }
 
-export type TextBoxUnderlineStyle =
-  | "sng"
-  | "dbl"
-  | "heavy"
-  | "dotted"
-  | "dottedHeavy"
-  | "dash"
-  | "dashHeavy"
-  | "dashLong"
-  | "dashLongHeavy"
-  | "dotDash"
-  | "dotDashHeavy"
-  | "dotDotDash"
-  | "dotDotDashHeavy"
-  | "wavy"
-  | "wavyHeavy"
-  | "wavyDbl"
-  | "none";
+export type TextBoxUnderlineStyle = SourceUnderlineStyle;
 
 export interface TextBoxUnderlineInput {
   readonly style?: TextBoxUnderlineStyle;
@@ -560,7 +544,7 @@ function createTextRunXml(
   };
 }
 
-function createTextRunPropertiesXml(
+export function createTextRunPropertiesXml(
   properties: TextBoxRunPropertiesInput,
   hyperlinkId?: RelationshipId,
 ): Record<string, unknown> {
@@ -877,6 +861,7 @@ export function parseShapeNodeXml(
     parseXml(xml),
     partPath,
     createSidecarIdFactory(`${partPath}#added-shape-${orderingSlot}`),
+    parseXmlOrdered(xml),
   );
   const node = nodes[0];
   if (node === undefined || nodes.length !== 1) {

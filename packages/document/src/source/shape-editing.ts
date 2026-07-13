@@ -136,11 +136,13 @@ const DASH_STYLES = new Set([
   "dashDot",
   "lgDash",
   "lgDashDot",
+  "lgDashDotDot",
   "sysDash",
   "sysDot",
 ]);
 const UNDERLINE_STYLES: ReadonlySet<string> = new Set<AddTextBoxUnderlineStyle>([
   "sng",
+  "words",
   "dbl",
   "heavy",
   "dotted",

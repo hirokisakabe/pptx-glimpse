@@ -163,6 +163,17 @@ describe("renderOutlineAttrs", () => {
     expect(result.attrs).toContain("stroke-dasharray=");
   });
 
+  it("renders large dash-dot-dot style", () => {
+    const result = renderOutlineAttrs({
+      width: 12700,
+      fill: { type: "solid", color: { hex: "#000000", alpha: 1 } },
+      dashStyle: "lgDashDotDot",
+      headEnd: null,
+      tailEnd: null,
+    });
+    expect(result.attrs).toContain('stroke-dasharray="10.666666666666666 4 1.3333333333333333 4');
+  });
+
   it("renders gradient outline with defs", () => {
     const result = renderOutlineAttrs({
       width: 12700,

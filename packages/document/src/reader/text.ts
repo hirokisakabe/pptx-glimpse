@@ -22,6 +22,7 @@ import type {
   SourceTextStyle,
   SourceTextVerticalType,
   SourceTextWrap,
+  SourceUnderlineStyle,
   SourceVerticalAnchor,
 } from "../source/index.js";
 import { asEmu, asHundredthPt, asPt, asSourceNodeId } from "../source/index.js";
@@ -54,6 +55,28 @@ const KNOWN_RUN_PROPERTY_CHILDREN: ReadonlySet<string> = new Set([
   "ea",
   "cs",
   "solidFill",
+  "highlight",
+  "uFill",
+]);
+const UNDERLINE_STYLES: ReadonlySet<SourceUnderlineStyle> = new Set([
+  "sng",
+  "words",
+  "dbl",
+  "heavy",
+  "dotted",
+  "dottedHeavy",
+  "dash",
+  "dashHeavy",
+  "dashLong",
+  "dashLongHeavy",
+  "dotDash",
+  "dotDashHeavy",
+  "dotDotDash",
+  "dotDotDashHeavy",
+  "wavy",
+  "wavyHeavy",
+  "wavyDbl",
+  "none",
 ]);
 
 const ALIGN_MAP: Readonly<Record<string, SourceTextAlign>> = {
@@ -617,6 +640,7 @@ function parseRunProperties(rPr: XmlNode | undefined): SourceRunProperties | und
   const bold = getAttr(rPr, "b");
   const italic = getAttr(rPr, "i");
   const underline = getAttr(rPr, "u");
+  const underlineStyle = parseEnumValue(underline, UNDERLINE_STYLES);
   const strike = getAttr(rPr, "strike");
   const baseline = numericAttr(rPr, "baseline");
   const size = numericAttr(rPr, "sz");
@@ -625,17 +649,24 @@ function parseRunProperties(rPr: XmlNode | undefined): SourceRunProperties | und
   const typefaceCs = getAttr(getChild(rPr, "cs"), "typeface");
   const hasHyperlink = getChild(rPr, "hlinkClick") !== undefined;
   const color = parseColorElement(getChild(rPr, "solidFill"));
+  const underlineColor = parseColorElement(getChild(getChild(rPr, "uFill"), "solidFill"));
+  const highlight = parseColorElement(getChild(rPr, "highlight"));
 
   const properties: SourceRunProperties = {
     ...(bold !== undefined ? { bold: isTrue(bold) } : {}),
     ...(italic !== undefined ? { italic: isTrue(italic) } : {}),
     ...(underline !== undefined
-      ? { underline: underline !== "none" }
+      ? {
+          underline: underline !== "none",
+          ...(underlineStyle !== undefined ? { underlineStyle } : {}),
+        }
       : hasHyperlink
         ? { underline: true }
         : {}),
+    ...(underlineColor !== undefined ? { underlineColor } : {}),
     ...(strike !== undefined ? { strikethrough: strike !== "noStrike" } : {}),
     ...(baseline !== undefined ? { baseline: baseline / 1000 } : {}),
+    ...(highlight !== undefined ? { highlight } : {}),
     // `a:rPr@sz` is in 1/100 pt unit. Convert to pt and save.
     ...(size !== undefined ? { fontSize: asPt(size / 100) } : {}),
     ...(typeface !== undefined ? { typeface } : {}),

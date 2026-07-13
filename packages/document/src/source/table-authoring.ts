@@ -4,16 +4,18 @@ import { editReservedShapeId, sourceHandlesEqual } from "./edit-descriptors.js";
 import type { PartPath, RelationshipId, SourceHandle } from "./handles.js";
 import { nextNumberedName, nextRelationshipId } from "./package-graph-mutations.js";
 import type { PptxSourceModel, PptxSourceModelAddTableEdit } from "./pptx-source-model.js";
-import { parseShapeNodeXml } from "./shape-xml.js";
-import type { Emu, Pt } from "./units.js";
+import {
+  createTextRunPropertiesXml,
+  parseShapeNodeXml,
+  type TextBoxColorInput,
+  type TextBoxRunPropertiesInput,
+} from "./shape-xml.js";
+import type { SourceDashStyle } from "./shapes.js";
+import type { Emu } from "./units.js";
 
-export interface AddTableRunPropertiesInput {
-  readonly bold?: boolean;
-  readonly italic?: boolean;
-  readonly underline?: boolean;
-  readonly fontSize?: Pt;
-  readonly fontFace?: string;
-  readonly color?: string;
+export interface AddTableRunPropertiesInput extends Omit<TextBoxRunPropertiesInput, "color"> {
+  /** Solid text color as a six-digit hex string or typed sRGB value. */
+  readonly color?: string | TextBoxColorInput;
 }
 export interface AddTableRunInput {
   readonly text: string;
@@ -23,7 +25,7 @@ export interface AddTableRunInput {
 export interface AddTableBorderInput {
   readonly width?: Emu;
   readonly color?: string;
-  readonly dash?: "solid" | "dash" | "dot" | "dashDot";
+  readonly dash?: SourceDashStyle;
 }
 export interface AddTableCellInput {
   readonly text?: string;
@@ -31,6 +33,10 @@ export interface AddTableCellInput {
   readonly fill?: string;
   readonly align?: "left" | "center" | "right" | "justify";
   readonly verticalAlign?: "top" | "middle" | "bottom";
+  readonly marginLeft?: Emu;
+  readonly marginRight?: Emu;
+  readonly marginTop?: Emu;
+  readonly marginBottom?: Emu;
   readonly borders?: {
     readonly top?: AddTableBorderInput;
     readonly right?: AddTableBorderInput;
@@ -134,84 +140,83 @@ function buildTableXml(
   links: ReadonlyMap<string, RelationshipId>,
 ): string {
   const mergeFlags = computeMergeFlags(input);
-  return xmlBuilder.build({
-    "p:graphicFrame": {
-      "p:nvGraphicFramePr": {
-        "p:cNvPr": { "@_id": shapeId, "@_name": name },
-        "p:cNvGraphicFramePr": {},
-        "p:nvPr": {},
-      },
-      "p:xfrm": {
-        "a:off": { "@_x": String(input.offsetX), "@_y": String(input.offsetY) },
-        "a:ext": { "@_cx": String(input.width), "@_cy": String(input.height) },
-      },
-      "a:graphic": {
-        "a:graphicData": {
-          "@_uri": "http://schemas.openxmlformats.org/drawingml/2006/table",
-          "a:tbl": {
-            "a:tblPr": {
-              "@_firstRow": "1",
-              "@_bandRow": "1",
-              "a:tableStyleId": input.tableStyleId ?? DEFAULT_TABLE_STYLE,
-            },
-            "a:tblGrid": {
-              "a:gridCol": input.columnWidths.map((width) => ({ "@_w": String(width) })),
-            },
-            "a:tr": input.rows.map((row, rowIndex) => ({
-              "@_h": String(row.height),
-              "a:tc": row.cells.map((cell, columnIndex) =>
-                cellXml(cell, links, mergeFlags.get(`${rowIndex}:${columnIndex}`)),
-              ),
-            })),
-          },
-        },
-      },
+  const nonVisual = xmlBuilder.build({
+    "p:nvGraphicFramePr": {
+      "p:cNvPr": { "@_id": shapeId, "@_name": name },
+      "p:cNvGraphicFramePr": {},
+      "p:nvPr": {},
     },
   });
+  const transform = xmlBuilder.build({
+    "p:xfrm": {
+      "a:off": { "@_x": String(input.offsetX), "@_y": String(input.offsetY) },
+      "a:ext": { "@_cx": String(input.width), "@_cy": String(input.height) },
+    },
+  });
+  const properties = xmlBuilder.build({
+    "a:tblPr": {
+      "@_firstRow": "1",
+      "@_bandRow": "1",
+      "a:tableStyleId": input.tableStyleId ?? DEFAULT_TABLE_STYLE,
+    },
+  });
+  const grid = xmlBuilder.build({
+    "a:tblGrid": {
+      "a:gridCol": input.columnWidths.map((width) => ({ "@_w": String(width) })),
+    },
+  });
+  const rows = input.rows
+    .map((row, rowIndex) => {
+      const cells = row.cells
+        .map((cell, columnIndex) =>
+          cellXml(cell, links, mergeFlags.get(`${rowIndex}:${columnIndex}`)),
+        )
+        .join("");
+      return `<a:tr h="${row.height}">${cells}</a:tr>`;
+    })
+    .join("");
+  return (
+    `<p:graphicFrame>${nonVisual}${transform}<a:graphic>` +
+    `<a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/table">` +
+    `<a:tbl>${properties}${grid}${rows}</a:tbl></a:graphicData></a:graphic></p:graphicFrame>`
+  );
 }
 
 function cellXml(
   cell: AddTableCellInput,
   links: ReadonlyMap<string, RelationshipId>,
   merge?: { readonly horizontal: boolean; readonly vertical: boolean },
-): Record<string, unknown> {
+): string {
   const runs = cell.runs ?? [{ text: cell.text ?? "" }];
-  return {
-    ...(cell.colspan !== undefined ? { "@_gridSpan": String(cell.colspan) } : {}),
-    ...(cell.rowspan !== undefined ? { "@_rowSpan": String(cell.rowspan) } : {}),
-    ...(merge?.horizontal ? { "@_hMerge": "1" } : {}),
-    ...(merge?.vertical ? { "@_vMerge": "1" } : {}),
-    "a:txBody": {
-      "a:bodyPr": {
-        "@_anchor": ({ top: "t", middle: "ctr", bottom: "b" } as const)[
-          cell.verticalAlign ?? "top"
-        ],
-      },
-      "a:lstStyle": {},
-      "a:p": {
-        ...(cell.align !== undefined
-          ? {
-              "a:pPr": {
-                "@_algn": ({ left: "l", center: "ctr", right: "r", justify: "just" } as const)[
-                  cell.align
-                ],
-              },
-            }
-          : {}),
-        "a:r": runs.map((run) => ({
-          ...(run.properties !== undefined || run.hyperlink !== undefined
-            ? { "a:rPr": runPropertiesXml(run, links) }
-            : {}),
-          "a:t": textElementValue(run.text),
-        })),
-        "a:endParaRPr": {},
-      },
+  const attributes = xmlBuilder.build({
+    cell: {
+      ...(cell.colspan !== undefined ? { "@_gridSpan": String(cell.colspan) } : {}),
+      ...(cell.rowspan !== undefined ? { "@_rowSpan": String(cell.rowspan) } : {}),
+      ...(merge?.horizontal ? { "@_hMerge": "1" } : {}),
+      ...(merge?.vertical ? { "@_vMerge": "1" } : {}),
     },
-    "a:tcPr": {
-      ...(cell.fill !== undefined ? { "a:solidFill": colorXml(cell.fill) } : {}),
-      ...bordersXml(cell.borders),
+  });
+  const attributeText = attributes.slice("<cell".length, -"/>".length);
+  const bodyPr = xmlBuilder.build({
+    "a:bodyPr": {
+      "@_anchor": ({ top: "t", middle: "ctr", bottom: "b" } as const)[cell.verticalAlign ?? "top"],
     },
-  };
+  });
+  const paragraphProperties =
+    cell.align === undefined
+      ? ""
+      : xmlBuilder.build({
+          "a:pPr": {
+            "@_algn": ({ left: "l", center: "ctr", right: "r", justify: "just" } as const)[
+              cell.align
+            ],
+          },
+        });
+  const runXml = runs.flatMap((run) => runElementsXml(run, links)).join("");
+  const textBody =
+    `<a:txBody>${bodyPr}<a:lstStyle/><a:p>${paragraphProperties}` +
+    `${runXml}<a:endParaRPr/></a:p></a:txBody>`;
+  return `<a:tc${attributeText}>${textBody}${cellPropertiesXml(cell)}</a:tc>`;
 }
 
 function computeMergeFlags(
@@ -253,19 +258,62 @@ function runPropertiesXml(
   links: ReadonlyMap<string, RelationshipId>,
 ): Record<string, unknown> {
   const p = run.properties;
-  return {
-    ...(p?.bold !== undefined ? { "@_b": p.bold ? "1" : "0" } : {}),
-    ...(p?.italic !== undefined ? { "@_i": p.italic ? "1" : "0" } : {}),
-    ...(p?.underline !== undefined ? { "@_u": p.underline ? "sng" : "none" } : {}),
-    ...(p?.fontSize !== undefined ? { "@_sz": String(Math.round(p.fontSize * 100)) } : {}),
-    ...(p?.color !== undefined ? { "a:solidFill": colorXml(p.color) } : {}),
-    ...(p?.fontFace !== undefined
-      ? { "a:latin": { "@_typeface": p.fontFace }, "a:ea": { "@_typeface": p.fontFace } }
-      : {}),
-    ...(run.hyperlink !== undefined
-      ? { "a:hlinkClick": { "@_r:id": links.get(run.hyperlink) } }
-      : {}),
-  };
+  const color = typeof p?.color === "string" ? { kind: "srgb" as const, hex: p.color } : p?.color;
+  return createTextRunPropertiesXml(
+    { ...p, color },
+    run.hyperlink !== undefined ? links.get(run.hyperlink) : undefined,
+  );
+}
+
+function runElementsXml(
+  run: AddTableRunInput,
+  links: ReadonlyMap<string, RelationshipId>,
+): readonly string[] {
+  const properties =
+    run.properties !== undefined || run.hyperlink !== undefined
+      ? xmlBuilder.build({ "a:rPr": runPropertiesXml(run, links) })
+      : "";
+  const parts = run.text.split(/\r\n|\n/);
+  if (parts.length === 1) {
+    return [
+      xmlBuilder.build({
+        "a:r": {
+          ...(properties ? { "a:rPr": runPropertiesXml(run, links) } : {}),
+          "a:t": textElementValue(run.text),
+        },
+      }),
+    ];
+  }
+  return parts.flatMap((part, index) => {
+    const elements: string[] = [];
+    if (part.length > 0) {
+      elements.push(
+        xmlBuilder.build({
+          "a:r": {
+            ...(properties ? { "a:rPr": runPropertiesXml(run, links) } : {}),
+            "a:t": textElementValue(part),
+          },
+        }),
+      );
+    }
+    if (index < parts.length - 1) {
+      elements.push(properties ? `<a:br>${properties}</a:br>` : "<a:br/>");
+    }
+    return elements;
+  });
+}
+
+function cellPropertiesXml(cell: AddTableCellInput): string {
+  return xmlBuilder.build({
+    "a:tcPr": {
+      ...(cell.marginLeft !== undefined ? { "@_marL": String(cell.marginLeft) } : {}),
+      ...(cell.marginRight !== undefined ? { "@_marR": String(cell.marginRight) } : {}),
+      ...(cell.marginTop !== undefined ? { "@_marT": String(cell.marginTop) } : {}),
+      ...(cell.marginBottom !== undefined ? { "@_marB": String(cell.marginBottom) } : {}),
+      ...bordersXml(cell.borders),
+      ...(cell.fill !== undefined ? { "a:solidFill": colorXml(cell.fill) } : {}),
+    },
+  });
 }
 function bordersXml(borders: AddTableCellInput["borders"]): Record<string, unknown> {
   if (borders === undefined) return {};
@@ -332,6 +380,16 @@ function assertInput(input: AddTableInput): void {
       )
         throw new Error("addTable: spans must be positive integers");
       if (cell.runs?.length === 0) throw new Error("addTable: runs must not be empty");
+      for (const [name, margin] of Object.entries({
+        marginLeft: cell.marginLeft,
+        marginRight: cell.marginRight,
+        marginTop: cell.marginTop,
+        marginBottom: cell.marginBottom,
+      })) {
+        if (margin !== undefined && !Number.isFinite(margin)) {
+          throw new Error(`addTable: ${name} must be a valid EMU value`);
+        }
+      }
       for (const run of cell.runs ?? []) {
         if (typeof run.text !== "string") throw new Error("addTable: run text must be a string");
         if (run.hyperlink !== undefined && run.hyperlink.trim().length === 0)
