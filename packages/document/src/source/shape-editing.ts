@@ -24,7 +24,7 @@ import {
   editTargetsShape,
   sourceHandlesEqual,
 } from "./edit-descriptors.js";
-import { asSourceNodeId } from "./handles.js";
+import { asSourceNodeId, type RelationshipId } from "./handles.js";
 import type {
   ConnectorPresetGeometry,
   EditableShapeFill,
@@ -36,6 +36,7 @@ import type {
   PptxSourceModelAddShapeEdit,
   PptxSourceModelEdit,
   PptxSourceModelShapeOutlineEdit,
+  Relationship,
   SourceArrowEndpoint,
   SourceConnector,
   SourceFill,
@@ -46,7 +47,7 @@ import type {
   SourceShapeNode,
   SourceSlide,
 } from "./index.js";
-import { nextNumberedName } from "./package-graph-mutations.js";
+import { nextNumberedName, nextRelationshipId } from "./package-graph-mutations.js";
 import type {
   ShapeColorInput,
   ShapeEffectsInput,
@@ -136,6 +137,8 @@ const UNDERLINE_STYLES: ReadonlySet<string> = new Set<AddTextBoxUnderlineStyle>(
   "wavyDbl",
   "none",
 ]);
+const HYPERLINK_REL_TYPE =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
 
 export interface UpdateShapeTransformInput {
   readonly offsetX: Emu;
@@ -382,6 +385,7 @@ export function addTextBox(
   const shapeIdValue = String(shapeId);
   const name = input.name?.trim() || `TextBox ${shapeIdValue}`;
   const orderingSlot = nextOrderingSlot(slide.shapes);
+  const hyperlinkAllocation = allocateRunHyperlinks(source, slide.partPath, input.paragraphs ?? []);
   const xml = buildTextBoxXml({
     shapeId: shapeIdValue,
     name,
@@ -392,6 +396,7 @@ export function addTextBox(
     ...(input.rotation !== undefined ? { rotation: input.rotation } : {}),
     ...(input.paragraphs !== undefined ? { paragraphs: input.paragraphs } : { text: input.text }),
     ...(input.body !== undefined ? { body: input.body } : {}),
+    hyperlinkIds: hyperlinkAllocation.ids,
   });
   const shape = parseShapeNodeXml(xml, slide.partPath, orderingSlot);
   const slides = source.slides.map((candidate, index) =>
@@ -405,6 +410,7 @@ export function addTextBox(
 
   return {
     ...source,
+    packageGraph: hyperlinkAllocation.packageGraph,
     slides,
     edits: [
       ...(source.edits ?? []),
@@ -437,6 +443,7 @@ export function addShape(
   const name = input.name?.trim() || `Shape ${shapeIdValue}`;
   const preset = input.preset.trim();
   const orderingSlot = nextOrderingSlot(slide.shapes);
+  const hyperlinkAllocation = allocateRunHyperlinks(source, slide.partPath, input.paragraphs ?? []);
   const xml = buildShapeXml({
     shapeId: shapeIdValue,
     name,
@@ -452,6 +459,7 @@ export function addShape(
     ...(input.paragraphs !== undefined ? { paragraphs: input.paragraphs } : {}),
     ...(input.text !== undefined ? { text: input.text } : {}),
     ...(input.body !== undefined ? { body: input.body } : {}),
+    hyperlinkIds: hyperlinkAllocation.ids,
   });
   const shape = parseShapeNodeXml(xml, slide.partPath, orderingSlot);
   const slides = source.slides.map((candidate, index) =>
@@ -465,6 +473,7 @@ export function addShape(
 
   return {
     ...source,
+    packageGraph: hyperlinkAllocation.packageGraph,
     slides,
     edits: [
       ...(source.edits ?? []),
@@ -891,7 +900,75 @@ function assertTextBoxRun(
   if (typeof run.text !== "string") {
     throw new Error(`${operationName}: ${path}.text must be a string`);
   }
+  if (run.hyperlink !== undefined) {
+    assertExternalHttpHyperlink(run.hyperlink, `${path}.hyperlink`, operationName);
+  }
   assertTextBoxRunProperties(run.properties, path, operationName);
+}
+
+function assertExternalHttpHyperlink(
+  hyperlink: unknown,
+  path: string,
+  operationName: string,
+): void {
+  if (typeof hyperlink !== "string" || hyperlink.trim() !== hyperlink || hyperlink === "") {
+    throw new Error(`${operationName}: ${path} must be an absolute HTTP(S) URL`);
+  }
+  try {
+    const url = new URL(hyperlink);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      throw new Error("unsupported protocol");
+    }
+  } catch {
+    throw new Error(`${operationName}: ${path} must be an absolute HTTP(S) URL`);
+  }
+}
+
+interface RunHyperlinkAllocation {
+  readonly packageGraph: PptxSourceModel["packageGraph"];
+  readonly ids: ReadonlyMap<string, RelationshipId>;
+}
+
+function allocateRunHyperlinks(
+  source: PptxSourceModel,
+  slidePartPath: PartPath,
+  paragraphs: readonly TextBoxParagraphInput[],
+): RunHyperlinkAllocation {
+  const group = source.packageGraph.relationships.find(
+    (relationships) => relationships.sourcePartPath === slidePartPath,
+  );
+  let relationships = group?.relationships ?? [];
+  const ids = new Map<string, RelationshipId>();
+  for (const paragraph of paragraphs) {
+    for (const run of paragraph.runs) {
+      if (run.hyperlink === undefined || ids.has(run.hyperlink)) continue;
+      const id = nextRelationshipId(relationships);
+      ids.set(run.hyperlink, id);
+      relationships = [
+        ...relationships,
+        {
+          id,
+          type: HYPERLINK_REL_TYPE,
+          target: run.hyperlink,
+          targetMode: "External",
+        } satisfies Relationship,
+      ];
+    }
+  }
+  if (ids.size === 0) return { packageGraph: source.packageGraph, ids };
+
+  return {
+    packageGraph: {
+      ...source.packageGraph,
+      relationships:
+        group === undefined
+          ? [...source.packageGraph.relationships, { sourcePartPath: slidePartPath, relationships }]
+          : source.packageGraph.relationships.map((candidate) =>
+              candidate === group ? { ...candidate, relationships } : candidate,
+            ),
+    },
+    ids,
+  };
 }
 
 function assertTextBoxRunProperties(
