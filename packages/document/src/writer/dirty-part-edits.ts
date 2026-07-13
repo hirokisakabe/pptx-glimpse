@@ -17,6 +17,7 @@ import type {
   PptxSourceModelEdit,
   PptxSourceModelParagraphPropertiesEdit,
   PptxSourceModelParagraphTextEdit,
+  PptxSourceModelSetSlideBackgroundEdit,
   PptxSourceModelShapeFillEdit,
   PptxSourceModelShapeOutlineEdit,
   PptxSourceModelShapeTransformEdit,
@@ -130,6 +131,9 @@ function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
       return;
     case "deleteShape":
       applyDeleteShapeEdit(root, edit);
+      return;
+    case "setSlideBackground":
+      applySetSlideBackgroundEdit(root, edit);
       return;
     case "replaceImage":
     case "addEmptySlideFromLayout":
@@ -448,6 +452,38 @@ function applyDeleteShapeEdit(root: XmlNode, edit: PptxSourceModelDeleteShapeEdi
       `writePptx: shape delete handle '${locator.nodeId}' no longer matches p:sp or p:cxnSp`,
     );
   }
+}
+
+function applySetSlideBackgroundEdit(
+  root: XmlNode,
+  edit: PptxSourceModelSetSlideBackgroundEdit,
+): void {
+  const slide = getChild(root, "sld");
+  const cSld = getChild(slide, "cSld");
+  if (slide === undefined || cSld === undefined) {
+    throw new Error(`writePptx: slide '${edit.slidePartPath}' has no p:cSld`);
+  }
+  slide["@_xmlns:a"] ??= "http://schemas.openxmlformats.org/drawingml/2006/main";
+  if (edit.relationshipId !== undefined) {
+    slide["@_xmlns:r"] ??= "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  }
+  const background = getChild(parseXml(edit.xml), "bg");
+  if (background === undefined) {
+    throw new Error("writePptx: background edit XML fragment does not contain a p:bg root element");
+  }
+
+  const entries: [string, unknown][] = [];
+  let inserted = false;
+  for (const [key, value] of Object.entries(cSld)) {
+    if (!key.startsWith("@_") && localName(key) === "bg") continue;
+    if (!inserted && !key.startsWith("@_") && localName(key) === "spTree") {
+      entries.push(["p:bg", background]);
+      inserted = true;
+    }
+    entries.push([key, value]);
+  }
+  if (!inserted) entries.push(["p:bg", background]);
+  replaceNodeEntries(cSld, entries);
 }
 
 interface ShapeTreeNodeLocation {

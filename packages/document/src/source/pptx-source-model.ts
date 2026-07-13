@@ -81,7 +81,8 @@ export type PptxSourceModelEdit =
   | PptxSourceModelAddEmptySlideFromLayoutEdit
   | PptxSourceModelDuplicateSlideEdit
   | PptxSourceModelMoveSlideEdit
-  | PptxSourceModelDeleteSlideEdit;
+  | PptxSourceModelDeleteSlideEdit
+  | PptxSourceModelSetSlideBackgroundEdit;
 
 export interface PptxSourceModelTextRunEdit {
   readonly kind: "replaceTextRunPlainText";
@@ -266,4 +267,14 @@ export interface PptxSourceModelDeleteSlideEdit {
   readonly kind: "deleteSlide";
   readonly slidePartPath: PartPath;
   readonly relationshipId: RelationshipId;
+}
+
+export interface PptxSourceModelSetSlideBackgroundEdit {
+  readonly kind: "setSlideBackground";
+  readonly slidePartPath: PartPath;
+  readonly relationshipId?: RelationshipId;
+  readonly mediaPartPath?: PartPath;
+  readonly contentType?: string;
+  /** Serialized `p:bg` fragment finalized at edit time. The writer only splices it. */
+  readonly xml: string;
 }

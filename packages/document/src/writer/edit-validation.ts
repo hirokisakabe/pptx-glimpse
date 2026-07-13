@@ -12,6 +12,7 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
   const shapeFillKeys = new Set<string>();
   const shapeOutlineKeys = new Set<string>();
   const deletedShapeKeys = new Set<string>();
+  const slideBackgroundKeys = new Set<string>();
   const textRunEdits: PptxSourceModelTextRunEdit[] = [];
   const textRunPropertiesEdits: PptxSourceModelTextRunPropertiesEdit[] = [];
 
@@ -101,6 +102,14 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
       case "duplicateSlide":
       case "moveSlide":
       case "deleteSlide":
+        break;
+      case "setSlideBackground":
+        if (slideBackgroundKeys.has(edit.slidePartPath)) {
+          throw new Error(
+            `writePptx: conflicting background edits for slide '${edit.slidePartPath}'`,
+          );
+        }
+        slideBackgroundKeys.add(edit.slidePartPath);
         break;
     }
   }

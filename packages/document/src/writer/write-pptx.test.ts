@@ -19,6 +19,7 @@ import {
   createComputedView,
   createPptx,
   readPptx,
+  setSlideBackground,
   writePptx,
 } from "../index.js";
 import {
@@ -860,6 +861,141 @@ describe("writePptx - from-scratch builder", () => {
         fill: { kind: "solid", color: { kind: "srgb", hex: "F8FAFC" } },
       },
     });
+  });
+
+  it("authors solid, linear, radial, PNG, and JPEG backgrounds on individual slides", () => {
+    let source = createPptx();
+    const masterHandle = source.slideMasters[0]?.handle;
+    const layout = source.slideLayouts[0];
+    if (masterHandle === undefined || layout === undefined) {
+      throw new Error("createPptx should create a master and layout");
+    }
+    source = addShape(source, masterHandle, {
+      preset: "rect",
+      offsetX: asEmu(100000),
+      offsetY: asEmu(100000),
+      width: asEmu(500000),
+      height: asEmu(500000),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "FFFFFF" } },
+    });
+    for (let index = 0; index < 4; index += 1) {
+      source = addEmptySlideFromLayout(source, { layoutPartPath: layout.partPath });
+    }
+    const handles = source.slides.map((slide) => slide.handle);
+    if (handles.some((handle) => handle === undefined)) {
+      throw new Error("authored slides should have handles");
+    }
+
+    source = setSlideBackground(source, handles[0]!, {
+      kind: "solid",
+      color: { kind: "srgb", hex: "112233" },
+    });
+    source = setSlideBackground(source, handles[1]!, {
+      kind: "gradient",
+      gradientType: "linear",
+      angle: asOoxmlAngle(2700000),
+      stops: [
+        { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FF0000" } },
+        { position: asOoxmlPercent(100000), color: { kind: "srgb", hex: "0000FF" } },
+      ],
+    });
+    source = setSlideBackground(source, handles[2]!, {
+      kind: "gradient",
+      gradientType: "radial",
+      centerX: asOoxmlPercent(25000),
+      centerY: asOoxmlPercent(75000),
+      stops: [
+        { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FFFFFF" } },
+        { position: asOoxmlPercent(100000), color: { kind: "srgb", hex: "00AA44" } },
+      ],
+    });
+    source = setSlideBackground(source, handles[3]!, { kind: "image", bytes: BLUE_PNG });
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xdb, 1, 2, 3]);
+    source = setSlideBackground(source, handles[4]!, { kind: "image", bytes: jpeg });
+
+    const output = writePptx(source);
+    const archive = unzipSync(output);
+    const slideXml = Array.from({ length: 5 }, (_, index) =>
+      decoder.decode(archive[`ppt/slides/slide${index + 1}.xml`]),
+    );
+    const pngRels = decoder.decode(archive["ppt/slides/_rels/slide4.xml.rels"]);
+    const jpegRels = decoder.decode(archive["ppt/slides/_rels/slide5.xml.rels"]);
+    const contentTypes = decoder.decode(archive["[Content_Types].xml"]);
+    const reread = readPptx(output);
+
+    expect(source.slides.map((slide) => slide.background?.kind)).toEqual([
+      "fill",
+      "fill",
+      "fill",
+      "fill",
+      "fill",
+    ]);
+    expect(slideXml[0]).toContain(
+      `<p:bg><p:bgPr><a:solidFill><a:srgbClr val="112233"/></a:solidFill>`,
+    );
+    expect(slideXml[1]).toContain(`<a:lin ang="2700000" scaled="1"/>`);
+    expect(slideXml[2]).toContain(
+      `<a:path path="circle"><a:fillToRect l="25000" t="75000" r="75000" b="25000"/></a:path>`,
+    );
+    for (const xml of slideXml) {
+      expect(xml.indexOf("<p:bg>")).toBeLessThan(xml.indexOf("<p:spTree>"));
+    }
+    expect(pngRels).toContain(`Target="../media/image1.png"`);
+    expect(jpegRels).toContain(`Target="../media/image1.jpeg"`);
+    expect(archive["ppt/media/image1.png"]).toEqual(BLUE_PNG);
+    expect(archive["ppt/media/image1.jpeg"]).toEqual(jpeg);
+    expect(contentTypes).toContain(`<Default Extension="png" ContentType="image/png"/>`);
+    expect(contentTypes).toContain(`<Default Extension="jpeg" ContentType="image/jpeg"/>`);
+    expect(reread.diagnostics).toEqual([]);
+    expect(reread.slides[1]?.background).toMatchObject({
+      kind: "fill",
+      fill: { kind: "gradient", gradientType: "linear", angle: 2700000 },
+    });
+    expect(reread.slides[2]?.background).toMatchObject({
+      kind: "fill",
+      fill: { kind: "gradient", gradientType: "radial", centerX: 0.25, centerY: 0.75 },
+    });
+    expect(reread.slides[3]?.background).toMatchObject({
+      kind: "fill",
+      fill: { kind: "image", blipRelationshipId: "rId2" },
+    });
+    expect(createComputedView(reread).slides.every((slide) => slide.elements.length === 1)).toBe(
+      true,
+    );
+    expect(
+      createComputedView(reread).slides.every(
+        (slide) => slide.elements[0]?.sourceLayer === "master",
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects invalid slide background inputs and non-slide handles", () => {
+    const source = createPptx();
+    const slideHandle = source.slides[0]?.handle;
+    const masterHandle = source.slideMasters[0]?.handle;
+    if (slideHandle === undefined || masterHandle === undefined) {
+      throw new Error("createPptx should create slide and master handles");
+    }
+    expect(() =>
+      setSlideBackground(source, slideHandle, {
+        kind: "gradient",
+        gradientType: "linear",
+        angle: asOoxmlAngle(0),
+        stops: [],
+      }),
+    ).toThrow(/at least two/);
+    expect(() =>
+      setSlideBackground(source, slideHandle, {
+        kind: "image",
+        bytes: new Uint8Array([1, 2, 3]),
+      }),
+    ).toThrow(/unsupported or unknown image format/);
+    expect(() =>
+      setSlideBackground(source, masterHandle, {
+        kind: "solid",
+        color: { kind: "srgb", hex: "FFFFFF" },
+      }),
+    ).toThrow(/slide handle was not found/);
   });
 
   it("authors every supported object on a layout with part-unique slide-number fields", () => {

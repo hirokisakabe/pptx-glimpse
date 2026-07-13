@@ -304,6 +304,22 @@ const EDIT_KIND_DESCRIPTORS: {
     insertedSlidePartPath: () => undefined,
     insertedShape: () => undefined,
   },
+  setSlideBackground: {
+    reservedPartPaths: (edit) => [
+      edit.slidePartPath,
+      ...(edit.mediaPartPath === undefined ? [] : [edit.mediaPartPath]),
+    ],
+    dirtyPartPath: (edit) => edit.slidePartPath,
+    targetsShape: () => false,
+    invalidatingPartPaths: (edit) => [
+      edit.slidePartPath,
+      ...(edit.mediaPartPath === undefined ? [] : [edit.mediaPartPath]),
+    ],
+    reservedShapeId: () => undefined,
+    slideTopologyOperation: () => undefined,
+    insertedSlidePartPath: () => undefined,
+    insertedShape: () => undefined,
+  },
 };
 
 function descriptorFor(edit: PptxSourceModelEdit): EditKindDescriptor<PptxSourceModelEdit> {
