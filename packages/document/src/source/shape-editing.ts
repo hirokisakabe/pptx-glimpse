@@ -205,8 +205,8 @@ export function findShapeNodeBySourceHandle(
   source: PptxSourceModel,
   handle: SourceHandle,
 ): SourceShapeNode | undefined {
-  for (const container of [...source.slides, ...source.slideLayouts, ...source.slideMasters]) {
-    const shape = findShapeNodeInTree(container.shapes, handle);
+  for (const slide of source.slides) {
+    const shape = findShapeNodeInTree(slide.shapes, handle);
     if (shape !== undefined) return shape;
   }
   return undefined;
