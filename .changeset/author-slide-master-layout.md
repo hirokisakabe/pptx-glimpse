@@ -2,4 +2,4 @@
 "@pptx-glimpse/document": minor
 ---
 
-from-scratch writer に slide master / layout の名前・背景・既定 margin と、master / layout object・slide number field の authoring API を追加しました。
+from-scratch writer に、スライドマスター／レイアウトの名前・背景・既定テキストマージン、オブジェクト追加、スライド番号フィールドの authoring API を追加しました。

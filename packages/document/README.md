@@ -88,8 +88,9 @@ await writeFile("from-scratch.pptx", writePptx(edited));
 
 `createPptx` can name and configure its initial master/layout. The same text, shape,
 connector, and picture authoring helpers used for slides accept the generated master or
-layout handle. A layout margin is materialized into subsequently authored text-bearing
-shapes on every slide that references that layout.
+layout handle. A layout margin is materialized when a text-bearing shape is subsequently
+authored directly on a slide that references that layout; it does not rewrite existing or
+inherited shapes, and explicit per-shape margin values take precedence.
 
 ```ts
 import { writeFile } from "node:fs/promises";
@@ -121,7 +122,9 @@ let source = createPptx({
 
 const master = source.slideMasters[0];
 const layout = source.slideLayouts[0];
-if (master?.handle === undefined || layout === undefined) throw new Error("Missing template");
+if (master?.handle === undefined || layout?.handle === undefined) {
+  throw new Error("Missing template");
+}
 
 source = addTextBox(source, master.handle, {
   offsetX: asEmu(300000),
@@ -136,7 +139,23 @@ source = addSlideNumber(source, master.handle, {
   width: asEmu(500000),
   height: asEmu(300000),
 });
+source = addTextBox(source, layout.handle, {
+  offsetX: asEmu(300000),
+  offsetY: asEmu(900000),
+  width: asEmu(3000000),
+  height: asEmu(500000),
+  text: "Inherited layout text",
+});
 source = addEmptySlideFromLayout(source, { layoutPartPath: layout.partPath });
+const authoredSlide = source.slides.at(-1);
+if (authoredSlide?.handle === undefined) throw new Error("Missing authored slide");
+source = addTextBox(source, authoredSlide.handle, {
+  offsetX: asEmu(300000),
+  offsetY: asEmu(1600000),
+  width: asEmu(3000000),
+  height: asEmu(500000),
+  text: "Uses the layout's default margins",
+});
 
 await writeFile("authored-master.pptx", writePptx(source));
 ```
