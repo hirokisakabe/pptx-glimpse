@@ -35,7 +35,8 @@ The stable entry point includes:
 - `createComputedView(source, options?)` for deriving slide/layout/master/theme effective values without mutating the source
 - `writePptx(source)` for structural round-trip writing
 - Text editing helpers such as `replaceTextRunPlainText(source, handle, text)` and related source handle lookup types exported from the root entry point
-- From-scratch authoring helpers such as `addTextBox(source, slideHandle, input)` and `addPicture(source, slideHandle, input)`
+- From-scratch authoring helpers such as `addTextBox(source, targetHandle, input)` and `addPicture(source, targetHandle, input)`; slide, layout, and master handles are supported
+- Master/layout authoring through `createPptx({ slideMaster, slideLayout })` and `addSlideNumber(source, masterOrLayoutHandle, input)`
 - Slide topology helpers such as `addEmptySlideFromLayout(source, { layoutPartPath })`, `duplicateSlide(source, slideHandle)`, `moveSlide(source, slideHandle, { toIndex })`, and `deleteSlide(source, slideHandle)`
 - Source model, computed view, and unit types needed to consume those APIs
 
@@ -81,6 +82,63 @@ const edited = addTextBox(source, firstSlide.handle, {
 });
 
 await writeFile("from-scratch.pptx", writePptx(edited));
+```
+
+### Slide master and layout authoring
+
+`createPptx` can name and configure its initial master/layout. The same text, shape,
+connector, and picture authoring helpers used for slides accept the generated master or
+layout handle. A layout margin is materialized into subsequently authored text-bearing
+shapes on every slide that references that layout.
+
+```ts
+import { writeFile } from "node:fs/promises";
+
+import {
+  addEmptySlideFromLayout,
+  addSlideNumber,
+  addTextBox,
+  asEmu,
+  createPptx,
+  writePptx,
+} from "@pptx-glimpse/document";
+
+let source = createPptx({
+  slideMaster: {
+    name: "Product Master",
+    background: { kind: "solid", color: { kind: "srgb", hex: "F8FAFC" } },
+  },
+  slideLayout: {
+    name: "Product Blank",
+    margin: {
+      left: asEmu(120000),
+      right: asEmu(120000),
+      top: asEmu(80000),
+      bottom: asEmu(80000),
+    },
+  },
+});
+
+const master = source.slideMasters[0];
+const layout = source.slideLayouts[0];
+if (master?.handle === undefined || layout === undefined) throw new Error("Missing template");
+
+source = addTextBox(source, master.handle, {
+  offsetX: asEmu(300000),
+  offsetY: asEmu(180000),
+  width: asEmu(3000000),
+  height: asEmu(500000),
+  text: "Inherited master text",
+});
+source = addSlideNumber(source, master.handle, {
+  offsetX: asEmu(8200000),
+  offsetY: asEmu(4650000),
+  width: asEmu(500000),
+  height: asEmu(300000),
+});
+source = addEmptySlideFromLayout(source, { layoutPartPath: layout.partPath });
+
+await writeFile("authored-master.pptx", writePptx(source));
 ```
 
 ## Text-Run Edit
