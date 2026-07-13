@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import sharp from "sharp";
+
 import {
   addChart,
   addConnector,
@@ -26,6 +28,7 @@ import {
   moveSlide,
   readPptx,
   replaceImageBytes,
+  setSlideBackground,
   type SourceConnector,
   type SourceHandle,
   type SourceImage,
@@ -590,6 +593,58 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
     renderSingleWithLibreOffice(
       libreOfficeImage,
       "editor-validity-from-scratch-authored-master.pptx",
+      writePptx(source),
+    );
+  });
+
+  it("opens a from-scratch PPTX with individual slide backgrounds", async () => {
+    let source = createPptx();
+    const masterHandle = requireHandle(source.slideMasters[0]?.handle);
+    const layout = source.slideLayouts[0];
+    if (layout === undefined) throw new Error("createPptx should create a layout");
+    source = addTextBox(source, masterHandle, {
+      offsetX: asEmu(300000),
+      offsetY: asEmu(180000),
+      width: asEmu(3000000),
+      height: asEmu(500000),
+      text: "Inherited above each slide background",
+    });
+    for (let index = 0; index < 4; index += 1) {
+      source = addEmptySlideFromLayout(source, { layoutPartPath: layout.partPath });
+    }
+    const handles = source.slides.map((slide) => requireHandle(slide.handle));
+    source = setSlideBackground(source, handles[0], {
+      kind: "solid",
+      color: { kind: "srgb", hex: "E2E8F0" },
+    });
+    source = setSlideBackground(source, handles[1], {
+      kind: "gradient",
+      gradientType: "linear",
+      angle: asOoxmlAngle(2700000),
+      stops: [
+        { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "DBEAFE" } },
+        { position: asOoxmlPercent(100000), color: { kind: "srgb", hex: "BFDBFE" } },
+      ],
+    });
+    source = setSlideBackground(source, handles[2], {
+      kind: "gradient",
+      gradientType: "radial",
+      centerX: asOoxmlPercent(35000),
+      centerY: asOoxmlPercent(40000),
+      stops: [
+        { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FEF3C7" } },
+        { position: asOoxmlPercent(100000), color: { kind: "srgb", hex: "FDE68A" } },
+      ],
+    });
+    source = setSlideBackground(source, handles[3], { kind: "image", bytes: BLUE_PNG });
+    source = setSlideBackground(source, handles[4], {
+      kind: "image",
+      bytes: new Uint8Array(await sharp(BLUE_PNG).jpeg().toBuffer()),
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-from-scratch-slide-backgrounds.pptx",
       writePptx(source),
     );
   });

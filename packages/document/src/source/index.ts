@@ -129,6 +129,7 @@ export type {
   PptxSourceModelParagraphPropertiesEdit,
   PptxSourceModelParagraphTextEdit,
   PptxSourceModelReplaceImageEdit,
+  PptxSourceModelSetSlideBackgroundEdit,
   PptxSourceModelShapeFillEdit,
   PptxSourceModelShapeOutlineEdit,
   PptxSourceModelShapeTransformEdit,
@@ -219,5 +220,11 @@ export type {
   SourceTransform,
   SourceVerticalAnchor,
 } from "./shapes.js";
+export type {
+  SetSlideBackgroundInput,
+  SlideBackgroundColorInput,
+  SlideBackgroundGradientStopInput,
+} from "./slide-background-authoring.js";
+export { setSlideBackground } from "./slide-background-authoring.js";
 export type { Emu, HundredthPt, OoxmlAngle, OoxmlPercent, Pt } from "./units.js";
 export { asEmu, asHundredthPt, asOoxmlAngle, asOoxmlPercent, asPt } from "./units.js";
