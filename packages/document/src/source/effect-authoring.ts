@@ -34,6 +34,7 @@ const RECTANGLE_ALIGNMENTS: ReadonlySet<string> = new Set<SourceRectangleAlignme
   "b",
   "br",
 ]);
+const MAX_POWERPOINT_POSITIVE_COORDINATE = 2147483647;
 
 export function assertShadowEffectsInput(
   effects: unknown,
@@ -75,8 +76,8 @@ function assertShadowGeometry(
   operationName: string,
   path: string,
 ): void {
-  assertNonNegativeInteger(value.blurRadius, operationName, `${path}.blurRadius`);
-  assertNonNegativeInteger(value.distance, operationName, `${path}.distance`);
+  assertPowerPointPositiveCoordinate(value.blurRadius, operationName, `${path}.blurRadius`);
+  assertPowerPointPositiveCoordinate(value.distance, operationName, `${path}.distance`);
   assertPositiveFixedAngle(value.direction, operationName, `${path}.direction`);
   assertShadowColor(value.color, operationName, `${path}.color`);
 }
@@ -109,9 +110,20 @@ function assertShadowColor(value: unknown, operationName: string, path: string):
   });
 }
 
-function assertNonNegativeInteger(value: unknown, operationName: string, path: string): void {
-  if (typeof value !== "number" || !Number.isInteger(value) || value < 0) {
-    throw new Error(`${operationName}: ${path} must be a non-negative integer EMU value`);
+function assertPowerPointPositiveCoordinate(
+  value: unknown,
+  operationName: string,
+  path: string,
+): void {
+  if (
+    typeof value !== "number" ||
+    !Number.isInteger(value) ||
+    value < 0 ||
+    value > MAX_POWERPOINT_POSITIVE_COORDINATE
+  ) {
+    throw new Error(
+      `${operationName}: ${path} must be an integer between 0 and ${MAX_POWERPOINT_POSITIVE_COORDINATE}`,
+    );
   }
 }
 

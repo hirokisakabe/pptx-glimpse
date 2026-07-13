@@ -709,13 +709,33 @@ describe("editing shape operations", () => {
         ...shapeInput,
         effects: { outerShadow: { ...outerShadow, blurRadius: asEmu(-1) } },
       }),
-    ).toThrow("addShape: effects.outerShadow.blurRadius must be a non-negative integer EMU value");
+    ).toThrow(
+      "addShape: effects.outerShadow.blurRadius must be an integer between 0 and 2147483647",
+    );
     expect(() =>
       addShape(source, slideHandle, {
         ...shapeInput,
         effects: { outerShadow: { ...outerShadow, distance: asEmu(1.5) } },
       }),
-    ).toThrow("addShape: effects.outerShadow.distance must be a non-negative integer EMU value");
+    ).toThrow("addShape: effects.outerShadow.distance must be an integer between 0 and 2147483647");
+    expect(() =>
+      addShape(source, slideHandle, {
+        ...shapeInput,
+        effects: {
+          outerShadow: { ...outerShadow, blurRadius: asEmu(2147483647) },
+        },
+      }),
+    ).not.toThrow();
+    expect(() =>
+      addShape(source, slideHandle, {
+        ...shapeInput,
+        effects: {
+          outerShadow: { ...outerShadow, blurRadius: asEmu(2147483648) },
+        },
+      }),
+    ).toThrow(
+      "addShape: effects.outerShadow.blurRadius must be an integer between 0 and 2147483647",
+    );
     expect(() =>
       addShape(source, slideHandle, {
         ...shapeInput,
@@ -746,13 +766,32 @@ describe("editing shape operations", () => {
         effects: {
           innerShadow: {
             blurRadius: asEmu(0),
-            distance: asEmu(-1),
+            distance: asEmu(2147483647),
             direction: asOoxmlAngle(0),
             color: { kind: "srgb", hex: "000000" },
           },
         },
       }),
-    ).toThrow("addPicture: effects.innerShadow.distance must be a non-negative integer EMU value");
+    ).not.toThrow();
+    expect(() =>
+      addPicture(source, slideHandle, {
+        bytes: PNG,
+        offsetX: asEmu(1),
+        offsetY: asEmu(2),
+        width: asEmu(3),
+        height: asEmu(4),
+        effects: {
+          innerShadow: {
+            blurRadius: asEmu(0),
+            distance: asEmu(2147483648),
+            direction: asOoxmlAngle(0),
+            color: { kind: "srgb", hex: "000000" },
+          },
+        },
+      }),
+    ).toThrow(
+      "addPicture: effects.innerShadow.distance must be an integer between 0 and 2147483647",
+    );
   });
 
   it("adds adjusted and custom geometry with flips and zero line extents", () => {
@@ -1502,7 +1541,7 @@ describe("editing shape operations", () => {
         // @ts-expect-error Runtime validation rejects empty effects from JS callers.
         effects: {},
       }),
-    ).toThrow("addShape: effects must set glow");
+    ).toThrow("addShape: effects must set glow, outerShadow, or innerShadow");
 
     const baseShape = {
       offsetX: asEmu(1),
