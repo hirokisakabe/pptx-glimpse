@@ -7,11 +7,22 @@
  */
 
 export type {
+  AddChartAreaStyleInput,
   AddChartAxisInput,
+  AddChartColorInput,
+  AddChartDataPointInput,
+  AddChartFillInput,
   AddChartInput,
+  AddChartMarkerInput,
+  AddChartNumberFormatInput,
+  AddChartOutlineInput,
   AddChartPlotLayoutInput,
   AddChartSeriesInput,
+  AddChartTextStyleInput,
+  NativeChartLabelPosition,
   NativeChartLegendPosition,
+  NativeChartMarkerSymbol,
+  NativeChartTickMark,
   NativeChartType,
   NativeRadarStyle,
 } from "./chart-authoring.js";
