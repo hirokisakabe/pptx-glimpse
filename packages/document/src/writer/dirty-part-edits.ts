@@ -459,31 +459,72 @@ function applySetSlideBackgroundEdit(
   edit: PptxSourceModelSetSlideBackgroundEdit,
 ): void {
   const slide = getChild(root, "sld");
+  const cSldKey =
+    slide === undefined
+      ? undefined
+      : Object.keys(slide).find((key) => !key.startsWith("@_") && localName(key) === "cSld");
   const cSld = getChild(slide, "cSld");
-  if (slide === undefined || cSld === undefined) {
+  if (slide === undefined || cSldKey === undefined || cSld === undefined) {
     throw new Error(`writePptx: slide '${edit.slidePartPath}' has no p:cSld`);
+  }
+  const spTreeKey = Object.keys(cSld).find(
+    (key) => !key.startsWith("@_") && localName(key) === "spTree",
+  );
+  if (spTreeKey === undefined) {
+    throw new Error(`writePptx: slide '${edit.slidePartPath}' has no p:spTree`);
   }
   slide["@_xmlns:a"] ??= "http://schemas.openxmlformats.org/drawingml/2006/main";
   if (edit.relationshipId !== undefined) {
     slide["@_xmlns:r"] ??= "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
   }
-  const background = getChild(parseXml(edit.xml), "bg");
-  if (background === undefined) {
+  const parsedBackground = getChild(parseXml(edit.xml), "bg");
+  if (parsedBackground === undefined) {
     throw new Error("writePptx: background edit XML fragment does not contain a p:bg root element");
   }
+  const existingBackgroundKey = Object.keys(cSld).find(
+    (key) => !key.startsWith("@_") && localName(key) === "bg",
+  );
+  const backgroundKey = existingBackgroundKey ?? qualifiedSiblingName(cSldKey, "bg");
+  const background = remapElementPrefix(parsedBackground, "p", elementPrefix(backgroundKey));
 
   const entries: [string, unknown][] = [];
   let inserted = false;
   for (const [key, value] of Object.entries(cSld)) {
     if (!key.startsWith("@_") && localName(key) === "bg") continue;
-    if (!inserted && !key.startsWith("@_") && localName(key) === "spTree") {
-      entries.push(["p:bg", background]);
+    if (!inserted && key === spTreeKey) {
+      entries.push([backgroundKey, background]);
       inserted = true;
     }
     entries.push([key, value]);
   }
-  if (!inserted) entries.push(["p:bg", background]);
   replaceNodeEntries(cSld, entries);
+}
+
+function qualifiedSiblingName(siblingKey: string, local: string): string {
+  const prefix = elementPrefix(siblingKey);
+  return prefix === "" ? local : `${prefix}:${local}`;
+}
+
+function elementPrefix(key: string): string {
+  const separatorIndex = key.indexOf(":");
+  return separatorIndex === -1 ? "" : key.slice(0, separatorIndex);
+}
+
+function remapElementPrefix(value: unknown, from: string, to: string): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => remapElementPrefix(entry, from, to));
+  }
+  if (typeof value !== "object" || value === null) return value;
+  return Object.fromEntries(
+    Object.entries(unsafeOoxmlBoundaryAssertion<XmlNode>(value)).map(([key, entry]) => {
+      const remappedKey = key.startsWith(`${from}:`)
+        ? to === ""
+          ? localName(key)
+          : `${to}:${localName(key)}`
+        : key;
+      return [remappedKey, remapElementPrefix(entry, from, to)];
+    }),
+  );
 }
 
 interface ShapeTreeNodeLocation {

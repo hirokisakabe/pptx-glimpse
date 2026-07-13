@@ -1014,6 +1014,39 @@ describe("writePptx - from-scratch builder", () => {
     }).toThrow(/relationship, media part, and content type must be provided together/);
   });
 
+  it("preserves a non-standard PresentationML prefix when authoring a slide background", () => {
+    const archive = unzipSync(writePptx(createPptx()));
+    const slidePartPath = "ppt/slides/slide1.xml";
+    const slideXml = decoder
+      .decode(archive[slidePartPath])
+      .replaceAll("p:", "x:")
+      .replace("xmlns:p=", "xmlns:x=");
+    const source = readPptx(zipSync({ ...archive, [slidePartPath]: encoder.encode(slideXml) }));
+    const edited = setSlideBackground(source, source.slides[0].handle!, {
+      kind: "solid",
+      color: { kind: "srgb", hex: "112233" },
+    });
+    const writtenSlideXml = decoder.decode(unzipSync(writePptx(edited))[slidePartPath]);
+
+    expect(writtenSlideXml).toContain("<x:bg><x:bgPr>");
+    expect(writtenSlideXml).not.toContain("<p:bg");
+  });
+
+  it("rejects authoring a background when the slide has no shape tree", () => {
+    const archive = unzipSync(writePptx(createPptx()));
+    const slidePartPath = "ppt/slides/slide1.xml";
+    const slideXml = decoder
+      .decode(archive[slidePartPath])
+      .replace(/<p:spTree>[\s\S]*<\/p:spTree>/, "");
+    const source = readPptx(zipSync({ ...archive, [slidePartPath]: encoder.encode(slideXml) }));
+    const edited = setSlideBackground(source, source.slides[0].handle!, {
+      kind: "solid",
+      color: { kind: "srgb", hex: "112233" },
+    });
+
+    expect(() => writePptx(edited)).toThrow(/has no p:spTree/);
+  });
+
   it("authors every supported object on a layout with part-unique slide-number fields", () => {
     let source = createPptx();
     const masterHandle = source.slideMasters[0]?.handle;
