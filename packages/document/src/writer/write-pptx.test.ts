@@ -1523,6 +1523,9 @@ describe("writePptx - from-scratch builder", () => {
       `<a:glow rad="12700"><a:srgbClr val="445566"><a:alpha val="100000"/></a:srgbClr></a:glow>`,
     );
     expect(slideXml).toContain(
+      `<a:gs pos="0"><a:srgbClr val="FF0000"><a:alpha val="25000"/></a:srgbClr></a:gs>`,
+    );
+    expect(slideXml).toContain(
       `<a:solidFill><a:srgbClr val="778899"><a:alpha val="50000"/></a:srgbClr></a:solidFill>`,
     );
     expect(slideXml).toContain(
