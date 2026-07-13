@@ -281,9 +281,116 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
           width: asEmu(1300000),
           height: asEmu(1800000),
           title: chartType,
+          titleStyle: {
+            fontFace: "Liberation Sans",
+            fontSize: asPt(12),
+            color: { kind: "srgb", hex: "203864" },
+            bold: true,
+            italic: index % 2 === 0,
+          },
+          displayBlanksAs: (["gap", "zero", "span"] as const)[index % 3],
+          roundedCorners: index === 0,
+          chartArea: {
+            fill: { kind: "solid", color: { kind: "srgb", hex: "F2F2F2" } },
+            outline: {
+              width: asEmu(12700),
+              fill: { kind: "solid", color: { kind: "srgb", hex: "BFBFBF" } },
+            },
+          },
+          plotArea: {
+            fill: { kind: "solid", color: { kind: "srgb", hex: "FFFFFF" } },
+          },
+          ...(chartType === "bar" ||
+          chartType === "line" ||
+          chartType === "area" ||
+          chartType === "radar"
+            ? {
+                categoryAxis: {
+                  hidden: chartType === "bar",
+                  majorTickMark: "outside" as const,
+                  labelPosition: "nextTo" as const,
+                  numberFormat: { formatCode: "General", sourceLinked: true },
+                  line: {
+                    fill: {
+                      kind: "solid" as const,
+                      color: { kind: "srgb" as const, hex: "808080" },
+                    },
+                  },
+                  textStyle: {
+                    fontFace: "Liberation Sans",
+                    fontSize: asPt(8),
+                    color: { kind: "srgb" as const, hex: "404040" },
+                  },
+                  showMultiLevelLabels: false,
+                },
+                valueAxis: {
+                  hidden: chartType === "bar",
+                  majorTickMark: "none" as const,
+                  labelPosition: "low" as const,
+                  numberFormat: { formatCode: "0.0", sourceLinked: false },
+                  gridLinesVisible: true,
+                  majorGridline: {
+                    fill: {
+                      kind: "solid" as const,
+                      color: { kind: "srgb" as const, hex: "D9D9D9" },
+                    },
+                    dash: "dot" as const,
+                  },
+                },
+              }
+            : {}),
+          ...(chartType === "bar"
+            ? { plotLayout: { coordinateMode: "edge" as const, x: 0, y: 0, width: 1, height: 1 } }
+            : {}),
           series: [
-            { name: "Plan", categories: ["Q1", "Q2", "Q3"], values: [10, 20, 15] },
-            { name: "Actual", categories: ["Q1", "Q2", "Q3"], values: [12, 18, 17] },
+            {
+              name: "Plan",
+              categories: ["Q1", "Q2", "Q3"],
+              values: [10, 20, 15],
+              fill: { kind: "solid", color: { kind: "srgb", hex: "4472C4" } },
+              outline: {
+                width: asEmu(12700),
+                fill: { kind: "solid", color: { kind: "srgb", hex: "203864" } },
+              },
+              ...(chartType === "line" || chartType === "radar"
+                ? {
+                    marker: {
+                      symbol: "diamond" as const,
+                      size: 7,
+                      fill: {
+                        kind: "solid" as const,
+                        color: { kind: "srgb" as const, hex: "FFC000" },
+                      },
+                      outline: {
+                        fill: {
+                          kind: "solid" as const,
+                          color: { kind: "srgb" as const, hex: "7F6000" },
+                        },
+                      },
+                    },
+                  }
+                : {}),
+              ...(chartType === "bar" || chartType === "pie" || chartType === "doughnut"
+                ? {
+                    dataPoints: [
+                      {
+                        index: 0,
+                        fill: {
+                          kind: "solid" as const,
+                          color: { kind: "srgb" as const, hex: "ED7D31" },
+                        },
+                      },
+                      {
+                        index: 1,
+                        fill: {
+                          kind: "solid" as const,
+                          color: { kind: "srgb" as const, hex: "70AD47" },
+                        },
+                      },
+                    ],
+                  }
+                : {}),
+            },
           ],
         }),
       source,
