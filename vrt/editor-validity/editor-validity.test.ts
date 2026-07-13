@@ -615,6 +615,20 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
       width: asEmu(9144000),
       height: asEmu(143500),
       fill: { kind: "solid", color: { kind: "srgb", hex: "4472C4" } },
+      effects: {
+        outerShadow: {
+          blurRadius: asEmu(40000),
+          distance: asEmu(20000),
+          direction: asOoxmlAngle(2700000),
+          color: {
+            kind: "srgb",
+            hex: "000000",
+            transforms: [{ kind: "alpha", value: asOoxmlPercent(35000) }],
+          },
+          alignment: "b",
+          rotateWithShape: false,
+        },
+      },
     });
     source = addConnector(source, masterHandle, {
       preset: "straightConnector1",
@@ -629,6 +643,26 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
       offsetY: asEmu(180000),
       width: asEmu(500000),
       height: asEmu(500000),
+      effects: {
+        innerShadow: {
+          blurRadius: asEmu(30000),
+          distance: asEmu(15000),
+          direction: asOoxmlAngle(8100000),
+          color: { kind: "srgb", hex: "1E293B" },
+        },
+        outerShadow: {
+          blurRadius: asEmu(45000),
+          distance: asEmu(25000),
+          direction: asOoxmlAngle(13500000),
+          color: {
+            kind: "srgb",
+            hex: "000000",
+            transforms: [{ kind: "alpha", value: asOoxmlPercent(25000) }],
+          },
+          alignment: "br",
+          rotateWithShape: true,
+        },
+      },
     });
     source = addSlideNumber(source, masterHandle, {
       offsetX: asEmu(8200000),
