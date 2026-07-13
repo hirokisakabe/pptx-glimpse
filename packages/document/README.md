@@ -98,7 +98,7 @@ const slide = source.slides[0];
 if (slide?.handle === undefined) throw new Error("Missing slide");
 
 source = addShape(source, slide.handle, {
-  preset: "ellipse",
+  geometry: { kind: "preset", preset: "ellipse" },
   offsetX: asEmu(914400),
   offsetY: asEmu(914400),
   width: asEmu(2743200),

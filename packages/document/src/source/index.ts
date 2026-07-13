@@ -17,8 +17,12 @@ export type {
   AddShapeBodyPropertiesInput,
   AddShapeColorInput,
   AddShapeColorTransformInput,
+  AddShapeCustomGeometryInput,
+  AddShapeCustomGeometryPathCommandInput,
+  AddShapeCustomGeometryPathInput,
   AddShapeEffectsInput,
   AddShapeFillInput,
+  AddShapeGeometryInput,
   AddShapeGlowInput,
   AddShapeGradientFillInput,
   AddShapeGradientStopInput,
@@ -26,6 +30,7 @@ export type {
   AddShapeOutlineInput,
   AddShapeParagraphInput,
   AddShapeParagraphPropertiesInput,
+  AddShapePresetGeometryInput,
   AddShapeRunInput,
   AddShapeRunPropertiesInput,
   AddSlideNumberInput,
@@ -37,12 +42,14 @@ export type {
   AddTableRunPropertiesInput,
   AddTextBoxBaselineInput,
   AddTextBoxBodyPropertiesInput,
+  AddTextBoxBulletInput,
   AddTextBoxColorInput,
   AddTextBoxColorTransformInput,
   AddTextBoxGlowInput,
   AddTextBoxGradientFillInput,
   AddTextBoxGradientStopInput,
   AddTextBoxInput,
+  AddTextBoxLineSpacingInput,
   AddTextBoxOutlineInput,
   AddTextBoxParagraphInput,
   AddTextBoxParagraphPropertiesInput,
@@ -126,6 +133,7 @@ export type {
   PptxSourceModelParagraphPropertiesEdit,
   PptxSourceModelParagraphTextEdit,
   PptxSourceModelReplaceImageEdit,
+  PptxSourceModelSetSlideBackgroundEdit,
   PptxSourceModelShapeFillEdit,
   PptxSourceModelShapeOutlineEdit,
   PptxSourceModelShapeTransformEdit,
@@ -214,7 +222,14 @@ export type {
   SourceTextVerticalType,
   SourceTextWrap,
   SourceTransform,
+  SourceUnderlineStyle,
   SourceVerticalAnchor,
 } from "./shapes.js";
+export type {
+  SetSlideBackgroundInput,
+  SlideBackgroundColorInput,
+  SlideBackgroundGradientStopInput,
+} from "./slide-background-authoring.js";
+export { setSlideBackground } from "./slide-background-authoring.js";
 export type { Emu, HundredthPt, OoxmlAngle, OoxmlPercent, Pt } from "./units.js";
 export { asEmu, asHundredthPt, asOoxmlAngle, asOoxmlPercent, asPt } from "./units.js";

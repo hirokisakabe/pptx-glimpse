@@ -12,6 +12,7 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
   const shapeFillKeys = new Set<string>();
   const shapeOutlineKeys = new Set<string>();
   const deletedShapeKeys = new Set<string>();
+  const slideBackgroundKeys = new Set<string>();
   const textRunEdits: PptxSourceModelTextRunEdit[] = [];
   const textRunPropertiesEdits: PptxSourceModelTextRunPropertiesEdit[] = [];
 
@@ -102,6 +103,15 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
       case "moveSlide":
       case "deleteSlide":
         break;
+      case "setSlideBackground":
+        validateSlideBackgroundImageMetadata(edit);
+        if (slideBackgroundKeys.has(edit.slidePartPath)) {
+          throw new Error(
+            `writePptx: conflicting background edits for slide '${edit.slidePartPath}'`,
+          );
+        }
+        slideBackgroundKeys.add(edit.slidePartPath);
+        break;
     }
   }
 
@@ -120,6 +130,21 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
         `writePptx: conflicting text run properties and paragraph edits for handle '${runPropertiesEdit.handle.nodeId}'`,
       );
     }
+  }
+}
+
+function validateSlideBackgroundImageMetadata(edit: {
+  readonly relationshipId?: unknown;
+  readonly mediaPartPath?: unknown;
+  readonly contentType?: unknown;
+}): void {
+  const definedCount = [edit.relationshipId, edit.mediaPartPath, edit.contentType].filter(
+    (value) => value !== undefined,
+  ).length;
+  if (definedCount !== 0 && definedCount !== 3) {
+    throw new Error(
+      "writePptx: slide background image relationship, media part, and content type must be provided together",
+    );
   }
 }
 

@@ -220,6 +220,7 @@ export type SourceDashStyle =
   | "dashDot"
   | "lgDash"
   | "lgDashDot"
+  | "lgDashDotDot"
   | "sysDash"
   | "sysDot";
 export type SourceLineCap = "butt" | "round" | "square";
@@ -236,8 +237,11 @@ export interface SourceRunProperties {
   readonly bold?: boolean;
   readonly italic?: boolean;
   readonly underline?: boolean;
+  readonly underlineStyle?: SourceUnderlineStyle;
+  readonly underlineColor?: SourceColor;
   readonly strikethrough?: boolean;
   readonly baseline?: number;
+  readonly highlight?: SourceColor;
   /** Font size. Stored as pt in the OOXML domain. */
   readonly fontSize?: Pt;
   /** latin typeface name (kept unresolved including theme token). */
@@ -248,6 +252,26 @@ export interface SourceRunProperties {
   readonly typefaceCs?: string;
   readonly color?: SourceColor;
 }
+
+export type SourceUnderlineStyle =
+  | "sng"
+  | "words"
+  | "dbl"
+  | "heavy"
+  | "dotted"
+  | "dottedHeavy"
+  | "dash"
+  | "dashHeavy"
+  | "dashLong"
+  | "dashLongHeavy"
+  | "dotDash"
+  | "dotDashHeavy"
+  | "dotDotDash"
+  | "dotDotDashHeavy"
+  | "wavy"
+  | "wavyHeavy"
+  | "wavyDbl"
+  | "none";
 
 export type SourceAutoNumScheme =
   | "arabicPeriod"
@@ -470,6 +494,10 @@ export interface SourceTableCell {
   readonly textBody?: SourceTextBody;
   readonly fill?: SourceFill;
   readonly borders?: SourceCellBorders;
+  readonly marginLeft?: Emu;
+  readonly marginRight?: Emu;
+  readonly marginTop?: Emu;
+  readonly marginBottom?: Emu;
   readonly gridSpan: number;
   readonly rowSpan: number;
   readonly hMerge: boolean;

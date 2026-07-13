@@ -5,6 +5,8 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import sharp from "sharp";
+
 import {
   addChart,
   addConnector,
@@ -26,6 +28,7 @@ import {
   moveSlide,
   readPptx,
   replaceImageBytes,
+  setSlideBackground,
   type SourceConnector,
   type SourceHandle,
   type SourceImage,
@@ -309,6 +312,88 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
     );
   });
 
+  it("opens from-scratch PPTX with plain, bulleted, and numbered text", () => {
+    const source = createPptx();
+    const slideHandle = requireHandle(source.slides[0]?.handle);
+    const withPlainText = addTextBox(source, slideHandle, {
+      offsetX: asEmu(457200),
+      offsetY: asEmu(228600),
+      width: asEmu(8229600),
+      height: asEmu(685800),
+      body: { autoFit: "shape" },
+      paragraphs: [
+        {
+          runs: [
+            {
+              text: "Plain text",
+              properties: {
+                fontFace: "Liberation Sans",
+                fontSize: asPt(24),
+                baseline: { type: "percent", value: asOoxmlPercent(0) },
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const withBullets = addTextBox(withPlainText, slideHandle, {
+      offsetX: asEmu(685800),
+      offsetY: asEmu(1371600),
+      width: asEmu(3657600),
+      height: asEmu(2286000),
+      body: { autoFit: "shape" },
+      paragraphs: ["First bullet", "Second bullet"].map((text) => ({
+        properties: {
+          marginLeft: asEmu(342900),
+          indent: asEmu(-285750),
+          lineSpacing: { type: "percent" as const, value: asOoxmlPercent(110000) },
+          bullet: {
+            type: "character" as const,
+            character: "•",
+            fontFace: "Liberation Sans",
+            size: asOoxmlPercent(100000),
+          },
+        },
+        runs: [{ text, properties: { fontFace: "Liberation Sans", fontSize: asPt(20) } }],
+      })),
+    });
+    const edited = addShape(withBullets, slideHandle, {
+      geometry: { kind: "preset", preset: "roundRect" },
+      offsetX: asEmu(4800600),
+      offsetY: asEmu(1371600),
+      width: asEmu(3657600),
+      height: asEmu(2286000),
+      body: { autoFit: "shape" },
+      paragraphs: [
+        {
+          properties: {
+            marginLeft: asEmu(457200),
+            indent: asEmu(-228600),
+            lineSpacing: { type: "points", value: asHundredthPt(2400) },
+            bullet: {
+              type: "auto-number",
+              scheme: "arabicPeriod",
+              startAt: 2,
+              fontFace: "Liberation Sans",
+              size: asOoxmlPercent(100000),
+            },
+          },
+          runs: [{ text: "Numbered item", properties: { fontSize: asPt(20) } }],
+        },
+        {
+          properties: { bullet: { type: "none" } },
+          runs: [{ text: "Explicitly unbulleted", properties: { fontSize: asPt(18) } }],
+        },
+      ],
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-from-scratch-text-lists.pptx",
+      writePptx(edited),
+    );
+  });
+
   it("opens from-scratch PPTX after adding a formatted text box", () => {
     const source = createPptx();
     const edited = addTextBox(source, requireHandle(source.slides[0]?.handle), {
@@ -326,7 +411,10 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
       },
       paragraphs: [
         {
-          properties: { align: "center", lineSpacing: asHundredthPt(1800) },
+          properties: {
+            align: "center",
+            lineSpacing: { type: "points", value: asHundredthPt(1800) },
+          },
           runs: [
             {
               text: "Formatted ",
@@ -382,7 +470,10 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
           ],
         },
         {
-          properties: { align: "right", lineSpacing: asHundredthPt(2200) },
+          properties: {
+            align: "right",
+            lineSpacing: { type: "points", value: asHundredthPt(2200) },
+          },
           runs: [{ text: "Subscript", properties: { baseline: "subscript" } }],
         },
       ],
@@ -413,7 +504,7 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
       ],
     });
     const edited = addShape(withTextBox, handle, {
-      preset: "roundRect",
+      geometry: { kind: "preset", preset: "roundRect" },
       offsetX: asEmu(914400),
       offsetY: asEmu(2286000),
       width: asEmu(5486400),
@@ -443,7 +534,39 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
       rows: [
         {
           height: asEmu(914400),
-          cells: [{ text: "Native table", fill: "4472C4", colspan: 2 }, {}],
+          cells: [
+            {
+              runs: [
+                {
+                  text: "Native\ntable",
+                  hyperlink: "https://example.com/table-validity",
+                  properties: {
+                    bold: true,
+                    strike: true,
+                    underline: {
+                      style: "dashLongHeavy",
+                      color: { kind: "srgb", hex: "FFFF00" },
+                    },
+                    highlight: { kind: "srgb", hex: "1F4E78" },
+                    color: { kind: "srgb", hex: "FFFFFF" },
+                  },
+                },
+              ],
+              fill: "4472C4",
+              colspan: 2,
+              marginLeft: asEmu(100000),
+              marginRight: asEmu(110000),
+              marginTop: asEmu(50000),
+              marginBottom: asEmu(60000),
+              borders: {
+                left: { width: asEmu(12700), color: "FFFFFF", dash: "lgDashDotDot" },
+                right: { width: asEmu(12700), color: "FFFFFF", dash: "sysDash" },
+                top: { width: asEmu(12700), color: "FFFFFF", dash: "dashDot" },
+                bottom: { width: asEmu(12700), color: "FFFFFF", dash: "sysDot" },
+              },
+            },
+            {},
+          ],
         },
         {
           height: asEmu(914400),
@@ -486,7 +609,7 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
       text: "Inherited master object",
     });
     source = addShape(source, masterHandle, {
-      preset: "rect",
+      geometry: { kind: "preset", preset: "rect" },
       offsetX: asEmu(0),
       offsetY: asEmu(5000000),
       width: asEmu(9144000),
@@ -524,6 +647,58 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
       writePptx(source),
     );
   });
+
+  it("opens a from-scratch PPTX with individual slide backgrounds", async () => {
+    let source = createPptx();
+    const masterHandle = requireHandle(source.slideMasters[0]?.handle);
+    const layout = source.slideLayouts[0];
+    if (layout === undefined) throw new Error("createPptx should create a layout");
+    source = addTextBox(source, masterHandle, {
+      offsetX: asEmu(300000),
+      offsetY: asEmu(180000),
+      width: asEmu(3000000),
+      height: asEmu(500000),
+      text: "Inherited above each slide background",
+    });
+    for (let index = 0; index < 4; index += 1) {
+      source = addEmptySlideFromLayout(source, { layoutPartPath: layout.partPath });
+    }
+    const handles = source.slides.map((slide) => requireHandle(slide.handle));
+    source = setSlideBackground(source, handles[0], {
+      kind: "solid",
+      color: { kind: "srgb", hex: "E2E8F0" },
+    });
+    source = setSlideBackground(source, handles[1], {
+      kind: "gradient",
+      gradientType: "linear",
+      angle: asOoxmlAngle(2700000),
+      stops: [
+        { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "DBEAFE" } },
+        { position: asOoxmlPercent(100000), color: { kind: "srgb", hex: "BFDBFE" } },
+      ],
+    });
+    source = setSlideBackground(source, handles[2], {
+      kind: "gradient",
+      gradientType: "radial",
+      centerX: asOoxmlPercent(35000),
+      centerY: asOoxmlPercent(40000),
+      stops: [
+        { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FEF3C7" } },
+        { position: asOoxmlPercent(100000), color: { kind: "srgb", hex: "FDE68A" } },
+      ],
+    });
+    source = setSlideBackground(source, handles[3], { kind: "image", bytes: BLUE_PNG });
+    source = setSlideBackground(source, handles[4], {
+      kind: "image",
+      bytes: new Uint8Array(await sharp(BLUE_PNG).jpeg().toBuffer()),
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-from-scratch-slide-backgrounds.pptx",
+      writePptx(source),
+    );
+  });
 });
 
 describeOrSkip("LibreOffice shape add/delete validity", { timeout: 120000 }, () => {
@@ -549,7 +724,7 @@ describeOrSkip("LibreOffice shape add/delete validity", { timeout: 120000 }, () 
     const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
     const source = readPptx(sourcePptx);
     const edited = addShape(source, requireHandle(source.slides[0]?.handle), {
-      preset: "roundRect",
+      geometry: { kind: "preset", preset: "roundRect" },
       offsetX: asEmu(914400),
       offsetY: asEmu(914400),
       width: asEmu(3657600),
@@ -612,6 +787,57 @@ describeOrSkip("LibreOffice shape add/delete validity", { timeout: 120000 }, () 
     renderSingleWithLibreOffice(
       libreOfficeImage,
       "editor-validity-shape-add-preset-edited.pptx",
+      writePptx(edited),
+    );
+  });
+
+  it("opens PPTX after adding adjusted, custom, flipped, and zero-extent shapes", () => {
+    const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
+    let edited = readPptx(sourcePptx);
+    const slideHandle = requireHandle(edited.slides[0]?.handle);
+    edited = addShape(edited, slideHandle, {
+      geometry: { kind: "preset", preset: "roundRect", adjustValues: { adj: 20000 } },
+      offsetX: asEmu(457200),
+      offsetY: asEmu(457200),
+      width: asEmu(1828800),
+      height: asEmu(914400),
+      flipHorizontal: true,
+    });
+    edited = addShape(edited, slideHandle, {
+      geometry: {
+        kind: "custom",
+        paths: [
+          {
+            width: 100,
+            height: 100,
+            commands: [
+              { kind: "moveTo", x: 0, y: 100 },
+              { kind: "lineTo", x: 50, y: 0 },
+              { kind: "lineTo", x: 100, y: 100 },
+              { kind: "close" },
+            ],
+          },
+        ],
+      },
+      offsetX: asEmu(3200400),
+      offsetY: asEmu(457200),
+      width: asEmu(1828800),
+      height: asEmu(914400),
+      flipVertical: true,
+    });
+    edited = addShape(edited, slideHandle, {
+      geometry: { kind: "preset", preset: "line" },
+      offsetX: asEmu(5943600),
+      offsetY: asEmu(457200),
+      width: asEmu(0),
+      height: asEmu(914400),
+      flipHorizontal: true,
+      flipVertical: true,
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-shape-add-geometry-transform-edited.pptx",
       writePptx(edited),
     );
   });

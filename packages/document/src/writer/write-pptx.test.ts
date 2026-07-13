@@ -19,6 +19,7 @@ import {
   createComputedView,
   createPptx,
   readPptx,
+  setSlideBackground,
   writePptx,
 } from "../index.js";
 import {
@@ -759,7 +760,7 @@ describe("writePptx - from-scratch builder", () => {
       text: "Master title",
     });
     source = addShape(source, masterHandle, {
-      preset: "rect",
+      geometry: { kind: "preset", preset: "rect" },
       offsetX: asEmu(0),
       offsetY: asEmu(5000000),
       width: asEmu(9144000),
@@ -862,6 +863,218 @@ describe("writePptx - from-scratch builder", () => {
     });
   });
 
+  it("authors solid, linear, radial, PNG, and JPEG backgrounds on individual slides", () => {
+    let source = createPptx();
+    const masterHandle = source.slideMasters[0]?.handle;
+    const layout = source.slideLayouts[0];
+    if (masterHandle === undefined || layout === undefined) {
+      throw new Error("createPptx should create a master and layout");
+    }
+    source = addShape(source, masterHandle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(100000),
+      offsetY: asEmu(100000),
+      width: asEmu(500000),
+      height: asEmu(500000),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "FFFFFF" } },
+    });
+    for (let index = 0; index < 4; index += 1) {
+      source = addEmptySlideFromLayout(source, { layoutPartPath: layout.partPath });
+    }
+    const handles = source.slides.map((slide) => slide.handle);
+    if (handles.some((handle) => handle === undefined)) {
+      throw new Error("authored slides should have handles");
+    }
+
+    source = setSlideBackground(source, handles[0]!, {
+      kind: "solid",
+      color: { kind: "srgb", hex: "112233" },
+    });
+    source = setSlideBackground(source, handles[1]!, {
+      kind: "gradient",
+      gradientType: "linear",
+      angle: asOoxmlAngle(2700000),
+      stops: [
+        { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FF0000" } },
+        { position: asOoxmlPercent(100000), color: { kind: "srgb", hex: "0000FF" } },
+      ],
+    });
+    source = setSlideBackground(source, handles[2]!, {
+      kind: "gradient",
+      gradientType: "radial",
+      centerX: asOoxmlPercent(25000),
+      centerY: asOoxmlPercent(75000),
+      stops: [
+        { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FFFFFF" } },
+        { position: asOoxmlPercent(100000), color: { kind: "srgb", hex: "00AA44" } },
+      ],
+    });
+    source = setSlideBackground(source, handles[3]!, { kind: "image", bytes: BLUE_PNG });
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xdb, 1, 2, 3]);
+    source = setSlideBackground(source, handles[4]!, { kind: "image", bytes: jpeg });
+
+    const output = writePptx(source);
+    const archive = unzipSync(output);
+    const slideXml = Array.from({ length: 5 }, (_, index) =>
+      decoder.decode(archive[`ppt/slides/slide${index + 1}.xml`]),
+    );
+    const pngRels = decoder.decode(archive["ppt/slides/_rels/slide4.xml.rels"]);
+    const jpegRels = decoder.decode(archive["ppt/slides/_rels/slide5.xml.rels"]);
+    const contentTypes = decoder.decode(archive["[Content_Types].xml"]);
+    const reread = readPptx(output);
+
+    expect(source.slides.map((slide) => slide.background?.kind)).toEqual([
+      "fill",
+      "fill",
+      "fill",
+      "fill",
+      "fill",
+    ]);
+    expect(slideXml[0]).toContain(
+      `<p:bg><p:bgPr><a:solidFill><a:srgbClr val="112233"/></a:solidFill>`,
+    );
+    expect(slideXml[1]).toContain(`<a:lin ang="2700000" scaled="1"/>`);
+    expect(slideXml[2]).toContain(
+      `<a:path path="circle"><a:fillToRect l="25000" t="75000" r="75000" b="25000"/></a:path>`,
+    );
+    for (const xml of slideXml) {
+      expect(xml.indexOf("<p:bg>")).toBeLessThan(xml.indexOf("<p:spTree>"));
+    }
+    expect(pngRels).toContain(`Target="../media/image1.png"`);
+    expect(jpegRels).toContain(`Target="../media/image1.jpeg"`);
+    expect(archive["ppt/media/image1.png"]).toEqual(BLUE_PNG);
+    expect(archive["ppt/media/image1.jpeg"]).toEqual(jpeg);
+    expect(contentTypes).toContain(`<Default Extension="png" ContentType="image/png"/>`);
+    expect(contentTypes).toContain(`<Default Extension="jpeg" ContentType="image/jpeg"/>`);
+    expect(reread.diagnostics).toEqual([]);
+    expect(reread.slides[1]?.background).toMatchObject({
+      kind: "fill",
+      fill: { kind: "gradient", gradientType: "linear", angle: 2700000 },
+    });
+    expect(reread.slides[2]?.background).toMatchObject({
+      kind: "fill",
+      fill: { kind: "gradient", gradientType: "radial", centerX: 0.25, centerY: 0.75 },
+    });
+    expect(reread.slides[3]?.background).toMatchObject({
+      kind: "fill",
+      fill: { kind: "image", blipRelationshipId: "rId2" },
+    });
+    expect(createComputedView(reread).slides.every((slide) => slide.elements.length === 1)).toBe(
+      true,
+    );
+    expect(
+      createComputedView(reread).slides.every(
+        (slide) => slide.elements[0]?.sourceLayer === "master",
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects invalid slide background inputs and non-slide handles", () => {
+    const source = createPptx();
+    const slideHandle = source.slides[0]?.handle;
+    const masterHandle = source.slideMasters[0]?.handle;
+    if (slideHandle === undefined || masterHandle === undefined) {
+      throw new Error("createPptx should create slide and master handles");
+    }
+    expect(() =>
+      setSlideBackground(source, slideHandle, {
+        kind: "gradient",
+        gradientType: "linear",
+        angle: asOoxmlAngle(0),
+        stops: [],
+      }),
+    ).toThrow(/at least two/);
+    expect(() =>
+      setSlideBackground(source, slideHandle, {
+        kind: "image",
+        bytes: new Uint8Array([1, 2, 3]),
+      }),
+    ).toThrow(/unsupported or unknown image format/);
+    expect(() =>
+      setSlideBackground(source, masterHandle, {
+        kind: "solid",
+        color: { kind: "srgb", hex: "FFFFFF" },
+      }),
+    ).toThrow(/slide handle was not found/);
+
+    expect(() => {
+      Reflect.apply(writePptx, undefined, [
+        {
+          ...source,
+          edits: [
+            {
+              kind: "setSlideBackground",
+              slidePartPath: source.slides[0].partPath,
+              relationshipId: "rId2",
+              xml: "<p:bg/>",
+            },
+          ],
+        },
+      ]);
+    }).toThrow(/relationship, media part, and content type must be provided together/);
+  });
+
+  it("preserves a non-standard PresentationML prefix when authoring a slide background", () => {
+    const archive = unzipSync(writePptx(createPptx()));
+    const slidePartPath = "ppt/slides/slide1.xml";
+    const slideXml = decoder
+      .decode(archive[slidePartPath])
+      .replaceAll("p:", "x:")
+      .replace("xmlns:p=", "xmlns:x=");
+    const source = readPptx(zipSync({ ...archive, [slidePartPath]: encoder.encode(slideXml) }));
+    const edited = setSlideBackground(source, source.slides[0].handle!, {
+      kind: "solid",
+      color: { kind: "srgb", hex: "112233" },
+    });
+    const writtenSlideXml = decoder.decode(unzipSync(writePptx(edited))[slidePartPath]);
+
+    expect(writtenSlideXml).toContain("<x:bg><x:bgPr>");
+    expect(writtenSlideXml).not.toContain("<p:bg");
+  });
+
+  it("preserves a namespace declared locally on an existing slide background", () => {
+    const archive = unzipSync(writePptx(createPptx()));
+    const slidePartPath = "ppt/slides/slide1.xml";
+    const presentationNamespace = "http://schemas.openxmlformats.org/presentationml/2006/main";
+    const existingBackground =
+      `<x:bg xmlns:x="${presentationNamespace}"><x:bgPr>` +
+      `<a:solidFill><a:srgbClr val="FFFFFF"/></a:solidFill><a:effectLst/>` +
+      `</x:bgPr></x:bg>`;
+    const slideXml = decoder
+      .decode(archive[slidePartPath])
+      .replace("<p:spTree>", `${existingBackground}<p:spTree>`);
+    const source = readPptx(zipSync({ ...archive, [slidePartPath]: encoder.encode(slideXml) }));
+    const edited = setSlideBackground(source, source.slides[0].handle!, {
+      kind: "solid",
+      color: { kind: "srgb", hex: "112233" },
+    });
+    const output = writePptx(edited);
+    const writtenSlideXml = decoder.decode(unzipSync(output)[slidePartPath]);
+    const reread = readPptx(output);
+
+    expect(writtenSlideXml).toContain(`<x:bg xmlns:x="${presentationNamespace}"><x:bgPr>`);
+    expect(reread.diagnostics).toEqual([]);
+    expect(reread.slides[0].background).toMatchObject({
+      kind: "fill",
+      fill: { kind: "solid", color: { kind: "srgb", hex: "112233" } },
+    });
+  });
+
+  it("rejects authoring a background when the slide has no shape tree", () => {
+    const archive = unzipSync(writePptx(createPptx()));
+    const slidePartPath = "ppt/slides/slide1.xml";
+    const slideXml = decoder
+      .decode(archive[slidePartPath])
+      .replace(/<p:spTree>[\s\S]*<\/p:spTree>/, "");
+    const source = readPptx(zipSync({ ...archive, [slidePartPath]: encoder.encode(slideXml) }));
+    const edited = setSlideBackground(source, source.slides[0].handle!, {
+      kind: "solid",
+      color: { kind: "srgb", hex: "112233" },
+    });
+
+    expect(() => writePptx(edited)).toThrow(/has no p:spTree/);
+  });
+
   it("authors every supported object on a layout with part-unique slide-number fields", () => {
     let source = createPptx();
     const masterHandle = source.slideMasters[0]?.handle;
@@ -877,7 +1090,7 @@ describe("writePptx - from-scratch builder", () => {
       text: "Layout text",
     });
     source = addShape(source, layoutHandle, {
-      preset: "rect",
+      geometry: { kind: "preset", preset: "rect" },
       offsetX: asEmu(20),
       offsetY: asEmu(30),
       width: asEmu(300),
@@ -981,7 +1194,7 @@ describe("writePptx - from-scratch builder", () => {
       ],
     });
     const withShape = addShape(withTextBox, firstSlideHandle, {
-      preset: "roundRect",
+      geometry: { kind: "preset", preset: "roundRect" },
       offsetX: asEmu(914400),
       offsetY: asEmu(2286000),
       width: asEmu(3657600),
@@ -1078,9 +1291,9 @@ describe("writePptx - from-scratch builder", () => {
     expect(() => addTextBox(source, handle, base)).toThrow(
       "addTextBox: paragraphs[0].runs[0].hyperlink must be an absolute HTTP(S) URL",
     );
-    expect(() => addShape(source, handle, { ...base, preset: "rect" })).toThrow(
-      "addShape: paragraphs[0].runs[0].hyperlink must be an absolute HTTP(S) URL",
-    );
+    expect(() =>
+      addShape(source, handle, { ...base, geometry: { kind: "preset", preset: "rect" } }),
+    ).toThrow("addShape: paragraphs[0].runs[0].hyperlink must be an absolute HTTP(S) URL");
   });
 
   it("writes added PNG and JPEG pictures with media parts, content types, and slide rels", () => {
@@ -1197,12 +1410,21 @@ describe("writePptx - from-scratch builder", () => {
         marginRight: asEmu(182880),
         marginTop: asEmu(45720),
         marginBottom: asEmu(68580),
+        autoFit: "shape",
       },
       paragraphs: [
         {
           properties: {
             align: "center",
-            lineSpacing: asHundredthPt(1800),
+            marginLeft: asEmu(342900),
+            indent: asEmu(-285750),
+            lineSpacing: { type: "points", value: asHundredthPt(1800) },
+            bullet: {
+              type: "character",
+              character: "•",
+              fontFace: "Aptos",
+              size: asOoxmlPercent(125000),
+            },
           },
           runs: [
             {
@@ -1243,13 +1465,20 @@ describe("writePptx - from-scratch builder", () => {
         {
           properties: {
             align: "right",
-            lineSpacing: asHundredthPt(2400),
+            lineSpacing: { type: "percent", value: asOoxmlPercent(90000) },
+            bullet: {
+              type: "auto-number",
+              scheme: "alphaLcParenR",
+              startAt: 3,
+              fontFace: "Aptos",
+              size: asOoxmlPercent(100000),
+            },
           },
           runs: [
             {
               text: "Subscript line",
               properties: {
-                baseline: "subscript",
+                baseline: { type: "percent", value: asOoxmlPercent(-12500) },
                 underline: true,
               },
             },
@@ -1257,10 +1486,26 @@ describe("writePptx - from-scratch builder", () => {
         },
       ],
     });
-    const output = writePptx(edited);
+    const withShape = addShape(edited, edited.slides[0].handle!, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(914400),
+      offsetY: asEmu(2743200),
+      width: asEmu(4572000),
+      height: asEmu(914400),
+      name: "Auto-fit Shape",
+      body: { autoFit: "shape" },
+      paragraphs: [
+        {
+          properties: { bullet: { type: "none" } },
+          runs: [{ text: "Shape text" }],
+        },
+      ],
+    });
+    const output = writePptx(withShape);
     const reread = readPptx(output);
     const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
     const added = requireShape(findShapeByName(reread, "Formatted TextBox"));
+    const addedShape = requireShape(findShapeByName(reread, "Auto-fit Shape"));
 
     expect(reread.diagnostics).toEqual([]);
     expect(added.transform).toMatchObject({ rotation: 5400000 });
@@ -1270,11 +1515,17 @@ describe("writePptx - from-scratch builder", () => {
       marginRight: 182880,
       marginTop: 45720,
       marginBottom: 68580,
+      autoFit: "spAutofit",
     });
     expect(added.textBody?.paragraphs).toHaveLength(2);
     expect(added.textBody?.paragraphs[0]?.properties).toMatchObject({
       align: "center",
       lineSpacing: { type: "pts", value: 1800 },
+      marginLeft: 342900,
+      indent: -285750,
+      bullet: { type: "char", char: "•" },
+      bulletFont: "Aptos",
+      bulletSizePct: 125000,
     });
     expect(added.textBody?.paragraphs[0]?.runs.map((run) => run.text)).toEqual([
       "Solid styled",
@@ -1282,14 +1533,25 @@ describe("writePptx - from-scratch builder", () => {
     ]);
     expect(added.textBody?.paragraphs[1]?.properties).toMatchObject({
       align: "right",
-      lineSpacing: { type: "pts", value: 2400 },
+      lineSpacing: { type: "pct", value: 90000 },
+      bullet: { type: "autoNum", scheme: "alphaLcParenR", startAt: 3 },
+      bulletFont: "Aptos",
+      bulletSizePct: 100000,
     });
+    expect(added.textBody?.paragraphs[1]?.runs[0]?.properties?.baseline).toBe(-12.5);
+    expect(addedShape.textBody?.properties?.autoFit).toBe("spAutofit");
+    expect(addedShape.textBody?.paragraphs[0]?.properties?.bullet).toEqual({ type: "none" });
     expect(slideXml).toContain(`<a:xfrm rot="5400000">`);
     expect(slideXml).toContain(
-      `<a:bodyPr wrap="square" anchor="ctr" lIns="91440" rIns="182880" tIns="45720" bIns="68580"/>`,
+      `<a:bodyPr wrap="square" anchor="ctr" lIns="91440" rIns="182880" tIns="45720" bIns="68580"><a:spAutoFit/></a:bodyPr>`,
     );
-    expect(slideXml).toContain(`<a:pPr algn="ctr"><a:lnSpc><a:spcPts val="1800"/>`);
-    expect(slideXml).toContain(`<a:pPr algn="r"><a:lnSpc><a:spcPts val="2400"/>`);
+    expect(slideXml).toContain(
+      `<a:pPr algn="ctr" marL="342900" indent="-285750"><a:lnSpc><a:spcPts val="1800"/></a:lnSpc><a:buSzPct val="125000"/><a:buFont typeface="Aptos"/><a:buChar char="•"/>`,
+    );
+    expect(slideXml).toContain(
+      `<a:pPr algn="r"><a:lnSpc><a:spcPct val="90000"/></a:lnSpc><a:buSzPct val="100000"/><a:buFont typeface="Aptos"/><a:buAutoNum type="alphaLcParenR" startAt="3"/>`,
+    );
+    expect(slideXml).toContain(`<a:pPr><a:buNone/></a:pPr>`);
     expect(slideXml).toContain(`b="1"`);
     expect(slideXml).toContain(`i="1"`);
     expect(slideXml).toContain(`u="dbl"`);
@@ -1315,7 +1577,7 @@ describe("writePptx - from-scratch builder", () => {
     expect(slideXml).toContain(`<a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs>`);
     expect(slideXml).toContain(`<a:lin ang="2700000" scaled="1"/>`);
     expect(slideXml).toContain(`baseline="30000"`);
-    expect(slideXml).toContain(`baseline="-25000"`);
+    expect(slideXml).toContain(`baseline="-12500"`);
   });
 
   it("writes alpha colors and linear or radial gradients consistently with the source model", () => {
@@ -1378,7 +1640,7 @@ describe("writePptx - from-scratch builder", () => {
       ],
     });
     const withSolidAndLinearOutline = addShape(withText, withText.slides[0].handle!, {
-      preset: "rect",
+      geometry: { kind: "preset", preset: "rect" },
       offsetX: asEmu(500),
       offsetY: asEmu(600),
       width: asEmu(700),
@@ -1427,7 +1689,7 @@ describe("writePptx - from-scratch builder", () => {
       withSolidAndLinearOutline,
       withSolidAndLinearOutline.slides[0].handle!,
       {
-        preset: "ellipse",
+        geometry: { kind: "preset", preset: "ellipse" },
         offsetX: asEmu(900),
         offsetY: asEmu(1000),
         width: asEmu(1100),
@@ -1546,7 +1808,7 @@ describe("writePptx - from-scratch builder", () => {
     if (slideHandle === undefined) throw new Error("createPptx should create a first slide");
 
     const withSolid = addShape(source, slideHandle, {
-      preset: "rect",
+      geometry: { kind: "preset", preset: "rect" },
       offsetX: asEmu(1000),
       offsetY: asEmu(2000),
       width: asEmu(3000),
@@ -1555,7 +1817,7 @@ describe("writePptx - from-scratch builder", () => {
       name: "Solid Rect",
     });
     const edited = addShape(withSolid, withSolid.slides[0].handle!, {
-      preset: "roundRect",
+      geometry: { kind: "preset", preset: "roundRect" },
       offsetX: asEmu(914400),
       offsetY: asEmu(457200),
       width: asEmu(2743200),
@@ -1590,7 +1852,7 @@ describe("writePptx - from-scratch builder", () => {
       name: "Styled Shape",
     });
     const lineShape = addShape(edited, edited.slides[0].handle!, {
-      preset: "line",
+      geometry: { kind: "preset", preset: "line" },
       offsetX: asEmu(1),
       offsetY: asEmu(2),
       width: asEmu(3),
@@ -1601,7 +1863,7 @@ describe("writePptx - from-scratch builder", () => {
       name: "Line Shape",
     });
     const ellipseShape = addShape(lineShape, lineShape.slides[0].handle!, {
-      preset: "ellipse",
+      geometry: { kind: "preset", preset: "ellipse" },
       offsetX: asEmu(5),
       offsetY: asEmu(6),
       width: asEmu(7),
@@ -1659,6 +1921,81 @@ describe("writePptx - from-scratch builder", () => {
     expect(slideXml).toContain(`<p:txBody>`);
     expect(slideXml).toContain(`<a:t>Shape label</a:t>`);
     expect(slideXml).toContain(`<a:xfrm rot="5400000">`);
+  });
+
+  it("writes and rereads adjusted, custom, flipped, and zero-extent shape geometry", () => {
+    let source = createPptx();
+    const slideHandle = source.slides[0]?.handle;
+    if (slideHandle === undefined) throw new Error("createPptx should create a first slide");
+    source = addShape(source, slideHandle, {
+      geometry: { kind: "preset", preset: "roundRect", adjustValues: { adj: 25000 } },
+      offsetX: asEmu(100),
+      offsetY: asEmu(200),
+      width: asEmu(300),
+      height: asEmu(400),
+      flipHorizontal: true,
+      name: "Adjusted Geometry",
+    });
+    source = addShape(source, slideHandle, {
+      geometry: {
+        kind: "custom",
+        paths: [
+          {
+            width: 100,
+            height: 100,
+            commands: [
+              { kind: "moveTo", x: 0, y: 100 },
+              { kind: "lineTo", x: 50, y: 0 },
+              { kind: "lineTo", x: 100, y: 100 },
+              { kind: "close" },
+            ],
+          },
+        ],
+      },
+      offsetX: asEmu(500),
+      offsetY: asEmu(600),
+      width: asEmu(700),
+      height: asEmu(800),
+      flipVertical: true,
+      name: "Custom Geometry",
+    });
+    source = addShape(source, slideHandle, {
+      geometry: { kind: "preset", preset: "line" },
+      offsetX: asEmu(900),
+      offsetY: asEmu(1000),
+      width: asEmu(0),
+      height: asEmu(1200),
+      flipHorizontal: true,
+      flipVertical: true,
+      name: "Zero Extent Line",
+    });
+
+    const output = writePptx(source);
+    const reread = readPptx(output);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+
+    expect(requireShape(findShapeByName(reread, "Adjusted Geometry"))).toMatchObject({
+      geometry: { preset: "roundRect", adjustValues: { adj: 25000 } },
+      transform: { flipHorizontal: true },
+    });
+    expect(requireShape(findShapeByName(reread, "Custom Geometry"))).toMatchObject({
+      geometry: {
+        kind: "custom",
+        paths: [{ width: 100, height: 100, commands: "M 0 100 L 50 0 L 100 100 Z" }],
+      },
+      transform: { flipVertical: true },
+    });
+    expect(requireShape(findShapeByName(reread, "Zero Extent Line"))).toMatchObject({
+      geometry: { preset: "line" },
+      transform: { width: 0, height: 1200, flipHorizontal: true, flipVertical: true },
+    });
+    expect(slideXml).toContain(`<a:avLst><a:gd name="adj" fmla="val 25000"/></a:avLst>`);
+    expect(slideXml).toContain(`<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/>`);
+    expect(slideXml).toContain(`<a:moveTo><a:pt x="0" y="100"/></a:moveTo>`);
+    expect(slideXml).toContain(`<a:lnTo><a:pt x="50" y="0"/></a:lnTo>`);
+    expect(slideXml).toContain(`<a:close/>`);
+    expect(slideXml).toContain(`<a:xfrm flipH="1" flipV="1">`);
+    expect(slideXml).toContain(`<a:ext cx="0" cy="1200"/>`);
   });
 
   it("writes custom slide size without fixed 16:9 metadata", () => {

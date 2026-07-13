@@ -558,6 +558,7 @@ const DASH_STYLES: ReadonlySet<SourceDashStyle> = new Set([
   "dashDot",
   "lgDash",
   "lgDashDot",
+  "lgDashDotDot",
   "sysDash",
   "sysDot",
 ]);

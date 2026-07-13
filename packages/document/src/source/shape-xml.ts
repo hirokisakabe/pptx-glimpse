@@ -13,15 +13,17 @@ import { XMLBuilder } from "fast-xml-parser";
 
 import { createSidecarIdFactory } from "../reader/raw-node.js";
 import { parseShapeTree } from "../reader/shape-tree.js";
-import { parseXml } from "../reader/xml.js";
+import { parseXml, parseXmlOrdered } from "../reader/xml.js";
 import type { PartPath, RelationshipId } from "./handles.js";
 import type { ConnectorPresetGeometry } from "./pptx-source-model.js";
 import type {
   SourceArrowEndpoint,
+  SourceAutoNumScheme,
   SourceDashStyle,
   SourceImageCrop,
   SourceShapeNode,
   SourceTextAlign,
+  SourceUnderlineStyle,
   SourceVerticalAnchor,
 } from "./shapes.js";
 import type { Emu, HundredthPt, OoxmlAngle, OoxmlPercent, Pt } from "./units.js";
@@ -63,31 +65,38 @@ export type TextBoxGradientFillInput =
   | TextBoxLinearGradientFillInput
   | TextBoxRadialGradientFillInput;
 
-export type TextBoxUnderlineStyle =
-  | "sng"
-  | "dbl"
-  | "heavy"
-  | "dotted"
-  | "dottedHeavy"
-  | "dash"
-  | "dashHeavy"
-  | "dashLong"
-  | "dashLongHeavy"
-  | "dotDash"
-  | "dotDashHeavy"
-  | "dotDotDash"
-  | "dotDotDashHeavy"
-  | "wavy"
-  | "wavyHeavy"
-  | "wavyDbl"
-  | "none";
+export type TextBoxUnderlineStyle = SourceUnderlineStyle;
 
 export interface TextBoxUnderlineInput {
   readonly style?: TextBoxUnderlineStyle;
   readonly color?: TextBoxColorInput;
 }
 
-export type TextBoxBaselineInput = "subscript" | "superscript";
+export type TextBoxBaselineInput =
+  | "subscript"
+  | "superscript"
+  | { readonly type: "percent"; readonly value: OoxmlPercent };
+
+export type TextBoxLineSpacingInput =
+  /** Legacy point input retained for compatibility. */
+  | HundredthPt
+  | { readonly type: "points"; readonly value: HundredthPt }
+  | { readonly type: "percent"; readonly value: OoxmlPercent };
+
+interface TextBoxBulletFormattingInput {
+  readonly fontFace?: string;
+  /** Bullet size as an OOXML percentage, where 100% is `asOoxmlPercent(100000)`. */
+  readonly size?: OoxmlPercent;
+}
+
+export type TextBoxBulletInput =
+  | { readonly type: "none" }
+  | ({ readonly type: "character"; readonly character: string } & TextBoxBulletFormattingInput)
+  | ({
+      readonly type: "auto-number";
+      readonly scheme: SourceAutoNumScheme;
+      readonly startAt?: number;
+    } & TextBoxBulletFormattingInput);
 
 export interface TextBoxGlowInput {
   readonly radius: Emu;
@@ -120,6 +129,30 @@ export interface ShapeOutlineInput {
   readonly tailEnd?: SourceArrowEndpoint;
 }
 
+export interface ShapePresetGeometryInput {
+  readonly kind: "preset";
+  readonly preset: string;
+  readonly adjustValues?: Readonly<Record<string, number>>;
+}
+
+export type ShapeCustomGeometryPathCommandInput =
+  | { readonly kind: "moveTo"; readonly x: number; readonly y: number }
+  | { readonly kind: "lineTo"; readonly x: number; readonly y: number }
+  | { readonly kind: "close" };
+
+export interface ShapeCustomGeometryPathInput {
+  readonly width: number;
+  readonly height: number;
+  readonly commands: readonly ShapeCustomGeometryPathCommandInput[];
+}
+
+export interface ShapeCustomGeometryInput {
+  readonly kind: "custom";
+  readonly paths: readonly ShapeCustomGeometryPathInput[];
+}
+
+export type ShapeGeometryInput = ShapePresetGeometryInput | ShapeCustomGeometryInput;
+
 export interface TextBoxOutlineInput {
   readonly width?: Emu;
   readonly color?: TextBoxColorInput;
@@ -151,7 +184,10 @@ export interface TextBoxRunInput {
 
 export interface TextBoxParagraphPropertiesInput {
   readonly align?: SourceTextAlign;
-  readonly lineSpacing?: HundredthPt;
+  readonly marginLeft?: Emu;
+  readonly indent?: Emu;
+  readonly lineSpacing?: TextBoxLineSpacingInput;
+  readonly bullet?: TextBoxBulletInput;
 }
 
 export interface TextBoxParagraphInput {
@@ -165,6 +201,8 @@ export interface TextBoxBodyPropertiesInput {
   readonly marginRight?: Emu;
   readonly marginTop?: Emu;
   readonly marginBottom?: Emu;
+  /** Lets the shape grow to fit its text (`a:spAutoFit`). */
+  readonly autoFit?: "shape";
 }
 
 interface TextBoxXmlParams {
@@ -197,12 +235,14 @@ interface SlideNumberXmlParams {
 interface ShapeXmlParams {
   readonly shapeId: string;
   readonly name: string;
-  readonly preset: string;
+  readonly geometry: ShapeGeometryInput;
   readonly offsetX: Emu;
   readonly offsetY: Emu;
   readonly width: Emu;
   readonly height: Emu;
   readonly rotation?: OoxmlAngle;
+  readonly flipHorizontal?: boolean;
+  readonly flipVertical?: boolean;
   readonly fill?: ShapeFillInput;
   readonly outline?: ShapeOutlineInput;
   readonly effects?: ShapeEffectsInput;
@@ -364,6 +404,8 @@ export function buildShapeXml(params: ShapeXmlParams): string {
       "p:spPr": {
         "a:xfrm": {
           ...(params.rotation !== undefined ? { "@_rot": String(params.rotation) } : {}),
+          ...(params.flipHorizontal ? { "@_flipH": "1" } : {}),
+          ...(params.flipVertical ? { "@_flipV": "1" } : {}),
           "a:off": {
             "@_x": String(params.offsetX),
             "@_y": String(params.offsetY),
@@ -373,10 +415,7 @@ export function buildShapeXml(params: ShapeXmlParams): string {
             "@_cy": String(params.height),
           },
         },
-        "a:prstGeom": {
-          "@_prst": params.preset,
-          "a:avLst": {},
-        },
+        ...createShapeGeometryXml(params.geometry),
         ...createShapeFillChildXml(params.fill),
         ...(params.outline !== undefined ? { "a:ln": createShapeLineXml(params.outline) } : {}),
         ...(params.effects?.glow !== undefined
@@ -398,6 +437,58 @@ export function buildShapeXml(params: ShapeXmlParams): string {
   });
 }
 
+function createShapeGeometryXml(geometry: ShapeGeometryInput): Record<string, unknown> {
+  if (geometry.kind === "preset") {
+    return {
+      "a:prstGeom": {
+        "@_prst": geometry.preset,
+        "a:avLst": {
+          ...(geometry.adjustValues !== undefined
+            ? {
+                "a:gd": Object.entries(geometry.adjustValues).map(([name, value]) => ({
+                  "@_name": name,
+                  "@_fmla": `val ${value}`,
+                })),
+              }
+            : {}),
+        },
+      },
+    };
+  }
+
+  return {
+    "a:custGeom": {
+      "a:avLst": {},
+      "a:gdLst": {},
+      "a:ahLst": {},
+      "a:cxnLst": {},
+      "a:rect": { "@_l": "l", "@_t": "t", "@_r": "r", "@_b": "b" },
+      "a:pathLst": {
+        "a:path": geometry.paths.map((path) => ({
+          "@_w": String(path.width),
+          "@_h": String(path.height),
+          "a:moveTo": createCustomGeometryPointXml(path.commands[0]),
+          ...(path.commands.some((command) => command.kind === "lineTo")
+            ? {
+                "a:lnTo": path.commands
+                  .filter((command) => command.kind === "lineTo")
+                  .map(createCustomGeometryPointXml),
+              }
+            : {}),
+          ...(path.commands.at(-1)?.kind === "close" ? { "a:close": {} } : {}),
+        })),
+      },
+    },
+  };
+}
+
+function createCustomGeometryPointXml(
+  command: ShapeCustomGeometryPathCommandInput | undefined,
+): Record<string, unknown> {
+  if (command === undefined || command.kind === "close") return {};
+  return { "a:pt": { "@_x": String(command.x), "@_y": String(command.y) } };
+}
+
 function createTextBodyPropertiesXml(
   body: TextBoxBodyPropertiesInput | undefined,
 ): Record<string, unknown> {
@@ -408,6 +499,7 @@ function createTextBodyPropertiesXml(
     ...(body?.marginRight !== undefined ? { "@_rIns": String(body.marginRight) } : {}),
     ...(body?.marginTop !== undefined ? { "@_tIns": String(body.marginTop) } : {}),
     ...(body?.marginBottom !== undefined ? { "@_bIns": String(body.marginBottom) } : {}),
+    ...(body?.autoFit === "shape" ? { "a:spAutoFit": {} } : {}),
   };
 }
 
@@ -429,9 +521,35 @@ function createParagraphPropertiesXml(
 ): Record<string, unknown> {
   return {
     ...(properties.align !== undefined ? { "@_algn": textAlignToken(properties.align) } : {}),
+    ...(properties.marginLeft !== undefined ? { "@_marL": String(properties.marginLeft) } : {}),
+    ...(properties.indent !== undefined ? { "@_indent": String(properties.indent) } : {}),
     ...(properties.lineSpacing !== undefined
-      ? { "a:lnSpc": { "a:spcPts": { "@_val": String(properties.lineSpacing) } } }
+      ? { "a:lnSpc": createLineSpacingXml(properties.lineSpacing) }
       : {}),
+    ...(properties.bullet !== undefined ? createBulletXml(properties.bullet) : {}),
+  };
+}
+
+function createLineSpacingXml(spacing: TextBoxLineSpacingInput): Record<string, unknown> {
+  if (typeof spacing === "number") return { "a:spcPts": { "@_val": String(spacing) } };
+  return spacing.type === "points"
+    ? { "a:spcPts": { "@_val": String(spacing.value) } }
+    : { "a:spcPct": { "@_val": String(spacing.value) } };
+}
+
+function createBulletXml(bullet: TextBoxBulletInput): Record<string, unknown> {
+  if (bullet.type === "none") return { "a:buNone": {} };
+  return {
+    ...(bullet.size !== undefined ? { "a:buSzPct": { "@_val": String(bullet.size) } } : {}),
+    ...(bullet.fontFace !== undefined ? { "a:buFont": { "@_typeface": bullet.fontFace } } : {}),
+    ...(bullet.type === "character"
+      ? { "a:buChar": { "@_char": bullet.character } }
+      : {
+          "a:buAutoNum": {
+            "@_type": bullet.scheme,
+            ...(bullet.startAt !== undefined ? { "@_startAt": String(bullet.startAt) } : {}),
+          },
+        }),
   };
 }
 
@@ -451,7 +569,7 @@ function createTextRunXml(
   };
 }
 
-function createTextRunPropertiesXml(
+export function createTextRunPropertiesXml(
   properties: TextBoxRunPropertiesInput,
   hyperlinkId?: RelationshipId,
 ): Record<string, unknown> {
@@ -602,7 +720,8 @@ function underlineStyleToken(underline: boolean | TextBoxUnderlineInput): TextBo
 
 function baselineToken(baseline: TextBoxBaselineInput): number {
   if (baseline === "superscript") return 30000;
-  return -25000;
+  if (baseline === "subscript") return -25000;
+  return baseline.value;
 }
 
 function textPointToken(value: number): string {
@@ -788,6 +907,7 @@ export function parseShapeNodeXml(
     parseXml(xml),
     partPath,
     createSidecarIdFactory(`${partPath}#added-shape-${orderingSlot}`),
+    parseXmlOrdered(xml),
   );
   const node = nodes[0];
   if (node === undefined || nodes.length !== 1) {

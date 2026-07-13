@@ -1,11 +1,10 @@
 /**
  * Shape editing and authoring operations for PptxSourceModel.
  *
- * Preset-geometry shape authoring uses the same edit-time XML finalization model as
- * text boxes and connectors. The API deliberately keeps the preset name as a
- * pass-through string because OOXML preset coverage is broader than the initial pom
- * swap needs, while styling inputs stay inside the typed subset that the source reader
- * can parse back into `SourceShape`.
+ * Shape authoring uses the same edit-time XML finalization model as text boxes and
+ * connectors. Preset names remain pass-through strings because OOXML preset coverage
+ * is broad, while preset adjustments and the supported custom path commands stay
+ * inside the typed subset that the source reader can parse back into `SourceShape`.
  *
  * Text-box authoring intentionally stays on the existing `addTextBox` operation
  * instead of introducing a second rich-text builder. The adopted API keeps the simple
@@ -16,6 +15,14 @@
  * escape hatch. A fluent builder would add another mutable authoring layer before the
  * source model has broader primitive coverage, and raw OOXML would shift validity and
  * escaping responsibility to consumers, so both were rejected for this slice.
+ *
+ * Paragraph spacing and explicit baselines use discriminated percentage inputs so
+ * callers cannot accidentally interchange point and percentage units. Bullet options
+ * form a discriminated union because character, automatic numbering, and explicit
+ * absence serialize to different DrawingML elements. Bullet font and size stay nested
+ * with the selected bullet kind while the parsed source model keeps the corresponding
+ * sibling OOXML properties. Shape auto-fit is exposed as a semantic `"shape"` option
+ * and is read back as the source model's `spAutofit` value.
  */
 
 import {
@@ -50,17 +57,24 @@ import { nextNumberedName, nextRelationshipId } from "./package-graph-mutations.
 import type {
   AuthoringColorTransformInput,
   ShapeColorInput,
+  ShapeCustomGeometryInput,
+  ShapeCustomGeometryPathCommandInput,
+  ShapeCustomGeometryPathInput,
   ShapeEffectsInput,
   ShapeFillInput,
+  ShapeGeometryInput,
   ShapeGlowInput,
   ShapeGradientFillInput,
   ShapeOutlineInput,
+  ShapePresetGeometryInput,
   TextBoxBaselineInput,
   TextBoxBodyPropertiesInput,
+  TextBoxBulletInput,
   TextBoxColorInput,
   TextBoxGlowInput,
   TextBoxGradientFillInput,
   TextBoxGradientStopInput,
+  TextBoxLineSpacingInput,
   TextBoxOutlineInput,
   TextBoxParagraphInput,
   TextBoxParagraphPropertiesInput,
@@ -78,6 +92,8 @@ import {
 } from "./shape-xml.js";
 
 export type AddTextBoxBaselineInput = TextBoxBaselineInput;
+export type AddTextBoxBulletInput = TextBoxBulletInput;
+export type AddTextBoxLineSpacingInput = TextBoxLineSpacingInput;
 export type AddTextBoxBodyPropertiesInput = TextBoxBodyPropertiesInput;
 export type AddTextBoxColorInput = TextBoxColorInput;
 export type AddTextBoxColorTransformInput = AuthoringColorTransformInput;
@@ -99,6 +115,11 @@ export type AddShapeFillInput = ShapeFillInput;
 export type AddShapeGlowInput = ShapeGlowInput;
 export type AddShapeGradientFillInput = ShapeGradientFillInput;
 export type AddShapeGradientStopInput = TextBoxGradientStopInput;
+export type AddShapeGeometryInput = ShapeGeometryInput;
+export type AddShapePresetGeometryInput = ShapePresetGeometryInput;
+export type AddShapeCustomGeometryInput = ShapeCustomGeometryInput;
+export type AddShapeCustomGeometryPathInput = ShapeCustomGeometryPathInput;
+export type AddShapeCustomGeometryPathCommandInput = ShapeCustomGeometryPathCommandInput;
 export type AddShapeOutlineInput = ShapeOutlineInput;
 export type AddShapeParagraphInput = TextBoxParagraphInput;
 export type AddShapeParagraphPropertiesInput = TextBoxParagraphPropertiesInput;
@@ -121,11 +142,13 @@ const DASH_STYLES = new Set([
   "dashDot",
   "lgDash",
   "lgDashDot",
+  "lgDashDotDot",
   "sysDash",
   "sysDot",
 ]);
 const UNDERLINE_STYLES: ReadonlySet<string> = new Set<AddTextBoxUnderlineStyle>([
   "sng",
+  "words",
   "dbl",
   "heavy",
   "dotted",
@@ -142,6 +165,17 @@ const UNDERLINE_STYLES: ReadonlySet<string> = new Set<AddTextBoxUnderlineStyle>(
   "wavyHeavy",
   "wavyDbl",
   "none",
+]);
+const AUTO_NUMBER_SCHEMES = new Set([
+  "arabicPeriod",
+  "arabicParenR",
+  "romanUcPeriod",
+  "romanLcPeriod",
+  "alphaUcPeriod",
+  "alphaLcPeriod",
+  "alphaLcParenR",
+  "alphaUcParenR",
+  "arabicPlain",
 ]);
 const HYPERLINK_REL_TYPE =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
@@ -162,7 +196,7 @@ export interface AddTextBoxInput extends UpdateShapeTransformInput {
 }
 
 export interface AddShapeInput extends UpdateShapeTransformInput {
-  readonly preset: string;
+  readonly geometry: AddShapeGeometryInput;
   readonly fill?: AddShapeFillInput;
   readonly outline?: AddShapeOutlineInput;
   readonly effects?: AddShapeEffectsInput;
@@ -170,6 +204,8 @@ export interface AddShapeInput extends UpdateShapeTransformInput {
   readonly paragraphs?: readonly AddShapeParagraphInput[];
   readonly body?: AddShapeBodyPropertiesInput;
   readonly rotation?: NonNullable<SourceShape["transform"]>["rotation"];
+  readonly flipHorizontal?: boolean;
+  readonly flipVertical?: boolean;
   readonly name?: string;
 }
 
@@ -495,7 +531,10 @@ export function addShape(
   const shapeId = nextShapeId(target.shapes, source.edits ?? [], target.partPath);
   const shapeIdValue = String(shapeId);
   const name = input.name?.trim() || `Shape ${shapeIdValue}`;
-  const preset = input.preset.trim();
+  const geometry =
+    input.geometry.kind === "preset"
+      ? { ...input.geometry, preset: input.geometry.preset.trim() }
+      : input.geometry;
   const orderingSlot = nextOrderingSlot(target.shapes);
   const hyperlinkAllocation = allocateRunHyperlinks(
     source,
@@ -505,12 +544,14 @@ export function addShape(
   const xml = buildShapeXml({
     shapeId: shapeIdValue,
     name,
-    preset,
+    geometry,
     offsetX: input.offsetX,
     offsetY: input.offsetY,
     width: input.width,
     height: input.height,
     ...(input.rotation !== undefined ? { rotation: input.rotation } : {}),
+    ...(input.flipHorizontal !== undefined ? { flipHorizontal: input.flipHorizontal } : {}),
+    ...(input.flipVertical !== undefined ? { flipVertical: input.flipVertical } : {}),
     ...(input.fill !== undefined ? { fill: input.fill } : {}),
     ...(input.outline !== undefined ? { outline: input.outline } : {}),
     ...(input.effects !== undefined ? { effects: input.effects } : {}),
@@ -866,14 +907,23 @@ function assertSlideNumberInput(input: AddSlideNumberInput): void {
 function assertShapeInput(input: AddShapeInput): void {
   assertFiniteEmu(input.offsetX, "addShape", "offsetX");
   assertFiniteEmu(input.offsetY, "addShape", "offsetY");
-  assertPositiveFiniteEmu(input.width, "addShape", "width");
-  assertPositiveFiniteEmu(input.height, "addShape", "height");
-  if (typeof input.preset !== "string" || input.preset.trim() === "") {
-    throw new Error("addShape: preset must be a non-empty string");
+  assertShapeGeometry(input.geometry);
+  const isLine = input.geometry.kind === "preset" && input.geometry.preset.trim() === "line";
+  if (isLine) {
+    assertNonNegativeFiniteEmu(input.width, "addShape", "width");
+    assertNonNegativeFiniteEmu(input.height, "addShape", "height");
+    if (input.width === 0 && input.height === 0) {
+      throw new Error("addShape: line width and height must not both be zero");
+    }
+  } else {
+    assertPositiveFiniteEmu(input.width, "addShape", "width");
+    assertPositiveFiniteEmu(input.height, "addShape", "height");
   }
   if (input.rotation !== undefined) {
     assertFiniteIntegerNumber(input.rotation, "addShape", "rotation");
   }
+  assertBooleanOrUndefined(input.flipHorizontal, "addShape", "flipHorizontal");
+  assertBooleanOrUndefined(input.flipVertical, "addShape", "flipVertical");
   if (input.text !== undefined && input.paragraphs !== undefined) {
     throw new Error("addShape: specify either text or paragraphs, not both");
   }
@@ -895,6 +945,63 @@ function assertShapeInput(input: AddShapeInput): void {
   if (input.fill !== undefined) assertShapeFill(input.fill, "fill");
   if (input.outline !== undefined) assertShapeOutline(input.outline);
   if (input.effects !== undefined) assertShapeEffects(input.effects);
+}
+
+function assertShapeGeometry(geometry: unknown): asserts geometry is AddShapeGeometryInput {
+  if (!isPlainRecord(geometry)) throw new Error("addShape: geometry must be an object");
+  if (geometry.kind === "preset") {
+    if (typeof geometry.preset !== "string" || geometry.preset.trim() === "") {
+      throw new Error("addShape: geometry.preset must be a non-empty string");
+    }
+    if (geometry.adjustValues !== undefined) {
+      if (!isPlainRecord(geometry.adjustValues)) {
+        throw new Error("addShape: geometry.adjustValues must be an object");
+      }
+      for (const [name, value] of Object.entries(geometry.adjustValues)) {
+        if (name.trim() === "" || name !== name.trim()) {
+          throw new Error(
+            "addShape: geometry.adjustValues names must be non-empty and have no surrounding whitespace",
+          );
+        }
+        assertFiniteIntegerNumber(value, "addShape", `geometry.adjustValues.${name}`);
+      }
+    }
+    return;
+  }
+  if (geometry.kind !== "custom") throw new Error("addShape: geometry.kind is not supported");
+  if (!isArrayValue(geometry.paths) || geometry.paths.length === 0) {
+    throw new Error("addShape: geometry.paths must contain at least one path");
+  }
+  geometry.paths.forEach((path, pathIndex) => assertCustomGeometryPath(path, pathIndex));
+}
+
+function assertCustomGeometryPath(path: unknown, pathIndex: number): void {
+  const field = `geometry.paths[${pathIndex}]`;
+  if (!isPlainRecord(path)) throw new Error(`addShape: ${field} must be an object`);
+  assertPositiveFiniteIntegerNumber(path.width, "addShape", `${field}.width`);
+  assertPositiveFiniteIntegerNumber(path.height, "addShape", `${field}.height`);
+  if (!isArrayValue(path.commands) || path.commands.length === 0) {
+    throw new Error(`addShape: ${field}.commands must contain at least one command`);
+  }
+  const commands = path.commands;
+  commands.forEach((command, commandIndex) => {
+    const commandField = `${field}.commands[${commandIndex}]`;
+    if (!isPlainRecord(command)) throw new Error(`addShape: ${commandField} must be an object`);
+    if (commandIndex === 0 ? command.kind !== "moveTo" : command.kind === "moveTo") {
+      throw new Error(`addShape: ${field}.commands must start with one moveTo command`);
+    }
+    if (command.kind !== "moveTo" && command.kind !== "lineTo" && command.kind !== "close") {
+      throw new Error(`addShape: ${commandField}.kind is not supported`);
+    }
+    if (command.kind === "close") {
+      if (commandIndex !== commands.length - 1) {
+        throw new Error(`addShape: ${field}.close must be the final command`);
+      }
+    } else {
+      assertFiniteIntegerNumber(command.x, "addShape", `${commandField}.x`);
+      assertFiniteIntegerNumber(command.y, "addShape", `${commandField}.y`);
+    }
+  });
 }
 
 function assertTextBoxParagraphs(
@@ -930,6 +1037,7 @@ function assertTextBoxParagraphProperties(
   }
   const align = properties.align;
   const lineSpacing = properties.lineSpacing;
+  const path = `paragraphs[${paragraphIndex}].properties`;
   if (
     align !== undefined &&
     align !== "left" &&
@@ -942,11 +1050,76 @@ function assertTextBoxParagraphProperties(
     );
   }
   if (lineSpacing !== undefined) {
-    assertPositiveFiniteIntegerNumber(
-      lineSpacing,
-      operationName,
-      `paragraphs[${paragraphIndex}].properties.lineSpacing`,
-    );
+    assertTextBoxLineSpacing(lineSpacing, `${path}.lineSpacing`, operationName);
+  }
+  if (properties.marginLeft !== undefined) {
+    assertFiniteEmu(properties.marginLeft, operationName, `${path}.marginLeft`);
+  }
+  if (properties.indent !== undefined) {
+    assertFiniteEmu(properties.indent, operationName, `${path}.indent`);
+  }
+  if (properties.bullet !== undefined) {
+    assertTextBoxBullet(properties.bullet, `${path}.bullet`, operationName);
+  }
+}
+
+function assertTextBoxLineSpacing(spacing: unknown, path: string, operationName: string): void {
+  if (typeof spacing === "number") {
+    assertTextBoxLineSpacingValue(spacing, "points", path, operationName);
+    return;
+  }
+  if (!isPlainRecord(spacing) || (spacing.type !== "points" && spacing.type !== "percent")) {
+    throw new Error(`${operationName}: ${path} must be a points or percent spacing object`);
+  }
+  assertTextBoxLineSpacingValue(spacing.value, spacing.type, `${path}.value`, operationName);
+}
+
+function assertTextBoxLineSpacingValue(
+  value: unknown,
+  type: "points" | "percent",
+  path: string,
+  operationName: string,
+): void {
+  assertFiniteIntegerNumber(value, operationName, path);
+  const maximum = type === "points" ? 158400 : 13200000;
+  if (typeof value !== "number" || value < 0 || value > maximum) {
+    throw new Error(`${operationName}: ${path} must be between 0 and ${maximum}`);
+  }
+}
+
+function assertTextBoxBullet(bullet: unknown, path: string, operationName: string): void {
+  if (!isPlainRecord(bullet)) {
+    throw new Error(`${operationName}: ${path} must be a bullet object`);
+  }
+  if (bullet.type === "none") return;
+  if (bullet.type !== "character" && bullet.type !== "auto-number") {
+    throw new Error(`${operationName}: ${path}.type is not supported`);
+  }
+  if (bullet.fontFace !== undefined) {
+    if (typeof bullet.fontFace !== "string" || bullet.fontFace.trim() === "") {
+      throw new Error(`${operationName}: ${path}.fontFace must be a non-empty string`);
+    }
+  }
+  if (bullet.size !== undefined) {
+    assertFiniteIntegerNumber(bullet.size, operationName, `${path}.size`);
+    if (typeof bullet.size !== "number" || bullet.size < 25000 || bullet.size > 400000) {
+      throw new Error(`${operationName}: ${path}.size must be between 25000 and 400000`);
+    }
+  }
+  if (bullet.type === "character") {
+    if (typeof bullet.character !== "string" || bullet.character.length === 0) {
+      throw new Error(`${operationName}: ${path}.character must be a non-empty string`);
+    }
+    return;
+  }
+  if (typeof bullet.scheme !== "string" || !AUTO_NUMBER_SCHEMES.has(bullet.scheme)) {
+    throw new Error(`${operationName}: ${path}.scheme is not supported`);
+  }
+  if (bullet.startAt !== undefined) {
+    assertFiniteIntegerNumber(bullet.startAt, operationName, `${path}.startAt`);
+    if (typeof bullet.startAt !== "number" || bullet.startAt < 1 || bullet.startAt > 32767) {
+      throw new Error(`${operationName}: ${path}.startAt must be between 1 and 32767`);
+    }
   }
 }
 
@@ -1182,7 +1355,19 @@ function assertTextBoxBaseline(
   operationName = "addTextBox",
 ): void {
   if (baseline === "subscript" || baseline === "superscript") return;
-  throw new Error(`${operationName}: ${path} must be subscript or superscript`);
+  if (isPlainRecord(baseline) && baseline.type === "percent") {
+    assertFiniteIntegerNumber(baseline.value, operationName, `${path}.value`);
+    if (
+      typeof baseline.value === "number" &&
+      baseline.value >= -400000 &&
+      baseline.value <= 400000
+    ) {
+      return;
+    }
+  }
+  throw new Error(
+    `${operationName}: ${path} must be subscript, superscript, or a percent between -400000 and 400000`,
+  );
 }
 
 function assertTextBoxGlow(glow: unknown, path: string, operationName = "addTextBox"): void {
@@ -1228,6 +1413,9 @@ function assertTextBoxBody(body: unknown, path: string, operationName = "addText
     assertFiniteEmu(body.marginTop, operationName, "body.marginTop");
   if (body.marginBottom !== undefined) {
     assertFiniteEmu(body.marginBottom, operationName, "body.marginBottom");
+  }
+  if (body.autoFit !== undefined && body.autoFit !== "shape") {
+    throw new Error(`${operationName}: body.autoFit is not supported`);
   }
 }
 
@@ -1345,6 +1533,17 @@ function assertFiniteIntegerNumber(value: unknown, operationName: string, fieldN
   }
 }
 
+function assertPositiveFiniteIntegerNumber(
+  value: unknown,
+  operationName: string,
+  fieldName: string,
+): void {
+  assertFiniteIntegerNumber(value, operationName, fieldName);
+  if (typeof value !== "number" || value <= 0) {
+    throw new Error(`${operationName}: ${fieldName} must be a finite positive integer`);
+  }
+}
+
 function assertPositiveFiniteNumber(
   value: unknown,
   operationName: string,
@@ -1352,16 +1551,6 @@ function assertPositiveFiniteNumber(
 ): void {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     throw new Error(`${operationName}: ${fieldName} must be a finite positive number`);
-  }
-}
-
-function assertPositiveFiniteIntegerNumber(
-  value: unknown,
-  operationName: string,
-  fieldName: string,
-): void {
-  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
-    throw new Error(`${operationName}: ${fieldName} must be a finite positive integer`);
   }
 }
 
@@ -1381,6 +1570,16 @@ function assertFiniteEmu(value: unknown, operationName: string, fieldName: strin
 function assertPositiveFiniteEmu(value: unknown, operationName: string, fieldName: string): void {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     throw new Error(`${operationName}: ${fieldName} must be a finite positive EMU value`);
+  }
+}
+
+function assertNonNegativeFiniteEmu(
+  value: unknown,
+  operationName: string,
+  fieldName: string,
+): void {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new Error(`${operationName}: ${fieldName} must be a finite non-negative EMU value`);
   }
 }
 
@@ -1469,8 +1668,18 @@ function defaultTextBodyProperties(
 ): AddTextBoxBodyPropertiesInput | undefined {
   if (target.kind !== "slide") return undefined;
   const slide = source.slides[target.index];
-  return source.slideLayouts.find((layout) => layout.partPath === slide.layoutPartPath)
-    ?.defaultTextBodyProperties;
+  const defaults = source.slideLayouts.find(
+    (layout) => layout.partPath === slide.layoutPartPath,
+  )?.defaultTextBodyProperties;
+  if (defaults === undefined) return undefined;
+  return {
+    ...(defaults.anchor !== undefined ? { anchor: defaults.anchor } : {}),
+    ...(defaults.marginLeft !== undefined ? { marginLeft: defaults.marginLeft } : {}),
+    ...(defaults.marginRight !== undefined ? { marginRight: defaults.marginRight } : {}),
+    ...(defaults.marginTop !== undefined ? { marginTop: defaults.marginTop } : {}),
+    ...(defaults.marginBottom !== undefined ? { marginBottom: defaults.marginBottom } : {}),
+    ...(defaults.autoFit === "spAutofit" ? { autoFit: "shape" as const } : {}),
+  };
 }
 
 function mergeTextBodyProperties(

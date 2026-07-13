@@ -417,6 +417,11 @@ export interface ComputedTextRun {
   readonly properties?: ComputedRunProperties;
 }
 
-export type ComputedRunProperties = Omit<SourceRunProperties, "color"> & {
+export type ComputedRunProperties = Omit<
+  SourceRunProperties,
+  "color" | "underlineColor" | "highlight"
+> & {
   readonly color?: ComputedColor;
+  readonly underlineColor?: ComputedColor;
+  readonly highlight?: ComputedColor;
 };
