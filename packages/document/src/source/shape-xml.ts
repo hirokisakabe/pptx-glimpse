@@ -154,6 +154,7 @@ interface TextBoxXmlParams {
 }
 
 interface SlideNumberXmlParams {
+  readonly partPath: PartPath;
   readonly shapeId: string;
   readonly name: string;
   readonly offsetX: Emu;
@@ -288,7 +289,7 @@ export function buildSlideNumberXml(params: SlideNumberXmlParams): string {
             ? { "a:pPr": createParagraphPropertiesXml({ align: params.align }) }
             : {}),
           "a:fld": {
-            "@_id": slideNumberFieldId(params.shapeId),
+            "@_id": slideNumberFieldId(params.partPath, params.shapeId),
             "@_type": "slidenum",
             "a:rPr": {
               "@_lang": "en-US",
@@ -305,12 +306,18 @@ export function buildSlideNumberXml(params: SlideNumberXmlParams): string {
   });
 }
 
-function slideNumberFieldId(shapeId: string): string {
+function slideNumberFieldId(partPath: PartPath, shapeId: string): string {
+  let partHash = 2166136261;
+  for (const character of partPath) {
+    partHash ^= character.codePointAt(0) ?? 0;
+    partHash = Math.imul(partHash, 16777619);
+  }
+  const prefix = (partHash >>> 0).toString(16).padStart(8, "0");
   const suffix = shapeId
     .replaceAll(/[^0-9A-Fa-f]/g, "")
     .slice(-12)
     .padStart(12, "0");
-  return `{00000000-0000-0000-0000-${suffix}}`;
+  return `{${prefix}-0000-4000-8000-${suffix}}`;
 }
 
 export function buildShapeXml(params: ShapeXmlParams): string {

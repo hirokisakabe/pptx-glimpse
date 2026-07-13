@@ -862,6 +862,76 @@ describe("writePptx - from-scratch builder", () => {
     });
   });
 
+  it("authors every supported object on a layout with part-unique slide-number fields", () => {
+    let source = createPptx();
+    const masterHandle = source.slideMasters[0]?.handle;
+    const layoutHandle = source.slideLayouts[0]?.handle;
+    if (masterHandle === undefined || layoutHandle === undefined) {
+      throw new Error("createPptx should create master and layout handles");
+    }
+    source = addTextBox(source, layoutHandle, {
+      offsetX: asEmu(10),
+      offsetY: asEmu(20),
+      width: asEmu(300),
+      height: asEmu(100),
+      text: "Layout text",
+    });
+    source = addShape(source, layoutHandle, {
+      preset: "rect",
+      offsetX: asEmu(20),
+      offsetY: asEmu(30),
+      width: asEmu(300),
+      height: asEmu(100),
+    });
+    source = addConnector(source, layoutHandle, {
+      preset: "straightConnector1",
+      offsetX: asEmu(30),
+      offsetY: asEmu(40),
+      width: asEmu(300),
+      height: asEmu(1),
+    });
+    source = addPicture(source, layoutHandle, {
+      bytes: RED_PNG,
+      offsetX: asEmu(40),
+      offsetY: asEmu(50),
+      width: asEmu(300),
+      height: asEmu(100),
+    });
+    source = addSlideNumber(source, layoutHandle, {
+      offsetX: asEmu(50),
+      offsetY: asEmu(60),
+      width: asEmu(300),
+      height: asEmu(100),
+    });
+    source = addSlideNumber(source, masterHandle, {
+      offsetX: asEmu(50),
+      offsetY: asEmu(60),
+      width: asEmu(300),
+      height: asEmu(100),
+    });
+
+    const output = writePptx(source);
+    const layoutXml = decoder.decode(getEntry(output, "ppt/slideLayouts/slideLayout1.xml"));
+    const masterXml = decoder.decode(getEntry(output, "ppt/slideMasters/slideMaster1.xml"));
+    const layoutRels = decoder.decode(
+      getEntry(output, "ppt/slideLayouts/_rels/slideLayout1.xml.rels"),
+    );
+    const layoutFieldId = layoutXml.match(/<a:fld id="([^"]+)" type="slidenum"/)?.[1];
+    const masterFieldId = masterXml.match(/<a:fld id="([^"]+)" type="slidenum"/)?.[1];
+    const reread = readPptx(output);
+
+    expect(layoutXml).toContain("<p:sp>");
+    expect(layoutXml).toContain("<p:cxnSp>");
+    expect(layoutXml).toContain("<p:pic>");
+    expect(layoutRels).toContain('Target="../media/image1.png"');
+    expect(layoutFieldId).toBeDefined();
+    expect(masterFieldId).toBeDefined();
+    expect(layoutFieldId).not.toBe(masterFieldId);
+    expect(reread.slideLayouts[0]?.shapes).toHaveLength(5);
+    expect(reread.slideMasters[0]?.shapes).toHaveLength(1);
+    expect(reread.diagnostics).toEqual([]);
+  });
+
   it("rejects invalid master and layout authoring options", () => {
     expect(() => {
       Reflect.apply(createPptx, undefined, [{ slideMaster: { background: { kind: "pattern" } } }]);

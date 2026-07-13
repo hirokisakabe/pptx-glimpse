@@ -439,6 +439,7 @@ export function addSlideNumber(
   const name = input.name?.trim() || `Slide Number ${shapeIdValue}`;
   const orderingSlot = nextOrderingSlot(target.shapes);
   const xml = buildSlideNumberXml({
+    partPath: target.partPath,
     shapeId: shapeIdValue,
     name,
     offsetX: input.offsetX,
