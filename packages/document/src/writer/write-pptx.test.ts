@@ -846,13 +846,25 @@ describe("writePptx - from-scratch builder", () => {
     expect(barXml).toContain(`<a:rPr lang="en-US" sz="1800" b="1" i="1">`);
     expect(barXml).toContain(`<a:latin typeface="Aptos Display"/>`);
     expect(barXml).toContain(`<a:alpha val="80000"/>`);
-    expect(barXml).toContain(`<c:xMode val="edge"/><c:yMode val="edge"/>`);
-    expect(barXml).toContain(`<c:majorTickMark val="in"/>`);
-    expect(barXml).toContain(`<c:majorTickMark val="out"/>`);
-    expect(barXml).toContain(`<c:tickLblPos val="low"/>`);
-    expect(barXml).toContain(`<c:numFmt formatCode="0.0%" sourceLinked="0"/>`);
-    expect(barXml).toContain(`<c:noMultiLvlLbl val="1"/>`);
-    expect(barXml).toContain(`<a:defRPr sz="900" b="1" i="0">`);
+    expect(barXml).toContain(
+      `<c:manualLayout><c:layoutTarget val="inner"/><c:xMode val="edge"/><c:yMode val="edge"/><c:wMode val="edge"/><c:hMode val="edge"/><c:x val="0"/><c:y val="0"/><c:w val="1"/><c:h val="1"/></c:manualLayout>`,
+    );
+    const categoryAxisXml = /<c:catAx>.*?<\/c:catAx>/.exec(barXml)?.[0];
+    const valueAxisXml = /<c:valAx>.*?<\/c:valAx>/.exec(barXml)?.[0];
+    expect(categoryAxisXml).toContain(`<c:delete val="1"/>`);
+    expect(categoryAxisXml).toContain(`<c:majorTickMark val="in"/>`);
+    expect(categoryAxisXml).toContain(`<c:tickLblPos val="low"/>`);
+    expect(categoryAxisXml).toContain(`<c:numFmt formatCode="0.0%" sourceLinked="0"/>`);
+    expect(categoryAxisXml).toContain(`<c:majorGridlines><c:spPr>`);
+    expect(categoryAxisXml).toContain(`<a:ln w="19050">`);
+    expect(categoryAxisXml).toContain(`<a:defRPr sz="900" b="1" i="0">`);
+    expect(categoryAxisXml).toContain(`<c:noMultiLvlLbl val="1"/>`);
+    expect(valueAxisXml).toContain(`<c:delete val="1"/>`);
+    expect(valueAxisXml).toContain(`<c:majorTickMark val="out"/>`);
+    expect(valueAxisXml).toContain(`<c:tickLblPos val="none"/>`);
+    expect(valueAxisXml).toContain(`<c:numFmt formatCode="#,##0" sourceLinked="1"/>`);
+    expect(valueAxisXml).not.toContain(`<c:majorGridlines>`);
+    expect(valueAxisXml).toContain(`<a:ln><a:noFill/></a:ln>`);
     expect(barXml).toContain(
       `<c:dPt><c:idx val="0"/><c:spPr><a:solidFill><a:srgbClr val="ED7D31"></a:srgbClr></a:solidFill><a:ln><a:solidFill><a:srgbClr val="843C0C"></a:srgbClr></a:solidFill></a:ln></c:spPr></c:dPt>`,
     );
@@ -950,6 +962,12 @@ describe("writePptx - from-scratch builder", () => {
       addChart(source, source.slides[0].handle!, {
         ...valid,
         chartArea: { outline: { width: asEmu(20_116_801) } },
+      }),
+    ).toThrow(/width must be a finite EMU value/);
+    expect(() =>
+      addChart(source, source.slides[0].handle!, {
+        ...valid,
+        chartArea: { outline: { width: asEmu(0.5) } },
       }),
     ).toThrow(/width must be a finite EMU value/);
     expect(() =>

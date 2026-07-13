@@ -6,6 +6,7 @@ export type { Diagnostic, DiagnosticSeverity } from "./diagnostics.js";
 export type {
   AddChartAreaStyleInput,
   AddChartAxisInput,
+  AddChartCategoryAxisInput,
   AddChartColorInput,
   AddChartDataPointInput,
   AddChartFillInput,

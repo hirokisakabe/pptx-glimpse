@@ -9,6 +9,7 @@
 export type {
   AddChartAreaStyleInput,
   AddChartAxisInput,
+  AddChartCategoryAxisInput,
   AddChartColorInput,
   AddChartDataPointInput,
   AddChartFillInput,

@@ -66,6 +66,7 @@ export { readPptx } from "./reader/index.js";
 export type {
   AddChartAreaStyleInput,
   AddChartAxisInput,
+  AddChartCategoryAxisInput,
   AddChartColorInput,
   AddChartDataPointInput,
   AddChartFillInput,

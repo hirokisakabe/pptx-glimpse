@@ -103,6 +103,8 @@ export interface AddChartAxisInput {
   readonly line?: AddChartOutlineInput;
   readonly majorGridline?: AddChartOutlineInput;
   readonly textStyle?: AddChartTextStyleInput;
+}
+export interface AddChartCategoryAxisInput extends AddChartAxisInput {
   readonly showMultiLevelLabels?: boolean;
 }
 
@@ -133,7 +135,7 @@ export interface AddChartInput {
   readonly legendPosition?: NativeChartLegendPosition;
   readonly radarStyle?: NativeRadarStyle;
   readonly holeSize?: number;
-  readonly categoryAxis?: AddChartAxisInput;
+  readonly categoryAxis?: AddChartCategoryAxisInput;
   readonly valueAxis?: AddChartAxisInput;
   readonly plotLayout?: AddChartPlotLayoutInput;
 }
@@ -608,6 +610,11 @@ function assertChartInput(input: AddChartInput): void {
   assertAreaStyle(input.plotArea, "plotArea");
   assertAxis(input.categoryAxis, "categoryAxis");
   assertAxis(input.valueAxis, "valueAxis");
+  if (
+    input.valueAxis !== undefined &&
+    Object.prototype.hasOwnProperty.call(input.valueAxis, "showMultiLevelLabels")
+  )
+    throw new Error("addChart: showMultiLevelLabels is only valid for categoryAxis");
   input.series.forEach((series, seriesIndex) => {
     if (series.categories.length !== count || series.values.length !== count)
       throw new Error("addChart: every series must have matching category and value counts");
@@ -714,7 +721,7 @@ function assertOutline(outline: AddChartOutlineInput | undefined, field: string)
   if (outline === undefined) return;
   if (
     outline.width !== undefined &&
-    (!Number.isFinite(outline.width) || outline.width < 0 || outline.width > MAX_LINE_WIDTH)
+    (!Number.isInteger(outline.width) || outline.width < 0 || outline.width > MAX_LINE_WIDTH)
   )
     throw new Error(
       `addChart: ${field}.width must be a finite EMU value from 0 through ${MAX_LINE_WIDTH}`,
