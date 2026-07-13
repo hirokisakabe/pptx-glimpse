@@ -25,6 +25,7 @@ import {
   addConnector,
   addEmptySlideFromLayout,
   addShape,
+  addSlideNumber,
   addTextBox,
   clearParagraphProperties,
   clearTextRunProperties,
@@ -730,6 +731,228 @@ describe("writePptx - from-scratch builder", () => {
     const computed = createComputedView(reread);
     expect(computed.slideSize).toEqual({ width: asEmu(9144000), height: asEmu(5143500) });
     expect(computed.slides[0]?.elements).toHaveLength(1);
+  });
+
+  it("authors a named master and layout with backgrounds, objects, slide numbers, and margins", () => {
+    let source = createPptx({
+      slideMaster: { name: "Product Master", background: { kind: "image", bytes: BLUE_PNG } },
+      slideLayout: {
+        name: "Product Blank",
+        margin: {
+          left: asEmu(120000),
+          right: asEmu(130000),
+          top: asEmu(140000),
+          bottom: asEmu(150000),
+        },
+      },
+    });
+    const masterHandle = source.slideMasters[0]?.handle;
+    const layout = source.slideLayouts[0];
+    if (masterHandle === undefined || layout?.handle === undefined) {
+      throw new Error("createPptx should create master and layout handles");
+    }
+    source = addTextBox(source, masterHandle, {
+      offsetX: asEmu(200000),
+      offsetY: asEmu(100000),
+      width: asEmu(1800000),
+      height: asEmu(400000),
+      text: "Master title",
+    });
+    source = addShape(source, masterHandle, {
+      preset: "rect",
+      offsetX: asEmu(0),
+      offsetY: asEmu(5000000),
+      width: asEmu(9144000),
+      height: asEmu(143500),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "112233" } },
+    });
+    source = addConnector(source, masterHandle, {
+      preset: "straightConnector1",
+      offsetX: asEmu(200000),
+      offsetY: asEmu(700000),
+      width: asEmu(1800000),
+      height: asEmu(1),
+    });
+    source = addPicture(source, masterHandle, {
+      bytes: RED_PNG,
+      offsetX: asEmu(8200000),
+      offsetY: asEmu(100000),
+      width: asEmu(600000),
+      height: asEmu(300000),
+    });
+    source = addSlideNumber(source, masterHandle, {
+      offsetX: asEmu(8200000),
+      offsetY: asEmu(4700000),
+      width: asEmu(600000),
+      height: asEmu(300000),
+      align: "right",
+      properties: { fontFace: "Aptos", fontSize: asPt(10), color: { kind: "srgb", hex: "334455" } },
+    });
+    source = addEmptySlideFromLayout(source, { layoutPartPath: layout.partPath });
+    source = addEmptySlideFromLayout(source, { layoutPartPath: layout.partPath });
+    source = addTextBox(source, source.slides[1].handle!, {
+      offsetX: asEmu(500000),
+      offsetY: asEmu(500000),
+      width: asEmu(2000000),
+      height: asEmu(500000),
+      text: "Uses layout margins",
+      body: { marginRight: asEmu(999000) },
+    });
+
+    const output = writePptx(source);
+    const masterXml = decoder.decode(getEntry(output, "ppt/slideMasters/slideMaster1.xml"));
+    const masterRels = decoder.decode(
+      getEntry(output, "ppt/slideMasters/_rels/slideMaster1.xml.rels"),
+    );
+    const slide2Xml = decoder.decode(getEntry(output, "ppt/slides/slide2.xml"));
+    const reread = readPptx(output);
+
+    expect(source.presentation.slidePartPaths).toHaveLength(3);
+    expect(source.slideMasters[0]).toMatchObject({ name: "Product Master" });
+    expect(source.slideLayouts[0]).toMatchObject({
+      name: "Product Blank",
+      defaultTextBodyProperties: {
+        marginLeft: 120000,
+        marginRight: 130000,
+        marginTop: 140000,
+        marginBottom: 150000,
+      },
+    });
+    expect(masterXml).toContain(`<p:cSld name="Product Master"><p:bg>`);
+    expect(masterXml).toContain(`<a:blip r:embed="rId3"/>`);
+    expect(masterXml).toContain(`type="slidenum"`);
+    expect(masterXml.match(/<p:cNvPr id="[1-5]"/g)).toHaveLength(5);
+    expect(masterRels).toContain(`Id="rId3"`);
+    expect(masterRels).toContain(`Target="../media/image1.png"`);
+    expect(masterRels).toContain(`Id="rId4"`);
+    expect(masterRels).toContain(`Target="../media/image2.png"`);
+    expect(slide2Xml).toContain(`lIns="120000"`);
+    expect(slide2Xml).toContain(`rIns="999000"`);
+    expect(slide2Xml).toContain(`tIns="140000"`);
+    expect(slide2Xml).toContain(`bIns="150000"`);
+    expect(reread.diagnostics).toEqual([]);
+    expect(reread.slideMasters[0]).toMatchObject({ name: "Product Master" });
+    expect(reread.slideLayouts[0]).toMatchObject({ name: "Product Blank" });
+    expect(reread.slideMasters[0]?.shapes).toHaveLength(5);
+    expect(createComputedView(reread).slides.map((slide) => slide.elements.length)).toEqual([
+      5, 6, 5,
+    ]);
+    expect(reread.packageGraph.contentTypes.defaults).toContainEqual({
+      extension: "png",
+      contentType: "image/png",
+    });
+  });
+
+  it("authors a solid master background", () => {
+    const output = writePptx(
+      createPptx({
+        slideMaster: {
+          name: "Solid Master",
+          background: { kind: "solid", color: { kind: "srgb", hex: "F8FAFC" } },
+        },
+      }),
+    );
+    const reread = readPptx(output);
+    expect(reread.slideMasters[0]).toMatchObject({
+      name: "Solid Master",
+      background: {
+        kind: "fill",
+        fill: { kind: "solid", color: { kind: "srgb", hex: "F8FAFC" } },
+      },
+    });
+  });
+
+  it("authors every supported object on a layout with part-unique slide-number fields", () => {
+    let source = createPptx();
+    const masterHandle = source.slideMasters[0]?.handle;
+    const layoutHandle = source.slideLayouts[0]?.handle;
+    if (masterHandle === undefined || layoutHandle === undefined) {
+      throw new Error("createPptx should create master and layout handles");
+    }
+    source = addTextBox(source, layoutHandle, {
+      offsetX: asEmu(10),
+      offsetY: asEmu(20),
+      width: asEmu(300),
+      height: asEmu(100),
+      text: "Layout text",
+    });
+    source = addShape(source, layoutHandle, {
+      preset: "rect",
+      offsetX: asEmu(20),
+      offsetY: asEmu(30),
+      width: asEmu(300),
+      height: asEmu(100),
+    });
+    source = addConnector(source, layoutHandle, {
+      preset: "straightConnector1",
+      offsetX: asEmu(30),
+      offsetY: asEmu(40),
+      width: asEmu(300),
+      height: asEmu(1),
+    });
+    source = addPicture(source, layoutHandle, {
+      bytes: RED_PNG,
+      offsetX: asEmu(40),
+      offsetY: asEmu(50),
+      width: asEmu(300),
+      height: asEmu(100),
+    });
+    source = addSlideNumber(source, layoutHandle, {
+      offsetX: asEmu(50),
+      offsetY: asEmu(60),
+      width: asEmu(300),
+      height: asEmu(100),
+    });
+    for (let index = 0; index < 4; index += 1) {
+      source = addSlideNumber(source, layoutHandle, {
+        offsetX: asEmu(60 + index),
+        offsetY: asEmu(70),
+        width: asEmu(300),
+        height: asEmu(100),
+      });
+    }
+    source = addSlideNumber(source, masterHandle, {
+      offsetX: asEmu(50),
+      offsetY: asEmu(60),
+      width: asEmu(300),
+      height: asEmu(100),
+    });
+
+    const output = writePptx(source);
+    const layoutXml = decoder.decode(getEntry(output, "ppt/slideLayouts/slideLayout1.xml"));
+    const masterXml = decoder.decode(getEntry(output, "ppt/slideMasters/slideMaster1.xml"));
+    const layoutRels = decoder.decode(
+      getEntry(output, "ppt/slideLayouts/_rels/slideLayout1.xml.rels"),
+    );
+    const layoutFieldIds = [...layoutXml.matchAll(/<a:fld id="([^"]+)" type="slidenum"/g)].map(
+      (match) => match[1],
+    );
+    const masterFieldId = masterXml.match(/<a:fld id="([^"]+)" type="slidenum"/)?.[1];
+    const reread = readPptx(output);
+
+    expect(layoutXml).toContain("<p:sp>");
+    expect(layoutXml).toContain("<p:cxnSp>");
+    expect(layoutXml).toContain("<p:pic>");
+    expect(layoutRels).toContain('Target="../media/image1.png"');
+    expect(layoutFieldIds).toHaveLength(5);
+    expect(new Set(layoutFieldIds).size).toBe(5);
+    expect(masterFieldId).toBeDefined();
+    expect(layoutFieldIds).not.toContain(masterFieldId);
+    expect(reread.slideLayouts[0]?.shapes).toHaveLength(9);
+    expect(reread.slideMasters[0]?.shapes).toHaveLength(1);
+    expect(reread.diagnostics).toEqual([]);
+  });
+
+  it("rejects invalid master and layout authoring options", () => {
+    expect(() => {
+      Reflect.apply(createPptx, undefined, [{ slideMaster: { background: { kind: "pattern" } } }]);
+    }).toThrow(/background\.kind must be solid or image/);
+    expect(() => createPptx({ slideMaster: { name: "bad\u0000name" } })).toThrow(
+      /forbidden in an XML attribute/,
+    );
+    expect(() => createPptx({ slideLayout: { name: "bad\nname" } })).toThrow(
+      /forbidden in an XML attribute/,
+    );
   });
 
   it("writes run hyperlinks for text boxes and shapes with slide-local relationships", () => {

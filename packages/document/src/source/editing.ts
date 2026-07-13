@@ -35,6 +35,7 @@ export type {
   AddShapeParagraphPropertiesInput,
   AddShapeRunInput,
   AddShapeRunPropertiesInput,
+  AddSlideNumberInput,
   AddTextBoxBaselineInput,
   AddTextBoxBodyPropertiesInput,
   AddTextBoxColorInput,
@@ -53,6 +54,7 @@ export type {
 export {
   addConnector,
   addShape,
+  addSlideNumber,
   addTextBox,
   deleteShape,
   findShapeNodeBySourceHandle,

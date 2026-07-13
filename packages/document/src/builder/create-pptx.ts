@@ -20,6 +20,8 @@
 
 import type {
   ContentTypeOverride,
+  Emu,
+  MediaPart,
   PackagePartRef,
   PartPath,
   PartRelationships,
@@ -27,6 +29,7 @@ import type {
   RawPackagePart,
   Relationship,
   SlideSize,
+  SourceBackground,
   SourceColorMap,
   SourceTheme,
   SourceThemeFormatScheme,
@@ -35,6 +38,43 @@ import { asEmu, asPartPath, asRelationshipId } from "../source/index.js";
 
 export interface CreatePptxOptions {
   readonly slideSize?: SlideSize;
+  readonly slideMaster?: CreatePptxSlideMasterOptions;
+  readonly slideLayout?: CreatePptxSlideLayoutOptions;
+}
+
+export type CreatePptxBackground =
+  | { readonly kind: "solid"; readonly color: { readonly kind: "srgb"; readonly hex: string } }
+  | { readonly kind: "image"; readonly bytes: Uint8Array };
+
+export interface CreatePptxSlideMasterOptions {
+  readonly name?: string;
+  readonly background?: CreatePptxBackground;
+}
+
+export interface SlideLayoutMargin {
+  readonly left: Emu;
+  readonly right: Emu;
+  readonly top: Emu;
+  readonly bottom: Emu;
+}
+
+export interface CreatePptxSlideLayoutOptions {
+  readonly name?: string;
+  readonly margin?: SlideLayoutMargin;
+}
+
+interface NormalizedCreatePptxOptions {
+  readonly slideSize: SlideSize;
+  readonly masterName: string;
+  readonly layoutName: string;
+  readonly background?: CreatePptxBackground;
+  readonly margin?: SlideLayoutMargin;
+  readonly backgroundImage?: DetectedImageType;
+}
+
+interface DetectedImageType {
+  readonly contentType: "image/png" | "image/jpeg";
+  readonly extension: "png" | "jpeg";
 }
 
 const textEncoder = new TextEncoder();
@@ -61,15 +101,20 @@ const SLIDE_MASTER_PART = asPartPath("ppt/slideMasters/slideMaster1.xml");
 const THEME_PART = asPartPath("ppt/theme/theme1.xml");
 const APP_PROPS_PART = asPartPath("docProps/app.xml");
 const CORE_PROPS_PART = asPartPath("docProps/core.xml");
+const BACKGROUND_IMAGE_PART_PNG = asPartPath("ppt/media/image1.png");
+const BACKGROUND_IMAGE_PART_JPEG = asPartPath("ppt/media/image1.jpeg");
 
 const DEFAULT_SLIDE_WIDTH = 9144000;
 const DEFAULT_SLIDE_HEIGHT = 5143500;
 
 export function createPptx(options: CreatePptxOptions = {}): PptxSourceModel {
-  const slideSize = normalizeSlideSize(options.slideSize);
+  const normalized = normalizeOptions(options);
+  const { slideSize } = normalized;
   const overrides = createContentTypeOverrides();
-  const rawParts = createRawParts(slideSize);
-  const parts = createPackageParts(overrides);
+  const rawParts = createRawParts(normalized);
+  const media = createMedia(normalized);
+  const parts = createPackageParts(overrides, media);
+  const masterBackground = createSourceBackground(normalized);
 
   return {
     packageGraph: {
@@ -77,12 +122,20 @@ export function createPptx(options: CreatePptxOptions = {}): PptxSourceModel {
         defaults: [
           { extension: "rels", contentType: RELS_CONTENT_TYPE },
           { extension: "xml", contentType: XML_CONTENT_TYPE },
+          ...(normalized.backgroundImage !== undefined
+            ? [
+                {
+                  extension: normalized.backgroundImage.extension,
+                  contentType: normalized.backgroundImage.contentType,
+                },
+              ]
+            : []),
         ],
         overrides,
       },
       parts,
-      relationships: createRelationships(),
-      media: [],
+      relationships: createRelationships(normalized),
+      media,
       rawParts,
     },
     presentation: {
@@ -103,18 +156,31 @@ export function createPptx(options: CreatePptxOptions = {}): PptxSourceModel {
       {
         partPath: SLIDE_LAYOUT_PART,
         masterPartPath: SLIDE_MASTER_PART,
+        name: normalized.layoutName,
         type: "blank",
         show: true,
         shapes: [],
+        ...(normalized.margin !== undefined
+          ? {
+              defaultTextBodyProperties: {
+                marginLeft: normalized.margin.left,
+                marginRight: normalized.margin.right,
+                marginTop: normalized.margin.top,
+                marginBottom: normalized.margin.bottom,
+              },
+            }
+          : {}),
         handle: { partPath: SLIDE_LAYOUT_PART },
       },
     ],
     slideMasters: [
       {
         partPath: SLIDE_MASTER_PART,
+        name: normalized.masterName,
         themePartPath: THEME_PART,
         layoutPartPaths: [SLIDE_LAYOUT_PART],
         colorMap: createDefaultColorMap(),
+        ...(masterBackground !== undefined ? { background: masterBackground } : {}),
         shapes: [],
         handle: { partPath: SLIDE_MASTER_PART },
       },
@@ -122,6 +188,84 @@ export function createPptx(options: CreatePptxOptions = {}): PptxSourceModel {
     themes: [createThemeSource()],
     diagnostics: [],
   };
+}
+
+function normalizeOptions(options: CreatePptxOptions): NormalizedCreatePptxOptions {
+  const slideSize = normalizeSlideSize(options.slideSize);
+  const masterName = normalizeName(options.slideMaster?.name, "slideMaster.name", "Blank Master");
+  const layoutName = normalizeName(options.slideLayout?.name, "slideLayout.name", "Blank");
+  const background = options.slideMaster?.background;
+  let backgroundImage: DetectedImageType | undefined;
+  if (background !== undefined) {
+    const backgroundKind: unknown = Reflect.get(background, "kind");
+    if (backgroundKind !== "solid" && backgroundKind !== "image") {
+      throw new Error("createPptx: slideMaster.background.kind must be solid or image");
+    }
+    if (background.kind === "solid") {
+      assertHexColor(background.color.hex, "slideMaster.background");
+    } else {
+      if (!(background.bytes instanceof Uint8Array)) {
+        throw new Error("createPptx: slideMaster.background.bytes must be a Uint8Array");
+      }
+      backgroundImage = detectSupportedImageType(background.bytes);
+      if (backgroundImage === undefined) {
+        throw new Error("createPptx: slideMaster.background uses an unsupported image format");
+      }
+    }
+  }
+  const margin = options.slideLayout?.margin;
+  if (margin !== undefined) {
+    assertFiniteEmu(margin.left, "slideLayout.margin.left");
+    assertFiniteEmu(margin.right, "slideLayout.margin.right");
+    assertFiniteEmu(margin.top, "slideLayout.margin.top");
+    assertFiniteEmu(margin.bottom, "slideLayout.margin.bottom");
+  }
+  return {
+    slideSize,
+    masterName,
+    layoutName,
+    ...(background !== undefined ? { background } : {}),
+    ...(margin !== undefined ? { margin } : {}),
+    ...(backgroundImage !== undefined ? { backgroundImage } : {}),
+  };
+}
+
+function normalizeName(value: string | undefined, field: string, fallback: string): string {
+  if (value === undefined) return fallback;
+  if (typeof value !== "string" || value.trim() === "") {
+    throw new Error(`createPptx: ${field} must be a non-empty string`);
+  }
+  assertValidXmlName(value, field);
+  return value.trim();
+}
+
+function assertValidXmlName(value: string, field: string): void {
+  for (let index = 0; index < value.length; index += 1) {
+    const codePoint = value.codePointAt(index);
+    if (codePoint === undefined) continue;
+    const valid =
+      codePoint >= 0x20 &&
+      codePoint <= 0x10ffff &&
+      !(codePoint >= 0xd800 && codePoint <= 0xdfff) &&
+      codePoint !== 0xfffe &&
+      codePoint !== 0xffff;
+    if (!valid) {
+      throw new Error(`createPptx: ${field} contains a character forbidden in an XML attribute`);
+    }
+    if (codePoint > 0xffff) index += 1;
+  }
+}
+
+function assertHexColor(value: string, field: string): void {
+  if (!/^[0-9A-Fa-f]{6}$/.test(value)) {
+    throw new Error(`createPptx: ${field} must be a 6-digit RGB color`);
+  }
+}
+
+function assertFiniteEmu(value: unknown, field: string): void {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new Error(`createPptx: ${field} must be a finite non-negative EMU value`);
+  }
 }
 
 function normalizeSlideSize(slideSize: SlideSize | undefined): SlideSize {
@@ -219,13 +363,17 @@ function createContentTypeOverrides(): ContentTypeOverride[] {
   ];
 }
 
-function createPackageParts(overrides: readonly ContentTypeOverride[]): PackagePartRef[] {
+function createPackageParts(
+  overrides: readonly ContentTypeOverride[],
+  media: readonly MediaPart[],
+): PackagePartRef[] {
   const partRefs = overrides.map((override) => ({
     partPath: override.partName,
     contentType: override.contentType,
   }));
   return [
     ...partRefs,
+    ...media.map((entry) => ({ partPath: entry.partPath, contentType: entry.contentType })),
     { partPath: asPartPath("_rels/.rels"), contentType: RELS_CONTENT_TYPE },
     { partPath: asPartPath("ppt/_rels/presentation.xml.rels"), contentType: RELS_CONTENT_TYPE },
     { partPath: asPartPath("ppt/slides/_rels/slide1.xml.rels"), contentType: RELS_CONTENT_TYPE },
@@ -240,7 +388,7 @@ function createPackageParts(overrides: readonly ContentTypeOverride[]): PackageP
   ];
 }
 
-function createRelationships(): PartRelationships[] {
+function createRelationships(options: NormalizedCreatePptxOptions): PartRelationships[] {
   return [
     {
       sourcePartPath: ROOT_PART,
@@ -310,6 +458,15 @@ function createRelationships(): PartRelationships[] {
           "http://schemas.openxmlformats.org/officeDocument/2006/relationships/theme",
           "../theme/theme1.xml",
         ),
+        ...(options.backgroundImage !== undefined
+          ? [
+              rel(
+                "rId3",
+                "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+                `../media/image1.${options.backgroundImage.extension}`,
+              ),
+            ]
+          : []),
       ],
     },
   ];
@@ -319,16 +476,52 @@ function rel(id: string, type: string, target: string): Relationship {
   return { id: asRelationshipId(id), type, target };
 }
 
-function createRawParts(slideSize: SlideSize): RawPackagePart[] {
+function createRawParts(options: NormalizedCreatePptxOptions): RawPackagePart[] {
   return [
-    rawXml(PRESENTATION_PART, PRESENTATION_CONTENT_TYPE, presentationXml(slideSize)),
+    rawXml(PRESENTATION_PART, PRESENTATION_CONTENT_TYPE, presentationXml(options.slideSize)),
     rawXml(SLIDE_PART, SLIDE_CONTENT_TYPE, slideXml()),
-    rawXml(SLIDE_LAYOUT_PART, SLIDE_LAYOUT_CONTENT_TYPE, slideLayoutXml()),
-    rawXml(SLIDE_MASTER_PART, SLIDE_MASTER_CONTENT_TYPE, slideMasterXml()),
+    rawXml(SLIDE_LAYOUT_PART, SLIDE_LAYOUT_CONTENT_TYPE, slideLayoutXml(options.layoutName)),
+    rawXml(SLIDE_MASTER_PART, SLIDE_MASTER_CONTENT_TYPE, slideMasterXml(options)),
     rawXml(THEME_PART, THEME_CONTENT_TYPE, themeXml()),
-    rawXml(APP_PROPS_PART, APP_PROPS_CONTENT_TYPE, appPropertiesXml(slideSize)),
+    rawXml(APP_PROPS_PART, APP_PROPS_CONTENT_TYPE, appPropertiesXml(options.slideSize)),
     rawXml(CORE_PROPS_PART, CORE_PROPS_CONTENT_TYPE, corePropertiesXml()),
   ];
+}
+
+function createMedia(options: NormalizedCreatePptxOptions): MediaPart[] {
+  if (options.background?.kind !== "image" || options.backgroundImage === undefined) return [];
+  return [
+    {
+      partPath:
+        options.backgroundImage.extension === "png"
+          ? BACKGROUND_IMAGE_PART_PNG
+          : BACKGROUND_IMAGE_PART_JPEG,
+      contentType: options.backgroundImage.contentType,
+      bytes: new Uint8Array(options.background.bytes),
+    },
+  ];
+}
+
+function createSourceBackground(
+  options: NormalizedCreatePptxOptions,
+): SourceBackground | undefined {
+  switch (options.background?.kind) {
+    case undefined:
+      return undefined;
+    case "solid":
+      return {
+        kind: "fill",
+        fill: {
+          kind: "solid",
+          color: { kind: "srgb", hex: options.background.color.hex.toUpperCase() },
+        },
+      };
+    case "image":
+      return {
+        kind: "fill",
+        fill: { kind: "image", blipRelationshipId: asRelationshipId("rId3") },
+      };
+  }
 }
 
 function rawXml(partPath: PartPath, contentType: string, xml: string): RawPackagePart {
@@ -374,24 +567,25 @@ function slideXml(): string {
   );
 }
 
-function slideLayoutXml(): string {
+function slideLayoutXml(name: string): string {
   return xmlPart(
     `<p:sldLayout xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ` +
       `xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ` +
       `xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" ` +
       `type="blank" preserve="1">` +
-      `<p:cSld name="Blank"><p:spTree>${emptyGroupShapeProperties()}</p:spTree></p:cSld>` +
+      `<p:cSld name="${escapeXmlAttribute(name)}"><p:spTree>${emptyGroupShapeProperties()}</p:spTree></p:cSld>` +
       `<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>` +
       `</p:sldLayout>`,
   );
 }
 
-function slideMasterXml(): string {
+function slideMasterXml(options: NormalizedCreatePptxOptions): string {
   return xmlPart(
     `<p:sldMaster xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ` +
       `xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ` +
       `xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">` +
-      `<p:cSld><p:spTree>${emptyGroupShapeProperties()}</p:spTree></p:cSld>` +
+      `<p:cSld name="${escapeXmlAttribute(options.masterName)}">${backgroundXml(options.background)}` +
+      `<p:spTree>${emptyGroupShapeProperties()}</p:spTree></p:cSld>` +
       `<p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" ` +
       `accent2="accent2" accent3="accent3" accent4="accent4" accent5="accent5" ` +
       `accent6="accent6" hlink="hlink" folHlink="folHlink"/>` +
@@ -399,6 +593,31 @@ function slideMasterXml(): string {
       `<p:txStyles><p:titleStyle/><p:bodyStyle/><p:otherStyle/></p:txStyles>` +
       `</p:sldMaster>`,
   );
+}
+
+function backgroundXml(background: CreatePptxBackground | undefined): string {
+  switch (background?.kind) {
+    case undefined:
+      return "";
+    case "solid":
+      return (
+        `<p:bg><p:bgPr><a:solidFill><a:srgbClr val="${background.color.hex.toUpperCase()}"/>` +
+        `</a:solidFill><a:effectLst/></p:bgPr></p:bg>`
+      );
+    case "image":
+      return (
+        `<p:bg><p:bgPr><a:blipFill dpi="0" rotWithShape="1"><a:blip r:embed="rId3"/>` +
+        `<a:stretch><a:fillRect/></a:stretch></a:blipFill><a:effectLst/></p:bgPr></p:bg>`
+      );
+  }
+}
+
+function escapeXmlAttribute(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }
 
 function emptyGroupShapeProperties(): string {
@@ -494,4 +713,19 @@ function corePropertiesXml(): string {
       `<cp:lastModifiedBy>pptx-glimpse</cp:lastModifiedBy>` +
       `</cp:coreProperties>`,
   );
+}
+
+function detectSupportedImageType(bytes: Uint8Array): DetectedImageType | undefined {
+  if (startsWithBytes(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
+    return { contentType: "image/png", extension: "png" };
+  }
+  if (startsWithBytes(bytes, [0xff, 0xd8, 0xff])) {
+    return { contentType: "image/jpeg", extension: "jpeg" };
+  }
+  return undefined;
+}
+
+function startsWithBytes(bytes: Uint8Array, prefix: readonly number[]): boolean {
+  if (bytes.length < prefix.length) return false;
+  return prefix.every((value, index) => bytes[index] === value);
 }
