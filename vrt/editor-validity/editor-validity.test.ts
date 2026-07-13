@@ -424,7 +424,39 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
       rows: [
         {
           height: asEmu(914400),
-          cells: [{ text: "Native table", fill: "4472C4", colspan: 2 }, {}],
+          cells: [
+            {
+              runs: [
+                {
+                  text: "Native\ntable",
+                  hyperlink: "https://example.com/table-validity",
+                  properties: {
+                    bold: true,
+                    strike: true,
+                    underline: {
+                      style: "dashLongHeavy",
+                      color: { kind: "srgb", hex: "FFFF00" },
+                    },
+                    highlight: { kind: "srgb", hex: "1F4E78" },
+                    color: { kind: "srgb", hex: "FFFFFF" },
+                  },
+                },
+              ],
+              fill: "4472C4",
+              colspan: 2,
+              marginLeft: asEmu(100000),
+              marginRight: asEmu(110000),
+              marginTop: asEmu(50000),
+              marginBottom: asEmu(60000),
+              borders: {
+                left: { width: asEmu(12700), color: "FFFFFF", dash: "lgDashDotDot" },
+                right: { width: asEmu(12700), color: "FFFFFF", dash: "sysDash" },
+                top: { width: asEmu(12700), color: "FFFFFF", dash: "dashDot" },
+                bottom: { width: asEmu(12700), color: "FFFFFF", dash: "sysDot" },
+              },
+            },
+            {},
+          ],
         },
         {
           height: asEmu(914400),
