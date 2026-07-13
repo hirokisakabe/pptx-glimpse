@@ -31,6 +31,11 @@ import {
   editTargetsShape,
   sourceHandlesEqual,
 } from "./edit-descriptors.js";
+import {
+  assertShadowEffectsInput,
+  type InnerShadowInput,
+  type OuterShadowInput,
+} from "./effect-authoring.js";
 import { asSourceNodeId, type RelationshipId } from "./handles.js";
 import type {
   ConnectorPresetGeometry,
@@ -111,6 +116,8 @@ export type AddShapeBodyPropertiesInput = TextBoxBodyPropertiesInput;
 export type AddShapeColorInput = ShapeColorInput;
 export type AddShapeColorTransformInput = AuthoringColorTransformInput;
 export type AddShapeEffectsInput = ShapeEffectsInput;
+export type AddInnerShadowInput = InnerShadowInput;
+export type AddOuterShadowInput = OuterShadowInput;
 export type AddShapeFillInput = ShapeFillInput;
 export type AddShapeGlowInput = ShapeGlowInput;
 export type AddShapeGradientFillInput = ShapeGradientFillInput;
@@ -1487,8 +1494,13 @@ function assertShapeEffects(effects: unknown): void {
   if (!isPlainRecord(effects)) {
     throw new Error("addShape: effects must be an object");
   }
-  if (effects.glow === undefined) {
-    throw new Error("addShape: effects must set glow");
+  assertShadowEffectsInput(effects, "addShape");
+  if (
+    effects.glow === undefined &&
+    effects.outerShadow === undefined &&
+    effects.innerShadow === undefined
+  ) {
+    throw new Error("addShape: effects must set glow, outerShadow, or innerShadow");
   }
   if (effects.glow !== undefined) assertTextBoxGlow(effects.glow, "effects.glow", "addShape");
 }

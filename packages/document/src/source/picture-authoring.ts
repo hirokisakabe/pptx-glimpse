@@ -1,5 +1,6 @@
 import { editReservedShapeId, sourceHandlesEqual } from "./edit-descriptors.js";
 import { copyBytes, IMAGE_REL_TYPE, relativeTarget } from "./editing-shared.js";
+import { assertShadowEffectsInput, type ShadowEffectsInput } from "./effect-authoring.js";
 import { asPartPath, type PartPath } from "./handles.js";
 import type {
   ContentTypeDefault,
@@ -37,8 +38,11 @@ export interface AddPictureInput {
   readonly height: Emu;
   readonly rotation?: OoxmlAngle;
   readonly crop?: AddPictureCropInput;
+  readonly effects?: AddPictureEffectsInput;
   readonly name?: string;
 }
+
+export type AddPictureEffectsInput = ShadowEffectsInput;
 
 interface DetectedImageType {
   readonly contentType: "image/png" | "image/jpeg";
@@ -100,6 +104,7 @@ export function addPicture(
     height: input.height,
     ...(input.rotation !== undefined ? { rotation: input.rotation } : {}),
     ...(input.crop !== undefined ? { crop: input.crop } : {}),
+    ...(input.effects !== undefined ? { effects: input.effects } : {}),
   });
   const picture = parseShapeNodeXml(xml, target.partPath, orderingSlot);
   if (picture.kind !== "image") {
@@ -269,6 +274,12 @@ function assertPictureInput(input: AddPictureInput): void {
     throw new Error("addPicture: name must be a non-empty string when provided");
   }
   if (input.crop !== undefined) assertCrop(input.crop);
+  if (input.effects !== undefined) {
+    assertShadowEffectsInput(input.effects, "addPicture");
+    if (input.effects.outerShadow === undefined && input.effects.innerShadow === undefined) {
+      throw new Error("addPicture: effects must set outerShadow or innerShadow");
+    }
+  }
 }
 
 function assertCrop(crop: AddPictureCropInput): asserts crop is SourceImageCrop {

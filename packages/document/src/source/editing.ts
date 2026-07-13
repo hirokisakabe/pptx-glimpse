@@ -17,12 +17,18 @@ export type {
 } from "./chart-authoring.js";
 export { addChart } from "./chart-authoring.js";
 export { replaceImageBytes } from "./image-replacement.js";
-export type { AddPictureCropInput, AddPictureInput } from "./picture-authoring.js";
+export type {
+  AddPictureCropInput,
+  AddPictureEffectsInput,
+  AddPictureInput,
+} from "./picture-authoring.js";
 export { addPicture } from "./picture-authoring.js";
 export type {
   AddConnectorConnectionEndpointInput,
   AddConnectorInput,
   AddConnectorOutlineInput,
+  AddInnerShadowInput,
+  AddOuterShadowInput,
   AddShapeBodyPropertiesInput,
   AddShapeColorInput,
   AddShapeColorTransformInput,

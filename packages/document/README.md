@@ -94,6 +94,7 @@ is 100%. Gradients use `gradientType` as their discriminator. Radial `centerX` a
 import { addShape, asEmu, asOoxmlPercent, createPptx } from "@pptx-glimpse/document";
 
 let source = createPptx();
+declare const imageBytes: Uint8Array;
 const slide = source.slides[0];
 if (slide?.handle === undefined) throw new Error("Missing slide");
 
@@ -131,6 +132,66 @@ source = addShape(source, slide.handle, {
         { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FFFFFF" } },
         { position: asOoxmlPercent(100000), color: { kind: "srgb", hex: "000000" } },
       ],
+    },
+  },
+});
+```
+
+### Shape and picture shadows
+
+Shape effects accept glow, outer shadow, and inner shadow in any supported combination. Picture
+effects accept outer and inner shadows. Shadow radius and distance are EMU integers from `0` to
+`2147483647`; direction is an OOXML angle where one degree is 60,000. Outer-shadow alignment is one
+of `tl`, `t`, `tr`, `l`, `ctr`, `r`, `bl`, `b`, or `br`.
+
+```ts
+import {
+  addPicture,
+  addShape,
+  asEmu,
+  asOoxmlAngle,
+  asOoxmlPercent,
+  createPptx,
+} from "@pptx-glimpse/document";
+
+let source = createPptx();
+const slide = source.slides[0];
+if (slide?.handle === undefined) throw new Error("Missing slide");
+
+source = addShape(source, slide.handle, {
+  geometry: { kind: "preset", preset: "rect" },
+  offsetX: asEmu(914400),
+  offsetY: asEmu(914400),
+  width: asEmu(2743200),
+  height: asEmu(1828800),
+  effects: {
+    outerShadow: {
+      blurRadius: asEmu(40000),
+      distance: asEmu(20000),
+      direction: asOoxmlAngle(45 * 60000),
+      alignment: "br",
+      rotateWithShape: false,
+      color: {
+        kind: "srgb",
+        hex: "000000",
+        transforms: [{ kind: "alpha", value: asOoxmlPercent(40000) }],
+      },
+    },
+  },
+});
+
+source = addPicture(source, slide.handle, {
+  bytes: imageBytes,
+  offsetX: asEmu(4114800),
+  offsetY: asEmu(914400),
+  width: asEmu(1828800),
+  height: asEmu(1828800),
+  effects: {
+    innerShadow: {
+      blurRadius: asEmu(30000),
+      distance: asEmu(15000),
+      direction: asOoxmlAngle(135 * 60000),
+      color: { kind: "srgb", hex: "334155" },
     },
   },
 });

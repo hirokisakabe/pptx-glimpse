@@ -45,6 +45,7 @@ import {
   setShapeOutline,
   setTextRunProperties,
   type SourceConnector,
+  type SourceImage,
   type SourceShape,
   type SourceShapeNode,
   type SourceTextRun,
@@ -1370,6 +1371,131 @@ describe("writePptx - from-scratch builder", () => {
         blipRelationshipId: "rId3",
       },
     ]);
+  });
+
+  it("writes and rereads shape and picture shadow effects", () => {
+    let source = createPptx();
+    const slideHandle = source.slides[0]?.handle;
+    if (slideHandle === undefined) throw new Error("createPptx should create a first slide");
+
+    source = addShape(source, slideHandle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(100),
+      offsetY: asEmu(200),
+      width: asEmu(300),
+      height: asEmu(400),
+      name: "Outer Shadow Shape",
+      effects: {
+        glow: {
+          radius: asEmu(12700),
+          color: { kind: "srgb", hex: "FFCC00" },
+        },
+        outerShadow: {
+          blurRadius: asEmu(40000),
+          distance: asEmu(20000),
+          direction: asOoxmlAngle(5400000),
+          color: {
+            kind: "srgb",
+            hex: "112233",
+            transforms: [{ kind: "alpha", value: asOoxmlPercent(40000) }],
+          },
+          alignment: "ctr",
+          rotateWithShape: false,
+        },
+      },
+    });
+    source = addShape(source, slideHandle, {
+      geometry: { kind: "preset", preset: "ellipse" },
+      offsetX: asEmu(500),
+      offsetY: asEmu(600),
+      width: asEmu(700),
+      height: asEmu(800),
+      name: "Inner Shadow Shape",
+      effects: {
+        innerShadow: {
+          blurRadius: asEmu(50000),
+          distance: asEmu(30000),
+          direction: asOoxmlAngle(10800000),
+          color: { kind: "srgb", hex: "445566" },
+        },
+      },
+    });
+    source = addPicture(source, slideHandle, {
+      bytes: RED_PNG,
+      offsetX: asEmu(900),
+      offsetY: asEmu(1000),
+      width: asEmu(1100),
+      height: asEmu(1200),
+      name: "Shadow Picture",
+      effects: {
+        innerShadow: {
+          blurRadius: asEmu(60000),
+          distance: asEmu(35000),
+          direction: asOoxmlAngle(9000000),
+          color: { kind: "srgb", hex: "778899" },
+        },
+        outerShadow: {
+          blurRadius: asEmu(70000),
+          distance: asEmu(45000),
+          direction: asOoxmlAngle(13500000),
+          color: {
+            kind: "srgb",
+            hex: "000000",
+            transforms: [{ kind: "alpha", value: asOoxmlPercent(25000) }],
+          },
+          alignment: "br",
+          rotateWithShape: true,
+        },
+      },
+    });
+
+    expect(findShapeByName(source, "Outer Shadow Shape").effects).toMatchObject({
+      glow: { radius: 12700 },
+      outerShadow: {
+        blurRadius: 40000,
+        distance: 20000,
+        direction: 5400000,
+        alignment: "ctr",
+        rotateWithShape: false,
+        color: { kind: "srgb", hex: "112233", transforms: [{ kind: "alpha", value: 40000 }] },
+      },
+    });
+    expect(findShapeByName(source, "Inner Shadow Shape").effects?.innerShadow).toMatchObject({
+      blurRadius: 50000,
+      distance: 30000,
+      direction: 10800000,
+      color: { kind: "srgb", hex: "445566" },
+    });
+    expect(findImageByName(source, "Shadow Picture")).toMatchObject({
+      effects: {
+        innerShadow: { blurRadius: 60000, distance: 35000, direction: 9000000 },
+        outerShadow: {
+          blurRadius: 70000,
+          distance: 45000,
+          direction: 13500000,
+          alignment: "br",
+          rotateWithShape: true,
+        },
+      },
+    });
+
+    const output = writePptx(source);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+    const reread = readPptx(output);
+
+    expect(reread.diagnostics).toEqual([]);
+    expect(findImageByName(reread, "Shadow Picture")).toMatchObject(
+      findImageByName(source, "Shadow Picture"),
+    );
+    expect(slideXml).toContain(
+      `<a:effectLst><a:glow rad="12700"><a:srgbClr val="FFCC00"/></a:glow><a:outerShdw blurRad="40000" dist="20000" dir="5400000" algn="ctr" rotWithShape="0"><a:srgbClr val="112233"><a:alpha val="40000"/></a:srgbClr></a:outerShdw></a:effectLst>`,
+    );
+    expect(slideXml).toContain(
+      `<a:innerShdw blurRad="50000" dist="30000" dir="10800000"><a:srgbClr val="445566"/></a:innerShdw>`,
+    );
+    expect(slideXml).toContain(
+      `<a:effectLst><a:innerShdw blurRad="60000" dist="35000" dir="9000000"><a:srgbClr val="778899"/></a:innerShdw><a:outerShdw blurRad="70000" dist="45000" dir="13500000" algn="br" rotWithShape="1"><a:srgbClr val="000000"><a:alpha val="25000"/></a:srgbClr></a:outerShdw></a:effectLst>`,
+    );
   });
 
   it("keeps added pictures at the serialized shape-tree end and adds missing relationship namespace", () => {
@@ -3674,6 +3800,14 @@ function findShapeByName(source: ReturnType<typeof readPptx>, name: string): Sou
     .find((node): node is SourceShape => node.kind === "shape" && node.name === name);
   if (shape === undefined) throw new Error(`shape not found: ${name}`);
   return shape;
+}
+
+function findImageByName(source: ReturnType<typeof readPptx>, name: string): SourceImage {
+  const image = source.slides
+    .flatMap((slide) => slide.shapes)
+    .find((node): node is SourceImage => node.kind === "image" && node.name === name);
+  if (image === undefined) throw new Error(`image not found: ${name}`);
+  return image;
 }
 
 function findConnectorByName(source: ReturnType<typeof readPptx>, name: string): SourceConnector {
