@@ -19,12 +19,66 @@ import {
   nextNumberedPartPath,
   nextRelationshipId,
 } from "./package-graph-mutations.js";
+import type { AuthoringColorInput } from "./shape-xml.js";
 import { parseShapeNodeXml } from "./shape-xml.js";
-import type { Emu } from "./units.js";
+import type { SourceDashStyle } from "./shapes.js";
+import type { Emu, Pt } from "./units.js";
 
 export type NativeChartType = "bar" | "line" | "pie" | "area" | "doughnut" | "radar";
 export type NativeRadarStyle = "standard" | "marker" | "filled";
 export type NativeChartLegendPosition = "b" | "t" | "l" | "r" | "tr";
+export type AddChartColorInput = AuthoringColorInput;
+export type AddChartFillInput =
+  | { readonly kind: "none" }
+  | { readonly kind: "solid"; readonly color: AddChartColorInput };
+export interface AddChartOutlineInput {
+  readonly width?: Emu;
+  readonly fill?: AddChartFillInput;
+  readonly dash?: SourceDashStyle;
+}
+export interface AddChartAreaStyleInput {
+  readonly fill?: AddChartFillInput;
+  readonly outline?: AddChartOutlineInput;
+}
+export interface AddChartTextStyleInput {
+  readonly fontFace?: string;
+  readonly fontSize?: Pt;
+  readonly color?: AddChartColorInput;
+  readonly bold?: boolean;
+  readonly italic?: boolean;
+}
+export interface AddChartNumberFormatInput {
+  readonly formatCode: string;
+  readonly sourceLinked?: boolean;
+}
+export type NativeChartTickMark = "none" | "inside" | "outside" | "cross";
+export type NativeChartLabelPosition = "nextTo" | "high" | "low" | "none";
+export type NativeChartMarkerSymbol =
+  | "auto"
+  | "circle"
+  | "dash"
+  | "diamond"
+  | "dot"
+  | "none"
+  | "plus"
+  | "square"
+  | "star"
+  | "triangle"
+  | "x";
+
+export interface AddChartMarkerInput {
+  readonly symbol?: NativeChartMarkerSymbol;
+  /** Marker size in points, from 2 through 72. */
+  readonly size?: number;
+  readonly fill?: AddChartFillInput;
+  readonly outline?: AddChartOutlineInput;
+}
+
+export interface AddChartDataPointInput {
+  readonly index: number;
+  readonly fill?: AddChartFillInput;
+  readonly outline?: AddChartOutlineInput;
+}
 
 export interface AddChartSeriesInput {
   readonly name?: string;
@@ -32,6 +86,10 @@ export interface AddChartSeriesInput {
   readonly values: readonly number[];
   /** Six-digit sRGB color, with or without `#`. */
   readonly color?: string;
+  readonly fill?: AddChartFillInput;
+  readonly outline?: AddChartOutlineInput;
+  readonly marker?: AddChartMarkerInput;
+  readonly dataPoints?: readonly AddChartDataPointInput[];
 }
 
 export interface AddChartAxisInput {
@@ -39,9 +97,19 @@ export interface AddChartAxisInput {
   readonly lineVisible?: boolean;
   readonly gridLinesVisible?: boolean;
   readonly title?: string;
+  readonly majorTickMark?: NativeChartTickMark;
+  readonly labelPosition?: NativeChartLabelPosition;
+  readonly numberFormat?: AddChartNumberFormatInput;
+  readonly line?: AddChartOutlineInput;
+  readonly majorGridline?: AddChartOutlineInput;
+  readonly textStyle?: AddChartTextStyleInput;
+}
+export interface AddChartCategoryAxisInput extends AddChartAxisInput {
+  readonly showMultiLevelLabels?: boolean;
 }
 
 export interface AddChartPlotLayoutInput {
+  readonly coordinateMode?: "factor" | "edge";
   /** Fraction of chart width/height in the range 0..1. */
   readonly x?: number;
   readonly y?: number;
@@ -58,11 +126,16 @@ export interface AddChartInput {
   readonly height: Emu;
   readonly name?: string;
   readonly title?: string;
+  readonly titleStyle?: AddChartTextStyleInput;
+  readonly displayBlanksAs?: "gap" | "zero" | "span";
+  readonly roundedCorners?: boolean;
+  readonly chartArea?: AddChartAreaStyleInput;
+  readonly plotArea?: AddChartAreaStyleInput;
   readonly showLegend?: boolean;
   readonly legendPosition?: NativeChartLegendPosition;
   readonly radarStyle?: NativeRadarStyle;
   readonly holeSize?: number;
-  readonly categoryAxis?: AddChartAxisInput;
+  readonly categoryAxis?: AddChartCategoryAxisInput;
   readonly valueAxis?: AddChartAxisInput;
   readonly plotLayout?: AddChartPlotLayoutInput;
 }
@@ -84,8 +157,38 @@ const CHART_TYPES: ReadonlySet<string> = new Set([
 ]);
 const LEGEND_POSITIONS: ReadonlySet<string> = new Set(["b", "t", "l", "r", "tr"]);
 const RADAR_STYLES: ReadonlySet<string> = new Set(["standard", "marker", "filled"]);
+const BLANK_DISPLAY_MODES: ReadonlySet<string> = new Set(["gap", "zero", "span"]);
+const TICK_MARKS: ReadonlySet<string> = new Set(["none", "inside", "outside", "cross"]);
+const LABEL_POSITIONS: ReadonlySet<string> = new Set(["nextTo", "high", "low", "none"]);
+const MARKER_SYMBOLS: ReadonlySet<string> = new Set([
+  "auto",
+  "circle",
+  "dash",
+  "diamond",
+  "dot",
+  "none",
+  "plus",
+  "square",
+  "star",
+  "triangle",
+  "x",
+]);
+const DASH_STYLES: ReadonlySet<string> = new Set([
+  "solid",
+  "dash",
+  "dot",
+  "dashDot",
+  "lgDash",
+  "lgDashDot",
+  "lgDashDotDot",
+  "sysDash",
+  "sysDot",
+]);
 const XLSX_MAX_SERIES = 16_383;
 const XLSX_MAX_DATA_POINTS = 1_048_575;
+const MAX_LINE_WIDTH = 20_116_800;
+const MIN_TEXT_SIZE = 100;
+const MAX_TEXT_SIZE = 400_000;
 
 export function addChart(
   source: PptxSourceModel,
@@ -188,14 +291,16 @@ function buildChartXml(input: AddChartInput, chartNumber: number): string {
   const axisIds = [100000 + chartNumber * 2, 100001 + chartNumber * 2];
   const chartProperties = chartTypeProperties(input, axisIds);
   const axes = usesAxes(input.chartType) ? buildAxes(input, axisIds) : "";
-  const title = input.title === undefined ? "" : buildTitleXml(input.title);
+  const title = input.title === undefined ? "" : buildTitleXml(input.title, input.titleStyle);
   const legend =
     input.showLegend === true
       ? `<c:legend><c:legendPos val="${input.legendPosition ?? "r"}"/><c:layout/><c:overlay val="0"/></c:legend>`
       : "";
   const layout =
     input.plotLayout === undefined ? "<c:layout/>" : buildManualLayout(input.plotLayout);
-  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><c:date1904 val="0"/><c:lang val="en-US"/><c:roundedCorners val="0"/><c:chart>${title}<c:autoTitleDeleted val="${input.title === undefined ? 1 : 0}"/><c:plotArea>${layout}<c:${chartTag}>${chartProperties.beforeSeries}${seriesXml}${chartProperties.afterSeries}</c:${chartTag}>${axes}</c:plotArea>${legend}<c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/><c:showDLblsOverMax val="0"/></c:chart><c:externalData r:id="rId1"><c:autoUpdate val="0"/></c:externalData></c:chartSpace>`;
+  const plotAreaStyle = buildAreaStyleXml(input.plotArea);
+  const chartAreaStyle = buildAreaStyleXml(input.chartArea);
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><c:date1904 val="0"/><c:lang val="en-US"/><c:roundedCorners val="${input.roundedCorners === true ? 1 : 0}"/><c:chart>${title}<c:autoTitleDeleted val="${input.title === undefined ? 1 : 0}"/><c:plotArea>${layout}<c:${chartTag}>${chartProperties.beforeSeries}${seriesXml}${chartProperties.afterSeries}</c:${chartTag}>${axes}${plotAreaStyle}</c:plotArea>${legend}<c:plotVisOnly val="1"/><c:dispBlanksAs val="${input.displayBlanksAs ?? "gap"}"/><c:showDLblsOverMax val="0"/></c:chart>${chartAreaStyle}<c:externalData r:id="rId1"><c:autoUpdate val="0"/></c:externalData></c:chartSpace>`;
 }
 
 function chartTypeProperties(
@@ -244,16 +349,18 @@ function buildSeriesXml(
 ): string {
   const column = spreadsheetColumn(index + 2);
   const name = series.name ?? `Series ${index + 1}`;
-  const color =
+  const legacyColor =
     series.color === undefined
-      ? ""
-      : `<c:spPr><a:solidFill><a:srgbClr val="${normalizeColor(series.color)}"/></a:solidFill><a:ln><a:solidFill><a:srgbClr val="${normalizeColor(series.color)}"/></a:solidFill></a:ln></c:spPr>`;
-  const marker =
-    chartType === "line" || chartType === "radar"
-      ? `<c:marker><c:symbol val="circle"/><c:size val="5"/></c:marker>`
-      : "";
+      ? undefined
+      : ({ kind: "solid", color: { kind: "srgb", hex: normalizeColor(series.color) } } as const);
+  const seriesProperties = buildShapePropertiesXml(
+    series.fill ?? legacyColor,
+    series.outline ?? (legacyColor === undefined ? undefined : { fill: legacyColor }),
+  );
+  const marker = chartType === "line" || chartType === "radar" ? buildMarkerXml(series.marker) : "";
+  const dataPoints = (series.dataPoints ?? []).map(buildDataPointXml).join("");
   const smooth = chartType === "line" ? `<c:smooth val="0"/>` : "";
-  return `<c:ser><c:idx val="${index}"/><c:order val="${index}"/><c:tx><c:strRef><c:f>Sheet1!$${column}$1</c:f>${stringCache([name])}</c:strRef></c:tx>${color}${marker}<c:cat><c:strRef><c:f>Sheet1!$A$2:$A$${pointCount + 1}</c:f>${stringCache(series.categories)}</c:strRef></c:cat><c:val><c:numRef><c:f>Sheet1!$${column}$2:$${column}$${pointCount + 1}</c:f>${numberCache(series.values)}</c:numRef></c:val>${smooth}</c:ser>`;
+  return `<c:ser><c:idx val="${index}"/><c:order val="${index}"/><c:tx><c:strRef><c:f>Sheet1!$${column}$1</c:f>${stringCache([name])}</c:strRef></c:tx>${seriesProperties}${marker}${dataPoints}<c:cat><c:strRef><c:f>Sheet1!$A$2:$A$${pointCount + 1}</c:f>${stringCache(series.categories)}</c:strRef></c:cat><c:val><c:numRef><c:f>Sheet1!$${column}$2:$${column}$${pointCount + 1}</c:f>${numberCache(series.values)}</c:numRef></c:val>${smooth}</c:ser>`;
 }
 
 function stringCache(values: readonly string[]): string {
@@ -267,21 +374,117 @@ function numberCache(values: readonly number[]): string {
 function buildAxes(input: AddChartInput, ids: readonly number[]): string {
   const cat = input.categoryAxis ?? {};
   const val = input.valueAxis ?? {};
-  return `<c:catAx><c:axId val="${ids[0]}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="${cat.hidden === true ? 1 : 0}"/><c:axPos val="b"/>${cat.gridLinesVisible === true ? "<c:majorGridlines/>" : ""}${cat.title === undefined ? "" : buildTitleXml(cat.title)}<c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/>${axisShapeProperties(cat.lineVisible)}<c:crossAx val="${ids[1]}"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/></c:catAx><c:valAx><c:axId val="${ids[1]}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="${val.hidden === true ? 1 : 0}"/><c:axPos val="l"/>${val.gridLinesVisible === false ? "" : "<c:majorGridlines/>"}${val.title === undefined ? "" : buildTitleXml(val.title)}<c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/>${axisShapeProperties(val.lineVisible)}<c:crossAx val="${ids[0]}"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>`;
+  return `<c:catAx><c:axId val="${ids[0]}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="${cat.hidden === true ? 1 : 0}"/><c:axPos val="b"/>${buildGridlineXml(cat, false)}${cat.title === undefined ? "" : buildTitleXml(cat.title)}${buildNumberFormatXml(cat.numberFormat)}<c:majorTickMark val="${tickMarkToken(cat.majorTickMark)}"/><c:minorTickMark val="none"/><c:tickLblPos val="${cat.labelPosition ?? "nextTo"}"/>${axisShapeProperties(cat)}${buildTextPropertiesXml(cat.textStyle)}<c:crossAx val="${ids[1]}"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/>${cat.showMultiLevelLabels === undefined ? "" : `<c:noMultiLvlLbl val="${cat.showMultiLevelLabels ? 0 : 1}"/>`}</c:catAx><c:valAx><c:axId val="${ids[1]}"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="${val.hidden === true ? 1 : 0}"/><c:axPos val="l"/>${buildGridlineXml(val, true)}${val.title === undefined ? "" : buildTitleXml(val.title)}${buildNumberFormatXml(val.numberFormat)}<c:majorTickMark val="${tickMarkToken(val.majorTickMark)}"/><c:minorTickMark val="none"/><c:tickLblPos val="${val.labelPosition ?? "nextTo"}"/>${axisShapeProperties(val)}${buildTextPropertiesXml(val.textStyle)}<c:crossAx val="${ids[0]}"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>`;
 }
 
-function axisShapeProperties(visible: boolean | undefined): string {
-  return visible === false ? `<c:spPr><a:ln><a:noFill/></a:ln></c:spPr>` : "";
+function buildGridlineXml(axis: AddChartAxisInput, visibleByDefault: boolean): string {
+  const visible = axis.gridLinesVisible ?? (axis.majorGridline !== undefined || visibleByDefault);
+  if (!visible) return "";
+  const properties =
+    axis.majorGridline === undefined ? "" : buildShapePropertiesXml(undefined, axis.majorGridline);
+  return `<c:majorGridlines>${properties}</c:majorGridlines>`;
 }
 
-function buildTitleXml(title: string): string {
-  return `<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US"/>${textElement("a:t", title)}</a:r></a:p></c:rich></c:tx><c:layout/><c:overlay val="0"/></c:title>`;
+function buildNumberFormatXml(format: AddChartNumberFormatInput | undefined): string {
+  return `<c:numFmt formatCode="${escapeXml(format?.formatCode ?? "General")}" sourceLinked="${format?.sourceLinked === false ? 0 : 1}"/>`;
+}
+
+function tickMarkToken(value: NativeChartTickMark | undefined): string {
+  if (value === "inside") return "in";
+  if (value === "outside") return "out";
+  return value ?? "none";
+}
+
+function axisShapeProperties(axis: AddChartAxisInput): string {
+  if (axis.lineVisible === false)
+    return buildShapePropertiesXml(undefined, { fill: { kind: "none" } });
+  return axis.line === undefined ? "" : buildShapePropertiesXml(undefined, axis.line);
+}
+
+function buildTitleXml(title: string, style?: AddChartTextStyleInput): string {
+  return `<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r>${buildRunPropertiesXml(style)}${textElement("a:t", title)}</a:r></a:p></c:rich></c:tx><c:layout/><c:overlay val="0"/></c:title>`;
 }
 
 function buildManualLayout(layout: AddChartPlotLayoutInput): string {
   const value = (tag: string, number: number | undefined) =>
     number === undefined ? "" : `<c:${tag} val="${number}"/>`;
-  return `<c:layout><c:manualLayout><c:layoutTarget val="inner"/><c:xMode val="factor"/><c:yMode val="factor"/><c:wMode val="factor"/><c:hMode val="factor"/>${value("x", layout.x)}${value("y", layout.y)}${value("w", layout.width)}${value("h", layout.height)}</c:manualLayout></c:layout>`;
+  const mode = layout.coordinateMode ?? "factor";
+  return `<c:layout><c:manualLayout><c:layoutTarget val="inner"/><c:xMode val="${mode}"/><c:yMode val="${mode}"/><c:wMode val="${mode}"/><c:hMode val="${mode}"/>${value("x", layout.x)}${value("y", layout.y)}${value("w", layout.width)}${value("h", layout.height)}</c:manualLayout></c:layout>`;
+}
+
+function buildAreaStyleXml(style: AddChartAreaStyleInput | undefined): string {
+  return style === undefined ? "" : buildShapePropertiesXml(style.fill, style.outline);
+}
+
+function buildShapePropertiesXml(
+  fill: AddChartFillInput | undefined,
+  outline: AddChartOutlineInput | undefined,
+): string {
+  return fill === undefined && outline === undefined
+    ? ""
+    : `<c:spPr>${buildFillXml(fill)}${outline === undefined ? "" : buildOutlineXml(outline)}</c:spPr>`;
+}
+
+function buildFillXml(fill: AddChartFillInput | undefined): string {
+  if (fill === undefined) return "";
+  return fill.kind === "none"
+    ? `<a:noFill/>`
+    : `<a:solidFill>${buildColorXml(fill.color)}</a:solidFill>`;
+}
+
+function buildOutlineXml(outline: AddChartOutlineInput): string {
+  const width = outline.width === undefined ? "" : ` w="${outline.width}"`;
+  const dash = outline.dash === undefined ? "" : `<a:prstDash val="${outline.dash}"/>`;
+  return `<a:ln${width}>${buildFillXml(outline.fill)}${dash}</a:ln>`;
+}
+
+function buildColorXml(color: AddChartColorInput): string {
+  const transforms = (color.transforms ?? [])
+    .map((transform) => `<a:alpha val="${transform.value}"/>`)
+    .join("");
+  return `<a:srgbClr val="${normalizeColor(color.hex)}">${transforms}</a:srgbClr>`;
+}
+
+function buildRunPropertiesXml(style: AddChartTextStyleInput | undefined): string {
+  const attributes = [
+    `lang="en-US"`,
+    ...(style?.fontSize === undefined ? [] : [`sz="${Math.round(style.fontSize * 100)}"`]),
+    ...(style?.bold === undefined ? [] : [`b="${style.bold ? 1 : 0}"`]),
+    ...(style?.italic === undefined ? [] : [`i="${style.italic ? 1 : 0}"`]),
+  ].join(" ");
+  return `<a:rPr ${attributes}>${buildTextStyleChildren(style)}</a:rPr>`;
+}
+
+function buildTextPropertiesXml(style: AddChartTextStyleInput | undefined): string {
+  if (style === undefined) return "";
+  const attributes = [
+    ...(style.fontSize === undefined ? [] : [`sz="${Math.round(style.fontSize * 100)}"`]),
+    ...(style.bold === undefined ? [] : [`b="${style.bold ? 1 : 0}"`]),
+    ...(style.italic === undefined ? [] : [`i="${style.italic ? 1 : 0}"`]),
+  ].join(" ");
+  const attributeText = attributes.length === 0 ? "" : ` ${attributes}`;
+  return `<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr${attributeText}>${buildTextStyleChildren(style)}</a:defRPr></a:pPr><a:endParaRPr lang="en-US"/></a:p></c:txPr>`;
+}
+
+function buildTextStyleChildren(style: AddChartTextStyleInput | undefined): string {
+  if (style === undefined) return "";
+  const color =
+    style.color === undefined ? "" : `<a:solidFill>${buildColorXml(style.color)}</a:solidFill>`;
+  const fonts =
+    style.fontFace === undefined
+      ? ""
+      : `<a:latin typeface="${escapeXml(style.fontFace)}"/><a:ea typeface="${escapeXml(style.fontFace)}"/><a:cs typeface="${escapeXml(style.fontFace)}"/>`;
+  return color + fonts;
+}
+
+function buildMarkerXml(marker: AddChartMarkerInput | undefined): string {
+  const resolved = marker ?? {};
+  const properties = buildShapePropertiesXml(resolved.fill, resolved.outline);
+  return `<c:marker><c:symbol val="${resolved.symbol ?? "circle"}"/><c:size val="${resolved.size ?? 5}"/>${properties}</c:marker>`;
+}
+
+function buildDataPointXml(point: AddChartDataPointInput): string {
+  return `<c:dPt><c:idx val="${point.index}"/>${buildShapePropertiesXml(point.fill, point.outline)}</c:dPt>`;
 }
 
 function buildEmbeddedWorkbook(series: readonly AddChartSeriesInput[]): Uint8Array {
@@ -374,6 +577,8 @@ function assertChartInput(input: AddChartInput): void {
     throw new Error("addChart: unsupported legendPosition");
   if (input.radarStyle !== undefined && !RADAR_STYLES.has(input.radarStyle))
     throw new Error("addChart: unsupported radarStyle");
+  if (input.displayBlanksAs !== undefined && !BLANK_DISPLAY_MODES.has(input.displayBlanksAs))
+    throw new Error("addChart: unsupported displayBlanksAs");
   for (const [field, value] of [
     ["offsetX", input.offsetX],
     ["offsetY", input.offsetY],
@@ -397,7 +602,19 @@ function assertChartInput(input: AddChartInput): void {
   for (const text of [input.name, input.title, input.categoryAxis?.title, input.valueAxis?.title]) {
     if (text !== undefined) assertValidXmlText(text);
   }
-  input.series.forEach((series) => {
+  if (input.titleStyle !== undefined && input.title === undefined)
+    throw new Error("addChart: titleStyle requires title");
+  assertTextStyle(input.titleStyle, "titleStyle");
+  assertAreaStyle(input.chartArea, "chartArea");
+  assertAreaStyle(input.plotArea, "plotArea");
+  assertAxis(input.categoryAxis, "categoryAxis");
+  assertAxis(input.valueAxis, "valueAxis");
+  if (
+    input.valueAxis !== undefined &&
+    Object.prototype.hasOwnProperty.call(input.valueAxis, "showMultiLevelLabels")
+  )
+    throw new Error("addChart: showMultiLevelLabels is only valid for categoryAxis");
+  input.series.forEach((series, seriesIndex) => {
     if (series.categories.length !== count || series.values.length !== count)
       throw new Error("addChart: every series must have matching category and value counts");
     if (series.categories.some((category, index) => category !== input.series[0].categories[index]))
@@ -407,6 +624,40 @@ function assertChartInput(input: AddChartInput): void {
     if (series.name !== undefined) assertValidXmlText(series.name);
     series.categories.forEach(assertValidXmlText);
     if (series.color !== undefined) normalizeColor(series.color);
+    assertFill(series.fill, `series[${seriesIndex}].fill`);
+    assertOutline(series.outline, `series[${seriesIndex}].outline`);
+    if (series.marker !== undefined) {
+      if (input.chartType !== "line" && input.chartType !== "radar")
+        throw new Error("addChart: marker is only valid for line and radar charts");
+      if (series.marker.symbol !== undefined && !MARKER_SYMBOLS.has(series.marker.symbol))
+        throw new Error(`addChart: unsupported series[${seriesIndex}].marker.symbol`);
+      if (
+        series.marker.size !== undefined &&
+        (!Number.isInteger(series.marker.size) || series.marker.size < 2 || series.marker.size > 72)
+      )
+        throw new Error(`addChart: series[${seriesIndex}].marker.size must be from 2 through 72`);
+      assertFill(series.marker.fill, `series[${seriesIndex}].marker.fill`);
+      assertOutline(series.marker.outline, `series[${seriesIndex}].marker.outline`);
+    }
+    if (
+      series.dataPoints !== undefined &&
+      input.chartType !== "pie" &&
+      input.chartType !== "doughnut" &&
+      !(input.chartType === "bar" && input.series.length === 1)
+    )
+      throw new Error(
+        "addChart: dataPoints are only valid for pie, doughnut, and single-series bar charts",
+      );
+    const pointIndexes = new Set<number>();
+    for (const point of series.dataPoints ?? []) {
+      if (!Number.isInteger(point.index) || point.index < 0 || point.index >= count)
+        throw new Error(`addChart: series[${seriesIndex}].dataPoints index is out of range`);
+      if (pointIndexes.has(point.index))
+        throw new Error(`addChart: series[${seriesIndex}].dataPoints indexes must be unique`);
+      pointIndexes.add(point.index);
+      assertFill(point.fill, `series[${seriesIndex}].dataPoints.fill`);
+      assertOutline(point.outline, `series[${seriesIndex}].dataPoints.outline`);
+    }
   });
   if (input.radarStyle !== undefined && input.chartType !== "radar")
     throw new Error("addChart: radarStyle is only valid for radar charts");
@@ -418,9 +669,94 @@ function assertChartInput(input: AddChartInput): void {
       input.holeSize > 90)
   )
     throw new Error("addChart: holeSize must be an integer from 10 through 90 for doughnut charts");
-  for (const value of Object.values(input.plotLayout ?? {}))
-    if (!Number.isFinite(value) || value < 0 || value > 1)
+  for (const value of [
+    input.plotLayout?.x,
+    input.plotLayout?.y,
+    input.plotLayout?.width,
+    input.plotLayout?.height,
+  ])
+    if (value !== undefined && (!Number.isFinite(value) || value < 0 || value > 1))
       throw new Error("addChart: plotLayout values must be finite numbers from 0 through 1");
+  if (
+    input.plotLayout?.coordinateMode !== undefined &&
+    input.plotLayout.coordinateMode !== "factor" &&
+    input.plotLayout.coordinateMode !== "edge"
+  )
+    throw new Error("addChart: unsupported plotLayout coordinateMode");
+}
+
+function assertAxis(axis: AddChartAxisInput | undefined, field: string): void {
+  if (axis === undefined) return;
+  if (axis.majorTickMark !== undefined && !TICK_MARKS.has(axis.majorTickMark))
+    throw new Error(`addChart: unsupported ${field}.majorTickMark`);
+  if (axis.labelPosition !== undefined && !LABEL_POSITIONS.has(axis.labelPosition))
+    throw new Error(`addChart: unsupported ${field}.labelPosition`);
+  if (axis.numberFormat !== undefined) {
+    assertValidXmlText(axis.numberFormat.formatCode);
+    if (axis.numberFormat.formatCode.length === 0)
+      throw new Error(`addChart: ${field}.numberFormat.formatCode must not be empty`);
+  }
+  assertOutline(axis.line, `${field}.line`);
+  assertOutline(axis.majorGridline, `${field}.majorGridline`);
+  assertTextStyle(axis.textStyle, `${field}.textStyle`);
+}
+
+function assertAreaStyle(style: AddChartAreaStyleInput | undefined, field: string): void {
+  if (style === undefined) return;
+  assertFill(style.fill, `${field}.fill`);
+  assertOutline(style.outline, `${field}.outline`);
+}
+
+function assertFill(fill: AddChartFillInput | undefined, field: string): void {
+  if (fill === undefined || fill.kind === "none") return;
+  if (fill.kind === "solid") {
+    assertColor(fill.color, `${field}.color`);
+    return;
+  }
+  throw new Error(`addChart: unsupported ${field}.kind`);
+}
+
+function assertOutline(outline: AddChartOutlineInput | undefined, field: string): void {
+  if (outline === undefined) return;
+  if (
+    outline.width !== undefined &&
+    (!Number.isInteger(outline.width) || outline.width < 0 || outline.width > MAX_LINE_WIDTH)
+  )
+    throw new Error(
+      `addChart: ${field}.width must be a finite EMU value from 0 through ${MAX_LINE_WIDTH}`,
+    );
+  if (outline.dash !== undefined && !DASH_STYLES.has(outline.dash))
+    throw new Error(`addChart: unsupported ${field}.dash`);
+  assertFill(outline.fill, `${field}.fill`);
+}
+
+function assertTextStyle(style: AddChartTextStyleInput | undefined, field: string): void {
+  if (style === undefined) return;
+  if (style.fontFace !== undefined) {
+    assertValidXmlText(style.fontFace);
+    if (style.fontFace.length === 0)
+      throw new Error(`addChart: ${field}.fontFace must not be empty`);
+  }
+  if (style.fontSize !== undefined) {
+    const textSize = Math.round(style.fontSize * 100);
+    if (!Number.isFinite(style.fontSize) || textSize < MIN_TEXT_SIZE || textSize > MAX_TEXT_SIZE)
+      throw new Error(`addChart: ${field}.fontSize must be from 1 through 4000 points`);
+  }
+  if (style.color !== undefined) assertColor(style.color, `${field}.color`);
+}
+
+function assertColor(color: AddChartColorInput, field: string): void {
+  if (color.kind !== "srgb") throw new Error(`addChart: unsupported ${field}.kind`);
+  normalizeColor(color.hex);
+  for (const transform of color.transforms ?? []) {
+    if (
+      transform.kind !== "alpha" ||
+      !Number.isInteger(transform.value) ||
+      transform.value < 0 ||
+      transform.value > 100000
+    )
+      throw new Error(`addChart: ${field} alpha must be an integer from 0 through 100000`);
+  }
 }
 
 function normalizeColor(value: string): string {

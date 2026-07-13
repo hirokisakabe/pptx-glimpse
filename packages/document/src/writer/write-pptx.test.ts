@@ -673,6 +673,261 @@ describe("writePptx - from-scratch builder", () => {
     ).toEqual(types);
   });
 
+  it("writes typed chart, axis, series, marker, and data point formatting", () => {
+    const source = createPptx();
+    const slideHandle = source.slides[0]?.handle;
+    if (slideHandle === undefined) throw new Error("createPptx should create a first slide");
+    const color = (hex: string, alpha?: number) => ({
+      kind: "srgb" as const,
+      hex,
+      ...(alpha === undefined
+        ? {}
+        : { transforms: [{ kind: "alpha" as const, value: asOoxmlPercent(alpha) }] }),
+    });
+    const solid = (hex: string, alpha?: number) => ({
+      kind: "solid" as const,
+      color: color(hex, alpha),
+    });
+
+    const formatted = addChart(source, slideHandle, {
+      chartType: "bar",
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(4000000),
+      height: asEmu(2500000),
+      title: "Formatted chart",
+      titleStyle: {
+        fontFace: "Aptos Display",
+        fontSize: asPt(18),
+        color: color("112233"),
+        bold: true,
+        italic: true,
+      },
+      displayBlanksAs: "span",
+      roundedCorners: true,
+      chartArea: {
+        fill: solid("F0F0F0", 80000),
+        outline: { width: asEmu(12700), fill: solid("223344"), dash: "dash" },
+      },
+      plotArea: {
+        fill: solid("FFFFFF"),
+        outline: { fill: { kind: "none" } },
+      },
+      categoryAxis: {
+        hidden: true,
+        majorTickMark: "inside",
+        labelPosition: "low",
+        numberFormat: { formatCode: "0.0%", sourceLinked: false },
+        line: { width: asEmu(19050), fill: solid("445566") },
+        majorGridline: { fill: solid("D9D9D9"), dash: "dot" },
+        gridLinesVisible: true,
+        textStyle: {
+          fontFace: "Aptos",
+          fontSize: asPt(9),
+          color: color("667788"),
+          bold: true,
+          italic: false,
+        },
+        showMultiLevelLabels: false,
+      },
+      valueAxis: {
+        hidden: true,
+        lineVisible: false,
+        majorTickMark: "outside",
+        labelPosition: "none",
+        numberFormat: { formatCode: "#,##0" },
+        line: { fill: solid("FF0000") },
+        gridLinesVisible: false,
+      },
+      plotLayout: { coordinateMode: "edge", x: 0, y: 0, width: 1, height: 1 },
+      series: [
+        {
+          name: "Revenue",
+          categories: ["Q1", "Q2"],
+          values: [10, 20],
+          fill: solid("4472C4"),
+          outline: { width: asEmu(12700), fill: solid("203864"), dash: "solid" },
+          dataPoints: [
+            { index: 0, fill: solid("ED7D31"), outline: { fill: solid("843C0C") } },
+            { index: 1, fill: solid("70AD47") },
+          ],
+        },
+      ],
+    });
+    const withLine = addChart(formatted, slideHandle, {
+      chartType: "line",
+      offsetX: asEmu(4000000),
+      offsetY: asEmu(0),
+      width: asEmu(4000000),
+      height: asEmu(2500000),
+      series: [
+        {
+          categories: ["Q1", "Q2"],
+          values: [4, 8],
+          fill: { kind: "none" },
+          outline: { width: asEmu(25400), fill: solid("5B9BD5"), dash: "dashDot" },
+          marker: {
+            symbol: "diamond",
+            size: 9,
+            fill: solid("FFC000"),
+            outline: { fill: solid("7F6000") },
+          },
+        },
+      ],
+    });
+    const withArea = addChart(withLine, slideHandle, {
+      chartType: "area",
+      offsetX: asEmu(0),
+      offsetY: asEmu(2500000),
+      width: asEmu(2500000),
+      height: asEmu(2000000),
+      series: [
+        {
+          categories: ["Q1", "Q2"],
+          values: [2, 3],
+          fill: solid("A5A5A5"),
+          outline: { fill: solid("404040") },
+        },
+      ],
+    });
+    const withRadar = addChart(withArea, slideHandle, {
+      chartType: "radar",
+      offsetX: asEmu(2500000),
+      offsetY: asEmu(2500000),
+      width: asEmu(2500000),
+      height: asEmu(2000000),
+      series: [
+        {
+          categories: ["Q1", "Q2"],
+          values: [5, 6],
+          fill: solid("8064A2"),
+          outline: { fill: solid("4F3B66") },
+          marker: { symbol: "triangle", size: 7, fill: solid("8064A2") },
+        },
+      ],
+    });
+    const withPie = addChart(withRadar, slideHandle, {
+      chartType: "pie",
+      offsetX: asEmu(5000000),
+      offsetY: asEmu(2500000),
+      width: asEmu(1800000),
+      height: asEmu(2000000),
+      displayBlanksAs: "zero",
+      series: [
+        {
+          categories: ["A", "B"],
+          values: [1, 2],
+          dataPoints: [
+            { index: 0, fill: solid("C00000") },
+            { index: 1, fill: solid("00B050"), outline: { fill: solid("006100") } },
+          ],
+        },
+      ],
+    });
+    const edited = addChart(withPie, slideHandle, {
+      chartType: "doughnut",
+      offsetX: asEmu(6800000),
+      offsetY: asEmu(2500000),
+      width: asEmu(1800000),
+      height: asEmu(2000000),
+      displayBlanksAs: "gap",
+      series: [
+        {
+          categories: ["A", "B"],
+          values: [1, 2],
+          dataPoints: [{ index: 0, fill: solid("00B0F0") }],
+        },
+      ],
+    });
+
+    const output = writePptx(edited);
+    const archive = unzipSync(output);
+    const barXml = decoder.decode(archive["ppt/charts/chart1.xml"]);
+    const titleXml = /<c:title>.*?<\/c:title>/.exec(barXml)?.[0];
+    const plotAreaXml = /<c:plotArea>.*?<\/c:plotArea>/.exec(barXml)?.[0];
+    const barSeriesXml = /<c:ser>.*?<\/c:ser>/.exec(barXml)?.[0];
+    expect(barXml).toContain(`<c:roundedCorners val="1"/>`);
+    expect(barXml).toContain(`<c:dispBlanksAs val="span"/>`);
+    expect(titleXml).toContain(`<a:rPr lang="en-US" sz="1800" b="1" i="1">`);
+    expect(titleXml).toContain(`<a:srgbClr val="112233">`);
+    expect(titleXml).toContain(`<a:latin typeface="Aptos Display"/>`);
+    expect(plotAreaXml).toContain(
+      `<c:spPr><a:solidFill><a:srgbClr val="FFFFFF"></a:srgbClr></a:solidFill><a:ln><a:noFill/></a:ln></c:spPr>`,
+    );
+    expect(barSeriesXml).toContain(
+      `<c:spPr><a:solidFill><a:srgbClr val="4472C4"></a:srgbClr></a:solidFill><a:ln w="12700"><a:solidFill><a:srgbClr val="203864"></a:srgbClr></a:solidFill><a:prstDash val="solid"/></a:ln></c:spPr>`,
+    );
+    expect(barXml).toContain(
+      `<c:manualLayout><c:layoutTarget val="inner"/><c:xMode val="edge"/><c:yMode val="edge"/><c:wMode val="edge"/><c:hMode val="edge"/><c:x val="0"/><c:y val="0"/><c:w val="1"/><c:h val="1"/></c:manualLayout>`,
+    );
+    const categoryAxisXml = /<c:catAx>.*?<\/c:catAx>/.exec(barXml)?.[0];
+    const valueAxisXml = /<c:valAx>.*?<\/c:valAx>/.exec(barXml)?.[0];
+    expect(categoryAxisXml).toContain(`<c:delete val="1"/>`);
+    expect(categoryAxisXml).toContain(`<c:majorTickMark val="in"/>`);
+    expect(categoryAxisXml).toContain(`<c:tickLblPos val="low"/>`);
+    expect(categoryAxisXml).toContain(`<c:numFmt formatCode="0.0%" sourceLinked="0"/>`);
+    expect(categoryAxisXml).toContain(`<c:majorGridlines><c:spPr>`);
+    expect(categoryAxisXml).toContain(`<a:ln w="19050">`);
+    expect(categoryAxisXml).toContain(`<a:defRPr sz="900" b="1" i="0">`);
+    expect(categoryAxisXml).toContain(`<c:noMultiLvlLbl val="1"/>`);
+    expect(valueAxisXml).toContain(`<c:delete val="1"/>`);
+    expect(valueAxisXml).toContain(`<c:majorTickMark val="out"/>`);
+    expect(valueAxisXml).toContain(`<c:tickLblPos val="none"/>`);
+    expect(valueAxisXml).toContain(`<c:numFmt formatCode="#,##0" sourceLinked="1"/>`);
+    expect(valueAxisXml).not.toContain(`<c:majorGridlines>`);
+    expect(valueAxisXml).toContain(`<a:ln><a:noFill/></a:ln>`);
+    expect(barXml).toContain(
+      `<c:dPt><c:idx val="0"/><c:spPr><a:solidFill><a:srgbClr val="ED7D31"></a:srgbClr></a:solidFill><a:ln><a:solidFill><a:srgbClr val="843C0C"></a:srgbClr></a:solidFill></a:ln></c:spPr></c:dPt>`,
+    );
+    expect(barXml).toContain(
+      `<c:dPt><c:idx val="1"/><c:spPr><a:solidFill><a:srgbClr val="70AD47"></a:srgbClr></a:solidFill></c:spPr></c:dPt>`,
+    );
+    expect(barXml).toContain(
+      `</c:chart><c:spPr><a:solidFill><a:srgbClr val="F0F0F0"><a:alpha val="80000"/></a:srgbClr></a:solidFill><a:ln w="12700"><a:solidFill><a:srgbClr val="223344"></a:srgbClr></a:solidFill><a:prstDash val="dash"/></a:ln></c:spPr><c:externalData`,
+    );
+    const lineXml = decoder.decode(archive["ppt/charts/chart2.xml"]);
+    expect(lineXml).toContain(`<c:symbol val="diamond"/><c:size val="9"/>`);
+    expect(lineXml).toContain(
+      `<c:spPr><a:solidFill><a:srgbClr val="FFC000"></a:srgbClr></a:solidFill><a:ln><a:solidFill><a:srgbClr val="7F6000"></a:srgbClr></a:solidFill></a:ln></c:spPr>`,
+    );
+    expect(lineXml).toContain(`<a:prstDash val="dashDot"/>`);
+    const areaXml = decoder.decode(archive["ppt/charts/chart3.xml"]);
+    expect(areaXml).toContain(
+      `<a:solidFill><a:srgbClr val="A5A5A5"></a:srgbClr></a:solidFill><a:ln><a:solidFill><a:srgbClr val="404040"></a:srgbClr></a:solidFill></a:ln>`,
+    );
+    const radarXml = decoder.decode(archive["ppt/charts/chart4.xml"]);
+    expect(radarXml).toContain(`<c:symbol val="triangle"/><c:size val="7"/>`);
+    expect(radarXml).toContain(
+      `<a:solidFill><a:srgbClr val="8064A2"></a:srgbClr></a:solidFill><a:ln><a:solidFill><a:srgbClr val="4F3B66"></a:srgbClr></a:solidFill></a:ln>`,
+    );
+    const pieXml = decoder.decode(archive["ppt/charts/chart5.xml"]);
+    expect(pieXml).toContain(`<c:dispBlanksAs val="zero"/>`);
+    expect(pieXml).toContain(
+      `<c:dPt><c:idx val="1"/><c:spPr><a:solidFill><a:srgbClr val="00B050"></a:srgbClr></a:solidFill><a:ln><a:solidFill><a:srgbClr val="006100"></a:srgbClr></a:solidFill></a:ln></c:spPr></c:dPt>`,
+    );
+    const doughnutXml = decoder.decode(archive["ppt/charts/chart6.xml"]);
+    expect(doughnutXml).toContain(`<c:dispBlanksAs val="gap"/>`);
+    expect(doughnutXml).toContain(
+      `<c:dPt><c:idx val="0"/><c:spPr><a:solidFill><a:srgbClr val="00B0F0"></a:srgbClr></a:solidFill></c:spPr></c:dPt>`,
+    );
+
+    const reread = readPptx(output);
+    expect(reread.diagnostics).toEqual([]);
+    expect(
+      reread.packageGraph.parts.filter((part) =>
+        /^ppt\/charts\/chart\d+\.xml$/.test(part.partPath),
+      ),
+    ).toHaveLength(6);
+    expect(
+      reread.packageGraph.parts.filter((part) => part.partPath.includes("/embeddings/")),
+    ).toHaveLength(6);
+    expect(
+      createComputedView(reread).slides[0]?.elements.map((element) =>
+        element.kind === "chart" ? element.chartData?.chartType : undefined,
+      ),
+    ).toEqual(["bar", "line", "area", "radar", "pie", "doughnut"]);
+  });
+
   it("avoids the shape-tree root ID and rejects package-breaking chart inputs", () => {
     const source = readPptx(buildShapeDeleteFixture());
     const edited = addChart(source, source.slides[0].handle!, {
@@ -706,6 +961,40 @@ describe("writePptx - from-scratch builder", () => {
     expect(() =>
       addChart(source, source.slides[0].handle!, { ...valid, title: "bad\u0000" }),
     ).toThrow(/forbidden by XML 1.0/);
+    const invalidFillKind = { ...valid, chartArea: { fill: { kind: "none" as const } } };
+    Reflect.set(invalidFillKind.chartArea.fill, "kind", "gradient");
+    expect(() => addChart(source, source.slides[0].handle!, invalidFillKind)).toThrow(
+      /unsupported chartArea\.fill\.kind/,
+    );
+    const invalidColorKind = {
+      ...valid,
+      chartArea: {
+        fill: { kind: "solid" as const, color: { kind: "srgb" as const, hex: "FFFFFF" } },
+      },
+    };
+    Reflect.set(invalidColorKind.chartArea.fill.color, "kind", "scheme");
+    expect(() => addChart(source, source.slides[0].handle!, invalidColorKind)).toThrow(
+      /unsupported chartArea\.fill\.color\.kind/,
+    );
+    expect(() =>
+      addChart(source, source.slides[0].handle!, {
+        ...valid,
+        chartArea: { outline: { width: asEmu(20_116_801) } },
+      }),
+    ).toThrow(/width must be a finite EMU value/);
+    expect(() =>
+      addChart(source, source.slides[0].handle!, {
+        ...valid,
+        chartArea: { outline: { width: asEmu(0.5) } },
+      }),
+    ).toThrow(/width must be a finite EMU value/);
+    expect(() =>
+      addChart(source, source.slides[0].handle!, {
+        ...valid,
+        title: "Too small",
+        titleStyle: { fontSize: asPt(0.5) },
+      }),
+    ).toThrow(/fontSize must be from 1 through 4000 points/);
   });
 
   it("writes a new presentation after adding a text box through public APIs", () => {
