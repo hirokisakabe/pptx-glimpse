@@ -26,17 +26,42 @@ import type {
 } from "./shapes.js";
 import type { Emu, HundredthPt, OoxmlAngle, OoxmlPercent, Pt } from "./units.js";
 
-export type TextBoxColorInput = { readonly kind: "srgb"; readonly hex: string };
+export interface AuthoringColorTransformInput {
+  readonly kind: "alpha";
+  readonly value: OoxmlPercent;
+}
+
+export type AuthoringColorInput = {
+  readonly kind: "srgb";
+  readonly hex: string;
+  readonly transforms?: readonly AuthoringColorTransformInput[];
+};
+
+export type TextBoxColorInput = AuthoringColorInput;
 
 export interface TextBoxGradientStopInput {
   readonly position: OoxmlPercent;
   readonly color: TextBoxColorInput;
 }
 
-export interface TextBoxGradientFillInput {
+interface TextBoxGradientFillBaseInput {
   readonly stops: readonly TextBoxGradientStopInput[];
+}
+
+export interface TextBoxLinearGradientFillInput extends TextBoxGradientFillBaseInput {
+  readonly gradientType: "linear";
   readonly angle?: OoxmlAngle;
 }
+
+export interface TextBoxRadialGradientFillInput extends TextBoxGradientFillBaseInput {
+  readonly gradientType: "radial";
+  readonly centerX: OoxmlPercent;
+  readonly centerY: OoxmlPercent;
+}
+
+export type TextBoxGradientFillInput =
+  | TextBoxLinearGradientFillInput
+  | TextBoxRadialGradientFillInput;
 
 export type TextBoxUnderlineStyle =
   | "sng"
@@ -490,6 +515,13 @@ function createColorXml(color: TextBoxColorInput): Record<string, unknown> {
   return {
     "a:srgbClr": {
       "@_val": color.hex.toUpperCase(),
+      ...(color.transforms !== undefined && color.transforms.length > 0
+        ? {
+            "a:alpha": color.transforms.map((transform) => ({
+              "@_val": String(transform.value),
+            })),
+          }
+        : {}),
     },
   };
 }
@@ -502,10 +534,24 @@ function createGradientFillXml(fill: TextBoxGradientFillInput): Record<string, u
         ...createColorXml(stop.color),
       })),
     },
-    "a:lin": {
-      "@_ang": String(fill.angle ?? 0),
-      "@_scaled": "1",
-    },
+    ...(fill.gradientType === "linear"
+      ? {
+          "a:lin": {
+            "@_ang": String(fill.angle ?? 0),
+            "@_scaled": "1",
+          },
+        }
+      : {
+          "a:path": {
+            "@_path": "circle",
+            "a:fillToRect": {
+              "@_l": String(fill.centerX),
+              "@_t": String(fill.centerY),
+              "@_r": String(100000 - fill.centerX),
+              "@_b": String(100000 - fill.centerY),
+            },
+          },
+        }),
   };
 }
 
