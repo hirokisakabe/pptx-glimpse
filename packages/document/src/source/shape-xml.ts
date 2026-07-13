@@ -14,6 +14,7 @@ import { XMLBuilder } from "fast-xml-parser";
 import { createSidecarIdFactory } from "../reader/raw-node.js";
 import { parseShapeTree } from "../reader/shape-tree.js";
 import { parseXml, parseXmlOrdered } from "../reader/xml.js";
+import type { InnerShadowInput, OuterShadowInput, ShadowEffectsInput } from "./effect-authoring.js";
 import type { PartPath, RelationshipId } from "./handles.js";
 import type { ConnectorPresetGeometry } from "./pptx-source-model.js";
 import type {
@@ -117,8 +118,8 @@ export interface ShapeGlowInput {
   readonly color: ShapeColorInput;
 }
 
-export interface ShapeEffectsInput {
-  readonly glow: ShapeGlowInput;
+export interface ShapeEffectsInput extends ShadowEffectsInput {
+  readonly glow?: ShapeGlowInput;
 }
 
 export interface ShapeOutlineInput {
@@ -278,6 +279,7 @@ interface PictureXmlParams {
   readonly offsetY: Emu;
   readonly width: Emu;
   readonly height: Emu;
+  readonly effects?: ShadowEffectsInput;
   readonly rotation?: OoxmlAngle;
   readonly crop?: SourceImageCrop;
 }
@@ -418,9 +420,7 @@ export function buildShapeXml(params: ShapeXmlParams): string {
         ...createShapeGeometryXml(params.geometry),
         ...createShapeFillChildXml(params.fill),
         ...(params.outline !== undefined ? { "a:ln": createShapeLineXml(params.outline) } : {}),
-        ...(params.effects?.glow !== undefined
-          ? { "a:effectLst": { "a:glow": createGlowXml(params.effects.glow) } }
-          : {}),
+        ...createEffectListChildXml(params.effects),
       },
       ...(paragraphs.length > 0
         ? {
@@ -713,6 +713,45 @@ function createGlowXml(glow: TextBoxGlowInput): Record<string, unknown> {
   };
 }
 
+function createEffectListChildXml(
+  effects: ShapeEffectsInput | ShadowEffectsInput | undefined,
+): Record<string, unknown> {
+  if (effects === undefined) return {};
+  return {
+    "a:effectLst": {
+      ...("glow" in effects && effects.glow !== undefined
+        ? { "a:glow": createGlowXml(effects.glow) }
+        : {}),
+      ...(effects.innerShadow !== undefined
+        ? { "a:innerShdw": createInnerShadowXml(effects.innerShadow) }
+        : {}),
+      ...(effects.outerShadow !== undefined
+        ? { "a:outerShdw": createOuterShadowXml(effects.outerShadow) }
+        : {}),
+    },
+  };
+}
+
+function createOuterShadowXml(shadow: OuterShadowInput): Record<string, unknown> {
+  return {
+    "@_blurRad": String(shadow.blurRadius),
+    "@_dist": String(shadow.distance),
+    "@_dir": String(shadow.direction),
+    "@_algn": shadow.alignment,
+    "@_rotWithShape": boolToken(shadow.rotateWithShape),
+    ...createColorXml(shadow.color),
+  };
+}
+
+function createInnerShadowXml(shadow: InnerShadowInput): Record<string, unknown> {
+  return {
+    "@_blurRad": String(shadow.blurRadius),
+    "@_dist": String(shadow.distance),
+    "@_dir": String(shadow.direction),
+    ...createColorXml(shadow.color),
+  };
+}
+
 function underlineStyleToken(underline: boolean | TextBoxUnderlineInput): TextBoxUnderlineStyle {
   if (typeof underline === "boolean") return underline ? "sng" : "none";
   return underline.style ?? "sng";
@@ -829,6 +868,7 @@ export function buildPictureXml(params: PictureXmlParams): string {
           "@_prst": "rect",
           "a:avLst": {},
         },
+        ...createEffectListChildXml(params.effects),
       },
     },
   });
