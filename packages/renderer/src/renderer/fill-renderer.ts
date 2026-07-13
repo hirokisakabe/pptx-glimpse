@@ -127,6 +127,7 @@ function getDashArray(style: string, w: number): string | null {
     dashDot: [4, 3, 1, 3],
     lgDash: [8, 3],
     lgDashDot: [8, 3, 1, 3],
+    lgDashDotDot: [8, 3, 1, 3, 1, 3],
     sysDash: [3, 1],
     sysDot: [1, 1],
   };

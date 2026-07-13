@@ -632,7 +632,7 @@ describe("editing shape operations", () => {
         outline: {
           width: asEmu(12700),
           fill: { kind: "solid", color: { kind: "srgb", hex: "00AAFF" } },
-          dash: "dash",
+          dash: "lgDashDotDot",
           headEnd: { type: "oval", width: "sm", length: "sm" },
           tailEnd: { type: "triangle", width: "med", length: "lg" },
         },
@@ -663,7 +663,7 @@ describe("editing shape operations", () => {
     expect(line.outline).toMatchObject({
       width: 12700,
       fill: { kind: "solid", color: { kind: "srgb", hex: "00AAFF" } },
-      dashStyle: "dash",
+      dashStyle: "lgDashDotDot",
       headEnd: { type: "oval", width: "sm", length: "sm" },
       tailEnd: { type: "triangle", width: "med", length: "lg" },
     });
@@ -676,7 +676,7 @@ describe("editing shape operations", () => {
     expect(edited.edits?.find((edit) => edit.kind === "addShape")?.xml).toContain(
       `<a:prstGeom prst="rect"`,
     );
-    expect(lastEdit.xml).toContain(`<a:prstDash val="dash"`);
+    expect(lastEdit.xml).toContain(`<a:prstDash val="lgDashDotDot"`);
     expect(lastEdit.xml).toContain(`<a:tailEnd type="triangle" w="med" len="lg"`);
   });
 

@@ -255,6 +255,7 @@ export interface SourceRunProperties {
 
 export type SourceUnderlineStyle =
   | "sng"
+  | "words"
   | "dbl"
   | "heavy"
   | "dotted"

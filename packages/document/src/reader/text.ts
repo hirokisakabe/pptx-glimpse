@@ -60,6 +60,7 @@ const KNOWN_RUN_PROPERTY_CHILDREN: ReadonlySet<string> = new Set([
 ]);
 const UNDERLINE_STYLES: ReadonlySet<SourceUnderlineStyle> = new Set([
   "sng",
+  "words",
   "dbl",
   "heavy",
   "dotted",

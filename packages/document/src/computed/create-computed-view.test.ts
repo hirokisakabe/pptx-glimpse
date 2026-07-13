@@ -399,6 +399,12 @@ describe("createComputedView", () => {
         color: { hex: "#336699", alpha: 1 },
       },
     });
+    expect(cell.textBody?.properties).toMatchObject({
+      marginLeft: 10,
+      marginRight: 20,
+      marginTop: 30,
+      marginBottom: 40,
+    });
     expect(cell.borders?.top).toMatchObject({
       width: 12700,
       fill: {
@@ -953,10 +959,17 @@ function buildSource(): PptxSourceModel {
                   height: asEmu(700),
                   cells: [
                     {
-                      textBody: textBody("Q1", {
-                        fontSize: asPt(12),
-                        color: { kind: "scheme", scheme: "accent1" },
-                      }),
+                      textBody: {
+                        ...textBody("Q1", {
+                          fontSize: asPt(12),
+                          color: { kind: "scheme", scheme: "accent1" },
+                        }),
+                        properties: { marginLeft: asEmu(999) },
+                      },
+                      marginLeft: asEmu(10),
+                      marginRight: asEmu(20),
+                      marginTop: asEmu(30),
+                      marginBottom: asEmu(40),
                       fill: { kind: "solid", color: { kind: "scheme", scheme: "accent1" } },
                       gridSpan: 2,
                       rowSpan: 1,
