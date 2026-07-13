@@ -759,7 +759,7 @@ describe("writePptx - from-scratch builder", () => {
       text: "Master title",
     });
     source = addShape(source, masterHandle, {
-      preset: "rect",
+      geometry: { kind: "preset", preset: "rect" },
       offsetX: asEmu(0),
       offsetY: asEmu(5000000),
       width: asEmu(9144000),
@@ -877,7 +877,7 @@ describe("writePptx - from-scratch builder", () => {
       text: "Layout text",
     });
     source = addShape(source, layoutHandle, {
-      preset: "rect",
+      geometry: { kind: "preset", preset: "rect" },
       offsetX: asEmu(20),
       offsetY: asEmu(30),
       width: asEmu(300),
@@ -981,7 +981,7 @@ describe("writePptx - from-scratch builder", () => {
       ],
     });
     const withShape = addShape(withTextBox, firstSlideHandle, {
-      preset: "roundRect",
+      geometry: { kind: "preset", preset: "roundRect" },
       offsetX: asEmu(914400),
       offsetY: asEmu(2286000),
       width: asEmu(3657600),
@@ -1078,9 +1078,9 @@ describe("writePptx - from-scratch builder", () => {
     expect(() => addTextBox(source, handle, base)).toThrow(
       "addTextBox: paragraphs[0].runs[0].hyperlink must be an absolute HTTP(S) URL",
     );
-    expect(() => addShape(source, handle, { ...base, preset: "rect" })).toThrow(
-      "addShape: paragraphs[0].runs[0].hyperlink must be an absolute HTTP(S) URL",
-    );
+    expect(() =>
+      addShape(source, handle, { ...base, geometry: { kind: "preset", preset: "rect" } }),
+    ).toThrow("addShape: paragraphs[0].runs[0].hyperlink must be an absolute HTTP(S) URL");
   });
 
   it("writes added PNG and JPEG pictures with media parts, content types, and slide rels", () => {
@@ -1372,7 +1372,7 @@ describe("writePptx - from-scratch builder", () => {
     if (slideHandle === undefined) throw new Error("createPptx should create a first slide");
 
     const withSolid = addShape(source, slideHandle, {
-      preset: "rect",
+      geometry: { kind: "preset", preset: "rect" },
       offsetX: asEmu(1000),
       offsetY: asEmu(2000),
       width: asEmu(3000),
@@ -1381,7 +1381,7 @@ describe("writePptx - from-scratch builder", () => {
       name: "Solid Rect",
     });
     const edited = addShape(withSolid, withSolid.slides[0].handle!, {
-      preset: "roundRect",
+      geometry: { kind: "preset", preset: "roundRect" },
       offsetX: asEmu(914400),
       offsetY: asEmu(457200),
       width: asEmu(2743200),
@@ -1415,7 +1415,7 @@ describe("writePptx - from-scratch builder", () => {
       name: "Styled Shape",
     });
     const lineShape = addShape(edited, edited.slides[0].handle!, {
-      preset: "line",
+      geometry: { kind: "preset", preset: "line" },
       offsetX: asEmu(1),
       offsetY: asEmu(2),
       width: asEmu(3),
@@ -1426,7 +1426,7 @@ describe("writePptx - from-scratch builder", () => {
       name: "Line Shape",
     });
     const ellipseShape = addShape(lineShape, lineShape.slides[0].handle!, {
-      preset: "ellipse",
+      geometry: { kind: "preset", preset: "ellipse" },
       offsetX: asEmu(5),
       offsetY: asEmu(6),
       width: asEmu(7),
@@ -1484,6 +1484,81 @@ describe("writePptx - from-scratch builder", () => {
     expect(slideXml).toContain(`<p:txBody>`);
     expect(slideXml).toContain(`<a:t>Shape label</a:t>`);
     expect(slideXml).toContain(`<a:xfrm rot="5400000">`);
+  });
+
+  it("writes and rereads adjusted, custom, flipped, and zero-extent shape geometry", () => {
+    let source = createPptx();
+    const slideHandle = source.slides[0]?.handle;
+    if (slideHandle === undefined) throw new Error("createPptx should create a first slide");
+    source = addShape(source, slideHandle, {
+      geometry: { kind: "preset", preset: "roundRect", adjustValues: { adj: 25000 } },
+      offsetX: asEmu(100),
+      offsetY: asEmu(200),
+      width: asEmu(300),
+      height: asEmu(400),
+      flipHorizontal: true,
+      name: "Adjusted Geometry",
+    });
+    source = addShape(source, slideHandle, {
+      geometry: {
+        kind: "custom",
+        paths: [
+          {
+            width: 100,
+            height: 100,
+            commands: [
+              { kind: "moveTo", x: 0, y: 100 },
+              { kind: "lineTo", x: 50, y: 0 },
+              { kind: "lineTo", x: 100, y: 100 },
+              { kind: "close" },
+            ],
+          },
+        ],
+      },
+      offsetX: asEmu(500),
+      offsetY: asEmu(600),
+      width: asEmu(700),
+      height: asEmu(800),
+      flipVertical: true,
+      name: "Custom Geometry",
+    });
+    source = addShape(source, slideHandle, {
+      geometry: { kind: "preset", preset: "line" },
+      offsetX: asEmu(900),
+      offsetY: asEmu(1000),
+      width: asEmu(0),
+      height: asEmu(1200),
+      flipHorizontal: true,
+      flipVertical: true,
+      name: "Zero Extent Line",
+    });
+
+    const output = writePptx(source);
+    const reread = readPptx(output);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+
+    expect(requireShape(findShapeByName(reread, "Adjusted Geometry"))).toMatchObject({
+      geometry: { preset: "roundRect", adjustValues: { adj: 25000 } },
+      transform: { flipHorizontal: true },
+    });
+    expect(requireShape(findShapeByName(reread, "Custom Geometry"))).toMatchObject({
+      geometry: {
+        kind: "custom",
+        paths: [{ width: 100, height: 100, commands: "M 0 100 L 50 0 L 100 100 Z" }],
+      },
+      transform: { flipVertical: true },
+    });
+    expect(requireShape(findShapeByName(reread, "Zero Extent Line"))).toMatchObject({
+      geometry: { preset: "line" },
+      transform: { width: 0, height: 1200, flipHorizontal: true, flipVertical: true },
+    });
+    expect(slideXml).toContain(`<a:avLst><a:gd name="adj" fmla="val 25000"/></a:avLst>`);
+    expect(slideXml).toContain(`<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/>`);
+    expect(slideXml).toContain(`<a:moveTo><a:pt x="0" y="100"/></a:moveTo>`);
+    expect(slideXml).toContain(`<a:lnTo><a:pt x="50" y="0"/></a:lnTo>`);
+    expect(slideXml).toContain(`<a:close/>`);
+    expect(slideXml).toContain(`<a:xfrm flipH="1" flipV="1">`);
+    expect(slideXml).toContain(`<a:ext cx="0" cy="1200"/>`);
   });
 
   it("writes custom slide size without fixed 16:9 metadata", () => {

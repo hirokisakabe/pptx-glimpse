@@ -482,7 +482,7 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
       ],
     });
     const edited = addShape(withTextBox, handle, {
-      preset: "roundRect",
+      geometry: { kind: "preset", preset: "roundRect" },
       offsetX: asEmu(914400),
       offsetY: asEmu(2286000),
       width: asEmu(5486400),
@@ -555,7 +555,7 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
       text: "Inherited master object",
     });
     source = addShape(source, masterHandle, {
-      preset: "rect",
+      geometry: { kind: "preset", preset: "rect" },
       offsetX: asEmu(0),
       offsetY: asEmu(5000000),
       width: asEmu(9144000),
@@ -618,7 +618,7 @@ describeOrSkip("LibreOffice shape add/delete validity", { timeout: 120000 }, () 
     const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
     const source = readPptx(sourcePptx);
     const edited = addShape(source, requireHandle(source.slides[0]?.handle), {
-      preset: "roundRect",
+      geometry: { kind: "preset", preset: "roundRect" },
       offsetX: asEmu(914400),
       offsetY: asEmu(914400),
       width: asEmu(3657600),
@@ -647,6 +647,57 @@ describeOrSkip("LibreOffice shape add/delete validity", { timeout: 120000 }, () 
     renderSingleWithLibreOffice(
       libreOfficeImage,
       "editor-validity-shape-add-preset-edited.pptx",
+      writePptx(edited),
+    );
+  });
+
+  it("opens PPTX after adding adjusted, custom, flipped, and zero-extent shapes", () => {
+    const sourcePptx = readFileSync(join(FIXTURE_DIR, "basic-shapes.pptx"));
+    let edited = readPptx(sourcePptx);
+    const slideHandle = requireHandle(edited.slides[0]?.handle);
+    edited = addShape(edited, slideHandle, {
+      geometry: { kind: "preset", preset: "roundRect", adjustValues: { adj: 20000 } },
+      offsetX: asEmu(457200),
+      offsetY: asEmu(457200),
+      width: asEmu(1828800),
+      height: asEmu(914400),
+      flipHorizontal: true,
+    });
+    edited = addShape(edited, slideHandle, {
+      geometry: {
+        kind: "custom",
+        paths: [
+          {
+            width: 100,
+            height: 100,
+            commands: [
+              { kind: "moveTo", x: 0, y: 100 },
+              { kind: "lineTo", x: 50, y: 0 },
+              { kind: "lineTo", x: 100, y: 100 },
+              { kind: "close" },
+            ],
+          },
+        ],
+      },
+      offsetX: asEmu(3200400),
+      offsetY: asEmu(457200),
+      width: asEmu(1828800),
+      height: asEmu(914400),
+      flipVertical: true,
+    });
+    edited = addShape(edited, slideHandle, {
+      geometry: { kind: "preset", preset: "line" },
+      offsetX: asEmu(5943600),
+      offsetY: asEmu(457200),
+      width: asEmu(0),
+      height: asEmu(914400),
+      flipHorizontal: true,
+      flipVertical: true,
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-shape-add-geometry-transform-edited.pptx",
       writePptx(edited),
     );
   });

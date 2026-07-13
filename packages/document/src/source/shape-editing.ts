@@ -1,11 +1,10 @@
 /**
  * Shape editing and authoring operations for PptxSourceModel.
  *
- * Preset-geometry shape authoring uses the same edit-time XML finalization model as
- * text boxes and connectors. The API deliberately keeps the preset name as a
- * pass-through string because OOXML preset coverage is broader than the initial pom
- * swap needs, while styling inputs stay inside the typed subset that the source reader
- * can parse back into `SourceShape`.
+ * Shape authoring uses the same edit-time XML finalization model as text boxes and
+ * connectors. Preset names remain pass-through strings because OOXML preset coverage
+ * is broad, while preset adjustments and the supported custom path commands stay
+ * inside the typed subset that the source reader can parse back into `SourceShape`.
  *
  * Text-box authoring intentionally stays on the existing `addTextBox` operation
  * instead of introducing a second rich-text builder. The adopted API keeps the simple
@@ -57,11 +56,16 @@ import type {
 import { nextNumberedName, nextRelationshipId } from "./package-graph-mutations.js";
 import type {
   ShapeColorInput,
+  ShapeCustomGeometryInput,
+  ShapeCustomGeometryPathCommandInput,
+  ShapeCustomGeometryPathInput,
   ShapeEffectsInput,
   ShapeFillInput,
+  ShapeGeometryInput,
   ShapeGlowInput,
   ShapeGradientFillInput,
   ShapeOutlineInput,
+  ShapePresetGeometryInput,
   TextBoxBaselineInput,
   TextBoxBodyPropertiesInput,
   TextBoxBulletInput,
@@ -105,6 +109,11 @@ export type AddShapeEffectsInput = ShapeEffectsInput;
 export type AddShapeFillInput = ShapeFillInput;
 export type AddShapeGlowInput = ShapeGlowInput;
 export type AddShapeGradientFillInput = ShapeGradientFillInput;
+export type AddShapeGeometryInput = ShapeGeometryInput;
+export type AddShapePresetGeometryInput = ShapePresetGeometryInput;
+export type AddShapeCustomGeometryInput = ShapeCustomGeometryInput;
+export type AddShapeCustomGeometryPathInput = ShapeCustomGeometryPathInput;
+export type AddShapeCustomGeometryPathCommandInput = ShapeCustomGeometryPathCommandInput;
 export type AddShapeOutlineInput = ShapeOutlineInput;
 export type AddShapeParagraphInput = TextBoxParagraphInput;
 export type AddShapeParagraphPropertiesInput = TextBoxParagraphPropertiesInput;
@@ -179,7 +188,7 @@ export interface AddTextBoxInput extends UpdateShapeTransformInput {
 }
 
 export interface AddShapeInput extends UpdateShapeTransformInput {
-  readonly preset: string;
+  readonly geometry: AddShapeGeometryInput;
   readonly fill?: AddShapeFillInput;
   readonly outline?: AddShapeOutlineInput;
   readonly effects?: AddShapeEffectsInput;
@@ -187,6 +196,8 @@ export interface AddShapeInput extends UpdateShapeTransformInput {
   readonly paragraphs?: readonly AddShapeParagraphInput[];
   readonly body?: AddShapeBodyPropertiesInput;
   readonly rotation?: NonNullable<SourceShape["transform"]>["rotation"];
+  readonly flipHorizontal?: boolean;
+  readonly flipVertical?: boolean;
   readonly name?: string;
 }
 
@@ -512,7 +523,10 @@ export function addShape(
   const shapeId = nextShapeId(target.shapes, source.edits ?? [], target.partPath);
   const shapeIdValue = String(shapeId);
   const name = input.name?.trim() || `Shape ${shapeIdValue}`;
-  const preset = input.preset.trim();
+  const geometry =
+    input.geometry.kind === "preset"
+      ? { ...input.geometry, preset: input.geometry.preset.trim() }
+      : input.geometry;
   const orderingSlot = nextOrderingSlot(target.shapes);
   const hyperlinkAllocation = allocateRunHyperlinks(
     source,
@@ -522,12 +536,14 @@ export function addShape(
   const xml = buildShapeXml({
     shapeId: shapeIdValue,
     name,
-    preset,
+    geometry,
     offsetX: input.offsetX,
     offsetY: input.offsetY,
     width: input.width,
     height: input.height,
     ...(input.rotation !== undefined ? { rotation: input.rotation } : {}),
+    ...(input.flipHorizontal !== undefined ? { flipHorizontal: input.flipHorizontal } : {}),
+    ...(input.flipVertical !== undefined ? { flipVertical: input.flipVertical } : {}),
     ...(input.fill !== undefined ? { fill: input.fill } : {}),
     ...(input.outline !== undefined ? { outline: input.outline } : {}),
     ...(input.effects !== undefined ? { effects: input.effects } : {}),
@@ -883,14 +899,23 @@ function assertSlideNumberInput(input: AddSlideNumberInput): void {
 function assertShapeInput(input: AddShapeInput): void {
   assertFiniteEmu(input.offsetX, "addShape", "offsetX");
   assertFiniteEmu(input.offsetY, "addShape", "offsetY");
-  assertPositiveFiniteEmu(input.width, "addShape", "width");
-  assertPositiveFiniteEmu(input.height, "addShape", "height");
-  if (typeof input.preset !== "string" || input.preset.trim() === "") {
-    throw new Error("addShape: preset must be a non-empty string");
+  assertShapeGeometry(input.geometry);
+  const isLine = input.geometry.kind === "preset" && input.geometry.preset.trim() === "line";
+  if (isLine) {
+    assertNonNegativeFiniteEmu(input.width, "addShape", "width");
+    assertNonNegativeFiniteEmu(input.height, "addShape", "height");
+    if (input.width === 0 && input.height === 0) {
+      throw new Error("addShape: line width and height must not both be zero");
+    }
+  } else {
+    assertPositiveFiniteEmu(input.width, "addShape", "width");
+    assertPositiveFiniteEmu(input.height, "addShape", "height");
   }
   if (input.rotation !== undefined) {
     assertFiniteIntegerNumber(input.rotation, "addShape", "rotation");
   }
+  assertBooleanOrUndefined(input.flipHorizontal, "addShape", "flipHorizontal");
+  assertBooleanOrUndefined(input.flipVertical, "addShape", "flipVertical");
   if (input.text !== undefined && input.paragraphs !== undefined) {
     throw new Error("addShape: specify either text or paragraphs, not both");
   }
@@ -912,6 +937,63 @@ function assertShapeInput(input: AddShapeInput): void {
   if (input.fill !== undefined) assertShapeFill(input.fill, "fill");
   if (input.outline !== undefined) assertShapeOutline(input.outline);
   if (input.effects !== undefined) assertShapeEffects(input.effects);
+}
+
+function assertShapeGeometry(geometry: unknown): asserts geometry is AddShapeGeometryInput {
+  if (!isPlainRecord(geometry)) throw new Error("addShape: geometry must be an object");
+  if (geometry.kind === "preset") {
+    if (typeof geometry.preset !== "string" || geometry.preset.trim() === "") {
+      throw new Error("addShape: geometry.preset must be a non-empty string");
+    }
+    if (geometry.adjustValues !== undefined) {
+      if (!isPlainRecord(geometry.adjustValues)) {
+        throw new Error("addShape: geometry.adjustValues must be an object");
+      }
+      for (const [name, value] of Object.entries(geometry.adjustValues)) {
+        if (name.trim() === "" || name !== name.trim()) {
+          throw new Error(
+            "addShape: geometry.adjustValues names must be non-empty and have no surrounding whitespace",
+          );
+        }
+        assertFiniteIntegerNumber(value, "addShape", `geometry.adjustValues.${name}`);
+      }
+    }
+    return;
+  }
+  if (geometry.kind !== "custom") throw new Error("addShape: geometry.kind is not supported");
+  if (!isArrayValue(geometry.paths) || geometry.paths.length === 0) {
+    throw new Error("addShape: geometry.paths must contain at least one path");
+  }
+  geometry.paths.forEach((path, pathIndex) => assertCustomGeometryPath(path, pathIndex));
+}
+
+function assertCustomGeometryPath(path: unknown, pathIndex: number): void {
+  const field = `geometry.paths[${pathIndex}]`;
+  if (!isPlainRecord(path)) throw new Error(`addShape: ${field} must be an object`);
+  assertPositiveFiniteIntegerNumber(path.width, "addShape", `${field}.width`);
+  assertPositiveFiniteIntegerNumber(path.height, "addShape", `${field}.height`);
+  if (!isArrayValue(path.commands) || path.commands.length === 0) {
+    throw new Error(`addShape: ${field}.commands must contain at least one command`);
+  }
+  const commands = path.commands;
+  commands.forEach((command, commandIndex) => {
+    const commandField = `${field}.commands[${commandIndex}]`;
+    if (!isPlainRecord(command)) throw new Error(`addShape: ${commandField} must be an object`);
+    if (commandIndex === 0 ? command.kind !== "moveTo" : command.kind === "moveTo") {
+      throw new Error(`addShape: ${field}.commands must start with one moveTo command`);
+    }
+    if (command.kind !== "moveTo" && command.kind !== "lineTo" && command.kind !== "close") {
+      throw new Error(`addShape: ${commandField}.kind is not supported`);
+    }
+    if (command.kind === "close") {
+      if (commandIndex !== commands.length - 1) {
+        throw new Error(`addShape: ${field}.close must be the final command`);
+      }
+    } else {
+      assertFiniteIntegerNumber(command.x, "addShape", `${commandField}.x`);
+      assertFiniteIntegerNumber(command.y, "addShape", `${commandField}.y`);
+    }
+  });
 }
 
 function assertTextBoxParagraphs(
@@ -1446,6 +1528,16 @@ function assertFiniteEmu(value: unknown, operationName: string, fieldName: strin
 function assertPositiveFiniteEmu(value: unknown, operationName: string, fieldName: string): void {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     throw new Error(`${operationName}: ${fieldName} must be a finite positive EMU value`);
+  }
+}
+
+function assertNonNegativeFiniteEmu(
+  value: unknown,
+  operationName: string,
+  fieldName: string,
+): void {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    throw new Error(`${operationName}: ${fieldName} must be a finite non-negative EMU value`);
   }
 }
 
