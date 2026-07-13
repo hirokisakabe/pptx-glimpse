@@ -374,6 +374,43 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
     );
   });
 
+  it("opens from-scratch PPTX with run hyperlinks in a text box and shape", () => {
+    const source = createPptx();
+    const handle = requireHandle(source.slides[0]?.handle);
+    const withTextBox = addTextBox(source, handle, {
+      offsetX: asEmu(914400),
+      offsetY: asEmu(914400),
+      width: asEmu(5486400),
+      height: asEmu(914400),
+      paragraphs: [
+        {
+          runs: [
+            { text: "Plain text and " },
+            { text: "linked text", hyperlink: "https://example.com/text-box" },
+          ],
+        },
+      ],
+    });
+    const edited = addShape(withTextBox, handle, {
+      preset: "roundRect",
+      offsetX: asEmu(914400),
+      offsetY: asEmu(2286000),
+      width: asEmu(5486400),
+      height: asEmu(914400),
+      paragraphs: [
+        {
+          runs: [{ text: "Shape " }, { text: "hyperlink", hyperlink: "https://example.com/shape" }],
+        },
+      ],
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-from-scratch-run-hyperlinks.pptx",
+      writePptx(edited),
+    );
+  });
+
   it("opens from-scratch PPTX after adding a native table", () => {
     const source = createPptx();
     const edited = addTable(source, requireHandle(source.slides[0]?.handle), {

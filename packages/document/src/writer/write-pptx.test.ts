@@ -732,6 +732,134 @@ describe("writePptx - from-scratch builder", () => {
     expect(computed.slides[0]?.elements).toHaveLength(1);
   });
 
+  it("writes run hyperlinks for text boxes and shapes with slide-local relationships", () => {
+    const source = createPptx();
+    const firstSlideHandle = source.slides[0]?.handle;
+    const layoutPartPath = source.slideLayouts[0]?.partPath;
+    if (firstSlideHandle === undefined || layoutPartPath === undefined) {
+      throw new Error("createPptx should create a slide and layout");
+    }
+
+    const withTextBox = addTextBox(source, firstSlideHandle, {
+      offsetX: asEmu(914400),
+      offsetY: asEmu(914400),
+      width: asEmu(3657600),
+      height: asEmu(914400),
+      paragraphs: [
+        {
+          runs: [
+            { text: "plain" },
+            { text: "first", hyperlink: "https://example.com/first?a=1&b=2" },
+            { text: " middle", properties: { bold: true } },
+            { text: " repeated", hyperlink: "https://example.com/first?a=1&b=2" },
+            { text: " second", hyperlink: "http://example.com/second" },
+          ],
+        },
+      ],
+    });
+    const withShape = addShape(withTextBox, firstSlideHandle, {
+      preset: "roundRect",
+      offsetX: asEmu(914400),
+      offsetY: asEmu(2286000),
+      width: asEmu(3657600),
+      height: asEmu(914400),
+      paragraphs: [
+        {
+          runs: [
+            { text: "shape plain" },
+            { text: " shape link", hyperlink: "https://example.com/first?a=1&b=2" },
+          ],
+        },
+      ],
+    });
+    const withSecondSlide = addEmptySlideFromLayout(withShape, { layoutPartPath });
+    const secondSlideHandle = withSecondSlide.slides[1]?.handle;
+    if (secondSlideHandle === undefined) throw new Error("expected a second slide");
+    const edited = addTextBox(withSecondSlide, secondSlideHandle, {
+      offsetX: asEmu(914400),
+      offsetY: asEmu(914400),
+      width: asEmu(3657600),
+      height: asEmu(914400),
+      paragraphs: [
+        {
+          runs: [
+            { text: "second slide" },
+            { text: " linked", hyperlink: "https://example.com/slide-two" },
+          ],
+        },
+      ],
+    });
+
+    const firstSlideRelationships = edited.packageGraph.relationships.find(
+      (relationships) => relationships.sourcePartPath === "ppt/slides/slide1.xml",
+    );
+    const secondSlideRelationships = edited.packageGraph.relationships.find(
+      (relationships) => relationships.sourcePartPath === "ppt/slides/slide2.xml",
+    );
+    expect(firstSlideRelationships?.relationships).toMatchObject([
+      { id: "rId1", target: "../slideLayouts/slideLayout1.xml" },
+      {
+        id: "rId2",
+        target: "https://example.com/first?a=1&b=2",
+        targetMode: "External",
+      },
+      { id: "rId3", target: "http://example.com/second", targetMode: "External" },
+      {
+        id: "rId4",
+        target: "https://example.com/first?a=1&b=2",
+        targetMode: "External",
+      },
+    ]);
+    expect(secondSlideRelationships?.relationships).toMatchObject([
+      { id: "rId1", target: "../slideLayouts/slideLayout1.xml" },
+      { id: "rId2", target: "https://example.com/slide-two", targetMode: "External" },
+    ]);
+
+    const output = writePptx(edited);
+    const firstSlideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+    const secondSlideXml = decoder.decode(getEntry(output, "ppt/slides/slide2.xml"));
+    const firstSlideRelsXml = decoder.decode(getEntry(output, "ppt/slides/_rels/slide1.xml.rels"));
+    const secondSlideRelsXml = decoder.decode(getEntry(output, "ppt/slides/_rels/slide2.xml.rels"));
+
+    expect([...firstSlideXml.matchAll(/<a:hlinkClick r:id="rId2"\/>/g)]).toHaveLength(2);
+    expect([...firstSlideXml.matchAll(/<a:hlinkClick r:id="rId3"\/>/g)]).toHaveLength(1);
+    expect([...firstSlideXml.matchAll(/<a:hlinkClick r:id="rId4"\/>/g)]).toHaveLength(1);
+    expect([...firstSlideXml.matchAll(/<a:hlinkClick/g)]).toHaveLength(4);
+    expect([...secondSlideXml.matchAll(/<a:hlinkClick r:id="rId2"\/>/g)]).toHaveLength(1);
+    expect(firstSlideRelsXml).toContain(
+      'Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/first?a=1&amp;b=2" TargetMode="External"',
+    );
+    expect(firstSlideRelsXml).toContain(
+      'Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="http://example.com/second" TargetMode="External"',
+    );
+    expect(firstSlideRelsXml).toContain(
+      'Id="rId4" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/first?a=1&amp;b=2" TargetMode="External"',
+    );
+    expect(secondSlideRelsXml).toContain(
+      'Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink" Target="https://example.com/slide-two" TargetMode="External"',
+    );
+  });
+
+  it("rejects non-HTTP run hyperlinks for text boxes and shapes", () => {
+    const source = createPptx();
+    const handle = source.slides[0]?.handle;
+    if (handle === undefined) throw new Error("createPptx should create a first slide");
+    const base = {
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(1000),
+      height: asEmu(1000),
+      paragraphs: [{ runs: [{ text: "link", hyperlink: "mailto:test@example.com" }] }],
+    } as const;
+
+    expect(() => addTextBox(source, handle, base)).toThrow(
+      "addTextBox: paragraphs[0].runs[0].hyperlink must be an absolute HTTP(S) URL",
+    );
+    expect(() => addShape(source, handle, { ...base, preset: "rect" })).toThrow(
+      "addShape: paragraphs[0].runs[0].hyperlink must be an absolute HTTP(S) URL",
+    );
+  });
+
   it("writes added PNG and JPEG pictures with media parts, content types, and slide rels", () => {
     const source = createPptx();
     const slideHandle = source.slides[0]?.handle;
