@@ -635,10 +635,23 @@ function computeTableCell(
       : table.table.tableStyleId !== undefined
         ? computeCellBorders(context, DEFAULT_TABLE_STYLE_BORDERS, partPath)
         : undefined;
+  const textBody =
+    cell.textBody === undefined
+      ? undefined
+      : {
+          ...cell.textBody,
+          properties: {
+            ...cell.textBody.properties,
+            ...(cell.marginLeft !== undefined ? { marginLeft: cell.marginLeft } : {}),
+            ...(cell.marginRight !== undefined ? { marginRight: cell.marginRight } : {}),
+            ...(cell.marginTop !== undefined ? { marginTop: cell.marginTop } : {}),
+            ...(cell.marginBottom !== undefined ? { marginBottom: cell.marginBottom } : {}),
+          },
+        };
   return {
     source: cell,
-    ...(cell.textBody !== undefined
-      ? { textBody: computeTextBody(context, cell.textBody, [], undefined, false) }
+    ...(textBody !== undefined
+      ? { textBody: computeTextBody(context, textBody, [], undefined, false) }
       : {}),
     ...(cell.fill !== undefined ? { fill: computeFill(context, cell.fill, partPath) } : {}),
     ...(borders !== undefined ? { borders } : {}),
@@ -1097,8 +1110,11 @@ function mergeRunProperties(
     bold?: SourceRunProperties["bold"];
     italic?: SourceRunProperties["italic"];
     underline?: SourceRunProperties["underline"];
+    underlineStyle?: SourceRunProperties["underlineStyle"];
+    underlineColor?: SourceRunProperties["underlineColor"];
     strikethrough?: SourceRunProperties["strikethrough"];
     baseline?: SourceRunProperties["baseline"];
+    highlight?: SourceRunProperties["highlight"];
     fontSize?: SourceRunProperties["fontSize"];
     typeface?: SourceRunProperties["typeface"];
     typefaceEa?: SourceRunProperties["typefaceEa"];
@@ -1111,10 +1127,16 @@ function mergeRunProperties(
   }
   if (Object.keys(merged).length === 0) return undefined;
   const color = merged.color !== undefined ? resolveColor(context, merged.color) : undefined;
-  const withoutColor = resolveThemeRunFonts(context, omitColor(merged));
+  const underlineColor =
+    merged.underlineColor !== undefined ? resolveColor(context, merged.underlineColor) : undefined;
+  const highlight =
+    merged.highlight !== undefined ? resolveColor(context, merged.highlight) : undefined;
+  const withoutColor = resolveThemeRunFonts(context, omitRunColors(merged));
   return {
     ...withoutColor,
     ...(color !== undefined ? { color } : {}),
+    ...(underlineColor !== undefined ? { underlineColor } : {}),
+    ...(highlight !== undefined ? { highlight } : {}),
   };
 }
 
@@ -1131,8 +1153,11 @@ function mergeDefaultRunProperties(
     target.bold ??= defaults.bold;
     target.italic ??= defaults.italic;
     target.underline ??= defaults.underline;
+    target.underlineStyle ??= defaults.underlineStyle;
+    target.underlineColor ??= defaults.underlineColor;
     target.strikethrough ??= defaults.strikethrough;
     target.baseline ??= defaults.baseline;
+    target.highlight ??= defaults.highlight;
   }
   target.fontSize ??= defaults.fontSize;
   target.typeface ??= defaults.typeface;
@@ -1163,8 +1188,8 @@ function pickInheritedValue<K extends keyof SourceParagraphProperties>(
 
 function resolveThemeRunFonts(
   context: ComputeContext,
-  properties: Omit<SourceRunProperties, "color">,
-): Omit<SourceRunProperties, "color"> {
+  properties: Omit<SourceRunProperties, "color" | "underlineColor" | "highlight">,
+): Omit<SourceRunProperties, "color" | "underlineColor" | "highlight"> {
   return {
     ...properties,
     ...(properties.typeface !== undefined
@@ -1221,10 +1246,14 @@ function numericAttr(node: XmlNode | undefined, attrName: string): number | unde
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-function omitColor(properties: SourceRunProperties): Omit<SourceRunProperties, "color"> {
-  const withoutColor = { ...properties };
-  delete withoutColor.color;
-  return withoutColor;
+function omitRunColors(
+  properties: SourceRunProperties,
+): Omit<SourceRunProperties, "color" | "underlineColor" | "highlight"> {
+  const withoutColors = { ...properties };
+  delete withoutColors.color;
+  delete withoutColors.underlineColor;
+  delete withoutColors.highlight;
+  return withoutColors;
 }
 
 function firstDefined<T>(...values: readonly (T | undefined)[]): T | undefined {

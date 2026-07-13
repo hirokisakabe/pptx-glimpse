@@ -31,5 +31,6 @@ export type DashStyle =
   | "dashDot"
   | "lgDash"
   | "lgDashDot"
+  | "lgDashDotDot"
   | "sysDash"
   | "sysDot";

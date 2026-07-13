@@ -115,6 +115,7 @@ const DASH_STYLES = new Set([
   "dashDot",
   "lgDash",
   "lgDashDot",
+  "lgDashDotDot",
   "sysDash",
   "sysDot",
 ]);

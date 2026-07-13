@@ -210,6 +210,7 @@ export type {
   SourceTextVerticalType,
   SourceTextWrap,
   SourceTransform,
+  SourceUnderlineStyle,
   SourceVerticalAnchor,
 } from "./shapes.js";
 export type { Emu, HundredthPt, OoxmlAngle, OoxmlPercent, Pt } from "./units.js";
