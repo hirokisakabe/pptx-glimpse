@@ -309,6 +309,88 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
     );
   });
 
+  it("opens from-scratch PPTX with plain, bulleted, and numbered text", () => {
+    const source = createPptx();
+    const slideHandle = requireHandle(source.slides[0]?.handle);
+    const withPlainText = addTextBox(source, slideHandle, {
+      offsetX: asEmu(457200),
+      offsetY: asEmu(228600),
+      width: asEmu(8229600),
+      height: asEmu(685800),
+      body: { autoFit: "shape" },
+      paragraphs: [
+        {
+          runs: [
+            {
+              text: "Plain text",
+              properties: {
+                fontFace: "Liberation Sans",
+                fontSize: asPt(24),
+                baseline: { type: "percent", value: asOoxmlPercent(0) },
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const withBullets = addTextBox(withPlainText, slideHandle, {
+      offsetX: asEmu(685800),
+      offsetY: asEmu(1371600),
+      width: asEmu(3657600),
+      height: asEmu(2286000),
+      body: { autoFit: "shape" },
+      paragraphs: ["First bullet", "Second bullet"].map((text) => ({
+        properties: {
+          marginLeft: asEmu(342900),
+          indent: asEmu(-285750),
+          lineSpacing: { type: "percent" as const, value: asOoxmlPercent(110000) },
+          bullet: {
+            type: "character" as const,
+            character: "•",
+            fontFace: "Liberation Sans",
+            size: asOoxmlPercent(100000),
+          },
+        },
+        runs: [{ text, properties: { fontFace: "Liberation Sans", fontSize: asPt(20) } }],
+      })),
+    });
+    const edited = addShape(withBullets, slideHandle, {
+      preset: "roundRect",
+      offsetX: asEmu(4800600),
+      offsetY: asEmu(1371600),
+      width: asEmu(3657600),
+      height: asEmu(2286000),
+      body: { autoFit: "shape" },
+      paragraphs: [
+        {
+          properties: {
+            marginLeft: asEmu(457200),
+            indent: asEmu(-228600),
+            lineSpacing: { type: "points", value: asHundredthPt(2400) },
+            bullet: {
+              type: "auto-number",
+              scheme: "arabicPeriod",
+              startAt: 2,
+              fontFace: "Liberation Sans",
+              size: asOoxmlPercent(100000),
+            },
+          },
+          runs: [{ text: "Numbered item", properties: { fontSize: asPt(20) } }],
+        },
+        {
+          properties: { bullet: { type: "none" } },
+          runs: [{ text: "Explicitly unbulleted", properties: { fontSize: asPt(18) } }],
+        },
+      ],
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-from-scratch-text-lists.pptx",
+      writePptx(edited),
+    );
+  });
+
   it("opens from-scratch PPTX after adding a formatted text box", () => {
     const source = createPptx();
     const edited = addTextBox(source, requireHandle(source.slides[0]?.handle), {
@@ -326,7 +408,10 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
       },
       paragraphs: [
         {
-          properties: { align: "center", lineSpacing: asHundredthPt(1800) },
+          properties: {
+            align: "center",
+            lineSpacing: { type: "points", value: asHundredthPt(1800) },
+          },
           runs: [
             {
               text: "Formatted ",
@@ -363,7 +448,10 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
           ],
         },
         {
-          properties: { align: "right", lineSpacing: asHundredthPt(2200) },
+          properties: {
+            align: "right",
+            lineSpacing: { type: "points", value: asHundredthPt(2200) },
+          },
           runs: [{ text: "Subscript", properties: { baseline: "subscript" } }],
         },
       ],

@@ -18,6 +18,7 @@ import type { PartPath, RelationshipId } from "./handles.js";
 import type { ConnectorPresetGeometry } from "./pptx-source-model.js";
 import type {
   SourceArrowEndpoint,
+  SourceAutoNumScheme,
   SourceDashStyle,
   SourceImageCrop,
   SourceShapeNode,
@@ -62,7 +63,31 @@ export interface TextBoxUnderlineInput {
   readonly color?: TextBoxColorInput;
 }
 
-export type TextBoxBaselineInput = "subscript" | "superscript";
+export type TextBoxBaselineInput =
+  | "subscript"
+  | "superscript"
+  | { readonly type: "percent"; readonly value: OoxmlPercent };
+
+export type TextBoxLineSpacingInput =
+  /** Legacy point input retained for compatibility. */
+  | HundredthPt
+  | { readonly type: "points"; readonly value: HundredthPt }
+  | { readonly type: "percent"; readonly value: OoxmlPercent };
+
+interface TextBoxBulletFormattingInput {
+  readonly fontFace?: string;
+  /** Bullet size as an OOXML percentage, where 100% is `asOoxmlPercent(100000)`. */
+  readonly size?: OoxmlPercent;
+}
+
+export type TextBoxBulletInput =
+  | { readonly type: "none" }
+  | ({ readonly type: "character"; readonly character: string } & TextBoxBulletFormattingInput)
+  | ({
+      readonly type: "auto-number";
+      readonly scheme: SourceAutoNumScheme;
+      readonly startAt?: number;
+    } & TextBoxBulletFormattingInput);
 
 export interface TextBoxGlowInput {
   readonly radius: Emu;
@@ -126,7 +151,10 @@ export interface TextBoxRunInput {
 
 export interface TextBoxParagraphPropertiesInput {
   readonly align?: SourceTextAlign;
-  readonly lineSpacing?: HundredthPt;
+  readonly marginLeft?: Emu;
+  readonly indent?: Emu;
+  readonly lineSpacing?: TextBoxLineSpacingInput;
+  readonly bullet?: TextBoxBulletInput;
 }
 
 export interface TextBoxParagraphInput {
@@ -140,6 +168,8 @@ export interface TextBoxBodyPropertiesInput {
   readonly marginRight?: Emu;
   readonly marginTop?: Emu;
   readonly marginBottom?: Emu;
+  /** Lets the shape grow to fit its text (`a:spAutoFit`). */
+  readonly autoFit?: "shape";
 }
 
 interface TextBoxXmlParams {
@@ -383,6 +413,7 @@ function createTextBodyPropertiesXml(
     ...(body?.marginRight !== undefined ? { "@_rIns": String(body.marginRight) } : {}),
     ...(body?.marginTop !== undefined ? { "@_tIns": String(body.marginTop) } : {}),
     ...(body?.marginBottom !== undefined ? { "@_bIns": String(body.marginBottom) } : {}),
+    ...(body?.autoFit === "shape" ? { "a:spAutoFit": {} } : {}),
   };
 }
 
@@ -404,9 +435,35 @@ function createParagraphPropertiesXml(
 ): Record<string, unknown> {
   return {
     ...(properties.align !== undefined ? { "@_algn": textAlignToken(properties.align) } : {}),
+    ...(properties.marginLeft !== undefined ? { "@_marL": String(properties.marginLeft) } : {}),
+    ...(properties.indent !== undefined ? { "@_indent": String(properties.indent) } : {}),
     ...(properties.lineSpacing !== undefined
-      ? { "a:lnSpc": { "a:spcPts": { "@_val": String(properties.lineSpacing) } } }
+      ? { "a:lnSpc": createLineSpacingXml(properties.lineSpacing) }
       : {}),
+    ...(properties.bullet !== undefined ? createBulletXml(properties.bullet) : {}),
+  };
+}
+
+function createLineSpacingXml(spacing: TextBoxLineSpacingInput): Record<string, unknown> {
+  if (typeof spacing === "number") return { "a:spcPts": { "@_val": String(spacing) } };
+  return spacing.type === "points"
+    ? { "a:spcPts": { "@_val": String(spacing.value) } }
+    : { "a:spcPct": { "@_val": String(spacing.value) } };
+}
+
+function createBulletXml(bullet: TextBoxBulletInput): Record<string, unknown> {
+  if (bullet.type === "none") return { "a:buNone": {} };
+  return {
+    ...(bullet.size !== undefined ? { "a:buSzPct": { "@_val": String(bullet.size) } } : {}),
+    ...(bullet.fontFace !== undefined ? { "a:buFont": { "@_typeface": bullet.fontFace } } : {}),
+    ...(bullet.type === "character"
+      ? { "a:buChar": { "@_char": bullet.character } }
+      : {
+          "a:buAutoNum": {
+            "@_type": bullet.scheme,
+            ...(bullet.startAt !== undefined ? { "@_startAt": String(bullet.startAt) } : {}),
+          },
+        }),
   };
 }
 
@@ -556,7 +613,8 @@ function underlineStyleToken(underline: boolean | TextBoxUnderlineInput): TextBo
 
 function baselineToken(baseline: TextBoxBaselineInput): number {
   if (baseline === "superscript") return 30000;
-  return -25000;
+  if (baseline === "subscript") return -25000;
+  return baseline.value;
 }
 
 function textPointToken(value: number): string {
