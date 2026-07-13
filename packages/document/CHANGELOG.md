@@ -1,5 +1,17 @@
 # @pptx-glimpse/document
 
+## 0.9.0
+
+### Minor Changes
+
+- 0034bb8: text・shape authoring の色に alpha transform を追加し、linear / radial gradient と gradient outline を typed input から生成できるようにしました。既存の linear gradient input には `gradientType: "linear"` を追加してください。
+- 593b9d5: `addShape` で preset adjustment、custom geometry、水平・垂直 flip、line の width または height 0 を指定できるようにする。従来の `preset` input は `geometry: { kind: "preset", preset }` に移行する
+- fd81dae: テキストボックスと図形テキストの shape auto-fit、段落インデント、割合行間、箇条書き・自動番号、明示 baseline を typed authoring API に追加します。
+- dd05595: Chart authoring に、chart area、plot area、title、axis、series、marker、data point、blank display、manual layout 向けの型付き書式入力を追加します。
+- bfb53c9: shape と picture の authoring API で outer shadow と inner shadow を指定できるようにする
+- 04b883d: Add a typed authoring API for solid, linear gradient, radial gradient, PNG, and JPEG slide backgrounds.
+- 3ad0961: Table authoring でセル余白、拡張 run 書式、全 preset border dash、run 内改行を指定できるようにする。
+
 ## 0.8.0
 
 ### Minor Changes
