@@ -1225,6 +1225,7 @@ describe("writePptx - from-scratch builder", () => {
               text: " gradient",
               properties: {
                 gradientFill: {
+                  gradientType: "linear",
                   angle: asOoxmlAngle(2700000),
                   stops: [
                     { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "ff0000" } },
@@ -1317,6 +1318,225 @@ describe("writePptx - from-scratch builder", () => {
     expect(slideXml).toContain(`baseline="-25000"`);
   });
 
+  it("writes alpha colors and linear or radial gradients consistently with the source model", () => {
+    const source = createPptx();
+    const slideHandle = source.slides[0]?.handle;
+    if (slideHandle === undefined) throw new Error("createPptx should create a first slide");
+
+    const withText = addTextBox(source, slideHandle, {
+      offsetX: asEmu(100),
+      offsetY: asEmu(200),
+      width: asEmu(300),
+      height: asEmu(400),
+      name: "Alpha Text",
+      paragraphs: [
+        {
+          runs: [
+            {
+              text: "alpha",
+              properties: {
+                color: {
+                  kind: "srgb",
+                  hex: "112233",
+                  transforms: [{ kind: "alpha", value: asOoxmlPercent(0) }],
+                },
+                glow: {
+                  radius: asEmu(12700),
+                  color: {
+                    kind: "srgb",
+                    hex: "445566",
+                    transforms: [{ kind: "alpha", value: asOoxmlPercent(100000) }],
+                  },
+                },
+              },
+            },
+            {
+              text: " gradient",
+              properties: {
+                gradientFill: {
+                  gradientType: "linear",
+                  angle: asOoxmlAngle(1800000),
+                  stops: [
+                    {
+                      position: asOoxmlPercent(0),
+                      color: {
+                        kind: "srgb",
+                        hex: "FF0000",
+                        transforms: [{ kind: "alpha", value: asOoxmlPercent(25000) }],
+                      },
+                    },
+                    {
+                      position: asOoxmlPercent(100000),
+                      color: { kind: "srgb", hex: "0000FF" },
+                    },
+                  ],
+                },
+              },
+            },
+          ],
+        },
+      ],
+    });
+    const withSolidAndLinearOutline = addShape(withText, withText.slides[0].handle!, {
+      preset: "rect",
+      offsetX: asEmu(500),
+      offsetY: asEmu(600),
+      width: asEmu(700),
+      height: asEmu(800),
+      name: "Alpha Solid",
+      fill: {
+        kind: "solid",
+        color: {
+          kind: "srgb",
+          hex: "778899",
+          transforms: [{ kind: "alpha", value: asOoxmlPercent(50000) }],
+        },
+      },
+      outline: {
+        fill: {
+          kind: "gradient",
+          gradientType: "linear",
+          stops: [
+            {
+              position: asOoxmlPercent(0),
+              color: {
+                kind: "srgb",
+                hex: "00AA00",
+                transforms: [{ kind: "alpha", value: asOoxmlPercent(40000) }],
+              },
+            },
+            {
+              position: asOoxmlPercent(100000),
+              color: { kind: "srgb", hex: "AA0000" },
+            },
+          ],
+        },
+      },
+      effects: {
+        glow: {
+          radius: asEmu(25400),
+          color: {
+            kind: "srgb",
+            hex: "ABCDEF",
+            transforms: [{ kind: "alpha", value: asOoxmlPercent(60000) }],
+          },
+        },
+      },
+    });
+    const edited = addShape(
+      withSolidAndLinearOutline,
+      withSolidAndLinearOutline.slides[0].handle!,
+      {
+        preset: "ellipse",
+        offsetX: asEmu(900),
+        offsetY: asEmu(1000),
+        width: asEmu(1100),
+        height: asEmu(1200),
+        name: "Radial Shape",
+        fill: {
+          kind: "gradient",
+          gradientType: "radial",
+          centerX: asOoxmlPercent(25000),
+          centerY: asOoxmlPercent(75000),
+          stops: [
+            { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FFFFFF" } },
+            {
+              position: asOoxmlPercent(100000),
+              color: {
+                kind: "srgb",
+                hex: "000000",
+                transforms: [{ kind: "alpha", value: asOoxmlPercent(75000) }],
+              },
+            },
+          ],
+        },
+        outline: {
+          fill: {
+            kind: "gradient",
+            gradientType: "radial",
+            centerX: asOoxmlPercent(50000),
+            centerY: asOoxmlPercent(50000),
+            stops: [
+              { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FFFF00" } },
+              {
+                position: asOoxmlPercent(100000),
+                color: {
+                  kind: "srgb",
+                  hex: "00FFFF",
+                  transforms: [{ kind: "alpha", value: asOoxmlPercent(30000) }],
+                },
+              },
+            ],
+          },
+        },
+      },
+    );
+
+    const authoredText = requireShape(findShapeByName(edited, "Alpha Text"));
+    const authoredSolid = requireShape(findShapeByName(edited, "Alpha Solid"));
+    const authoredRadial = requireShape(findShapeByName(edited, "Radial Shape"));
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+
+    expect(reread.diagnostics).toEqual([]);
+    expect(authoredText.textBody?.paragraphs[0]?.runs[0]?.properties?.color).toEqual({
+      kind: "srgb",
+      hex: "112233",
+      transforms: [{ kind: "alpha", value: 0 }],
+    });
+    expect(authoredSolid.fill).toEqual({
+      kind: "solid",
+      color: {
+        kind: "srgb",
+        hex: "778899",
+        transforms: [{ kind: "alpha", value: 50000 }],
+      },
+    });
+    expect(authoredSolid.effects?.glow?.color).toEqual({
+      kind: "srgb",
+      hex: "ABCDEF",
+      transforms: [{ kind: "alpha", value: 60000 }],
+    });
+    expect(authoredRadial.fill).toMatchObject({
+      kind: "gradient",
+      gradientType: "radial",
+      centerX: 0.25,
+      centerY: 0.75,
+    });
+    expect(
+      requireShape(findShapeByName(reread, "Alpha Text")).textBody?.paragraphs[0]?.runs[0]
+        ?.properties?.color,
+    ).toEqual(authoredText.textBody?.paragraphs[0]?.runs[0]?.properties?.color);
+    expect(requireShape(findShapeByName(reread, "Alpha Solid")).fill).toEqual(authoredSolid.fill);
+    expect(requireShape(findShapeByName(reread, "Alpha Solid")).outline).toEqual(
+      authoredSolid.outline,
+    );
+    expect(requireShape(findShapeByName(reread, "Radial Shape")).fill).toEqual(authoredRadial.fill);
+    expect(requireShape(findShapeByName(reread, "Radial Shape")).outline).toEqual(
+      authoredRadial.outline,
+    );
+    expect(slideXml).toContain(
+      `<a:solidFill><a:srgbClr val="112233"><a:alpha val="0"/></a:srgbClr></a:solidFill>`,
+    );
+    expect(slideXml).toContain(
+      `<a:glow rad="12700"><a:srgbClr val="445566"><a:alpha val="100000"/></a:srgbClr></a:glow>`,
+    );
+    expect(slideXml).toContain(
+      `<a:solidFill><a:srgbClr val="778899"><a:alpha val="50000"/></a:srgbClr></a:solidFill>`,
+    );
+    expect(slideXml).toContain(
+      `<a:glow rad="25400"><a:srgbClr val="ABCDEF"><a:alpha val="60000"/></a:srgbClr></a:glow>`,
+    );
+    expect(slideXml).toContain(
+      `<a:path path="circle"><a:fillToRect l="25000" t="75000" r="75000" b="25000"/></a:path>`,
+    );
+    expect(slideXml).toContain(
+      `<a:path path="circle"><a:fillToRect l="50000" t="50000" r="50000" b="50000"/></a:path>`,
+    );
+    expect(slideXml.match(/<a:alpha val=/g)).toHaveLength(8);
+  });
+
   it("writes preset geometry shapes with fill, line, glow, rotation, and text", () => {
     const source = createPptx();
     const slideHandle = source.slides[0]?.handle;
@@ -1340,6 +1560,7 @@ describe("writePptx - from-scratch builder", () => {
       rotation: asOoxmlAngle(5400000),
       fill: {
         kind: "gradient",
+        gradientType: "linear",
         angle: asOoxmlAngle(2700000),
         stops: [
           { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "ff0000" } },

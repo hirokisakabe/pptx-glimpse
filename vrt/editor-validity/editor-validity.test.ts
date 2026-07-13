@@ -333,13 +333,24 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
               properties: {
                 fontFace: "Liberation Sans",
                 fontSize: asPt(24),
-                color: { kind: "srgb", hex: "112233" },
+                color: {
+                  kind: "srgb",
+                  hex: "112233",
+                  transforms: [{ kind: "alpha", value: asOoxmlPercent(70000) }],
+                },
                 bold: true,
                 italic: true,
                 underline: { style: "sng", color: { kind: "srgb", hex: "445566" } },
                 strike: true,
                 highlight: { kind: "srgb", hex: "ffff00" },
-                glow: { radius: asEmu(12700), color: { kind: "srgb", hex: "00aaff" } },
+                glow: {
+                  radius: asEmu(12700),
+                  color: {
+                    kind: "srgb",
+                    hex: "00aaff",
+                    transforms: [{ kind: "alpha", value: asOoxmlPercent(50000) }],
+                  },
+                },
                 outline: { width: asEmu(6350), color: { kind: "srgb", hex: "aa00aa" } },
                 charSpacing: 80,
               },
@@ -348,9 +359,17 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
               text: "gradient",
               properties: {
                 gradientFill: {
+                  gradientType: "linear",
                   angle: asOoxmlAngle(2700000),
                   stops: [
-                    { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "ff0000" } },
+                    {
+                      position: asOoxmlPercent(0),
+                      color: {
+                        kind: "srgb",
+                        hex: "ff0000",
+                        transforms: [{ kind: "alpha", value: asOoxmlPercent(60000) }],
+                      },
+                    },
                     {
                       position: asOoxmlPercent(100000),
                       color: { kind: "srgb", hex: "0000ff" },
@@ -538,20 +557,54 @@ describeOrSkip("LibreOffice shape add/delete validity", { timeout: 120000 }, () 
       rotation: asOoxmlAngle(900000),
       fill: {
         kind: "gradient",
-        angle: asOoxmlAngle(2700000),
+        gradientType: "radial",
+        centerX: asOoxmlPercent(35000),
+        centerY: asOoxmlPercent(65000),
         stops: [
-          { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FF0000" } },
+          {
+            position: asOoxmlPercent(0),
+            color: {
+              kind: "srgb",
+              hex: "FF0000",
+              transforms: [{ kind: "alpha", value: asOoxmlPercent(70000) }],
+            },
+          },
           { position: asOoxmlPercent(100000), color: { kind: "srgb", hex: "0000FF" } },
         ],
       },
       outline: {
         width: asEmu(12700),
-        fill: { kind: "solid", color: { kind: "srgb", hex: "00AA44" } },
+        fill: {
+          kind: "gradient",
+          gradientType: "linear",
+          angle: asOoxmlAngle(2700000),
+          stops: [
+            {
+              position: asOoxmlPercent(0),
+              color: {
+                kind: "srgb",
+                hex: "00AA44",
+                transforms: [{ kind: "alpha", value: asOoxmlPercent(50000) }],
+              },
+            },
+            {
+              position: asOoxmlPercent(100000),
+              color: { kind: "srgb", hex: "0044AA" },
+            },
+          ],
+        },
         dash: "dash",
         tailEnd: { type: "triangle", width: "med", length: "lg" },
       },
       effects: {
-        glow: { radius: asEmu(25400), color: { kind: "srgb", hex: "AA00AA" } },
+        glow: {
+          radius: asEmu(25400),
+          color: {
+            kind: "srgb",
+            hex: "AA00AA",
+            transforms: [{ kind: "alpha", value: asOoxmlPercent(60000) }],
+          },
+        },
       },
       paragraphs: [{ runs: [{ text: "LibreOffice added shape" }] }],
     });

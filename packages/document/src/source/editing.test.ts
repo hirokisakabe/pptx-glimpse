@@ -522,6 +522,7 @@ describe("editing shape operations", () => {
                   fontSize: asPt(24),
                   bold: true,
                   gradientFill: {
+                    gradientType: "linear",
                     angle: asOoxmlAngle(5400000),
                     stops: [
                       { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FF0000" } },
@@ -697,6 +698,7 @@ describe("editing shape operations", () => {
               properties: {
                 bold: true,
                 gradientFill: {
+                  gradientType: "linear",
                   angle: asOoxmlAngle(0),
                   stops: [
                     { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FF0000" } },
@@ -803,6 +805,7 @@ describe("editing shape operations", () => {
                   text: "bad gradient",
                   properties: {
                     gradientFill: {
+                      gradientType: "linear",
                       stops: [
                         { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FF0000" } },
                         {
@@ -853,6 +856,72 @@ describe("editing shape operations", () => {
           ],
         },
         expected: /color must be an srgb 6-digit hex color/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          paragraphs: [
+            {
+              runs: [
+                {
+                  text: "bad negative alpha",
+                  properties: {
+                    color: {
+                      kind: "srgb",
+                      hex: "112233",
+                      transforms: [{ kind: "alpha", value: asOoxmlPercent(-1) }],
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        expected: /transforms\[0\]\.value must be between 0 and 100000/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          paragraphs: [
+            {
+              runs: [
+                {
+                  text: "bad large alpha",
+                  properties: {
+                    color: {
+                      kind: "srgb",
+                      hex: "112233",
+                      transforms: [{ kind: "alpha", value: asOoxmlPercent(100001) }],
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        expected: /transforms\[0\]\.value must be between 0 and 100000/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          paragraphs: [
+            {
+              runs: [
+                {
+                  text: "bad fractional alpha",
+                  properties: {
+                    color: {
+                      kind: "srgb",
+                      hex: "112233",
+                      transforms: [{ kind: "alpha", value: asOoxmlPercent(1.5) }],
+                    },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        expected: /transforms\[0\]\.value must be a finite integer/,
       },
       {
         input: {
@@ -1124,10 +1193,33 @@ describe("editing shape operations", () => {
         height: asEmu(4),
         fill: {
           kind: "gradient",
+          gradientType: "linear",
           stops: [{ position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FF0000" } }],
         },
       }),
     ).toThrow("addShape: fill.stops must contain at least two stops");
+    expect(() =>
+      addShape(source, requireHandle(source.slides[0].handle), {
+        preset: "rect",
+        offsetX: asEmu(1),
+        offsetY: asEmu(2),
+        width: asEmu(3),
+        height: asEmu(4),
+        fill: {
+          kind: "gradient",
+          gradientType: "radial",
+          centerX: asOoxmlPercent(100001),
+          centerY: asOoxmlPercent(50000),
+          stops: [
+            { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FF0000" } },
+            {
+              position: asOoxmlPercent(100000),
+              color: { kind: "srgb", hex: "0000FF" },
+            },
+          ],
+        },
+      }),
+    ).toThrow("addShape: fill.centerX must be between 0 and 100000");
     expect(() =>
       addShape(source, requireHandle(source.slides[0].handle), {
         preset: "rect",
