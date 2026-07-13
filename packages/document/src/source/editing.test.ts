@@ -513,7 +513,10 @@ describe("editing shape operations", () => {
         },
         paragraphs: [
           {
-            properties: { align: "center", lineSpacing: asHundredthPt(1800) },
+            properties: {
+              align: "center",
+              lineSpacing: { type: "points", value: asHundredthPt(1800) },
+            },
             runs: [
               {
                 text: "Gradient",
@@ -690,7 +693,10 @@ describe("editing shape operations", () => {
       height: asEmu(800),
       paragraphs: [
         {
-          properties: { align: "center", lineSpacing: asHundredthPt(1800) },
+          properties: {
+            align: "center",
+            lineSpacing: { type: "points", value: asHundredthPt(1800) },
+          },
           runs: [
             {
               text: "formatted",
@@ -764,12 +770,50 @@ describe("editing shape operations", () => {
           ...formattedInput,
           paragraphs: [
             {
-              properties: { lineSpacing: asHundredthPt(1.5) },
+              properties: {
+                lineSpacing: { type: "points", value: asHundredthPt(1.5) },
+              },
               runs: [{ text: "bad line spacing" }],
             },
           ],
         },
-        expected: /lineSpacing must be a finite positive integer/,
+        expected: /lineSpacing.value must be a finite positive integer/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          paragraphs: [
+            {
+              properties: {
+                bullet: {
+                  type: "character",
+                  character: "•",
+                  size: asOoxmlPercent(24000),
+                },
+              },
+              runs: [{ text: "bad bullet size" }],
+            },
+          ],
+        },
+        expected: /bullet.size must be between 25000 and 400000/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          paragraphs: [
+            {
+              properties: {
+                bullet: {
+                  type: "auto-number",
+                  scheme: "arabicPeriod",
+                  startAt: 0,
+                },
+              },
+              runs: [{ text: "bad start" }],
+            },
+          ],
+        },
+        expected: /bullet.startAt must be between 1 and 32767/,
       },
       {
         input: {
@@ -836,7 +880,25 @@ describe("editing shape operations", () => {
             },
           ],
         },
-        expected: /baseline must be subscript or superscript/,
+        expected: /baseline must be subscript, superscript, or a percent/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          paragraphs: [
+            {
+              runs: [
+                {
+                  text: "bad baseline percentage",
+                  properties: {
+                    baseline: { type: "percent", value: asOoxmlPercent(400001) },
+                  },
+                },
+              ],
+            },
+          ],
+        },
+        expected: /baseline must be subscript, superscript, or a percent/,
       },
       {
         input: {
@@ -861,6 +923,16 @@ describe("editing shape operations", () => {
           body: null,
         },
         expected: /body must be an object/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          body: {
+            // @ts-expect-error Runtime validation rejects unsupported auto-fit modes.
+            autoFit: "normal",
+          },
+        },
+        expected: /body.autoFit is not supported/,
       },
       {
         input: {

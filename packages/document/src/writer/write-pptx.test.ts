@@ -1197,12 +1197,21 @@ describe("writePptx - from-scratch builder", () => {
         marginRight: asEmu(182880),
         marginTop: asEmu(45720),
         marginBottom: asEmu(68580),
+        autoFit: "shape",
       },
       paragraphs: [
         {
           properties: {
             align: "center",
-            lineSpacing: asHundredthPt(1800),
+            marginLeft: asEmu(342900),
+            indent: asEmu(-285750),
+            lineSpacing: { type: "points", value: asHundredthPt(1800) },
+            bullet: {
+              type: "character",
+              character: "•",
+              fontFace: "Aptos",
+              size: asOoxmlPercent(125000),
+            },
           },
           runs: [
             {
@@ -1242,13 +1251,20 @@ describe("writePptx - from-scratch builder", () => {
         {
           properties: {
             align: "right",
-            lineSpacing: asHundredthPt(2400),
+            lineSpacing: { type: "percent", value: asOoxmlPercent(90000) },
+            bullet: {
+              type: "auto-number",
+              scheme: "alphaLcParenR",
+              startAt: 3,
+              fontFace: "Aptos",
+              size: asOoxmlPercent(100000),
+            },
           },
           runs: [
             {
               text: "Subscript line",
               properties: {
-                baseline: "subscript",
+                baseline: { type: "percent", value: asOoxmlPercent(-12500) },
                 underline: true,
               },
             },
@@ -1256,10 +1272,26 @@ describe("writePptx - from-scratch builder", () => {
         },
       ],
     });
-    const output = writePptx(edited);
+    const withShape = addShape(edited, edited.slides[0].handle!, {
+      preset: "rect",
+      offsetX: asEmu(914400),
+      offsetY: asEmu(2743200),
+      width: asEmu(4572000),
+      height: asEmu(914400),
+      name: "Auto-fit Shape",
+      body: { autoFit: "shape" },
+      paragraphs: [
+        {
+          properties: { bullet: { type: "none" } },
+          runs: [{ text: "Shape text" }],
+        },
+      ],
+    });
+    const output = writePptx(withShape);
     const reread = readPptx(output);
     const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
     const added = requireShape(findShapeByName(reread, "Formatted TextBox"));
+    const addedShape = requireShape(findShapeByName(reread, "Auto-fit Shape"));
 
     expect(reread.diagnostics).toEqual([]);
     expect(added.transform).toMatchObject({ rotation: 5400000 });
@@ -1269,11 +1301,17 @@ describe("writePptx - from-scratch builder", () => {
       marginRight: 182880,
       marginTop: 45720,
       marginBottom: 68580,
+      autoFit: "spAutofit",
     });
     expect(added.textBody?.paragraphs).toHaveLength(2);
     expect(added.textBody?.paragraphs[0]?.properties).toMatchObject({
       align: "center",
       lineSpacing: { type: "pts", value: 1800 },
+      marginLeft: 342900,
+      indent: -285750,
+      bullet: { type: "char", char: "•" },
+      bulletFont: "Aptos",
+      bulletSizePct: 125000,
     });
     expect(added.textBody?.paragraphs[0]?.runs.map((run) => run.text)).toEqual([
       "Solid styled",
@@ -1281,14 +1319,25 @@ describe("writePptx - from-scratch builder", () => {
     ]);
     expect(added.textBody?.paragraphs[1]?.properties).toMatchObject({
       align: "right",
-      lineSpacing: { type: "pts", value: 2400 },
+      lineSpacing: { type: "pct", value: 90000 },
+      bullet: { type: "autoNum", scheme: "alphaLcParenR", startAt: 3 },
+      bulletFont: "Aptos",
+      bulletSizePct: 100000,
     });
+    expect(added.textBody?.paragraphs[1]?.runs[0]?.properties?.baseline).toBe(-12.5);
+    expect(addedShape.textBody?.properties?.autoFit).toBe("spAutofit");
+    expect(addedShape.textBody?.paragraphs[0]?.properties?.bullet).toEqual({ type: "none" });
     expect(slideXml).toContain(`<a:xfrm rot="5400000">`);
     expect(slideXml).toContain(
-      `<a:bodyPr wrap="square" anchor="ctr" lIns="91440" rIns="182880" tIns="45720" bIns="68580"/>`,
+      `<a:bodyPr wrap="square" anchor="ctr" lIns="91440" rIns="182880" tIns="45720" bIns="68580"><a:spAutoFit/></a:bodyPr>`,
     );
-    expect(slideXml).toContain(`<a:pPr algn="ctr"><a:lnSpc><a:spcPts val="1800"/>`);
-    expect(slideXml).toContain(`<a:pPr algn="r"><a:lnSpc><a:spcPts val="2400"/>`);
+    expect(slideXml).toContain(
+      `<a:pPr algn="ctr" marL="342900" indent="-285750"><a:lnSpc><a:spcPts val="1800"/></a:lnSpc><a:buSzPct val="125000"/><a:buFont typeface="Aptos"/><a:buChar char="•"/>`,
+    );
+    expect(slideXml).toContain(
+      `<a:pPr algn="r"><a:lnSpc><a:spcPct val="90000"/></a:lnSpc><a:buSzPct val="100000"/><a:buFont typeface="Aptos"/><a:buAutoNum type="alphaLcParenR" startAt="3"/>`,
+    );
+    expect(slideXml).toContain(`<a:pPr><a:buNone/></a:pPr>`);
     expect(slideXml).toContain(`b="1"`);
     expect(slideXml).toContain(`i="1"`);
     expect(slideXml).toContain(`u="dbl"`);
@@ -1314,7 +1363,7 @@ describe("writePptx - from-scratch builder", () => {
     expect(slideXml).toContain(`<a:gs pos="100000"><a:srgbClr val="0000FF"/></a:gs>`);
     expect(slideXml).toContain(`<a:lin ang="2700000" scaled="1"/>`);
     expect(slideXml).toContain(`baseline="30000"`);
-    expect(slideXml).toContain(`baseline="-25000"`);
+    expect(slideXml).toContain(`baseline="-12500"`);
   });
 
   it("writes preset geometry shapes with fill, line, glow, rotation, and text", () => {

@@ -16,6 +16,14 @@
  * escape hatch. A fluent builder would add another mutable authoring layer before the
  * source model has broader primitive coverage, and raw OOXML would shift validity and
  * escaping responsibility to consumers, so both were rejected for this slice.
+ *
+ * Paragraph spacing and explicit baselines use discriminated percentage inputs so
+ * callers cannot accidentally interchange point and percentage units. Bullet options
+ * form a discriminated union because character, automatic numbering, and explicit
+ * absence serialize to different DrawingML elements. Bullet font and size stay nested
+ * with the selected bullet kind while the parsed source model keeps the corresponding
+ * sibling OOXML properties. Shape auto-fit is exposed as a semantic `"shape"` option
+ * and is read back as the source model's `spAutofit` value.
  */
 
 import {
@@ -56,9 +64,11 @@ import type {
   ShapeOutlineInput,
   TextBoxBaselineInput,
   TextBoxBodyPropertiesInput,
+  TextBoxBulletInput,
   TextBoxColorInput,
   TextBoxGlowInput,
   TextBoxGradientFillInput,
+  TextBoxLineSpacingInput,
   TextBoxOutlineInput,
   TextBoxParagraphInput,
   TextBoxParagraphPropertiesInput,
@@ -76,6 +86,8 @@ import {
 } from "./shape-xml.js";
 
 export type AddTextBoxBaselineInput = TextBoxBaselineInput;
+export type AddTextBoxBulletInput = TextBoxBulletInput;
+export type AddTextBoxLineSpacingInput = TextBoxLineSpacingInput;
 export type AddTextBoxBodyPropertiesInput = TextBoxBodyPropertiesInput;
 export type AddTextBoxColorInput = TextBoxColorInput;
 export type AddTextBoxGlowInput = TextBoxGlowInput;
@@ -136,6 +148,17 @@ const UNDERLINE_STYLES: ReadonlySet<string> = new Set<AddTextBoxUnderlineStyle>(
   "wavyHeavy",
   "wavyDbl",
   "none",
+]);
+const AUTO_NUMBER_SCHEMES = new Set([
+  "arabicPeriod",
+  "arabicParenR",
+  "romanUcPeriod",
+  "romanLcPeriod",
+  "alphaUcPeriod",
+  "alphaLcPeriod",
+  "alphaLcParenR",
+  "alphaUcParenR",
+  "arabicPlain",
 ]);
 const HYPERLINK_REL_TYPE =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
@@ -924,6 +947,7 @@ function assertTextBoxParagraphProperties(
   }
   const align = properties.align;
   const lineSpacing = properties.lineSpacing;
+  const path = `paragraphs[${paragraphIndex}].properties`;
   if (
     align !== undefined &&
     align !== "left" &&
@@ -936,11 +960,59 @@ function assertTextBoxParagraphProperties(
     );
   }
   if (lineSpacing !== undefined) {
-    assertPositiveFiniteIntegerNumber(
-      lineSpacing,
-      operationName,
-      `paragraphs[${paragraphIndex}].properties.lineSpacing`,
-    );
+    assertTextBoxLineSpacing(lineSpacing, `${path}.lineSpacing`, operationName);
+  }
+  if (properties.marginLeft !== undefined) {
+    assertFiniteEmu(properties.marginLeft, operationName, `${path}.marginLeft`);
+  }
+  if (properties.indent !== undefined) {
+    assertFiniteEmu(properties.indent, operationName, `${path}.indent`);
+  }
+  if (properties.bullet !== undefined) {
+    assertTextBoxBullet(properties.bullet, `${path}.bullet`, operationName);
+  }
+}
+
+function assertTextBoxLineSpacing(spacing: unknown, path: string, operationName: string): void {
+  if (!isPlainRecord(spacing) || (spacing.type !== "points" && spacing.type !== "percent")) {
+    throw new Error(`${operationName}: ${path} must be a points or percent spacing object`);
+  }
+  assertPositiveFiniteIntegerNumber(spacing.value, operationName, `${path}.value`);
+}
+
+function assertTextBoxBullet(bullet: unknown, path: string, operationName: string): void {
+  if (!isPlainRecord(bullet)) {
+    throw new Error(`${operationName}: ${path} must be a bullet object`);
+  }
+  if (bullet.type === "none") return;
+  if (bullet.type !== "character" && bullet.type !== "auto-number") {
+    throw new Error(`${operationName}: ${path}.type is not supported`);
+  }
+  if (bullet.fontFace !== undefined) {
+    if (typeof bullet.fontFace !== "string" || bullet.fontFace.trim() === "") {
+      throw new Error(`${operationName}: ${path}.fontFace must be a non-empty string`);
+    }
+  }
+  if (bullet.size !== undefined) {
+    assertFiniteIntegerNumber(bullet.size, operationName, `${path}.size`);
+    if (typeof bullet.size !== "number" || bullet.size < 25000 || bullet.size > 400000) {
+      throw new Error(`${operationName}: ${path}.size must be between 25000 and 400000`);
+    }
+  }
+  if (bullet.type === "character") {
+    if (typeof bullet.character !== "string" || bullet.character.length === 0) {
+      throw new Error(`${operationName}: ${path}.character must be a non-empty string`);
+    }
+    return;
+  }
+  if (typeof bullet.scheme !== "string" || !AUTO_NUMBER_SCHEMES.has(bullet.scheme)) {
+    throw new Error(`${operationName}: ${path}.scheme is not supported`);
+  }
+  if (bullet.startAt !== undefined) {
+    assertFiniteIntegerNumber(bullet.startAt, operationName, `${path}.startAt`);
+    if (typeof bullet.startAt !== "number" || bullet.startAt < 1 || bullet.startAt > 32767) {
+      throw new Error(`${operationName}: ${path}.startAt must be between 1 and 32767`);
+    }
   }
 }
 
@@ -1153,7 +1225,19 @@ function assertTextBoxBaseline(
   operationName = "addTextBox",
 ): void {
   if (baseline === "subscript" || baseline === "superscript") return;
-  throw new Error(`${operationName}: ${path} must be subscript or superscript`);
+  if (isPlainRecord(baseline) && baseline.type === "percent") {
+    assertFiniteIntegerNumber(baseline.value, operationName, `${path}.value`);
+    if (
+      typeof baseline.value === "number" &&
+      baseline.value >= -400000 &&
+      baseline.value <= 400000
+    ) {
+      return;
+    }
+  }
+  throw new Error(
+    `${operationName}: ${path} must be subscript, superscript, or a percent between -400000 and 400000`,
+  );
 }
 
 function assertTextBoxGlow(glow: unknown, path: string, operationName = "addTextBox"): void {
@@ -1199,6 +1283,9 @@ function assertTextBoxBody(body: unknown, path: string, operationName = "addText
     assertFiniteEmu(body.marginTop, operationName, "body.marginTop");
   if (body.marginBottom !== undefined) {
     assertFiniteEmu(body.marginBottom, operationName, "body.marginBottom");
+  }
+  if (body.autoFit !== undefined && body.autoFit !== "shape") {
+    throw new Error(`${operationName}: body.autoFit is not supported`);
   }
 }
 
@@ -1440,8 +1527,18 @@ function defaultTextBodyProperties(
 ): AddTextBoxBodyPropertiesInput | undefined {
   if (target.kind !== "slide") return undefined;
   const slide = source.slides[target.index];
-  return source.slideLayouts.find((layout) => layout.partPath === slide.layoutPartPath)
-    ?.defaultTextBodyProperties;
+  const defaults = source.slideLayouts.find(
+    (layout) => layout.partPath === slide.layoutPartPath,
+  )?.defaultTextBodyProperties;
+  if (defaults === undefined) return undefined;
+  return {
+    ...(defaults.anchor !== undefined ? { anchor: defaults.anchor } : {}),
+    ...(defaults.marginLeft !== undefined ? { marginLeft: defaults.marginLeft } : {}),
+    ...(defaults.marginRight !== undefined ? { marginRight: defaults.marginRight } : {}),
+    ...(defaults.marginTop !== undefined ? { marginTop: defaults.marginTop } : {}),
+    ...(defaults.marginBottom !== undefined ? { marginBottom: defaults.marginBottom } : {}),
+    ...(defaults.autoFit === "spAutofit" ? { autoFit: "shape" as const } : {}),
+  };
 }
 
 function mergeTextBodyProperties(
