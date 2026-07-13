@@ -55,6 +55,7 @@ import type {
 } from "./index.js";
 import { nextNumberedName, nextRelationshipId } from "./package-graph-mutations.js";
 import type {
+  AuthoringColorTransformInput,
   ShapeColorInput,
   ShapeCustomGeometryInput,
   ShapeCustomGeometryPathCommandInput,
@@ -72,6 +73,7 @@ import type {
   TextBoxColorInput,
   TextBoxGlowInput,
   TextBoxGradientFillInput,
+  TextBoxGradientStopInput,
   TextBoxLineSpacingInput,
   TextBoxOutlineInput,
   TextBoxParagraphInput,
@@ -94,8 +96,10 @@ export type AddTextBoxBulletInput = TextBoxBulletInput;
 export type AddTextBoxLineSpacingInput = TextBoxLineSpacingInput;
 export type AddTextBoxBodyPropertiesInput = TextBoxBodyPropertiesInput;
 export type AddTextBoxColorInput = TextBoxColorInput;
+export type AddTextBoxColorTransformInput = AuthoringColorTransformInput;
 export type AddTextBoxGlowInput = TextBoxGlowInput;
 export type AddTextBoxGradientFillInput = TextBoxGradientFillInput;
+export type AddTextBoxGradientStopInput = TextBoxGradientStopInput;
 export type AddTextBoxOutlineInput = TextBoxOutlineInput;
 export type AddTextBoxParagraphInput = TextBoxParagraphInput;
 export type AddTextBoxParagraphPropertiesInput = TextBoxParagraphPropertiesInput;
@@ -105,10 +109,12 @@ export type AddTextBoxUnderlineInput = TextBoxUnderlineInput;
 export type AddTextBoxUnderlineStyle = TextBoxUnderlineStyle;
 export type AddShapeBodyPropertiesInput = TextBoxBodyPropertiesInput;
 export type AddShapeColorInput = ShapeColorInput;
+export type AddShapeColorTransformInput = AuthoringColorTransformInput;
 export type AddShapeEffectsInput = ShapeEffectsInput;
 export type AddShapeFillInput = ShapeFillInput;
 export type AddShapeGlowInput = ShapeGlowInput;
 export type AddShapeGradientFillInput = ShapeGradientFillInput;
+export type AddShapeGradientStopInput = TextBoxGradientStopInput;
 export type AddShapeGeometryInput = ShapeGeometryInput;
 export type AddShapePresetGeometryInput = ShapePresetGeometryInput;
 export type AddShapeCustomGeometryInput = ShapeCustomGeometryInput;
@@ -1267,6 +1273,19 @@ function assertTextBoxColor(color: unknown, path: string, operationName = "addTe
   ) {
     throw new Error(`${operationName}: ${path} must be an srgb 6-digit hex color`);
   }
+  if (color.transforms !== undefined) {
+    if (!isArrayValue(color.transforms)) {
+      throw new Error(`${operationName}: ${path}.transforms must be an array`);
+    }
+    color.transforms.forEach((transform: unknown, index: number) => {
+      if (!isPlainRecord(transform) || transform.kind !== "alpha") {
+        throw new Error(
+          `${operationName}: ${path}.transforms[${index}] must be an alpha transform`,
+        );
+      }
+      assertOoxmlPercent(transform.value, operationName, `${path}.transforms[${index}].value`);
+    });
+  }
 }
 
 function assertTextBoxGradientFill(
@@ -1277,25 +1296,35 @@ function assertTextBoxGradientFill(
   if (!isPlainRecord(fill)) {
     throw new Error(`${operationName}: ${path} must be a gradient fill object`);
   }
+  if (fill.gradientType !== "linear" && fill.gradientType !== "radial") {
+    throw new Error(`${operationName}: ${path}.gradientType must be linear or radial`);
+  }
   const stops = fill.stops;
   if (!isArrayValue(stops) || stops.length < 2) {
     throw new Error(`${operationName}: ${path}.stops must contain at least two stops`);
   }
-  if (fill.angle !== undefined)
-    assertFiniteIntegerNumber(fill.angle, operationName, `${path}.angle`);
+  if (fill.gradientType === "linear") {
+    if (fill.angle !== undefined)
+      assertFiniteIntegerNumber(fill.angle, operationName, `${path}.angle`);
+  } else {
+    assertOoxmlPercent(fill.centerX, operationName, `${path}.centerX`);
+    assertOoxmlPercent(fill.centerY, operationName, `${path}.centerY`);
+  }
   stops.forEach((stop: unknown, index: number) => {
     if (!isPlainRecord(stop)) {
       throw new Error(`${operationName}: ${path}.stops[${index}] must be an object`);
     }
     const position = stop.position;
-    assertFiniteIntegerNumber(position, operationName, `${path}.stops[${index}].position`);
-    if (typeof position !== "number" || position < 0 || position > 100000) {
-      throw new Error(
-        `${operationName}: ${path}.stops[${index}].position must be between 0 and 100000`,
-      );
-    }
+    assertOoxmlPercent(position, operationName, `${path}.stops[${index}].position`);
     assertTextBoxColor(stop.color, `${path}.stops[${index}].color`, operationName);
   });
+}
+
+function assertOoxmlPercent(value: unknown, operationName: string, path: string): void {
+  assertFiniteIntegerNumber(value, operationName, path);
+  if (typeof value !== "number" || value < 0 || value > 100000) {
+    throw new Error(`${operationName}: ${path} must be between 0 and 100000`);
+  }
 }
 
 function isArrayValue(value: unknown): value is readonly unknown[] {
@@ -1501,6 +1530,17 @@ function assertBooleanOrUndefined(value: unknown, operationName: string, fieldNa
 function assertFiniteIntegerNumber(value: unknown, operationName: string, fieldName: string): void {
   if (!Number.isInteger(value)) {
     throw new Error(`${operationName}: ${fieldName} must be a finite integer`);
+  }
+}
+
+function assertPositiveFiniteIntegerNumber(
+  value: unknown,
+  operationName: string,
+  fieldName: string,
+): void {
+  assertFiniteIntegerNumber(value, operationName, fieldName);
+  if (typeof value !== "number" || value <= 0) {
+    throw new Error(`${operationName}: ${fieldName} must be a finite positive integer`);
   }
 }
 

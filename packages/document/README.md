@@ -84,6 +84,58 @@ const edited = addTextBox(source, firstSlide.handle, {
 await writeFile("from-scratch.pptx", writePptx(edited));
 ```
 
+### Alpha colors and gradients
+
+Color transforms and gradient coordinates use OOXML percentages: `0` is 0% and `100000`
+is 100%. Gradients use `gradientType` as their discriminator. Radial `centerX` and
+`centerY` locate the center within the shape bounds.
+
+```ts
+import { addShape, asEmu, asOoxmlPercent, createPptx } from "@pptx-glimpse/document";
+
+let source = createPptx();
+const slide = source.slides[0];
+if (slide?.handle === undefined) throw new Error("Missing slide");
+
+source = addShape(source, slide.handle, {
+  geometry: { kind: "preset", preset: "ellipse" },
+  offsetX: asEmu(914400),
+  offsetY: asEmu(914400),
+  width: asEmu(2743200),
+  height: asEmu(1828800),
+  fill: {
+    kind: "gradient",
+    gradientType: "radial",
+    centerX: asOoxmlPercent(50000),
+    centerY: asOoxmlPercent(50000),
+    stops: [
+      {
+        position: asOoxmlPercent(0),
+        color: {
+          kind: "srgb",
+          hex: "FF0000",
+          transforms: [{ kind: "alpha", value: asOoxmlPercent(75000) }],
+        },
+      },
+      {
+        position: asOoxmlPercent(100000),
+        color: { kind: "srgb", hex: "0000FF" },
+      },
+    ],
+  },
+  outline: {
+    fill: {
+      kind: "gradient",
+      gradientType: "linear",
+      stops: [
+        { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "FFFFFF" } },
+        { position: asOoxmlPercent(100000), color: { kind: "srgb", hex: "000000" } },
+      ],
+    },
+  },
+});
+```
+
 ### Slide master and layout authoring
 
 `createPptx` can name and configure its initial master/layout. The same text, shape,
