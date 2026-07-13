@@ -1,5 +1,12 @@
 # @pptx-glimpse/document
 
+## 0.8.0
+
+### Minor Changes
+
+- 772b4f9: from-scratch writer に、スライドマスター／レイアウトの名前・背景・既定テキストマージン、オブジェクト追加、スライド番号フィールドの authoring API を追加しました。
+- 897d4fd: text box / shape authoring の run に外部 HTTP(S) hyperlink を指定できるようにしました。
+
 ## 0.7.0
 
 ### Minor Changes
