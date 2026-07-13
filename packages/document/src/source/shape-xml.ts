@@ -120,6 +120,8 @@ export interface TextBoxRunPropertiesInput {
 export interface TextBoxRunInput {
   readonly text: string;
   readonly properties?: TextBoxRunPropertiesInput;
+  /** External HTTP(S) hyperlink applied to this run. */
+  readonly hyperlink?: string;
 }
 
 export interface TextBoxParagraphPropertiesInput {
@@ -151,6 +153,7 @@ interface TextBoxXmlParams {
   readonly text?: string;
   readonly paragraphs?: readonly TextBoxParagraphInput[];
   readonly body?: TextBoxBodyPropertiesInput;
+  readonly hyperlinkIds?: ReadonlyMap<string, RelationshipId>;
 }
 
 interface SlideNumberXmlParams {
@@ -181,6 +184,7 @@ interface ShapeXmlParams {
   readonly text?: string;
   readonly paragraphs?: readonly TextBoxParagraphInput[];
   readonly body?: TextBoxBodyPropertiesInput;
+  readonly hyperlinkIds?: ReadonlyMap<string, RelationshipId>;
 }
 
 interface ConnectorXmlParams {
@@ -258,7 +262,9 @@ export function buildTextBoxXml(params: TextBoxXmlParams): string {
       "p:txBody": {
         "a:bodyPr": createTextBodyPropertiesXml(params.body),
         "a:lstStyle": {},
-        "a:p": paragraphs.map(createParagraphXml),
+        "a:p": paragraphs.map((paragraph) =>
+          createParagraphXml(paragraph, params.hyperlinkIds ?? new Map()),
+        ),
       },
     },
   });
@@ -357,7 +363,9 @@ export function buildShapeXml(params: ShapeXmlParams): string {
             "p:txBody": {
               "a:bodyPr": createTextBodyPropertiesXml(params.body),
               "a:lstStyle": {},
-              "a:p": paragraphs.map(createParagraphXml),
+              "a:p": paragraphs.map((paragraph) =>
+                createParagraphXml(paragraph, params.hyperlinkIds ?? new Map()),
+              ),
             },
           }
         : {}),
@@ -378,12 +386,15 @@ function createTextBodyPropertiesXml(
   };
 }
 
-function createParagraphXml(paragraph: TextBoxParagraphInput): Record<string, unknown> {
+function createParagraphXml(
+  paragraph: TextBoxParagraphInput,
+  hyperlinkIds: ReadonlyMap<string, RelationshipId>,
+): Record<string, unknown> {
   return {
     ...(paragraph.properties !== undefined
       ? { "a:pPr": createParagraphPropertiesXml(paragraph.properties) }
       : {}),
-    "a:r": paragraph.runs.map(createTextRunXml),
+    "a:r": paragraph.runs.map((run) => createTextRunXml(run, hyperlinkIds)),
     "a:endParaRPr": {},
   };
 }
@@ -399,10 +410,17 @@ function createParagraphPropertiesXml(
   };
 }
 
-function createTextRunXml(run: TextBoxRunInput): Record<string, unknown> {
+function createTextRunXml(
+  run: TextBoxRunInput,
+  hyperlinkIds: ReadonlyMap<string, RelationshipId>,
+): Record<string, unknown> {
+  const hyperlinkId = run.hyperlink === undefined ? undefined : hyperlinkIds.get(run.hyperlink);
+  if (run.hyperlink !== undefined && hyperlinkId === undefined) {
+    throw new Error("buildTextBoxXml: hyperlink relationship id was not allocated");
+  }
   return {
-    ...(run.properties !== undefined
-      ? { "a:rPr": createTextRunPropertiesXml(run.properties) }
+    ...(run.properties !== undefined || hyperlinkId !== undefined
+      ? { "a:rPr": createTextRunPropertiesXml(run.properties ?? {}, hyperlinkId) }
       : {}),
     "a:t": textElementValue(run.text),
   };
@@ -410,6 +428,7 @@ function createTextRunXml(run: TextBoxRunInput): Record<string, unknown> {
 
 function createTextRunPropertiesXml(
   properties: TextBoxRunPropertiesInput,
+  hyperlinkId?: RelationshipId,
 ): Record<string, unknown> {
   return {
     ...(properties.bold !== undefined ? { "@_b": boolToken(properties.bold) } : {}),
@@ -456,6 +475,7 @@ function createTextRunPropertiesXml(
           "a:cs": { "@_typeface": properties.fontFace },
         }
       : {}),
+    ...(hyperlinkId !== undefined ? { "a:hlinkClick": { "@_r:id": hyperlinkId } } : {}),
   };
 }
 
