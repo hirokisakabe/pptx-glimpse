@@ -195,15 +195,22 @@ function normalizeOptions(options: CreatePptxOptions): NormalizedCreatePptxOptio
   const masterName = normalizeName(options.slideMaster?.name, "slideMaster.name", "Blank Master");
   const layoutName = normalizeName(options.slideLayout?.name, "slideLayout.name", "Blank");
   const background = options.slideMaster?.background;
-  if (background?.kind === "solid") assertHexColor(background.color.hex, "slideMaster.background");
   let backgroundImage: DetectedImageType | undefined;
-  if (background?.kind === "image") {
-    if (!(background.bytes instanceof Uint8Array)) {
-      throw new Error("createPptx: slideMaster.background.bytes must be a Uint8Array");
+  if (background !== undefined) {
+    const backgroundKind: unknown = Reflect.get(background, "kind");
+    if (backgroundKind !== "solid" && backgroundKind !== "image") {
+      throw new Error("createPptx: slideMaster.background.kind must be solid or image");
     }
-    backgroundImage = detectSupportedImageType(background.bytes);
-    if (backgroundImage === undefined) {
-      throw new Error("createPptx: slideMaster.background uses an unsupported image format");
+    if (background.kind === "solid") {
+      assertHexColor(background.color.hex, "slideMaster.background");
+    } else {
+      if (!(background.bytes instanceof Uint8Array)) {
+        throw new Error("createPptx: slideMaster.background.bytes must be a Uint8Array");
+      }
+      backgroundImage = detectSupportedImageType(background.bytes);
+      if (backgroundImage === undefined) {
+        throw new Error("createPptx: slideMaster.background uses an unsupported image format");
+      }
     }
   }
   const margin = options.slideLayout?.margin;
@@ -228,7 +235,25 @@ function normalizeName(value: string | undefined, field: string, fallback: strin
   if (typeof value !== "string" || value.trim() === "") {
     throw new Error(`createPptx: ${field} must be a non-empty string`);
   }
+  assertValidXmlName(value, field);
   return value.trim();
+}
+
+function assertValidXmlName(value: string, field: string): void {
+  for (let index = 0; index < value.length; index += 1) {
+    const codePoint = value.codePointAt(index);
+    if (codePoint === undefined) continue;
+    const valid =
+      codePoint >= 0x20 &&
+      codePoint <= 0x10ffff &&
+      !(codePoint >= 0xd800 && codePoint <= 0xdfff) &&
+      codePoint !== 0xfffe &&
+      codePoint !== 0xffff;
+    if (!valid) {
+      throw new Error(`createPptx: ${field} contains a character forbidden in an XML attribute`);
+    }
+    if (codePoint > 0xffff) index += 1;
+  }
 }
 
 function assertHexColor(value: string, field: string): void {

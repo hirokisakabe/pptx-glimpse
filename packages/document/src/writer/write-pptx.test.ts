@@ -862,6 +862,18 @@ describe("writePptx - from-scratch builder", () => {
     });
   });
 
+  it("rejects invalid master and layout authoring options", () => {
+    expect(() => {
+      Reflect.apply(createPptx, undefined, [{ slideMaster: { background: { kind: "pattern" } } }]);
+    }).toThrow(/background\.kind must be solid or image/);
+    expect(() => createPptx({ slideMaster: { name: "bad\u0000name" } })).toThrow(
+      /forbidden in an XML attribute/,
+    );
+    expect(() => createPptx({ slideLayout: { name: "bad\nname" } })).toThrow(
+      /forbidden in an XML attribute/,
+    );
+  });
+
   it("writes added PNG and JPEG pictures with media parts, content types, and slide rels", () => {
     const source = createPptx();
     const slideHandle = source.slides[0]?.handle;
