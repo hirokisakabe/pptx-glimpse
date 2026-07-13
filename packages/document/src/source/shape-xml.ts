@@ -95,6 +95,30 @@ export interface ShapeOutlineInput {
   readonly tailEnd?: SourceArrowEndpoint;
 }
 
+export interface ShapePresetGeometryInput {
+  readonly kind: "preset";
+  readonly preset: string;
+  readonly adjustValues?: Readonly<Record<string, number>>;
+}
+
+export type ShapeCustomGeometryPathCommandInput =
+  | { readonly kind: "moveTo"; readonly x: number; readonly y: number }
+  | { readonly kind: "lineTo"; readonly x: number; readonly y: number }
+  | { readonly kind: "close" };
+
+export interface ShapeCustomGeometryPathInput {
+  readonly width: number;
+  readonly height: number;
+  readonly commands: readonly ShapeCustomGeometryPathCommandInput[];
+}
+
+export interface ShapeCustomGeometryInput {
+  readonly kind: "custom";
+  readonly paths: readonly ShapeCustomGeometryPathInput[];
+}
+
+export type ShapeGeometryInput = ShapePresetGeometryInput | ShapeCustomGeometryInput;
+
 export interface TextBoxOutlineInput {
   readonly width?: Emu;
   readonly color?: TextBoxColorInput;
@@ -172,12 +196,14 @@ interface SlideNumberXmlParams {
 interface ShapeXmlParams {
   readonly shapeId: string;
   readonly name: string;
-  readonly preset: string;
+  readonly geometry: ShapeGeometryInput;
   readonly offsetX: Emu;
   readonly offsetY: Emu;
   readonly width: Emu;
   readonly height: Emu;
   readonly rotation?: OoxmlAngle;
+  readonly flipHorizontal?: boolean;
+  readonly flipVertical?: boolean;
   readonly fill?: ShapeFillInput;
   readonly outline?: ShapeOutlineInput;
   readonly effects?: ShapeEffectsInput;
@@ -339,6 +365,8 @@ export function buildShapeXml(params: ShapeXmlParams): string {
       "p:spPr": {
         "a:xfrm": {
           ...(params.rotation !== undefined ? { "@_rot": String(params.rotation) } : {}),
+          ...(params.flipHorizontal ? { "@_flipH": "1" } : {}),
+          ...(params.flipVertical ? { "@_flipV": "1" } : {}),
           "a:off": {
             "@_x": String(params.offsetX),
             "@_y": String(params.offsetY),
@@ -348,10 +376,7 @@ export function buildShapeXml(params: ShapeXmlParams): string {
             "@_cy": String(params.height),
           },
         },
-        "a:prstGeom": {
-          "@_prst": params.preset,
-          "a:avLst": {},
-        },
+        ...createShapeGeometryXml(params.geometry),
         ...createShapeFillChildXml(params.fill),
         ...(params.outline !== undefined ? { "a:ln": createShapeLineXml(params.outline) } : {}),
         ...(params.effects?.glow !== undefined
@@ -371,6 +396,58 @@ export function buildShapeXml(params: ShapeXmlParams): string {
         : {}),
     },
   });
+}
+
+function createShapeGeometryXml(geometry: ShapeGeometryInput): Record<string, unknown> {
+  if (geometry.kind === "preset") {
+    return {
+      "a:prstGeom": {
+        "@_prst": geometry.preset,
+        "a:avLst": {
+          ...(geometry.adjustValues !== undefined
+            ? {
+                "a:gd": Object.entries(geometry.adjustValues).map(([name, value]) => ({
+                  "@_name": name,
+                  "@_fmla": `val ${value}`,
+                })),
+              }
+            : {}),
+        },
+      },
+    };
+  }
+
+  return {
+    "a:custGeom": {
+      "a:avLst": {},
+      "a:gdLst": {},
+      "a:ahLst": {},
+      "a:cxnLst": {},
+      "a:rect": { "@_l": "l", "@_t": "t", "@_r": "r", "@_b": "b" },
+      "a:pathLst": {
+        "a:path": geometry.paths.map((path) => ({
+          "@_w": String(path.width),
+          "@_h": String(path.height),
+          "a:moveTo": createCustomGeometryPointXml(path.commands[0]),
+          ...(path.commands.some((command) => command.kind === "lineTo")
+            ? {
+                "a:lnTo": path.commands
+                  .filter((command) => command.kind === "lineTo")
+                  .map(createCustomGeometryPointXml),
+              }
+            : {}),
+          ...(path.commands.at(-1)?.kind === "close" ? { "a:close": {} } : {}),
+        })),
+      },
+    },
+  };
+}
+
+function createCustomGeometryPointXml(
+  command: ShapeCustomGeometryPathCommandInput | undefined,
+): Record<string, unknown> {
+  if (command === undefined || command.kind === "close") return {};
+  return { "a:pt": { "@_x": String(command.x), "@_y": String(command.y) } };
 }
 
 function createTextBodyPropertiesXml(

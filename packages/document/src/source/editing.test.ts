@@ -597,7 +597,7 @@ describe("editing shape operations", () => {
     const source = buildSourceModel();
 
     const withRect = addShape(source, requireHandle(source.slides[0].handle), {
-      preset: " rect ",
+      geometry: { kind: "preset", preset: " rect " },
       offsetX: asEmu(100),
       offsetY: asEmu(200),
       width: asEmu(300),
@@ -606,7 +606,7 @@ describe("editing shape operations", () => {
       name: "Shape rect",
     });
     const withRoundRect = addShape(withRect, requireHandle(withRect.slides[0].handle), {
-      preset: "roundRect",
+      geometry: { kind: "preset", preset: "roundRect" },
       offsetX: asEmu(500),
       offsetY: asEmu(600),
       width: asEmu(700),
@@ -614,7 +614,7 @@ describe("editing shape operations", () => {
       name: "Shape roundRect",
     });
     const withEllipse = addShape(withRoundRect, requireHandle(withRoundRect.slides[0].handle), {
-      preset: "ellipse",
+      geometry: { kind: "preset", preset: "ellipse" },
       offsetX: asEmu(900),
       offsetY: asEmu(1000),
       width: asEmu(1100),
@@ -623,7 +623,7 @@ describe("editing shape operations", () => {
     });
     const edited = expectNonMutating(withEllipse, () =>
       addShape(withEllipse, requireHandle(withEllipse.slides[0].handle), {
-        preset: "line",
+        geometry: { kind: "preset", preset: "line" },
         offsetX: asEmu(1300),
         offsetY: asEmu(1400),
         width: asEmu(1500),
@@ -678,6 +678,97 @@ describe("editing shape operations", () => {
     );
     expect(lastEdit.xml).toContain(`<a:prstDash val="dash"`);
     expect(lastEdit.xml).toContain(`<a:tailEnd type="triangle" w="med" len="lg"`);
+  });
+
+  it("adds adjusted and custom geometry with flips and zero line extents", () => {
+    let edited = buildSourceModel();
+    const slideHandle = requireHandle(edited.slides[0].handle);
+    edited = addShape(edited, slideHandle, {
+      geometry: { kind: "preset", preset: "roundRect", adjustValues: { adj: 25000 } },
+      offsetX: asEmu(100),
+      offsetY: asEmu(200),
+      width: asEmu(300),
+      height: asEmu(400),
+      flipHorizontal: true,
+      name: "Adjusted",
+    });
+    edited = addShape(edited, slideHandle, {
+      geometry: {
+        kind: "custom",
+        paths: [
+          {
+            width: 100,
+            height: 100,
+            commands: [
+              { kind: "moveTo", x: 0, y: 100 },
+              { kind: "lineTo", x: 50, y: 0 },
+              { kind: "lineTo", x: 100, y: 100 },
+              { kind: "close" },
+            ],
+          },
+        ],
+      },
+      offsetX: asEmu(500),
+      offsetY: asEmu(600),
+      width: asEmu(700),
+      height: asEmu(800),
+      flipVertical: true,
+      name: "Custom",
+    });
+    edited = addShape(edited, slideHandle, {
+      geometry: { kind: "preset", preset: "line" },
+      offsetX: asEmu(900),
+      offsetY: asEmu(1000),
+      width: asEmu(0),
+      height: asEmu(1200),
+      flipHorizontal: true,
+      flipVertical: true,
+      name: "Vertical Line",
+    });
+    edited = addShape(edited, slideHandle, {
+      geometry: { kind: "preset", preset: "line" },
+      offsetX: asEmu(1300),
+      offsetY: asEmu(1400),
+      width: asEmu(1500),
+      height: asEmu(0),
+      name: "Horizontal Line",
+    });
+
+    expect(shapeByName(edited, "Adjusted")).toMatchObject({
+      geometry: { preset: "roundRect", adjustValues: { adj: 25000 } },
+      transform: { flipHorizontal: true },
+    });
+    expect(shapeByName(edited, "Custom")).toMatchObject({
+      geometry: {
+        kind: "custom",
+        paths: [{ width: 100, height: 100, commands: "M 0 100 L 50 0 L 100 100 Z" }],
+      },
+      transform: { flipVertical: true },
+    });
+    expect(shapeByName(edited, "Vertical Line").transform).toMatchObject({
+      width: 0,
+      height: 1200,
+      flipHorizontal: true,
+      flipVertical: true,
+    });
+    expect(shapeByName(edited, "Horizontal Line").transform).toMatchObject({
+      width: 1500,
+      height: 0,
+    });
+
+    const xml = edited.edits
+      ?.filter((edit) => edit.kind === "addShape")
+      .map((edit) => edit.xml)
+      .join("");
+    expect(xml).toContain(
+      `<a:prstGeom prst="roundRect"><a:avLst><a:gd name="adj" fmla="val 25000"/></a:avLst></a:prstGeom>`,
+    );
+    expect(xml).toContain(
+      `<a:custGeom><a:avLst/><a:gdLst/><a:ahLst/><a:cxnLst/><a:rect l="l" t="t" r="r" b="b"/><a:pathLst><a:path w="100" h="100"><a:moveTo><a:pt x="0" y="100"/></a:moveTo><a:lnTo><a:pt x="50" y="0"/></a:lnTo><a:lnTo><a:pt x="100" y="100"/></a:lnTo><a:close/></a:path></a:pathLst></a:custGeom>`,
+    );
+    expect(xml).toContain(`<a:xfrm flipH="1" flipV="1">`);
+    expect(xml).toContain(`<a:ext cx="0" cy="1200"/>`);
+    expect(xml).toContain(`<a:ext cx="1500" cy="0"/>`);
   });
 
   it("rejects invalid formatted text box inputs before editing", () => {
@@ -1027,7 +1118,7 @@ describe("editing shape operations", () => {
       ),
     );
     const withShape = addShape(source, requireHandle(source.slides[0].handle), {
-      preset: "rect",
+      geometry: { kind: "preset", preset: "rect" },
       offsetX: asEmu(1),
       offsetY: asEmu(2),
       width: asEmu(3),
@@ -1095,16 +1186,16 @@ describe("editing shape operations", () => {
     );
     expect(() =>
       addShape(source, requireHandle(source.slides[0].handle), {
-        preset: "",
+        geometry: { kind: "preset", preset: "" },
         offsetX: asEmu(1),
         offsetY: asEmu(2),
         width: asEmu(3),
         height: asEmu(4),
       }),
-    ).toThrow("addShape: preset must be a non-empty string");
+    ).toThrow("addShape: geometry.preset must be a non-empty string");
     expect(() =>
       addShape(source, requireHandle(source.slides[0].handle), {
-        preset: "rect",
+        geometry: { kind: "preset", preset: "rect" },
         offsetX: asEmu(1),
         offsetY: asEmu(2),
         width: asEmu(3),
@@ -1117,7 +1208,7 @@ describe("editing shape operations", () => {
     ).toThrow("addShape: outline.dash is not supported");
     expect(() =>
       addShape(source, requireHandle(source.slides[0].handle), {
-        preset: "rect",
+        geometry: { kind: "preset", preset: "rect" },
         offsetX: asEmu(1),
         offsetY: asEmu(2),
         width: asEmu(3),
@@ -1130,7 +1221,7 @@ describe("editing shape operations", () => {
     ).toThrow("addShape: fill.stops must contain at least two stops");
     expect(() =>
       addShape(source, requireHandle(source.slides[0].handle), {
-        preset: "rect",
+        geometry: { kind: "preset", preset: "rect" },
         offsetX: asEmu(1),
         offsetY: asEmu(2),
         width: asEmu(3),
@@ -1140,7 +1231,7 @@ describe("editing shape operations", () => {
     ).toThrow("addShape: body requires text or paragraphs");
     expect(() =>
       addShape(source, requireHandle(source.slides[0].handle), {
-        preset: "rect",
+        geometry: { kind: "preset", preset: "rect" },
         offsetX: asEmu(1),
         offsetY: asEmu(2),
         width: asEmu(3),
@@ -1149,6 +1240,55 @@ describe("editing shape operations", () => {
         effects: {},
       }),
     ).toThrow("addShape: effects must set glow");
+
+    const baseShape = {
+      offsetX: asEmu(1),
+      offsetY: asEmu(2),
+      width: asEmu(3),
+      height: asEmu(4),
+    };
+    expect(() =>
+      addShape(source, requireHandle(source.slides[0].handle), {
+        ...baseShape,
+        geometry: { kind: "preset", preset: "roundRect", adjustValues: { adj: 1.5 } },
+      }),
+    ).toThrow("addShape: geometry.adjustValues.adj must be a finite integer");
+    expect(() =>
+      addShape(source, requireHandle(source.slides[0].handle), {
+        ...baseShape,
+        geometry: { kind: "custom", paths: [] },
+      }),
+    ).toThrow("addShape: geometry.paths must contain at least one path");
+    expect(() =>
+      addShape(source, requireHandle(source.slides[0].handle), {
+        ...baseShape,
+        geometry: {
+          kind: "custom",
+          paths: [
+            {
+              width: 100,
+              height: 100,
+              commands: [{ kind: "lineTo", x: 0, y: 0 }],
+            },
+          ],
+        },
+      }),
+    ).toThrow("addShape: geometry.paths[0].commands must start with one moveTo command");
+    expect(() =>
+      addShape(source, requireHandle(source.slides[0].handle), {
+        ...baseShape,
+        width: asEmu(0),
+        geometry: { kind: "preset", preset: "rect" },
+      }),
+    ).toThrow("addShape: width must be a finite positive EMU value");
+    expect(() =>
+      addShape(source, requireHandle(source.slides[0].handle), {
+        ...baseShape,
+        width: asEmu(0),
+        height: asEmu(0),
+        geometry: { kind: "preset", preset: "line" },
+      }),
+    ).toThrow("addShape: line width and height must not both be zero");
   });
 });
 
