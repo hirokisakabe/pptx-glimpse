@@ -396,10 +396,9 @@ function tickMarkToken(value: NativeChartTickMark | undefined): string {
 }
 
 function axisShapeProperties(axis: AddChartAxisInput): string {
-  if (axis.line !== undefined) return buildShapePropertiesXml(undefined, axis.line);
-  return axis.lineVisible === false
-    ? buildShapePropertiesXml(undefined, { fill: { kind: "none" } })
-    : "";
+  if (axis.lineVisible === false)
+    return buildShapePropertiesXml(undefined, { fill: { kind: "none" } });
+  return axis.line === undefined ? "" : buildShapePropertiesXml(undefined, axis.line);
 }
 
 function buildTitleXml(title: string, style?: AddChartTextStyleInput): string {

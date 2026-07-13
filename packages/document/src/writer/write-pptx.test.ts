@@ -731,10 +731,11 @@ describe("writePptx - from-scratch builder", () => {
       },
       valueAxis: {
         hidden: true,
+        lineVisible: false,
         majorTickMark: "outside",
         labelPosition: "none",
         numberFormat: { formatCode: "#,##0" },
-        line: { fill: { kind: "none" } },
+        line: { fill: solid("FF0000") },
         gridLinesVisible: false,
       },
       plotLayout: { coordinateMode: "edge", x: 0, y: 0, width: 1, height: 1 },
@@ -841,11 +842,20 @@ describe("writePptx - from-scratch builder", () => {
     const output = writePptx(edited);
     const archive = unzipSync(output);
     const barXml = decoder.decode(archive["ppt/charts/chart1.xml"]);
+    const titleXml = /<c:title>.*?<\/c:title>/.exec(barXml)?.[0];
+    const plotAreaXml = /<c:plotArea>.*?<\/c:plotArea>/.exec(barXml)?.[0];
+    const barSeriesXml = /<c:ser>.*?<\/c:ser>/.exec(barXml)?.[0];
     expect(barXml).toContain(`<c:roundedCorners val="1"/>`);
     expect(barXml).toContain(`<c:dispBlanksAs val="span"/>`);
-    expect(barXml).toContain(`<a:rPr lang="en-US" sz="1800" b="1" i="1">`);
-    expect(barXml).toContain(`<a:latin typeface="Aptos Display"/>`);
-    expect(barXml).toContain(`<a:alpha val="80000"/>`);
+    expect(titleXml).toContain(`<a:rPr lang="en-US" sz="1800" b="1" i="1">`);
+    expect(titleXml).toContain(`<a:srgbClr val="112233">`);
+    expect(titleXml).toContain(`<a:latin typeface="Aptos Display"/>`);
+    expect(plotAreaXml).toContain(
+      `<c:spPr><a:solidFill><a:srgbClr val="FFFFFF"></a:srgbClr></a:solidFill><a:ln><a:noFill/></a:ln></c:spPr>`,
+    );
+    expect(barSeriesXml).toContain(
+      `<c:spPr><a:solidFill><a:srgbClr val="4472C4"></a:srgbClr></a:solidFill><a:ln w="12700"><a:solidFill><a:srgbClr val="203864"></a:srgbClr></a:solidFill><a:prstDash val="solid"/></a:ln></c:spPr>`,
+    );
     expect(barXml).toContain(
       `<c:manualLayout><c:layoutTarget val="inner"/><c:xMode val="edge"/><c:yMode val="edge"/><c:wMode val="edge"/><c:hMode val="edge"/><c:x val="0"/><c:y val="0"/><c:w val="1"/><c:h val="1"/></c:manualLayout>`,
     );
@@ -874,23 +884,30 @@ describe("writePptx - from-scratch builder", () => {
     expect(barXml).toContain(
       `</c:chart><c:spPr><a:solidFill><a:srgbClr val="F0F0F0"><a:alpha val="80000"/></a:srgbClr></a:solidFill><a:ln w="12700"><a:solidFill><a:srgbClr val="223344"></a:srgbClr></a:solidFill><a:prstDash val="dash"/></a:ln></c:spPr><c:externalData`,
     );
-    expect(decoder.decode(archive["ppt/charts/chart2.xml"])).toContain(
-      `<c:symbol val="diamond"/><c:size val="9"/>`,
-    );
-    expect(decoder.decode(archive["ppt/charts/chart2.xml"])).toContain(
+    const lineXml = decoder.decode(archive["ppt/charts/chart2.xml"]);
+    expect(lineXml).toContain(`<c:symbol val="diamond"/><c:size val="9"/>`);
+    expect(lineXml).toContain(
       `<c:spPr><a:solidFill><a:srgbClr val="FFC000"></a:srgbClr></a:solidFill><a:ln><a:solidFill><a:srgbClr val="7F6000"></a:srgbClr></a:solidFill></a:ln></c:spPr>`,
     );
-    expect(decoder.decode(archive["ppt/charts/chart2.xml"])).toContain(
-      `<a:prstDash val="dashDot"/>`,
+    expect(lineXml).toContain(`<a:prstDash val="dashDot"/>`);
+    const areaXml = decoder.decode(archive["ppt/charts/chart3.xml"]);
+    expect(areaXml).toContain(
+      `<a:solidFill><a:srgbClr val="A5A5A5"></a:srgbClr></a:solidFill><a:ln><a:solidFill><a:srgbClr val="404040"></a:srgbClr></a:solidFill></a:ln>`,
     );
-    expect(decoder.decode(archive["ppt/charts/chart4.xml"])).toContain(
-      `<c:symbol val="triangle"/><c:size val="7"/>`,
+    const radarXml = decoder.decode(archive["ppt/charts/chart4.xml"]);
+    expect(radarXml).toContain(`<c:symbol val="triangle"/><c:size val="7"/>`);
+    expect(radarXml).toContain(
+      `<a:solidFill><a:srgbClr val="8064A2"></a:srgbClr></a:solidFill><a:ln><a:solidFill><a:srgbClr val="4F3B66"></a:srgbClr></a:solidFill></a:ln>`,
     );
-    expect(decoder.decode(archive["ppt/charts/chart5.xml"])).toContain(
-      `<c:dispBlanksAs val="zero"/>`,
+    const pieXml = decoder.decode(archive["ppt/charts/chart5.xml"]);
+    expect(pieXml).toContain(`<c:dispBlanksAs val="zero"/>`);
+    expect(pieXml).toContain(
+      `<c:dPt><c:idx val="1"/><c:spPr><a:solidFill><a:srgbClr val="00B050"></a:srgbClr></a:solidFill><a:ln><a:solidFill><a:srgbClr val="006100"></a:srgbClr></a:solidFill></a:ln></c:spPr></c:dPt>`,
     );
-    expect(decoder.decode(archive["ppt/charts/chart6.xml"])).toContain(
-      `<c:dispBlanksAs val="gap"/>`,
+    const doughnutXml = decoder.decode(archive["ppt/charts/chart6.xml"]);
+    expect(doughnutXml).toContain(`<c:dispBlanksAs val="gap"/>`);
+    expect(doughnutXml).toContain(
+      `<c:dPt><c:idx val="0"/><c:spPr><a:solidFill><a:srgbClr val="00B0F0"></a:srgbClr></a:solidFill></c:spPr></c:dPt>`,
     );
 
     const reread = readPptx(output);
