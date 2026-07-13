@@ -695,7 +695,7 @@ describe("editing shape operations", () => {
         {
           properties: {
             align: "center",
-            lineSpacing: { type: "points", value: asHundredthPt(1800) },
+            lineSpacing: asHundredthPt(1800),
           },
           runs: [
             {
@@ -777,7 +777,35 @@ describe("editing shape operations", () => {
             },
           ],
         },
-        expected: /lineSpacing.value must be a finite positive integer/,
+        expected: /lineSpacing.value must be a finite integer/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          paragraphs: [
+            {
+              properties: {
+                lineSpacing: { type: "points", value: asHundredthPt(158401) },
+              },
+              runs: [{ text: "point spacing out of range" }],
+            },
+          ],
+        },
+        expected: /lineSpacing.value must be between 0 and 158400/,
+      },
+      {
+        input: {
+          ...formattedInput,
+          paragraphs: [
+            {
+              properties: {
+                lineSpacing: { type: "percent", value: asOoxmlPercent(13200001) },
+              },
+              runs: [{ text: "percent spacing out of range" }],
+            },
+          ],
+        },
+        expected: /lineSpacing.value must be between 0 and 13200000/,
       },
       {
         input: {

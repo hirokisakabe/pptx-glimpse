@@ -974,10 +974,27 @@ function assertTextBoxParagraphProperties(
 }
 
 function assertTextBoxLineSpacing(spacing: unknown, path: string, operationName: string): void {
+  if (typeof spacing === "number") {
+    assertTextBoxLineSpacingValue(spacing, "points", path, operationName);
+    return;
+  }
   if (!isPlainRecord(spacing) || (spacing.type !== "points" && spacing.type !== "percent")) {
     throw new Error(`${operationName}: ${path} must be a points or percent spacing object`);
   }
-  assertPositiveFiniteIntegerNumber(spacing.value, operationName, `${path}.value`);
+  assertTextBoxLineSpacingValue(spacing.value, spacing.type, `${path}.value`, operationName);
+}
+
+function assertTextBoxLineSpacingValue(
+  value: unknown,
+  type: "points" | "percent",
+  path: string,
+  operationName: string,
+): void {
+  assertFiniteIntegerNumber(value, operationName, path);
+  const maximum = type === "points" ? 158400 : 13200000;
+  if (typeof value !== "number" || value < 0 || value > maximum) {
+    throw new Error(`${operationName}: ${path} must be between 0 and ${maximum}`);
+  }
 }
 
 function assertTextBoxBullet(bullet: unknown, path: string, operationName: string): void {
@@ -1410,16 +1427,6 @@ function assertPositiveFiniteNumber(
 ): void {
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     throw new Error(`${operationName}: ${fieldName} must be a finite positive number`);
-  }
-}
-
-function assertPositiveFiniteIntegerNumber(
-  value: unknown,
-  operationName: string,
-  fieldName: string,
-): void {
-  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
-    throw new Error(`${operationName}: ${fieldName} must be a finite positive integer`);
   }
 }
 

@@ -69,6 +69,8 @@ export type TextBoxBaselineInput =
   | { readonly type: "percent"; readonly value: OoxmlPercent };
 
 export type TextBoxLineSpacingInput =
+  /** Legacy point input retained for compatibility. */
+  | HundredthPt
   | { readonly type: "points"; readonly value: HundredthPt }
   | { readonly type: "percent"; readonly value: OoxmlPercent };
 
@@ -443,6 +445,7 @@ function createParagraphPropertiesXml(
 }
 
 function createLineSpacingXml(spacing: TextBoxLineSpacingInput): Record<string, unknown> {
+  if (typeof spacing === "number") return { "a:spcPts": { "@_val": String(spacing) } };
   return spacing.type === "points"
     ? { "a:spcPts": { "@_val": String(spacing.value) } }
     : { "a:spcPct": { "@_val": String(spacing.value) } };
