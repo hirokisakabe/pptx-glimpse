@@ -269,12 +269,20 @@ export interface PptxSourceModelDeleteSlideEdit {
   readonly relationshipId: RelationshipId;
 }
 
-export interface PptxSourceModelSetSlideBackgroundEdit {
+export type PptxSourceModelSetSlideBackgroundEdit = {
   readonly kind: "setSlideBackground";
   readonly slidePartPath: PartPath;
-  readonly relationshipId?: RelationshipId;
-  readonly mediaPartPath?: PartPath;
-  readonly contentType?: string;
   /** Serialized `p:bg` fragment finalized at edit time. The writer only splices it. */
   readonly xml: string;
-}
+} & (
+  | {
+      readonly relationshipId: RelationshipId;
+      readonly mediaPartPath: PartPath;
+      readonly contentType: string;
+    }
+  | {
+      readonly relationshipId?: never;
+      readonly mediaPartPath?: never;
+      readonly contentType?: never;
+    }
+);

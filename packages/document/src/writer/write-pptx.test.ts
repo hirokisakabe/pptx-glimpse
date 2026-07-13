@@ -996,6 +996,22 @@ describe("writePptx - from-scratch builder", () => {
         color: { kind: "srgb", hex: "FFFFFF" },
       }),
     ).toThrow(/slide handle was not found/);
+
+    expect(() => {
+      Reflect.apply(writePptx, undefined, [
+        {
+          ...source,
+          edits: [
+            {
+              kind: "setSlideBackground",
+              slidePartPath: source.slides[0].partPath,
+              relationshipId: "rId2",
+              xml: "<p:bg/>",
+            },
+          ],
+        },
+      ]);
+    }).toThrow(/relationship, media part, and content type must be provided together/);
   });
 
   it("authors every supported object on a layout with part-unique slide-number fields", () => {
