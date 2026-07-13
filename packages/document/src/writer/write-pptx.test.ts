@@ -853,10 +853,20 @@ describe("writePptx - from-scratch builder", () => {
     expect(barXml).toContain(`<c:numFmt formatCode="0.0%" sourceLinked="0"/>`);
     expect(barXml).toContain(`<c:noMultiLvlLbl val="1"/>`);
     expect(barXml).toContain(`<a:defRPr sz="900" b="1" i="0">`);
-    expect(barXml.match(/<c:dPt>/g)).toHaveLength(2);
-    expect(barXml.indexOf("<c:plotArea>")).toBeLessThan(barXml.indexOf("<c:spPr>"));
+    expect(barXml).toContain(
+      `<c:dPt><c:idx val="0"/><c:spPr><a:solidFill><a:srgbClr val="ED7D31"></a:srgbClr></a:solidFill><a:ln><a:solidFill><a:srgbClr val="843C0C"></a:srgbClr></a:solidFill></a:ln></c:spPr></c:dPt>`,
+    );
+    expect(barXml).toContain(
+      `<c:dPt><c:idx val="1"/><c:spPr><a:solidFill><a:srgbClr val="70AD47"></a:srgbClr></a:solidFill></c:spPr></c:dPt>`,
+    );
+    expect(barXml).toContain(
+      `</c:chart><c:spPr><a:solidFill><a:srgbClr val="F0F0F0"><a:alpha val="80000"/></a:srgbClr></a:solidFill><a:ln w="12700"><a:solidFill><a:srgbClr val="223344"></a:srgbClr></a:solidFill><a:prstDash val="dash"/></a:ln></c:spPr><c:externalData`,
+    );
     expect(decoder.decode(archive["ppt/charts/chart2.xml"])).toContain(
       `<c:symbol val="diamond"/><c:size val="9"/>`,
+    );
+    expect(decoder.decode(archive["ppt/charts/chart2.xml"])).toContain(
+      `<c:spPr><a:solidFill><a:srgbClr val="FFC000"></a:srgbClr></a:solidFill><a:ln><a:solidFill><a:srgbClr val="7F6000"></a:srgbClr></a:solidFill></a:ln></c:spPr>`,
     );
     expect(decoder.decode(archive["ppt/charts/chart2.xml"])).toContain(
       `<a:prstDash val="dashDot"/>`,
@@ -921,6 +931,34 @@ describe("writePptx - from-scratch builder", () => {
     expect(() =>
       addChart(source, source.slides[0].handle!, { ...valid, title: "bad\u0000" }),
     ).toThrow(/forbidden by XML 1.0/);
+    const invalidFillKind = { ...valid, chartArea: { fill: { kind: "none" as const } } };
+    Reflect.set(invalidFillKind.chartArea.fill, "kind", "gradient");
+    expect(() => addChart(source, source.slides[0].handle!, invalidFillKind)).toThrow(
+      /unsupported chartArea\.fill\.kind/,
+    );
+    const invalidColorKind = {
+      ...valid,
+      chartArea: {
+        fill: { kind: "solid" as const, color: { kind: "srgb" as const, hex: "FFFFFF" } },
+      },
+    };
+    Reflect.set(invalidColorKind.chartArea.fill.color, "kind", "scheme");
+    expect(() => addChart(source, source.slides[0].handle!, invalidColorKind)).toThrow(
+      /unsupported chartArea\.fill\.color\.kind/,
+    );
+    expect(() =>
+      addChart(source, source.slides[0].handle!, {
+        ...valid,
+        chartArea: { outline: { width: asEmu(20_116_801) } },
+      }),
+    ).toThrow(/width must be a finite EMU value/);
+    expect(() =>
+      addChart(source, source.slides[0].handle!, {
+        ...valid,
+        title: "Too small",
+        titleStyle: { fontSize: asPt(0.5) },
+      }),
+    ).toThrow(/fontSize must be from 1 through 4000 points/);
   });
 
   it("writes a new presentation after adding a text box through public APIs", () => {

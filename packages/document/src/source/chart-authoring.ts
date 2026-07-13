@@ -184,6 +184,9 @@ const DASH_STYLES: ReadonlySet<string> = new Set([
 ]);
 const XLSX_MAX_SERIES = 16_383;
 const XLSX_MAX_DATA_POINTS = 1_048_575;
+const MAX_LINE_WIDTH = 20_116_800;
+const MIN_TEXT_SIZE = 100;
+const MAX_TEXT_SIZE = 400_000;
 
 export function addChart(
   source: PptxSourceModel,
@@ -699,13 +702,23 @@ function assertAreaStyle(style: AddChartAreaStyleInput | undefined, field: strin
 }
 
 function assertFill(fill: AddChartFillInput | undefined, field: string): void {
-  if (fill?.kind === "solid") assertColor(fill.color, `${field}.color`);
+  if (fill === undefined || fill.kind === "none") return;
+  if (fill.kind === "solid") {
+    assertColor(fill.color, `${field}.color`);
+    return;
+  }
+  throw new Error(`addChart: unsupported ${field}.kind`);
 }
 
 function assertOutline(outline: AddChartOutlineInput | undefined, field: string): void {
   if (outline === undefined) return;
-  if (outline.width !== undefined && (!Number.isFinite(outline.width) || outline.width < 0))
-    throw new Error(`addChart: ${field}.width must be a finite non-negative EMU value`);
+  if (
+    outline.width !== undefined &&
+    (!Number.isFinite(outline.width) || outline.width < 0 || outline.width > MAX_LINE_WIDTH)
+  )
+    throw new Error(
+      `addChart: ${field}.width must be a finite EMU value from 0 through ${MAX_LINE_WIDTH}`,
+    );
   if (outline.dash !== undefined && !DASH_STYLES.has(outline.dash))
     throw new Error(`addChart: unsupported ${field}.dash`);
   assertFill(outline.fill, `${field}.fill`);
@@ -718,12 +731,16 @@ function assertTextStyle(style: AddChartTextStyleInput | undefined, field: strin
     if (style.fontFace.length === 0)
       throw new Error(`addChart: ${field}.fontFace must not be empty`);
   }
-  if (style.fontSize !== undefined && (!Number.isFinite(style.fontSize) || style.fontSize <= 0))
-    throw new Error(`addChart: ${field}.fontSize must be a finite positive point value`);
+  if (style.fontSize !== undefined) {
+    const textSize = Math.round(style.fontSize * 100);
+    if (!Number.isFinite(style.fontSize) || textSize < MIN_TEXT_SIZE || textSize > MAX_TEXT_SIZE)
+      throw new Error(`addChart: ${field}.fontSize must be from 1 through 4000 points`);
+  }
   if (style.color !== undefined) assertColor(style.color, `${field}.color`);
 }
 
 function assertColor(color: AddChartColorInput, field: string): void {
+  if (color.kind !== "srgb") throw new Error(`addChart: unsupported ${field}.kind`);
   normalizeColor(color.hex);
   for (const transform of color.transforms ?? []) {
     if (
