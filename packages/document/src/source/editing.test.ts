@@ -1412,6 +1412,27 @@ describe("editing shape operations", () => {
     expect(edited.edits?.at(-1)).not.toHaveProperty("endShapeId");
   });
 
+  it("preserves empty connector outline compatibility with the default black line", () => {
+    const source = buildSourceModel();
+    const edited = addConnector(source, requireHandle(source.slides[0].handle), {
+      preset: "straightConnector1",
+      offsetX: asEmu(10),
+      offsetY: asEmu(20),
+      width: asEmu(30),
+      height: asEmu(40),
+      outline: {},
+    });
+
+    expect(edited.slides[0].shapes.at(-1)).toMatchObject({
+      kind: "connector",
+      outline: { fill: { kind: "solid", color: { kind: "srgb", hex: "000000" } } },
+    });
+    expect(edited.edits?.at(-1)).toHaveProperty(
+      "xml",
+      expect.stringContaining('<a:solidFill><a:srgbClr val="000000"'),
+    );
+  });
+
   it("rejects connector endpoints outside the target part or OOXML index range", () => {
     const source = buildSourceModel();
     const slideHandle = requireHandle(source.slides[0].handle);

@@ -1439,7 +1439,9 @@ function assertConnectorInput(input: AddConnectorInput): void {
   if (input.name !== undefined && input.name.trim() === "") {
     throw new Error("addConnector: name must be a non-empty string when provided");
   }
-  if (input.outline !== undefined) assertShapeOutline(input.outline, "addConnector");
+  if (input.outline !== undefined && Object.keys(input.outline).length > 0) {
+    assertShapeOutline(input.outline, "addConnector");
+  }
 }
 
 function assertShapeFill(
