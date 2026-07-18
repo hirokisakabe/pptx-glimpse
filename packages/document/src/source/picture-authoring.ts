@@ -1,4 +1,5 @@
-import { editReservedShapeId, sourceHandlesEqual } from "./edit-descriptors.js";
+import { nextDrawingOrderingSlot, nextDrawingShapeId } from "./drawing-authoring-allocation.js";
+import { sourceHandlesEqual } from "./edit-descriptors.js";
 import { copyBytes, IMAGE_REL_TYPE, relativeTarget } from "./editing-shared.js";
 import { assertShadowEffectsInput, type ShadowEffectsInput } from "./effect-authoring.js";
 import { asPartPath, type PartPath } from "./handles.js";
@@ -13,11 +14,7 @@ import type {
   SourceHandle,
   SourceShapeNode,
 } from "./index.js";
-import {
-  nextNumberedName,
-  nextNumberedPartPath,
-  nextRelationshipId,
-} from "./package-graph-mutations.js";
+import { nextNumberedPartPath, nextRelationshipId } from "./package-graph-mutations.js";
 import { relationshipsPartPath } from "./package-paths.js";
 import { buildPictureXml, parseShapeNodeXml } from "./shape-xml.js";
 import type { SourceImageCrop, SourceTransform } from "./shapes.js";
@@ -77,7 +74,7 @@ export function addPicture(
     );
   }
 
-  const shapeId = nextPictureShapeId(source, target.partPath, target.shapes);
+  const shapeId = nextDrawingShapeId(source, target.shapes, target.partPath);
   const shapeIdValue = String(shapeId);
   const relationshipGroup = relationshipGroupForPart(source.packageGraph, target.partPath);
   const relationshipId = nextRelationshipId(relationshipGroup.relationships);
@@ -93,7 +90,7 @@ export function addPicture(
     target: relativeTarget(target.partPath, mediaPartPath),
   };
   const name = input.name?.trim() || `Picture ${shapeIdValue}`;
-  const orderingSlot = nextOrderingSlot(target.shapes);
+  const orderingSlot = nextDrawingOrderingSlot(target.shapes);
   const xml = buildPictureXml({
     shapeId: shapeIdValue,
     name,
@@ -225,38 +222,6 @@ function nextMediaPartPath(
     return [edit.mediaPartPath];
   });
   return nextNumberedPartPath(graph, reserved, IMAGE_MEDIA_PREFIX, `.${imageType.extension}`);
-}
-
-function nextPictureShapeId(
-  source: PptxSourceModel,
-  slidePartPath: PartPath,
-  shapes: readonly SourceShapeNode[],
-): string {
-  const used = new Set<number>();
-  collectShapeIds(shapes, used);
-  for (const edit of source.edits ?? []) {
-    const numericId = Number(editReservedShapeId(edit, slidePartPath));
-    if (Number.isInteger(numericId) && numericId > 0) used.add(numericId);
-  }
-  const usedNames = new Set([...used].map(String));
-  return nextNumberedName(usedNames, /^(\d+)$/, String);
-}
-
-function collectShapeIds(shapes: readonly SourceShapeNode[], used: Set<number>): void {
-  for (const shape of shapes) {
-    const numericId = Number(shape.nodeId);
-    if (Number.isInteger(numericId) && numericId > 0) used.add(numericId);
-    if (shape.kind === "group") collectShapeIds(shape.children, used);
-  }
-}
-
-function nextOrderingSlot(shapes: readonly { readonly handle?: SourceHandle }[]): number {
-  return (
-    shapes.reduce((current, shape) => {
-      const slot = shape.handle?.orderingSlot ?? -1;
-      return Math.max(current, slot);
-    }, -1) + 1
-  );
 }
 
 function assertPictureInput(input: AddPictureInput): void {

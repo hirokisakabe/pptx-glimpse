@@ -1,8 +1,9 @@
 import { XMLBuilder } from "fast-xml-parser";
 
-import { editReservedShapeId, sourceHandlesEqual } from "./edit-descriptors.js";
-import type { PartPath, RelationshipId, SourceHandle } from "./handles.js";
-import { nextNumberedName, nextRelationshipId } from "./package-graph-mutations.js";
+import { nextDrawingOrderingSlot, nextDrawingShapeId } from "./drawing-authoring-allocation.js";
+import { sourceHandlesEqual } from "./edit-descriptors.js";
+import type { RelationshipId, SourceHandle } from "./handles.js";
+import { nextRelationshipId } from "./package-graph-mutations.js";
 import type { PptxSourceModel, PptxSourceModelAddTableEdit } from "./pptx-source-model.js";
 import {
   createTextRunPropertiesXml,
@@ -83,7 +84,7 @@ export function addTable(
   if (slideIndex < 0)
     throw new Error("addTable: slide handle was not found in PptxSourceModel source");
   const slide = source.slides[slideIndex];
-  const shapeId = nextShapeId(source, slide.partPath);
+  const shapeId = nextDrawingShapeId(source, slide.shapes, slide.partPath);
   const group = source.packageGraph.relationships.find(
     (item) => item.sourcePartPath === slide.partPath,
   );
@@ -101,7 +102,7 @@ export function addTable(
         ];
       }
   const xml = buildTableXml(input, shapeId, input.name?.trim() || `Table ${shapeId}`, hyperlinkIds);
-  const table = parseShapeNodeXml(xml, slide.partPath, nextOrderingSlot(slide.shapes));
+  const table = parseShapeNodeXml(xml, slide.partPath, nextDrawingOrderingSlot(slide.shapes));
   if (table.kind !== "table") throw new Error("addTable: finalized XML did not parse as a table");
   const edit = {
     kind: "addTable",
@@ -402,21 +403,4 @@ function assertInput(input: AddTableInput): void {
       }
     }
   }
-}
-function nextShapeId(source: PptxSourceModel, partPath: PartPath): string {
-  // p:spTree reserves id 1 for its non-visual group properties.
-  const used = new Set<string>(["1"]);
-  const slide = source.slides.find((s) => s.partPath === partPath);
-  for (const shape of slide?.shapes ?? [])
-    if (shape.nodeId !== undefined) used.add(String(shape.nodeId));
-  for (const edit of source.edits ?? []) {
-    const id = editReservedShapeId(edit, partPath);
-    if (id !== undefined) used.add(id);
-  }
-  return nextNumberedName(used, /^(\d+)$/, String);
-}
-function nextOrderingSlot(
-  shapes: readonly { readonly handle?: { readonly orderingSlot?: number } }[],
-): number {
-  return Math.max(0, ...shapes.map((shape) => shape.handle?.orderingSlot ?? 0)) + 1;
 }
