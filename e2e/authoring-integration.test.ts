@@ -18,64 +18,82 @@ import { createAuthoringIntegrationFixture } from "./fixtures/authoring-integrat
 const fixturePath = fileURLToPath(
   new URL("../shared-fixtures/authoring-integration.pptx", import.meta.url),
 );
+const FIXTURE_CASES = [
+  ["freshly generated", () => createAuthoringIntegrationFixture()],
+  ["committed baseline", () => new Uint8Array(readFileSync(fixturePath))],
+] as const;
 
 describe("from-scratch authoring integration fixture", () => {
-  it.each([
-    ["freshly generated", () => createAuthoringIntegrationFixture()],
-    ["committed baseline", () => new Uint8Array(readFileSync(fixturePath))],
-  ] as const)("validates the %s package and source-model contract", async (_, loadFixture) => {
-    const bytes = loadFixture();
-    const archive = await JSZip.loadAsync(bytes);
-    const entryPaths = new Set(Object.keys(archive.files));
-    const source = readPptx(bytes);
+  it.each(FIXTURE_CASES)(
+    "validates the %s package and source-model contract",
+    async (_, loadFixture) => {
+      const bytes = loadFixture();
+      const archive = await JSZip.loadAsync(bytes);
+      const entryPaths = new Set(Object.keys(archive.files));
+      const source = readPptx(bytes);
 
-    expect(source.diagnostics.filter((diagnostic) => diagnostic.severity === "error")).toEqual([]);
-    expect([...entryPaths]).toEqual(expect.arrayContaining(requiredPackagePaths()));
-    expectPackageGraphToBeConsistent(source.packageGraph, entryPaths);
-    expectSourceContract(source);
+      expect(source.diagnostics.filter((diagnostic) => diagnostic.severity === "error")).toEqual(
+        [],
+      );
+      expect([...entryPaths]).toEqual(expect.arrayContaining(requiredPackagePaths()));
+      expectPackageGraphToBeConsistent(source.packageGraph, entryPaths);
+      expectSourceContract(source);
 
-    const reread = readPptx(writePptx(source));
-    expect(reread.diagnostics.filter((diagnostic) => diagnostic.severity === "error")).toEqual([]);
-    expectSourceContract(reread);
-  });
+      const rewrittenBytes = writePptx(source);
+      const rewrittenArchive = await JSZip.loadAsync(rewrittenBytes);
+      const rewrittenEntryPaths = new Set(Object.keys(rewrittenArchive.files));
+      const reread = readPptx(rewrittenBytes);
+      expect(reread.diagnostics.filter((diagnostic) => diagnostic.severity === "error")).toEqual(
+        [],
+      );
+      expect([...rewrittenEntryPaths]).toEqual(expect.arrayContaining(requiredPackagePaths()));
+      expectPackageGraphToBeConsistent(reread.packageGraph, rewrittenEntryPaths);
+      expectSourceContract(reread);
+    },
+  );
 
-  it("renders every authored element through core's document path", async () => {
-    const bytes = createAuthoringIntegrationFixture();
-    const source = readPptx(bytes);
-    const computed = createComputedView(source);
-    const report = await convertPptxToSvg(bytes, {
-      textOutput: "text",
-      skipSystemFonts: true,
-    });
+  it.each(FIXTURE_CASES)(
+    "renders every authored element from the %s fixture through core's document path",
+    async (_, loadFixture) => {
+      const bytes = loadFixture();
+      const source = readPptx(bytes);
+      const computed = createComputedView(source);
+      const report = await convertPptxToSvg(bytes, {
+        textOutput: "text",
+        skipSystemFonts: true,
+      });
 
-    expect(computed.slides).toHaveLength(1);
-    expect(computed.slides[0]?.elements.map((element) => element.kind)).toEqual([
-      "shape",
-      "shape",
-      "shape",
-      "shape",
-      "image",
-      "connector",
-      "table",
-      "chart",
-    ]);
-    expect(report.slides).toHaveLength(1);
-    expect(report.diagnostics.filter((diagnostic) => diagnostic.severity === "error")).toEqual([]);
-    expect(report.supportCoverage.overall).toMatchObject({
-      inputElements: 8,
-      outputElements: 8,
-      skippedElements: 0,
-      unresolvedElements: 0,
-    });
-    expect(report.slides[0]?.svg).toContain("MASTER CONTRACT");
-    expect(report.slides[0]?.svg).toContain("LAYOUT CONTRACT");
-    expect(report.slides[0]?.svg).toContain("Authoring integration fixture");
-    expect(report.slides[0]?.svg).toContain("Shape contract");
-    expect(report.slides[0]?.svg).toContain(">Table</tspan>");
-    expect(report.slides[0]?.svg).toContain(">contract</tspan>");
-    expect(report.slides[0]?.svg).toContain("Chart contract");
-    expect(report.slides[0]?.svg).toContain("data:image/png;base64,");
-  });
+      expect(computed.slides).toHaveLength(1);
+      expect(computed.slides[0]?.elements.map((element) => element.kind)).toEqual([
+        "shape",
+        "shape",
+        "shape",
+        "shape",
+        "image",
+        "connector",
+        "table",
+        "chart",
+      ]);
+      expect(report.slides).toHaveLength(1);
+      expect(report.diagnostics.filter((diagnostic) => diagnostic.severity === "error")).toEqual(
+        [],
+      );
+      expect(report.supportCoverage.overall).toMatchObject({
+        inputElements: 8,
+        outputElements: 8,
+        skippedElements: 0,
+        unresolvedElements: 0,
+      });
+      expect(report.slides[0]?.svg).toContain("MASTER CONTRACT");
+      expect(report.slides[0]?.svg).toContain("LAYOUT CONTRACT");
+      expect(report.slides[0]?.svg).toContain("Authoring integration fixture");
+      expect(report.slides[0]?.svg).toContain("Shape contract");
+      expect(report.slides[0]?.svg).toContain(">Table</tspan>");
+      expect(report.slides[0]?.svg).toContain(">contract</tspan>");
+      expect(report.slides[0]?.svg).toContain("Chart contract");
+      expect(report.slides[0]?.svg).toContain("data:image/png;base64,");
+    },
+  );
 });
 
 function expectSourceContract(source: PptxSourceModel): void {
@@ -106,8 +124,24 @@ function expectSourceContract(source: PptxSourceModel): void {
   for (const shapeOwner of [source.slides[0], source.slideLayouts[0], source.slideMasters[0]]) {
     const ids =
       shapeOwner?.shapes.map((shape) => shape.nodeId).filter((id) => id !== undefined) ?? [];
+    expect(ids).toHaveLength(shapeOwner?.shapes.length ?? 0);
     expect(new Set(ids).size).toBe(ids.length);
   }
+
+  const slideShapes = source.slides[0]?.shapes ?? [];
+  const fixtureTitle = slideShapes.find(
+    (shape) => shape.kind === "shape" && shape.name === "Fixture title",
+  );
+  const contractShape = slideShapes.find(
+    (shape) => shape.kind === "shape" && shape.name === "Contract shape",
+  );
+  const connector = slideShapes.find(
+    (shape) => shape.kind === "connector" && shape.name === "Contract connector",
+  );
+  expect(connector?.connection).toEqual({
+    start: { shapeId: contractShape?.nodeId, connectionSiteIndex: 1 },
+    end: { shapeId: fixtureTitle?.nodeId, connectionSiteIndex: 3 },
+  });
 }
 
 function expectPackageGraphToBeConsistent(
