@@ -78,13 +78,10 @@ export type {
   AddTextBoxRunPropertiesInput,
   AddTextBoxUnderlineInput,
   AddTextBoxUnderlineStyle,
-  UpdateShapeTransformInput,
-} from "./shape-editing.js";
+} from "./shape-authoring.js";
+export { addConnector, addShape, addSlideNumber, addTextBox } from "./shape-authoring.js";
+export type { UpdateShapeTransformInput } from "./shape-editing.js";
 export {
-  addConnector,
-  addShape,
-  addSlideNumber,
-  addTextBox,
   deleteShape,
   findShapeNodeBySourceHandle,
   setShapeFill,
