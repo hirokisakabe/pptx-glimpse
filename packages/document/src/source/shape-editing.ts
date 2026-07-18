@@ -45,7 +45,6 @@ import type {
   PptxSourceModelEdit,
   PptxSourceModelShapeOutlineEdit,
   Relationship,
-  SourceArrowEndpoint,
   SourceConnector,
   SourceFill,
   SourceHandle,
@@ -225,10 +224,7 @@ export interface AddConnectorConnectionEndpointInput {
   readonly connectionSiteIndex: number;
 }
 
-export interface AddConnectorOutlineInput {
-  readonly headEnd?: SourceArrowEndpoint;
-  readonly tailEnd?: SourceArrowEndpoint;
-}
+export type AddConnectorOutlineInput = AddShapeOutlineInput;
 
 export interface AddConnectorInput extends UpdateShapeTransformInput {
   readonly preset: ConnectorPresetGeometry;
@@ -1439,31 +1435,39 @@ function assertConnectorInput(input: AddConnectorInput): void {
   if (input.name !== undefined && input.name.trim() === "") {
     throw new Error("addConnector: name must be a non-empty string when provided");
   }
-  assertArrowEndpoint(input.outline?.headEnd, "headEnd", "addConnector");
-  assertArrowEndpoint(input.outline?.tailEnd, "tailEnd", "addConnector");
+  if (input.outline !== undefined && Object.keys(input.outline).length > 0) {
+    assertShapeOutline(input.outline, "addConnector");
+  }
 }
 
-function assertShapeFill(fill: unknown, path: string): void {
+function assertShapeFill(
+  fill: unknown,
+  path: string,
+  operationName: "addConnector" | "addShape" = "addShape",
+): void {
   if (!isPlainRecord(fill)) {
-    throw new Error(`addShape: ${path} must be a fill object`);
+    throw new Error(`${operationName}: ${path} must be a fill object`);
   }
   switch (fill.kind) {
     case "none":
       return;
     case "solid":
-      assertTextBoxColor(fill.color, `${path}.color`, "addShape");
+      assertTextBoxColor(fill.color, `${path}.color`, operationName);
       return;
     case "gradient":
-      assertTextBoxGradientFill(fill, path, "addShape");
+      assertTextBoxGradientFill(fill, path, operationName);
       return;
     default:
-      throw new Error(`addShape: ${path}.kind is not supported`);
+      throw new Error(`${operationName}: ${path}.kind is not supported`);
   }
 }
 
-function assertShapeOutline(outline: unknown): void {
+function assertShapeOutline(
+  outline: unknown,
+  operationName: "addConnector" | "addShape" = "addShape",
+): void {
   if (!isPlainRecord(outline)) {
-    throw new Error("addShape: outline must be an object");
+    throw new Error(`${operationName}: outline must be an object`);
   }
   if (
     outline.width === undefined &&
@@ -1472,19 +1476,19 @@ function assertShapeOutline(outline: unknown): void {
     outline.headEnd === undefined &&
     outline.tailEnd === undefined
   ) {
-    throw new Error("addShape: outline must set width, fill, dash, headEnd, or tailEnd");
+    throw new Error(`${operationName}: outline must set width, fill, dash, headEnd, or tailEnd`);
   }
   if (outline.width !== undefined) {
-    assertPositiveFiniteEmu(outline.width, "addShape", "outline.width");
+    assertPositiveFiniteEmu(outline.width, operationName, "outline.width");
   }
-  if (outline.fill !== undefined) assertShapeFill(outline.fill, "outline.fill");
+  if (outline.fill !== undefined) assertShapeFill(outline.fill, "outline.fill", operationName);
   if (outline.dash !== undefined) {
     if (typeof outline.dash !== "string" || !DASH_STYLES.has(outline.dash)) {
-      throw new Error("addShape: outline.dash is not supported");
+      throw new Error(`${operationName}: outline.dash is not supported`);
     }
   }
-  assertArrowEndpoint(outline.headEnd, "headEnd", "addShape");
-  assertArrowEndpoint(outline.tailEnd, "tailEnd", "addShape");
+  assertArrowEndpoint(outline.headEnd, "headEnd", operationName);
+  assertArrowEndpoint(outline.tailEnd, "tailEnd", operationName);
 }
 
 function assertShapeEffects(effects: unknown): void {

@@ -4,6 +4,7 @@ import {
   IMAGE_REL_TYPE,
   requirePartRelationships,
 } from "./editing-shared.js";
+import { detectSupportedImageType, startsWithBytes } from "./image-type.js";
 import type {
   PartPath,
   PptxSourceModel,
@@ -176,10 +177,8 @@ function findImagesInTree(shapes: readonly SourceShapeNode[]): SourceImage[] {
 }
 
 function detectImageContentType(bytes: Uint8Array): string | undefined {
-  if (startsWithBytes(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
-    return "image/png";
-  }
-  if (startsWithBytes(bytes, [0xff, 0xd8, 0xff])) return "image/jpeg";
+  const supportedImageType = detectSupportedImageType(bytes);
+  if (supportedImageType !== undefined) return supportedImageType.contentType;
   if (
     startsWithBytes(bytes, [0x47, 0x49, 0x46, 0x38, 0x37, 0x61]) ||
     startsWithBytes(bytes, [0x47, 0x49, 0x46, 0x38, 0x39, 0x61])
@@ -203,9 +202,4 @@ function detectImageContentType(bytes: Uint8Array): string | undefined {
     return "image/webp";
   }
   return undefined;
-}
-
-function startsWithBytes(bytes: Uint8Array, prefix: readonly number[]): boolean {
-  if (bytes.length < prefix.length) return false;
-  return prefix.every((value, index) => bytes[index] === value);
 }

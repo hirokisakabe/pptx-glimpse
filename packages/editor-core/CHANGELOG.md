@@ -1,5 +1,13 @@
 # @pptx-glimpse/editor-core
 
+## 0.0.11
+
+### Patch Changes
+
+- Updated dependencies [f16b0f5]
+- Updated dependencies [79c3c55]
+  - @pptx-glimpse/document@0.9.2
+
 ## 0.0.10
 
 ### Patch Changes

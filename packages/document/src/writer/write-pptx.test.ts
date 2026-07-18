@@ -3090,6 +3090,10 @@ describe("writePptx - shape add/delete edits", () => {
         connectionSiteIndex: 3,
       },
       outline: {
+        width: asEmu(12700),
+        fill: { kind: "solid", color: { kind: "srgb", hex: "00AAFF" } },
+        dash: "lgDashDotDot",
+        headEnd: { type: "oval", width: "sm", length: "sm" },
         tailEnd: { type: "triangle", width: "med", length: "lg" },
       },
     });
@@ -3107,18 +3111,28 @@ describe("writePptx - shape add/delete edits", () => {
       },
       geometry: { preset: "bentConnector3" },
       outline: {
-        fill: { kind: "solid", color: { kind: "srgb", hex: "000000" } },
+        width: 12700,
+        fill: { kind: "solid", color: { kind: "srgb", hex: "00AAFF" } },
+        dashStyle: "lgDashDotDot",
+        headEnd: { type: "oval", width: "sm", length: "sm" },
         tailEnd: { type: "triangle", width: "med", length: "lg" },
       },
     });
     expect(findConnectorByName(edited, "Connector 31").outline).toMatchObject({
-      fill: { kind: "solid", color: { kind: "srgb", hex: "000000" } },
+      width: 12700,
+      fill: { kind: "solid", color: { kind: "srgb", hex: "00AAFF" } },
+      dashStyle: "lgDashDotDot",
+      headEnd: { type: "oval", width: "sm", length: "sm" },
       tailEnd: { type: "triangle", width: "med", length: "lg" },
     });
     expect(slideXml).toContain(`<p:cxnSp>`);
     expect(slideXml).toContain(`<a:stCxn id="10" idx="1"`);
     expect(slideXml).toContain(`<a:endCxn id="30" idx="3"`);
     expect(slideXml).toContain(`<a:prstGeom prst="bentConnector3"`);
+    expect(slideXml).toContain(`<a:ln w="12700"`);
+    expect(slideXml).toContain(`<a:srgbClr val="00AAFF"`);
+    expect(slideXml).toContain(`<a:prstDash val="lgDashDotDot"`);
+    expect(slideXml).toContain(`<a:headEnd type="oval" w="sm" len="sm"`);
     expect(slideXml).toContain(`<a:tailEnd type="triangle" w="med" len="lg"`);
     expect(decoder.decode(getEntry(output, "docProps/custom.xml"))).toContain("preserve-me");
   });
