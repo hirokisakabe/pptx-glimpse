@@ -1,7 +1,7 @@
 import { zipSync } from "fflate";
 
-import { getAttr, getChild, parseXml } from "../reader/xml.js";
-import { editReservedShapeId, sourceHandlesEqual } from "./edit-descriptors.js";
+import { nextDrawingOrderingSlot, nextDrawingShapeId } from "./drawing-authoring-allocation.js";
+import { sourceHandlesEqual } from "./edit-descriptors.js";
 import { relativeTarget } from "./editing-shared.js";
 import { asRelationshipId, type PartPath } from "./handles.js";
 import type {
@@ -10,12 +10,10 @@ import type {
   PptxSourceModel,
   PptxSourceModelAddChartEdit,
   SourceHandle,
-  SourceShapeNode,
 } from "./index.js";
 import {
   addPackagePart,
   addPartRelationship,
-  nextNumberedName,
   nextNumberedPartPath,
   nextRelationshipId,
 } from "./package-graph-mutations.js";
@@ -146,7 +144,6 @@ const CHART_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/re
 const PACKAGE_REL_TYPE =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/package";
 const encoder = new TextEncoder();
-const decoder = new TextDecoder();
 const CHART_TYPES: ReadonlySet<string> = new Set([
   "bar",
   "line",
@@ -219,7 +216,7 @@ export function addChart(
     "ppt/embeddings/Microsoft_Excel_Worksheet",
     ".xlsx",
   );
-  const shapeId = nextChartShapeId(source, slide.partPath);
+  const shapeId = nextDrawingShapeId(source, slide.shapes, slide.partPath);
   const chartNumber = Number(/(\d+)\.xml$/.exec(chartPartPath)?.[1] ?? 1);
   const chartXml = buildChartXml(input, chartNumber);
   const workbookBytes = buildEmbeddedWorkbook(input.series);
@@ -251,7 +248,7 @@ export function addChart(
   });
   const name = input.name?.trim() || `Chart ${shapeId}`;
   const xml = buildChartFrameXml(shapeId, name, relationshipId, input);
-  const chart = parseShapeNodeXml(xml, slide.partPath, nextOrderingSlot(slide.shapes));
+  const chart = parseShapeNodeXml(xml, slide.partPath, nextDrawingOrderingSlot(slide.shapes));
   if (chart.kind !== "chart")
     throw new Error("addChart: finalized chart XML did not parse as a chart");
   const edit = {
@@ -538,37 +535,6 @@ function relationshipGroup(graph: PackageGraph, partPath: PartPath): PartRelatio
       relationships: [],
     }
   );
-}
-
-function nextChartShapeId(source: PptxSourceModel, slidePartPath: PartPath): string {
-  const used = new Set<string>();
-  const rawSlide = source.packageGraph.rawParts?.find((part) => part.partPath === slidePartPath);
-  if (rawSlide?.kind === "binary") {
-    const root = parseXml(decoder.decode(rawSlide.bytes));
-    const rootId = getAttr(
-      getChild(
-        getChild(getChild(getChild(getChild(root, "sld"), "cSld"), "spTree"), "nvGrpSpPr"),
-        "cNvPr",
-      ),
-      "id",
-    );
-    if (rootId !== undefined) used.add(rootId);
-  }
-  const collect = (shapes: readonly SourceShapeNode[]) =>
-    shapes.forEach((shape) => {
-      if (shape.nodeId !== undefined) used.add(String(shape.nodeId));
-      if (shape.kind === "group") collect(shape.children);
-    });
-  collect(source.slides.find((slide) => slide.partPath === slidePartPath)?.shapes ?? []);
-  for (const edit of source.edits ?? []) {
-    const id = editReservedShapeId(edit, slidePartPath);
-    if (id !== undefined) used.add(id);
-  }
-  return nextNumberedName(used, /^(\d+)$/, String);
-}
-
-function nextOrderingSlot(shapes: readonly { readonly handle?: SourceHandle }[]): number {
-  return shapes.reduce((max, shape) => Math.max(max, shape.handle?.orderingSlot ?? -1), -1) + 1;
 }
 
 function assertChartInput(input: AddChartInput): void {
