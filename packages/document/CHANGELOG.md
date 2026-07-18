@@ -1,5 +1,15 @@
 # @pptx-glimpse/document
 
+## 0.10.0
+
+### Minor Changes
+
+- 5d60794: Allow authored connectors to specify horizontal and vertical transform flips.
+
+### Patch Changes
+
+- 01568a2: Unify part-local drawing ID and ordering allocation across shape, picture, table, and chart authoring while avoiding reserved and pending-edit IDs.
+
 ## 0.9.2
 
 ### Patch Changes
