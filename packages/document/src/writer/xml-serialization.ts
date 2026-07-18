@@ -59,7 +59,7 @@ export function appendXmlChildAtEnd(node: XmlNode, key: string, value: XmlNode):
 
 /** Serialize an edited XML tree without grouping heterogeneous siblings by tag name. */
 export function buildXmlPreservingChildOrder(root: XmlNode): string {
-  return orderedXmlBuilder.build(toOrderedChildren(root, true));
+  return orderedXmlBuilder.build(toOrderedChildren(root));
 }
 
 export function encodeXml(xml: string): Uint8Array {
@@ -98,55 +98,74 @@ function rememberChildOrder(node: XmlNode, orderedChildren: readonly XmlNode[]):
   xmlChildOrder.set(node, order);
 }
 
-function toOrderedChildren(node: XmlNode, root = false): XmlNode[] {
+function toOrderedChildren(node: XmlNode): XmlNode[] {
   const current = flattenChildren(node);
-  const unused = new Set(current);
-  const ordered = (xmlChildOrder.get(node) ?? []).flatMap((remembered) => {
-    const exact = current.find(
-      (child) =>
-        unused.has(child) && child.key === remembered.key && child.value === remembered.value,
-    );
-    const replacement =
-      exact ?? current.find((child) => unused.has(child) && child.key === remembered.key);
-    if (replacement === undefined) return [];
-    unused.delete(replacement);
-    return [replacement];
+  const currentIndexes = indexCurrentChildren(current);
+  const matchedIndexes = (xmlChildOrder.get(node) ?? []).flatMap((remembered) => {
+    const indexes = currentIndexes.get(remembered.key)?.get(remembered.value);
+    if (indexes === undefined || indexes.cursor >= indexes.values.length) return [];
+    const index = indexes.values[indexes.cursor];
+    indexes.cursor += 1;
+    return [index];
   });
-
-  for (const child of current) {
-    if (!unused.has(child)) continue;
-    const currentIndex = current.indexOf(child);
-    const following = current
-      .slice(currentIndex + 1)
-      .find((candidate) => ordered.includes(candidate));
-    if (following === undefined) ordered.push(child);
-    else ordered.splice(ordered.indexOf(following), 0, child);
-    unused.delete(child);
+  const matched = new Set(matchedIndexes);
+  const unmatchedBefore = new Map<number | undefined, FlattenedChild[]>();
+  let followingMatchedIndex: number | undefined;
+  for (let index = current.length - 1; index >= 0; index -= 1) {
+    if (matched.has(index)) {
+      followingMatchedIndex = index;
+      continue;
+    }
+    const bucket = unmatchedBefore.get(followingMatchedIndex) ?? [];
+    bucket.unshift(current[index]);
+    unmatchedBefore.set(followingMatchedIndex, bucket);
   }
+  const ordered = matchedIndexes.flatMap((index) => [
+    ...(unmatchedBefore.get(index) ?? []),
+    current[index],
+  ]);
+  ordered.push(...(unmatchedBefore.get(undefined) ?? []));
 
-  return ordered
-    .map(({ key, value }) => {
-      if (key === "#text") return { "#text": value };
-      const children = isXmlNode(value)
-        ? toOrderedChildren(value)
-        : value === "" || value === undefined || value === null
-          ? []
-          : [{ "#text": value }];
-      const entry: XmlNode = { [key]: children };
-      if (isXmlNode(value)) {
-        const attributes = Object.fromEntries(
-          Object.entries(value).filter(([attributeKey]) => attributeKey.startsWith("@_")),
-        );
-        if (Object.keys(attributes).length > 0) entry[":@"] = attributes;
-      }
-      return entry;
-    })
-    .filter((entry) => !root || !("?xml" in entry));
+  return ordered.map(({ key, value }) => {
+    if (key === "#text") return { "#text": value };
+    const children = isXmlNode(value)
+      ? toOrderedChildren(value)
+      : value === "" || value === undefined || value === null
+        ? []
+        : [{ "#text": value }];
+    const entry: XmlNode = { [key]: children };
+    if (isXmlNode(value)) {
+      const attributes = Object.fromEntries(
+        Object.entries(value).filter(([attributeKey]) => attributeKey.startsWith("@_")),
+      );
+      if (Object.keys(attributes).length > 0) entry[":@"] = attributes;
+    }
+    return entry;
+  });
 }
 
 interface FlattenedChild {
   readonly key: string;
   readonly value: unknown;
+}
+
+interface CurrentChildIndexes {
+  readonly values: number[];
+  cursor: number;
+}
+
+function indexCurrentChildren(
+  children: readonly FlattenedChild[],
+): Map<string, Map<unknown, CurrentChildIndexes>> {
+  const indexed = new Map<string, Map<unknown, CurrentChildIndexes>>();
+  children.forEach((child, index) => {
+    const byValue = indexed.get(child.key) ?? new Map<unknown, CurrentChildIndexes>();
+    indexed.set(child.key, byValue);
+    const indexes = byValue.get(child.value) ?? { values: [], cursor: 0 };
+    indexes.values.push(index);
+    byValue.set(child.value, indexes);
+  });
+  return indexed;
 }
 
 function flattenChildren(node: XmlNode): FlattenedChild[] {

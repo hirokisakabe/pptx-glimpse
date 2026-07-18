@@ -638,6 +638,20 @@ describe("writePptx - from-scratch builder", () => {
       "image",
       "shape",
     ]);
+
+    const persisted = readPptx(output);
+    const firstShapeHandle = persisted.slides[0]?.shapes[0]?.handle;
+    if (firstShapeHandle === undefined) throw new Error("first shape handle should exist");
+    const deletedOutput = writePptx(deleteShape(persisted, firstShapeHandle));
+    const deletedSlideXml = decoder.decode(getEntry(deletedOutput, "ppt/slides/slide1.xml"));
+    const deletedSpTreeXml = deletedSlideXml.slice(
+      deletedSlideXml.indexOf("<p:spTree"),
+      deletedSlideXml.indexOf("</p:spTree>"),
+    );
+    expect(deletedSpTreeXml.match(/<p:(?:sp|pic|graphicFrame)(?=[ >])/g)).toEqual([
+      "<p:pic",
+      "<p:sp",
+    ]);
   });
 
   it("preserves shape, picture, chart, and table sibling order after write and reread", () => {
