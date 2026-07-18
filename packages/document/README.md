@@ -42,6 +42,9 @@ The stable entry point includes:
 
 Parser helpers, raw replacement internals, writer dirty-scope implementation details, and OOXML implementation modules outside the package root are internal and may change without notice.
 
+For a stage-by-stage view of reader, computed view, from-scratch writer, existing edit, and
+round-trip preservation support, see the [Document Feature Support matrix](docs/feature-support.md).
+
 ## Read and Write Round Trip
 
 ```ts
