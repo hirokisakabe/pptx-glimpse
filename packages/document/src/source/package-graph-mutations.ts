@@ -1,17 +1,17 @@
 /**
  * Pure mutation helpers for PackageGraph.
  *
- * Adding or removing a single package part must update four lists consistently
- * at once: parts / contentTypes.overrides / relationships / rawParts. These
- * helpers own that invariant so each editing operation does not have to
- * re-implement it by hand. All functions return a new PackageGraph and never
- * mutate their input. The media list is out of scope: none of these helpers
- * touch `graph.media`.
+ * Adding or removing a single package part must update its related PackageGraph
+ * lists consistently. These helpers own that invariant so each editing operation
+ * does not have to re-implement it by hand. All functions return a new PackageGraph
+ * and never mutate their input. Media registration deliberately uses `graph.media`
+ * instead of `rawParts`, matching the writer's source-of-truth invariant.
  */
 
 import { asPartPath, asRelationshipId, type PartPath, type RelationshipId } from "./handles.js";
 import type {
   ContentTypeOverride,
+  MediaPart,
   PackageGraph,
   PartRelationships,
   Relationship,
@@ -27,6 +27,14 @@ interface AddPackagePartInput {
   readonly bytes: Uint8Array;
   /** Relationships owned by the new part. When present, the `.rels` part is registered too. */
   readonly relationships?: PartRelationships;
+}
+
+interface AddMediaPartRelationshipInput {
+  readonly ownerPartPath: PartPath;
+  readonly media: MediaPart;
+  readonly extension: string;
+  readonly relationship: Relationship;
+  readonly contentTypeDefaultConflictError: (existingContentType: string) => Error;
 }
 
 /** Adds one part (and optionally its `.rels` part) to all four PackageGraph lists. */
@@ -68,6 +76,62 @@ export function addPackagePart(graph: PackageGraph, input: AddPackagePartInput):
         bytes: input.bytes,
       },
     ],
+  };
+}
+
+/**
+ * Registers a media part and its relationship from an existing owner part.
+ *
+ * The media payload is added only to `media`, never to `rawParts`. The owner's
+ * relationship group and `.rels` package part are created when absent, including
+ * a content type override when the package has no standard `rels` default.
+ */
+export function addMediaPartRelationship(
+  graph: PackageGraph,
+  input: AddMediaPartRelationshipInput,
+): PackageGraph {
+  const relationshipPart = asPartPath(relationshipsPartPath(input.ownerPartPath));
+  const hasRelationshipGroup = graph.relationships.some(
+    (candidate) => candidate.sourcePartPath === input.ownerPartPath,
+  );
+  const hasRelationshipPart = graph.parts.some((part) => part.partPath === relationshipPart);
+
+  return {
+    ...graph,
+    parts: [
+      ...graph.parts,
+      { partPath: input.media.partPath, contentType: input.media.contentType },
+      ...(hasRelationshipPart
+        ? []
+        : [{ partPath: relationshipPart, contentType: RELS_CONTENT_TYPE }]),
+    ],
+    contentTypes: {
+      ...graph.contentTypes,
+      defaults: withContentTypeDefault(
+        graph,
+        input.extension,
+        input.media.contentType,
+        input.contentTypeDefaultConflictError,
+      ),
+      overrides: [
+        ...graph.contentTypes.overrides,
+        ...relationshipPartOverrides(graph, hasRelationshipPart ? [] : [relationshipPart]),
+      ],
+    },
+    relationships: hasRelationshipGroup
+      ? graph.relationships.map((candidate) =>
+          candidate.sourcePartPath === input.ownerPartPath
+            ? {
+                ...candidate,
+                relationships: [...candidate.relationships, input.relationship],
+              }
+            : candidate,
+        )
+      : [
+          ...graph.relationships,
+          { sourcePartPath: input.ownerPartPath, relationships: [input.relationship] },
+        ],
+    media: [...graph.media, input.media],
   };
 }
 
@@ -221,6 +285,20 @@ function relationshipPartOverrides(
   return partPaths
     .filter((partPath) => !existingOverrides.has(partPath))
     .map((partName) => ({ partName, contentType: RELS_CONTENT_TYPE }));
+}
+
+function withContentTypeDefault(
+  graph: PackageGraph,
+  extension: string,
+  contentType: string,
+  conflictError: (existingContentType: string) => Error,
+): PackageGraph["contentTypes"]["defaults"] {
+  const existing = graph.contentTypes.defaults.find((entry) => entry.extension === extension);
+  if (existing === undefined) {
+    return [...graph.contentTypes.defaults, { extension, contentType }];
+  }
+  if (existing.contentType === contentType) return graph.contentTypes.defaults;
+  throw conflictError(existing.contentType);
 }
 
 function escapeRegExp(value: string): string {
