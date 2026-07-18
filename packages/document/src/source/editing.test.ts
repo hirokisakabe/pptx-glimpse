@@ -1297,7 +1297,13 @@ describe("editing shape operations", () => {
         height: asEmu(40),
         start: { shapeHandle: requireHandle(start.handle), connectionSiteIndex: 1 },
         end: { shapeHandle: requireHandle(end.handle), connectionSiteIndex: 3 },
-        outline: { tailEnd: { type: "triangle", width: "med", length: "lg" } },
+        outline: {
+          width: asEmu(12700),
+          fill: { kind: "solid", color: { kind: "srgb", hex: "00AAFF" } },
+          dash: "lgDashDotDot",
+          headEnd: { type: "oval", width: "sm", length: "sm" },
+          tailEnd: { type: "triangle", width: "med", length: "lg" },
+        },
       }),
     );
     const connector = edited.slides[0].shapes.at(-1);
@@ -1311,6 +1317,13 @@ describe("editing shape operations", () => {
         end: { shapeId: "30", connectionSiteIndex: 3 },
       },
       geometry: { preset: "bentConnector3" },
+      outline: {
+        width: 12700,
+        fill: { kind: "solid", color: { kind: "srgb", hex: "00AAFF" } },
+        dashStyle: "lgDashDotDot",
+        headEnd: { type: "oval", width: "sm", length: "sm" },
+        tailEnd: { type: "triangle", width: "med", length: "lg" },
+      },
     });
     expect(edited.edits?.at(-1)).toMatchObject({
       kind: "addConnector",
@@ -1320,6 +1333,51 @@ describe("editing shape operations", () => {
       endShapeId: "30",
     });
     expect(edited.edits?.at(-1)).toHaveProperty("xml", expect.stringContaining("bentConnector3"));
+    expect(edited.edits?.at(-1)).toHaveProperty("xml", expect.stringContaining('<a:ln w="12700">'));
+    expect(edited.edits?.at(-1)).toHaveProperty(
+      "xml",
+      expect.stringContaining('<a:prstDash val="lgDashDotDot"'),
+    );
+  });
+
+  it("rejects invalid connector outline styles", () => {
+    const source = buildSourceModel();
+    const slideHandle = requireHandle(source.slides[0].handle);
+    const baseInput = {
+      preset: "straightConnector1" as const,
+      offsetX: asEmu(10),
+      offsetY: asEmu(20),
+      width: asEmu(30),
+      height: asEmu(40),
+    };
+
+    expect(() =>
+      addConnector(source, slideHandle, {
+        ...baseInput,
+        outline: { width: asEmu(0) },
+      }),
+    ).toThrow("addConnector: outline.width must be a finite positive EMU value");
+    expect(() =>
+      addConnector(source, slideHandle, {
+        ...baseInput,
+        outline: {
+          // @ts-expect-error Runtime validation rejects unsupported dash styles from JS callers.
+          dash: "invalid",
+        },
+      }),
+    ).toThrow("addConnector: outline.dash is not supported");
+    expect(() =>
+      addConnector(source, slideHandle, {
+        ...baseInput,
+        outline: {
+          fill: {
+            kind: "solid",
+            // @ts-expect-error Runtime validation rejects malformed colors from JS callers.
+            color: { kind: "srgb", hex: "xyz" },
+          },
+        },
+      }),
+    ).toThrow("addConnector: outline.fill.color must be an srgb 6-digit hex color");
   });
 
   it("adds a free connector without native connection sites", () => {
