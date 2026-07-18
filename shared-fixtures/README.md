@@ -1,6 +1,6 @@
 # shared-fixtures
 
-実アプリケーション（PowerPoint / Google Slides / md-pptx など）が生成した実 PPTX ファイルを格納するディレクトリ。
+実アプリケーション（PowerPoint / Google Slides / md-pptx など）が生成した実 PPTX ファイルと、公開 authoring API の固定 integration baseline を格納するディレクトリ。
 
 ## 用途
 
@@ -24,13 +24,29 @@
 
 ## ファイル一覧
 
-| ファイル                     | 作成元        | スライド数 | 主な内容                                                 |
-| ---------------------------- | ------------- | ---------- | -------------------------------------------------------- |
-| `real-basic-theme.pptx`      | Google Slides | 2          | タイトル・コンテンツ・テーブル・画像・テーマフォント参照 |
-| `real-product-page.pptx`     | 手作成        | 1          | 角丸矩形・楕円・テキストボックス                         |
-| `real-financial-report.pptx` | 手作成        | 4          | チャート（棒グラフ・円グラフ等）・テキスト               |
-| `sample.pptx`                | md-pptx 生成  | 6          | 日本語テキスト・箇条書き・テキスト装飾                   |
-| `sample-issue-387.pptx`      | 手作成        | 1          | インラインテキスト装飾（太字・斜体・太字斜体）           |
+| ファイル                     | 作成元        | スライド数 | 主な内容                                                   |
+| ---------------------------- | ------------- | ---------- | ---------------------------------------------------------- |
+| `real-basic-theme.pptx`      | Google Slides | 2          | タイトル・コンテンツ・テーブル・画像・テーマフォント参照   |
+| `real-product-page.pptx`     | 手作成        | 1          | 角丸矩形・楕円・テキストボックス                           |
+| `real-financial-report.pptx` | 手作成        | 4          | チャート（棒グラフ・円グラフ等）・テキスト                 |
+| `sample.pptx`                | md-pptx 生成  | 6          | 日本語テキスト・箇条書き・テキスト装飾                     |
+| `sample-issue-387.pptx`      | 手作成        | 1          | インラインテキスト装飾（太字・斜体・太字斜体）             |
+| `authoring-integration.pptx` | document API  | 1          | from-scratch authoring API の package/render 統合 contract |
+
+## Authoring integration fixture の再生成
+
+`authoring-integration.pptx` は `@pptx-glimpse/document` の package root から公開された
+`createPptx` と authoring API だけで生成する。次のコマンドで再生成できる。
+
+```bash
+npm run fixture:authoring
+npm run test -- e2e/authoring-integration.test.ts
+```
+
+baseline は、公開 authoring contract または生成される汎用 PPTX / OOXML package structure を
+意図的に変更した場合だけ更新する。ZIP metadata や byte-for-byte equality は baseline contract に
+含めない。更新時は integration test で package relationship、content type、part path、ID、reader / writer
+round-trip、core document-path renderability が引き続き成立することを確認する。
 
 ## ファイルを追加する場合
 
