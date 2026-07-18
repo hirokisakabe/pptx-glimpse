@@ -6,7 +6,7 @@ import { nextDrawingOrderingSlot, nextDrawingShapeId } from "./drawing-authoring
 import { asPartPath, asRawSidecarId, asSourceNodeId } from "./handles.js";
 import { addPicture } from "./picture-authoring.js";
 import type { PptxSourceModel, PptxSourceModelEdit } from "./pptx-source-model.js";
-import { addConnector, addShape, addSlideNumber, addTextBox } from "./shape-editing.js";
+import { addConnector, addShape, addSlideNumber, addTextBox } from "./shape-authoring.js";
 import type { SourceGroup, SourceShape } from "./shapes.js";
 import { addTable } from "./table-authoring.js";
 import { asEmu } from "./units.js";
