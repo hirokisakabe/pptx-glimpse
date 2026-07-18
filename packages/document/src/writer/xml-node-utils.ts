@@ -1,5 +1,6 @@
 import { getChild, localName, type XmlNode } from "../reader/xml.js";
 import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
+import { reconcileXmlChildOrder } from "./xml-serialization.js";
 
 export function namespacedChildKey(node: XmlNode, fallback: string, local: string): string {
   for (const key of Object.keys(node)) {
@@ -82,8 +83,10 @@ export function xmlNodeIsEmpty(node: XmlNode): boolean {
 }
 
 export function replaceNodeEntries(node: XmlNode, entries: readonly [string, unknown][]): void {
+  const previousEntries = Object.entries(node);
   for (const key of Object.keys(node)) delete node[key];
   for (const [key, value] of entries) node[key] = value;
+  reconcileXmlChildOrder(node, previousEntries);
 }
 
 export function cloneXmlNode(node: XmlNode): XmlNode {
