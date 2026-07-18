@@ -261,6 +261,8 @@ interface ConnectorXmlParams {
   readonly offsetY: Emu;
   readonly width: Emu;
   readonly height: Emu;
+  readonly flipHorizontal?: boolean;
+  readonly flipVertical?: boolean;
   readonly startShapeId?: string;
   readonly startConnectionSiteIndex?: number;
   readonly endShapeId?: string;
@@ -808,6 +810,8 @@ export function buildConnectorXml(params: ConnectorXmlParams): string {
       },
       "p:spPr": {
         "a:xfrm": {
+          ...(params.flipHorizontal ? { "@_flipH": "1" } : {}),
+          ...(params.flipVertical ? { "@_flipV": "1" } : {}),
           "a:off": {
             "@_x": String(params.offsetX),
             "@_y": String(params.offsetY),

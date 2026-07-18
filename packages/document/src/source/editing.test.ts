@@ -1295,6 +1295,8 @@ describe("editing shape operations", () => {
         offsetY: asEmu(20),
         width: asEmu(30),
         height: asEmu(40),
+        flipHorizontal: true,
+        flipVertical: true,
         start: { shapeHandle: requireHandle(start.handle), connectionSiteIndex: 1 },
         end: { shapeHandle: requireHandle(end.handle), connectionSiteIndex: 3 },
         outline: {
@@ -1317,6 +1319,7 @@ describe("editing shape operations", () => {
         end: { shapeId: "30", connectionSiteIndex: 3 },
       },
       geometry: { preset: "bentConnector3" },
+      transform: { flipHorizontal: true, flipVertical: true },
       outline: {
         width: 12700,
         fill: { kind: "solid", color: { kind: "srgb", hex: "00AAFF" } },
@@ -1333,11 +1336,37 @@ describe("editing shape operations", () => {
       endShapeId: "30",
     });
     expect(edited.edits?.at(-1)).toHaveProperty("xml", expect.stringContaining("bentConnector3"));
+    expect(edited.edits?.at(-1)).toHaveProperty(
+      "xml",
+      expect.stringContaining('<a:xfrm flipH="1" flipV="1">'),
+    );
     expect(edited.edits?.at(-1)).toHaveProperty("xml", expect.stringContaining('<a:ln w="12700">'));
     expect(edited.edits?.at(-1)).toHaveProperty(
       "xml",
       expect.stringContaining('<a:prstDash val="lgDashDotDot"'),
     );
+  });
+
+  it.each([
+    ["horizontal", { flipHorizontal: true }, 'flipH="1"', 'flipV="1"'],
+    ["vertical", { flipVertical: true }, 'flipV="1"', 'flipH="1"'],
+  ] as const)("adds a connector with only the %s flip", (_name, flip, present, absent) => {
+    const source = buildSourceModel();
+    const edited = addConnector(source, requireHandle(source.slides[0].handle), {
+      preset: "straightConnector1",
+      offsetX: asEmu(10),
+      offsetY: asEmu(20),
+      width: asEmu(30),
+      height: asEmu(40),
+      ...flip,
+    });
+    const connector = connectorByName(edited, "Connector 31");
+    const edit = edited.edits?.at(-1);
+    if (edit?.kind !== "addConnector") throw new Error("addConnector edit is missing");
+
+    expect(connector.transform).toMatchObject(flip);
+    expect(edit.xml).toContain(present);
+    expect(edit.xml).not.toContain(absent);
   });
 
   it("rejects invalid connector outline styles", () => {
@@ -1378,6 +1407,13 @@ describe("editing shape operations", () => {
         },
       }),
     ).toThrow("addConnector: outline.fill.color must be an srgb 6-digit hex color");
+    expect(() =>
+      addConnector(source, slideHandle, {
+        ...baseInput,
+        // @ts-expect-error Runtime validation rejects non-boolean flip values from JS callers.
+        flipHorizontal: "true",
+      }),
+    ).toThrow("addConnector: flipHorizontal must be a boolean value");
   });
 
   it("adds a free connector without native connection sites", () => {
