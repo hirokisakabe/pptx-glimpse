@@ -230,6 +230,8 @@ export interface AddConnectorInput extends UpdateShapeTransformInput {
   readonly preset: ConnectorPresetGeometry;
   readonly start?: AddConnectorConnectionEndpointInput;
   readonly end?: AddConnectorConnectionEndpointInput;
+  readonly flipHorizontal?: boolean;
+  readonly flipVertical?: boolean;
   readonly name?: string;
   readonly outline?: AddConnectorOutlineInput;
 }
@@ -614,6 +616,8 @@ export function addConnector(
     offsetY: input.offsetY,
     width: input.width,
     height: input.height,
+    ...(input.flipHorizontal !== undefined ? { flipHorizontal: input.flipHorizontal } : {}),
+    ...(input.flipVertical !== undefined ? { flipVertical: input.flipVertical } : {}),
     ...(startShapeId !== undefined && input.start !== undefined
       ? {
           startShapeId,
@@ -1432,6 +1436,8 @@ function assertConnectorInput(input: AddConnectorInput): void {
   if (input.start !== undefined)
     assertConnectionSiteIndex(input.start.connectionSiteIndex, "start");
   if (input.end !== undefined) assertConnectionSiteIndex(input.end.connectionSiteIndex, "end");
+  assertBooleanOrUndefined(input.flipHorizontal, "addConnector", "flipHorizontal");
+  assertBooleanOrUndefined(input.flipVertical, "addConnector", "flipVertical");
   if (input.name !== undefined && input.name.trim() === "") {
     throw new Error("addConnector: name must be a non-empty string when provided");
   }
