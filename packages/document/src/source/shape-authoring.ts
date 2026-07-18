@@ -34,7 +34,6 @@ import {
 import { asSourceNodeId, type RelationshipId } from "./handles.js";
 import type {
   ConnectorPresetGeometry,
-  Emu,
   PartPath,
   PptxSourceModel,
   PptxSourceModelAddConnectorEdit,
@@ -47,6 +46,7 @@ import type {
   SourceShapeNode,
 } from "./index.js";
 import { nextNumberedName, nextRelationshipId } from "./package-graph-mutations.js";
+import type { UpdateShapeTransformInput } from "./shape-editing.js";
 import type {
   AuthoringColorTransformInput,
   ShapeColorInput,
@@ -173,14 +173,7 @@ const AUTO_NUMBER_SCHEMES = new Set([
 const HYPERLINK_REL_TYPE =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink";
 
-interface AuthoringTransformInput {
-  readonly offsetX: Emu;
-  readonly offsetY: Emu;
-  readonly width: Emu;
-  readonly height: Emu;
-}
-
-export interface AddTextBoxInput extends AuthoringTransformInput {
+export interface AddTextBoxInput extends UpdateShapeTransformInput {
   readonly text?: string;
   readonly paragraphs?: readonly AddTextBoxParagraphInput[];
   readonly body?: AddTextBoxBodyPropertiesInput;
@@ -188,7 +181,7 @@ export interface AddTextBoxInput extends AuthoringTransformInput {
   readonly name?: string;
 }
 
-export interface AddShapeInput extends AuthoringTransformInput {
+export interface AddShapeInput extends UpdateShapeTransformInput {
   readonly geometry: AddShapeGeometryInput;
   readonly fill?: AddShapeFillInput;
   readonly outline?: AddShapeOutlineInput;
@@ -202,7 +195,7 @@ export interface AddShapeInput extends AuthoringTransformInput {
   readonly name?: string;
 }
 
-export interface AddSlideNumberInput extends AuthoringTransformInput {
+export interface AddSlideNumberInput extends UpdateShapeTransformInput {
   readonly properties?: AddTextBoxRunPropertiesInput;
   readonly body?: AddTextBoxBodyPropertiesInput;
   readonly align?: "left" | "center" | "right";
@@ -217,7 +210,7 @@ export interface AddConnectorConnectionEndpointInput {
 
 export type AddConnectorOutlineInput = AddShapeOutlineInput;
 
-export interface AddConnectorInput extends AuthoringTransformInput {
+export interface AddConnectorInput extends UpdateShapeTransformInput {
   readonly preset: ConnectorPresetGeometry;
   readonly start?: AddConnectorConnectionEndpointInput;
   readonly end?: AddConnectorConnectionEndpointInput;
