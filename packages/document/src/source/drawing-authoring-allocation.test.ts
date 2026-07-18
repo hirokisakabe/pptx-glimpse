@@ -6,7 +6,7 @@ import { nextDrawingOrderingSlot, nextDrawingShapeId } from "./drawing-authoring
 import { asPartPath, asRawSidecarId, asSourceNodeId } from "./handles.js";
 import { addPicture } from "./picture-authoring.js";
 import type { PptxSourceModel, PptxSourceModelEdit } from "./pptx-source-model.js";
-import { addShape } from "./shape-editing.js";
+import { addConnector, addShape, addSlideNumber, addTextBox } from "./shape-editing.js";
 import type { SourceGroup, SourceShape } from "./shapes.js";
 import { addTable } from "./table-authoring.js";
 import { asEmu } from "./units.js";
@@ -57,12 +57,26 @@ describe("drawing authoring allocation", () => {
   it("keeps finalized XML and typed nodes on the same edit-time id and ordering", () => {
     let source = createPptx();
     const slideHandle = source.slides[0].handle!;
+    source = addTextBox(source, slideHandle, {
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(1000),
+      height: asEmu(1000),
+      text: "A",
+    });
     source = addShape(source, slideHandle, {
       geometry: { kind: "preset", preset: "rect" },
       offsetX: asEmu(0),
       offsetY: asEmu(0),
       width: asEmu(1000),
       height: asEmu(1000),
+    });
+    source = addConnector(source, slideHandle, {
+      preset: "straightConnector1",
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(1000),
+      height: asEmu(1),
     });
     source = addPicture(source, slideHandle, {
       bytes: PNG_BYTES,
@@ -90,17 +104,33 @@ describe("drawing authoring allocation", () => {
 
     const nodes = source.slides[0].shapes;
     const edits = (source.edits ?? []).filter((edit) =>
-      ["addShape", "addPicture", "addChart", "addTable"].includes(edit.kind),
+      ["addTextBox", "addShape", "addConnector", "addPicture", "addChart", "addTable"].includes(
+        edit.kind,
+      ),
     );
 
-    expect(nodes.map((node) => node.nodeId)).toEqual(["1", "2", "3", "4"]);
-    expect(nodes.map((node) => node.handle?.orderingSlot)).toEqual([0, 1, 2, 3]);
+    expect(nodes.map((node) => node.nodeId)).toEqual(["1", "2", "3", "4", "5", "6"]);
+    expect(nodes.map((node) => node.handle?.orderingSlot)).toEqual([0, 1, 2, 3, 4, 5]);
     expect(edits).toHaveLength(nodes.length);
     edits.forEach((edit, index) => {
       if (!("shapeId" in edit) || !("xml" in edit)) throw new Error("expected drawing add edit");
       expect(edit.shapeId).toBe(nodes[index].nodeId);
       expect(edit.xml).toContain(`id="${edit.shapeId}"`);
     });
+
+    const layoutHandle = source.slideLayouts[0].handle!;
+    source = addSlideNumber(source, layoutHandle, {
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(1000),
+      height: asEmu(1000),
+    });
+    const slideNumber = source.slideLayouts[0].shapes.at(-1);
+    const slideNumberEdit = source.edits?.at(-1);
+    if (slideNumberEdit?.kind !== "addTextBox") throw new Error("expected slide number edit");
+    expect(slideNumber?.nodeId).toBe(slideNumberEdit.shapeId);
+    expect(slideNumber?.handle?.orderingSlot).toBe(0);
+    expect(slideNumberEdit.xml).toContain(`id="${slideNumberEdit.shapeId}"`);
   });
 });
 
