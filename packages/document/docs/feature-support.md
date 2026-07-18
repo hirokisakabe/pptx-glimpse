@@ -22,6 +22,10 @@ from-scratch writer and is therefore represented in the â€œfrom-scratch writerâ€
 opaque preservation only; `S` means supported edits or typed authoring are also written and
 reread in tests. See [Read and Write Round Trip](../README.md#read-and-write-round-trip).
 
+Consecutive authoring can be coordinated through the public `createPptxAuthoringSession` API.
+Its target scopes delegate to the same immutable authoring functions documented below and return
+the `SourceHandle` of each newly added drawing or slide.
+
 ## Matrix
 
 | PowerPoint element      | Reader | Computed view | From-scratch writer | Existing edit | Round-trip preservation |

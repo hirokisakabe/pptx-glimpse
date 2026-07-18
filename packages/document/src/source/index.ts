@@ -2,6 +2,8 @@
  * Barrel re-export of type PptxSourceModel source model.
  */
 
+export type { PptxAuthoringTarget } from "./authoring-session.js";
+export { createPptxAuthoringSession, PptxAuthoringSession } from "./authoring-session.js";
 export type { Diagnostic, DiagnosticSeverity } from "./diagnostics.js";
 export type {
   AddChartAreaStyleInput,

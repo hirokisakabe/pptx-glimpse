@@ -36,6 +36,7 @@ The stable entry point includes:
 - `writePptx(source)` for structural round-trip writing
 - Text editing helpers such as `replaceTextRunPlainText(source, handle, text)` and related source handle lookup types exported from the root entry point
 - From-scratch authoring helpers such as `addTextBox(source, targetHandle, input)` and `addPicture(source, targetHandle, input)`; slide, layout, and master handles are supported
+- `createPptxAuthoringSession(source)` for applying consecutive authoring operations through slide/layout/master target scopes while retaining the latest source and returning new drawing/slide handles
 - Master/layout authoring through `createPptx({ slideMaster, slideLayout })` and `addSlideNumber(source, masterOrLayoutHandle, input)`
 - Slide topology helpers such as `addEmptySlideFromLayout(source, { layoutPartPath })`, `duplicateSlide(source, slideHandle)`, `moveSlide(source, slideHandle, { toIndex })`, and `deleteSlide(source, slideHandle)`
 - Source model, computed view, and unit types needed to consume those APIs
@@ -85,6 +86,36 @@ const edited = addTextBox(source, firstSlide.handle, {
 });
 
 await writeFile("from-scratch.pptx", writePptx(edited));
+```
+
+For consecutive operations, a target-scoped session retains the latest immutable source and
+returns each newly created handle without requiring collection searches:
+
+```ts
+import { asEmu, createPptx, createPptxAuthoringSession } from "@pptx-glimpse/document";
+
+const session = createPptxAuthoringSession(createPptx());
+const slide = session.source.slides[0];
+if (slide?.handle === undefined) throw new Error("Missing slide");
+
+const target = session.target(slide.handle);
+const shapeHandle = target.addShape({
+  geometry: { kind: "preset", preset: "rect" },
+  offsetX: asEmu(0),
+  offsetY: asEmu(0),
+  width: asEmu(914400),
+  height: asEmu(914400),
+});
+target.addConnector({
+  preset: "straightConnector1",
+  offsetX: asEmu(914400),
+  offsetY: asEmu(457200),
+  width: asEmu(914400),
+  height: asEmu(1),
+  start: { shapeHandle, connectionSiteIndex: 0 },
+});
+
+const authored = session.source;
 ```
 
 ### Alpha colors and gradients
