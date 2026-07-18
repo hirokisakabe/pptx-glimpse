@@ -42,6 +42,8 @@ The source code is split across pnpm workspaces (`packages/*`). The root package
 
 Before working on issues related to `@pptx-glimpse/document`, PptxSourceModel, the writer, editor-core, or pom integration, read the module-level comments in `packages/document/src/source/pptx-source-model.ts`, `packages/document/src/computed/pptx-computed-view.ts`, `packages/document/src/writer/write-pptx.ts`, and `packages/core/src/pptx-computed-view-renderer-adapter.ts` to confirm the current responsibility boundaries and dependency direction. Treat `document` as a lower-level foundation that does not know about `core`, `editor-core`, renderer, or pom.
 
+When adding or changing a `@pptx-glimpse/document` reader, computed view, from-scratch writer, existing-element edit, or round-trip preservation capability, update `packages/document/docs/feature-support.md` in the same change. Base every `S` entry on a public root API and an implementation test; use `△`, `P`, or `—` when support is constrained, preservation-only, or unverified, and keep the linked constraints/evidence current.
+
 `packages/document/src/` — The `@pptx-glimpse/document` package. This lower-level foundation provides the PptxSourceModel / OOXML document layer and is used as the default reader / computed view for the public conversion path. Import the reader, computed view, writer, and minimal editing operations from the root entry point.
 
 `packages/core/src/` — Implementation of the public `pptx-glimpse` package (document path orchestration + public API)
