@@ -225,6 +225,7 @@ export interface AddSlideNumberInput extends UpdateShapeTransformInput {
 
 export interface AddConnectorConnectionEndpointInput {
   readonly shapeHandle: SourceHandle;
+  /** Unsigned index into the target shape's OOXML connection-site table. */
   readonly connectionSiteIndex: number;
 }
 
@@ -1506,9 +1507,9 @@ function assertShapeEffects(effects: unknown): void {
 }
 
 function assertConnectionSiteIndex(value: number, fieldName: "start" | "end"): void {
-  if (!Number.isInteger(value) || value < 0) {
+  if (!Number.isInteger(value) || value < 0 || value > 0xffffffff) {
     throw new Error(
-      `addConnector: ${fieldName}.connectionSiteIndex must be a non-negative integer`,
+      `addConnector: ${fieldName}.connectionSiteIndex must be an unsigned 32-bit integer`,
     );
   }
 }
@@ -1600,10 +1601,15 @@ function requireConnectorTargetShape(
   handle: SourceHandle,
   endpointName: "start" | "end",
 ): SourceShape & { readonly nodeId: SourceNodeId } {
+  if (handle.partPath !== target.partPath) {
+    throw new Error(
+      `addConnector: ${endpointName} target shape belongs to a different drawing part`,
+    );
+  }
   const shape = target.shapes.find((candidate) => sourceHandlesEqual(candidate.handle, handle));
   if (shape === undefined) {
     throw new Error(
-      `addConnector: ${endpointName} shape handle was not found on the target drawing part`,
+      `addConnector: ${endpointName} shape handle was not found in the target drawing part`,
     );
   }
   if (shape.kind !== "shape") {
