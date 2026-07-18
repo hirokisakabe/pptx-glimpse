@@ -13,8 +13,13 @@ import type { SourceHandle } from "./handles.js";
 import type { AddPictureInput } from "./picture-authoring.js";
 import { addPicture } from "./picture-authoring.js";
 import type { PptxSourceModel } from "./pptx-source-model.js";
-import type { AddConnectorInput, AddShapeInput, AddTextBoxInput } from "./shape-editing.js";
-import { addConnector, addShape, addTextBox } from "./shape-editing.js";
+import type {
+  AddConnectorInput,
+  AddShapeInput,
+  AddSlideNumberInput,
+  AddTextBoxInput,
+} from "./shape-editing.js";
+import { addConnector, addShape, addSlideNumber, addTextBox } from "./shape-editing.js";
 import type { SetSlideBackgroundInput } from "./slide-background-authoring.js";
 import { setSlideBackground } from "./slide-background-authoring.js";
 import type { AddEmptySlideFromLayoutInput } from "./slide-topology.js";
@@ -25,6 +30,7 @@ import { addTable } from "./table-authoring.js";
 /** Consecutive authoring operations bound to one slide, layout, or master handle. */
 export interface PptxAuthoringTarget {
   addTextBox(input: AddTextBoxInput): SourceHandle;
+  addSlideNumber(input: AddSlideNumberInput): SourceHandle;
   addShape(input: AddShapeInput): SourceHandle;
   addConnector(input: AddConnectorInput): SourceHandle;
   addPicture(input: AddPictureInput): SourceHandle;
@@ -35,6 +41,7 @@ export interface PptxAuthoringTarget {
 
 type DrawingOperationInput =
   | AddTextBoxInput
+  | AddSlideNumberInput
   | AddShapeInput
   | AddConnectorInput
   | AddPictureInput
@@ -64,6 +71,8 @@ export class PptxAuthoringSession {
   target(targetHandle: SourceHandle): PptxAuthoringTarget {
     return {
       addTextBox: (input) => this.#addDrawing("addTextBox", targetHandle, input, addTextBox),
+      addSlideNumber: (input) =>
+        this.#addDrawing("addSlideNumber", targetHandle, input, addSlideNumber),
       addShape: (input) => this.#addDrawing("addShape", targetHandle, input, addShape),
       addConnector: (input) => this.#addDrawing("addConnector", targetHandle, input, addConnector),
       addPicture: (input) => this.#addDrawing("addPicture", targetHandle, input, addPicture),

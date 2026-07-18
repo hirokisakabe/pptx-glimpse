@@ -8,7 +8,7 @@ import { asEmu } from "./units.js";
 const PNG_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 describe("PptxAuthoringSession", () => {
-  it("applies every drawing primitive consecutively to one target and returns its handles", () => {
+  it("applies drawing primitives consecutively to one target and returns their handles", () => {
     const original = createPptx();
     const slideHandle = requireHandle(original.slides[0]?.handle);
     const session = createPptxAuthoringSession(original);
@@ -104,6 +104,19 @@ describe("PptxAuthoringSession", () => {
       expect(handles?.map((handle) => handle.orderingSlot)).toEqual([0, 1]);
       expect(handles?.every((handle) => handle.partPath === targetHandle.partPath)).toBe(true);
     }
+
+    const layoutSlideNumber = addSlideNumber(session.target(layoutHandle));
+    const masterSlideNumber = addSlideNumber(session.target(masterHandle));
+    expect(layoutSlideNumber.partPath).toBe(layoutHandle.partPath);
+    expect(layoutSlideNumber.orderingSlot).toBe(2);
+    expect(Number(layoutSlideNumber.nodeId)).toBe(
+      Number(handlesByPart.get(layoutHandle.partPath)?.at(-1)?.nodeId) + 1,
+    );
+    expect(masterSlideNumber.partPath).toBe(masterHandle.partPath);
+    expect(masterSlideNumber.orderingSlot).toBe(2);
+    expect(Number(masterSlideNumber.nodeId)).toBe(
+      Number(handlesByPart.get(masterHandle.partPath)?.at(-1)?.nodeId) + 1,
+    );
     expect(secondSlide).toEqual(session.source.slides[1].handle);
 
     session.target(secondSlide).setSlideBackground({
@@ -151,6 +164,15 @@ type Target = ReturnType<ReturnType<typeof createPptxAuthoringSession>["target"]
 function addRect(target: Target) {
   return target.addShape({
     geometry: { kind: "preset", preset: "rect" },
+    offsetX: asEmu(0),
+    offsetY: asEmu(0),
+    width: asEmu(1000),
+    height: asEmu(1000),
+  });
+}
+
+function addSlideNumber(target: Target) {
+  return target.addSlideNumber({
     offsetX: asEmu(0),
     offsetY: asEmu(0),
     width: asEmu(1000),
