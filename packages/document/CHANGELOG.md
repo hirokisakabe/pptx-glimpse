@@ -1,5 +1,11 @@
 # @pptx-glimpse/document
 
+## 0.9.1
+
+### Patch Changes
+
+- 4e00197: writePptx で shape、picture、graphicFrame、および table cell 内の run と line break の追加順を保持する
+
 ## 0.9.0
 
 ### Minor Changes
