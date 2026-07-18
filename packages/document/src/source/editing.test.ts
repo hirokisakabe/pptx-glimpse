@@ -1347,6 +1347,28 @@ describe("editing shape operations", () => {
     );
   });
 
+  it.each([
+    ["horizontal", { flipHorizontal: true }, 'flipH="1"', 'flipV="1"'],
+    ["vertical", { flipVertical: true }, 'flipV="1"', 'flipH="1"'],
+  ] as const)("adds a connector with only the %s flip", (_name, flip, present, absent) => {
+    const source = buildSourceModel();
+    const edited = addConnector(source, requireHandle(source.slides[0].handle), {
+      preset: "straightConnector1",
+      offsetX: asEmu(10),
+      offsetY: asEmu(20),
+      width: asEmu(30),
+      height: asEmu(40),
+      ...flip,
+    });
+    const connector = connectorByName(edited, "Connector 31");
+    const edit = edited.edits?.at(-1);
+    if (edit?.kind !== "addConnector") throw new Error("addConnector edit is missing");
+
+    expect(connector.transform).toMatchObject(flip);
+    expect(edit.xml).toContain(present);
+    expect(edit.xml).not.toContain(absent);
+  });
+
   it("rejects invalid connector outline styles", () => {
     const source = buildSourceModel();
     const slideHandle = requireHandle(source.slides[0].handle);
