@@ -3081,6 +3081,8 @@ describe("writePptx - shape add/delete edits", () => {
       offsetY: asEmu(200),
       width: asEmu(700),
       height: asEmu(800),
+      flipHorizontal: true,
+      flipVertical: true,
       start: {
         shapeHandle: requireHandle(start.handle),
         connectionSiteIndex: 1,
@@ -3110,6 +3112,7 @@ describe("writePptx - shape add/delete edits", () => {
         end: { shapeId: "30", connectionSiteIndex: 3 },
       },
       geometry: { preset: "bentConnector3" },
+      transform: { flipHorizontal: true, flipVertical: true },
       outline: {
         width: 12700,
         fill: { kind: "solid", color: { kind: "srgb", hex: "00AAFF" } },
@@ -3129,6 +3132,7 @@ describe("writePptx - shape add/delete edits", () => {
     expect(slideXml).toContain(`<a:stCxn id="10" idx="1"`);
     expect(slideXml).toContain(`<a:endCxn id="30" idx="3"`);
     expect(slideXml).toContain(`<a:prstGeom prst="bentConnector3"`);
+    expect(slideXml).toContain(`<a:xfrm flipH="1" flipV="1"`);
     expect(slideXml).toContain(`<a:ln w="12700"`);
     expect(slideXml).toContain(`<a:srgbClr val="00AAFF"`);
     expect(slideXml).toContain(`<a:prstDash val="lgDashDotDot"`);
