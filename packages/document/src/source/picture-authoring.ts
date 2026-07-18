@@ -1,7 +1,8 @@
 import { editReservedShapeId, sourceHandlesEqual } from "./edit-descriptors.js";
 import { copyBytes, IMAGE_REL_TYPE, relativeTarget } from "./editing-shared.js";
 import { assertShadowEffectsInput, type ShadowEffectsInput } from "./effect-authoring.js";
-import { type PartPath } from "./handles.js";
+import type { PartPath } from "./handles.js";
+import { detectSupportedImageType, type SupportedImageType } from "./image-type.js";
 import type {
   MediaPart,
   PackageGraph,
@@ -42,11 +43,6 @@ export interface AddPictureInput {
 }
 
 export type AddPictureEffectsInput = ShadowEffectsInput;
-
-interface DetectedImageType {
-  readonly contentType: "image/png" | "image/jpeg";
-  readonly extension: "png" | "jpeg";
-}
 
 interface PictureAuthoringTarget {
   readonly kind: "slide" | "layout" | "master";
@@ -147,7 +143,7 @@ function relationshipGroupForPart(graph: PackageGraph, slidePartPath: PartPath):
 function nextMediaPartPath(
   graph: PackageGraph,
   edits: readonly { readonly kind: string; readonly mediaPartPath?: PartPath }[],
-  imageType: DetectedImageType,
+  imageType: SupportedImageType,
 ): PartPath {
   const reserved = edits.flatMap((edit) => {
     if (edit.kind !== "addPicture" || edit.mediaPartPath === undefined) return [];
@@ -235,21 +231,6 @@ function assertPositiveFiniteEmu(value: unknown, fieldName: keyof SourceTransfor
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     throw new Error(`addPicture: ${fieldName} must be a finite positive EMU value`);
   }
-}
-
-function detectSupportedImageType(bytes: Uint8Array): DetectedImageType | undefined {
-  if (startsWithBytes(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
-    return { contentType: "image/png", extension: "png" };
-  }
-  if (startsWithBytes(bytes, [0xff, 0xd8, 0xff])) {
-    return { contentType: "image/jpeg", extension: "jpeg" };
-  }
-  return undefined;
-}
-
-function startsWithBytes(bytes: Uint8Array, prefix: readonly number[]): boolean {
-  if (bytes.length < prefix.length) return false;
-  return prefix.every((value, index) => bytes[index] === value);
 }
 
 function findPictureAuthoringTarget(

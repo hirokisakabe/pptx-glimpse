@@ -2,7 +2,8 @@ import { XMLBuilder } from "fast-xml-parser";
 
 import { sourceHandlesEqual } from "./edit-descriptors.js";
 import { copyBytes, IMAGE_REL_TYPE, relativeTarget } from "./editing-shared.js";
-import { type PartPath } from "./handles.js";
+import type { PartPath } from "./handles.js";
+import { detectSupportedImageType } from "./image-type.js";
 import type {
   MediaPart,
   PackageGraph,
@@ -44,11 +45,6 @@ export type SetSlideBackgroundInput =
       readonly centerY?: OoxmlPercent;
     }
   | { readonly kind: "image"; readonly bytes: Uint8Array };
-
-interface DetectedImageType {
-  readonly contentType: "image/png" | "image/jpeg";
-  readonly extension: "png" | "jpeg";
-}
 
 const IMAGE_MEDIA_PREFIX = "ppt/media/image";
 
@@ -355,19 +351,4 @@ function assertOptionalPercent(
   field: string,
 ): asserts value is OoxmlPercent | undefined {
   if (value !== undefined) assertRequiredPercent(value, field);
-}
-
-function detectSupportedImageType(bytes: Uint8Array): DetectedImageType | undefined {
-  if (startsWithBytes(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
-    return { contentType: "image/png", extension: "png" };
-  }
-  if (startsWithBytes(bytes, [0xff, 0xd8, 0xff])) {
-    return { contentType: "image/jpeg", extension: "jpeg" };
-  }
-  return undefined;
-}
-
-function startsWithBytes(bytes: Uint8Array, prefix: readonly number[]): boolean {
-  if (bytes.length < prefix.length) return false;
-  return prefix.every((value, index) => bytes[index] === value);
 }

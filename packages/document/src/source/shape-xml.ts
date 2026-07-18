@@ -265,10 +265,7 @@ interface ConnectorXmlParams {
   readonly startConnectionSiteIndex?: number;
   readonly endShapeId?: string;
   readonly endConnectionSiteIndex?: number;
-  readonly outline?: {
-    readonly headEnd?: SourceArrowEndpoint;
-    readonly tailEnd?: SourceArrowEndpoint;
-  };
+  readonly outline?: ShapeOutlineInput;
 }
 
 interface PictureXmlParams {
@@ -905,19 +902,13 @@ function createConnectorConnectionXml(params: ConnectorXmlParams): Record<string
 }
 
 function createConnectorLineXml(params: ConnectorXmlParams): Record<string, unknown> {
-  return {
-    "a:solidFill": {
-      "a:srgbClr": {
-        "@_val": "000000",
-      },
+  return createShapeLineXml({
+    ...params.outline,
+    fill: params.outline?.fill ?? {
+      kind: "solid",
+      color: { kind: "srgb", hex: "000000" },
     },
-    ...(params.outline?.headEnd !== undefined
-      ? { "a:headEnd": createArrowEndpointXml(params.outline.headEnd) }
-      : {}),
-    ...(params.outline?.tailEnd !== undefined
-      ? { "a:tailEnd": createArrowEndpointXml(params.outline.tailEnd) }
-      : {}),
-  };
+  });
 }
 
 function createArrowEndpointXml(endpoint: SourceArrowEndpoint): Record<string, unknown> {

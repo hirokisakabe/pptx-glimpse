@@ -1,5 +1,12 @@
 # @pptx-glimpse/document
 
+## 0.9.2
+
+### Patch Changes
+
+- f16b0f5: Allow native connector outlines to specify fill, width, and dash styles alongside arrow endpoints.
+- 79c3c55: Strengthen native connector endpoint validation and preserve documented connection semantics across slide duplication.
+
 ## 0.9.1
 
 ### Patch Changes
