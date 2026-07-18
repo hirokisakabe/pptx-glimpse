@@ -155,6 +155,10 @@ describe("addTable", () => {
     const output = writePptx(edited);
     const slideXml = decode(unzipSync(output)["ppt/slides/slide1.xml"]);
     expect(slideXml.match(/<a:br>/g)).toHaveLength(2);
+    const paragraphXml = slideXml.slice(slideXml.indexOf("<a:p>"), slideXml.indexOf("</a:p>"));
+    expect(paragraphXml).toMatch(
+      /<a:r>.*<a:t>First<\/a:t><\/a:r><a:br>.*<\/a:br><a:r>.*<a:t>Second<\/a:t><\/a:r><a:br>.*<\/a:br><a:r>.*<a:t>Third<\/a:t><\/a:r>/,
+    );
     expect(slideXml).toContain('strike="sngStrike"');
     expect(slideXml).toContain('baseline="30000"');
     expect(slideXml).toContain('u="dashLongHeavy"');
@@ -172,6 +176,9 @@ describe("addTable", () => {
 
     const reread = readPptx(output);
     const rereadTable = reread.slides[0].shapes.find((shape) => shape.kind === "table");
+    expect(
+      rereadTable?.table.rows[0]?.cells[0]?.textBody?.paragraphs[0]?.runs.map((run) => run.text),
+    ).toEqual(["First", "\n", "Second", "\n", "Third"]);
     expect(rereadTable?.table.rows[0]?.cells[0]).toMatchObject({
       marginLeft: 100,
       marginRight: 200,
