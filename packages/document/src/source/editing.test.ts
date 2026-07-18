@@ -1354,6 +1354,75 @@ describe("editing shape operations", () => {
     expect(edited.edits?.at(-1)).not.toHaveProperty("endShapeId");
   });
 
+  it("rejects connector endpoints outside the target part or OOXML index range", () => {
+    const source = buildSourceModel();
+    const slideHandle = requireHandle(source.slides[0].handle);
+    const titleHandle = requireHandle(shapeByName(source, "Title").handle);
+    const secondSlideShapeHandle = requireHandle(shapeByName(source, "Second").handle);
+    const baseInput = {
+      preset: "straightConnector1" as const,
+      offsetX: asEmu(10),
+      offsetY: asEmu(20),
+      width: asEmu(30),
+      height: asEmu(40),
+    };
+
+    expect(() =>
+      addConnector(source, slideHandle, {
+        ...baseInput,
+        start: { shapeHandle: secondSlideShapeHandle, connectionSiteIndex: 0 },
+      }),
+    ).toThrow("addConnector: start target shape belongs to a different drawing part");
+    expect(() =>
+      addConnector(source, slideHandle, {
+        ...baseInput,
+        start: {
+          shapeHandle: handle("ppt/slides/slide1.xml", "missing"),
+          connectionSiteIndex: 0,
+        },
+      }),
+    ).toThrow("addConnector: start shape handle was not found in the target drawing part");
+    expect(() =>
+      addConnector(source, slideHandle, {
+        ...baseInput,
+        start: { shapeHandle: titleHandle, connectionSiteIndex: -1 },
+      }),
+    ).toThrow("addConnector: start.connectionSiteIndex must be an unsigned 32-bit integer");
+    expect(() =>
+      addConnector(source, slideHandle, {
+        ...baseInput,
+        end: { shapeHandle: titleHandle, connectionSiteIndex: 0x1_0000_0000 },
+      }),
+    ).toThrow("addConnector: end.connectionSiteIndex must be an unsigned 32-bit integer");
+  });
+
+  it("rejects an existing connector as a connection target", () => {
+    const source = buildSourceModel();
+    const slideHandle = requireHandle(source.slides[0].handle);
+    const withConnector = addConnector(source, slideHandle, {
+      preset: "straightConnector1",
+      offsetX: asEmu(10),
+      offsetY: asEmu(20),
+      width: asEmu(30),
+      height: asEmu(40),
+      name: "Existing connector",
+    });
+
+    expect(() =>
+      addConnector(withConnector, slideHandle, {
+        preset: "straightConnector1",
+        offsetX: asEmu(50),
+        offsetY: asEmu(60),
+        width: asEmu(70),
+        height: asEmu(80),
+        start: {
+          shapeHandle: requireHandle(connectorByName(withConnector, "Existing connector").handle),
+          connectionSiteIndex: 0,
+        },
+      }),
+    ).toThrow("addConnector: start target must be a top-level sp shape");
+  });
+
   it("deletes an existing shape, drops stale text edits, and cancels added shapes followed by deleteShape", () => {
     const source = buildSourceModel();
     const existingHandle = requireHandle(shapeByName(source, "Title").handle);

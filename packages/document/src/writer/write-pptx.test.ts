@@ -577,6 +577,25 @@ function buildShapeDeleteFixture(): Uint8Array {
   });
 }
 
+function buildConnectedShapeFixture(): Uint8Array {
+  const files = unzipSync(buildShapeDeleteFixture());
+  const slidePath = "ppt/slides/slide1.xml";
+  const slideXml = decoder.decode(files[slidePath]);
+  const connectorXml =
+    `<p:cxnSp>` +
+    `<p:nvCxnSpPr><p:cNvPr id="31" name="Connected Shapes"/><p:cNvCxnSpPr>` +
+    `<a:stCxn id="10" idx="1"/><a:endCxn id="30" idx="3"/>` +
+    `</p:cNvCxnSpPr><p:nvPr/></p:nvCxnSpPr>` +
+    `<p:spPr><a:xfrm><a:off x="100" y="200"/><a:ext cx="700" cy="800"/></a:xfrm>` +
+    `<a:prstGeom prst="straightConnector1"><a:avLst/></a:prstGeom></p:spPr>` +
+    `</p:cxnSp>`;
+
+  return zipSync({
+    ...files,
+    [slidePath]: encoder.encode(slideXml.replace("</p:spTree>", `${connectorXml}</p:spTree>`)),
+  });
+}
+
 function getEntry(output: Uint8Array, path: string): Uint8Array {
   const entry = unzipSync(output)[path];
   if (entry === undefined) throw new Error(`missing zip entry: ${path}`);
@@ -2858,6 +2877,37 @@ describe("writePptx - slide topology edits", () => {
           contentType:
             "application/vnd.openxmlformats-officedocument.presentationml.notesSlide+xml",
         },
+      ]),
+    );
+  });
+
+  it("preserves connector shape IDs and connection sites when duplicating a slide", () => {
+    const source = readPptx(buildConnectedShapeFixture());
+    const output = writePptx(duplicateSlide(source, source.slides[0].handle!));
+    const reread = readPptx(output);
+    const duplicatedConnector = reread.slides[1]?.shapes.find(
+      (shape): shape is SourceConnector => shape.kind === "connector",
+    );
+
+    expect(duplicatedConnector).toMatchObject({
+      nodeId: "31",
+      name: "Connected Shapes",
+      connection: {
+        start: { shapeId: "10", connectionSiteIndex: 1 },
+        end: { shapeId: "30", connectionSiteIndex: 3 },
+      },
+      handle: { partPath: "ppt/slides/slide2.xml", nodeId: "31" },
+    });
+    expect(reread.slides[1]?.shapes).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          nodeId: "10",
+          handle: { partPath: "ppt/slides/slide2.xml", nodeId: "10", orderingSlot: 0 },
+        }),
+        expect.objectContaining({
+          nodeId: "30",
+          handle: { partPath: "ppt/slides/slide2.xml", nodeId: "30", orderingSlot: 2 },
+        }),
       ]),
     );
   });
