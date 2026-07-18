@@ -1,4 +1,4 @@
-import { getChild, getChildArray, localName, parseXml, type XmlNode } from "../reader/xml.js";
+import { getChild, getChildArray, localName, type XmlNode } from "../reader/xml.js";
 import { editDirtyPartPath } from "../source/edit-descriptors.js";
 import type {
   EditableParagraphProperties,
@@ -43,11 +43,17 @@ import {
   replaceChild,
   replaceNodeEntries,
   setChildText,
-  stripXmlProcessingInstruction,
   textRequiresPreserve,
   xmlNodeIsEmpty,
 } from "./xml-node-utils.js";
-import { encodeXml, textDecoder, XML_DECLARATION, xmlBuilder } from "./xml-serialization.js";
+import {
+  appendXmlChildAtEnd,
+  buildXmlPreservingChildOrder,
+  encodeXml,
+  parseXmlForEditing,
+  textDecoder,
+  XML_DECLARATION,
+} from "./xml-serialization.js";
 
 const FILL_CHILD_LOCAL_NAMES: ReadonlySet<string> = new Set([
   "noFill",
@@ -71,7 +77,7 @@ export function serializeDirtyXmlPart(
     throw new Error(`writePptx: dirty XML tree part '${partPath}' patching is not implemented`);
   }
 
-  const root = parseXml(textDecoder.decode(rawPart.bytes));
+  const root = parseXmlForEditing(textDecoder.decode(rawPart.bytes));
   // Edits are applied in chronological order. This relies on the editing API
   // invariant that deleteShape drops earlier edits targeting the deleted shape,
   // so no stale-target edit can follow its delete within one part. Hand-built
@@ -80,7 +86,7 @@ export function serializeDirtyXmlPart(
     if (editDirtyPartPath(edit) !== partPath) continue;
     applyDirtyPartEdit(root, edit);
   }
-  return encodeXml(XML_DECLARATION + xmlBuilder.build(stripXmlProcessingInstruction(root)));
+  return encodeXml(XML_DECLARATION + buildXmlPreservingChildOrder(root));
 }
 
 /**
@@ -424,22 +430,14 @@ function ensurePictureNamespaces(slide: XmlNode): void {
 
 function appendShapeTreeNodeAtEnd(spTree: XmlNode, preferredKey: string, value: XmlNode): void {
   const local = localName(preferredKey);
-  const retainedEntries: [string, unknown][] = [];
-  const existingValues: unknown[] = [];
   let existingKey = preferredKey;
 
-  for (const [key, entryValue] of Object.entries(spTree)) {
+  for (const key of Object.keys(spTree)) {
     if (!key.startsWith("@_") && localName(key) === local) {
       existingKey = key;
-      if (Array.isArray(entryValue)) {
-        existingValues.push(...unsafeOoxmlBoundaryAssertion<unknown[]>(entryValue));
-      } else existingValues.push(entryValue);
-      continue;
     }
-    retainedEntries.push([key, entryValue]);
   }
-
-  replaceNodeEntries(spTree, [...retainedEntries, [existingKey, [...existingValues, value]]]);
+  appendXmlChildAtEnd(spTree, existingKey, value);
 }
 
 function applyDeleteShapeEdit(root: XmlNode, edit: PptxSourceModelDeleteShapeEdit): void {
@@ -477,7 +475,7 @@ function applySetSlideBackgroundEdit(
   if (edit.relationshipId !== undefined) {
     slide["@_xmlns:r"] ??= "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
   }
-  const parsedBackground = getChild(parseXml(edit.xml), "bg");
+  const parsedBackground = getChild(parseXmlForEditing(edit.xml), "bg");
   if (parsedBackground === undefined) {
     throw new Error("writePptx: background edit XML fragment does not contain a p:bg root element");
   }
@@ -697,7 +695,7 @@ function parseShapeFragmentXml(
   xml: string,
   rootLocalName: "sp" | "cxnSp" | "pic" | "graphicFrame",
 ): XmlNode {
-  const node = getChild(parseXml(xml), rootLocalName);
+  const node = getChild(parseXmlForEditing(xml), rootLocalName);
   if (node === undefined) {
     throw new Error(
       `writePptx: shape edit XML fragment does not contain a '${rootLocalName}' root element`,

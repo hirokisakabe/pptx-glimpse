@@ -27,6 +27,7 @@ import {
   addEmptySlideFromLayout,
   addShape,
   addSlideNumber,
+  addTable,
   addTextBox,
   clearParagraphProperties,
   clearTextRunProperties,
@@ -596,6 +597,110 @@ function findTextRun(source: ReturnType<typeof readPptx>, text: string): SourceT
 }
 
 describe("writePptx - from-scratch builder", () => {
+  it("preserves alternating shape and picture sibling order after write and reread", () => {
+    let source = createPptx();
+    const slideHandle = source.slides[0]?.handle;
+    if (slideHandle === undefined) throw new Error("createPptx should create a first slide");
+    const shape = (name: string) => ({
+      geometry: { kind: "preset" as const, preset: "rect" },
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(1000),
+      height: asEmu(1000),
+      name,
+    });
+
+    source = addShape(source, slideHandle, shape("First shape"));
+    source = addPicture(source, slideHandle, {
+      bytes: RED_PNG,
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(1000),
+      height: asEmu(1000),
+      name: "Middle picture",
+    });
+    source = addShape(source, slideHandle, shape("Last shape"));
+
+    const output = writePptx(source);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+    const spTreeXml = slideXml.slice(
+      slideXml.indexOf("<p:spTree"),
+      slideXml.indexOf("</p:spTree>"),
+    );
+
+    expect(spTreeXml.match(/<p:(?:sp|pic|graphicFrame)(?=[ >])/g)).toEqual([
+      "<p:sp",
+      "<p:pic",
+      "<p:sp",
+    ]);
+    expect(readPptx(output).slides[0]?.shapes.map((item) => item.kind)).toEqual([
+      "shape",
+      "image",
+      "shape",
+    ]);
+  });
+
+  it("preserves shape, picture, chart, and table sibling order after write and reread", () => {
+    let source = createPptx();
+    const slideHandle = source.slides[0]?.handle;
+    if (slideHandle === undefined) throw new Error("createPptx should create a first slide");
+
+    source = addShape(source, slideHandle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(1000),
+      height: asEmu(1000),
+      name: "Ordered shape",
+    });
+    source = addPicture(source, slideHandle, {
+      bytes: RED_PNG,
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(1000),
+      height: asEmu(1000),
+      name: "Ordered picture",
+    });
+    source = addChart(source, slideHandle, {
+      chartType: "bar",
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(1000),
+      height: asEmu(1000),
+      series: [{ categories: ["A"], values: [1] }],
+      name: "Ordered chart",
+    });
+    source = addTable(source, slideHandle, {
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(1000),
+      height: asEmu(1000),
+      columnWidths: [asEmu(1000)],
+      rows: [{ height: asEmu(1000), cells: [{ text: "Cell" }] }],
+      name: "Ordered table",
+    });
+
+    const output = writePptx(source);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+    const spTreeXml = slideXml.slice(
+      slideXml.indexOf("<p:spTree"),
+      slideXml.indexOf("</p:spTree>"),
+    );
+
+    expect(spTreeXml.match(/<p:(?:sp|pic|graphicFrame)(?=[ >])/g)).toEqual([
+      "<p:sp",
+      "<p:pic",
+      "<p:graphicFrame",
+      "<p:graphicFrame",
+    ]);
+    expect(readPptx(output).slides[0]?.shapes.map((item) => item.kind)).toEqual([
+      "shape",
+      "image",
+      "chart",
+      "table",
+    ]);
+  });
+
   it("writes all native chart types with editable workbooks and consistent package metadata", () => {
     const source = createPptx();
     const slideHandle = source.slides[0]?.handle;
