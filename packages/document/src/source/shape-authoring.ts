@@ -46,7 +46,7 @@ import type {
   SourceShapeNode,
 } from "./index.js";
 import { nextNumberedName, nextRelationshipId } from "./package-graph-mutations.js";
-import type { UpdateShapeTransformInput } from "./shape-editing.js";
+import type { UpdateShapeTransformInput } from "./shape-transform.js";
 import type {
   AuthoringColorTransformInput,
   ShapeColorInput,

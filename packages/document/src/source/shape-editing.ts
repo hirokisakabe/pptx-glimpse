@@ -10,7 +10,6 @@ import { editInsertedShape, editTargetsShape, sourceHandlesEqual } from "./edit-
 import type {
   EditableShapeFill,
   EditableShapeOutline,
-  Emu,
   PptxSourceModel,
   PptxSourceModelEdit,
   PptxSourceModelShapeOutlineEdit,
@@ -21,15 +20,11 @@ import type {
   SourceShape,
   SourceShapeNode,
 } from "./index.js";
+import type { UpdateShapeTransformInput } from "./shape-transform.js";
 
 type TransformableShapeNode = Exclude<SourceShapeNode, { readonly kind: "raw" }>;
 
-export interface UpdateShapeTransformInput {
-  readonly offsetX: Emu;
-  readonly offsetY: Emu;
-  readonly width: Emu;
-  readonly height: Emu;
-}
+export type { UpdateShapeTransformInput } from "./shape-transform.js";
 
 type StyleEditableShapeNode = SourceShape | SourceConnector;
 
