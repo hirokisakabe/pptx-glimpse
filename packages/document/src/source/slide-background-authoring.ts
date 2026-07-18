@@ -2,9 +2,8 @@ import { XMLBuilder } from "fast-xml-parser";
 
 import { sourceHandlesEqual } from "./edit-descriptors.js";
 import { copyBytes, IMAGE_REL_TYPE, relativeTarget } from "./editing-shared.js";
-import { asPartPath, type PartPath } from "./handles.js";
+import { type PartPath } from "./handles.js";
 import type {
-  ContentTypeDefault,
   MediaPart,
   PackageGraph,
   PartRelationships,
@@ -14,8 +13,11 @@ import type {
   SourceBackground,
   SourceHandle,
 } from "./index.js";
-import { nextNumberedPartPath, nextRelationshipId } from "./package-graph-mutations.js";
-import { relationshipsPartPath } from "./package-paths.js";
+import {
+  addMediaPartRelationship,
+  nextNumberedPartPath,
+  nextRelationshipId,
+} from "./package-graph-mutations.js";
 import type { SourceColor, SourceGradientStop } from "./shapes.js";
 import type { OoxmlAngle, OoxmlPercent } from "./units.js";
 
@@ -49,7 +51,6 @@ interface DetectedImageType {
 }
 
 const IMAGE_MEDIA_PREFIX = "ppt/media/image";
-const RELS_CONTENT_TYPE = "application/vnd.openxmlformats-package.relationships+xml";
 
 const xmlBuilder = new XMLBuilder({
   ignoreAttributes: false,
@@ -136,13 +137,16 @@ export function setSlideBackground(
     slides: source.slides.map((candidate, index) =>
       index === slideIndex ? { ...candidate, background } : candidate,
     ),
-    packageGraph: addImagePackageEntries(
-      source.packageGraph,
-      slide.partPath,
+    packageGraph: addMediaPartRelationship(source.packageGraph, {
+      ownerPartPath: slide.partPath,
       media,
-      imageType.extension,
+      extension: imageType.extension,
       relationship,
-    ),
+      contentTypeDefaultConflictError: (existingContentType) =>
+        new Error(
+          `setSlideBackground: content type default for extension '${imageType.extension}' already maps to '${existingContentType}'`,
+        ),
+    }),
     edits: [...(source.edits ?? []), edit],
   };
 }
@@ -244,79 +248,12 @@ function colorXml(color: SlideBackgroundColorInput): Record<string, unknown> {
   return { "a:srgbClr": { "@_val": color.hex.toUpperCase() } };
 }
 
-function addImagePackageEntries(
-  graph: PackageGraph,
-  slidePartPath: PartPath,
-  media: MediaPart,
-  extension: string,
-  relationship: Relationship,
-): PackageGraph {
-  const relationshipGroup = relationshipGroupForPart(graph, slidePartPath);
-  const relationshipPartPath = asPartPath(relationshipsPartPath(slidePartPath));
-  const hasRelationshipGroup = graph.relationships.some(
-    (candidate) => candidate.sourcePartPath === slidePartPath,
-  );
-  const hasRelationshipPart = graph.parts.some((part) => part.partPath === relationshipPartPath);
-  const needsRelationshipOverride =
-    !hasRelationshipPart &&
-    !graph.contentTypes.defaults.some(
-      (entry) => entry.extension === "rels" && entry.contentType === RELS_CONTENT_TYPE,
-    ) &&
-    !graph.contentTypes.overrides.some((entry) => entry.partName === relationshipPartPath);
-
-  return {
-    ...graph,
-    contentTypes: {
-      ...graph.contentTypes,
-      defaults: withImageContentTypeDefault(
-        graph.contentTypes.defaults,
-        extension,
-        media.contentType,
-      ),
-      overrides: [
-        ...graph.contentTypes.overrides,
-        ...(needsRelationshipOverride
-          ? [{ partName: relationshipPartPath, contentType: RELS_CONTENT_TYPE }]
-          : []),
-      ],
-    },
-    parts: [
-      ...graph.parts,
-      { partPath: media.partPath, contentType: media.contentType },
-      ...(hasRelationshipPart
-        ? []
-        : [{ partPath: relationshipPartPath, contentType: RELS_CONTENT_TYPE }]),
-    ],
-    relationships: hasRelationshipGroup
-      ? graph.relationships.map((candidate) =>
-          candidate.sourcePartPath === slidePartPath
-            ? { ...candidate, relationships: [...candidate.relationships, relationship] }
-            : candidate,
-        )
-      : [...graph.relationships, { ...relationshipGroup, relationships: [relationship] }],
-    media: [...graph.media, media],
-  };
-}
-
 function relationshipGroupForPart(graph: PackageGraph, partPath: PartPath): PartRelationships {
   return (
     graph.relationships.find((candidate) => candidate.sourcePartPath === partPath) ?? {
       sourcePartPath: partPath,
       relationships: [],
     }
-  );
-}
-
-function withImageContentTypeDefault(
-  defaults: readonly ContentTypeDefault[],
-  extension: string,
-  contentType: string,
-): readonly ContentTypeDefault[] {
-  const existing = defaults.find((entry) => entry.extension === extension);
-  if (existing === undefined) return [...defaults, { extension, contentType }];
-  if (existing.contentType === contentType) return defaults;
-  throw new Error(
-    `setSlideBackground: content type default for extension '${extension}' already maps to '${existing.contentType}'`,
   );
 }
 
