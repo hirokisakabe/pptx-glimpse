@@ -73,7 +73,7 @@ const expectedAddedTextBoxFixture = {
       slides: [
         {
           xml: wrapSlideXml(
-            textBoxShapeXml(1, "TextBox 1", {
+            textBoxShapeXml(2, "TextBox 2", {
               x: 914400,
               y: 914400,
               cx: 3657600,
@@ -136,7 +136,7 @@ const addThenEditTextBox = {
       text: "Initial added box",
     });
     const shape = withTextBox.slides[0]?.shapes.find(
-      (candidate) => candidate.kind === "shape" && candidate.name === "TextBox 1",
+      (candidate) => candidate.kind === "shape" && candidate.name === "TextBox 2",
     );
     const runHandle =
       shape?.kind === "shape" ? shape.textBody?.paragraphs[0]?.runs[0]?.handle : undefined;

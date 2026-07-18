@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { asPartPath, asRelationshipId } from "./handles.js";
 import type { PackageGraph } from "./package-graph.js";
 import {
+  addMediaPartRelationship,
   addPackagePart,
   addPartRelationship,
   nextNumberedName,
@@ -15,6 +16,9 @@ import {
 const RELS_CONTENT_TYPE = "application/vnd.openxmlformats-package.relationships+xml";
 const SLIDE_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.presentationml.slide+xml";
 const SLIDE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide";
+const IMAGE_REL_TYPE = "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image";
+const SLIDE_PATH = asPartPath("ppt/slides/slide1.xml");
+const SLIDE_RELS_PATH = asPartPath("ppt/slides/_rels/slide1.xml.rels");
 
 function buildGraph(overrides?: Partial<PackageGraph>): PackageGraph {
   return {
@@ -123,6 +127,116 @@ describe("addPackagePart", () => {
       { partName: "ppt/slides/slide2.xml", contentType: SLIDE_CONTENT_TYPE },
       { partName: "ppt/slides/_rels/slide2.xml.rels", contentType: RELS_CONTENT_TYPE },
     ]);
+  });
+});
+
+describe("addMediaPartRelationship", () => {
+  it.each([
+    { hasRelationshipGroup: false, hasRelationshipPart: false, hasRelsDefault: false },
+    { hasRelationshipGroup: false, hasRelationshipPart: false, hasRelsDefault: true },
+    { hasRelationshipGroup: false, hasRelationshipPart: true, hasRelsDefault: false },
+    { hasRelationshipGroup: false, hasRelationshipPart: true, hasRelsDefault: true },
+    { hasRelationshipGroup: true, hasRelationshipPart: false, hasRelsDefault: false },
+    { hasRelationshipGroup: true, hasRelationshipPart: false, hasRelsDefault: true },
+    { hasRelationshipGroup: true, hasRelationshipPart: true, hasRelsDefault: false },
+    { hasRelationshipGroup: true, hasRelationshipPart: true, hasRelsDefault: true },
+  ])(
+    "registers media consistently with relationship group=$hasRelationshipGroup, .rels part=$hasRelationshipPart, rels default=$hasRelsDefault",
+    ({ hasRelationshipGroup, hasRelationshipPart, hasRelsDefault }) => {
+      const base = buildGraph();
+      const graph = buildGraph({
+        contentTypes: {
+          defaults: hasRelsDefault ? [{ extension: "rels", contentType: RELS_CONTENT_TYPE }] : [],
+          overrides: [
+            ...base.contentTypes.overrides,
+            ...(hasRelationshipPart && !hasRelsDefault
+              ? [{ partName: SLIDE_RELS_PATH, contentType: RELS_CONTENT_TYPE }]
+              : []),
+          ],
+        },
+        parts: [
+          ...base.parts,
+          ...(hasRelationshipPart
+            ? [{ partPath: SLIDE_RELS_PATH, contentType: RELS_CONTENT_TYPE }]
+            : []),
+        ],
+        relationships: hasRelationshipGroup
+          ? base.relationships
+          : base.relationships.filter(
+              (relationships) => relationships.sourcePartPath !== SLIDE_PATH,
+            ),
+      });
+      const bytes = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
+      const media = {
+        partPath: asPartPath("ppt/media/image1.png"),
+        contentType: "image/png",
+        bytes,
+      };
+      const relationship = {
+        id: asRelationshipId("rId2"),
+        type: IMAGE_REL_TYPE,
+        target: "../media/image1.png",
+      };
+
+      const next = addMediaPartRelationship(graph, {
+        ownerPartPath: SLIDE_PATH,
+        media,
+        extension: "png",
+        relationship,
+        contentTypeDefaultConflictError: (existingContentType) =>
+          new Error(`unexpected existing content type: ${existingContentType}`),
+      });
+
+      expect(next.parts.filter((part) => part.partPath === media.partPath)).toEqual([
+        { partPath: media.partPath, contentType: media.contentType },
+      ]);
+      expect(next.parts.filter((part) => part.partPath === SLIDE_RELS_PATH)).toHaveLength(1);
+      expect(next.contentTypes.defaults).toContainEqual({
+        extension: "png",
+        contentType: "image/png",
+      });
+      expect(
+        next.contentTypes.overrides.filter((override) => override.partName === SLIDE_RELS_PATH),
+      ).toHaveLength(hasRelsDefault ? 0 : 1);
+      expect(
+        next.relationships.filter((relationships) => relationships.sourcePartPath === SLIDE_PATH),
+      ).toEqual([{ sourcePartPath: SLIDE_PATH, relationships: [relationship] }]);
+      expect(next.media).toEqual([media]);
+      expect(next.rawParts).toBe(graph.rawParts);
+      expect(next.rawParts?.some((part) => part.partPath === media.partPath)).toBe(false);
+      expect(graph.media).toEqual([]);
+    },
+  );
+
+  it("uses the caller-provided error when an extension has a conflicting content type", () => {
+    const graph = buildGraph({
+      contentTypes: {
+        defaults: [
+          { extension: "rels", contentType: RELS_CONTENT_TYPE },
+          { extension: "png", contentType: "application/not-png" },
+        ],
+        overrides: [],
+      },
+    });
+
+    expect(() =>
+      addMediaPartRelationship(graph, {
+        ownerPartPath: SLIDE_PATH,
+        media: {
+          partPath: asPartPath("ppt/media/image1.png"),
+          contentType: "image/png",
+          bytes: new Uint8Array([1]),
+        },
+        extension: "png",
+        relationship: {
+          id: asRelationshipId("rId2"),
+          type: IMAGE_REL_TYPE,
+          target: "../media/image1.png",
+        },
+        contentTypeDefaultConflictError: (existingContentType) =>
+          new Error(`operation-specific: ${existingContentType}`),
+      }),
+    ).toThrow("operation-specific: application/not-png");
   });
 });
 

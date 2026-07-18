@@ -1,9 +1,10 @@
-import { editReservedShapeId, sourceHandlesEqual } from "./edit-descriptors.js";
+import { nextDrawingOrderingSlot, nextDrawingShapeId } from "./drawing-authoring-allocation.js";
+import { sourceHandlesEqual } from "./edit-descriptors.js";
 import { copyBytes, IMAGE_REL_TYPE, relativeTarget } from "./editing-shared.js";
 import { assertShadowEffectsInput, type ShadowEffectsInput } from "./effect-authoring.js";
-import { asPartPath, type PartPath } from "./handles.js";
+import type { PartPath } from "./handles.js";
+import { detectSupportedImageType, type SupportedImageType } from "./image-type.js";
 import type {
-  ContentTypeDefault,
   MediaPart,
   PackageGraph,
   PartRelationships,
@@ -14,11 +15,10 @@ import type {
   SourceShapeNode,
 } from "./index.js";
 import {
-  nextNumberedName,
+  addMediaPartRelationship,
   nextNumberedPartPath,
   nextRelationshipId,
 } from "./package-graph-mutations.js";
-import { relationshipsPartPath } from "./package-paths.js";
 import { buildPictureXml, parseShapeNodeXml } from "./shape-xml.js";
 import type { SourceImageCrop, SourceTransform } from "./shapes.js";
 import type { Emu, OoxmlAngle, OoxmlPercent } from "./units.js";
@@ -44,11 +44,6 @@ export interface AddPictureInput {
 
 export type AddPictureEffectsInput = ShadowEffectsInput;
 
-interface DetectedImageType {
-  readonly contentType: "image/png" | "image/jpeg";
-  readonly extension: "png" | "jpeg";
-}
-
 interface PictureAuthoringTarget {
   readonly kind: "slide" | "layout" | "master";
   readonly index: number;
@@ -57,7 +52,6 @@ interface PictureAuthoringTarget {
 }
 
 const IMAGE_MEDIA_PREFIX = "ppt/media/image";
-const RELS_CONTENT_TYPE = "application/vnd.openxmlformats-package.relationships+xml";
 
 export function addPicture(
   source: PptxSourceModel,
@@ -77,7 +71,7 @@ export function addPicture(
     );
   }
 
-  const shapeId = nextPictureShapeId(source, target.partPath, target.shapes);
+  const shapeId = nextDrawingShapeId(source, target.shapes, target.partPath);
   const shapeIdValue = String(shapeId);
   const relationshipGroup = relationshipGroupForPart(source.packageGraph, target.partPath);
   const relationshipId = nextRelationshipId(relationshipGroup.relationships);
@@ -93,7 +87,7 @@ export function addPicture(
     target: relativeTarget(target.partPath, mediaPartPath),
   };
   const name = input.name?.trim() || `Picture ${shapeIdValue}`;
-  const orderingSlot = nextOrderingSlot(target.shapes);
+  const orderingSlot = nextDrawingOrderingSlot(target.shapes);
   const xml = buildPictureXml({
     shapeId: shapeIdValue,
     name,
@@ -123,73 +117,17 @@ export function addPicture(
 
   return {
     ...withPictureAuthoringTargetShapes(source, target, [...target.shapes, picture]),
-    packageGraph: addPicturePackageGraphEntries(
-      source.packageGraph,
-      target.partPath,
+    packageGraph: addMediaPartRelationship(source.packageGraph, {
+      ownerPartPath: target.partPath,
       media,
-      imageType.extension,
+      extension: imageType.extension,
       relationship,
-    ),
+      contentTypeDefaultConflictError: (existingContentType) =>
+        new Error(
+          `addPicture: content type default for extension '${imageType.extension}' already maps to '${existingContentType}'`,
+        ),
+    }),
     edits: [...(source.edits ?? []), edit],
-  };
-}
-
-function addPicturePackageGraphEntries(
-  graph: PackageGraph,
-  slidePartPath: PartPath,
-  media: MediaPart,
-  extension: string,
-  relationship: Relationship,
-): PackageGraph {
-  const relationshipGroup = relationshipGroupForPart(graph, slidePartPath);
-  const relationshipPartPath = asPartPath(relationshipsPartPath(slidePartPath));
-  const hasRelationshipGroup = graph.relationships.some(
-    (candidate) => candidate.sourcePartPath === slidePartPath,
-  );
-  const hasRelationshipPart = graph.parts.some((part) => part.partPath === relationshipPartPath);
-  const needsRelationshipOverride =
-    !hasRelationshipPart &&
-    !graph.contentTypes.defaults.some(
-      (entry) => entry.extension === "rels" && entry.contentType === RELS_CONTENT_TYPE,
-    ) &&
-    !graph.contentTypes.overrides.some((entry) => entry.partName === relationshipPartPath);
-
-  return {
-    ...graph,
-    contentTypes: {
-      ...graph.contentTypes,
-      defaults: withImageContentTypeDefault(
-        graph.contentTypes.defaults,
-        extension,
-        media.contentType,
-      ),
-      overrides: [
-        ...graph.contentTypes.overrides,
-        ...(needsRelationshipOverride
-          ? [{ partName: relationshipPartPath, contentType: RELS_CONTENT_TYPE }]
-          : []),
-      ],
-    },
-    parts: [
-      ...graph.parts,
-      { partPath: media.partPath, contentType: media.contentType },
-      ...(hasRelationshipPart
-        ? []
-        : [
-            {
-              partPath: relationshipPartPath,
-              contentType: RELS_CONTENT_TYPE,
-            },
-          ]),
-    ],
-    relationships: hasRelationshipGroup
-      ? graph.relationships.map((candidate) =>
-          candidate.sourcePartPath === slidePartPath
-            ? { ...candidate, relationships: [...candidate.relationships, relationship] }
-            : candidate,
-        )
-      : [...graph.relationships, { ...relationshipGroup, relationships: [relationship] }],
-    media: [...graph.media, media],
   };
 }
 
@@ -202,61 +140,16 @@ function relationshipGroupForPart(graph: PackageGraph, slidePartPath: PartPath):
   );
 }
 
-function withImageContentTypeDefault(
-  defaults: readonly ContentTypeDefault[],
-  extension: string,
-  contentType: string,
-): readonly ContentTypeDefault[] {
-  const existing = defaults.find((entry) => entry.extension === extension);
-  if (existing === undefined) return [...defaults, { extension, contentType }];
-  if (existing.contentType === contentType) return defaults;
-  throw new Error(
-    `addPicture: content type default for extension '${extension}' already maps to '${existing.contentType}'`,
-  );
-}
-
 function nextMediaPartPath(
   graph: PackageGraph,
   edits: readonly { readonly kind: string; readonly mediaPartPath?: PartPath }[],
-  imageType: DetectedImageType,
+  imageType: SupportedImageType,
 ): PartPath {
   const reserved = edits.flatMap((edit) => {
     if (edit.kind !== "addPicture" || edit.mediaPartPath === undefined) return [];
     return [edit.mediaPartPath];
   });
   return nextNumberedPartPath(graph, reserved, IMAGE_MEDIA_PREFIX, `.${imageType.extension}`);
-}
-
-function nextPictureShapeId(
-  source: PptxSourceModel,
-  slidePartPath: PartPath,
-  shapes: readonly SourceShapeNode[],
-): string {
-  const used = new Set<number>();
-  collectShapeIds(shapes, used);
-  for (const edit of source.edits ?? []) {
-    const numericId = Number(editReservedShapeId(edit, slidePartPath));
-    if (Number.isInteger(numericId) && numericId > 0) used.add(numericId);
-  }
-  const usedNames = new Set([...used].map(String));
-  return nextNumberedName(usedNames, /^(\d+)$/, String);
-}
-
-function collectShapeIds(shapes: readonly SourceShapeNode[], used: Set<number>): void {
-  for (const shape of shapes) {
-    const numericId = Number(shape.nodeId);
-    if (Number.isInteger(numericId) && numericId > 0) used.add(numericId);
-    if (shape.kind === "group") collectShapeIds(shape.children, used);
-  }
-}
-
-function nextOrderingSlot(shapes: readonly { readonly handle?: SourceHandle }[]): number {
-  return (
-    shapes.reduce((current, shape) => {
-      const slot = shape.handle?.orderingSlot ?? -1;
-      return Math.max(current, slot);
-    }, -1) + 1
-  );
 }
 
 function assertPictureInput(input: AddPictureInput): void {
@@ -306,21 +199,6 @@ function assertPositiveFiniteEmu(value: unknown, fieldName: keyof SourceTransfor
   if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     throw new Error(`addPicture: ${fieldName} must be a finite positive EMU value`);
   }
-}
-
-function detectSupportedImageType(bytes: Uint8Array): DetectedImageType | undefined {
-  if (startsWithBytes(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
-    return { contentType: "image/png", extension: "png" };
-  }
-  if (startsWithBytes(bytes, [0xff, 0xd8, 0xff])) {
-    return { contentType: "image/jpeg", extension: "jpeg" };
-  }
-  return undefined;
-}
-
-function startsWithBytes(bytes: Uint8Array, prefix: readonly number[]): boolean {
-  if (bytes.length < prefix.length) return false;
-  return prefix.every((value, index) => bytes[index] === value);
 }
 
 function findPictureAuthoringTarget(

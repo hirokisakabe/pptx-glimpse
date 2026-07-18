@@ -71,7 +71,7 @@ describe("addTable", () => {
 
     const reread = readPptx(output);
     const table = reread.slides[0].shapes.find((shape) => shape.kind === "table");
-    expect(table?.nodeId).toBe("2");
+    expect(table?.nodeId).toBe("1");
     expect(table?.table.columns).toHaveLength(3);
     expect(table?.table.rows).toHaveLength(3);
     expect(table?.table.rows[0].cells[0]).toMatchObject({ gridSpan: 2 });

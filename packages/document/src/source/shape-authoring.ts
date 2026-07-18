@@ -25,27 +25,27 @@
  * and is read back as the source model's `spAutofit` value.
  */
 
-import { editReservedShapeId, sourceHandlesEqual } from "./edit-descriptors.js";
+import { nextDrawingOrderingSlot, nextDrawingShapeId } from "./drawing-authoring-allocation.js";
+import { sourceHandlesEqual } from "./edit-descriptors.js";
 import {
   assertShadowEffectsInput,
   type InnerShadowInput,
   type OuterShadowInput,
 } from "./effect-authoring.js";
-import { asSourceNodeId, type RelationshipId } from "./handles.js";
+import type { RelationshipId } from "./handles.js";
 import type {
   ConnectorPresetGeometry,
   PartPath,
   PptxSourceModel,
   PptxSourceModelAddConnectorEdit,
   PptxSourceModelAddShapeEdit,
-  PptxSourceModelEdit,
   Relationship,
   SourceHandle,
   SourceNodeId,
   SourceShape,
   SourceShapeNode,
 } from "./index.js";
-import { nextNumberedName, nextRelationshipId } from "./package-graph-mutations.js";
+import { nextRelationshipId } from "./package-graph-mutations.js";
 import type { UpdateShapeTransformInput } from "./shape-transform.js";
 import type {
   AuthoringColorTransformInput,
@@ -238,10 +238,10 @@ export function addTextBox(
     );
   }
   const body = mergeTextBodyProperties(defaultTextBodyProperties(source, target), input.body);
-  const shapeId = nextShapeId(target.shapes, source.edits ?? [], target.partPath);
+  const shapeId = nextDrawingShapeId(source, target.shapes, target.partPath);
   const shapeIdValue = String(shapeId);
   const name = input.name?.trim() || `TextBox ${shapeIdValue}`;
-  const orderingSlot = nextOrderingSlot(target.shapes);
+  const orderingSlot = nextDrawingOrderingSlot(target.shapes);
   const hyperlinkAllocation = allocateRunHyperlinks(
     source,
     target.partPath,
@@ -291,10 +291,10 @@ export function addSlideNumber(
       "addSlideNumber: layout or master handle was not found in PptxSourceModel source",
     );
   }
-  const shapeId = nextShapeId(target.shapes, source.edits ?? [], target.partPath);
+  const shapeId = nextDrawingShapeId(source, target.shapes, target.partPath);
   const shapeIdValue = String(shapeId);
   const name = input.name?.trim() || `Slide Number ${shapeIdValue}`;
-  const orderingSlot = nextOrderingSlot(target.shapes);
+  const orderingSlot = nextDrawingOrderingSlot(target.shapes);
   const xml = buildSlideNumberXml({
     partPath: target.partPath,
     shapeId: shapeIdValue,
@@ -330,14 +330,14 @@ export function addShape(
     );
   }
   const body = mergeTextBodyProperties(defaultTextBodyProperties(source, target), input.body);
-  const shapeId = nextShapeId(target.shapes, source.edits ?? [], target.partPath);
+  const shapeId = nextDrawingShapeId(source, target.shapes, target.partPath);
   const shapeIdValue = String(shapeId);
   const name = input.name?.trim() || `Shape ${shapeIdValue}`;
   const geometry =
     input.geometry.kind === "preset"
       ? { ...input.geometry, preset: input.geometry.preset.trim() }
       : input.geometry;
-  const orderingSlot = nextOrderingSlot(target.shapes);
+  const orderingSlot = nextDrawingOrderingSlot(target.shapes);
   const hyperlinkAllocation = allocateRunHyperlinks(
     source,
     target.partPath,
@@ -402,10 +402,10 @@ export function addConnector(
     input.end !== undefined
       ? requireConnectorTargetShape(target, input.end.shapeHandle, "end")
       : undefined;
-  const shapeId = nextShapeId(target.shapes, source.edits ?? [], target.partPath);
+  const shapeId = nextDrawingShapeId(source, target.shapes, target.partPath);
   const shapeIdValue = String(shapeId);
   const name = input.name?.trim() || `Connector ${shapeIdValue}`;
-  const orderingSlot = nextOrderingSlot(target.shapes);
+  const orderingSlot = nextDrawingOrderingSlot(target.shapes);
   const startShapeId = startShape !== undefined ? String(startShape.nodeId) : undefined;
   const endShapeId = endShape !== undefined ? String(endShape.nodeId) : undefined;
   const xml = buildConnectorXml({
@@ -1305,44 +1305,4 @@ function mergeTextBodyProperties(
   if (defaults === undefined) return explicit;
   if (explicit === undefined) return defaults;
   return { ...defaults, ...explicit };
-}
-
-function nextShapeId(
-  shapes: readonly SourceShapeNode[],
-  edits: readonly PptxSourceModelEdit[],
-  slidePartPath: PartPath,
-): SourceNodeId {
-  const used = new Set<number>();
-  collectNumericShapeIds(shapes, used);
-  collectNumericShapeEditIds(edits, slidePartPath, used);
-  const usedNames = new Set([...used].map(String));
-  return asSourceNodeId(nextNumberedName(usedNames, /^(\d+)$/, String));
-}
-
-function collectNumericShapeIds(shapes: readonly SourceShapeNode[], used: Set<number>): void {
-  for (const shape of shapes) {
-    const numericId = Number(shape.nodeId);
-    if (Number.isInteger(numericId) && numericId > 0) used.add(numericId);
-    if (shape.kind === "group") collectNumericShapeIds(shape.children, used);
-  }
-}
-
-function collectNumericShapeEditIds(
-  edits: readonly PptxSourceModelEdit[],
-  slidePartPath: PartPath,
-  used: Set<number>,
-): void {
-  for (const edit of edits) {
-    const numericId = Number(editReservedShapeId(edit, slidePartPath));
-    if (Number.isInteger(numericId) && numericId > 0) used.add(numericId);
-  }
-}
-
-function nextOrderingSlot(shapes: readonly SourceShapeNode[]): number {
-  return (
-    shapes.reduce((current, shape) => {
-      const slot = shape.handle?.orderingSlot ?? -1;
-      return Math.max(current, slot);
-    }, -1) + 1
-  );
 }

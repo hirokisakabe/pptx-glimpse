@@ -18,6 +18,7 @@
  * needs a stable empty-presentation seed for text-box generation.
  */
 
+import { detectSupportedImageType, type SupportedImageType } from "../source/image-type.js";
 import type {
   ContentTypeOverride,
   Emu,
@@ -69,12 +70,7 @@ interface NormalizedCreatePptxOptions {
   readonly layoutName: string;
   readonly background?: CreatePptxBackground;
   readonly margin?: SlideLayoutMargin;
-  readonly backgroundImage?: DetectedImageType;
-}
-
-interface DetectedImageType {
-  readonly contentType: "image/png" | "image/jpeg";
-  readonly extension: "png" | "jpeg";
+  readonly backgroundImage?: SupportedImageType;
 }
 
 const textEncoder = new TextEncoder();
@@ -195,7 +191,7 @@ function normalizeOptions(options: CreatePptxOptions): NormalizedCreatePptxOptio
   const masterName = normalizeName(options.slideMaster?.name, "slideMaster.name", "Blank Master");
   const layoutName = normalizeName(options.slideLayout?.name, "slideLayout.name", "Blank");
   const background = options.slideMaster?.background;
-  let backgroundImage: DetectedImageType | undefined;
+  let backgroundImage: SupportedImageType | undefined;
   if (background !== undefined) {
     const backgroundKind: unknown = Reflect.get(background, "kind");
     if (backgroundKind !== "solid" && backgroundKind !== "image") {
@@ -713,19 +709,4 @@ function corePropertiesXml(): string {
       `<cp:lastModifiedBy>pptx-glimpse</cp:lastModifiedBy>` +
       `</cp:coreProperties>`,
   );
-}
-
-function detectSupportedImageType(bytes: Uint8Array): DetectedImageType | undefined {
-  if (startsWithBytes(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
-    return { contentType: "image/png", extension: "png" };
-  }
-  if (startsWithBytes(bytes, [0xff, 0xd8, 0xff])) {
-    return { contentType: "image/jpeg", extension: "jpeg" };
-  }
-  return undefined;
-}
-
-function startsWithBytes(bytes: Uint8Array, prefix: readonly number[]): boolean {
-  if (bytes.length < prefix.length) return false;
-  return prefix.every((value, index) => bytes[index] === value);
 }
