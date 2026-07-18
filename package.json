@@ -19,6 +19,7 @@
     "dev": "tsx scripts/dev-server.ts",
     "render": "tsx scripts/test-render.ts",
     "inspect": "tsx scripts/inspect-pptx.ts",
+    "fixture:authoring": "tsx scripts/create-authoring-integration-fixture.ts",
     "vrt:snapshot:docker-build": "docker build -t pptx-glimpse-snapshot-vrt docker/snapshot-vrt",
     "vrt:snapshot:fixtures": "tsx vrt/snapshot/create-fixtures.ts",
     "vrt:snapshot:update": "docker run --rm -v \"$(pwd)\":/workspace -v pptx-glimpse-snapshot-vrt-nm:/workspace/node_modules pptx-glimpse-snapshot-vrt bash /workspace/vrt/snapshot/docker-run.sh bash -c 'npx tsx vrt/snapshot/create-fixtures.ts \"$@\" && npx tsx vrt/snapshot/update-snapshots.ts \"$@\"' --",
@@ -39,6 +40,7 @@
   "devDependencies": {
     "@changesets/cli": "^2.29.8",
     "@playwright/test": "^1.61.1",
+    "@pptx-glimpse/document": "workspace:*",
     "@types/node": "^25.2.2",
     "@types/ws": "^8.18.1",
     "@vitest/coverage-v8": "4.1.0",

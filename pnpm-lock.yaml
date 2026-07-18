@@ -14,6 +14,9 @@ importers:
       '@playwright/test':
         specifier: ^1.61.1
         version: 1.61.1
+      '@pptx-glimpse/document':
+        specifier: workspace:*
+        version: link:packages/document
       '@types/node':
         specifier: ^25.2.2
         version: 25.9.1
