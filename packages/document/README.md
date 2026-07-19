@@ -37,6 +37,7 @@ The stable entry point includes:
 - Text editing helpers such as `replaceTextRunPlainText(source, handle, text)` and related source handle lookup types exported from the root entry point
 - From-scratch authoring helpers such as `addTextBox(source, targetHandle, input)` and `addPicture(source, targetHandle, input)`; slide, layout, and master handles are supported
 - `createPptxAuthoringSession(source)` for applying consecutive authoring operations through slide/layout/master target scopes while retaining the latest source and returning new drawing/slide handles
+- `reorderShapes(source, targetHandle, orderedShapeHandles)` (or `target.reorderShapes(...)` in a session) for setting the complete shape-tree drawing order after authoring
 - Master/layout authoring through `createPptx({ slideMaster, slideLayout })` and `addSlideNumber(source, masterOrLayoutHandle, input)`
 - Slide topology helpers such as `addEmptySlideFromLayout(source, { layoutPartPath })`, `duplicateSlide(source, slideHandle)`, `moveSlide(source, slideHandle, { toIndex })`, and `deleteSlide(source, slideHandle)`
 - Source model, computed view, and unit types needed to consume those APIs
@@ -106,7 +107,7 @@ const shapeHandle = target.addShape({
   width: asEmu(914400),
   height: asEmu(914400),
 });
-target.addConnector({
+const connectorHandle = target.addConnector({
   preset: "straightConnector1",
   offsetX: asEmu(914400),
   offsetY: asEmu(457200),
@@ -114,9 +115,14 @@ target.addConnector({
   height: asEmu(1),
   start: { shapeHandle, connectionSiteIndex: 0 },
 });
+target.reorderShapes([connectorHandle, shapeHandle]);
 
 const authored = session.source;
 ```
+
+`reorderShapes` requires every top-level drawing in the target exactly once. Because the reorder
+operation is applied after earlier additions, a connector can be placed behind its connection
+targets without weakening endpoint validation.
 
 ### Alpha colors and gradients
 

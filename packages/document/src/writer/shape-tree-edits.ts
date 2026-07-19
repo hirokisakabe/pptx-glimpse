@@ -1,4 +1,4 @@
-import { getChild, localName, type XmlNode } from "../reader/xml.js";
+import { getAttr, getChild, localName, type XmlNode } from "../reader/xml.js";
 import type {
   PptxSourceModelAddChartEdit,
   PptxSourceModelAddConnectorEdit,
@@ -7,8 +7,10 @@ import type {
   PptxSourceModelAddTableEdit,
   PptxSourceModelAddTextBoxEdit,
   PptxSourceModelDeleteShapeEdit,
+  PptxSourceModelReorderShapesEdit,
   PptxSourceModelSetSlideBackgroundEdit,
 } from "../source/index.js";
+import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import {
   appendShapeTreeNodeAtEnd,
   elementPrefix,
@@ -22,6 +24,7 @@ import {
 import { deleteShapeXml, locateShapeTreeNode, parseShapeLocator } from "./xml-locators.js";
 import { replaceNodeEntries } from "./xml-node-utils.js";
 import { parseXmlForEditing } from "./xml-serialization.js";
+import { setXmlChildOrder } from "./xml-serialization.js";
 
 export function applyAddTextBoxEdit(root: XmlNode, edit: PptxSourceModelAddTextBoxEdit): void {
   applyAddSpEdit(root, edit);
@@ -95,6 +98,42 @@ export function applyDeleteShapeEdit(root: XmlNode, edit: PptxSourceModelDeleteS
   }
 }
 
+export function applyReorderShapesEdit(
+  root: XmlNode,
+  edit: PptxSourceModelReorderShapesEdit,
+): void {
+  const spTree = getShapeTree(root, edit.targetPartPath);
+  const fixed: { key: string; value: unknown }[] = [];
+  const shapeById = new Map<string, { key: string; value: unknown }>();
+  for (const [key, grouped] of Object.entries(spTree)) {
+    if (key.startsWith("@_")) continue;
+    const values = Array.isArray(grouped) ? grouped : [grouped];
+    for (const value of values) {
+      if (localName(key) === "nvGrpSpPr" || localName(key) === "grpSpPr") {
+        fixed.push({ key, value });
+        continue;
+      }
+      const node = unsafeOoxmlBoundaryAssertion<XmlNode>(value);
+      const nodeId = shapeTreeNodeId(node);
+      if (nodeId === undefined) {
+        throw new Error("writePptx: every reordered shape tree node requires an id");
+      }
+      shapeById.set(nodeId, { key, value });
+    }
+  }
+  if (shapeById.size !== edit.shapeIds.length) {
+    throw new Error("writePptx: reordered shape ids must contain every shape exactly once");
+  }
+  const ordered = edit.shapeIds.map((shapeId) => {
+    const entry = shapeById.get(shapeId);
+    if (entry === undefined) {
+      throw new Error(`writePptx: reordered shape '${shapeId}' was not found`);
+    }
+    return entry;
+  });
+  setXmlChildOrder(spTree, [...fixed, ...ordered]);
+}
+
 export function applySetSlideBackgroundEdit(
   root: XmlNode,
   edit: PptxSourceModelSetSlideBackgroundEdit,
@@ -166,4 +205,14 @@ function assertShapeIdAvailable(spTree: XmlNode, shapeId: string): void {
   if (locateShapeTreeNode(spTree, { nodeId: shapeId }) !== undefined) {
     throw new Error(`writePptx: shape id '${shapeId}' already exists in source XML`);
   }
+}
+
+function shapeTreeNodeId(node: XmlNode): string | undefined {
+  const nonVisualProperties =
+    getChild(node, "nvSpPr") ??
+    getChild(node, "nvPicPr") ??
+    getChild(node, "nvCxnSpPr") ??
+    getChild(node, "nvGrpSpPr") ??
+    getChild(node, "nvGraphicFramePr");
+  return getAttr(getChild(nonVisualProperties, "cNvPr"), "id");
 }

@@ -87,6 +87,12 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
         shapeOutlineKeys.add(key);
         break;
       }
+      case "reorderShapes": {
+        if (new Set(edit.shapeIds).size !== edit.shapeIds.length) {
+          throw new Error("writePptx: reordered shape ids contain a duplicate shape");
+        }
+        break;
+      }
       case "deleteShape": {
         const key = editHandleNodeKey(edit);
         if (deletedShapeKeys.has(key)) {
