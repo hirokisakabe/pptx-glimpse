@@ -20,6 +20,9 @@ export function reorderShapes(
   if (target === undefined) {
     throw new Error("reorderShapes: target handle was not found");
   }
+  if (target.shapes.some(hasAlternateContent)) {
+    throw new Error("reorderShapes: mc:AlternateContent shape trees are not supported");
+  }
   if (orderedShapeHandles.length !== target.shapes.length) {
     throw new Error("reorderShapes: ordered handles must contain every target shape exactly once");
   }
@@ -60,6 +63,11 @@ export function reorderShapes(
       },
     ],
   };
+}
+
+function hasAlternateContent(shape: SourceShapeNode): boolean {
+  if (shape.kind === "raw") return shape.raw.node.name === "mc:AlternateContent";
+  return shape.rawSidecars?.some((sidecar) => sidecar.node.name === "mc:AlternateContent") ?? false;
 }
 
 function findTarget(source: PptxSourceModel, handle: SourceHandle): Target | undefined {

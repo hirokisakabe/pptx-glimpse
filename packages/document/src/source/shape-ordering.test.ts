@@ -1,9 +1,10 @@
+import { unzipSync, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 
 import { createPptx } from "../builder/create-pptx.js";
+import { createPptxAuthoringSession, reorderShapes } from "../index.js";
 import { readPptx } from "../reader/read-pptx.js";
 import { writePptx } from "../writer/write-pptx.js";
-import { createPptxAuthoringSession } from "./authoring-session.js";
 import { asPartPath, type SourceHandle } from "./handles.js";
 import { asEmu } from "./units.js";
 
@@ -87,6 +88,57 @@ describe("reorderShapes", () => {
       "was not found in the target drawing part",
     );
   });
+
+  it("preserves formatted text and extLst while the root function reorders drawings", () => {
+    const authored = createTwoShapeSource();
+    const archive = unzipSync(writePptx(authored));
+    const slidePath = "ppt/slides/slide1.xml";
+    const slideXml = new TextDecoder().decode(requireValue(archive[slidePath]));
+    archive[slidePath] = new TextEncoder().encode(
+      slideXml.replace("</p:spTree>", '\n  <p:extLst><p:ext uri="test"/></p:extLst>\n</p:spTree>'),
+    );
+    const source = readPptx(zipSync(archive));
+    const slide = requireValue(source.slides[0]);
+    const handles = slide.shapes.map((shape) => requireValue(shape.handle));
+
+    const reversedHandles = [...handles].reverse();
+    const reordered = reorderShapes(source, requireValue(slide.handle), reversedHandles);
+    const outputArchive = unzipSync(writePptx(reordered));
+    const outputXml = new TextDecoder().decode(requireValue(outputArchive[slidePath]));
+
+    expect(outputXml).toContain('<p:extLst><p:ext uri="test"/></p:extLst>');
+    expect(outputXml).toContain("\n  \n");
+    expect(readPptx(writePptx(reordered)).slides[0]?.shapes.map((shape) => shape.nodeId)).toEqual(
+      reversedHandles.map((handle) => handle.nodeId),
+    );
+  });
+
+  it("rejects an AlternateContent shape tree before creating an edit", () => {
+    const authored = createTwoShapeSource();
+    const archive = unzipSync(writePptx(authored));
+    const slidePath = "ppt/slides/slide1.xml";
+    const slideXml = new TextDecoder().decode(requireValue(archive[slidePath]));
+    const firstShape = requireValue(slideXml.match(/<p:sp>[\s\S]*?<\/p:sp>/)?.[0]);
+    archive[slidePath] = new TextEncoder().encode(
+      slideXml
+        .replace(
+          "<p:sld ",
+          '<p:sld xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006" ',
+        )
+        .replace(
+          firstShape,
+          `<mc:AlternateContent><mc:Choice Requires="p14">${firstShape}</mc:Choice></mc:AlternateContent>`,
+        ),
+    );
+    const source = readPptx(zipSync(archive));
+    const slide = requireValue(source.slides[0]);
+    const handles = slide.shapes.map((shape) => requireValue(shape.handle));
+
+    expect(() => reorderShapes(source, requireValue(slide.handle), [...handles].reverse())).toThrow(
+      "mc:AlternateContent shape trees are not supported",
+    );
+    expect(source.edits).toBeUndefined();
+  });
 });
 
 type Target = ReturnType<ReturnType<typeof createPptxAuthoringSession>["target"]>;
@@ -104,4 +156,13 @@ function addRect(target: Target, offsetX: number): SourceHandle {
 function requireValue<T>(value: T | undefined): T {
   if (value === undefined) throw new Error("test fixture value is missing");
   return value;
+}
+
+function createTwoShapeSource() {
+  const source = createPptx();
+  const session = createPptxAuthoringSession(source);
+  const target = session.target(requireValue(source.slides[0]?.handle));
+  addRect(target, 0);
+  addRect(target, 2000);
+  return session.source;
 }

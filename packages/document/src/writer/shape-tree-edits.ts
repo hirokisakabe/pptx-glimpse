@@ -103,35 +103,38 @@ export function applyReorderShapesEdit(
   edit: PptxSourceModelReorderShapesEdit,
 ): void {
   const spTree = getShapeTree(root, edit.targetPartPath);
-  const fixed: { key: string; value: unknown }[] = [];
+  const current: { key: string; value: unknown }[] = [];
   const shapeById = new Map<string, { key: string; value: unknown }>();
   for (const [key, grouped] of Object.entries(spTree)) {
     if (key.startsWith("@_")) continue;
-    const values = Array.isArray(grouped) ? grouped : [grouped];
+    const values = Array.isArray(grouped)
+      ? unsafeOoxmlBoundaryAssertion<unknown[]>(grouped)
+      : [grouped];
     for (const value of values) {
-      if (localName(key) === "nvGrpSpPr" || localName(key) === "grpSpPr") {
-        fixed.push({ key, value });
-        continue;
-      }
-      const node = unsafeOoxmlBoundaryAssertion<XmlNode>(value);
-      const nodeId = shapeTreeNodeId(node);
-      if (nodeId === undefined) {
-        throw new Error("writePptx: every reordered shape tree node requires an id");
-      }
-      shapeById.set(nodeId, { key, value });
+      const entry = { key, value };
+      current.push(entry);
+      if (localName(key) === "nvGrpSpPr" || localName(key) === "grpSpPr") continue;
+      const nodeId = shapeTreeEntryNodeId(value);
+      if (nodeId !== undefined) shapeById.set(nodeId, entry);
     }
   }
   if (shapeById.size !== edit.shapeIds.length) {
     throw new Error("writePptx: reordered shape ids must contain every shape exactly once");
   }
-  const ordered = edit.shapeIds.map((shapeId) => {
+  const orderedShapes = edit.shapeIds.map((shapeId) => {
     const entry = shapeById.get(shapeId);
     if (entry === undefined) {
       throw new Error(`writePptx: reordered shape '${shapeId}' was not found`);
     }
     return entry;
   });
-  setXmlChildOrder(spTree, [...fixed, ...ordered]);
+  let orderedShapeIndex = 0;
+  setXmlChildOrder(
+    spTree,
+    current.map((entry) =>
+      shapeTreeEntryNodeId(entry.value) === undefined ? entry : orderedShapes[orderedShapeIndex++],
+    ),
+  );
 }
 
 export function applySetSlideBackgroundEdit(
@@ -215,4 +218,9 @@ function shapeTreeNodeId(node: XmlNode): string | undefined {
     getChild(node, "nvGrpSpPr") ??
     getChild(node, "nvGraphicFramePr");
   return getAttr(getChild(nonVisualProperties, "cNvPr"), "id");
+}
+
+function shapeTreeEntryNodeId(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  return shapeTreeNodeId(unsafeOoxmlBoundaryAssertion<XmlNode>(value));
 }

@@ -122,7 +122,8 @@ const authored = session.source;
 
 `reorderShapes` requires every top-level drawing in the target exactly once. Because the reorder
 operation is applied after earlier additions, a connector can be placed behind its connection
-targets without weakening endpoint validation.
+targets without weakening endpoint validation. Non-drawing shape-tree children remain in place;
+shape trees containing `mc:AlternateContent` are rejected by this initial API.
 
 ### Alpha colors and gradients
 
