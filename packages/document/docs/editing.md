@@ -32,10 +32,11 @@ slide loaded from an existing PPTX.
 
 ## Typed edits and raw preservation
 
-The source model deliberately carries both typed nodes and preserved raw material. A supported edit
-updates the typed representation immediately and appends an edit record that identifies the dirty
-scope. `writePptx` later patches that scope into preserved raw XML while copying untouched package
-material where possible.
+The source model deliberately carries both typed nodes and preserved raw material. When a supported
+edit changes the source, it updates the typed representation immediately and appends an edit record
+that identifies the dirty scope. A no-op may return the source without adding a record. `writePptx`
+later patches dirty scopes into preserved raw XML while copying untouched package material where
+possible.
 
 This design avoids regenerating an entire input package from an incomplete typed model. It also
 means some combinations are rejected instead of guessed. For example, an operation that cannot
@@ -52,6 +53,8 @@ content. Existing editing must additionally preserve unknown input parts and sou
 The available operations and preservation constraints therefore differ even when both workflows
 eventually call the same writer.
 
-Only root-exported operations are public. Raw replacement helpers, edit descriptors, XML locators,
-and writer patching modules are internal. See the [feature support matrix](./feature-support.md) for
-the currently supported edit subset and constraints.
+Only root-exported operations are public. Edit record types are exported for observing the source
+model, but constructing or mutating records directly is not a supported editing operation. Raw
+replacement helpers, XML locators, and writer patching modules are internal. See the
+[feature support matrix](./feature-support.md) for the currently supported edit subset and
+constraints.
