@@ -149,6 +149,7 @@ export type {
   PptxSourceModelMoveSlideEdit,
   PptxSourceModelParagraphPropertiesEdit,
   PptxSourceModelParagraphTextEdit,
+  PptxSourceModelReorderShapesEdit,
   PptxSourceModelReplaceImageEdit,
   PptxSourceModelSetSlideBackgroundEdit,
   PptxSourceModelShapeFillEdit,
@@ -172,6 +173,7 @@ export type {
   SourceThemeFormatScheme,
 } from "./presentation.js";
 export type { RawOoxmlNode, RawPackagePart, RawSidecar } from "./raw.js";
+export { reorderShapes } from "./shape-ordering.js";
 export type {
   SourceArrowEndpoint,
   SourceArrowSize,

@@ -59,6 +59,28 @@ export function appendXmlChildAtEnd(node: XmlNode, key: string, value: XmlNode):
   xmlChildOrder.set(node, order);
 }
 
+/** Replace the remembered heterogeneous child order without changing grouped values. */
+export function setXmlChildOrder(
+  node: XmlNode,
+  orderedEntries: readonly { readonly key: string; readonly value: unknown }[],
+): void {
+  const current = flattenChildren(node);
+  if (orderedEntries.length !== current.length) {
+    throw new Error("writePptx: reordered XML children must contain every child exactly once");
+  }
+  const remaining = [...current];
+  for (const entry of orderedEntries) {
+    const index = remaining.findIndex(
+      (candidate) => candidate.key === entry.key && candidate.value === entry.value,
+    );
+    if (index < 0) {
+      throw new Error("writePptx: reordered XML children contain an unknown or duplicate child");
+    }
+    remaining.splice(index, 1);
+  }
+  xmlChildOrder.set(node, [...orderedEntries]);
+}
+
 /** Reconcile ordered references after grouped node entries are replaced. */
 export function reconcileXmlChildOrder(
   node: XmlNode,

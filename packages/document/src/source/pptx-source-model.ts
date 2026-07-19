@@ -76,6 +76,7 @@ export type PptxSourceModelEdit =
   | PptxSourceModelAddPictureEdit
   | PptxSourceModelAddChartEdit
   | PptxSourceModelAddTableEdit
+  | PptxSourceModelReorderShapesEdit
   | PptxSourceModelDeleteShapeEdit
   | PptxSourceModelReplaceImageEdit
   | PptxSourceModelAddEmptySlideFromLayoutEdit
@@ -221,6 +222,12 @@ export interface PptxSourceModelAddTableEdit {
   readonly shapeId: string;
   /** Serialized `p:graphicFrame` fragment finalized at edit time. */
   readonly xml: string;
+}
+
+export interface PptxSourceModelReorderShapesEdit {
+  readonly kind: "reorderShapes";
+  readonly targetPartPath: PartPath;
+  readonly shapeIds: readonly string[];
 }
 
 export interface PptxSourceModelDeleteShapeEdit {

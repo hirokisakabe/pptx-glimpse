@@ -54,7 +54,7 @@ const shapeHandle = target.addShape({
   width: asEmu(914400),
   height: asEmu(914400),
 });
-target.addConnector({
+const connectorHandle = target.addConnector({
   preset: "straightConnector1",
   offsetX: asEmu(914400),
   offsetY: asEmu(457200),
@@ -62,12 +62,20 @@ target.addConnector({
   height: asEmu(1),
   start: { shapeHandle, connectionSiteIndex: 0 },
 });
+target.reorderShapes([connectorHandle, shapeHandle]);
 
 const authored = session.source;
 ```
 
 The session delegates to the same immutable public authoring functions; it is not a separate
 mutable document representation.
+
+`reorderShapes` requires every top-level drawing in the target exactly once. Because the reorder
+operation is applied after earlier additions, a connector can be placed behind its connection
+targets without weakening endpoint validation. Non-drawing shape-tree children remain in place;
+shape trees containing `mc:AlternateContent` are rejected by this initial API. The standalone
+`reorderShapes(source, targetHandle, orderedShapeHandles)` root export provides the same operation
+without a session.
 
 ## OOXML percentages, angles, and effects
 
