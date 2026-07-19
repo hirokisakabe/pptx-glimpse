@@ -1,5 +1,15 @@
 # @pptx-glimpse/document
 
+## 0.11.0
+
+### Minor Changes
+
+- 4c3cd80: Add target-scoped authoring sessions that retain the latest source and return new slide and drawing handles.
+
+### Patch Changes
+
+- 433da8e: Fix target-scoped authoring sessions after shape authoring and editing were split into separate modules.
+
 ## 0.10.0
 
 ### Minor Changes
