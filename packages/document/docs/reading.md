@@ -30,7 +30,8 @@ The reader deliberately keeps two complementary forms of source material:
 - Raw package parts and raw sidecars retain unsupported OOXML, vendor extensions,
   `mc:AlternateContent`, and unmodeled DrawingML for structural preservation.
 
-Typed support does not imply that every OOXML variant is modeled. Inspect `source.diagnostics` and
+Typed support does not imply that every OOXML variant is modeled. `source.diagnostics` reports
+detected package and reference problems; it is not an exhaustive list of unsupported features. Use
 the [feature support matrix](./feature-support.md) when deciding whether a workflow is supported.
 
 ## Source values versus effective values
