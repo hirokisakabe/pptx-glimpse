@@ -28,7 +28,8 @@
     "fflate": "^0.8.2"
   },
   "files": [
-    "dist"
+    "dist",
+    "docs"
   ],
   "engines": {
     "node": ">=22"
