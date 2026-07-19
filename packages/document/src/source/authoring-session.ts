@@ -20,6 +20,7 @@ import type {
   AddTextBoxInput,
 } from "./shape-authoring.js";
 import { addConnector, addShape, addSlideNumber, addTextBox } from "./shape-authoring.js";
+import { reorderShapes } from "./shape-ordering.js";
 import type { SetSlideBackgroundInput } from "./slide-background-authoring.js";
 import { setSlideBackground } from "./slide-background-authoring.js";
 import type { AddEmptySlideFromLayoutInput } from "./slide-topology.js";
@@ -37,6 +38,7 @@ export interface PptxAuthoringTarget {
   addTable(input: AddTableInput): SourceHandle;
   addChart(input: AddChartInput): SourceHandle;
   setSlideBackground(input: SetSlideBackgroundInput): void;
+  reorderShapes(orderedShapeHandles: readonly SourceHandle[]): void;
 }
 
 type DrawingOperationInput =
@@ -80,6 +82,9 @@ export class PptxAuthoringSession {
       addChart: (input) => this.#addDrawing("addChart", targetHandle, input, addChart),
       setSlideBackground: (input) => {
         this.#source = setSlideBackground(this.#source, targetHandle, input);
+      },
+      reorderShapes: (orderedShapeHandles) => {
+        this.#source = reorderShapes(this.#source, targetHandle, orderedShapeHandles);
       },
     };
   }

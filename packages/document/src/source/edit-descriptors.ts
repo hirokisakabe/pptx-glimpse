@@ -227,6 +227,16 @@ const EDIT_KIND_DESCRIPTORS: {
     insertedSlidePartPath: () => undefined,
     insertedShape: (edit) => ({ slidePartPath: edit.slidePartPath, shapeId: edit.shapeId }),
   },
+  reorderShapes: {
+    reservedPartPaths: (edit) => [edit.targetPartPath],
+    dirtyPartPath: (edit) => edit.targetPartPath,
+    targetsShape: () => false,
+    invalidatingPartPaths: (edit) => [edit.targetPartPath],
+    reservedShapeId: () => undefined,
+    slideTopologyOperation: () => undefined,
+    insertedSlidePartPath: () => undefined,
+    insertedShape: () => undefined,
+  },
   deleteShape: {
     reservedPartPaths: () => [],
     dirtyPartPath: (edit) => edit.handle.partPath,

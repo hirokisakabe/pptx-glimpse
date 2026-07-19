@@ -1,4 +1,4 @@
-import { getChild, localName, type XmlNode } from "../reader/xml.js";
+import { getAttr, getChild, localName, type XmlNode } from "../reader/xml.js";
 import type {
   PptxSourceModelAddChartEdit,
   PptxSourceModelAddConnectorEdit,
@@ -7,8 +7,10 @@ import type {
   PptxSourceModelAddTableEdit,
   PptxSourceModelAddTextBoxEdit,
   PptxSourceModelDeleteShapeEdit,
+  PptxSourceModelReorderShapesEdit,
   PptxSourceModelSetSlideBackgroundEdit,
 } from "../source/index.js";
+import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import {
   appendShapeTreeNodeAtEnd,
   elementPrefix,
@@ -22,6 +24,7 @@ import {
 import { deleteShapeXml, locateShapeTreeNode, parseShapeLocator } from "./xml-locators.js";
 import { replaceNodeEntries } from "./xml-node-utils.js";
 import { parseXmlForEditing } from "./xml-serialization.js";
+import { setXmlChildOrder } from "./xml-serialization.js";
 
 export function applyAddTextBoxEdit(root: XmlNode, edit: PptxSourceModelAddTextBoxEdit): void {
   applyAddSpEdit(root, edit);
@@ -95,6 +98,45 @@ export function applyDeleteShapeEdit(root: XmlNode, edit: PptxSourceModelDeleteS
   }
 }
 
+export function applyReorderShapesEdit(
+  root: XmlNode,
+  edit: PptxSourceModelReorderShapesEdit,
+): void {
+  const spTree = getShapeTree(root, edit.targetPartPath);
+  const current: { key: string; value: unknown }[] = [];
+  const shapeById = new Map<string, { key: string; value: unknown }>();
+  for (const [key, grouped] of Object.entries(spTree)) {
+    if (key.startsWith("@_")) continue;
+    const values = Array.isArray(grouped)
+      ? unsafeOoxmlBoundaryAssertion<unknown[]>(grouped)
+      : [grouped];
+    for (const value of values) {
+      const entry = { key, value };
+      current.push(entry);
+      if (localName(key) === "nvGrpSpPr" || localName(key) === "grpSpPr") continue;
+      const nodeId = shapeTreeEntryNodeId(value);
+      if (nodeId !== undefined) shapeById.set(nodeId, entry);
+    }
+  }
+  if (shapeById.size !== edit.shapeIds.length) {
+    throw new Error("writePptx: reordered shape ids must contain every shape exactly once");
+  }
+  const orderedShapes = edit.shapeIds.map((shapeId) => {
+    const entry = shapeById.get(shapeId);
+    if (entry === undefined) {
+      throw new Error(`writePptx: reordered shape '${shapeId}' was not found`);
+    }
+    return entry;
+  });
+  let orderedShapeIndex = 0;
+  setXmlChildOrder(
+    spTree,
+    current.map((entry) =>
+      shapeTreeEntryNodeId(entry.value) === undefined ? entry : orderedShapes[orderedShapeIndex++],
+    ),
+  );
+}
+
 export function applySetSlideBackgroundEdit(
   root: XmlNode,
   edit: PptxSourceModelSetSlideBackgroundEdit,
@@ -166,4 +208,19 @@ function assertShapeIdAvailable(spTree: XmlNode, shapeId: string): void {
   if (locateShapeTreeNode(spTree, { nodeId: shapeId }) !== undefined) {
     throw new Error(`writePptx: shape id '${shapeId}' already exists in source XML`);
   }
+}
+
+function shapeTreeNodeId(node: XmlNode): string | undefined {
+  const nonVisualProperties =
+    getChild(node, "nvSpPr") ??
+    getChild(node, "nvPicPr") ??
+    getChild(node, "nvCxnSpPr") ??
+    getChild(node, "nvGrpSpPr") ??
+    getChild(node, "nvGraphicFramePr");
+  return getAttr(getChild(nonVisualProperties, "cNvPr"), "id");
+}
+
+function shapeTreeEntryNodeId(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  return shapeTreeNodeId(unsafeOoxmlBoundaryAssertion<XmlNode>(value));
 }
