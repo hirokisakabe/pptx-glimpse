@@ -1,5 +1,13 @@
 # pptx-glimpse
 
+## 3.2.7
+
+### Patch Changes
+
+- Updated dependencies [4c3cd80]
+- Updated dependencies [433da8e]
+  - @pptx-glimpse/document@0.11.0
+
 ## 3.2.6
 
 ### Patch Changes
