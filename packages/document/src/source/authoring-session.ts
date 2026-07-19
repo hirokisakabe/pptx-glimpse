@@ -18,8 +18,8 @@ import type {
   AddShapeInput,
   AddSlideNumberInput,
   AddTextBoxInput,
-} from "./shape-editing.js";
-import { addConnector, addShape, addSlideNumber, addTextBox } from "./shape-editing.js";
+} from "./shape-authoring.js";
+import { addConnector, addShape, addSlideNumber, addTextBox } from "./shape-authoring.js";
 import type { SetSlideBackgroundInput } from "./slide-background-authoring.js";
 import { setSlideBackground } from "./slide-background-authoring.js";
 import type { AddEmptySlideFromLayoutInput } from "./slide-topology.js";
