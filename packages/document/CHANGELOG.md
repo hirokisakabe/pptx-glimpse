@@ -1,5 +1,11 @@
 # @pptx-glimpse/document
 
+## 0.12.0
+
+### Minor Changes
+
+- c60442c: Add a typed shape-tree reorder operation for slide, layout, and master authoring targets.
+
 ## 0.11.0
 
 ### Minor Changes
