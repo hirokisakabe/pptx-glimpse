@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
+import { SiteFooter } from "@/components/SiteFooter";
+import { SiteHeader } from "@/components/SiteHeader";
 import { SITE_URL } from "@/lib/constants";
 import "./globals.css";
 const TITLE = "pptx-glimpse Demo - Browser PPTX to SVG Viewer";
@@ -7,7 +9,10 @@ const DESCRIPTION = "Open a PPTX file and preview slides as SVG with browser-onl
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
-  title: TITLE,
+  title: {
+    default: TITLE,
+    template: "%s | pptx-glimpse",
+  },
   description: DESCRIPTION,
   keywords: ["PPTX", "SVG", "PowerPoint", "converter", "TypeScript", "presentation", "slides"],
   openGraph: {
@@ -23,16 +28,17 @@ export const metadata: Metadata = {
     title: TITLE,
     description: DESCRIPTION,
   },
-  alternates: {
-    canonical: "/",
-  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <body>
-        {children}
+        <div className="site-shell">
+          <SiteHeader />
+          {children}
+          <SiteFooter />
+        </div>
         <Analytics />
       </body>
     </html>

@@ -1,5 +1,12 @@
+import type { Metadata } from "next";
 import { UploadViewer } from "@/components/UploadViewer";
 import { SITE_URL } from "@/lib/constants";
+
+export const metadata: Metadata = {
+  alternates: {
+    canonical: "/",
+  },
+};
 
 const jsonLd = {
   "@context": "https://schema.org",
@@ -19,13 +26,14 @@ const jsonLd = {
 
 export default function Home() {
   return (
-    <div className="app">
+    <div className="app demo-page">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <header>
-        <h1>pptx-glimpse</h1>
+      <header className="demo-intro">
+        <p className="eyebrow">Browser rendering demo</p>
+        <h1>See your PowerPoint as SVG.</h1>
         <p className="description">
           Preview PowerPoint slides as SVG in the browser. No upload service, no LibreOffice.
         </p>
@@ -33,11 +41,6 @@ export default function Home() {
       <main>
         <UploadViewer />
       </main>
-      <footer>
-        <a href="https://github.com/hirokisakabe/pptx-glimpse">GitHub</a>
-        <span> | </span>
-        <a href="https://www.npmjs.com/package/pptx-glimpse">npm</a>
-      </footer>
     </div>
   );
 }

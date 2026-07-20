@@ -42,6 +42,31 @@ test.afterAll(async () => {
   demoServer = null;
 });
 
+test("links the rendering demo to package documentation", async ({ page }) => {
+  if (demoServer === null) throw new Error("demo server was not started");
+
+  await page.goto(demoServer.url);
+  await page.getByRole("link", { name: "Documentation" }).click();
+
+  await expect(page).toHaveURL(`${demoServer.url}/docs`);
+  await expect(page).toHaveTitle("Documentation | pptx-glimpse");
+  await expect(page.getByRole("heading", { name: "pptx-glimpse", exact: true })).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "@pptx-glimpse/document", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: /Read the rendering guide/ })).toHaveAttribute(
+    "href",
+    "https://github.com/hirokisakabe/pptx-glimpse/blob/main/README.md",
+  );
+  await expect(page.getByRole("link", { name: /Choose a document workflow/ })).toHaveAttribute(
+    "href",
+    "https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/README.md",
+  );
+
+  const sitemapResponse = await page.request.get(`${demoServer.url}/sitemap.xml`);
+  expect(await sitemapResponse.text()).toContain("https://glimpse.pptx.app/docs");
+});
+
 test("runs the public demo browser editor flow entirely client-side", async ({ page }) => {
   test.setTimeout(120_000);
   if (demoServer === null) throw new Error("demo server was not started");

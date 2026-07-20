@@ -28,29 +28,278 @@ body {
   min-height: 100vh;
 }
 
-.app {
-  max-width: 1180px;
+.site-shell {
   margin: 0 auto;
-  padding: 28px 16px;
+  max-width: 1180px;
+  padding: 0 16px 28px;
 }
 
-header {
+.site-header {
+  align-items: center;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  min-height: 72px;
+}
+
+.site-mark {
+  align-items: center;
+  color: var(--ink);
+  display: inline-flex;
+  font-weight: 780;
+  gap: 10px;
+  text-decoration: none;
+}
+
+.site-mark-icon {
+  align-items: center;
+  background: var(--blueprint);
+  border-radius: 3px;
+  color: white;
+  display: inline-flex;
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.8rem;
+  height: 28px;
+  justify-content: center;
+  position: relative;
+  width: 24px;
+}
+
+.site-mark-icon::after {
+  border-left: 6px solid transparent;
+  border-top: 6px solid rgba(255, 255, 255, 0.78);
+  content: "";
+  position: absolute;
+  right: 2px;
+  top: 2px;
+}
+
+.site-nav {
+  align-items: center;
+  display: flex;
+  gap: 22px;
+}
+
+.site-nav a {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.site-nav a:hover,
+.site-nav a:focus-visible {
+  color: var(--blueprint);
+}
+
+.app {
+  padding: 40px 0 0;
+}
+
+.demo-intro {
   margin-bottom: 24px;
 }
 
-header h1 {
-  font-size: 2.4rem;
+.demo-intro h1 {
+  font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  font-size: clamp(2.2rem, 5vw, 4.2rem);
   font-weight: 760;
-  line-height: 1;
-  letter-spacing: 0;
+  letter-spacing: -0.045em;
+  line-height: 0.98;
+  max-width: 720px;
 }
 
-header .description {
+.demo-intro .description {
   max-width: 620px;
   color: var(--muted);
   font-size: 1rem;
   line-height: 1.55;
   margin-top: 10px;
+}
+
+.eyebrow {
+  color: var(--blueprint);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.76rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+  text-transform: uppercase;
+}
+
+.docs-page {
+  padding: 64px 0 24px;
+}
+
+.docs-intro {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1.3fr) minmax(260px, 0.7fr);
+  margin-bottom: 44px;
+}
+
+.docs-intro .eyebrow {
+  grid-column: 1 / -1;
+  margin-bottom: -6px;
+}
+
+.docs-intro h1 {
+  font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  font-size: clamp(2.5rem, 5vw, 4.8rem);
+  font-weight: 760;
+  letter-spacing: -0.05em;
+  line-height: 0.95;
+}
+
+.docs-intro > p:last-child {
+  align-self: end;
+  color: var(--muted);
+  line-height: 1.65;
+}
+
+.package-routes {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  position: relative;
+}
+
+.package-route {
+  background: rgba(255, 255, 255, 0.86);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  min-height: 500px;
+  overflow: hidden;
+  padding: 30px;
+  position: relative;
+}
+
+.package-route::before {
+  background: var(--blueprint);
+  content: "";
+  height: 4px;
+  inset: 0 0 auto;
+  position: absolute;
+}
+
+.document-route::before {
+  background: var(--green);
+}
+
+.route-output {
+  align-self: flex-end;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.75rem;
+  padding: 5px 9px;
+}
+
+.route-label {
+  color: var(--blueprint);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.76rem;
+  font-weight: 750;
+  letter-spacing: 0.06em;
+  margin: 28px 0 8px;
+  text-transform: uppercase;
+}
+
+.document-route .route-label {
+  color: var(--green);
+}
+
+.package-route h2 {
+  font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+  font-size: clamp(1.65rem, 3vw, 2.35rem);
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.package-summary {
+  color: var(--muted);
+  line-height: 1.6;
+  margin-top: 16px;
+}
+
+.package-route ul {
+  display: grid;
+  gap: 10px;
+  list-style: none;
+  margin: 24px 0 32px;
+}
+
+.package-route li {
+  line-height: 1.4;
+  padding-left: 20px;
+  position: relative;
+}
+
+.package-route li::before {
+  color: var(--amber);
+  content: "→";
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  left: 0;
+  position: absolute;
+}
+
+.route-links {
+  align-items: flex-start;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: auto;
+}
+
+.route-links a {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+}
+
+.route-links .primary-doc-link {
+  color: var(--blueprint);
+  font-size: 1rem;
+  text-decoration: none;
+}
+
+.document-route .route-links .primary-doc-link {
+  color: var(--green);
+}
+
+.primary-doc-link span {
+  display: inline-block;
+  transition: transform 0.16s ease;
+}
+
+.primary-doc-link:hover span,
+.primary-doc-link:focus-visible span {
+  transform: translateX(4px);
+}
+
+.demo-boundary {
+  border-left: 4px solid var(--amber);
+  display: grid;
+  gap: 8px 28px;
+  grid-template-columns: 180px minmax(0, 1fr);
+  margin-top: 24px;
+  padding: 18px 22px;
+}
+
+.demo-boundary strong {
+  font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
+}
+
+.demo-boundary p {
+  color: var(--muted);
+  line-height: 1.55;
 }
 
 .drop-zone {
@@ -552,19 +801,29 @@ header .description {
   margin-bottom: 0;
 }
 
-footer {
+.site-footer {
+  align-items: flex-start;
+  display: flex;
+  justify-content: space-between;
   margin-top: 3rem;
   padding-top: 1rem;
   border-top: 1px solid var(--line);
   color: var(--muted);
 }
 
-footer a {
+.site-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  justify-content: flex-end;
+}
+
+.site-footer a {
   color: var(--blueprint);
   text-decoration: none;
 }
 
-footer a:hover {
+.site-footer a:hover {
   text-decoration: underline;
 }
 
@@ -580,7 +839,53 @@ footer a:hover {
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .loading-mark {
+    animation: none;
+  }
+
+  .primary-doc-link span {
+    transition: none;
+  }
+}
+
 @media (max-width: 720px) {
+  .site-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+    padding: 18px 0;
+  }
+
+  .site-nav {
+    gap: 16px;
+    width: 100%;
+  }
+
+  .docs-page {
+    padding-top: 42px;
+  }
+
+  .docs-intro,
+  .package-routes,
+  .demo-boundary {
+    grid-template-columns: 1fr;
+  }
+
+  .package-route {
+    min-height: 0;
+    padding: 24px;
+  }
+
+  .site-footer {
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .site-footer nav {
+    justify-content: flex-start;
+  }
+
   .drop-zone {
     grid-template-columns: 1fr;
     padding: 22px;

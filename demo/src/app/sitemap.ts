@@ -5,9 +5,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
   return [
     {
       url: SITE_URL,
-      lastModified: "2025-03-05",
+      lastModified: "2026-07-20",
       changeFrequency: "monthly",
       priority: 1,
+    },
+    {
+      url: `${SITE_URL}/docs`,
+      lastModified: "2026-07-20",
+      changeFrequency: "monthly",
+      priority: 0.8,
     },
   ];
 }
