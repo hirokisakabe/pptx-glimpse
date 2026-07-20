@@ -19,6 +19,20 @@ _Upload a .pptx file → get SVG/PNG output instantly_
 | :------------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------: |
 | ![PowerPoint](https://raw.githubusercontent.com/hirokisakabe/pptx-glimpse/main/docs/comparison-powerpoint.png) | ![pptx-glimpse](https://raw.githubusercontent.com/hirokisakabe/pptx-glimpse/main/docs/comparison-pptx-glimpse.png) |
 
+## Choose a package
+
+| If you want to...                                                               | Use                                                                                                                              |
+| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Render PPTX slides as SVG or PNG in Node.js or the browser                      | [`pptx-glimpse`](#installation)                                                                                                  |
+| Read PPTX source data or derive a resolved, non-mutating computed view          | [`@pptx-glimpse/document`](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/README.md)                   |
+| Author a new PPTX, edit an existing PPTX, or write PPTX bytes with preservation | [`@pptx-glimpse/document`](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/README.md#choose-a-workflow) |
+
+`pptx-glimpse` is the rendering package and includes the SVG / PNG conversion APIs documented
+below. `@pptx-glimpse/document` is the lower-level OOXML document package for read, computed-view,
+authoring, editing, and writer workflows. Start with its
+[package guide](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/README.md)
+to choose the relevant workflow and check current feature support.
+
 ## Motivation
 
 pptx-glimpse is designed for two primary use cases:
