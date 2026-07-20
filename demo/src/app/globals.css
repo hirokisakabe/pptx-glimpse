@@ -924,9 +924,3 @@ body {
     flex: 1 1 150px;
   }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  .loading-mark {
-    animation: none;
-  }
-}

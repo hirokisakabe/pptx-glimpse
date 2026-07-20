@@ -64,6 +64,7 @@ test("links the rendering demo to package documentation", async ({ page }) => {
   );
 
   const sitemapResponse = await page.request.get(`${demoServer.url}/sitemap.xml`);
+  expect(sitemapResponse.ok()).toBe(true);
   expect(await sitemapResponse.text()).toContain("https://glimpse.pptx.app/docs");
 });
 
