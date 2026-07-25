@@ -193,11 +193,7 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
     const thumbnailsBeforeSort = page.getByTestId("editor-thumbnail");
     await expect(thumbnailsBeforeSort.nth(1)).toContainText("A SMALL, EDITABLE SYSTEM");
     await expect(thumbnailsBeforeSort.nth(1)).toBeEnabled();
-    await dragElementAfter(
-      page,
-      page.getByTestId("editor-thumbnail-grip").nth(1),
-      thumbnailsBeforeSort.nth(2),
-    );
+    await dragElementAfter(page, thumbnailsBeforeSort.nth(1), thumbnailsBeforeSort.nth(2));
     await expect(page.getByTestId("editor-status")).toContainText("moved to position 3 of 3");
     await expect(page.getByTestId("editor-thumbnail").nth(2)).toContainText(
       "A SMALL, EDITABLE SYSTEM",

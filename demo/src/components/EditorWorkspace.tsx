@@ -15,6 +15,7 @@ import {
 const EMU_PER_PIXEL = 9525;
 const MIN_SHAPE_SIZE = 8;
 const MAX_IMAGE_REPLACEMENT_BYTES = 5 * 1024 * 1024;
+const SLIDE_DRAG_THRESHOLD_PX = 4;
 
 type EditorSession = Awaited<ReturnType<typeof createPptxEditorSession>>;
 type ShapeTransformCommand = Extract<EditorCommand, { readonly kind: "setShapeTransform" }>;
@@ -82,6 +83,8 @@ interface SlideDropTarget {
 interface SlideSortDragState {
   readonly fromIndex: number;
   readonly pointerId: number;
+  readonly startPoint: Point;
+  readonly hasMoved: boolean;
 }
 
 type PreferredSlideIndex = number | ((session: EditorSession) => number);
@@ -128,6 +131,7 @@ export function EditorWorkspace({
   const directTextCommitPromiseRef = useRef<Promise<boolean> | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
   const slideSortDragRef = useRef<SlideSortDragState | null>(null);
+  const suppressSlideClickRef = useRef(false);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const busyRef = useRef(true);
   const dirtyRef = useRef(false);
@@ -910,48 +914,67 @@ export function EditorWorkspace({
               }
               type="button"
               disabled={busy}
-              onClick={() => void handleSelectSlide(index)}
+              onClick={(event) => {
+                if (suppressSlideClickRef.current) {
+                  suppressSlideClickRef.current = false;
+                  event.preventDefault();
+                  return;
+                }
+                void handleSelectSlide(index);
+              }}
               onKeyDown={(event) => handleSlideKeyDown(index, event)}
+              onLostPointerCapture={(event) => clearSlideSortDrag(event.pointerId)}
+              onPointerCancel={(event) => clearSlideSortDrag(event.pointerId)}
+              onPointerDown={(event) => {
+                if (busy || slide.handle === undefined || slideSortDragRef.current !== null) {
+                  event.preventDefault();
+                  return;
+                }
+                event.currentTarget.setPointerCapture(event.pointerId);
+                suppressSlideClickRef.current = false;
+                slideSortDragRef.current = {
+                  fromIndex: index,
+                  pointerId: event.pointerId,
+                  startPoint: { x: event.clientX, y: event.clientY },
+                  hasMoved: false,
+                };
+                setDraggedSlideIndex(index);
+                setSlideDropTarget(null);
+              }}
+              onPointerMove={(event) => {
+                let drag = slideSortDragRef.current;
+                if (drag === null || drag.pointerId !== event.pointerId) return;
+                if (
+                  !drag.hasMoved &&
+                  Math.hypot(
+                    event.clientX - drag.startPoint.x,
+                    event.clientY - drag.startPoint.y,
+                  ) >= SLIDE_DRAG_THRESHOLD_PX
+                ) {
+                  drag = { ...drag, hasMoved: true };
+                  slideSortDragRef.current = drag;
+                }
+                if (!drag.hasMoved) return;
+                const target = slideDropTargetAtPoint(event.clientX, event.clientY);
+                setSlideDropTarget(target);
+              }}
+              onPointerUp={(event) => {
+                const drag = slideSortDragRef.current;
+                if (drag === null || drag.pointerId !== event.pointerId) return;
+                const target = drag.hasMoved
+                  ? slideDropTargetAtPoint(event.clientX, event.clientY)
+                  : null;
+                suppressSlideClickRef.current = drag.hasMoved;
+                if (drag.hasMoved) {
+                  window.setTimeout(() => {
+                    suppressSlideClickRef.current = false;
+                  }, 0);
+                }
+                clearSlideSortDrag(event.pointerId);
+                if (target !== null) handleSlideDrop(drag.fromIndex, target);
+              }}
             >
               <span className="editor-thumbnail-label">
-                <span
-                  className="editor-thumbnail-grip"
-                  data-testid="editor-thumbnail-grip"
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                  }}
-                  onLostPointerCapture={(event) => clearSlideSortDrag(event.pointerId)}
-                  onPointerCancel={(event) => clearSlideSortDrag(event.pointerId)}
-                  onPointerDown={(event) => {
-                    if (busy || slide.handle === undefined || slideSortDragRef.current !== null) {
-                      event.preventDefault();
-                      return;
-                    }
-                    event.preventDefault();
-                    event.stopPropagation();
-                    event.currentTarget.setPointerCapture(event.pointerId);
-                    slideSortDragRef.current = { fromIndex: index, pointerId: event.pointerId };
-                    setDraggedSlideIndex(index);
-                    setSlideDropTarget(null);
-                  }}
-                  onPointerMove={(event) => {
-                    const drag = slideSortDragRef.current;
-                    if (drag === null || drag.pointerId !== event.pointerId) return;
-                    const target = slideDropTargetAtPoint(event.clientX, event.clientY);
-                    setSlideDropTarget(target);
-                  }}
-                  onPointerUp={(event) => {
-                    const drag = slideSortDragRef.current;
-                    if (drag === null || drag.pointerId !== event.pointerId) return;
-                    const target = slideDropTargetAtPoint(event.clientX, event.clientY);
-                    clearSlideSortDrag(event.pointerId);
-                    if (target !== null) handleSlideDrop(drag.fromIndex, target);
-                  }}
-                  aria-hidden="true"
-                >
-                  ⠿
-                </span>
                 <span>Slide {slide.slideNumber}</span>
               </span>
               <span dangerouslySetInnerHTML={{ __html: slide.svg }} />
