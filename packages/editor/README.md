@@ -25,16 +25,12 @@ const source = readPptx(await readFile("input.pptx"));
 const run = source.slides[0]?.shapes.find((shape) => shape.kind === "shape")?.textBody
   ?.paragraphs[0]?.runs[0];
 
-if (run?.handle === undefined) {
+if (run === undefined) {
   throw new Error("No editable text run found");
 }
 
 const session = createEditorSession(source);
-const result = session.apply({
-  kind: "replaceTextRunPlainText",
-  handle: run.handle,
-  text: "Edited",
-});
+const result = session.replaceTextRunPlainText(run, "Edited");
 
 if (!result.ok) {
   throw new Error(`${result.code}: ${result.message}`, { cause: result.cause });
@@ -47,11 +43,25 @@ for (const warning of result.warnings ?? []) {
 await writeFile("edited.pptx", writePptx(session.document));
 ```
 
-## Commands, history, and selection
+## Source-node methods, commands, history, and selection
 
-`session.apply(command)` validates and applies one command. `session.applyAll(commands)` applies a
-batch as one undo-history entry. Failed validation returns an `invalid-command` result without
-changing the document.
+For ordinary edits, pass source nodes directly to the corresponding `EditorSession` convenience
+method. Text-run and paragraph methods replace plain text or set/clear properties. Shape methods
+move, resize, transform, style, or delete a `SourceShapeNode`; `replaceImage()` accepts a
+`SourceImage`; slide topology methods accept a `SourceSlide`. `addTextBox()` and `addConnector()`
+also accept the target `SourceSlide`, so application code does not need to extract source handles.
+Nodes captured before earlier edits remain usable because the session resolves their stable handle
+against its current document.
+
+Every convenience method creates and applies the matching command through the same validation,
+warning, selection-reconciliation, and undo/redo-history path. A successful convenience-method
+call is one undo-history entry.
+
+Use `session.apply(command)` when commands need to be stored, logged, transported by UI code, or
+constructed independently of a source-node object. Use `session.applyAll(commands)` to apply
+multiple operations atomically as one undo-history entry; convenience methods are single-operation
+calls and cannot be grouped into one history entry by calling them sequentially. Failed validation
+returns an `invalid-command` result without changing the document.
 
 The released command set includes:
 
