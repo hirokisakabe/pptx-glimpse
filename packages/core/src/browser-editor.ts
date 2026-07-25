@@ -9,8 +9,11 @@ import {
   type RelationshipId,
   type SourceHandle,
   type SourceImage,
+  type SourceParagraphProperties,
+  type SourceRunProperties,
   type SourceShapeNode,
   type SourceTextBody,
+  type SourceTextBodyProperties,
   type SourceTextRun,
   writePptx,
 } from "@pptx-glimpse/document";
@@ -18,11 +21,13 @@ import {
   createEditorSession,
   type EditorCommand,
   type EditorCommandWarning,
+} from "@pptx-glimpse/editor";
+
+import {
   type PptxTextBodyProseMirrorDocJson,
   proseMirrorDocJsonToEditorCommands,
   textBodyToProseMirrorDocJson,
-} from "@pptx-glimpse/editor-core";
-
+} from "./prosemirror-text-body-compat.js";
 import { type ConvertOptions, renderPptxSourceModelToSvg, type SlideSvg } from "./svg-converter.js";
 import { unsafeBrandAssertion } from "./unsafe-type-assertion.js";
 
@@ -70,7 +75,29 @@ export interface BrowserEditorTextRunInfo {
 }
 
 export interface BrowserEditorTextBodyInfo {
+  /**
+   * @deprecated Use `BrowserEditorShapeInfo.textBody` and `applyAll()` with editor commands.
+   * This ProseMirror-compatible JSON bridge is retained for pptx-glimpse 3.x only.
+   */
   readonly docJson: PptxTextBodyProseMirrorDocJson;
+}
+
+export interface BrowserEditorTextBodyView {
+  readonly handle?: SourceHandle;
+  readonly properties?: SourceTextBodyProperties;
+  readonly paragraphs: readonly BrowserEditorTextParagraphView[];
+}
+
+export interface BrowserEditorTextParagraphView {
+  readonly handle?: SourceHandle;
+  readonly properties?: SourceParagraphProperties;
+  readonly runs: readonly BrowserEditorTextRunView[];
+}
+
+export interface BrowserEditorTextRunView {
+  readonly handle?: SourceHandle;
+  readonly properties?: SourceRunProperties;
+  readonly text: string;
 }
 
 export interface BrowserEditorImageReplacementInfo {
@@ -96,6 +123,11 @@ export interface BrowserEditorShapeInfo {
   readonly editableTransform?: boolean;
   readonly editableDelete?: boolean;
   readonly textRuns?: readonly BrowserEditorTextRunInfo[];
+  readonly textBody?: BrowserEditorTextBodyView;
+  /**
+   * @deprecated Use `textBody` and `applyAll()` with `@pptx-glimpse/editor` commands.
+   * This ProseMirror-compatible view is retained for pptx-glimpse 3.x only.
+   */
   readonly editableTextBody?: BrowserEditorTextBodyInfo;
   readonly editableImageReplacement?: BrowserEditorImageReplacementInfo;
 }
@@ -209,10 +241,15 @@ export class BrowserPptxEditorSession {
   }
 
   async apply(command: EditorCommand): Promise<BrowserEditorSlidesResponse> {
-    const result = this.#session.apply(command);
+    return this.applyAll([command]);
+  }
+
+  async applyAll(commands: readonly EditorCommand[]): Promise<BrowserEditorSlidesResponse> {
+    const result = this.#session.applyAll(commands);
     if (!result.ok) {
       throw new Error(result.message);
     }
+    if (commands.length === 0) return this.response(result.warnings);
     await this.renderCurrentSlides();
     return this.response(result.warnings);
   }
@@ -291,6 +328,10 @@ export class BrowserPptxEditorSession {
     return this.deleteShape(selection.shapeHandle);
   }
 
+  /**
+   * @deprecated Use `textBody` from `shapes()` and pass generated commands to `applyAll()`.
+   * This ProseMirror-compatible bridge is retained for pptx-glimpse 3.x only.
+   */
   async applyTextBodyDocJson(
     handle: SourceHandle,
     docJson: unknown,
@@ -299,12 +340,7 @@ export class BrowserPptxEditorSession {
     const commands = proseMirrorDocJsonToEditorCommands(textBody, docJson);
     if (commands.length === 0) return this.response();
 
-    const result = this.#session.applyAll(commands);
-    if (!result.ok) {
-      throw new Error(result.message);
-    }
-    await this.renderCurrentSlides();
-    return this.response(result.warnings);
+    return this.applyAll(commands);
   }
 
   selectShape(handle: SourceHandle): BrowserEditorSlidesResponse {
@@ -394,6 +430,7 @@ function shapeInfo(
           textRuns: collectTextRuns(
             shape.textBody.paragraphs.flatMap((paragraph) => paragraph.runs),
           ),
+          textBody: textBodyView(shape.textBody),
         }
       : {}),
     ...(shape.kind === "shape" && canEditTransform && shape.textBody !== undefined
@@ -455,6 +492,22 @@ function collectTextRuns(runs: readonly SourceTextRun[]): BrowserEditorTextRunIn
     if (run.handle === undefined) return [];
     return [{ text: run.text, handle: run.handle }];
   });
+}
+
+function textBodyView(textBody: SourceTextBody): BrowserEditorTextBodyView {
+  return {
+    ...(textBody.handle !== undefined ? { handle: textBody.handle } : {}),
+    ...(textBody.properties !== undefined ? { properties: textBody.properties } : {}),
+    paragraphs: textBody.paragraphs.map((paragraph) => ({
+      ...(paragraph.handle !== undefined ? { handle: paragraph.handle } : {}),
+      ...(paragraph.properties !== undefined ? { properties: paragraph.properties } : {}),
+      runs: paragraph.runs.map((run) => ({
+        text: run.text,
+        ...(run.handle !== undefined ? { handle: run.handle } : {}),
+        ...(run.properties !== undefined ? { properties: run.properties } : {}),
+      })),
+    })),
+  };
 }
 
 function editableTextBody(

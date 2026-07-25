@@ -19,7 +19,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
 const demoRoot = resolve(repoRoot, "demo");
 const documentPackageRoot = resolve(repoRoot, "packages/document");
-const editorCorePackageRoot = resolve(repoRoot, "packages/editor-core");
+const editorPackageRoot = resolve(repoRoot, "packages/editor");
 const rendererPackageRoot = resolve(repoRoot, "packages/renderer");
 const corePackageRoot = resolve(repoRoot, "packages/core");
 const execFileAsync = promisify(execFile);
@@ -247,7 +247,7 @@ async function ensureDemoBuild(): Promise<void> {
 async function ensureCoreDist(): Promise<void> {
   coreDistBuildPromise ??= (async () => {
     await runPackageBuild(documentPackageRoot);
-    await runPackageBuild(editorCorePackageRoot);
+    await runPackageBuild(editorPackageRoot);
     await runPackageBuild(rendererPackageRoot);
     await runPackageBuild(corePackageRoot);
   })();

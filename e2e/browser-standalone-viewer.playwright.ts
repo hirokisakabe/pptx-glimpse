@@ -14,7 +14,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
 const corePackageRoot = resolve(repoRoot, "packages/core");
 const documentPackageRoot = resolve(repoRoot, "packages/document");
-const editorCorePackageRoot = resolve(repoRoot, "packages/editor-core");
+const editorPackageRoot = resolve(repoRoot, "packages/editor");
 const rendererPackageRoot = resolve(repoRoot, "packages/renderer");
 const sharedFixtures = resolve(repoRoot, "shared-fixtures");
 const vrtFixtures = resolve(repoRoot, "vrt/snapshot/fixtures");
@@ -174,7 +174,7 @@ async function buildStandaloneViewerBundle(): Promise<string> {
 async function ensureCoreDist(): Promise<void> {
   coreDistBuildPromise ??= (async () => {
     await runPackageBuild(documentPackageRoot);
-    await runPackageBuild(editorCorePackageRoot);
+    await runPackageBuild(editorPackageRoot);
     await runPackageBuild(rendererPackageRoot);
     await runPackageBuild(corePackageRoot);
   })();

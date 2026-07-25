@@ -1,3 +1,13 @@
+/**
+ * pptx-glimpse 3.x compatibility bridge for the deprecated ProseMirror text-body API.
+ *
+ * New headless editing code consumes the source-backed text body view exposed by
+ * BrowserPptxEditorSession and sends @pptx-glimpse/editor commands through applyAll().
+ * Keep all ProseMirror-specific schema and JSON conversion in this core integration
+ * boundary so @pptx-glimpse/editor stays UI-framework independent. This module can be
+ * removed together with editableTextBody/applyTextBodyDocJson in the next major.
+ */
+
 import {
   asPartPath,
   asRelationshipId,
@@ -14,7 +24,7 @@ import {
 } from "@pptx-glimpse/document";
 import { Node as ProseMirrorNode, Schema } from "prosemirror-model";
 
-export const pptxTextBodySchema = new Schema({
+const pptxTextBodySchema = new Schema({
   nodes: {
     doc: { content: "paragraph*" },
     paragraph: {
@@ -53,13 +63,13 @@ export interface PptxTextBodyProseMirrorParagraphJson {
   readonly content?: readonly PptxTextBodyProseMirrorTextJson[];
 }
 
-export interface PptxTextBodyProseMirrorTextJson {
+interface PptxTextBodyProseMirrorTextJson {
   readonly type: "text";
   readonly text: string;
   readonly marks?: readonly PptxTextBodyProseMirrorRunMarkJson[];
 }
 
-export interface PptxTextBodyProseMirrorRunMarkJson {
+interface PptxTextBodyProseMirrorRunMarkJson {
   readonly type: "pptxRun";
   /** Read-only source metadata. Formatting edits are not applied from ProseMirror JSON. */
   readonly attrs?: {
@@ -68,7 +78,7 @@ export interface PptxTextBodyProseMirrorRunMarkJson {
   };
 }
 
-export type PptxTextBodyProseMirrorCommand =
+type PptxTextBodyProseMirrorCommand =
   | {
       readonly kind: "replaceTextRunPlainText";
       readonly handle: SourceHandle;
@@ -525,16 +535,12 @@ function sourceHandlesEqual(
   right: SourceHandle | undefined,
 ): boolean {
   if (left === undefined || right === undefined) return left === right;
-  return sourceHandleKey(left) === sourceHandleKey(right);
-}
-
-function sourceHandleKey(handle: SourceHandle): string {
-  return [
-    handle.partPath,
-    handle.nodeId ?? "",
-    handle.relationshipId ?? "",
-    handle.orderingSlot ?? "",
-  ].join("\u0000");
+  return (
+    left.partPath === right.partPath &&
+    left.nodeId === right.nodeId &&
+    left.relationshipId === right.relationshipId &&
+    left.orderingSlot === right.orderingSlot
+  );
 }
 
 function stableValueEqual(left: unknown, right: unknown): boolean {

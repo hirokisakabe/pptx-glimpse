@@ -2,7 +2,7 @@ import { Buffer } from "node:buffer";
 
 import { asEmu, readPptx, type SourceConnector, type SourceShape } from "@pptx-glimpse/document";
 import JSZip from "jszip";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { createBrowserPptxEditorSession } from "./browser-editor.js";
 
@@ -24,6 +24,23 @@ describe("BrowserPptxEditorSession", () => {
 
     expect(editor.slides).toHaveLength(1);
     expect(shape.bounds).toEqual({ x: 96, y: 192, width: 288, height: 96 });
+    expect(shape.textBody).toMatchObject({
+      paragraphs: [
+        {
+          runs: [
+            {
+              text: "Original",
+              properties: {
+                fontSize: 24,
+                typeface: "Aptos",
+              },
+            },
+          ],
+        },
+      ],
+    });
+    expect(shape.textBody?.paragraphs[0]?.handle).toBeDefined();
+    expect(shape.textBody?.paragraphs[0]?.runs[0]?.handle).toBeDefined();
     expect(shape.editableTextBody).toBeDefined();
 
     await editor.apply({
@@ -61,6 +78,41 @@ describe("BrowserPptxEditorSession", () => {
       width: 336 * 9525,
       height: 120 * 9525,
     });
+  });
+
+  it("applies command batches as one history entry and renders once", async () => {
+    const editor = await createBrowserPptxEditorSession(await buildShapeFixture(), {
+      skipSystemFonts: true,
+    });
+    const run = editor.shapes(1)[0]?.textBody?.paragraphs[0]?.runs[0];
+    if (run?.handle === undefined) throw new Error("text run handle not found");
+    const renderSpy = vi.spyOn(editor, "renderCurrentSlides");
+
+    const response = await editor.applyAll([
+      {
+        kind: "replaceTextRunPlainText",
+        handle: run.handle,
+        text: "Batch edited",
+      },
+      {
+        kind: "setTextRunProperties",
+        handle: run.handle,
+        properties: { bold: true },
+      },
+    ]);
+
+    expect(renderSpy).toHaveBeenCalledTimes(1);
+    expect(response.history).toMatchObject({ undoDepth: 1, canUndo: true });
+    expect(firstText(editor.document)).toBe("Batch edited");
+    expect(firstShape(editor.document).textBody?.paragraphs[0]?.runs[0]?.properties?.bold).toBe(
+      true,
+    );
+
+    await editor.undo();
+    expect(firstText(editor.document)).toBe("Original");
+    expect(
+      firstShape(editor.document).textBody?.paragraphs[0]?.runs[0]?.properties?.bold,
+    ).toBeUndefined();
   });
 
   it("returns shared media warnings from image replacement commands", async () => {

@@ -38,7 +38,7 @@ import {
   type SourceTextRun,
   writePptx,
 } from "../../packages/document/src/index.js";
-import { createEditorSession } from "../../packages/editor-core/src/index.js";
+import { createEditorSession } from "../../packages/editor/src/index.js";
 import { compareImageBuffers } from "../compare-utils.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

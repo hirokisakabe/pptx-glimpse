@@ -69,7 +69,7 @@ def create_basic_shapes():
 
 
 def create_editor_validity_text_fixture(filename, text):
-    """Fixture pair for editor-core text replacement validity checks."""
+    """Fixture pair for editor text replacement validity checks."""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -101,7 +101,7 @@ def create_editor_validity_text_fixture(filename, text):
 
 
 def create_editor_validity_transform_fixture(filename, left, top, width, height):
-    """Fixture pair for editor-core move / resize validity checks."""
+    """Fixture pair for editor move / resize validity checks."""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -137,7 +137,7 @@ def create_editor_validity_transform_fixture(filename, left, top, width, height)
 
 
 def create_editor_validity_formatting_fixture(filename, *, expected):
-    """Fixture pair for editor-core run property validity checks."""
+    """Fixture pair for editor run property validity checks."""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -181,7 +181,7 @@ def create_editor_validity_formatting_fixture(filename, *, expected):
 
 
 def create_editor_validity_paragraph_fixture(filename, *, expected):
-    """Fixture pair for editor-core paragraph property validity checks."""
+    """Fixture pair for editor paragraph property validity checks."""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 
@@ -219,7 +219,7 @@ def create_editor_validity_paragraph_fixture(filename, *, expected):
 
 
 def create_editor_validity_image_fixture(filename, image_base64):
-    """Fixture pair for editor-core image replacement validity checks."""
+    """Fixture pair for editor image replacement validity checks."""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
 

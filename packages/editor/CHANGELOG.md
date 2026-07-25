@@ -1,4 +1,6 @@
-# @pptx-glimpse/editor-core
+# @pptx-glimpse/editor
+
+> 0.0.14 以前は private package `@pptx-glimpse/editor-core` として管理されていた履歴です。
 
 ## 0.0.14
 

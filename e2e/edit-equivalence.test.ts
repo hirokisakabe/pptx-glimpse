@@ -12,7 +12,7 @@ import {
   asPt,
   replaceTextRunPlainText,
 } from "../packages/document/src/index.js";
-import { createEditorSession } from "../packages/editor-core/src/index.js";
+import { createEditorSession } from "../packages/editor/src/index.js";
 import {
   buildPptx,
   shapeXml,

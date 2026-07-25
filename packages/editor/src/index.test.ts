@@ -16,18 +16,12 @@ import {
   writePptx,
 } from "@pptx-glimpse/document";
 import JSZip from "jszip";
-import { Node as ProseMirrorNode } from "prosemirror-model";
-import { Transform } from "prosemirror-transform";
 import { describe, expect, it } from "vitest";
 
 import {
   createEditorSession,
   type EditorApplyCommandResult,
   type EditorHistoryResult,
-  pptxTextBodySchema,
-  proseMirrorDocJsonToEditorCommands,
-  proseMirrorDocJsonToTextBody,
-  textBodyToProseMirrorDocJson,
 } from "./index.js";
 
 const encoder = new TextEncoder();
@@ -89,6 +83,24 @@ describe("EditorSession text-run commands", () => {
     expect(firstRun(readPptx(writePptx(redone))).text).toBe("Edited text");
     expect(session.canUndo).toBe(true);
     expect(session.canRedo).toBe(false);
+  });
+
+  it("keeps redo history when applying a no-op command after undo", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const handle = requireHandle(firstRun(source).handle);
+
+    expectApplied(session.apply({ kind: "replaceTextRunPlainText", handle, text: "Edited text" }));
+    expectHistory(session.undo());
+    const noOp = expectApplied(
+      session.apply({ kind: "replaceTextRunPlainText", handle, text: "Original" }),
+    );
+
+    expect(noOp).toBe(source);
+    expect(session.undoDepth).toBe(0);
+    expect(session.redoDepth).toBe(1);
+    expectHistory(session.redo());
+    expect(firstRun(session.document).text).toBe("Edited text");
   });
 
   it("keeps the latest edit when the same text run is edited repeatedly", async () => {
@@ -181,6 +193,29 @@ describe("EditorSession text-run commands", () => {
     expect(firstRun(session.document).text).toBe("Original");
     expect(session.undoDepth).toBe(0);
     expect(session.redoDepth).toBe(0);
+  });
+
+  it("rejects non-string text from JavaScript callers", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+
+    const runResult = session.apply({
+      kind: "replaceTextRunPlainText",
+      handle: requireHandle(firstRun(source).handle),
+      // @ts-expect-error exercises runtime validation for JavaScript callers.
+      text: 42,
+    });
+    const paragraphResult = session.apply({
+      kind: "replaceParagraphPlainText",
+      handle: requireHandle(firstParagraph(source).handle),
+      // @ts-expect-error exercises runtime validation for JavaScript callers.
+      text: null,
+    });
+
+    expect(runResult).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(paragraphResult).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(session.document).toBe(source);
+    expect(session.undoDepth).toBe(0);
   });
 });
 
@@ -435,6 +470,152 @@ describe("EditorSession text run property commands", () => {
 });
 
 describe("EditorSession paragraph property commands", () => {
+  it("replaces paragraph text as one undoable writer-persisted command", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const handle = requireHandle(firstParagraph(source).handle);
+
+    const edited = expectApplied(
+      session.apply({
+        kind: "replaceParagraphPlainText",
+        handle,
+        text: "Paragraph replacement",
+      }),
+    );
+
+    expect(firstParagraph(edited).runs.map((run) => run.text)).toEqual(["Paragraph replacement"]);
+    expect(firstParagraph(readPptx(writePptx(edited))).runs.map((run) => run.text)).toEqual([
+      "Paragraph replacement",
+    ]);
+    expect(session.undoDepth).toBe(1);
+    expect(firstParagraph(expectHistory(session.undo())).runs.map((run) => run.text)).toEqual([
+      "Original",
+      " Keep ",
+    ]);
+    expect(firstParagraph(expectHistory(session.redo())).runs.map((run) => run.text)).toEqual([
+      "Paragraph replacement",
+    ]);
+  });
+
+  it("normalizes an earlier run text edit into paragraph replacement and rejects the reverse order", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const paragraphHandle = requireHandle(firstParagraph(source).handle);
+    const runHandle = requireHandle(firstRun(source).handle);
+    const runThenParagraph = createEditorSession(source);
+
+    const edited = expectApplied(
+      runThenParagraph.applyAll([
+        { kind: "replaceTextRunPlainText", handle: runHandle, text: "Intermediate" },
+        {
+          kind: "replaceParagraphPlainText",
+          handle: paragraphHandle,
+          text: "Final paragraph",
+        },
+      ]),
+    );
+
+    expect(firstParagraph(edited).runs.map((run) => run.text)).toEqual(["Final paragraph"]);
+    expect(firstParagraph(readPptx(writePptx(edited))).runs.map((run) => run.text)).toEqual([
+      "Final paragraph",
+    ]);
+    expect(runThenParagraph.undoDepth).toBe(1);
+
+    const paragraphThenRun = createEditorSession(source);
+    expect(
+      paragraphThenRun.applyAll([
+        {
+          kind: "replaceParagraphPlainText",
+          handle: paragraphHandle,
+          text: "Intermediate paragraph",
+        },
+        { kind: "replaceTextRunPlainText", handle: runHandle, text: "Unsafe follow-up" },
+      ]),
+    ).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(paragraphThenRun.document).toBe(source);
+    expect(paragraphThenRun.undoDepth).toBe(0);
+  });
+
+  it("rejects paragraph replacement combined with run edits for the same paragraph", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const paragraphHandle = requireHandle(firstParagraph(source).handle);
+    const runHandle = requireHandle(firstRun(source).handle);
+
+    for (const [orderIndex, commands] of (
+      [
+        [
+          {
+            kind: "setTextRunProperties",
+            handle: runHandle,
+            properties: { bold: false },
+          },
+          {
+            kind: "replaceParagraphPlainText",
+            handle: paragraphHandle,
+            text: "Replacement",
+          },
+        ],
+        [
+          {
+            kind: "replaceParagraphPlainText",
+            handle: paragraphHandle,
+            text: "Replacement",
+          },
+          {
+            kind: "setTextRunProperties",
+            handle: runHandle,
+            properties: { bold: false },
+          },
+        ],
+      ] as const
+    ).entries()) {
+      const session = createEditorSession(source);
+      const result = session.applyAll(commands);
+
+      expect(result, `command order ${String(orderIndex)}`).toMatchObject({
+        ok: false,
+        code: "invalid-command",
+      });
+      expect(session.document).toBe(source);
+      expect(session.undoDepth).toBe(0);
+    }
+
+    const runThenParagraph = createEditorSession(source);
+    expectApplied(
+      runThenParagraph.apply({
+        kind: "setTextRunProperties",
+        handle: runHandle,
+        properties: { bold: false },
+      }),
+    );
+    expect(
+      runThenParagraph.apply({
+        kind: "replaceParagraphPlainText",
+        handle: paragraphHandle,
+        text: "Replacement",
+      }),
+    ).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(runThenParagraph.undoDepth).toBe(1);
+    expect(firstRun(runThenParagraph.document).properties?.bold).toBe(false);
+
+    const paragraphThenRun = createEditorSession(source);
+    expectApplied(
+      paragraphThenRun.apply({
+        kind: "replaceParagraphPlainText",
+        handle: paragraphHandle,
+        text: "Replacement",
+      }),
+    );
+    expect(
+      paragraphThenRun.apply({
+        kind: "setTextRunProperties",
+        handle: runHandle,
+        properties: { bold: false },
+      }),
+    ).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(paragraphThenRun.undoDepth).toBe(1);
+    expect(firstParagraph(paragraphThenRun.document).runs[0].text).toBe("Replacement");
+  });
+
   it("applies paragraph alignment and bullet edits and persists them through write/read", async () => {
     const source = readPptx(await buildTextEditFixture());
     const session = createEditorSession(source);
@@ -555,188 +736,6 @@ describe("EditorSession paragraph property commands", () => {
     expect(invalidClear).toMatchObject({ ok: false, code: "invalid-command" });
     expect(session.document).toBe(before);
     expect(session.undoDepth).toBe(0);
-  });
-});
-
-describe("ProseMirror text body conversion", () => {
-  it("round-trips paragraph and run text with source properties", async () => {
-    const source = readPptx(await buildTextEditFixture());
-    const textBody = firstTextBody(source);
-    const docJson = textBodyToProseMirrorDocJson(textBody);
-    const roundTripped = proseMirrorDocJsonToTextBody(textBody, docJson);
-
-    expect(roundTripped.paragraphs).toEqual(textBody.paragraphs);
-    expect(roundTripped.paragraphs[0].runs[0].properties).toEqual(
-      textBody.paragraphs[0].runs[0].properties,
-    );
-    expect(roundTripped.paragraphs[0].runs[1].properties).toEqual(
-      textBody.paragraphs[0].runs[1].properties,
-    );
-  });
-
-  it("turns a run-crossing ProseMirror replacement into writer-persisted run edits", async () => {
-    const source = readPptx(await buildTextEditFixture());
-    const textBody = firstTextBody(source);
-    const doc = ProseMirrorNode.fromJSON(
-      pptxTextBodySchema,
-      textBodyToProseMirrorDocJson(textBody),
-    );
-    const firstRunMark = doc.firstChild?.child(0).marks[0];
-    if (firstRunMark === undefined) throw new Error("first run mark not found");
-    const transform = new Transform(doc).replaceWith(
-      1 + "Orig".length,
-      1 + "Original Ke".length,
-      pptxTextBodySchema.text("X", [firstRunMark]),
-    );
-    const editedJson: unknown = transform.doc.toJSON();
-    const commands = proseMirrorDocJsonToEditorCommands(textBody, editedJson);
-    const session = createEditorSession(source);
-
-    expectApplied(session.applyAll(commands));
-    const reread = readPptx(writePptx(session.document));
-
-    expect(commands).toHaveLength(2);
-    expect(session.undoDepth).toBe(1);
-    expect(firstParagraph(session.document).runs.map((run) => run.text)).toEqual(["OrigX", "ep "]);
-    expect(firstParagraph(reread).runs.map((run) => run.text)).toEqual(["OrigX", "ep "]);
-    expect(firstParagraph(reread).runs[0].properties).toEqual(
-      firstParagraph(source).runs[0].properties,
-    );
-    expect(firstParagraph(reread).runs[1].properties).toEqual(
-      firstParagraph(source).runs[1].properties,
-    );
-
-    expectHistory(session.undo());
-    expect(firstParagraph(session.document).runs.map((run) => run.text)).toEqual([
-      "Original",
-      " Keep ",
-    ]);
-    expectHistory(session.redo());
-    expect(firstParagraph(session.document).runs.map((run) => run.text)).toEqual(["OrigX", "ep "]);
-  });
-
-  it("falls back to paragraph replacement when run mark order changes", async () => {
-    const source = readPptx(await buildTextEditFixture());
-    const textBody = firstTextBody(source);
-    const docJson = textBodyToProseMirrorDocJson(textBody);
-    const paragraph = docJson.content?.[0];
-    const firstText = paragraph?.content?.[0];
-    const secondText = paragraph?.content?.[1];
-    if (paragraph === undefined || firstText === undefined || secondText === undefined) {
-      throw new Error("text body doc fixture is missing expected text nodes");
-    }
-    const editedJson = {
-      type: "doc",
-      content: [
-        {
-          ...paragraph,
-          content: [secondText, firstText],
-        },
-      ],
-    };
-    const commands = proseMirrorDocJsonToEditorCommands(textBody, editedJson);
-    const session = createEditorSession(source);
-
-    for (const command of commands) {
-      expectApplied(session.apply(command));
-    }
-    const reread = readPptx(writePptx(session.document));
-
-    expect(commands).toEqual([
-      {
-        kind: "replaceParagraphPlainText",
-        handle: firstParagraph(source).handle,
-        text: " Keep Original",
-      },
-    ]);
-    expect(firstParagraph(reread).runs.map((run) => run.text)).toEqual([" Keep Original"]);
-  });
-
-  it("turns paragraph property attr changes into editor commands", async () => {
-    const source = readPptx(await buildTextEditFixture());
-    const textBody = firstTextBody(source);
-    const docJson = textBodyToProseMirrorDocJson(textBody);
-    const paragraph = docJson.content?.[0];
-    if (paragraph === undefined) throw new Error("text body doc fixture is missing paragraph");
-    const editedJson = {
-      type: "doc",
-      content: [
-        {
-          ...paragraph,
-          attrs: {
-            ...paragraph.attrs,
-            properties: {
-              ...firstParagraph(source).properties,
-              align: "right",
-              level: 1,
-              bullet: { type: "char", char: "\u2022" },
-            },
-          },
-        },
-      ],
-    };
-    const commands = proseMirrorDocJsonToEditorCommands(textBody, editedJson);
-    const session = createEditorSession(source);
-
-    expect(commands).toEqual([
-      {
-        kind: "setParagraphProperties",
-        handle: firstParagraph(source).handle,
-        properties: { align: "right", level: 1, bullet: { type: "char", char: "\u2022" } },
-      },
-    ]);
-    expectApplied(session.applyAll(commands));
-    expect(firstParagraph(readPptx(writePptx(session.document))).properties).toMatchObject({
-      align: "right",
-      level: 1,
-      bullet: { type: "char", char: "\u2022" },
-    });
-  });
-
-  it("clears paragraph property attrs removed from ProseMirror JSON", async () => {
-    const source = readPptx(await buildTextEditFixture());
-    const textBody = firstTextBody(source);
-    const docJson = textBodyToProseMirrorDocJson(textBody);
-    const paragraph = docJson.content?.[0];
-    if (paragraph === undefined) throw new Error("text body doc fixture is missing paragraph");
-    const editedJson = {
-      type: "doc",
-      content: [
-        {
-          ...paragraph,
-          attrs: {
-            ...paragraph.attrs,
-            properties: {},
-          },
-        },
-      ],
-    };
-
-    expect(proseMirrorDocJsonToEditorCommands(textBody, editedJson)).toEqual([
-      {
-        kind: "clearParagraphProperties",
-        handle: firstParagraph(source).handle,
-        properties: ["align"],
-      },
-    ]);
-  });
-
-  it("rejects text bodies with empty or unsupported run-like content", async () => {
-    const source = readPptx(await buildTextEditFixture());
-    const textBody = firstTextBody(source);
-    const paragraph = textBody.paragraphs[0];
-    const run = paragraph.runs[0];
-    const withEmptyRun = {
-      ...textBody,
-      paragraphs: [{ ...paragraph, runs: [{ ...run, text: "" }] }],
-    };
-    const withBreakRun = {
-      ...textBody,
-      paragraphs: [{ ...paragraph, runs: [{ ...run, text: "\n" }] }],
-    };
-
-    expect(() => textBodyToProseMirrorDocJson(withEmptyRun)).toThrow(/empty text runs/);
-    expect(() => textBodyToProseMirrorDocJson(withBreakRun)).toThrow(/unsupported run-like/);
   });
 });
 
@@ -2044,10 +2043,6 @@ function firstShape(source: PptxSourceModel): SourceShape {
 
 function firstParagraph(source: PptxSourceModel) {
   return firstShape(source).textBody!.paragraphs[0];
-}
-
-function firstTextBody(source: PptxSourceModel) {
-  return firstShape(source).textBody!;
 }
 
 function firstRun(source: PptxSourceModel) {
