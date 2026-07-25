@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  createBrowserPptxEditorSession,
-  type BrowserEditorShapeBoundsPx,
-  type BrowserEditorShapeInfo,
-  type BrowserEditorSlideSvg,
+  createPptxEditorSession,
+  type PptxEditorShapeBoundsPx,
+  type PptxEditorShapeInfo,
+  type PptxEditorSlideSvg,
   type EditorCommand,
   type FontBuffer,
   type SourceHandle,
@@ -15,7 +15,7 @@ const EMU_PER_PIXEL = 9525;
 const MIN_SHAPE_SIZE = 8;
 const MAX_IMAGE_REPLACEMENT_BYTES = 5 * 1024 * 1024;
 
-type EditorSession = Awaited<ReturnType<typeof createBrowserPptxEditorSession>>;
+type EditorSession = Awaited<ReturnType<typeof createPptxEditorSession>>;
 type ShapeTransformCommand = Extract<EditorCommand, { readonly kind: "setShapeTransform" }>;
 type TextRunProperties = Extract<
   EditorCommand,
@@ -45,7 +45,7 @@ interface DragState {
   readonly shapeHandle: SourceHandle;
   readonly pointerId: number;
   readonly startPoint: Point;
-  readonly startBounds: BrowserEditorShapeBoundsPx;
+  readonly startBounds: PptxEditorShapeBoundsPx;
 }
 
 interface Point {
@@ -62,11 +62,11 @@ export function EditorWorkspace({
   onBackToViewer,
 }: EditorWorkspaceProps) {
   const [editor, setEditor] = useState<EditorSession | null>(null);
-  const [slides, setSlides] = useState<BrowserEditorSlideSvg[]>([]);
+  const [slides, setSlides] = useState<PptxEditorSlideSvg[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [shapeOptions, setShapeOptions] = useState<BrowserEditorShapeInfo[]>([]);
+  const [shapeOptions, setShapeOptions] = useState<PptxEditorShapeInfo[]>([]);
   const [selectedShapeKey, setSelectedShapeKey] = useState<string | null>(null);
-  const [draftBounds, setDraftBounds] = useState<BrowserEditorShapeBoundsPx | null>(null);
+  const [draftBounds, setDraftBounds] = useState<PptxEditorShapeBoundsPx | null>(null);
   const [selectedRunIndex, setSelectedRunIndex] = useState(0);
   const [textValue, setTextValue] = useState("");
   const [fontSize, setFontSize] = useState("24");
@@ -144,7 +144,7 @@ export function EditorWorkspace({
       setLoadError("");
       setOperationError("");
       try {
-        const session = await createBrowserPptxEditorSession(new Uint8Array(pptxBytes), {
+        const session = await createPptxEditorSession(new Uint8Array(pptxBytes), {
           fonts: [...fonts],
           skipSystemFonts: true,
           textOutput: "text",
@@ -221,7 +221,7 @@ export function EditorWorkspace({
   );
 
   const handleSelectShape = useCallback(
-    (shape: BrowserEditorShapeInfo, event?: React.PointerEvent<SVGRectElement>) => {
+    (shape: PptxEditorShapeInfo, event?: React.PointerEvent<SVGRectElement>) => {
       if (busyRef.current) return;
       if (shape.handle === undefined) return;
       editor?.selectShape(shape.handle);
@@ -765,7 +765,7 @@ function beginDrag(
   handle: ResizeHandle | undefined,
   shapeHandle: SourceHandle,
   event: React.PointerEvent<SVGRectElement>,
-  startBounds: BrowserEditorShapeBoundsPx,
+  startBounds: PptxEditorShapeBoundsPx,
   dragStateRef: React.MutableRefObject<DragState | null>,
   overlayRef: React.MutableRefObject<SVGSVGElement | null>,
 ) {
@@ -793,19 +793,19 @@ function eventPoint(svg: SVGSVGElement | null, clientX: number, clientY: number)
 }
 
 function movedBounds(
-  bounds: BrowserEditorShapeBoundsPx,
+  bounds: PptxEditorShapeBoundsPx,
   dx: number,
   dy: number,
-): BrowserEditorShapeBoundsPx {
+): PptxEditorShapeBoundsPx {
   return { ...bounds, x: bounds.x + dx, y: bounds.y + dy };
 }
 
 function resizedBounds(
-  bounds: BrowserEditorShapeBoundsPx,
+  bounds: PptxEditorShapeBoundsPx,
   handle: ResizeHandle,
   dx: number,
   dy: number,
-): BrowserEditorShapeBoundsPx {
+): PptxEditorShapeBoundsPx {
   const right = bounds.x + bounds.width;
   const bottom = bounds.y + bounds.height;
   const next = { ...bounds };
@@ -823,7 +823,7 @@ function resizedBounds(
   return next;
 }
 
-function handlePoint(bounds: BrowserEditorShapeBoundsPx, handle: ResizeHandle): Point {
+function handlePoint(bounds: PptxEditorShapeBoundsPx, handle: ResizeHandle): Point {
   const right = bounds.x + bounds.width;
   const bottom = bounds.y + bounds.height;
   if (handle === "nw") return { x: bounds.x, y: bounds.y };
@@ -832,7 +832,7 @@ function handlePoint(bounds: BrowserEditorShapeBoundsPx, handle: ResizeHandle): 
   return { x: right, y: bottom };
 }
 
-function sameBounds(a: BrowserEditorShapeBoundsPx, b: BrowserEditorShapeBoundsPx): boolean {
+function sameBounds(a: PptxEditorShapeBoundsPx, b: PptxEditorShapeBoundsPx): boolean {
   return (
     Math.round(a.x) === Math.round(b.x) &&
     Math.round(a.y) === Math.round(b.y) &&
@@ -841,7 +841,7 @@ function sameBounds(a: BrowserEditorShapeBoundsPx, b: BrowserEditorShapeBoundsPx
   );
 }
 
-function shapeKey(shape: BrowserEditorShapeInfo): string {
+function shapeKey(shape: PptxEditorShapeInfo): string {
   return shape.handle === undefined ? "" : handleKey(shape.handle);
 }
 

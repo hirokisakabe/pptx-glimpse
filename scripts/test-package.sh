@@ -84,6 +84,15 @@ for (const privatePackageName of [
     throw new Error(`published output contains private package import: ${privatePackageName}`);
   }
 }
+for (const removedEditorApi of [
+  "BrowserPptxEditorSession",
+  "createBrowserPptxEditorSession",
+  "BrowserEditor",
+]) {
+  if (declarations.includes(removedEditorApi)) {
+    throw new Error(`published declarations contain removed editor API: ${removedEditorApi}`);
+  }
+}
 TESTEOF
 echo "Core package boundary verification passed!"
 
@@ -170,14 +179,16 @@ assert(
   "renderPptxSourceModelToSvg should be a function",
 );
 assert(
-  typeof pkg.createBrowserPptxEditorSession === "function",
-  "createBrowserPptxEditorSession should be a function",
+  typeof pkg.createPptxEditorSession === "function",
+  "createPptxEditorSession should be a function",
 );
+assert(typeof pkg.PptxEditorSession === "function", "PptxEditorSession should be a class");
 
 console.log("  convertPptxToSvg: function OK");
 console.log("  convertPptxToPng: function OK");
 console.log("  renderPptxSourceModelToSvg: function OK");
-console.log("  createBrowserPptxEditorSession: function OK");
+console.log("  createPptxEditorSession: function OK");
+console.log("  PptxEditorSession: class OK");
 console.log("CJS test passed!");
 TESTEOF
 node test-cjs.cjs
@@ -190,7 +201,8 @@ cat > test-esm.mjs << 'TESTEOF'
 import {
   convertPptxToSvg,
   convertPptxToPng,
-  createBrowserPptxEditorSession,
+  createPptxEditorSession,
+  PptxEditorSession,
   renderPptxSourceModelToSvg,
 } from "pptx-glimpse";
 import { readFile } from "node:fs/promises";
@@ -209,19 +221,21 @@ assert(
   "renderPptxSourceModelToSvg should be a function",
 );
 assert(
-  typeof createBrowserPptxEditorSession === "function",
-  "createBrowserPptxEditorSession should be a function",
+  typeof createPptxEditorSession === "function",
+  "createPptxEditorSession should be a function",
 );
+assert(typeof PptxEditorSession === "function", "PptxEditorSession should be a class");
 
 console.log("  convertPptxToSvg: function OK");
 console.log("  convertPptxToPng: function OK");
 console.log("  renderPptxSourceModelToSvg: function OK");
-console.log("  createBrowserPptxEditorSession: function OK");
+console.log("  createPptxEditorSession: function OK");
+console.log("  PptxEditorSession: class OK");
 const input = new Uint8Array(await readFile("fixture.pptx"));
 const result = await convertPptxToSvg(input, { skipSystemFonts: true });
 assert(result.slides[0]?.svg.startsWith("<svg"), "Node SVG conversion should produce SVG");
 console.log("  Node SVG conversion: OK");
-const editor = await createBrowserPptxEditorSession(input, { skipSystemFonts: true });
+const editor = await createPptxEditorSession(input, { skipSystemFonts: true });
 const run = editor
   .shapes(1)
   .flatMap((shape) => shape.textBody?.paragraphs ?? [])
@@ -246,7 +260,7 @@ echo ""
 echo "--- Test: pptx-glimpse browser consumer bundle ---"
 npm install --save-dev esbuild > /dev/null 2>&1
 cat > browser-entry.mjs << 'TESTEOF'
-import { convertPptxToSvg, createBrowserPptxEditorSession } from "pptx-glimpse";
+import { convertPptxToSvg, createPptxEditorSession } from "pptx-glimpse";
 
 export async function verifyBrowserApis(input) {
   const converted = await convertPptxToSvg(input, { skipSystemFonts: true });
@@ -254,7 +268,7 @@ export async function verifyBrowserApis(input) {
     throw new Error("browser SVG conversion did not produce SVG");
   }
 
-  const session = await createBrowserPptxEditorSession(input, { skipSystemFonts: true });
+  const session = await createPptxEditorSession(input, { skipSystemFonts: true });
   const run = session
     .shapes(1)
     .flatMap((shape) => shape.textBody?.paragraphs ?? [])
@@ -331,7 +345,7 @@ import {
   collectUsedFonts,
   convertPptxToSvg,
   convertPptxToPng,
-  createBrowserPptxEditorSession,
+  createPptxEditorSession,
   renderPptxSourceModelToSvg,
 } from "pptx-glimpse";
 import type {
@@ -341,6 +355,9 @@ import type {
   FontMapping,
   OpentypeSetup,
   PngConversionReport,
+  PptxEditorRenderOptions,
+  PptxEditorSession,
+  PptxEditorShapeInfo,
   PptxSourceModel,
   ResvgWasmInput,
   SvgConversionReport,
@@ -357,7 +374,11 @@ const _sourceModelSvgFn: (
   options?: ConvertOptions,
 ) => Promise<SvgConversionReport> = renderPptxSourceModelToSvg;
 const _fontFn: (input: Uint8Array) => UsedFonts = collectUsedFonts;
-const _editorFn = createBrowserPptxEditorSession;
+const _editorFn: (
+  input: Uint8Array,
+  options?: PptxEditorRenderOptions,
+) => Promise<PptxEditorSession> = createPptxEditorSession;
+declare const _shapeInfo: PptxEditorShapeInfo;
 
 // Verify SlideImage.png is Uint8Array
 async function _verifyPngType(input: Uint8Array) {
@@ -385,6 +406,7 @@ void _pngFn;
 void _sourceModelSvgFn;
 void _fontFn;
 void _editorFn;
+void _shapeInfo;
 void _options;
 void _fontBuffer;
 void _fontMapping;
@@ -413,16 +435,19 @@ cat > tsconfig-browser.json << 'TESTEOF'
 TESTEOF
 cat > test-browser-types.ts << 'TESTEOF'
 import {
-  createBrowserPptxEditorSession,
+  createPptxEditorSession,
   initResvgWasm,
   type EditorCommand,
+  type PptxEditorSession,
+  type PptxEditorShapeInfo,
   type PptxSourceModel,
   type ResvgWasmInput,
 } from "pptx-glimpse";
 
-const _create = createBrowserPptxEditorSession;
+const _create: (input: Uint8Array) => Promise<PptxEditorSession> = createPptxEditorSession;
 const _init: (wasm: ResvgWasmInput) => Promise<void> = initResvgWasm;
 declare const _source: PptxSourceModel;
+declare const _shape: PptxEditorShapeInfo;
 const _command: EditorCommand = {
   kind: "replaceTextRunPlainText",
   handle: _source.slides[0].handle!,
@@ -431,6 +456,7 @@ const _command: EditorCommand = {
 void _create;
 void _init;
 void _command;
+void _shape;
 TESTEOF
 npx tsc -p tsconfig-browser.json
 echo "TypeScript type resolution test passed!"

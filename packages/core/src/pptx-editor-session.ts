@@ -58,85 +58,85 @@ const IMAGE_ACCEPT_BY_CONTENT_TYPE: Readonly<Record<string, string>> = {
   "image/webp": "image/webp,.webp",
 };
 
-export interface BrowserEditorHistoryState {
+export interface PptxEditorHistoryState {
   readonly canUndo: boolean;
   readonly canRedo: boolean;
   readonly undoDepth: number;
   readonly redoDepth: number;
 }
 
-export interface BrowserEditorSelectionInfo {
+export interface PptxEditorSelectionInfo {
   readonly shapeHandle: SourceHandle;
 }
 
-export interface BrowserEditorTextRunInfo {
+export interface PptxEditorTextRunInfo {
   readonly text: string;
   readonly handle: SourceHandle;
 }
 
-export interface BrowserEditorTextBodyInfo {
+export interface PptxEditorTextBodyInfo {
   /**
-   * @deprecated Use `BrowserEditorShapeInfo.textBody` and `applyAll()` with editor commands.
+   * @deprecated Use `PptxEditorShapeInfo.textBody` and `applyAll()` with editor commands.
    * This ProseMirror-compatible JSON bridge is retained for pptx-glimpse 3.x only.
    */
   readonly docJson: PptxTextBodyProseMirrorDocJson;
 }
 
-export interface BrowserEditorTextBodyView {
+export interface PptxEditorTextBodyView {
   readonly handle?: SourceHandle;
   readonly properties?: SourceTextBodyProperties;
-  readonly paragraphs: readonly BrowserEditorTextParagraphView[];
+  readonly paragraphs: readonly PptxEditorTextParagraphView[];
 }
 
-export interface BrowserEditorTextParagraphView {
+export interface PptxEditorTextParagraphView {
   readonly handle?: SourceHandle;
   readonly properties?: SourceParagraphProperties;
-  readonly runs: readonly BrowserEditorTextRunView[];
+  readonly runs: readonly PptxEditorTextRunView[];
 }
 
-export interface BrowserEditorTextRunView {
+export interface PptxEditorTextRunView {
   readonly handle?: SourceHandle;
   readonly properties?: SourceRunProperties;
   readonly text: string;
 }
 
-export interface BrowserEditorImageReplacementInfo {
+export interface PptxEditorImageReplacementInfo {
   readonly contentType: string;
   readonly accept: string;
   readonly mediaPartPath: string;
   readonly sharedReferenceCount: number;
 }
 
-export interface BrowserEditorShapeBoundsPx {
+export interface PptxEditorShapeBoundsPx {
   readonly x: number;
   readonly y: number;
   readonly width: number;
   readonly height: number;
 }
 
-export interface BrowserEditorShapeInfo {
+export interface PptxEditorShapeInfo {
   readonly id: string;
   readonly kind: SourceShapeNode["kind"];
   readonly name?: string;
   readonly handle?: SourceHandle;
-  readonly bounds?: BrowserEditorShapeBoundsPx;
+  readonly bounds?: PptxEditorShapeBoundsPx;
   readonly editableTransform?: boolean;
   readonly editableDelete?: boolean;
-  readonly textRuns?: readonly BrowserEditorTextRunInfo[];
-  readonly textBody?: BrowserEditorTextBodyView;
+  readonly textRuns?: readonly PptxEditorTextRunInfo[];
+  readonly textBody?: PptxEditorTextBodyView;
   /**
    * @deprecated Use `textBody` and `applyAll()` with `@pptx-glimpse/editor` commands.
    * This ProseMirror-compatible view is retained for pptx-glimpse 3.x only.
    */
-  readonly editableTextBody?: BrowserEditorTextBodyInfo;
-  readonly editableImageReplacement?: BrowserEditorImageReplacementInfo;
+  readonly editableTextBody?: PptxEditorTextBodyInfo;
+  readonly editableImageReplacement?: PptxEditorImageReplacementInfo;
 }
 
-export interface BrowserEditorSlideSvg extends SlideSvg {
+export interface PptxEditorSlideSvg extends SlideSvg {
   readonly handle?: SourceHandle;
 }
 
-export interface BrowserEditorAddTextBoxOptions {
+export interface PptxEditorAddTextBoxOptions {
   readonly x?: number;
   readonly y?: number;
   readonly width?: number;
@@ -145,7 +145,7 @@ export interface BrowserEditorAddTextBoxOptions {
   readonly name?: string;
 }
 
-export interface BrowserEditorAddConnectorOptions {
+export interface PptxEditorAddConnectorOptions {
   readonly x?: number;
   readonly y?: number;
   readonly width?: number;
@@ -153,36 +153,36 @@ export interface BrowserEditorAddConnectorOptions {
   readonly name?: string;
 }
 
-export interface BrowserEditorSlidesResponse {
-  readonly slides: readonly BrowserEditorSlideSvg[];
-  readonly history: BrowserEditorHistoryState;
-  readonly selection?: BrowserEditorSelectionInfo;
+export interface PptxEditorSlidesResponse {
+  readonly slides: readonly PptxEditorSlideSvg[];
+  readonly history: PptxEditorHistoryState;
+  readonly selection?: PptxEditorSelectionInfo;
   readonly warnings?: readonly EditorCommandWarning[];
 }
 
-export interface BrowserEditorSaveResponse {
+export interface PptxEditorSaveResponse {
   readonly ok: true;
   readonly pptx: Uint8Array;
-  readonly history: BrowserEditorHistoryState;
+  readonly history: PptxEditorHistoryState;
 }
 
-export type BrowserEditorRenderOptions = Omit<ConvertOptions, "slides">;
+export type PptxEditorRenderOptions = Omit<ConvertOptions, "slides">;
 
-export class BrowserPptxEditorSession {
+export class PptxEditorSession {
   #session: ReturnType<typeof createEditorSession>;
-  #slides: readonly BrowserEditorSlideSvg[] = [];
-  readonly #renderOptions: BrowserEditorRenderOptions;
+  #slides: readonly PptxEditorSlideSvg[] = [];
+  readonly #renderOptions: PptxEditorRenderOptions;
 
-  private constructor(source: PptxSourceModel, renderOptions: BrowserEditorRenderOptions) {
+  private constructor(source: PptxSourceModel, renderOptions: PptxEditorRenderOptions) {
     this.#session = createEditorSession(source);
     this.#renderOptions = renderOptions;
   }
 
   static async create(
     input: Uint8Array,
-    renderOptions: BrowserEditorRenderOptions = {},
-  ): Promise<BrowserPptxEditorSession> {
-    const editor = new BrowserPptxEditorSession(readPptx(input), renderOptions);
+    renderOptions: PptxEditorRenderOptions = {},
+  ): Promise<PptxEditorSession> {
+    const editor = new PptxEditorSession(readPptx(input), renderOptions);
     await editor.renderCurrentSlides();
     return editor;
   }
@@ -191,11 +191,11 @@ export class BrowserPptxEditorSession {
     return this.#session.document;
   }
 
-  get slides(): readonly BrowserEditorSlideSvg[] {
+  get slides(): readonly PptxEditorSlideSvg[] {
     return this.#slides;
   }
 
-  get history(): BrowserEditorHistoryState {
+  get history(): PptxEditorHistoryState {
     return {
       canUndo: this.#session.canUndo,
       canRedo: this.#session.canRedo,
@@ -204,11 +204,11 @@ export class BrowserPptxEditorSession {
     };
   }
 
-  get selection(): BrowserEditorSelectionInfo | undefined {
+  get selection(): PptxEditorSelectionInfo | undefined {
     return this.#session.selection;
   }
 
-  response(warnings?: readonly EditorCommandWarning[]): BrowserEditorSlidesResponse {
+  response(warnings?: readonly EditorCommandWarning[]): PptxEditorSlidesResponse {
     return {
       slides: this.#slides,
       history: this.history,
@@ -217,7 +217,7 @@ export class BrowserPptxEditorSession {
     };
   }
 
-  shapes(slideNumber: number): readonly BrowserEditorShapeInfo[] {
+  shapes(slideNumber: number): readonly PptxEditorShapeInfo[] {
     const slide = this.#session.document.slides[slideNumber - 1];
     if (slide === undefined) return [];
     return slide.shapes.flatMap((shape, index) =>
@@ -225,7 +225,7 @@ export class BrowserPptxEditorSession {
     );
   }
 
-  async renderCurrentSlides(): Promise<readonly BrowserEditorSlideSvg[]> {
+  async renderCurrentSlides(): Promise<readonly PptxEditorSlideSvg[]> {
     const report = await renderPptxSourceModelToSvg(this.#session.document, {
       textOutput: "text",
       skipSystemFonts: true,
@@ -240,11 +240,11 @@ export class BrowserPptxEditorSession {
     return this.#slides;
   }
 
-  async apply(command: EditorCommand): Promise<BrowserEditorSlidesResponse> {
+  async apply(command: EditorCommand): Promise<PptxEditorSlidesResponse> {
     return this.applyAll([command]);
   }
 
-  async applyAll(commands: readonly EditorCommand[]): Promise<BrowserEditorSlidesResponse> {
+  async applyAll(commands: readonly EditorCommand[]): Promise<PptxEditorSlidesResponse> {
     const result = this.#session.applyAll(commands);
     if (!result.ok) {
       throw new Error(result.message);
@@ -256,8 +256,8 @@ export class BrowserPptxEditorSession {
 
   async addTextBox(
     slideNumber = 1,
-    options: BrowserEditorAddTextBoxOptions = {},
-  ): Promise<BrowserEditorSlidesResponse> {
+    options: PptxEditorAddTextBoxOptions = {},
+  ): Promise<PptxEditorSlidesResponse> {
     const slide = this.#session.document.slides[slideNumber - 1];
     if (slide?.handle === undefined) {
       throw new Error("addTextBox: slide handle was not found in PptxSourceModel source");
@@ -283,8 +283,8 @@ export class BrowserPptxEditorSession {
 
   async addConnector(
     slideNumber = 1,
-    options: BrowserEditorAddConnectorOptions = {},
-  ): Promise<BrowserEditorSlidesResponse> {
+    options: PptxEditorAddConnectorOptions = {},
+  ): Promise<PptxEditorSlidesResponse> {
     const slide = this.#session.document.slides[slideNumber - 1];
     if (slide?.handle === undefined) {
       throw new Error("addConnector: slide handle was not found in PptxSourceModel source");
@@ -311,7 +311,7 @@ export class BrowserPptxEditorSession {
     return this.response(result.warnings);
   }
 
-  async deleteShape(handle: SourceHandle): Promise<BrowserEditorSlidesResponse> {
+  async deleteShape(handle: SourceHandle): Promise<PptxEditorSlidesResponse> {
     const result = this.#session.apply({ kind: "deleteShape", handle });
     if (!result.ok) {
       throw new Error(result.message);
@@ -320,7 +320,7 @@ export class BrowserPptxEditorSession {
     return this.response(result.warnings);
   }
 
-  async deleteSelectedShape(): Promise<BrowserEditorSlidesResponse> {
+  async deleteSelectedShape(): Promise<PptxEditorSlidesResponse> {
     const selection = this.#session.selection;
     if (selection === undefined) {
       throw new Error("deleteShape: no selected shape");
@@ -335,7 +335,7 @@ export class BrowserPptxEditorSession {
   async applyTextBodyDocJson(
     handle: SourceHandle,
     docJson: unknown,
-  ): Promise<BrowserEditorSlidesResponse> {
+  ): Promise<PptxEditorSlidesResponse> {
     const textBody = this.#requireEditableShapeTextBody(handle);
     const commands = proseMirrorDocJsonToEditorCommands(textBody, docJson);
     if (commands.length === 0) return this.response();
@@ -343,7 +343,7 @@ export class BrowserPptxEditorSession {
     return this.applyAll(commands);
   }
 
-  selectShape(handle: SourceHandle): BrowserEditorSlidesResponse {
+  selectShape(handle: SourceHandle): PptxEditorSlidesResponse {
     const result = this.#session.selectShape(handle);
     if (!result.ok) {
       throw new Error(result.message);
@@ -351,7 +351,7 @@ export class BrowserPptxEditorSession {
     return this.response();
   }
 
-  async undo(): Promise<BrowserEditorSlidesResponse> {
+  async undo(): Promise<PptxEditorSlidesResponse> {
     const result = this.#session.undo();
     if (!result.ok) {
       throw new Error(result.reason);
@@ -360,7 +360,7 @@ export class BrowserPptxEditorSession {
     return this.response();
   }
 
-  async redo(): Promise<BrowserEditorSlidesResponse> {
+  async redo(): Promise<PptxEditorSlidesResponse> {
     const result = this.#session.redo();
     if (!result.ok) {
       throw new Error(result.reason);
@@ -369,7 +369,7 @@ export class BrowserPptxEditorSession {
     return this.response();
   }
 
-  save(): BrowserEditorSaveResponse {
+  save(): PptxEditorSaveResponse {
     const output = writePptx(this.#session.document);
     readPptx(output);
     return { ok: true, pptx: output, history: this.history };
@@ -394,11 +394,11 @@ export class BrowserPptxEditorSession {
   }
 }
 
-export function createBrowserPptxEditorSession(
+export function createPptxEditorSession(
   input: Uint8Array,
-  renderOptions?: BrowserEditorRenderOptions,
-): Promise<BrowserPptxEditorSession> {
-  return BrowserPptxEditorSession.create(input, renderOptions);
+  renderOptions?: PptxEditorRenderOptions,
+): Promise<PptxEditorSession> {
+  return PptxEditorSession.create(input, renderOptions);
 }
 
 function shapeInfo(
@@ -407,13 +407,13 @@ function shapeInfo(
   index: number,
   editableTransform = true,
   slideShapes: readonly SourceShapeNode[] = [],
-): BrowserEditorShapeInfo[] {
+): PptxEditorShapeInfo[] {
   const canEditTransform =
     shape.kind !== "raw" &&
     shape.transform !== undefined &&
     editableTransform &&
     isEditableTransformShape(shape);
-  const base: BrowserEditorShapeInfo = {
+  const base: PptxEditorShapeInfo = {
     id: String(shape.nodeId ?? shape.handle?.nodeId ?? `${shape.kind}:${String(index)}`),
     kind: shape.kind,
     ...(shapeName(shape) !== undefined ? { name: shapeName(shape) } : {}),
@@ -487,14 +487,14 @@ function isShapeReferencedByConnector(
   );
 }
 
-function collectTextRuns(runs: readonly SourceTextRun[]): BrowserEditorTextRunInfo[] {
+function collectTextRuns(runs: readonly SourceTextRun[]): PptxEditorTextRunInfo[] {
   return runs.flatMap((run) => {
     if (run.handle === undefined) return [];
     return [{ text: run.text, handle: run.handle }];
   });
 }
 
-function textBodyView(textBody: SourceTextBody): BrowserEditorTextBodyView {
+function textBodyView(textBody: SourceTextBody): PptxEditorTextBodyView {
   return {
     ...(textBody.handle !== undefined ? { handle: textBody.handle } : {}),
     ...(textBody.properties !== undefined ? { properties: textBody.properties } : {}),
@@ -512,7 +512,7 @@ function textBodyView(textBody: SourceTextBody): BrowserEditorTextBodyView {
 
 function editableTextBody(
   textBody: SourceTextBody,
-): Partial<Pick<BrowserEditorShapeInfo, "editableTextBody">> {
+): Partial<Pick<PptxEditorShapeInfo, "editableTextBody">> {
   try {
     return { editableTextBody: { docJson: textBodyToProseMirrorDocJson(textBody) } };
   } catch {
@@ -523,7 +523,7 @@ function editableTextBody(
 function editableImageReplacement(
   source: PptxSourceModel,
   image: SourceImage,
-): Partial<Pick<BrowserEditorShapeInfo, "editableImageReplacement">> {
+): Partial<Pick<PptxEditorShapeInfo, "editableImageReplacement">> {
   const media = imageMediaPart(source, image);
   if (media === undefined) return {};
   const accept = IMAGE_ACCEPT_BY_CONTENT_TYPE[media.contentType];
@@ -687,7 +687,7 @@ function transformBoundsPx(transform: {
   readonly offsetY: number;
   readonly width: number;
   readonly height: number;
-}): BrowserEditorShapeBoundsPx {
+}): PptxEditorShapeBoundsPx {
   return {
     x: emuToPixels(transform.offsetX),
     y: emuToPixels(transform.offsetY),
