@@ -26,33 +26,13 @@ const jsonLd = {
 
 export default function Home() {
   return (
-    <div className="app demo-page">
+    <main className="app demo-page">
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <header className="demo-intro">
-        <p className="eyebrow">Browser rendering + editing demo</p>
-        <h1>Open it. Edit it. Save it back to PPTX.</h1>
-        <p className="description">
-          View, edit, and resave PowerPoint files entirely in your browser. Your files are never
-          sent to a server, and no LibreOffice installation is required.
-        </p>
-        <ol className="capability-flow" aria-label="Demo workflow">
-          <li>
-            <span>01</span> View
-          </li>
-          <li>
-            <span>02</span> Edit
-          </li>
-          <li>
-            <span>03</span> Save PPTX
-          </li>
-        </ol>
-      </header>
-      <main>
-        <UploadViewer />
-      </main>
-    </div>
+      <h1 className="visually-hidden">pptx-glimpse browser editor demo</h1>
+      <UploadViewer />
+    </main>
   );
 }

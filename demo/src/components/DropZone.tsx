@@ -135,18 +135,12 @@ export interface SamplePptx {
 
 export type SampleOpenMode = "view" | "edit";
 
-const SAMPLE_PPTX_FILES: readonly SamplePptx[] = [
+export const SAMPLE_PPTX_FILES: readonly SamplePptx[] = [
   {
-    id: "basic-theme",
+    id: "editor-demo",
     label: "View sample",
-    filename: "real-basic-theme.pptx",
-    href: "/samples/real-basic-theme.pptx",
-  },
-  {
-    id: "product-page",
-    label: "View product sample",
-    filename: "real-product-page.pptx",
-    href: "/samples/real-product-page.pptx",
+    filename: "editor-demo.pptx",
+    href: "/samples/editor-demo.pptx",
   },
 ];
 

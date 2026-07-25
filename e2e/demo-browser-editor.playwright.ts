@@ -41,6 +41,8 @@ test("links the toolkit demo to all public package documentation", async ({ page
   if (demoServer === null) throw new Error("demo server was not started");
 
   await page.goto(demoServer.url);
+  await expect(page.getByRole("link", { name: "GitHub" })).toHaveAttribute("target", "_blank");
+  await expect(page.getByRole("link", { name: "GitHub" })).toHaveAttribute("rel", "noreferrer");
   await page.getByRole("link", { name: "Documentation" }).click();
 
   await expect(page).toHaveURL(`${demoServer.url}/docs`);
@@ -76,37 +78,52 @@ test("links the toolkit demo to all public package documentation", async ({ page
   expect(await sitemapResponse.text()).toContain("https://glimpse.pptx.app/docs");
 });
 
-test("opens uploaded and sample PPTX files through the primary demo routes", async ({ page }) => {
+test("opens the sample editor first and replaces it with an uploaded PPTX", async ({ page }) => {
   test.setTimeout(120_000);
   if (demoServer === null) throw new Error("demo server was not started");
 
   await page.goto(demoServer.url);
-  await expect(
-    page.getByRole("heading", { name: "Open it. Edit it. Save it back to PPTX." }),
-  ).toBeVisible();
-  await expect(page.getByText(/never sent to a server/).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Choose PPTX" })).toBeVisible();
+  await expect(page.getByTestId("editor-workspace")).toBeVisible();
+  const fileNameInput = page.getByRole("textbox", { name: "Presentation file name" });
+  await expect(fileNameInput).toHaveValue("editor-demo");
+  await expect(page.getByRole("button", { name: "Open PPTX" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download PPTX" })).toBeVisible();
 
   await page
     .getByTestId("pptx-input")
-    .setInputFiles(resolve(repoRoot, "shared-fixtures/real-basic-theme.pptx"));
-  await expect(page.getByTestId("viewer-status")).toContainText("slides rendered");
-  await expect(page.getByRole("button", { name: "View", exact: true })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-  await expect(page.getByTestId("open-editor")).toBeVisible();
-
-  await page.goto(demoServer.url);
-  await page.getByTestId("sample-edit-basic-theme").click();
+    .setInputFiles(resolve(repoRoot, "shared-fixtures/real-product-page.pptx"));
   await expect(page.getByTestId("editor-workspace")).toBeVisible();
-  await expect(page.getByTestId("editor-status")).toContainText("ready");
-  await expect(page.getByRole("button", { name: "Download PPTX" })).toBeVisible();
+  await expect(fileNameInput).toHaveValue("real-product-page");
 
-  await page.getByRole("button", { name: "View", exact: true }).click();
-  await expect(page.getByTestId("viewer-status")).toContainText("slides rendered");
-  await page.getByTestId("open-editor").click();
+  await page.getByRole("button", { name: "Add text box" }).click();
+  page.once("dialog", async (dialog) => {
+    expect(dialog.message()).toContain("Discard your unsaved changes");
+    await dialog.dismiss();
+  });
+  await page.getByRole("button", { name: "Open sample" }).click();
+  await expect(fileNameInput).toHaveValue("real-product-page");
+
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await page.getByRole("link", { name: "Documentation" }).click();
+  await expect(page).toHaveURL(demoServer.url);
+
+  await page.getByTestId("pptx-input").setInputFiles({
+    name: "invalid.pptx",
+    mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    buffer: Buffer.from("not a PPTX"),
+  });
+  await expect(page.locator(".replacement-error")).toBeVisible();
+  await expect(fileNameInput).toHaveValue("real-product-page");
+
+  page.once("dialog", (dialog) => dialog.accept());
+  await page.getByRole("button", { name: "Open sample" }).click();
   await expect(page.getByTestId("editor-workspace")).toBeVisible();
+  await expect(fileNameInput).toHaveValue("editor-demo");
+  await expect(
+    page.getByRole("heading", { name: "pptx-glimpse browser editor demo" }),
+  ).toBeAttached();
+  await page.getByRole("link", { name: "Documentation" }).click();
+  await expect(page).toHaveURL(`${demoServer.url}/docs`);
 });
 
 test("runs the public demo browser editor flow entirely client-side", async ({ page }) => {
@@ -120,17 +137,15 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
     await writeFile(replacementImagePath, BLUE_PNG);
 
     await page.goto(demoServer.url);
-
-    await page.getByTestId("sample-basic-theme").click();
-    await expect(page.getByTestId("viewer-status")).toContainText("slides rendered");
-    await page.getByTestId("open-editor").click();
     await expect(page.getByTestId("editor-workspace")).toBeVisible();
-    await expect(page.getByTestId("editor-status")).toContainText("ready");
+    const fileNameInput = page.getByRole("textbox", { name: "Presentation file name" });
+    await expect(fileNameInput).toHaveValue("editor-demo");
+    await fileNameInput.fill("browser-workshop");
 
     const slideFrame = page.getByTestId("editor-slide-frame");
     const firstEditableTextShape = page
       .locator('[data-testid="shape-hit-area"][data-editable-text="true"]')
-      .first();
+      .nth(1);
     await firstEditableTextShape.dblclick();
     const directTextEditor = page.getByTestId("direct-text-editor");
     await expect(directTextEditor).toBeVisible();
@@ -155,9 +170,9 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
 
     await page.getByRole("button", { name: "Duplicate" }).click();
     await expect(page.getByTestId("editor-status")).toContainText("Slide duplicated");
-    await expect(page.getByTestId("editor-thumbnail")).toHaveCount(3);
+    await expect(page.getByTestId("editor-thumbnail")).toHaveCount(4);
     await page.getByRole("button", { name: "Delete", exact: true }).click();
-    await expect(page.getByTestId("editor-thumbnail")).toHaveCount(2);
+    await expect(page.getByTestId("editor-thumbnail")).toHaveCount(3);
 
     await firstEditableTextShape.click();
     await expect(slideFrame).toBeFocused();
@@ -169,7 +184,8 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
     await expect(slideFrame).toContainText("Direct edit done");
 
     await page.getByRole("button", { name: "Undo" }).click();
-    await expect(slideFrame).toContainText("たいとる");
+    await expect(slideFrame).toContainText("Make the");
+    await expect(slideFrame).toContainText("presentation");
     await expect(slideFrame).not.toContainText("Direct edit done");
     await page.getByRole("button", { name: "Redo" }).click();
     await expect(slideFrame).toContainText("Direct edit done");
@@ -178,7 +194,9 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
     await directTextRun.fill("Direct edit saved");
     const focusoutDownload = page.waitForEvent("download");
     await page.getByRole("button", { name: "Download PPTX" }).click();
-    await (await focusoutDownload).saveAs(focusoutSavedPath);
+    const focusoutDownloadedFile = await focusoutDownload;
+    expect(focusoutDownloadedFile.suggestedFilename()).toBe("browser-workshop.pptx");
+    await focusoutDownloadedFile.saveAs(focusoutSavedPath);
     await expect(directTextEditor).toHaveCount(0);
     await expect(slideFrame).toContainText("Direct edit saved");
     expect(
@@ -225,13 +243,18 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
     await expect(secondThumbnail).toBeEnabled();
     await secondThumbnail.click();
     await expect(secondThumbnail).toHaveClass(/active/);
+    const firstThumbnail = page.getByTestId("editor-thumbnail").first();
+    await firstThumbnail.click();
+    await expect(firstThumbnail).toHaveClass(/active/);
     await selectFirstReplaceableImage(page);
     await page.getByTestId("image-replacement-input").setInputFiles(replacementImagePath);
     await expect(page.getByTestId("editor-status")).toContainText("Image replaced");
 
     const download = page.waitForEvent("download");
     await page.getByRole("button", { name: "Download PPTX" }).click();
-    await (await download).saveAs(savedPath);
+    const downloadedFile = await download;
+    expect(downloadedFile.suggestedFilename()).toBe("browser-workshop.pptx");
+    await downloadedFile.saveAs(savedPath);
 
     const saved = readPptx(await readFile(savedPath));
     expect(shapeByText(saved, "Direct edit saved")).toBeDefined();
@@ -243,7 +266,7 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
       height: 96 * EMU_PER_PIXEL,
     });
     expect(addedShape.textBody?.paragraphs[0]?.runs[0]?.properties?.bold).toBe(true);
-    expect(mediaBytes(saved, "ppt/media/image1.png")).toEqual(BLUE_PNG);
+    expect(mediaBytes(saved, "ppt/media/image.png")).toEqual(BLUE_PNG);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

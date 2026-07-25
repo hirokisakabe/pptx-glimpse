@@ -29,9 +29,12 @@ type ClearTextRunProperties = Extract<
 
 interface EditorWorkspaceProps {
   readonly fileName: string;
+  readonly fontFileCount: number;
   readonly pptxBytes: Uint8Array;
   readonly fonts: readonly FontBuffer[];
-  readonly onBackToViewer: () => void;
+  readonly onAddFonts: () => void;
+  readonly onOpenPptx: () => void;
+  readonly onOpenSample: () => void;
 }
 
 interface TextRunOption {
@@ -75,10 +78,14 @@ type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
 export function EditorWorkspace({
   fileName,
+  fontFileCount,
   pptxBytes,
   fonts,
-  onBackToViewer,
+  onAddFonts,
+  onOpenPptx,
+  onOpenSample,
 }: EditorWorkspaceProps) {
+  const [downloadName, setDownloadName] = useState(() => fileStem(fileName));
   const [editor, setEditor] = useState<EditorSession | null>(null);
   const [slides, setSlides] = useState<PptxEditorSlideSvg[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -108,6 +115,8 @@ export function EditorWorkspace({
   const dragStateRef = useRef<DragState | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const busyRef = useRef(true);
+  const dirtyRef = useRef(false);
+  const cleanUndoDepthRef = useRef(0);
   const compositionRef = useRef(false);
   const commitAfterCompositionRef = useRef(false);
 
@@ -131,6 +140,10 @@ export function EditorWorkspace({
   }, [selectedShape]);
 
   const selectedRun = textRuns[selectedRunIndex];
+
+  useEffect(() => {
+    setDownloadName(fileStem(fileName));
+  }, [fileName]);
 
   const syncFromEditor = useCallback(
     (session: EditorSession, preferredIndex = currentIndex) => {
@@ -179,9 +192,9 @@ export function EditorWorkspace({
         setShapeOptions([...session.shapes(1).filter((shape) => shape.handle && shape.bounds)]);
         setHistory(session.history);
         setCurrentIndex(0);
-        setMessage(
-          `${session.slides.length.toString()} slide${session.slides.length === 1 ? "" : "s"} ready`,
-        );
+        cleanUndoDepthRef.current = session.history.undoDepth;
+        dirtyRef.current = false;
+        setMessage("");
       } catch (error) {
         if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
       } finally {
@@ -223,6 +236,7 @@ export function EditorWorkspace({
       try {
         const messageOverride = await operation(editor);
         syncFromEditor(editor, preferredIndex);
+        dirtyRef.current = editor.history.undoDepth !== cleanUndoDepthRef.current;
         setMessage(messageOverride ?? success);
       } catch (error) {
         setOperationError(error instanceof Error ? error.message : String(error));
@@ -398,6 +412,7 @@ export function EditorWorkspace({
         try {
           const result = await session.applyAll(commands);
           syncFromEditor(session, currentIndex);
+          dirtyRef.current = session.history.undoDepth !== cleanUndoDepthRef.current;
           setMessage(commandMessage("Text updated", result.warnings));
           closeDirectTextEditor(restoreFocus);
           return true;
@@ -405,6 +420,7 @@ export function EditorWorkspace({
           setHistory(session.history);
           setOperationError(error instanceof Error ? error.message : String(error));
           if (isPptxEditorError(error) && error.code === "render-failed") {
+            dirtyRef.current = session.history.undoDepth !== cleanUndoDepthRef.current;
             setMessage("Text updated; slide preview could not refresh");
             closeDirectTextEditor(restoreFocus);
             return true;
@@ -604,9 +620,52 @@ export function EditorWorkspace({
     return commit === null || (await commit);
   }, []);
 
-  const handleBackToViewer = useCallback(async () => {
-    if (await waitForDirectTextCommit()) onBackToViewer();
-  }, [onBackToViewer, waitForDirectTextCommit]);
+  const confirmDiscardChanges = useCallback(async () => {
+    if (!(await waitForDirectTextCommit())) return false;
+    return (
+      !dirtyRef.current ||
+      window.confirm("Discard your unsaved changes and open another version of the presentation?")
+    );
+  }, [waitForDirectTextCommit]);
+
+  const handleOpenPptx = useCallback(async () => {
+    if (await confirmDiscardChanges()) onOpenPptx();
+  }, [confirmDiscardChanges, onOpenPptx]);
+
+  const handleOpenSample = useCallback(async () => {
+    if (await confirmDiscardChanges()) onOpenSample();
+  }, [confirmDiscardChanges, onOpenSample]);
+
+  const handleAddFonts = useCallback(async () => {
+    if (await confirmDiscardChanges()) onAddFonts();
+  }, [confirmDiscardChanges, onAddFonts]);
+
+  useEffect(() => {
+    const confirmMessage = "Discard your unsaved changes and leave the editor?";
+    const hasUnsavedChanges = () => dirtyRef.current || directTextEditorStateRef.current !== null;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasUnsavedChanges()) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    const handleLinkClick = (event: MouseEvent) => {
+      if (!hasUnsavedChanges()) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const link = target.closest("a");
+      if (link === null || link.target === "_blank" || link.hasAttribute("download")) return;
+      if (window.confirm(confirmMessage)) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("click", handleLinkClick, true);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("click", handleLinkClick, true);
+    };
+  }, []);
 
   const handleSelectSlide = useCallback(
     async (index: number) => {
@@ -661,6 +720,7 @@ export function EditorWorkspace({
     try {
       const saved = editor.save();
       setHistory(saved.history);
+      cleanUndoDepthRef.current = saved.history.undoDepth;
       const href = URL.createObjectURL(
         new Blob([uint8ArrayToArrayBuffer(saved.pptx)], {
           type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -668,9 +728,10 @@ export function EditorWorkspace({
       );
       const link = document.createElement("a");
       link.href = href;
-      link.download = editedFileName(fileName);
+      link.download = downloadFileName(downloadName, fileName);
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(href), 0);
+      dirtyRef.current = false;
       setMessage("PPTX downloaded");
     } catch (error) {
       setOperationError(error instanceof Error ? error.message : String(error));
@@ -678,7 +739,7 @@ export function EditorWorkspace({
       busyRef.current = false;
       setBusy(false);
     }
-  }, [editor, fileName, waitForDirectTextCommit]);
+  }, [downloadName, editor, fileName, waitForDirectTextCommit]);
 
   if (loadError !== "") {
     return (
@@ -700,20 +761,52 @@ export function EditorWorkspace({
   return (
     <section className="editor-workspace" aria-label="PPTX editor" data-testid="editor-workspace">
       <div className="editor-topbar">
-        <div className="mode-switch" role="group" aria-label="Demo mode">
-          <button disabled={busy} type="button" onClick={() => void handleBackToViewer()}>
-            View
-          </button>
-          <button aria-pressed="true" type="button">
-            Edit
-          </button>
+        <div className="editor-file">
+          <label className="editor-file-name">
+            <span className="visually-hidden">Presentation file name</span>
+            <input
+              aria-label="Presentation file name"
+              disabled={busy}
+              maxLength={120}
+              spellCheck={false}
+              style={{
+                width: `${Math.min(Math.max(downloadName.length + 1, 8), 30).toString()}ch`,
+              }}
+              value={downloadName}
+              onBlur={() => {
+                if (downloadName.trim() === "") setDownloadName(fileStem(fileName));
+              }}
+              onChange={(event) => setDownloadName(event.target.value)}
+            />
+            <span aria-hidden="true">.pptx</span>
+          </label>
         </div>
         <div className="editor-status" data-testid="editor-status">
-          <span>{message}</span>
+          {message === "" ? null : <span>{message}</span>}
           {busy ? <span>Working...</span> : null}
         </div>
-        <button className="primary-action" disabled={busy} type="button" onClick={handleDownload}>
-          Download PPTX
+        <div className="editor-file-actions">
+          <button disabled={busy} type="button" onClick={() => void handleOpenPptx()}>
+            Open PPTX
+          </button>
+          <button disabled={busy} type="button" onClick={() => void handleOpenSample()}>
+            Open sample
+          </button>
+          <button disabled={busy} type="button" onClick={() => void handleAddFonts()}>
+            Add fonts{fontFileCount > 0 ? ` (${fontFileCount.toString()})` : ""}
+          </button>
+          <button className="primary-action" disabled={busy} type="button" onClick={handleDownload}>
+            Download PPTX
+          </button>
+        </div>
+      </div>
+
+      <div className="editor-commandbar" aria-label="Editing history">
+        <button disabled={busy || !history.canUndo} type="button" onClick={handleUndo}>
+          Undo
+        </button>
+        <button disabled={busy || !history.canRedo} type="button" onClick={handleRedo}>
+          Redo
         </button>
       </div>
 
@@ -904,14 +997,6 @@ export function EditorWorkspace({
                 onClick={handleDeleteSlide}
               >
                 Delete
-              </button>
-            </div>
-            <div className="button-row">
-              <button disabled={busy || !history.canUndo} type="button" onClick={handleUndo}>
-                Undo
-              </button>
-              <button disabled={busy || !history.canRedo} type="button" onClick={handleRedo}>
-                Redo
               </button>
             </div>
           </div>
@@ -1220,8 +1305,17 @@ function insertTextAtSelection(text: string): void {
   selection.addRange(range);
 }
 
-function editedFileName(fileName: string): string {
-  return fileName.replace(/\.pptx$/i, "") + ".edited.pptx";
+function fileStem(fileName: string): string {
+  return fileName.replace(/\.pptx$/i, "");
+}
+
+function downloadFileName(downloadName: string, fallbackFileName: string): string {
+  const normalized = downloadName
+    .trim()
+    .replace(/\.pptx$/i, "")
+    .replace(/[/:\\\u0000-\u001f]/g, "-")
+    .replace(/\.+$/g, "");
+  return `${normalized === "" ? fileStem(fallbackFileName) : normalized}.pptx`;
 }
 
 function commandMessage(

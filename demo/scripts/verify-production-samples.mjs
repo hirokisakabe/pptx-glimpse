@@ -10,12 +10,8 @@ import { chromium, expect } from "@playwright/test";
 const execFileAsync = promisify(execFile);
 const here = dirname(fileURLToPath(import.meta.url));
 const demoRoot = resolve(here, "..");
-const repoRoot = resolve(demoRoot, "..");
 const nextCli = resolve(demoRoot, "node_modules/next/dist/bin/next");
-const samples = [
-  { id: "basic-theme", filename: "real-basic-theme.pptx" },
-  { id: "product-page", filename: "real-product-page.pptx" },
-];
+const samples = [{ filename: "editor-demo.pptx" }];
 
 const port = await getFreePort();
 const baseUrl = `http://127.0.0.1:${port.toString()}`;
@@ -70,13 +66,21 @@ try {
 
   browser = await chromium.launch();
   const page = await browser.newPage();
+  await page.goto(baseUrl);
+  await expect(page.getByTestId("editor-workspace")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByRole("textbox", { name: "Presentation file name" })).toHaveValue(
+    "editor-demo",
+  );
+
   for (const sample of samples) {
-    await page.goto(baseUrl);
-    await page.getByTestId(`sample-${sample.id}`).click();
-    await expect(page.getByTestId("viewer-status")).toContainText("slides rendered", {
-      timeout: 30_000,
-    });
-    await expect(page.locator("svg").first()).toBeVisible();
+    await page
+      .getByTestId("pptx-input")
+      .setInputFiles(resolve(demoRoot, "assets", sample.filename));
+    await expect(page.getByRole("textbox", { name: "Presentation file name" })).toHaveValue(
+      sample.filename.replace(/\.pptx$/i, ""),
+      { timeout: 30_000 },
+    );
+    await expect(page.getByTestId("editor-slide-frame").locator("svg").first()).toBeVisible();
   }
 } finally {
   await browser?.close();
@@ -96,10 +100,10 @@ async function assertSampleServed(baseUrl, sampleName) {
   }
 
   const actual = Buffer.from(await response.arrayBuffer());
-  const expected = await readFile(resolve(repoRoot, "shared-fixtures", sampleName));
+  const expected = await readFile(resolve(demoRoot, "assets", sampleName));
 
   if (!actual.equals(expected)) {
-    throw new Error(`/samples/${sampleName} did not match shared-fixtures/${sampleName}`);
+    throw new Error(`/samples/${sampleName} did not match assets/${sampleName}`);
   }
 }
 
