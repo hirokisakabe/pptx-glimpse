@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { convertPptxToSvg, type FontBuffer } from "pptx-glimpse";
 
-import { DropZone, type SamplePptx } from "./DropZone";
+import { DropZone, type SampleOpenMode, type SamplePptx } from "./DropZone";
 import { EditorWorkspace } from "./EditorWorkspace";
 import { SlideViewer } from "./SlideViewer";
 import { ThumbnailStrip } from "./ThumbnailStrip";
@@ -34,7 +34,7 @@ export function UploadViewer() {
   }, []);
 
   const handleFile = useCallback(
-    async (file: File) => {
+    async (file: File, initialMode: DemoMode = "view") => {
       setPhase("loading");
       setErrorMessage("");
 
@@ -58,7 +58,7 @@ export function UploadViewer() {
         setFontBuffers(fonts);
         setRenderedFontCount(fonts.length);
         setCurrentIndex(0);
-        setMode("view");
+        setMode(initialMode);
         setPhase("viewing");
       } catch (err) {
         setErrorMessage(err instanceof Error ? err.message : String(err));
@@ -69,7 +69,7 @@ export function UploadViewer() {
   );
 
   const handleSample = useCallback(
-    async (sample: SamplePptx) => {
+    async (sample: SamplePptx, initialMode: SampleOpenMode) => {
       setPhase("loading");
       setErrorMessage("");
 
@@ -81,7 +81,7 @@ export function UploadViewer() {
         const file = new File([await response.blob()], sample.filename, {
           type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         });
-        await handleFile(file);
+        await handleFile(file, initialMode);
       } catch (err) {
         setErrorMessage(err instanceof Error ? err.message : String(err));
         setPhase("error");

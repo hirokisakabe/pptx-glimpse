@@ -13,7 +13,7 @@ export function DropZone({
   fontFiles: File[];
   onFile: (file: File) => void;
   onFontFiles: (files: File[]) => void;
-  onSample: (sample: SamplePptx) => void;
+  onSample: (sample: SamplePptx, mode: SampleOpenMode) => void;
 }) {
   const [dragOver, setDragOver] = useState(false);
   const pptxInputRef = useRef<HTMLInputElement>(null);
@@ -58,9 +58,9 @@ export function DropZone({
       onDrop={handleDrop}
     >
       <div className="drop-zone-copy">
-        <p className="drop-zone-title">Drop a PPTX file</p>
+        <p className="drop-zone-title">Open a PPTX in this browser</p>
         <p className="drop-zone-note">
-          PPTX files are never sent to a server. Conversion runs locally in your browser.
+          View, edit, and save without sending your file to a server.
         </p>
       </div>
       <div className="file-actions">
@@ -70,6 +70,14 @@ export function DropZone({
           onClick={() => pptxInputRef.current?.click()}
         >
           Choose PPTX
+        </button>
+        <button
+          className="file-label edit-sample"
+          data-testid="sample-edit-basic-theme"
+          type="button"
+          onClick={() => onSample(SAMPLE_PPTX_FILES[0], "edit")}
+        >
+          Edit a sample
         </button>
         <button
           className="file-label secondary"
@@ -85,7 +93,7 @@ export function DropZone({
               data-testid={`sample-${sample.id}`}
               key={sample.id}
               type="button"
-              onClick={() => onSample(sample)}
+              onClick={() => onSample(sample, "view")}
             >
               {sample.label}
             </button>
@@ -125,16 +133,18 @@ export interface SamplePptx {
   readonly href: string;
 }
 
+export type SampleOpenMode = "view" | "edit";
+
 const SAMPLE_PPTX_FILES: readonly SamplePptx[] = [
   {
     id: "basic-theme",
-    label: "Open sample",
+    label: "View sample",
     filename: "real-basic-theme.pptx",
     href: "/samples/real-basic-theme.pptx",
   },
   {
     id: "product-page",
-    label: "Open product sample",
+    label: "View product sample",
     filename: "real-product-page.pptx",
     href: "/samples/real-product-page.pptx",
   },

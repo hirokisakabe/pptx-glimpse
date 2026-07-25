@@ -4,8 +4,9 @@ import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SITE_URL } from "@/lib/constants";
 import "./globals.css";
-const TITLE = "pptx-glimpse Demo - Browser PPTX to SVG Viewer";
-const DESCRIPTION = "Open a PPTX file and preview slides as SVG with browser-only conversion.";
+const TITLE = "pptx-glimpse Demo - Render, Edit, and Save PPTX in Your Browser";
+const DESCRIPTION =
+  "Open, render, edit, and save PowerPoint files locally in your browser without uploading them.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -14,7 +15,7 @@ export const metadata: Metadata = {
     template: "%s | pptx-glimpse",
   },
   description: DESCRIPTION,
-  keywords: ["PPTX", "SVG", "PowerPoint", "converter", "TypeScript", "presentation", "slides"],
+  keywords: ["PPTX", "PowerPoint", "renderer", "editor", "TypeScript", "presentation", "slides"],
   openGraph: {
     title: TITLE,
     description: DESCRIPTION,
