@@ -68,13 +68,18 @@ try {
   const page = await browser.newPage();
   await page.goto(baseUrl);
   await expect(page.getByTestId("editor-workspace")).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByText("editor-demo.pptx")).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Presentation file name" })).toHaveValue(
+    "editor-demo",
+  );
 
   for (const sample of samples) {
     await page
       .getByTestId("pptx-input")
       .setInputFiles(resolve(demoRoot, "assets", sample.filename));
-    await expect(page.getByText(sample.filename)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole("textbox", { name: "Presentation file name" })).toHaveValue(
+      sample.filename.replace(/\.pptx$/i, ""),
+      { timeout: 30_000 },
+    );
     await expect(page.getByTestId("editor-slide-frame").locator("svg").first()).toBeVisible();
   }
 } finally {
