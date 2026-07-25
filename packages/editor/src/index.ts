@@ -1,3 +1,12 @@
+/**
+ * Headless editor commands, selection, warnings, and history.
+ *
+ * Expected operation rejections use the shared discriminated failure contract exported
+ * by this module. Unexpected programmer errors and invariant violations must propagate.
+ * The repository-wide ownership, conversion, and catch rules are documented in
+ * [the editor error contract](../../../docs/editor-error-contract.md).
+ */
+
 import {
   addConnector,
   type AddConnectorInput,
@@ -174,18 +183,28 @@ export type EditorCommand =
   | MoveSlideCommand
   | DeleteSlideCommand;
 
+export type EditorOperationErrorCode =
+  | "invalid-command"
+  | "invalid-selection"
+  | "empty-undo-stack"
+  | "empty-redo-stack";
+
+export interface EditorOperationFailure<
+  Code extends EditorOperationErrorCode = EditorOperationErrorCode,
+> {
+  readonly ok: false;
+  readonly code: Code;
+  readonly message: string;
+  readonly cause?: unknown;
+}
+
 export type EditorApplyCommandResult =
   | {
       readonly ok: true;
       readonly document: PptxSourceModel;
       readonly warnings?: readonly EditorCommandWarning[];
     }
-  | {
-      readonly ok: false;
-      readonly code: "invalid-command";
-      readonly message: string;
-      readonly cause?: unknown;
-    };
+  | EditorOperationFailure<"invalid-command">;
 
 export interface EditorCommandWarning {
   readonly code: "shared-media-part";
@@ -199,10 +218,7 @@ export type EditorHistoryResult =
       readonly ok: true;
       readonly document: PptxSourceModel;
     }
-  | {
-      readonly ok: false;
-      readonly reason: "empty-undo-stack" | "empty-redo-stack";
-    };
+  | EditorOperationFailure<"empty-undo-stack" | "empty-redo-stack">;
 
 export interface EditorSelection {
   readonly shapeHandle: SourceHandle;
@@ -213,11 +229,7 @@ export type EditorSelectShapeResult =
       readonly ok: true;
       readonly selection: EditorSelection;
     }
-  | {
-      readonly ok: false;
-      readonly code: "invalid-selection";
-      readonly message: string;
-    };
+  | EditorOperationFailure<"invalid-selection">;
 
 interface HistoryEntry {
   readonly before: PptxSourceModel;
@@ -284,46 +296,49 @@ export class EditorSession {
     const before = this.#document;
     if (commands.length === 0) return { ok: true, document: before };
 
+    let after = before;
+    const warnings: EditorCommandWarning[] = [];
+    for (const command of commands) {
+      const result = applyCommandToDocument(after, command);
+      if (!result.ok) return result;
+      after = result.document;
+      warnings.push(...collectCommandWarnings(after, [command]));
+    }
     try {
-      let after = before;
-      const warnings: EditorCommandWarning[] = [];
-      for (const command of commands) {
-        after = applyCommandToDocument(after, command);
-        warnings.push(...collectCommandWarnings(after, [command]));
-      }
       assertNoConflictingParagraphAndRunEdits(after.edits);
-      after = normalizeEditorEdits(after);
-      const dedupedWarnings = dedupeCommandWarnings(warnings);
-      if (after === before) {
-        return {
-          ok: true,
-          document: before,
-          ...(dedupedWarnings.length > 0 ? { warnings: dedupedWarnings } : {}),
-        };
-      }
-      this.#document = after;
-      this.reconcileSelectionAfterDocumentChange();
-      this.#undoStack.push({ before, after });
-      this.#redoStack.length = 0;
-
+    } catch (cause) {
+      return invalidCommandFailure(cause);
+    }
+    after = normalizeEditorEdits(after);
+    const dedupedWarnings = dedupeCommandWarnings(warnings);
+    if (after === before) {
       return {
         ok: true,
-        document: after,
+        document: before,
         ...(dedupedWarnings.length > 0 ? { warnings: dedupedWarnings } : {}),
       };
-    } catch (error) {
-      return {
-        ok: false,
-        code: "invalid-command",
-        message: error instanceof Error ? error.message : "Editor command was rejected.",
-        cause: error,
-      };
     }
+    this.#document = after;
+    this.reconcileSelectionAfterDocumentChange();
+    this.#undoStack.push({ before, after });
+    this.#redoStack.length = 0;
+
+    return {
+      ok: true,
+      document: after,
+      ...(dedupedWarnings.length > 0 ? { warnings: dedupedWarnings } : {}),
+    };
   }
 
   undo(): EditorHistoryResult {
     const entry = this.#undoStack.pop();
-    if (entry === undefined) return { ok: false, reason: "empty-undo-stack" };
+    if (entry === undefined) {
+      return {
+        ok: false,
+        code: "empty-undo-stack",
+        message: "undo: undo history is empty",
+      };
+    }
 
     this.#document = entry.before;
     this.reconcileSelectionAfterDocumentChange();
@@ -334,7 +349,13 @@ export class EditorSession {
 
   redo(): EditorHistoryResult {
     const entry = this.#redoStack.pop();
-    if (entry === undefined) return { ok: false, reason: "empty-redo-stack" };
+    if (entry === undefined) {
+      return {
+        ok: false,
+        code: "empty-redo-stack",
+        message: "redo: redo history is empty",
+      };
+    }
 
     this.#document = entry.after;
     this.reconcileSelectionAfterDocumentChange();
@@ -355,10 +376,115 @@ export function createEditorSession(document: PptxSourceModel): EditorSession {
   return new EditorSession(document);
 }
 
+type ApplyCommandAttempt =
+  | {
+      readonly ok: true;
+      readonly document: PptxSourceModel;
+    }
+  | EditorOperationFailure<"invalid-command">;
+
+const EDITOR_COMMAND_KINDS: ReadonlySet<string> = new Set([
+  "replaceTextRunPlainText",
+  "replaceParagraphPlainText",
+  "setTextRunProperties",
+  "clearTextRunProperties",
+  "setParagraphProperties",
+  "clearParagraphProperties",
+  "moveShape",
+  "resizeShape",
+  "setShapeTransform",
+  "setShapeFill",
+  "setShapeOutline",
+  "addTextBox",
+  "addConnector",
+  "deleteShape",
+  "replaceImage",
+  "addEmptySlideFromLayout",
+  "duplicateSlide",
+  "moveSlide",
+  "deleteSlide",
+]);
+
+const EXPECTED_COMMAND_REJECTION_PREFIXES = [
+  "replaceTextRunPlainText:",
+  "replaceParagraphPlainText:",
+  "setTextRunProperties:",
+  "clearTextRunProperties:",
+  "setParagraphProperties:",
+  "clearParagraphProperties:",
+  "moveShape:",
+  "resizeShape:",
+  "setShapeTransform:",
+  "setShapeFill:",
+  "setShapeOutline:",
+  "addTextBox:",
+  "addConnector:",
+  "deleteShape:",
+  "replaceImageBytes:",
+  "addEmptySlideFromLayout:",
+  "duplicateSlide:",
+  "moveSlide:",
+  "deleteSlide:",
+  "updateTextRunProperties:",
+  "updateParagraphProperties:",
+  "updateShapeTransform:",
+] as const;
+
 function applyCommandToDocument(
   document: PptxSourceModel,
   command: EditorCommand,
-): PptxSourceModel {
+): ApplyCommandAttempt {
+  if (!EDITOR_COMMAND_KINDS.has(command.kind)) {
+    throw new TypeError(`EditorSession: unsupported command kind '${String(command.kind)}'`);
+  }
+  switch (command.kind) {
+    case "replaceTextRunPlainText":
+    case "replaceParagraphPlainText":
+    case "setTextRunProperties":
+    case "clearTextRunProperties":
+    case "setParagraphProperties":
+    case "clearParagraphProperties":
+    case "moveShape":
+    case "resizeShape":
+    case "setShapeTransform":
+    case "setShapeFill":
+    case "setShapeOutline":
+    case "addTextBox":
+    case "addConnector":
+    case "deleteShape":
+    case "replaceImage":
+    case "addEmptySlideFromLayout":
+    case "duplicateSlide":
+    case "moveSlide":
+    case "deleteSlide":
+      return attemptCommand(() => executeCommand(document, command));
+  }
+}
+
+function attemptCommand(operation: () => PptxSourceModel): ApplyCommandAttempt {
+  try {
+    return { ok: true, document: operation() };
+  } catch (cause) {
+    return invalidCommandFailure(cause);
+  }
+}
+
+function invalidCommandFailure(cause: unknown): EditorOperationFailure<"invalid-command"> {
+  if (
+    !(cause instanceof Error) ||
+    !EXPECTED_COMMAND_REJECTION_PREFIXES.some((prefix) => cause.message.startsWith(prefix))
+  ) {
+    throw cause;
+  }
+  return {
+    ok: false,
+    code: "invalid-command",
+    message: cause.message,
+    cause,
+  };
+}
+
+function executeCommand(document: PptxSourceModel, command: EditorCommand): PptxSourceModel {
   switch (command.kind) {
     case "replaceTextRunPlainText":
       return replaceTextRunPlainTextCommand(document, command);

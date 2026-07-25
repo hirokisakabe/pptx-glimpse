@@ -1,3 +1,12 @@
+/**
+ * High-level read/edit/render/write session shared by the Node and browser entries.
+ *
+ * Headless expected failures are unwrapped into PptxEditorError without changing their
+ * code, message, or cause. Read, render, and write integrations are wrapped only at
+ * their owning boundaries. See the repository's
+ * [editor error contract](../../../docs/editor-error-contract.md).
+ */
+
 import {
   asEmu,
   findShapeNodeBySourceHandle,
@@ -21,6 +30,8 @@ import {
   createEditorSession,
   type EditorCommand,
   type EditorCommandWarning,
+  type EditorOperationErrorCode,
+  type EditorOperationFailure,
 } from "@pptx-glimpse/editor";
 
 import {
@@ -173,6 +184,32 @@ export interface PptxEditorSaveResponse {
 
 export type PptxEditorRenderOptions = Omit<ConvertOptions, "slides">;
 
+export type PptxEditorErrorCode =
+  | EditorOperationErrorCode
+  | "read-failed"
+  | "render-failed"
+  | "write-failed";
+
+export class PptxEditorError extends Error {
+  readonly code: PptxEditorErrorCode;
+  declare readonly cause?: unknown;
+
+  constructor(code: PptxEditorErrorCode, message: string, options?: { readonly cause?: unknown }) {
+    super(message, options);
+    this.name = "PptxEditorError";
+    this.code = code;
+  }
+}
+
+export function isPptxEditorError(value: unknown): value is PptxEditorError {
+  return (
+    isRecord(value) &&
+    value.name === "PptxEditorError" &&
+    typeof value.message === "string" &&
+    isPptxEditorErrorCode(value.code)
+  );
+}
+
 type PptxEditorSvgRenderer = (
   source: PptxSourceModel,
   options?: ConvertOptions,
@@ -201,7 +238,13 @@ export class PptxEditorSession {
     input: Uint8Array,
     renderOptions: PptxEditorRenderOptions = {},
   ): Promise<PptxEditorSession> {
-    const editor = new PptxEditorSession(readPptx(input), renderOptions);
+    let source: PptxSourceModel;
+    try {
+      source = readPptx(input);
+    } catch (cause) {
+      throw integrationError("read-failed", "Failed to read PPTX input", cause);
+    }
+    const editor = new PptxEditorSession(source, renderOptions);
     await editor.renderCurrentSlides();
     return editor;
   }
@@ -245,11 +288,16 @@ export class PptxEditorSession {
   }
 
   async renderCurrentSlides(): Promise<readonly PptxEditorSlideSvg[]> {
-    const report = await this.#renderToSvg(this.#session.document, {
-      textOutput: "text",
-      skipSystemFonts: true,
-      ...this.#renderOptions,
-    });
+    let report: SvgConversionReport;
+    try {
+      report = await this.#renderToSvg(this.#session.document, {
+        textOutput: "text",
+        skipSystemFonts: true,
+        ...this.#renderOptions,
+      });
+    } catch (cause) {
+      throw integrationError("render-failed", "Failed to render editor slides", cause);
+    }
     this.#slides = report.slides.map((slide) => ({
       ...slide,
       ...(this.#session.document.slides[slide.slideNumber - 1]?.handle !== undefined
@@ -264,10 +312,7 @@ export class PptxEditorSession {
   }
 
   async applyAll(commands: readonly EditorCommand[]): Promise<PptxEditorSlidesResponse> {
-    const result = this.#session.applyAll(commands);
-    if (!result.ok) {
-      throw new Error(result.message);
-    }
+    const result = unwrapEditorOperation(this.#session.applyAll(commands));
     if (commands.length === 0) return this.response(result.warnings);
     await this.renderCurrentSlides();
     return this.response(result.warnings);
@@ -279,22 +324,24 @@ export class PptxEditorSession {
   ): Promise<PptxEditorSlidesResponse> {
     const slide = this.#session.document.slides[slideNumber - 1];
     if (slide?.handle === undefined) {
-      throw new Error("addTextBox: slide handle was not found in PptxSourceModel source");
+      throw new PptxEditorError(
+        "invalid-command",
+        "addTextBox: slide handle was not found in PptxSourceModel source",
+      );
     }
     const existingShapeKeys = new Set(slide.shapes.map(shapeSourceKey));
-    const result = this.#session.apply({
-      kind: "addTextBox",
-      slideHandle: slide.handle,
-      offsetX: pxToEmu(options.x ?? DEFAULT_TEXT_BOX_BOUNDS_PX.x),
-      offsetY: pxToEmu(options.y ?? DEFAULT_TEXT_BOX_BOUNDS_PX.y),
-      width: pxToEmu(options.width ?? DEFAULT_TEXT_BOX_BOUNDS_PX.width),
-      height: pxToEmu(options.height ?? DEFAULT_TEXT_BOX_BOUNDS_PX.height),
-      text: options.text ?? DEFAULT_TEXT_BOX_TEXT,
-      ...(options.name !== undefined ? { name: options.name } : {}),
-    });
-    if (!result.ok) {
-      throw new Error(result.message);
-    }
+    const result = unwrapEditorOperation(
+      this.#session.apply({
+        kind: "addTextBox",
+        slideHandle: slide.handle,
+        offsetX: pxToEmu(options.x ?? DEFAULT_TEXT_BOX_BOUNDS_PX.x),
+        offsetY: pxToEmu(options.y ?? DEFAULT_TEXT_BOX_BOUNDS_PX.y),
+        width: pxToEmu(options.width ?? DEFAULT_TEXT_BOX_BOUNDS_PX.width),
+        height: pxToEmu(options.height ?? DEFAULT_TEXT_BOX_BOUNDS_PX.height),
+        text: options.text ?? DEFAULT_TEXT_BOX_TEXT,
+        ...(options.name !== undefined ? { name: options.name } : {}),
+      }),
+    );
     this.#selectNewShape(slideNumber, existingShapeKeys);
     await this.renderCurrentSlides();
     return this.response(result.warnings);
@@ -306,35 +353,34 @@ export class PptxEditorSession {
   ): Promise<PptxEditorSlidesResponse> {
     const slide = this.#session.document.slides[slideNumber - 1];
     if (slide?.handle === undefined) {
-      throw new Error("addConnector: slide handle was not found in PptxSourceModel source");
+      throw new PptxEditorError(
+        "invalid-command",
+        "addConnector: slide handle was not found in PptxSourceModel source",
+      );
     }
     const existingShapeKeys = new Set(slide.shapes.map(shapeSourceKey));
-    const result = this.#session.apply({
-      kind: "addConnector",
-      slideHandle: slide.handle,
-      preset: "straightConnector1",
-      offsetX: pxToEmu(options.x ?? DEFAULT_CONNECTOR_BOUNDS_PX.x),
-      offsetY: pxToEmu(options.y ?? DEFAULT_CONNECTOR_BOUNDS_PX.y),
-      width: pxToEmu(options.width ?? DEFAULT_CONNECTOR_BOUNDS_PX.width),
-      height: pxToEmu(options.height ?? DEFAULT_CONNECTOR_BOUNDS_PX.height),
-      outline: {
-        tailEnd: { type: "triangle", width: "med", length: "med" },
-      },
-      ...(options.name !== undefined ? { name: options.name } : {}),
-    });
-    if (!result.ok) {
-      throw new Error(result.message);
-    }
+    const result = unwrapEditorOperation(
+      this.#session.apply({
+        kind: "addConnector",
+        slideHandle: slide.handle,
+        preset: "straightConnector1",
+        offsetX: pxToEmu(options.x ?? DEFAULT_CONNECTOR_BOUNDS_PX.x),
+        offsetY: pxToEmu(options.y ?? DEFAULT_CONNECTOR_BOUNDS_PX.y),
+        width: pxToEmu(options.width ?? DEFAULT_CONNECTOR_BOUNDS_PX.width),
+        height: pxToEmu(options.height ?? DEFAULT_CONNECTOR_BOUNDS_PX.height),
+        outline: {
+          tailEnd: { type: "triangle", width: "med", length: "med" },
+        },
+        ...(options.name !== undefined ? { name: options.name } : {}),
+      }),
+    );
     this.#selectNewShape(slideNumber, existingShapeKeys);
     await this.renderCurrentSlides();
     return this.response(result.warnings);
   }
 
   async deleteShape(handle: SourceHandle): Promise<PptxEditorSlidesResponse> {
-    const result = this.#session.apply({ kind: "deleteShape", handle });
-    if (!result.ok) {
-      throw new Error(result.message);
-    }
+    const result = unwrapEditorOperation(this.#session.apply({ kind: "deleteShape", handle }));
     await this.renderCurrentSlides();
     return this.response(result.warnings);
   }
@@ -342,7 +388,7 @@ export class PptxEditorSession {
   async deleteSelectedShape(): Promise<PptxEditorSlidesResponse> {
     const selection = this.#session.selection;
     if (selection === undefined) {
-      throw new Error("deleteShape: no selected shape");
+      throw new PptxEditorError("invalid-selection", "deleteShape: no selected shape");
     }
     return this.deleteShape(selection.shapeHandle);
   }
@@ -363,44 +409,46 @@ export class PptxEditorSession {
   }
 
   selectShape(handle: SourceHandle): PptxEditorSlidesResponse {
-    const result = this.#session.selectShape(handle);
-    if (!result.ok) {
-      throw new Error(result.message);
-    }
+    unwrapEditorOperation(this.#session.selectShape(handle));
     return this.response();
   }
 
   async undo(): Promise<PptxEditorSlidesResponse> {
-    const result = this.#session.undo();
-    if (!result.ok) {
-      throw new Error(result.reason);
-    }
+    unwrapEditorOperation(this.#session.undo());
     await this.renderCurrentSlides();
     return this.response();
   }
 
   async redo(): Promise<PptxEditorSlidesResponse> {
-    const result = this.#session.redo();
-    if (!result.ok) {
-      throw new Error(result.reason);
-    }
+    unwrapEditorOperation(this.#session.redo());
     await this.renderCurrentSlides();
     return this.response();
   }
 
   save(): PptxEditorSaveResponse {
-    const output = writePptx(this.#session.document);
-    readPptx(output);
+    let output: Uint8Array;
+    try {
+      output = writePptx(this.#session.document);
+      readPptx(output);
+    } catch (cause) {
+      throw integrationError("write-failed", "Failed to write or validate PPTX output", cause);
+    }
     return { ok: true, pptx: output, history: this.history };
   }
 
   #requireEditableShapeTextBody(handle: SourceHandle): SourceTextBody {
     const shape = findShapeNodeBySourceHandle(this.#session.document, handle);
     if (shape === undefined) {
-      throw new Error("text body edit: shape handle was not found in PptxSourceModel source");
+      throw new PptxEditorError(
+        "invalid-command",
+        "text body edit: shape handle was not found in PptxSourceModel source",
+      );
     }
     if (shape.kind !== "shape" || shape.textBody === undefined) {
-      throw new Error("text body edit: shape does not have editable text body");
+      throw new PptxEditorError(
+        "invalid-command",
+        "text body edit: shape does not have editable text body",
+      );
     }
     return shape.textBody;
   }
@@ -418,6 +466,52 @@ export function createPptxEditorSession(
   renderOptions?: PptxEditorRenderOptions,
 ): Promise<PptxEditorSession> {
   return PptxEditorSession.create(input, renderOptions);
+}
+
+function unwrapEditorOperation<Success extends { readonly ok: true }>(
+  result: Success | EditorOperationFailure,
+): Success {
+  if (!result.ok) {
+    throw new PptxEditorError(
+      result.code,
+      result.message,
+      "cause" in result ? { cause: result.cause } : undefined,
+    );
+  }
+  return result;
+}
+
+function integrationError(
+  code: "read-failed" | "render-failed" | "write-failed",
+  message: string,
+  cause: unknown,
+): PptxEditorError {
+  return new PptxEditorError(code, errorMessage(message, cause), { cause });
+}
+
+function errorMessage(message: string, cause: unknown): string {
+  return cause instanceof Error && cause.message.length > 0
+    ? `${message}: ${cause.message}`
+    : message;
+}
+
+function isRecord(value: unknown): value is { readonly [key: string]: unknown } {
+  return typeof value === "object" && value !== null;
+}
+
+function isPptxEditorErrorCode(value: unknown): value is PptxEditorErrorCode {
+  switch (value) {
+    case "invalid-command":
+    case "invalid-selection":
+    case "empty-undo-stack":
+    case "empty-redo-stack":
+    case "read-failed":
+    case "render-failed":
+    case "write-failed":
+      return true;
+    default:
+      return false;
+  }
 }
 
 function shapeInfo(

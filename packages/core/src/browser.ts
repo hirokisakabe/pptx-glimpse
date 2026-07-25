@@ -19,6 +19,7 @@ export { collectUsedFonts } from "./font/font-collector.js";
 export type {
   PptxEditorAddConnectorOptions,
   PptxEditorAddTextBoxOptions,
+  PptxEditorErrorCode,
   PptxEditorHistoryState,
   PptxEditorImageReplacementInfo,
   PptxEditorRenderOptions,
@@ -34,7 +35,12 @@ export type {
   PptxEditorTextRunInfo,
   PptxEditorTextRunView,
 } from "./pptx-editor-session.js";
-export { createPptxEditorSession, PptxEditorSession } from "./pptx-editor-session.js";
+export {
+  createPptxEditorSession,
+  isPptxEditorError,
+  PptxEditorError,
+  PptxEditorSession,
+} from "./pptx-editor-session.js";
 export type {
   ConversionDiagnostic,
   ConvertOptions,
@@ -47,7 +53,12 @@ export type {
 } from "./svg-converter.js";
 export { convertPptxToSvg, renderPptxSourceModelToSvg } from "./svg-converter.js";
 export type { SourceHandle } from "@pptx-glimpse/document";
-export type { EditorCommand, EditorCommandWarning } from "@pptx-glimpse/editor";
+export type {
+  EditorCommand,
+  EditorCommandWarning,
+  EditorOperationErrorCode,
+  EditorOperationFailure,
+} from "@pptx-glimpse/editor";
 export type { FontMapping } from "@pptx-glimpse/renderer";
 export type { FontBuffer, OpentypeSetup } from "@pptx-glimpse/renderer";
 export type { LogLevel, WarningEntry, WarningSummary } from "@pptx-glimpse/renderer";

@@ -85,6 +85,28 @@ describe("EditorSession text-run commands", () => {
     expect(session.canRedo).toBe(false);
   });
 
+  it("returns common failures for empty history without changing document or selection", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const shapeHandle = requireHandle(firstShape(source).handle);
+    expect(session.selectShape(shapeHandle)).toMatchObject({ ok: true });
+
+    expect(session.undo()).toEqual({
+      ok: false,
+      code: "empty-undo-stack",
+      message: "undo: undo history is empty",
+    });
+    expect(session.redo()).toEqual({
+      ok: false,
+      code: "empty-redo-stack",
+      message: "redo: redo history is empty",
+    });
+    expect(session.document).toBe(source);
+    expect(session.selection).toEqual({ shapeHandle });
+    expect(session.undoDepth).toBe(0);
+    expect(session.redoDepth).toBe(0);
+  });
+
   it("keeps redo history when applying a no-op command after undo", async () => {
     const source = readPptx(await buildTextEditFixture());
     const session = createEditorSession(source);
@@ -158,7 +180,11 @@ describe("EditorSession text-run commands", () => {
     expect(session.redoDepth).toBe(0);
     expect(session.canUndo).toBe(false);
     expect(session.canRedo).toBe(false);
-    expect(session.undo()).toEqual({ ok: false, reason: "empty-undo-stack" });
+    expect(session.undo()).toEqual({
+      ok: false,
+      code: "empty-undo-stack",
+      message: "undo: undo history is empty",
+    });
   });
 
   it("rejects an invalid command batch without partially applying earlier commands", async () => {
@@ -191,6 +217,40 @@ describe("EditorSession text-run commands", () => {
     });
     expect(session.document).toBe(before);
     expect(firstRun(session.document).text).toBe("Original");
+    expect(session.undoDepth).toBe(0);
+    expect(session.redoDepth).toBe(0);
+  });
+
+  it("does not convert an unsupported command kind into an expected failure", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+
+    expect(() =>
+      session.apply({
+        // @ts-expect-error exercises a programmer error from an untyped JavaScript caller.
+        kind: "unsupported-command",
+      }),
+    ).toThrow(TypeError);
+    expect(session.document).toBe(source);
+    expect(session.undoDepth).toBe(0);
+    expect(session.redoDepth).toBe(0);
+  });
+
+  it("does not convert an unexpected failure from a supported command into a rejection", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const unexpected = new Error("unexpected command implementation failure");
+
+    expect(() =>
+      session.apply({
+        kind: "replaceTextRunPlainText",
+        handle: requireHandle(firstRun(source).handle),
+        get text(): string {
+          throw unexpected;
+        },
+      }),
+    ).toThrow(unexpected);
+    expect(session.document).toBe(source);
     expect(session.undoDepth).toBe(0);
     expect(session.redoDepth).toBe(0);
   });
@@ -2031,7 +2091,7 @@ function expectApplied(result: EditorApplyCommandResult): PptxSourceModel {
 }
 
 function expectHistory(result: EditorHistoryResult): PptxSourceModel {
-  if (!result.ok) throw new Error(result.reason);
+  if (!result.ok) throw new Error(result.message);
   return result.document;
 }
 

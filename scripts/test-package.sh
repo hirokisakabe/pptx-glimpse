@@ -156,7 +156,7 @@ mkdir -p "$TEST_DIR"
 cp "$REPO_DIR/shared-fixtures/real-basic-theme.pptx" "$TEST_DIR/fixture.pptx"
 cd "$TEST_DIR"
 npm init -y > /dev/null 2>&1
-npm install "$TARBALL_PATH" > /dev/null 2>&1
+npm install "$DOCUMENT_TARBALL_PATH" "$EDITOR_TARBALL_PATH" "$TARBALL_PATH" > /dev/null 2>&1
 
 echo ""
 
@@ -183,12 +183,16 @@ assert(
   "createPptxEditorSession should be a function",
 );
 assert(typeof pkg.PptxEditorSession === "function", "PptxEditorSession should be a class");
+assert(typeof pkg.PptxEditorError === "function", "PptxEditorError should be a class");
+assert(typeof pkg.isPptxEditorError === "function", "isPptxEditorError should be a function");
 
 console.log("  convertPptxToSvg: function OK");
 console.log("  convertPptxToPng: function OK");
 console.log("  renderPptxSourceModelToSvg: function OK");
 console.log("  createPptxEditorSession: function OK");
 console.log("  PptxEditorSession: class OK");
+console.log("  PptxEditorError: class OK");
+console.log("  isPptxEditorError: function OK");
 console.log("CJS test passed!");
 TESTEOF
 node test-cjs.cjs
@@ -202,6 +206,8 @@ import {
   convertPptxToSvg,
   convertPptxToPng,
   createPptxEditorSession,
+  isPptxEditorError,
+  PptxEditorError,
   PptxEditorSession,
   renderPptxSourceModelToSvg,
 } from "pptx-glimpse";
@@ -225,12 +231,16 @@ assert(
   "createPptxEditorSession should be a function",
 );
 assert(typeof PptxEditorSession === "function", "PptxEditorSession should be a class");
+assert(typeof PptxEditorError === "function", "PptxEditorError should be a class");
+assert(typeof isPptxEditorError === "function", "isPptxEditorError should be a function");
 
 console.log("  convertPptxToSvg: function OK");
 console.log("  convertPptxToPng: function OK");
 console.log("  renderPptxSourceModelToSvg: function OK");
 console.log("  createPptxEditorSession: function OK");
 console.log("  PptxEditorSession: class OK");
+console.log("  PptxEditorError: class OK");
+console.log("  isPptxEditorError: function OK");
 const input = new Uint8Array(await readFile("fixture.pptx"));
 const result = await convertPptxToSvg(input, { skipSystemFonts: true });
 assert(result.slides[0]?.svg.startsWith("<svg"), "Node SVG conversion should produce SVG");
@@ -260,9 +270,18 @@ echo ""
 echo "--- Test: pptx-glimpse browser consumer bundle ---"
 npm install --save-dev esbuild > /dev/null 2>&1
 cat > browser-entry.mjs << 'TESTEOF'
-import { convertPptxToSvg, createPptxEditorSession } from "pptx-glimpse";
+import {
+  convertPptxToSvg,
+  createPptxEditorSession,
+  isPptxEditorError,
+  PptxEditorError,
+} from "pptx-glimpse";
 
 export async function verifyBrowserApis(input) {
+  const sampleError = new PptxEditorError("invalid-command", "sample");
+  if (!isPptxEditorError(sampleError) || sampleError.code !== "invalid-command") {
+    throw new Error("browser editor error API is unavailable");
+  }
   const converted = await convertPptxToSvg(input, { skipSystemFonts: true });
   if (!converted.slides[0]?.svg.startsWith("<svg")) {
     throw new Error("browser SVG conversion did not produce SVG");
@@ -346,6 +365,8 @@ import {
   convertPptxToSvg,
   convertPptxToPng,
   createPptxEditorSession,
+  isPptxEditorError,
+  PptxEditorError,
   renderPptxSourceModelToSvg,
 } from "pptx-glimpse";
 import type {
@@ -355,6 +376,7 @@ import type {
   FontMapping,
   OpentypeSetup,
   PngConversionReport,
+  PptxEditorErrorCode,
   PptxEditorRenderOptions,
   PptxEditorSession,
   PptxEditorShapeInfo,
@@ -401,6 +423,9 @@ const _fontMapping: FontMapping = { Arial: "Inter" };
 declare const _opentypeSetup: OpentypeSetup;
 const _wasm: ResvgWasmInput = new Uint8Array();
 declare const _editorCommand: EditorCommand;
+const _editorError = new PptxEditorError("invalid-command", "typed");
+const _editorErrorCode: PptxEditorErrorCode = _editorError.code;
+const _isEditorError: boolean = isPptxEditorError(_editorError);
 void _svgFn;
 void _pngFn;
 void _sourceModelSvgFn;
@@ -413,6 +438,8 @@ void _fontMapping;
 void _opentypeSetup;
 void _wasm;
 void _editorCommand;
+void _editorErrorCode;
+void _isEditorError;
 void _verifyPngType;
 void _verifyBufferInput;
 TESTEOF
@@ -437,7 +464,10 @@ cat > test-browser-types.ts << 'TESTEOF'
 import {
   createPptxEditorSession,
   initResvgWasm,
+  isPptxEditorError,
+  PptxEditorError,
   type EditorCommand,
+  type PptxEditorErrorCode,
   type PptxEditorSession,
   type PptxEditorShapeInfo,
   type PptxSourceModel,
@@ -446,6 +476,9 @@ import {
 
 const _create: (input: Uint8Array) => Promise<PptxEditorSession> = createPptxEditorSession;
 const _init: (wasm: ResvgWasmInput) => Promise<void> = initResvgWasm;
+const _editorError = new PptxEditorError("render-failed", "typed browser error");
+const _editorErrorCode: PptxEditorErrorCode = _editorError.code;
+const _isEditorError: boolean = isPptxEditorError(_editorError);
 declare const _source: PptxSourceModel;
 declare const _shape: PptxEditorShapeInfo;
 const _command: EditorCommand = {
@@ -455,6 +488,8 @@ const _command: EditorCommand = {
 };
 void _create;
 void _init;
+void _editorErrorCode;
+void _isEditorError;
 void _command;
 void _shape;
 TESTEOF
@@ -605,6 +640,8 @@ import type {
   EditorCommand,
   EditorCommandWarning,
   EditorHistoryResult,
+  EditorOperationErrorCode,
+  EditorOperationFailure,
   EditorSelection,
   EditorSelectShapeResult,
   MoveShapeCommand,
@@ -649,6 +686,8 @@ declare const _history: EditorHistoryResult;
 declare const _selection: EditorSelection;
 declare const _selectResult: EditorSelectShapeResult;
 declare const _warning: EditorCommandWarning;
+const _operationCode: EditorOperationErrorCode = "invalid-command";
+declare const _operationFailure: EditorOperationFailure;
 void _create;
 void _editorCommand;
 void _apply;
@@ -656,6 +695,8 @@ void _history;
 void _selection;
 void _selectResult;
 void _warning;
+void _operationCode;
+void _operationFailure;
 TESTEOF
 cat > test-editor-cjs.cts << 'TESTEOF'
 import editor = require("@pptx-glimpse/editor");

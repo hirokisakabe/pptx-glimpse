@@ -45,6 +45,10 @@ foundation; `@pptx-glimpse/editor` builds on it; public `pptx-glimpse` orchestra
 editor, and rendering behavior; the demo/UI consumes public packages. Lower layers must not
 depend on higher layers.
 
+Read [`docs/editor-error-contract.md`](docs/editor-error-contract.md) before adding or changing
+editor operations, operation failure codes, high-level editor error wrapping, warning transport,
+or read/render/write catches in `PptxEditorSession`.
+
 Before changing PptxSourceModel, computed-view, writer, or adapter behavior, also read the
 module-level comments in `packages/document/src/source/pptx-source-model.ts`,
 `packages/document/src/computed/pptx-computed-view.ts`,
