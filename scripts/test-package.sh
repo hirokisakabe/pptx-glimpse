@@ -163,10 +163,15 @@ assert(
   typeof pkg.renderPptxSourceModelToSvg === "function",
   "renderPptxSourceModelToSvg should be a function",
 );
+assert(
+  typeof pkg.createBrowserPptxEditorSession === "function",
+  "createBrowserPptxEditorSession should be a function",
+);
 
 console.log("  convertPptxToSvg: function OK");
 console.log("  convertPptxToPng: function OK");
 console.log("  renderPptxSourceModelToSvg: function OK");
+console.log("  createBrowserPptxEditorSession: function OK");
 console.log("CJS test passed!");
 TESTEOF
 node test-cjs.cjs
@@ -176,7 +181,12 @@ echo ""
 # --- core ESM test ---
 echo "--- Test: pptx-glimpse ESM (import) ---"
 cat > test-esm.mjs << 'TESTEOF'
-import { convertPptxToSvg, convertPptxToPng, renderPptxSourceModelToSvg } from "pptx-glimpse";
+import {
+  convertPptxToSvg,
+  convertPptxToPng,
+  createBrowserPptxEditorSession,
+  renderPptxSourceModelToSvg,
+} from "pptx-glimpse";
 import { readFile } from "node:fs/promises";
 
 const assert = (condition, message) => {
@@ -192,14 +202,34 @@ assert(
   typeof renderPptxSourceModelToSvg === "function",
   "renderPptxSourceModelToSvg should be a function",
 );
+assert(
+  typeof createBrowserPptxEditorSession === "function",
+  "createBrowserPptxEditorSession should be a function",
+);
 
 console.log("  convertPptxToSvg: function OK");
 console.log("  convertPptxToPng: function OK");
 console.log("  renderPptxSourceModelToSvg: function OK");
+console.log("  createBrowserPptxEditorSession: function OK");
 const input = new Uint8Array(await readFile("fixture.pptx"));
 const result = await convertPptxToSvg(input, { skipSystemFonts: true });
 assert(result.slides[0]?.svg.startsWith("<svg"), "Node SVG conversion should produce SVG");
 console.log("  Node SVG conversion: OK");
+const editor = await createBrowserPptxEditorSession(input, { skipSystemFonts: true });
+const run = editor
+  .shapes(1)
+  .flatMap((shape) => shape.textBody?.paragraphs ?? [])
+  .flatMap((paragraph) => paragraph.runs)
+  .find((candidate) => candidate.handle !== undefined);
+assert(run?.handle !== undefined, "Node editor fixture text run should exist");
+const edited = await editor.apply({
+  kind: "replaceTextRunPlainText",
+  handle: run.handle,
+  text: "Node package consumer edited",
+});
+assert(edited.slides[0]?.svg.startsWith("<svg"), "Node editor should rerender SVG");
+assert(editor.save().pptx instanceof Uint8Array, "Node editor should save Uint8Array");
+console.log("  Node high-level editor: OK");
 console.log("ESM test passed!");
 TESTEOF
 node test-esm.mjs
@@ -291,9 +321,16 @@ cat > tsconfig.json << 'TESTEOF'
 TESTEOF
 
 cat > test-types.ts << 'TESTEOF'
-import { collectUsedFonts, convertPptxToSvg, convertPptxToPng, renderPptxSourceModelToSvg } from "pptx-glimpse";
+import {
+  collectUsedFonts,
+  convertPptxToSvg,
+  convertPptxToPng,
+  createBrowserPptxEditorSession,
+  renderPptxSourceModelToSvg,
+} from "pptx-glimpse";
 import type {
   ConvertOptions,
+  EditorCommand,
   FontBuffer,
   FontMapping,
   OpentypeSetup,
@@ -314,6 +351,7 @@ const _sourceModelSvgFn: (
   options?: ConvertOptions,
 ) => Promise<SvgConversionReport> = renderPptxSourceModelToSvg;
 const _fontFn: (input: Uint8Array) => UsedFonts = collectUsedFonts;
+const _editorFn = createBrowserPptxEditorSession;
 
 // Verify SlideImage.png is Uint8Array
 async function _verifyPngType(input: Uint8Array) {
@@ -335,15 +373,18 @@ const _fontBuffer: FontBuffer = { name: "Test", data: new Uint8Array() };
 const _fontMapping: FontMapping = { Arial: "Inter" };
 declare const _opentypeSetup: OpentypeSetup;
 const _wasm: ResvgWasmInput = new Uint8Array();
+declare const _editorCommand: EditorCommand;
 void _svgFn;
 void _pngFn;
 void _sourceModelSvgFn;
 void _fontFn;
+void _editorFn;
 void _options;
 void _fontBuffer;
 void _fontMapping;
 void _opentypeSetup;
 void _wasm;
+void _editorCommand;
 void _verifyPngType;
 void _verifyBufferInput;
 TESTEOF

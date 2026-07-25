@@ -71,8 +71,8 @@ npm install pptx-glimpse
 ```
 
 `pptx-glimpse` installs its compatible `@pptx-glimpse/document` and `@pptx-glimpse/editor`
-versions as transitive dependencies. The high-level conversion and browser editor APIs below do
-not require separate package installs.
+versions as transitive dependencies. The high-level conversion and editor APIs below do not
+require separate package installs.
 
 Install a lower-level package directly when your application imports it. Do not rely on package
 manager hoisting to make a transitive dependency importable:

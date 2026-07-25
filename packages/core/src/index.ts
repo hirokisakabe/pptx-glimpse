@@ -1,4 +1,23 @@
 export type {
+  BrowserEditorAddConnectorOptions,
+  BrowserEditorAddTextBoxOptions,
+  BrowserEditorHistoryState,
+  BrowserEditorImageReplacementInfo,
+  BrowserEditorRenderOptions,
+  BrowserEditorSaveResponse,
+  BrowserEditorSelectionInfo,
+  BrowserEditorShapeBoundsPx,
+  BrowserEditorShapeInfo,
+  BrowserEditorSlidesResponse,
+  BrowserEditorSlideSvg,
+  BrowserEditorTextBodyInfo,
+  BrowserEditorTextBodyView,
+  BrowserEditorTextParagraphView,
+  BrowserEditorTextRunInfo,
+  BrowserEditorTextRunView,
+} from "./browser-editor.js";
+export { BrowserPptxEditorSession, createBrowserPptxEditorSession } from "./browser-editor.js";
+export type {
   ConversionDiagnostic,
   ConvertOptions,
   PngConversionReport,
@@ -13,6 +32,8 @@ export type {
 export { convertPptxToPng, convertPptxToSvg, renderPptxSourceModelToSvg } from "./converter.js";
 export type { UsedFonts } from "./font/font-collector.js";
 export { collectUsedFonts } from "./font/font-collector.js";
+export type { SourceHandle } from "@pptx-glimpse/document";
+export type { EditorCommand, EditorCommandWarning } from "@pptx-glimpse/editor";
 export type { FontMapping } from "@pptx-glimpse/renderer";
 export type { FontBuffer, OpentypeSetup } from "@pptx-glimpse/renderer";
 export type { LogLevel, WarningEntry, WarningSummary } from "@pptx-glimpse/renderer";
