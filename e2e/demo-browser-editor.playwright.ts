@@ -41,6 +41,8 @@ test("links the toolkit demo to all public package documentation", async ({ page
   if (demoServer === null) throw new Error("demo server was not started");
 
   await page.goto(demoServer.url);
+  await expect(page.getByRole("link", { name: "GitHub" })).toHaveAttribute("target", "_blank");
+  await expect(page.getByRole("link", { name: "GitHub" })).toHaveAttribute("rel", "noreferrer");
   await page.getByRole("link", { name: "Documentation" }).click();
 
   await expect(page).toHaveURL(`${demoServer.url}/docs`);
@@ -76,37 +78,25 @@ test("links the toolkit demo to all public package documentation", async ({ page
   expect(await sitemapResponse.text()).toContain("https://glimpse.pptx.app/docs");
 });
 
-test("opens uploaded and sample PPTX files through the primary demo routes", async ({ page }) => {
+test("opens the sample editor first and replaces it with an uploaded PPTX", async ({ page }) => {
   test.setTimeout(120_000);
   if (demoServer === null) throw new Error("demo server was not started");
 
   await page.goto(demoServer.url);
-  await expect(
-    page.getByRole("heading", { name: "Open it. Edit it. Save it back to PPTX." }),
-  ).toBeVisible();
-  await expect(page.getByText(/never sent to a server/).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Choose PPTX" })).toBeVisible();
+  await expect(page.getByTestId("editor-workspace")).toBeVisible();
+  await expect(page.getByText("real-basic-theme.pptx")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Open PPTX" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Download PPTX" })).toBeVisible();
 
   await page
     .getByTestId("pptx-input")
-    .setInputFiles(resolve(repoRoot, "shared-fixtures/real-basic-theme.pptx"));
-  await expect(page.getByTestId("viewer-status")).toContainText("slides rendered");
-  await expect(page.getByRole("button", { name: "View", exact: true })).toHaveAttribute(
-    "aria-pressed",
-    "true",
-  );
-  await expect(page.getByTestId("open-editor")).toBeVisible();
-
-  await page.goto(demoServer.url);
-  await page.getByTestId("sample-edit-basic-theme").click();
+    .setInputFiles(resolve(repoRoot, "shared-fixtures/real-product-page.pptx"));
   await expect(page.getByTestId("editor-workspace")).toBeVisible();
-  await expect(page.getByTestId("editor-status")).toContainText("ready");
-  await expect(page.getByRole("button", { name: "Download PPTX" })).toBeVisible();
+  await expect(page.getByText("real-product-page.pptx")).toBeVisible();
 
-  await page.getByRole("button", { name: "View", exact: true }).click();
-  await expect(page.getByTestId("viewer-status")).toContainText("slides rendered");
-  await page.getByTestId("open-editor").click();
+  await page.getByRole("button", { name: "Open sample" }).click();
   await expect(page.getByTestId("editor-workspace")).toBeVisible();
+  await expect(page.getByText("real-basic-theme.pptx")).toBeVisible();
 });
 
 test("runs the public demo browser editor flow entirely client-side", async ({ page }) => {
@@ -120,12 +110,7 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
     await writeFile(replacementImagePath, BLUE_PNG);
 
     await page.goto(demoServer.url);
-
-    await page.getByTestId("sample-basic-theme").click();
-    await expect(page.getByTestId("viewer-status")).toContainText("slides rendered");
-    await page.getByTestId("open-editor").click();
     await expect(page.getByTestId("editor-workspace")).toBeVisible();
-    await expect(page.getByTestId("editor-status")).toContainText("ready");
 
     const slideFrame = page.getByTestId("editor-slide-frame");
     const firstEditableTextShape = page

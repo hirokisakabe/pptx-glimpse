@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { convertPptxToSvg, type FontBuffer } from "pptx-glimpse";
 
-import { DropZone, type SampleOpenMode, type SamplePptx } from "./DropZone";
+import { DropZone, SAMPLE_PPTX_FILES, type SampleOpenMode, type SamplePptx } from "./DropZone";
 import { EditorWorkspace } from "./EditorWorkspace";
 import { SlideViewer } from "./SlideViewer";
 import { ThumbnailStrip } from "./ThumbnailStrip";
@@ -17,31 +17,40 @@ type Phase = "upload" | "loading" | "viewing" | "error";
 type DemoMode = "view" | "edit";
 
 export function UploadViewer() {
-  const [phase, setPhase] = useState<Phase>("upload");
+  const [phase, setPhase] = useState<Phase>("loading");
   const [slides, setSlides] = useState<Slide[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [errorMessage, setErrorMessage] = useState("");
   const [fontFiles, setFontFiles] = useState<File[]>([]);
   const [fontBuffers, setFontBuffers] = useState<FontBuffer[]>([]);
   const [renderedFontCount, setRenderedFontCount] = useState(0);
-  const [sourceFile, setSourceFile] = useState<{ fileName: string; bytes: Uint8Array } | null>(
-    null,
-  );
+  const [sourceFile, setSourceFile] = useState<{
+    file: File;
+    fileName: string;
+    bytes: Uint8Array;
+  } | null>(null);
   const [mode, setMode] = useState<DemoMode>("view");
+  const initialSampleRequested = useRef(false);
+  const pptxInputRef = useRef<HTMLInputElement>(null);
+  const fontInputRef = useRef<HTMLInputElement>(null);
 
   const handleFontFiles = useCallback((files: File[]) => {
     setFontFiles(files);
   }, []);
 
   const handleFile = useCallback(
-    async (file: File, initialMode: DemoMode = "view") => {
+    async (
+      file: File,
+      initialMode: DemoMode = "view",
+      selectedFontFiles: readonly File[] = fontFiles,
+    ) => {
       setPhase("loading");
       setErrorMessage("");
 
       try {
         const [pptxArrayBuffer, fonts] = await Promise.all([
           file.arrayBuffer(),
-          readFontBuffers(fontFiles),
+          readFontBuffers(selectedFontFiles),
         ]);
         const pptxBytes = new Uint8Array(pptxArrayBuffer);
         const report = await convertPptxToSvg(new Uint8Array(pptxBytes), {
@@ -54,7 +63,7 @@ export function UploadViewer() {
         }
 
         setSlides([...report.slides]);
-        setSourceFile({ fileName: file.name, bytes: pptxBytes });
+        setSourceFile({ file, fileName: file.name, bytes: pptxBytes });
         setFontBuffers(fonts);
         setRenderedFontCount(fonts.length);
         setCurrentIndex(0);
@@ -88,6 +97,31 @@ export function UploadViewer() {
       }
     },
     [handleFile],
+  );
+
+  useEffect(() => {
+    if (initialSampleRequested.current) return;
+    initialSampleRequested.current = true;
+    void handleSample(SAMPLE_PPTX_FILES[0], "edit");
+  }, [handleSample]);
+
+  const handlePptxChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = "";
+      if (file !== undefined) void handleFile(file, "edit");
+    },
+    [handleFile],
+  );
+
+  const handleFontChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(event.target.files ?? []);
+      event.target.value = "";
+      handleFontFiles(files);
+      if (sourceFile !== null) void handleFile(sourceFile.file, "edit", files);
+    },
+    [handleFile, handleFontFiles, sourceFile],
   );
 
   const handleNavigate = useCallback(
@@ -127,12 +161,34 @@ export function UploadViewer() {
   if (phase === "viewing") {
     if (mode === "edit" && sourceFile !== null) {
       return (
-        <EditorWorkspace
-          fileName={sourceFile.fileName}
-          fonts={fontBuffers}
-          pptxBytes={sourceFile.bytes}
-          onBackToViewer={() => setMode("view")}
-        />
+        <>
+          <EditorWorkspace
+            fileName={sourceFile.fileName}
+            fontFileCount={fontFiles.length}
+            fonts={fontBuffers}
+            pptxBytes={sourceFile.bytes}
+            onAddFonts={() => fontInputRef.current?.click()}
+            onOpenPptx={() => pptxInputRef.current?.click()}
+            onOpenSample={() => void handleSample(SAMPLE_PPTX_FILES[0], "edit")}
+          />
+          <input
+            ref={pptxInputRef}
+            data-testid="pptx-input"
+            type="file"
+            accept=".pptx"
+            hidden
+            onChange={handlePptxChange}
+          />
+          <input
+            ref={fontInputRef}
+            data-testid="font-input"
+            type="file"
+            accept=".ttf,.otf,.ttc,font/ttf,font/otf"
+            hidden
+            multiple
+            onChange={handleFontChange}
+          />
+        </>
       );
     }
 

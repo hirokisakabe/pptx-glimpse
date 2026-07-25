@@ -5,12 +5,12 @@
 }
 
 :root {
-  --paper: #f4f6f1;
+  --paper: #f6f7f8;
   --surface: #ffffff;
-  --surface-2: #eef3f7;
+  --surface-2: #f1f3f5;
   --ink: #17212b;
   --muted: #5e6d78;
-  --line: #cfd8dc;
+  --line: #dce1e5;
   --blueprint: #2454a6;
   --amber: #b86b1f;
   --amber-text: #8f4e12;
@@ -21,10 +21,7 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background:
-    linear-gradient(90deg, rgba(36, 84, 166, 0.04) 1px, transparent 1px),
-    linear-gradient(rgba(36, 84, 166, 0.04) 1px, transparent 1px), var(--paper);
-  background-size: 28px 28px;
+  background: var(--paper);
   color: var(--ink);
   min-height: 100vh;
 }
@@ -33,6 +30,15 @@ body {
   margin: 0 auto;
   max-width: 1180px;
   padding: 0 16px 28px;
+}
+
+.site-shell:has(.demo-page) {
+  max-width: none;
+  padding-bottom: 0;
+}
+
+.site-shell:has(.demo-page) .site-footer {
+  display: none;
 }
 
 .site-header {
@@ -95,6 +101,10 @@ body {
 
 .app {
   padding: 40px 0 0;
+}
+
+.demo-page {
+  padding-top: 16px;
 }
 
 .demo-intro {
@@ -592,15 +602,34 @@ body {
 }
 
 .editor-workspace {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
   display: grid;
-  gap: 12px;
+  gap: 0;
+  overflow: hidden;
 }
 
 .editor-topbar {
   align-items: center;
   display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(180px, auto) minmax(120px, 1fr) auto;
+  min-height: 68px;
+  padding: 10px 14px;
+}
+
+.editor-file {
+  align-items: center;
+  display: flex;
   gap: 12px;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  min-width: 0;
+}
+
+.editor-file strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .editor-status {
@@ -614,12 +643,14 @@ body {
 }
 
 .editor-status span {
-  background: var(--surface-2);
-  border-radius: 999px;
-  padding: 6px 10px;
+  color: var(--green);
+  font-size: 0.82rem;
+  font-weight: 700;
 }
 
 .primary-action,
+.editor-file-actions button,
+.editor-commandbar button,
 .editor-panel button,
 .button-row button {
   border: 1px solid var(--line);
@@ -637,6 +668,35 @@ body {
   color: white;
 }
 
+.editor-file-actions {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.editor-file-actions button,
+.editor-commandbar button {
+  background: var(--surface);
+  color: var(--ink);
+}
+
+.editor-file-actions .primary-action {
+  background: var(--green);
+  border-color: transparent;
+  color: white;
+}
+
+.editor-commandbar {
+  align-items: center;
+  background: #fafbfc;
+  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+  display: flex;
+  gap: 8px;
+  min-height: 48px;
+  padding: 6px 14px;
+}
+
 .editor-panel button,
 .button-row button {
   background: var(--surface);
@@ -645,6 +705,8 @@ body {
 
 .editor-panel button:disabled,
 .button-row button:disabled,
+.editor-file-actions button:disabled,
+.editor-commandbar button:disabled,
 .format-toolbar button:disabled,
 .text-property-row button:disabled {
   cursor: not-allowed;
@@ -653,17 +715,16 @@ body {
 
 .editor-shell {
   display: grid;
-  gap: 12px;
+  gap: 0;
   grid-template-columns: 140px minmax(0, 1fr) 280px;
-  min-height: 620px;
+  min-height: calc(100vh - 218px);
 }
 
 .editor-thumbnails {
-  background: rgba(255, 255, 255, 0.58);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  background: #fafbfc;
+  border-right: 1px solid var(--line);
   overflow-y: auto;
-  padding: 8px;
+  padding: 10px;
 }
 
 .editor-thumbnail {
@@ -696,12 +757,7 @@ body {
 
 .editor-stage {
   align-items: center;
-  background:
-    linear-gradient(90deg, rgba(23, 33, 43, 0.05) 1px, transparent 1px),
-    linear-gradient(rgba(23, 33, 43, 0.05) 1px, transparent 1px), #dfe8ed;
-  background-size: 20px 20px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  background: #eef1f3;
   display: flex;
   justify-content: center;
   min-width: 0;
@@ -834,9 +890,8 @@ body {
 
 .editor-panel {
   align-content: start;
-  background: rgba(255, 255, 255, 0.68);
-  border: 1px solid var(--line);
-  border-radius: 8px;
+  background: #fbfcfc;
+  border-left: 1px solid var(--line);
   display: grid;
   gap: 12px;
   overflow-y: auto;
@@ -1041,6 +1096,19 @@ body {
   .editor-topbar {
     align-items: stretch;
     grid-template-columns: 1fr;
+    padding-bottom: 8px;
+  }
+
+  .editor-file-actions {
+    flex-wrap: wrap;
+  }
+
+  .editor-file-actions button {
+    flex: 1 1 auto;
+  }
+
+  .editor-commandbar {
+    flex-wrap: wrap;
   }
 
   .editor-shell {

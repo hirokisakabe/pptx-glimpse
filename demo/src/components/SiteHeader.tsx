@@ -12,7 +12,9 @@ export function SiteHeader() {
       <nav className="site-nav" aria-label="Primary navigation">
         <Link href="/">Demo</Link>
         <Link href="/docs">Documentation</Link>
-        <a href="https://github.com/hirokisakabe/pptx-glimpse">GitHub</a>
+        <a href="https://github.com/hirokisakabe/pptx-glimpse" target="_blank" rel="noreferrer">
+          GitHub
+        </a>
       </nav>
     </header>
   );

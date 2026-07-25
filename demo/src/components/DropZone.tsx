@@ -135,7 +135,7 @@ export interface SamplePptx {
 
 export type SampleOpenMode = "view" | "edit";
 
-const SAMPLE_PPTX_FILES: readonly SamplePptx[] = [
+export const SAMPLE_PPTX_FILES: readonly SamplePptx[] = [
   {
     id: "basic-theme",
     label: "View sample",

@@ -29,9 +29,12 @@ type ClearTextRunProperties = Extract<
 
 interface EditorWorkspaceProps {
   readonly fileName: string;
+  readonly fontFileCount: number;
   readonly pptxBytes: Uint8Array;
   readonly fonts: readonly FontBuffer[];
-  readonly onBackToViewer: () => void;
+  readonly onAddFonts: () => void;
+  readonly onOpenPptx: () => void;
+  readonly onOpenSample: () => void;
 }
 
 interface TextRunOption {
@@ -75,9 +78,12 @@ type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
 export function EditorWorkspace({
   fileName,
+  fontFileCount,
   pptxBytes,
   fonts,
-  onBackToViewer,
+  onAddFonts,
+  onOpenPptx,
+  onOpenSample,
 }: EditorWorkspaceProps) {
   const [editor, setEditor] = useState<EditorSession | null>(null);
   const [slides, setSlides] = useState<PptxEditorSlideSvg[]>([]);
@@ -179,9 +185,7 @@ export function EditorWorkspace({
         setShapeOptions([...session.shapes(1).filter((shape) => shape.handle && shape.bounds)]);
         setHistory(session.history);
         setCurrentIndex(0);
-        setMessage(
-          `${session.slides.length.toString()} slide${session.slides.length === 1 ? "" : "s"} ready`,
-        );
+        setMessage("");
       } catch (error) {
         if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
       } finally {
@@ -604,10 +608,6 @@ export function EditorWorkspace({
     return commit === null || (await commit);
   }, []);
 
-  const handleBackToViewer = useCallback(async () => {
-    if (await waitForDirectTextCommit()) onBackToViewer();
-  }, [onBackToViewer, waitForDirectTextCommit]);
-
   const handleSelectSlide = useCallback(
     async (index: number) => {
       if (await waitForDirectTextCommit()) setCurrentIndex(index);
@@ -700,20 +700,35 @@ export function EditorWorkspace({
   return (
     <section className="editor-workspace" aria-label="PPTX editor" data-testid="editor-workspace">
       <div className="editor-topbar">
-        <div className="mode-switch" role="group" aria-label="Demo mode">
-          <button disabled={busy} type="button" onClick={() => void handleBackToViewer()}>
-            View
-          </button>
-          <button aria-pressed="true" type="button">
-            Edit
-          </button>
+        <div className="editor-file">
+          <strong title={fileName}>{fileName}</strong>
         </div>
         <div className="editor-status" data-testid="editor-status">
-          <span>{message}</span>
+          {message === "" ? null : <span>{message}</span>}
           {busy ? <span>Working...</span> : null}
         </div>
-        <button className="primary-action" disabled={busy} type="button" onClick={handleDownload}>
-          Download PPTX
+        <div className="editor-file-actions">
+          <button disabled={busy} type="button" onClick={onOpenPptx}>
+            Open PPTX
+          </button>
+          <button disabled={busy} type="button" onClick={onOpenSample}>
+            Open sample
+          </button>
+          <button disabled={busy} type="button" onClick={onAddFonts}>
+            Add fonts{fontFileCount > 0 ? ` (${fontFileCount.toString()})` : ""}
+          </button>
+          <button className="primary-action" disabled={busy} type="button" onClick={handleDownload}>
+            Download PPTX
+          </button>
+        </div>
+      </div>
+
+      <div className="editor-commandbar" aria-label="Editing history">
+        <button disabled={busy || !history.canUndo} type="button" onClick={handleUndo}>
+          Undo
+        </button>
+        <button disabled={busy || !history.canRedo} type="button" onClick={handleRedo}>
+          Redo
         </button>
       </div>
 
@@ -904,14 +919,6 @@ export function EditorWorkspace({
                 onClick={handleDeleteSlide}
               >
                 Delete
-              </button>
-            </div>
-            <div className="button-row">
-              <button disabled={busy || !history.canUndo} type="button" onClick={handleUndo}>
-                Undo
-              </button>
-              <button disabled={busy || !history.canRedo} type="button" onClick={handleRedo}>
-                Redo
               </button>
             </div>
           </div>
