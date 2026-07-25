@@ -11,7 +11,7 @@ A TypeScript toolkit for rendering and editing PowerPoint (`.pptx`) files in Nod
 browser. Use the high-level package for SVG/PNG conversion and browser-oriented editing, or build
 on the lower-level document and headless editor packages.
 
-**[Try the Demo](https://glimpse.pptx.app/)** | [npm](https://www.npmjs.com/package/pptx-glimpse)
+**[Try the Demo](https://glimpse.pptx.app/)**
 
 ![pptx-glimpse browser rendering and editing demo](https://raw.githubusercontent.com/hirokisakabe/pptx-glimpse/main/docs/demo-editor.png)
 
