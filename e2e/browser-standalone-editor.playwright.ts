@@ -346,7 +346,7 @@ const editorHtml = `<!doctype html>
 </html>`;
 
 const editorAppSource = `
-import { createBrowserPptxEditorSession } from "pptx-glimpse";
+import { createPptxEditorSession } from "pptx-glimpse";
 
 const pptxInput = document.getElementById("pptx-input");
 const status = document.getElementById("status");
@@ -372,7 +372,7 @@ pptxInput.addEventListener("change", async () => {
   if (!file) return;
   fileName = file.name.replace(/\\.pptx$/i, ".edited.pptx");
   status.textContent = "Opening";
-  editor = await createBrowserPptxEditorSession(new Uint8Array(await file.arrayBuffer()), {
+  editor = await createPptxEditorSession(new Uint8Array(await file.arrayBuffer()), {
     skipSystemFonts: true,
     textOutput: "text",
   });

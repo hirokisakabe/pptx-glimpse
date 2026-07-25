@@ -4,7 +4,15 @@ import { asEmu, readPptx, type SourceConnector, type SourceShape } from "@pptx-g
 import JSZip from "jszip";
 import { describe, expect, it, vi } from "vitest";
 
-import { createBrowserPptxEditorSession } from "./browser-editor.js";
+import { createPptxEditorSession } from "./index.js";
+
+const nodeFontMocks = vi.hoisted(() => ({
+  createOpentypeSetupFromSystem: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock("@pptx-glimpse/renderer/node", () => ({
+  createOpentypeSetupFromSystem: nodeFontMocks.createOpentypeSetupFromSystem,
+}));
 
 const encoder = new TextEncoder();
 const RED_PNG = pngBytes(
@@ -14,9 +22,9 @@ const BLUE_PNG = pngBytes(
   "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGNkYPjPAANMcBZeDgAx0wEH1s7nlgAAAABJRU5ErkJggg==",
 );
 
-describe("BrowserPptxEditorSession", () => {
-  it("edits, renders, undoes, redoes, and saves a browser editor session", async () => {
-    const editor = await createBrowserPptxEditorSession(await buildShapeFixture(), {
+describe("PptxEditorSession", () => {
+  it("edits, rerenders, and saves Uint8Array PPTX bytes in Node.js", async () => {
+    const editor = await createPptxEditorSession(await buildShapeFixture(), {
       skipSystemFonts: true,
     });
     const shape = editor.shapes(1)[0];
@@ -57,21 +65,21 @@ describe("BrowserPptxEditorSession", () => {
         {
           type: "paragraph",
           attrs: {},
-          content: [{ type: "text", text: "Browser edited", marks: [] }],
+          content: [{ type: "text", text: "Node edited", marks: [] }],
         },
       ],
     });
 
     expect(editor.history.undoDepth).toBe(2);
-    expect(editor.slides[0]?.svg).toContain("Browser edited");
+    expect(editor.slides[0]?.svg).toContain("Node edited");
 
     expect((await editor.undo()).history).toMatchObject({ canRedo: true, undoDepth: 1 });
     expect(firstText(editor.document)).toBe("Original");
     expect((await editor.redo()).history).toMatchObject({ canUndo: true, redoDepth: 0 });
-    expect(firstText(editor.document)).toBe("Browser edited");
+    expect(firstText(editor.document)).toBe("Node edited");
 
     const saved = readPptx(editor.save().pptx);
-    expect(firstText(saved)).toBe("Browser edited");
+    expect(firstText(saved)).toBe("Node edited");
     expect(firstShape(saved).transform).toMatchObject({
       offsetX: 120 * 9525,
       offsetY: 208 * 9525,
@@ -80,8 +88,23 @@ describe("BrowserPptxEditorSession", () => {
     });
   });
 
+  it("uses the Node font loader selected by the main entry", async () => {
+    nodeFontMocks.createOpentypeSetupFromSystem.mockClear();
+
+    await createPptxEditorSession(await buildShapeFixture(), {
+      fontDirs: ["/app/fonts"],
+      skipSystemFonts: true,
+    });
+
+    expect(nodeFontMocks.createOpentypeSetupFromSystem).toHaveBeenCalledWith(
+      ["/app/fonts"],
+      undefined,
+      true,
+    );
+  });
+
   it("applies command batches as one history entry and renders once", async () => {
-    const editor = await createBrowserPptxEditorSession(await buildShapeFixture(), {
+    const editor = await createPptxEditorSession(await buildShapeFixture(), {
       skipSystemFonts: true,
     });
     const run = editor.shapes(1)[0]?.textBody?.paragraphs[0]?.runs[0];
@@ -116,7 +139,7 @@ describe("BrowserPptxEditorSession", () => {
   });
 
   it("returns shared media warnings from image replacement commands", async () => {
-    const editor = await createBrowserPptxEditorSession(await buildImageFixture(), {
+    const editor = await createPptxEditorSession(await buildImageFixture(), {
       skipSystemFonts: true,
     });
     const image = editor.shapes(1).find((shape) => shape.kind === "image");
@@ -145,7 +168,7 @@ describe("BrowserPptxEditorSession", () => {
   });
 
   it("adds, selects, edits, moves, resizes, saves, deletes, undoes, and redoes a text box", async () => {
-    const editor = await createBrowserPptxEditorSession(await buildShapeFixture(), {
+    const editor = await createPptxEditorSession(await buildShapeFixture(), {
       skipSystemFonts: true,
     });
 
@@ -207,7 +230,7 @@ describe("BrowserPptxEditorSession", () => {
   });
 
   it("adds, selects, moves, resizes, saves, deletes, undoes, and redoes a connector", async () => {
-    const editor = await createBrowserPptxEditorSession(await buildShapeFixture(), {
+    const editor = await createPptxEditorSession(await buildShapeFixture(), {
       skipSystemFonts: true,
     });
 
@@ -255,7 +278,7 @@ describe("BrowserPptxEditorSession", () => {
   });
 
   it("marks top-level text shapes without transform as deletable", async () => {
-    const editor = await createBrowserPptxEditorSession(
+    const editor = await createPptxEditorSession(
       await buildShapeFixture({ includeNoTransformShape: true }),
       {
         skipSystemFonts: true,
@@ -273,7 +296,7 @@ describe("BrowserPptxEditorSession", () => {
   });
 
   it("does not mark connector-referenced shapes as deletable", async () => {
-    const editor = await createBrowserPptxEditorSession(
+    const editor = await createPptxEditorSession(
       await buildShapeFixture({ includeConnector: true }),
       {
         skipSystemFonts: true,
@@ -289,7 +312,7 @@ describe("BrowserPptxEditorSession", () => {
   });
 
   it("duplicates and deletes slides with render state and history updates", async () => {
-    const editor = await createBrowserPptxEditorSession(await buildTwoSlideFixture(), {
+    const editor = await createPptxEditorSession(await buildTwoSlideFixture(), {
       skipSystemFonts: true,
     });
     const firstSlide = editor.slides[0];
@@ -326,8 +349,8 @@ describe("BrowserPptxEditorSession", () => {
     ]);
   });
 
-  it("rejects deleting the last slide without changing the browser editor state", async () => {
-    const editor = await createBrowserPptxEditorSession(await buildShapeFixture(), {
+  it("rejects deleting the last slide without changing the editor state", async () => {
+    const editor = await createPptxEditorSession(await buildShapeFixture(), {
       skipSystemFonts: true,
     });
     const slide = editor.slides[0];
@@ -341,7 +364,7 @@ describe("BrowserPptxEditorSession", () => {
   });
 
   it("counts unparsed image relationships in image replacement metadata", async () => {
-    const editor = await createBrowserPptxEditorSession(
+    const editor = await createPptxEditorSession(
       await buildImageFixture({ includeUnusedImageRelationship: true }),
       { skipSystemFonts: true },
     );

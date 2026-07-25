@@ -1,11 +1,11 @@
 /**
- * pptx-glimpse 3.x compatibility bridge for the deprecated ProseMirror text-body API.
+ * Compatibility bridge for the deprecated ProseMirror text-body API.
  *
  * New headless editing code consumes the source-backed text body view exposed by
- * BrowserPptxEditorSession and sends @pptx-glimpse/editor commands through applyAll().
+ * PptxEditorSession and sends @pptx-glimpse/editor commands through applyAll().
  * Keep all ProseMirror-specific schema and JSON conversion in this core integration
- * boundary so @pptx-glimpse/editor stays UI-framework independent. This module can be
- * removed together with editableTextBody/applyTextBodyDocJson in the next major.
+ * boundary so @pptx-glimpse/editor stays UI-framework independent. This module remains
+ * temporarily so existing consumers can migrate away from editableTextBody/applyTextBodyDocJson.
  */
 
 import {

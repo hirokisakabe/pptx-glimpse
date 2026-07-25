@@ -1,22 +1,8 @@
-export type {
-  BrowserEditorAddConnectorOptions,
-  BrowserEditorAddTextBoxOptions,
-  BrowserEditorHistoryState,
-  BrowserEditorImageReplacementInfo,
-  BrowserEditorRenderOptions,
-  BrowserEditorSaveResponse,
-  BrowserEditorSelectionInfo,
-  BrowserEditorShapeBoundsPx,
-  BrowserEditorShapeInfo,
-  BrowserEditorSlidesResponse,
-  BrowserEditorSlideSvg,
-  BrowserEditorTextBodyInfo,
-  BrowserEditorTextBodyView,
-  BrowserEditorTextParagraphView,
-  BrowserEditorTextRunInfo,
-  BrowserEditorTextRunView,
-} from "./browser-editor.js";
-export { BrowserPptxEditorSession, createBrowserPptxEditorSession } from "./browser-editor.js";
+import { renderPptxSourceModelToSvg as renderPptxSourceModelToSvgForEditor } from "./converter.js";
+import { configurePptxEditorSessionRenderer } from "./pptx-editor-session.js";
+
+configurePptxEditorSessionRenderer(renderPptxSourceModelToSvgForEditor);
+
 export type {
   ConversionDiagnostic,
   ConvertOptions,
@@ -32,6 +18,25 @@ export type {
 export { convertPptxToPng, convertPptxToSvg, renderPptxSourceModelToSvg } from "./converter.js";
 export type { UsedFonts } from "./font/font-collector.js";
 export { collectUsedFonts } from "./font/font-collector.js";
+export type {
+  PptxEditorAddConnectorOptions,
+  PptxEditorAddTextBoxOptions,
+  PptxEditorHistoryState,
+  PptxEditorImageReplacementInfo,
+  PptxEditorRenderOptions,
+  PptxEditorSaveResponse,
+  PptxEditorSelectionInfo,
+  PptxEditorShapeBoundsPx,
+  PptxEditorShapeInfo,
+  PptxEditorSlidesResponse,
+  PptxEditorSlideSvg,
+  PptxEditorTextBodyInfo,
+  PptxEditorTextBodyView,
+  PptxEditorTextParagraphView,
+  PptxEditorTextRunInfo,
+  PptxEditorTextRunView,
+} from "./pptx-editor-session.js";
+export { createPptxEditorSession, PptxEditorSession } from "./pptx-editor-session.js";
 export type { SourceHandle } from "@pptx-glimpse/document";
 export type { EditorCommand, EditorCommandWarning } from "@pptx-glimpse/editor";
 export type { FontMapping } from "@pptx-glimpse/renderer";
