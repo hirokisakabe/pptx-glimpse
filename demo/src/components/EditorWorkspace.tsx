@@ -115,6 +115,7 @@ export function EditorWorkspace({
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const busyRef = useRef(true);
   const dirtyRef = useRef(false);
+  const cleanUndoDepthRef = useRef(0);
   const compositionRef = useRef(false);
   const commitAfterCompositionRef = useRef(false);
 
@@ -186,6 +187,7 @@ export function EditorWorkspace({
         setShapeOptions([...session.shapes(1).filter((shape) => shape.handle && shape.bounds)]);
         setHistory(session.history);
         setCurrentIndex(0);
+        cleanUndoDepthRef.current = session.history.undoDepth;
         dirtyRef.current = false;
         setMessage("");
       } catch (error) {
@@ -229,7 +231,7 @@ export function EditorWorkspace({
       try {
         const messageOverride = await operation(editor);
         syncFromEditor(editor, preferredIndex);
-        dirtyRef.current = true;
+        dirtyRef.current = editor.history.undoDepth !== cleanUndoDepthRef.current;
         setMessage(messageOverride ?? success);
       } catch (error) {
         setOperationError(error instanceof Error ? error.message : String(error));
@@ -405,7 +407,7 @@ export function EditorWorkspace({
         try {
           const result = await session.applyAll(commands);
           syncFromEditor(session, currentIndex);
-          dirtyRef.current = true;
+          dirtyRef.current = session.history.undoDepth !== cleanUndoDepthRef.current;
           setMessage(commandMessage("Text updated", result.warnings));
           closeDirectTextEditor(restoreFocus);
           return true;
@@ -413,7 +415,7 @@ export function EditorWorkspace({
           setHistory(session.history);
           setOperationError(error instanceof Error ? error.message : String(error));
           if (isPptxEditorError(error) && error.code === "render-failed") {
-            dirtyRef.current = true;
+            dirtyRef.current = session.history.undoDepth !== cleanUndoDepthRef.current;
             setMessage("Text updated; slide preview could not refresh");
             closeDirectTextEditor(restoreFocus);
             return true;
@@ -713,6 +715,7 @@ export function EditorWorkspace({
     try {
       const saved = editor.save();
       setHistory(saved.history);
+      cleanUndoDepthRef.current = saved.history.undoDepth;
       const href = URL.createObjectURL(
         new Blob([uint8ArrayToArrayBuffer(saved.pptx)], {
           type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",

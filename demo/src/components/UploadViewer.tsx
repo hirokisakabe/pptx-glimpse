@@ -177,15 +177,17 @@ export function UploadViewer() {
       return (
         <>
           <div className="editor-replacement-shell" aria-busy={isReplacing}>
-            <EditorWorkspace
-              fileName={sourceFile.fileName}
-              fontFileCount={fontFiles.length}
-              fonts={fontBuffers}
-              pptxBytes={sourceFile.bytes}
-              onAddFonts={() => fontInputRef.current?.click()}
-              onOpenPptx={() => pptxInputRef.current?.click()}
-              onOpenSample={() => void handleSample(SAMPLE_PPTX_FILES[0], "edit")}
-            />
+            <div inert={isReplacing ? true : undefined}>
+              <EditorWorkspace
+                fileName={sourceFile.fileName}
+                fontFileCount={fontFiles.length}
+                fonts={fontBuffers}
+                pptxBytes={sourceFile.bytes}
+                onAddFonts={() => fontInputRef.current?.click()}
+                onOpenPptx={() => pptxInputRef.current?.click()}
+                onOpenSample={() => void handleSample(SAMPLE_PPTX_FILES[0], "edit")}
+              />
+            </div>
             {errorMessage === "" ? null : (
               <div className="replacement-error" role="alert">
                 {errorMessage}
