@@ -69,6 +69,7 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
   const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-demo-editor-test-"));
   try {
     const savedPath = join(dir, "demo.edited.pptx");
+    const focusoutSavedPath = join(dir, "focusout.edited.pptx");
     const replacementImagePath = join(dir, "replacement.png");
     await writeFile(replacementImagePath, BLUE_PNG);
 
@@ -127,9 +128,14 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
 
     await firstEditableTextShape.dblclick();
     await directTextRun.fill("Direct edit saved");
-    await page.getByRole("button", { name: "Download PPTX" }).focus();
+    const focusoutDownload = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download PPTX" }).click();
+    await (await focusoutDownload).saveAs(focusoutSavedPath);
     await expect(directTextEditor).toHaveCount(0);
     await expect(slideFrame).toContainText("Direct edit saved");
+    expect(
+      shapeByText(readPptx(await readFile(focusoutSavedPath)), "Direct edit saved"),
+    ).toBeDefined();
     await page.getByRole("button", { name: "Undo" }).click();
     await expect(slideFrame).toContainText("Direct edit done");
     await page.getByRole("button", { name: "Redo" }).click();

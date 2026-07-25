@@ -103,6 +103,7 @@ export function EditorWorkspace({
   const slideFrameRef = useRef<HTMLDivElement | null>(null);
   const directTextEditorRef = useRef<HTMLDivElement | null>(null);
   const directTextEditorStateRef = useRef<DirectTextEditorState | null>(null);
+  const directTextCommitPromiseRef = useRef<Promise<boolean> | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const busyRef = useRef(true);
@@ -211,7 +212,10 @@ export function EditorWorkspace({
       success: string,
       preferredIndex = currentIndex,
     ) => {
-      if (editor === null || busyRef.current) return;
+      if (editor === null) return;
+      const directTextCommit = directTextCommitPromiseRef.current;
+      if (directTextCommit !== null && !(await directTextCommit)) return;
+      if (busyRef.current) return;
       busyRef.current = true;
       setBusy(true);
       setOperationError("");
@@ -344,48 +348,72 @@ export function EditorWorkspace({
     [selectedShape],
   );
 
-  const closeDirectTextEditor = useCallback(() => {
+  const closeDirectTextEditor = useCallback((restoreFocus = true) => {
     directTextEditorStateRef.current = null;
     compositionRef.current = false;
     commitAfterCompositionRef.current = false;
     setDirectTextEditor(null);
-    window.setTimeout(() => slideFrameRef.current?.focus({ preventScroll: true }), 0);
+    if (restoreFocus) {
+      window.setTimeout(() => slideFrameRef.current?.focus({ preventScroll: true }), 0);
+    }
   }, []);
 
-  const commitDirectTextEditor = useCallback(async () => {
-    const activeEditor = directTextEditorStateRef.current;
-    const editorElement = directTextEditorRef.current;
-    if (activeEditor === null || editorElement === null || busyRef.current) return;
+  const commitDirectTextEditor = useCallback(
+    (restoreFocus = true): Promise<boolean> | undefined => {
+      const activeEditor = directTextEditorStateRef.current;
+      const editorElement = directTextEditorRef.current;
+      const session = editor;
+      if (activeEditor === null || editorElement === null || session === null) return;
+      if (directTextCommitPromiseRef.current !== null) return directTextCommitPromiseRef.current;
 
-    const commands = activeEditor.paragraphs.flatMap((paragraph) =>
-      paragraph.runs.flatMap((run) => {
-        if (run.handle === undefined) return [];
-        const runElement = editorElement.querySelector<HTMLElement>(
-          `[data-text-run-key="${cssAttributeValue(run.key)}"]`,
-        );
-        const text = runElement?.textContent ?? run.text;
-        return text === run.text
-          ? []
-          : [
-              {
-                kind: "replaceTextRunPlainText",
-                handle: run.handle,
-                text,
-              } satisfies EditorCommand,
-            ];
-      }),
-    );
+      const commands = activeEditor.paragraphs.flatMap((paragraph) =>
+        paragraph.runs.flatMap((run) => {
+          if (run.handle === undefined) return [];
+          const runElement = editorElement.querySelector<HTMLElement>(
+            `[data-text-run-key="${cssAttributeValue(run.key)}"]`,
+          );
+          const text = runElement?.textContent ?? run.text;
+          return text === run.text
+            ? []
+            : [
+                {
+                  kind: "replaceTextRunPlainText",
+                  handle: run.handle,
+                  text,
+                } satisfies EditorCommand,
+              ];
+        }),
+      );
 
-    closeDirectTextEditor();
-    if (commands.length === 0) {
-      setMessage("Text unchanged");
-      return;
-    }
-    await runEditorOperation(async (session) => {
-      const result = await session.applyAll(commands);
-      return commandMessage("Text updated", result.warnings);
-    }, "Text updated");
-  }, [closeDirectTextEditor, runEditorOperation]);
+      if (commands.length === 0) {
+        closeDirectTextEditor(restoreFocus);
+        setMessage("Text unchanged");
+        return Promise.resolve(true);
+      }
+
+      const commit = (async () => {
+        busyRef.current = true;
+        setOperationError("");
+        try {
+          const result = await session.applyAll(commands);
+          syncFromEditor(session, currentIndex);
+          setMessage(commandMessage("Text updated", result.warnings));
+          closeDirectTextEditor(restoreFocus);
+          return true;
+        } catch (error) {
+          setHistory(session.history);
+          setOperationError(error instanceof Error ? error.message : String(error));
+          return false;
+        } finally {
+          busyRef.current = false;
+          directTextCommitPromiseRef.current = null;
+        }
+      })();
+      directTextCommitPromiseRef.current = commit;
+      return commit;
+    },
+    [closeDirectTextEditor, currentIndex, editor, syncFromEditor],
+  );
 
   const startDirectTextEditor = useCallback(
     (shape: PptxEditorShapeInfo) => {
@@ -464,7 +492,7 @@ export function EditorWorkspace({
         commitAfterCompositionRef.current = true;
         return;
       }
-      void commitDirectTextEditor();
+      void commitDirectTextEditor(false);
     },
     [commitDirectTextEditor],
   );
@@ -565,6 +593,26 @@ export function EditorWorkspace({
     [runEditorOperation],
   );
 
+  const waitForDirectTextCommit = useCallback(async () => {
+    const commit = directTextCommitPromiseRef.current;
+    return commit === null || (await commit);
+  }, []);
+
+  const handleBackToViewer = useCallback(async () => {
+    if (await waitForDirectTextCommit()) onBackToViewer();
+  }, [onBackToViewer, waitForDirectTextCommit]);
+
+  const handleSelectSlide = useCallback(
+    async (index: number) => {
+      if (await waitForDirectTextCommit()) setCurrentIndex(index);
+    },
+    [waitForDirectTextCommit],
+  );
+
+  const handleOpenImageInput = useCallback(async () => {
+    if (await waitForDirectTextCommit()) imageInputRef.current?.click();
+  }, [waitForDirectTextCommit]);
+
   const handleImageReplacement = useCallback(
     async (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
@@ -598,7 +646,8 @@ export function EditorWorkspace({
     [applyCommand, selectedShape],
   );
 
-  const handleDownload = useCallback(() => {
+  const handleDownload = useCallback(async () => {
+    if (!(await waitForDirectTextCommit())) return;
     if (editor === null || busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
@@ -623,7 +672,7 @@ export function EditorWorkspace({
       busyRef.current = false;
       setBusy(false);
     }
-  }, [editor, fileName]);
+  }, [editor, fileName, waitForDirectTextCommit]);
 
   if (loadError !== "") {
     return (
@@ -646,7 +695,7 @@ export function EditorWorkspace({
     <section className="editor-workspace" aria-label="PPTX editor" data-testid="editor-workspace">
       <div className="editor-topbar">
         <div className="mode-switch" role="group" aria-label="Demo mode">
-          <button disabled={busy} type="button" onClick={onBackToViewer}>
+          <button disabled={busy} type="button" onClick={() => void handleBackToViewer()}>
             View
           </button>
           <button aria-pressed="true" type="button">
@@ -671,7 +720,7 @@ export function EditorWorkspace({
               key={`${slide.slideNumber.toString()}-${index.toString()}`}
               type="button"
               disabled={busy}
-              onClick={() => setCurrentIndex(index)}
+              onClick={() => void handleSelectSlide(index)}
             >
               <span>Slide {slide.slideNumber}</span>
               <span dangerouslySetInnerHTML={{ __html: slide.svg }} />
@@ -774,7 +823,7 @@ export function EditorWorkspace({
                     !directTextEditorRef.current?.contains(document.activeElement)
                   ) {
                     commitAfterCompositionRef.current = false;
-                    void commitDirectTextEditor();
+                    void commitDirectTextEditor(false);
                   }
                 }}
                 onCompositionStart={() => {
@@ -877,7 +926,7 @@ export function EditorWorkspace({
               data-testid="replace-image-button"
               disabled={busy || selectedShape?.editableImageReplacement === undefined}
               type="button"
-              onClick={() => imageInputRef.current?.click()}
+              onClick={() => void handleOpenImageInput()}
             >
               Replace image
             </button>
