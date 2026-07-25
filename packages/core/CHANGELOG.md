@@ -1,5 +1,30 @@
 # pptx-glimpse
 
+## 4.0.0
+
+### Major Changes
+
+- e057459: Rename the environment-independent high-level editor API from
+  `BrowserPptxEditorSession` / `createBrowserPptxEditorSession` and `BrowserEditor*` types to
+  `PptxEditorSession` / `createPptxEditorSession` and `PptxEditor*`, and export the same API from the
+  Node.js and browser entries.
+
+### Minor Changes
+
+- 8e5b47b: Unify headless editor operation failures under a shared discriminated result and expose
+  `PptxEditorError` with stable operation and read/render/write codes from both high-level runtime
+  entries.
+
+### Patch Changes
+
+- ffa4e0c: Add package-specific English README guidance and align public package metadata with the current
+  rendering, document, and editing responsibilities.
+- Updated dependencies [ffa4e0c]
+- Updated dependencies [f38b91a]
+- Updated dependencies [8e5b47b]
+  - @pptx-glimpse/document@0.12.1
+  - @pptx-glimpse/editor@0.2.0
+
 ## 3.3.1
 
 ### Patch Changes

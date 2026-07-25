@@ -1,5 +1,21 @@
 # @pptx-glimpse/editor
 
+## 0.2.0
+
+### Minor Changes
+
+- f38b91a: source node を直接渡して既存の editor command を実行できる convenience method を追加
+- 8e5b47b: Unify headless editor operation failures under a shared discriminated result and expose
+  `PptxEditorError` with stable operation and read/render/write codes from both high-level runtime
+  entries.
+
+### Patch Changes
+
+- ffa4e0c: Add package-specific English README guidance and align public package metadata with the current
+  rendering, document, and editing responsibilities.
+- Updated dependencies [ffa4e0c]
+  - @pptx-glimpse/document@0.12.1
+
 ## 0.1.0
 
 ### Minor Changes

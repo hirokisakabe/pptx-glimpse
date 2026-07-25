@@ -1,6 +1,6 @@
 {
   "name": "@pptx-glimpse/document",
-  "version": "0.12.0",
+  "version": "0.12.1",
   "description": "OOXML document foundation for reading, computed views, authoring, editing, and writing PPTX files.",
   "keywords": [
     "pptx",
