@@ -720,8 +720,7 @@ export function EditorWorkspace({
 
   const handleSlideDrop = useCallback(
     (fromIndex: number, target: SlideDropTarget) => {
-      const insertionIndex = target.index + (target.edge === "after" ? 1 : 0);
-      const toIndex = insertionIndex > fromIndex ? insertionIndex - 1 : insertionIndex;
+      const toIndex = slideDropIndex(fromIndex, target);
       setDraggedSlideIndex(null);
       setSlideDropTarget(null);
       void handleMoveSlide(fromIndex, toIndex);
@@ -926,6 +925,7 @@ export function EditorWorkspace({
               onLostPointerCapture={(event) => clearSlideSortDrag(event.pointerId)}
               onPointerCancel={(event) => clearSlideSortDrag(event.pointerId)}
               onPointerDown={(event) => {
+                if (event.pointerType === "touch") return;
                 if (busy || slide.handle === undefined || slideSortDragRef.current !== null) {
                   event.preventDefault();
                   return;
@@ -964,14 +964,17 @@ export function EditorWorkspace({
                 const target = drag.hasMoved
                   ? slideDropTargetAtPoint(event.clientX, event.clientY)
                   : null;
-                suppressSlideClickRef.current = drag.hasMoved;
-                if (drag.hasMoved) {
+                const changesPosition =
+                  target !== null && slideDropIndex(drag.fromIndex, target) !== drag.fromIndex;
+                suppressSlideClickRef.current =
+                  drag.hasMoved && (target === null || changesPosition);
+                if (suppressSlideClickRef.current) {
                   window.setTimeout(() => {
                     suppressSlideClickRef.current = false;
                   }, 0);
                 }
                 clearSlideSortDrag(event.pointerId);
-                if (target !== null) handleSlideDrop(drag.fromIndex, target);
+                if (target !== null && changesPosition) handleSlideDrop(drag.fromIndex, target);
               }}
             >
               <span className="editor-thumbnail-label">
@@ -1461,6 +1464,11 @@ function slideDropTargetAtPoint(clientX: number, clientY: number): SlideDropTarg
     index,
     edge: clientY < bounds.top + bounds.height / 2 ? "before" : "after",
   };
+}
+
+function slideDropIndex(fromIndex: number, target: SlideDropTarget): number {
+  const insertionIndex = target.index + (target.edge === "after" ? 1 : 0);
+  return insertionIndex > fromIndex ? insertionIndex - 1 : insertionIndex;
 }
 
 function selectElementContents(element: HTMLElement): void {

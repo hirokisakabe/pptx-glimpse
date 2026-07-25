@@ -1124,7 +1124,7 @@ body {
     border-color 120ms ease,
     opacity 120ms ease,
     transform 120ms ease;
-  touch-action: none;
+  touch-action: pan-y;
   user-select: none;
   width: 100%;
 }

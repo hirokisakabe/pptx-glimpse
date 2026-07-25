@@ -193,6 +193,11 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
     const thumbnailsBeforeSort = page.getByTestId("editor-thumbnail");
     await expect(thumbnailsBeforeSort.nth(1)).toContainText("A SMALL, EDITABLE SYSTEM");
     await expect(thumbnailsBeforeSort.nth(1)).toBeEnabled();
+    await expect(thumbnailsBeforeSort.first()).toHaveCSS("touch-action", "pan-y");
+    await clickElementWithMovement(page, thumbnailsBeforeSort.first(), 2);
+    await expect(thumbnailsBeforeSort.first()).toHaveClass(/active/);
+    await clickElementWithMovement(page, thumbnailsBeforeSort.nth(1), 6);
+    await expect(thumbnailsBeforeSort.nth(1)).toHaveClass(/active/);
     await dragElementAfter(page, thumbnailsBeforeSort.nth(1), thumbnailsBeforeSort.nth(2));
     await expect(page.getByTestId("editor-status")).toContainText("moved to position 3 of 3");
     await expect(page.getByTestId("editor-thumbnail").nth(2)).toContainText(
@@ -347,6 +352,21 @@ async function dragElementAfter(page: Page, source: Locator, target: Locator): P
     targetBounds.y + targetBounds.height * 0.75,
     { steps: 12 },
   );
+  await page.mouse.up();
+}
+
+async function clickElementWithMovement(
+  page: Page,
+  element: Locator,
+  movementY: number,
+): Promise<void> {
+  const bounds = await element.boundingBox();
+  if (bounds === null) throw new Error("click target bounds were not available");
+  const x = bounds.x + bounds.width / 2;
+  const y = bounds.y + bounds.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x, y + movementY, { steps: 2 });
   await page.mouse.up();
 }
 
