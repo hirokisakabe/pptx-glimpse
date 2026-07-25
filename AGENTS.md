@@ -34,40 +34,30 @@ CI consists of 5 jobs:
 
 ## Architecture
 
-Data flow: **PPTX binary → PptxSourceModel reader → Computed view → Renderer model adapter → Renderer (SVG generation) → PNG conversion (optional)**
+Read [`docs/architecture/overview.md`](docs/architecture/overview.md) before changing package
+responsibilities, workspace dependencies, public/private package status, build entries,
+externalization/bundling, the document-to-renderer adapter, or Node/browser boundaries. Update
+the overview in the same change when one of those boundaries changes.
 
-Public `convertPptxToSvg` / `convertPptxToPng` use the PptxSourceModel document path. VRT baselines are committed document-path snapshots rather than an in-memory legacy parser oracle.
+The working summary is: **PPTX binary → PptxSourceModel → computed view → core adapter →
+private renderer → SVG → optional PNG**. `@pptx-glimpse/document` is the lower-level OOXML
+foundation; `@pptx-glimpse/editor` builds on it; public `pptx-glimpse` orchestrates document,
+editor, and rendering behavior; the demo/UI consumes public packages. Lower layers must not
+depend on higher layers.
 
-The source code is split across pnpm workspaces (`packages/*`). The root package is private and only orchestrates the workspace. The public npm packages are `pptx-glimpse` from `packages/core`, `@pptx-glimpse/document` from `packages/document`, and `@pptx-glimpse/editor` from `packages/editor`. The document and editor packages are 0.x. The `pptx-glimpse` package declares `@pptx-glimpse/document` and `@pptx-glimpse/editor` as public runtime dependencies, while the private `@pptx-glimpse/renderer` workspace package is a build-time dependency bundled into the published core tarball.
-
-Before working on issues related to `@pptx-glimpse/document`, PptxSourceModel, the writer, editor, or pom integration, read the module-level comments in `packages/document/src/source/pptx-source-model.ts`, `packages/document/src/computed/pptx-computed-view.ts`, `packages/document/src/writer/write-pptx.ts`, and `packages/core/src/pptx-computed-view-renderer-adapter.ts` to confirm the current responsibility boundaries and dependency direction. Treat `document` as a lower-level foundation that does not know about `core`, `editor`, renderer, or pom.
+Before changing PptxSourceModel, computed-view, writer, or adapter behavior, also read the
+module-level comments in `packages/document/src/source/pptx-source-model.ts`,
+`packages/document/src/computed/pptx-computed-view.ts`,
+`packages/document/src/writer/write-pptx.ts`, and
+`packages/core/src/pptx-computed-view-renderer-adapter.ts`.
 
 When adding or changing a `@pptx-glimpse/document` reader, computed view, from-scratch writer, existing-element edit, or round-trip preservation capability, update `packages/document/docs/feature-support.md` in the same change. Base every `S` entry on a public root API and an implementation test; use `△`, `P`, or `—` when support is constrained, preservation-only, or unverified, and keep the linked constraints/evidence current.
 
-`packages/document/src/` — The `@pptx-glimpse/document` package. This lower-level foundation provides the PptxSourceModel / OOXML document layer and is used as the default reader / computed view for the public conversion path. Import the reader, computed view, writer, and minimal editing operations from the root entry point.
-
-`packages/core/src/` — Implementation of the public `pptx-glimpse` package (document path orchestration + public API)
-
-- `ooxml/` — Core-local OOXML utilities such as XML parsing for adapter helpers
-- `color/` — Theme color resolution (schemeClr → colorMap → colorScheme) and color transformations (lumMod/tint/shade)
-- `font/font-collector.ts` — Public API for collecting font names used by a PPTX (`collectUsedFonts`)
-- `converter.ts` — Implementation of `convertPptxToSvg` / `convertPptxToPng`
-- `index.ts` — Public entry point
-
-`packages/renderer/src/` — Internal renderer package `@pptx-glimpse/renderer` (private; decided by parent issue #340)
-
-- `renderer/` — Generates SVG strings from the intermediate model. Includes preset shape definitions in `geometry/`, plus dedicated renderers for tables, charts, and images
-- `model/` — TypeScript interfaces for the intermediate model (Slide, Shape, Fill, Text, Theme, Table, Chart, Image, Line, Effect, Presentation, etc.)
-- `font/` — Font loading (system font scanning), font mapping (proprietary → OSS alternatives), text measurement and text-to-SVG-path conversion via `opentype.js`
-- `png/` — SVG → PNG conversion using `@resvg/resvg-wasm`
-- `data/` — Font metrics data (fallback character width information)
-- `utils/` — EMU ↔ pixel conversion (1 inch = 914400 EMU, 96 DPI) and text wrapping
-- `warning-logger.ts` — Shared warning logger
-- `index.ts` — Barrel re-export imported by pptx-glimpse
-
-Entry point: `packages/core/src/index.ts` exports `convertPptxToSvg`, `convertPptxToPng`, warning utilities (`getWarningSummary`, `getWarningEntries`), font utilities (`collectUsedFonts`, `DEFAULT_FONT_MAPPING`, `createFontMapping`, `getMappedFont`), and related types.
-
-`packages/core/tsup.config.ts` bundles `packages/core/src/index.ts`, generates `packages/core/dist/`, and publishes it as the `pptx-glimpse` package. It keeps `document` / `editor` external and includes only the private `renderer` workspace package via `noExternal`. `packages/document` and `packages/editor` are also independently publishable for direct document-layer and headless editor consumers. The root `tsup.config.ts` mirrors this boundary for compatible manual builds; the normal publish path uses the package-specific configs.
+Read [`docs/development/type-assertions.md`](docs/development/type-assertions.md) before
+adding or changing a type assertion, an `unsafe*Assertion` helper, parser/external boundary
+narrowing, a branded constructor, or the ESLint assertion rules. Update the policy when the
+allowed exceptions or enforcement changes; update its dated audit snapshot only when running
+a deliberate assertion audit.
 
 ## Technical Constraints
 

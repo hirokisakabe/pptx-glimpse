@@ -21,6 +21,9 @@
  * policy remain the responsibility of the core adapter or renderer. Raw elements, raw
  * fills, and raw backgrounds are kept for preservation and diagnostics, and the adapter
  * decides direct rendering policy.
+ *
+ * Repository-level package and dependency boundaries are documented in the
+ * [architecture overview](../../../../docs/architecture/overview.md).
  */
 
 import type {
