@@ -497,6 +497,44 @@ describe("EditorSession paragraph property commands", () => {
     ]);
   });
 
+  it("normalizes an earlier run text edit into paragraph replacement and rejects the reverse order", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const paragraphHandle = requireHandle(firstParagraph(source).handle);
+    const runHandle = requireHandle(firstRun(source).handle);
+    const runThenParagraph = createEditorSession(source);
+
+    const edited = expectApplied(
+      runThenParagraph.applyAll([
+        { kind: "replaceTextRunPlainText", handle: runHandle, text: "Intermediate" },
+        {
+          kind: "replaceParagraphPlainText",
+          handle: paragraphHandle,
+          text: "Final paragraph",
+        },
+      ]),
+    );
+
+    expect(firstParagraph(edited).runs.map((run) => run.text)).toEqual(["Final paragraph"]);
+    expect(firstParagraph(readPptx(writePptx(edited))).runs.map((run) => run.text)).toEqual([
+      "Final paragraph",
+    ]);
+    expect(runThenParagraph.undoDepth).toBe(1);
+
+    const paragraphThenRun = createEditorSession(source);
+    expect(
+      paragraphThenRun.applyAll([
+        {
+          kind: "replaceParagraphPlainText",
+          handle: paragraphHandle,
+          text: "Intermediate paragraph",
+        },
+        { kind: "replaceTextRunPlainText", handle: runHandle, text: "Unsafe follow-up" },
+      ]),
+    ).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(paragraphThenRun.document).toBe(source);
+    expect(paragraphThenRun.undoDepth).toBe(0);
+  });
+
   it("rejects paragraph replacement combined with run edits for the same paragraph", async () => {
     const source = readPptx(await buildTextEditFixture());
     const paragraphHandle = requireHandle(firstParagraph(source).handle);
