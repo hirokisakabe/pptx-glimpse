@@ -1,4 +1,4 @@
-# @pptx-glimpse/editor-core
+# @pptx-glimpse/editor
 
 ## 0.0.14
 

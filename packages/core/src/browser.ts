@@ -20,7 +20,10 @@ export type {
   BrowserEditorSlidesResponse,
   BrowserEditorSlideSvg,
   BrowserEditorTextBodyInfo,
+  BrowserEditorTextBodyView,
+  BrowserEditorTextParagraphView,
   BrowserEditorTextRunInfo,
+  BrowserEditorTextRunView,
 } from "./browser-editor.js";
 export { BrowserPptxEditorSession, createBrowserPptxEditorSession } from "./browser-editor.js";
 export type { PngConversionReport, SlideImage } from "./converter.js";
@@ -38,7 +41,7 @@ export type {
 } from "./svg-converter.js";
 export { convertPptxToSvg, renderPptxSourceModelToSvg } from "./svg-converter.js";
 export type { SourceHandle } from "@pptx-glimpse/document";
-export type { EditorCommand, EditorCommandWarning } from "@pptx-glimpse/editor-core";
+export type { EditorCommand, EditorCommandWarning } from "@pptx-glimpse/editor";
 export type { FontMapping } from "@pptx-glimpse/renderer";
 export type { FontBuffer, OpentypeSetup } from "@pptx-glimpse/renderer";
 export type { LogLevel, WarningEntry, WarningSummary } from "@pptx-glimpse/renderer";

@@ -96,8 +96,8 @@ describe("browser entry", () => {
             build.onResolve({ filter: /^@pptx-glimpse\/document$/ }, () => ({
               path: resolve(packageRoot, "../document/src/index.ts"),
             }));
-            build.onResolve({ filter: /^@pptx-glimpse\/editor-core$/ }, () => ({
-              path: resolve(packageRoot, "../editor-core/src/index.ts"),
+            build.onResolve({ filter: /^@pptx-glimpse\/editor$/ }, () => ({
+              path: resolve(packageRoot, "../editor/src/index.ts"),
             }));
             build.onResolve({ filter: /^@pptx-glimpse\/renderer$/ }, () => ({
               path: resolve(packageRoot, "../renderer/src/index.ts"),

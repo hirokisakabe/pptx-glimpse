@@ -1,0 +1,46 @@
+{
+  "name": "@pptx-glimpse/editor",
+  "version": "0.0.14",
+  "description": "UI-independent commands, selection, history, and validation for PptxSourceModel.",
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup"
+  },
+  "dependencies": {
+    "@pptx-glimpse/document": "workspace:^"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "pptx",
+    "powerpoint",
+    "editor",
+    "headless"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hirokisakabe/pptx-glimpse.git",
+    "directory": "packages/editor"
+  },
+  "homepage": "https://github.com/hirokisakabe/pptx-glimpse/tree/main/packages/editor",
+  "bugs": {
+    "url": "https://github.com/hirokisakabe/pptx-glimpse/issues"
+  },
+  "author": "hirokisakabe",
+  "license": "MIT"
+}

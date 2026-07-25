@@ -4,7 +4,7 @@
  * This is the canonical PPTX document representation owned by
  * `@pptx-glimpse/document`. Rather than exposing package parts directly as the public
  * API, it groups presentation, slides, layouts, masters, themes, relationships, media,
- * and content types as OOXML source semantics. Upper layers such as core, editor-core,
+ * and content types as OOXML source semantics. Upper layers such as core, editor,
  * and pom may consume this package, but this package must not depend on them. Renderer
  * output is produced by the core adapter, and PptxSourceModel does not know about it.
  *

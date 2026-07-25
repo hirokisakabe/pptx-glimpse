@@ -7,22 +7,22 @@ import prettier from "eslint-config-prettier";
 
 const repoRoot = dirname(fileURLToPath(import.meta.url));
 const documentSource = fileURLToPath(new URL("./packages/document/src/index.ts", import.meta.url));
-const editorCoreSource = fileURLToPath(
-  new URL("./packages/editor-core/src/index.ts", import.meta.url),
+const editorSource = fileURLToPath(
+  new URL("./packages/editor/src/index.ts", import.meta.url),
 );
 const documentBoundaryRestrictedImportPattern = {
   group: [
     "@pptx-glimpse/renderer",
     "@pptx-glimpse/renderer/*",
-    "@pptx-glimpse/editor-core",
-    "@pptx-glimpse/editor-core/*",
+    "@pptx-glimpse/editor",
+    "@pptx-glimpse/editor/*",
     "pptx-glimpse",
     "pptx-glimpse/*",
   ],
   message:
     "@pptx-glimpse/document is the lower-level OOXML/PptxSourceModel foundation and must not import renderer or the public core package.",
 };
-const editorCoreBoundaryRestrictedImportPattern = {
+const editorBoundaryRestrictedImportPattern = {
   group: [
     "@pptx-glimpse/renderer",
     "@pptx-glimpse/renderer/*",
@@ -32,7 +32,7 @@ const editorCoreBoundaryRestrictedImportPattern = {
     "pptx-glimpse/*",
   ],
   message:
-    "@pptx-glimpse/editor-core is a headless command layer above @pptx-glimpse/document and must not import renderer, core, CLI, or UI code.",
+    "@pptx-glimpse/editor is a headless command layer above @pptx-glimpse/document and must not import renderer, core, CLI, or UI code.",
 };
 
 export default tseslint.config(
@@ -65,7 +65,7 @@ export default tseslint.config(
           },
           alias: {
             "@pptx-glimpse/document": [documentSource],
-            "@pptx-glimpse/editor-core": [editorCoreSource],
+            "@pptx-glimpse/editor": [editorSource],
           },
           mainFields: ["module", "main"],
         }),
@@ -83,7 +83,7 @@ export default tseslint.config(
               target: "./packages/document/src",
               from: [
                 "./packages/core/src",
-                "./packages/editor-core/src",
+                "./packages/editor/src",
                 "./packages/renderer/src",
                 "./packages/cli/src",
                 "./demo",
@@ -93,7 +93,7 @@ export default tseslint.config(
                 "@pptx-glimpse/document is the lower-level OOXML/PptxSourceModel foundation and must not import higher-level packages or app/script code.",
             },
             {
-              target: "./packages/editor-core/src",
+              target: "./packages/editor/src",
               from: [
                 "./packages/core/src",
                 "./packages/renderer/src",
@@ -102,7 +102,7 @@ export default tseslint.config(
                 "./scripts",
               ],
               message:
-                "@pptx-glimpse/editor-core may depend on @pptx-glimpse/document only, not renderer, core, CLI, or app/script code.",
+                "@pptx-glimpse/editor may depend on @pptx-glimpse/document only, not renderer, core, CLI, or app/script code.",
             },
           ],
         },
@@ -264,16 +264,16 @@ export default tseslint.config(
     },
   },
   {
-    files: ["packages/editor-core/src/**/*.ts"],
+    files: ["packages/editor/src/**/*.ts"],
     ignores: [
-      "packages/editor-core/src/**/*.test.ts",
-      "packages/editor-core/src/**/*.e2e.test.ts",
+      "packages/editor/src/**/*.test.ts",
+      "packages/editor/src/**/*.e2e.test.ts",
     ],
     rules: {
       "import-x/no-extraneous-dependencies": [
         "error",
         {
-          packageDir: ["packages/editor-core"],
+          packageDir: ["packages/editor"],
           devDependencies: false,
           includeInternal: true,
         },
@@ -282,7 +282,7 @@ export default tseslint.config(
         "error",
         {
           patterns: [
-            editorCoreBoundaryRestrictedImportPattern,
+            editorBoundaryRestrictedImportPattern,
             {
               group: ["**/unsafe-type-assertion.js"],
               importNames: ["unsafeFixtureAssertion"],
@@ -296,14 +296,14 @@ export default tseslint.config(
   },
   {
     files: [
-      "packages/editor-core/src/**/*.test.ts",
-      "packages/editor-core/src/**/*.e2e.test.ts",
+      "packages/editor/src/**/*.test.ts",
+      "packages/editor/src/**/*.e2e.test.ts",
     ],
     rules: {
       "import-x/no-extraneous-dependencies": [
         "error",
         {
-          packageDir: ["packages/editor-core", "."],
+          packageDir: ["packages/editor", "."],
           devDependencies: true,
           includeInternal: true,
         },
@@ -311,7 +311,7 @@ export default tseslint.config(
       "no-restricted-imports": [
         "error",
         {
-          patterns: [editorCoreBoundaryRestrictedImportPattern],
+          patterns: [editorBoundaryRestrictedImportPattern],
         },
       ],
     },

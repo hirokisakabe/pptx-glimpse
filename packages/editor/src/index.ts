@@ -42,18 +42,6 @@ import {
   updateShapeTransform,
 } from "@pptx-glimpse/document";
 
-export {
-  type PptxTextBodyProseMirrorCommand,
-  type PptxTextBodyProseMirrorDocJson,
-  type PptxTextBodyProseMirrorParagraphJson,
-  type PptxTextBodyProseMirrorRunMarkJson,
-  type PptxTextBodyProseMirrorTextJson,
-  pptxTextBodySchema,
-  proseMirrorDocJsonToEditorCommands,
-  proseMirrorDocJsonToTextBody,
-  textBodyToProseMirrorDocJson,
-} from "./prosemirror-text-body.js";
-
 export interface ReplaceTextRunPlainTextCommand {
   readonly kind: "replaceTextRunPlainText";
   readonly handle: SourceHandle;

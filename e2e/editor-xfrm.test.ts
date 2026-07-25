@@ -17,9 +17,9 @@ import {
 import {
   createEditorSession,
   type EditorApplyCommandResult,
-} from "../packages/editor-core/src/index.js";
+} from "../packages/editor/src/index.js";
 
-describe("editor-core xfrm rendering integration", () => {
+describe("editor xfrm rendering integration", () => {
   it("renders edited shape position and size after move and resize commands", async () => {
     const input = readSharedFixture("real-product-page.pptx");
     const source = readPptx(input);

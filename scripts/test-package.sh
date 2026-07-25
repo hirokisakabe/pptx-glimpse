@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+REPO_DIR=$(pwd)
+
 # Create temporary directory and clean up on exit
 WORK_DIR=$(mktemp -d)
 trap 'rm -rf "$WORK_DIR"' EXIT
@@ -8,7 +10,7 @@ trap 'rm -rf "$WORK_DIR"' EXIT
 echo "=== Package publish verification ==="
 echo "Working directory: $WORK_DIR"
 
-# Generate tarballs for publishing target package and document workspace package with pnpm pack.
+# Generate tarballs for publishing target packages with pnpm pack.
 # pnpm rewrites workspace: dependency ranges the same way publish does.
 pnpm --dir packages/core pack --pack-destination "$WORK_DIR" > /dev/null
 TARBALL_PATH=$(find "$WORK_DIR" -maxdepth 1 -type f -name "pptx-glimpse-[0-9]*.tgz" -print -quit)
@@ -16,15 +18,45 @@ TARBALL=$(basename "$TARBALL_PATH")
 pnpm --dir packages/document pack --pack-destination "$WORK_DIR" > /dev/null
 DOCUMENT_TARBALL_PATH=$(find "$WORK_DIR" -maxdepth 1 -type f -name "pptx-glimpse-document-*.tgz" -print -quit)
 DOCUMENT_TARBALL=$(basename "$DOCUMENT_TARBALL_PATH")
+pnpm --dir packages/editor pack --pack-destination "$WORK_DIR" > /dev/null
+EDITOR_TARBALL_PATH=$(find "$WORK_DIR" -maxdepth 1 -type f -name "pptx-glimpse-editor-*.tgz" -print -quit)
+EDITOR_TARBALL=$(basename "$EDITOR_TARBALL_PATH")
 echo "Packed: $TARBALL"
 echo "Packed: $DOCUMENT_TARBALL"
+echo "Packed: $EDITOR_TARBALL"
+
+EDITOR_PACKAGE_DIR="$WORK_DIR/editor-package"
+mkdir -p "$EDITOR_PACKAGE_DIR"
+tar -xzf "$EDITOR_TARBALL_PATH" -C "$EDITOR_PACKAGE_DIR"
+node --input-type=module - "$EDITOR_PACKAGE_DIR/package/package.json" << 'TESTEOF'
+import { readFileSync } from "node:fs";
+
+const packageJson = JSON.parse(readFileSync(process.argv[2], "utf8"));
+const runtimeDependencies = Object.keys(packageJson.dependencies ?? {});
+if (
+  runtimeDependencies.length !== 1 ||
+  runtimeDependencies[0] !== "@pptx-glimpse/document"
+) {
+  throw new Error(
+    `@pptx-glimpse/editor runtime dependencies must contain only @pptx-glimpse/document: ${runtimeDependencies.join(", ")}`,
+  );
+}
+if (packageJson.private === true) {
+  throw new Error("@pptx-glimpse/editor must be publishable");
+}
+TESTEOF
+if grep -R -i "prosemirror" "$EDITOR_PACKAGE_DIR/package/dist"; then
+  echo "FAIL: @pptx-glimpse/editor dist must not expose ProseMirror"
+  exit 1
+fi
+echo "Editor package boundary verification passed!"
 
 # Install in core package test directory
 TEST_DIR="$WORK_DIR/core-test-project"
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
 npm init -y > /dev/null 2>&1
-npm install "$DOCUMENT_TARBALL_PATH" "$TARBALL_PATH" > /dev/null 2>&1
+npm install "$DOCUMENT_TARBALL_PATH" "$EDITOR_TARBALL_PATH" "$TARBALL_PATH" > /dev/null 2>&1
 
 echo ""
 
@@ -163,6 +195,171 @@ void _verifyDocumentSourceModel;
 TESTEOF
 npx tsc --noEmit
 echo "TypeScript type resolution test passed!"
+
+echo ""
+
+# Install in the test directory of the editor package.
+EDITOR_TEST_DIR="$WORK_DIR/editor-test-project"
+mkdir -p "$EDITOR_TEST_DIR"
+cp "$REPO_DIR/shared-fixtures/real-basic-theme.pptx" "$EDITOR_TEST_DIR/fixture.pptx"
+cd "$EDITOR_TEST_DIR"
+npm init -y > /dev/null 2>&1
+npm install "$DOCUMENT_TARBALL_PATH" "$EDITOR_TARBALL_PATH" > /dev/null 2>&1
+
+# --- editor Node ESM test ---
+echo "--- Test: @pptx-glimpse/editor Node ESM consumer ---"
+cat > test-editor-node.mjs << 'TESTEOF'
+import { readFileSync } from "node:fs";
+
+import { readPptx } from "@pptx-glimpse/document";
+import { createEditorSession } from "@pptx-glimpse/editor";
+
+const source = readPptx(readFileSync("fixture.pptx"));
+const run = source.slides
+  .flatMap((slide) => slide.shapes)
+  .find((shape) => shape.kind === "shape" && shape.textBody?.paragraphs[0]?.runs[0]?.handle)
+  ?.textBody?.paragraphs[0]?.runs[0];
+if (!run?.handle) throw new Error("fixture text run not found");
+
+const session = createEditorSession(source);
+const result = session.apply({
+  kind: "replaceTextRunPlainText",
+  handle: run.handle,
+  text: "Package consumer edited",
+});
+if (!result.ok) throw new Error(result.message);
+if (session.document === source) throw new Error("editor did not produce an edited document");
+
+console.log("Editor Node ESM consumer test passed!");
+TESTEOF
+node test-editor-node.mjs
+
+echo ""
+
+# --- editor browser bundle test ---
+echo "--- Test: @pptx-glimpse/editor browser consumer bundle ---"
+npm install --save-dev esbuild > /dev/null 2>&1
+cat > test-editor-browser.mjs << 'TESTEOF'
+import { build } from "esbuild";
+
+const result = await build({
+  stdin: {
+    contents: `
+      import { readPptx } from "@pptx-glimpse/document";
+      import { createEditorSession } from "@pptx-glimpse/editor";
+      export function edit(input, handle) {
+        const session = createEditorSession(readPptx(input));
+        return session.apply({ kind: "replaceTextRunPlainText", handle, text: "Browser edited" });
+      }
+    `,
+    loader: "js",
+    resolveDir: process.cwd(),
+  },
+  bundle: true,
+  write: false,
+  format: "esm",
+  platform: "browser",
+});
+const bundled = result.outputFiles[0]?.text ?? "";
+if (!bundled.includes("replaceTextRunPlainText")) {
+  throw new Error("browser bundle does not contain the editor command implementation");
+}
+if (/(?:node:fs|node:path|node:buffer|from "fs"|from "path")/.test(bundled)) {
+  throw new Error("browser bundle contains a Node built-in");
+}
+
+console.log("Editor browser consumer bundle test passed!");
+TESTEOF
+node test-editor-browser.mjs
+
+echo ""
+
+# --- editor TypeScript public API test ---
+echo "--- Test: @pptx-glimpse/editor TypeScript public API ---"
+npm install --save-dev typescript@latest > /dev/null 2>&1
+npm pkg set type=module > /dev/null 2>&1
+cat > tsconfig.json << 'TESTEOF'
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true
+  },
+  "include": ["test-editor-types.ts"]
+}
+TESTEOF
+cat > test-editor-types.ts << 'TESTEOF'
+import { createEditorSession, EditorSession } from "@pptx-glimpse/editor";
+import type {
+  AddConnectorCommand,
+  AddEmptySlideFromLayoutCommand,
+  AddTextBoxCommand,
+  ClearParagraphPropertiesCommand,
+  ClearTextRunPropertiesCommand,
+  DeleteShapeCommand,
+  DeleteSlideCommand,
+  DuplicateSlideCommand,
+  EditorApplyCommandResult,
+  EditorCommand,
+  EditorCommandWarning,
+  EditorHistoryResult,
+  EditorSelection,
+  EditorSelectShapeResult,
+  MoveShapeCommand,
+  MoveSlideCommand,
+  ReplaceImageCommand,
+  ReplaceParagraphPlainTextCommand,
+  ReplaceTextRunPlainTextCommand,
+  ResizeShapeCommand,
+  SetParagraphPropertiesCommand,
+  SetShapeFillCommand,
+  SetShapeOutlineCommand,
+  SetShapeTransformCommand,
+  SetTextRunPropertiesCommand,
+} from "@pptx-glimpse/editor";
+import type { PptxSourceModel } from "@pptx-glimpse/document";
+
+const _create: (document: PptxSourceModel) => EditorSession = createEditorSession;
+type _AllCommands =
+  | AddConnectorCommand
+  | AddEmptySlideFromLayoutCommand
+  | AddTextBoxCommand
+  | ClearParagraphPropertiesCommand
+  | ClearTextRunPropertiesCommand
+  | DeleteShapeCommand
+  | DeleteSlideCommand
+  | DuplicateSlideCommand
+  | MoveShapeCommand
+  | MoveSlideCommand
+  | ReplaceImageCommand
+  | ReplaceParagraphPlainTextCommand
+  | ReplaceTextRunPlainTextCommand
+  | ResizeShapeCommand
+  | SetParagraphPropertiesCommand
+  | SetShapeFillCommand
+  | SetShapeOutlineCommand
+  | SetShapeTransformCommand
+  | SetTextRunPropertiesCommand;
+declare const _command: _AllCommands;
+const _editorCommand: EditorCommand = _command;
+declare const _apply: EditorApplyCommandResult;
+declare const _history: EditorHistoryResult;
+declare const _selection: EditorSelection;
+declare const _selectResult: EditorSelectShapeResult;
+declare const _warning: EditorCommandWarning;
+void _create;
+void _editorCommand;
+void _apply;
+void _history;
+void _selection;
+void _selectResult;
+void _warning;
+TESTEOF
+npx tsc --noEmit
+echo "Editor TypeScript public API test passed!"
 
 echo ""
 

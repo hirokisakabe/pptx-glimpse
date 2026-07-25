@@ -9,6 +9,11 @@ import { promisify } from "util";
 import { type WebSocket, WebSocketServer } from "ws";
 
 import {
+  type PptxTextBodyProseMirrorDocJson,
+  proseMirrorDocJsonToEditorCommands,
+  textBodyToProseMirrorDocJson,
+} from "../packages/core/src/prosemirror-text-body-compat.js";
+import {
   asEmu,
   asPartPath,
   asPt,
@@ -35,16 +40,13 @@ import {
   createEditorSession,
   type EditorCommand,
   type EditorCommandWarning,
-  type PptxTextBodyProseMirrorDocJson,
-  proseMirrorDocJsonToEditorCommands,
-  textBodyToProseMirrorDocJson,
-} from "../packages/editor-core/src/index.js";
+} from "../packages/editor/src/index.js";
 import { generateDevEditorHtml } from "./dev-server-editor/template.js";
 import { unsafeScriptInputAssertion } from "./unsafe-type-assertion.js";
 
 const DEFAULT_PORT = 3000;
 const DEBOUNCE_MS = 300;
-// The in-process editor session imports document/editor-core once; restart the server for those changes.
+// The in-process editor session imports document/editor once; restart the server for those changes.
 const WATCH_DIRS = [resolve("packages/core/src"), resolve("packages/renderer/src")];
 const RENDER_TIMEOUT_MS = 30_000;
 const MAX_BUFFER = 50 * 1024 * 1024;
