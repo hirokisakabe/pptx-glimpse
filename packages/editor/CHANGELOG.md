@@ -1,5 +1,11 @@
 # @pptx-glimpse/editor
 
+## 0.1.0
+
+### Minor Changes
+
+- b5efe3d: UI 非依存の headless 編集 API を `@pptx-glimpse/editor` として公開し、browser editor に command の一括適用と ProseMirror 非依存の text body view を追加する。
+
 > 0.0.14 以前は private package `@pptx-glimpse/editor-core` として管理されていた履歴です。
 
 ## 0.0.14
