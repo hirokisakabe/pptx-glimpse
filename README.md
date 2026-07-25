@@ -104,8 +104,48 @@ const { slides: pngResults } = await convertPptxToPng(pptx);
 await writeFile("slide1.png", pngResults[0].png);
 ```
 
-For high-level editing, see the
-[`pptx-glimpse` package README](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/core/README.md#high-level-editing).
+## High-level edit session
+
+`createPptxEditorSession` provides the same read → edit → SVG rerender → save workflow from the
+Node.js main entry and browser conditional entry.
+
+```typescript
+// Node.js
+import { readFile, writeFile } from "node:fs/promises";
+import { createPptxEditorSession } from "pptx-glimpse";
+
+const editor = await createPptxEditorSession(new Uint8Array(await readFile("presentation.pptx")), {
+  skipSystemFonts: false,
+});
+await editor.apply(command);
+console.log(editor.slides[0]?.svg);
+await writeFile("edited.pptx", editor.save().pptx);
+```
+
+```typescript
+// Browser
+import { createPptxEditorSession } from "pptx-glimpse";
+
+const [pptx, font] = await Promise.all([
+  fetch("/presentation.pptx").then((response) => response.arrayBuffer()),
+  fetch("/fonts/Inter-Regular.ttf").then((response) => response.arrayBuffer()),
+]);
+const editor = await createPptxEditorSession(new Uint8Array(pptx), {
+  fonts: [{ name: "Inter", data: font }],
+  textOutput: "text",
+});
+await editor.apply(command);
+const downloadBytes = editor.save().pptx;
+```
+
+Use `pptx-glimpse` for the integrated high-level lifecycle. Use `@pptx-glimpse/editor` directly
+when you only need headless commands, selection, validation, and undo/redo over a
+`PptxSourceModel`. The session defaults to `skipSystemFonts: true`; browser-like runtimes should
+provide `fonts`, while Node.js can opt into system fonts or use `fontDirs`. The session renders SVG
+and does not need resvg WASM; explicit `initResvgWasm` is only needed for browser PNG conversion.
+See the
+[`pptx-glimpse` package README](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/core/README.md#high-level-editing)
+for the full API and the [v4 migration guide](docs/migration-v4.md) for the breaking rename.
 
 The conversion APIs return a report object:
 
