@@ -94,6 +94,15 @@ test("opens the sample editor first and replaces it with an uploaded PPTX", asyn
   await expect(page.getByTestId("editor-workspace")).toBeVisible();
   await expect(page.getByText("real-product-page.pptx")).toBeVisible();
 
+  await page.getByRole("button", { name: "Add text box" }).click();
+  page.once("dialog", async (dialog) => {
+    expect(dialog.message()).toContain("Discard your unsaved changes");
+    await dialog.dismiss();
+  });
+  await page.getByRole("button", { name: "Open sample" }).click();
+  await expect(page.getByText("real-product-page.pptx")).toBeVisible();
+
+  page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Open sample" }).click();
   await expect(page.getByTestId("editor-workspace")).toBeVisible();
   await expect(page.getByText("real-basic-theme.pptx")).toBeVisible();

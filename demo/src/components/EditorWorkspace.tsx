@@ -114,6 +114,7 @@ export function EditorWorkspace({
   const dragStateRef = useRef<DragState | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const busyRef = useRef(true);
+  const dirtyRef = useRef(false);
   const compositionRef = useRef(false);
   const commitAfterCompositionRef = useRef(false);
 
@@ -227,6 +228,7 @@ export function EditorWorkspace({
       try {
         const messageOverride = await operation(editor);
         syncFromEditor(editor, preferredIndex);
+        dirtyRef.current = true;
         setMessage(messageOverride ?? success);
       } catch (error) {
         setOperationError(error instanceof Error ? error.message : String(error));
@@ -402,6 +404,7 @@ export function EditorWorkspace({
         try {
           const result = await session.applyAll(commands);
           syncFromEditor(session, currentIndex);
+          dirtyRef.current = true;
           setMessage(commandMessage("Text updated", result.warnings));
           closeDirectTextEditor(restoreFocus);
           return true;
@@ -608,6 +611,26 @@ export function EditorWorkspace({
     return commit === null || (await commit);
   }, []);
 
+  const confirmDiscardChanges = useCallback(async () => {
+    if (!(await waitForDirectTextCommit())) return false;
+    return (
+      !dirtyRef.current ||
+      window.confirm("Discard your unsaved changes and open another version of the presentation?")
+    );
+  }, [waitForDirectTextCommit]);
+
+  const handleOpenPptx = useCallback(async () => {
+    if (await confirmDiscardChanges()) onOpenPptx();
+  }, [confirmDiscardChanges, onOpenPptx]);
+
+  const handleOpenSample = useCallback(async () => {
+    if (await confirmDiscardChanges()) onOpenSample();
+  }, [confirmDiscardChanges, onOpenSample]);
+
+  const handleAddFonts = useCallback(async () => {
+    if (await confirmDiscardChanges()) onAddFonts();
+  }, [confirmDiscardChanges, onAddFonts]);
+
   const handleSelectSlide = useCallback(
     async (index: number) => {
       if (await waitForDirectTextCommit()) setCurrentIndex(index);
@@ -671,6 +694,7 @@ export function EditorWorkspace({
       link.download = editedFileName(fileName);
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(href), 0);
+      dirtyRef.current = false;
       setMessage("PPTX downloaded");
     } catch (error) {
       setOperationError(error instanceof Error ? error.message : String(error));
@@ -708,13 +732,13 @@ export function EditorWorkspace({
           {busy ? <span>Working...</span> : null}
         </div>
         <div className="editor-file-actions">
-          <button disabled={busy} type="button" onClick={onOpenPptx}>
+          <button disabled={busy} type="button" onClick={() => void handleOpenPptx()}>
             Open PPTX
           </button>
-          <button disabled={busy} type="button" onClick={onOpenSample}>
+          <button disabled={busy} type="button" onClick={() => void handleOpenSample()}>
             Open sample
           </button>
-          <button disabled={busy} type="button" onClick={onAddFonts}>
+          <button disabled={busy} type="button" onClick={() => void handleAddFonts()}>
             Add fonts{fontFileCount > 0 ? ` (${fontFileCount.toString()})` : ""}
           </button>
           <button className="primary-action" disabled={busy} type="button" onClick={handleDownload}>
