@@ -552,6 +552,7 @@ export function affectedSlidePartPaths(
   after: PptxSourceModel,
 ): ReadonlySet<string> | undefined {
   if (before === after) return new Set();
+  if (nonSlideRenderingInputsChanged(before, after)) return undefined;
 
   const beforeByPartPath = new Map(before.slides.map((slide) => [slide.partPath, slide]));
   const affected = new Set<string>();
@@ -584,6 +585,27 @@ export function affectedSlidePartPaths(
   if (affected.size > 0 || topologyChanged) return affected;
   if (changedMediaPartPaths.size > 0 && mediaChangeWasScoped) return affected;
   return undefined;
+}
+
+function nonSlideRenderingInputsChanged(before: PptxSourceModel, after: PptxSourceModel): boolean {
+  return (
+    !sameReferences(before.slideLayouts, after.slideLayouts) ||
+    !sameReferences(before.slideMasters, after.slideMasters) ||
+    !sameReferences(before.themes, after.themes) ||
+    before.diagnostics !== after.diagnostics ||
+    before.presentation.partPath !== after.presentation.partPath ||
+    before.presentation.slideSize !== after.presentation.slideSize ||
+    before.presentation.defaultTextStyle !== after.presentation.defaultTextStyle ||
+    before.presentation.handle !== after.presentation.handle ||
+    before.presentation.rawSidecars !== after.presentation.rawSidecars
+  );
+}
+
+function sameReferences<T>(before: readonly T[], after: readonly T[]): boolean {
+  return (
+    before === after ||
+    (before.length === after.length && before.every((value, index) => value === after[index]))
+  );
 }
 
 function findChangedMediaPartPaths(

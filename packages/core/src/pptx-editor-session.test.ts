@@ -479,11 +479,12 @@ describe("PptxEditorSession", () => {
         "ppt/slides/slide1.xml",
       ]);
       expect(renderCalls.at(-1)).toEqual([1]);
+      const renderCallCountAfterUndo = renderCalls.length;
       expect((await editor.redo()).slides.map((slide) => slide.handle?.partPath)).toEqual([
         "ppt/slides/slide2.xml",
         "ppt/slides/slide1.xml",
       ]);
-      expect(renderCalls.at(-1)).toEqual([1]);
+      expect(renderCalls).toHaveLength(renderCallCountAfterUndo);
 
       const added = await editor.apply({
         kind: "addEmptySlideFromLayout",
@@ -536,6 +537,52 @@ describe("PptxEditorSession", () => {
       expect(editor.slides[1]?.svg).toContain("Fallback edited");
     } finally {
       configurePptxEditorSessionAffectedSlidesResolver(affectedSlidePartPaths);
+      configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
+    }
+  });
+
+  it("falls back to all slides when applyAll changes inherited and slide-local content", async () => {
+    const renderCalls: Array<readonly number[] | undefined> = [];
+    configurePptxEditorSessionRenderer((source, options) => {
+      renderCalls.push(options?.slides);
+      return renderPptxSourceModelToSvg(source, options);
+    });
+    try {
+      const editor = await createPptxEditorSession(await buildTwoSlideFixture(), {
+        skipSystemFonts: true,
+      });
+      const layoutHandle = editor.document.slideLayouts[0]?.handle;
+      const secondRun = editor.shapes(2)[0]?.textBody?.paragraphs[0]?.runs[0];
+      if (layoutHandle === undefined || secondRun?.handle === undefined) {
+        throw new Error("layout or text run handle not found");
+      }
+
+      await editor.applyAll([
+        {
+          kind: "addTextBox",
+          slideHandle: layoutHandle,
+          offsetX: asEmu(0),
+          offsetY: asEmu(0),
+          width: asEmu(914400),
+          height: asEmu(914400),
+          text: "Inherited edit",
+        },
+        {
+          kind: "replaceTextRunPlainText",
+          handle: secondRun.handle,
+          text: "Second local edit",
+        },
+      ]);
+
+      expect(renderCalls).toEqual([undefined, undefined]);
+      expect(editor.slides[0]?.svg).toContain(">Inher</");
+      expect(editor.slides[1]?.svg).toContain("Second local edit");
+
+      await editor.undo();
+      expect(renderCalls).toEqual([undefined, undefined, undefined]);
+      expect(editor.slides[0]?.svg).not.toContain(">Inher</");
+      expect(editor.slides[1]?.svg).toContain("Second");
+    } finally {
       configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
     }
   });
