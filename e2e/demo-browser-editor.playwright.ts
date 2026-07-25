@@ -102,10 +102,25 @@ test("opens the sample editor first and replaces it with an uploaded PPTX", asyn
   await page.getByRole("button", { name: "Open sample" }).click();
   await expect(page.getByText("real-product-page.pptx")).toBeVisible();
 
+  page.once("dialog", (dialog) => dialog.dismiss());
+  await page.getByRole("link", { name: "Documentation" }).click();
+  await expect(page).toHaveURL(demoServer.url);
+
+  await page.getByTestId("pptx-input").setInputFiles({
+    name: "invalid.pptx",
+    mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    buffer: Buffer.from("not a PPTX"),
+  });
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.getByText("real-product-page.pptx")).toBeVisible();
+
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Open sample" }).click();
   await expect(page.getByTestId("editor-workspace")).toBeVisible();
   await expect(page.getByText("real-basic-theme.pptx")).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "pptx-glimpse browser editor demo" }),
+  ).toBeAttached();
 });
 
 test("runs the public demo browser editor flow entirely client-side", async ({ page }) => {

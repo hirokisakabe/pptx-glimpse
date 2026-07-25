@@ -26,6 +26,17 @@ body {
   min-height: 100vh;
 }
 
+.visually-hidden {
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  padding: 0;
+  position: absolute;
+  width: 1px;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 .site-shell {
   margin: 0 auto;
   max-width: 1180px;
@@ -608,6 +619,37 @@ body {
   display: grid;
   gap: 0;
   overflow: hidden;
+}
+
+.editor-replacement-shell {
+  position: relative;
+}
+
+.replacement-error {
+  background: var(--danger-bg);
+  border: 1px solid rgba(159, 45, 20, 0.18);
+  border-radius: 6px;
+  color: var(--danger);
+  left: 50%;
+  max-width: min(560px, calc(100% - 32px));
+  padding: 12px 16px;
+  position: absolute;
+  top: 82px;
+  transform: translateX(-50%);
+  z-index: 5;
+}
+
+.replacement-loading {
+  align-items: center;
+  backdrop-filter: blur(2px);
+  background: rgba(246, 247, 248, 0.72);
+  display: flex;
+  font-weight: 700;
+  gap: 10px;
+  inset: 0;
+  justify-content: center;
+  position: absolute;
+  z-index: 6;
 }
 
 .editor-topbar {

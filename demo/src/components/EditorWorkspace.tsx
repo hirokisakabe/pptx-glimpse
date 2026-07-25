@@ -412,6 +412,7 @@ export function EditorWorkspace({
           setHistory(session.history);
           setOperationError(error instanceof Error ? error.message : String(error));
           if (isPptxEditorError(error) && error.code === "render-failed") {
+            dirtyRef.current = true;
             setMessage("Text updated; slide preview could not refresh");
             closeDirectTextEditor(restoreFocus);
             return true;
@@ -630,6 +631,33 @@ export function EditorWorkspace({
   const handleAddFonts = useCallback(async () => {
     if (await confirmDiscardChanges()) onAddFonts();
   }, [confirmDiscardChanges, onAddFonts]);
+
+  useEffect(() => {
+    const confirmMessage = "Discard your unsaved changes and leave the editor?";
+    const hasUnsavedChanges = () => dirtyRef.current || directTextEditorStateRef.current !== null;
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!hasUnsavedChanges()) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    const handleLinkClick = (event: MouseEvent) => {
+      if (!hasUnsavedChanges()) return;
+      const target = event.target;
+      if (!(target instanceof Element)) return;
+      const link = target.closest("a");
+      if (link === null || link.target === "_blank" || link.hasAttribute("download")) return;
+      if (window.confirm(confirmMessage)) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("click", handleLinkClick, true);
+    return () => {
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("click", handleLinkClick, true);
+    };
+  }, []);
 
   const handleSelectSlide = useCallback(
     async (index: number) => {

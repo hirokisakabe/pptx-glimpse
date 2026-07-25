@@ -21,6 +21,7 @@ export function UploadViewer() {
   const [slides, setSlides] = useState<Slide[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [errorMessage, setErrorMessage] = useState("");
+  const [isReplacing, setIsReplacing] = useState(false);
   const [fontFiles, setFontFiles] = useState<File[]>([]);
   const [fontBuffers, setFontBuffers] = useState<FontBuffer[]>([]);
   const [renderedFontCount, setRenderedFontCount] = useState(0);
@@ -44,7 +45,9 @@ export function UploadViewer() {
       initialMode: DemoMode = "view",
       selectedFontFiles: readonly File[] = fontFiles,
     ) => {
-      setPhase("loading");
+      const replacing = sourceFile !== null;
+      if (replacing) setIsReplacing(true);
+      else setPhase("loading");
       setErrorMessage("");
 
       try {
@@ -71,15 +74,19 @@ export function UploadViewer() {
         setPhase("viewing");
       } catch (err) {
         setErrorMessage(err instanceof Error ? err.message : String(err));
-        setPhase("error");
+        setPhase(replacing ? "viewing" : "error");
+      } finally {
+        if (replacing) setIsReplacing(false);
       }
     },
-    [fontFiles],
+    [fontFiles, sourceFile],
   );
 
   const handleSample = useCallback(
     async (sample: SamplePptx, initialMode: SampleOpenMode) => {
-      setPhase("loading");
+      const replacing = sourceFile !== null;
+      if (replacing) setIsReplacing(true);
+      else setPhase("loading");
       setErrorMessage("");
 
       try {
@@ -93,10 +100,11 @@ export function UploadViewer() {
         await handleFile(file, initialMode);
       } catch (err) {
         setErrorMessage(err instanceof Error ? err.message : String(err));
-        setPhase("error");
+        setPhase(replacing ? "viewing" : "error");
+        if (replacing) setIsReplacing(false);
       }
     },
-    [handleFile],
+    [handleFile, sourceFile],
   );
 
   useEffect(() => {
@@ -162,15 +170,28 @@ export function UploadViewer() {
     if (mode === "edit" && sourceFile !== null) {
       return (
         <>
-          <EditorWorkspace
-            fileName={sourceFile.fileName}
-            fontFileCount={fontFiles.length}
-            fonts={fontBuffers}
-            pptxBytes={sourceFile.bytes}
-            onAddFonts={() => fontInputRef.current?.click()}
-            onOpenPptx={() => pptxInputRef.current?.click()}
-            onOpenSample={() => void handleSample(SAMPLE_PPTX_FILES[0], "edit")}
-          />
+          <div className="editor-replacement-shell" aria-busy={isReplacing}>
+            <EditorWorkspace
+              fileName={sourceFile.fileName}
+              fontFileCount={fontFiles.length}
+              fonts={fontBuffers}
+              pptxBytes={sourceFile.bytes}
+              onAddFonts={() => fontInputRef.current?.click()}
+              onOpenPptx={() => pptxInputRef.current?.click()}
+              onOpenSample={() => void handleSample(SAMPLE_PPTX_FILES[0], "edit")}
+            />
+            {errorMessage === "" ? null : (
+              <div className="replacement-error" role="alert">
+                {errorMessage}
+              </div>
+            )}
+            {isReplacing ? (
+              <div className="replacement-loading" data-testid="replacement-loading">
+                <div className="loading-mark" aria-hidden="true" />
+                <span>Opening presentation...</span>
+              </div>
+            ) : null}
+          </div>
           <input
             ref={pptxInputRef}
             data-testid="pptx-input"
