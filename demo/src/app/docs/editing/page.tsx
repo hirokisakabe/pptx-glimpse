@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
-import { DocsCallout, DocsPage, DocsPager } from "@/components/docs/DocsPage";
+import { Callout } from "nextra/components";
+import { DocsPage, DocsPager } from "@/components/docs/DocsPage";
 
 export const metadata: Metadata = {
-  title: "Build an editing flow",
+  title: "Editing presentations",
   description: "Inspect, edit, rerender, and save PPTX files through PptxEditorSession.",
   alternates: { canonical: "/docs/editing" },
 };
@@ -18,9 +19,9 @@ const toc = [
 export default function EditingPage() {
   return (
     <DocsPage
-      eyebrow="Guide / Editing"
-      title="Keep one session from open to save."
+      title="Editing presentations"
       description="PptxEditorSession coordinates reading, editable shape information, commands, SVG rerendering, selection, undo and redo, and PPTX serialization."
+      filePath="src/app/docs/editing/page.tsx"
       toc={toc}
     >
       <section id="create-session">
@@ -72,13 +73,13 @@ const run = shapes
           Successful state-changing commands rerender the current document and create history. Use{" "}
           <code>applyAll</code> when several commands must succeed atomically as one undo entry.
         </p>
-        <DocsCallout title="Editing support is intentionally constrained">
+        <Callout type="warning">
           <p>
-            Shapes without stable source handles and operations that cannot be preserved safely are
-            rejected. Check the feature support documentation before designing a general-purpose
-            editor.
+            <strong>Editing support is intentionally constrained.</strong> Shapes without stable
+            source handles and operations that cannot be preserved safely are rejected. Check the
+            feature support documentation before designing a general-purpose editor.
           </p>
-        </DocsCallout>
+        </Callout>
       </section>
 
       <section id="history">

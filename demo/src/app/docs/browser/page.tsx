@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { DocsCallout, DocsPage, DocsPager } from "@/components/docs/DocsPage";
+import { DocsPage, DocsPager } from "@/components/docs/DocsPage";
 
 export const metadata: Metadata = {
-  title: "Run in the browser",
+  title: "Browser usage",
   description: "Load PPTX and font bytes, render SVG, edit, and download files in a browser.",
   alternates: { canonical: "/docs/browser" },
 };
@@ -17,9 +17,9 @@ const toc = [
 export default function BrowserPage() {
   return (
     <DocsPage
-      eyebrow="Runtime / Browser"
-      title="Keep the presentation in the browser."
+      title="Browser usage"
       description="Browser bundles use the same Uint8Array-oriented APIs. Your application supplies file and font bytes and decides how rendered or edited output enters the page."
+      filePath="src/app/docs/browser/page.tsx"
       toc={toc}
     >
       <section id="load-bytes">
@@ -30,12 +30,10 @@ if (!file) throw new Error("Choose a PPTX file");
 
 const pptx = new Uint8Array(await file.arrayBuffer());`}</code>
         </pre>
-        <DocsCallout title="Local by default">
-          <p>
-            Reading a <code>File</code> and passing its bytes to pptx-glimpse does not upload it.
-            Network behavior is entirely controlled by your application.
-          </p>
-        </DocsCallout>
+        <p>
+          Reading a <code>File</code> and passing its bytes to pptx-glimpse does not upload it.
+          Network behavior is entirely controlled by your application.
+        </p>
       </section>
 
       <section id="fonts">
