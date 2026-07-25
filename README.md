@@ -497,11 +497,12 @@ const { slides } = await convertPptxToSvg(pptx, {
 
 ## Development
 
-The local editor preview (`npm run dev -- <pptx-file>`) includes an MVP text editing
-overlay for text shapes plus thumbnail-level slide duplicate/delete controls. IME
-behavior is intentionally not automated in CI; verify IME composition, slide
-duplicate/delete, and undo/redo manually as part of the release checklist before
-shipping editor changes.
+The local editor preview (`npm run dev -- <pptx-file>`) and public browser demo include
+text editing overlays for editable text shapes. IME behavior is intentionally not
+automated in CI. Before shipping editor changes, manually verify that composing text
+in the public demo overlay is not committed by Enter or focus changes until composition
+ends. Also verify slide duplicate/delete and undo/redo in the local editor release
+checklist.
 
 Browser conversion smoke tests run with Playwright and cover browser-only SVG conversion
 plus PNG conversion after explicit resvg WASM initialization:
