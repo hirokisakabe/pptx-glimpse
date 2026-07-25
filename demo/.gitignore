@@ -1,4 +1,5 @@
 .next/
 node_modules/
 next-env.d.ts
+*.tsbuildinfo
 public/samples/*.pptx

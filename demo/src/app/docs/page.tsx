@@ -1,145 +1,128 @@
 import type { Metadata } from "next";
-
-const REPOSITORY_URL = "https://github.com/hirokisakabe/pptx-glimpse";
-const TOOLKIT_DOCS_URL = `${REPOSITORY_URL}/blob/main/packages/core/README.md`;
-const DOCUMENT_DOCS_URL = `${REPOSITORY_URL}/blob/main/packages/document/README.md`;
-const EDITOR_DOCS_URL = `${REPOSITORY_URL}/blob/main/packages/editor/README.md`;
+import { DocsPage, DocsPager } from "@/components/docs/DocsPage";
 
 export const metadata: Metadata = {
   title: "Documentation",
   description:
-    "Choose among the pptx-glimpse toolkit and its lower-level document and headless editor packages.",
-  keywords: ["pptx-glimpse", "PPTX rendering", "PPTX editing", "PowerPoint", "OOXML", "TypeScript"],
-  alternates: {
-    canonical: "/docs",
-  },
-  openGraph: {
-    title: "pptx-glimpse Documentation",
-    description:
-      "Choose among the pptx-glimpse toolkit and its lower-level document and headless editor packages.",
-    url: "/docs",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "pptx-glimpse Documentation",
-    description:
-      "Choose among the pptx-glimpse toolkit and its lower-level document and headless editor packages.",
-  },
+    "Learn how to render, edit, and save PowerPoint files with pptx-glimpse in Node.js and the browser.",
+  alternates: { canonical: "/docs" },
 };
 
-const documentWorkflows = [
-  "Read typed PPTX source data",
-  "Resolve a non-mutating computed view",
-  "Author presentations from scratch",
-  "Edit supported content in an existing PPTX",
-  "Write PPTX bytes with round-trip preservation",
-];
+const toc = [
+  { href: "#choose-a-path", label: "Choose a path" },
+  { href: "#workflow", label: "The high-level workflow" },
+  { href: "#packages", label: "Packages" },
+] as const;
 
-const toolkitWorkflows = [
-  "Render complete decks or selected slides as SVG or PNG",
-  "Open one editor session for read, edit, rerender, and save",
-  "Run the same high-level workflow in Node.js and browsers",
-];
+const paths = [
+  {
+    marker: ".svg",
+    title: "Render presentations",
+    description: "Convert a complete deck or selected slides to SVG or PNG.",
+    href: "/docs/rendering",
+    link: "Rendering guide",
+  },
+  {
+    marker: "edit",
+    title: "Build an editing flow",
+    description: "Read, inspect, edit, rerender, undo, redo, and save through one session.",
+    href: "/docs/editing",
+    link: "Editing guide",
+  },
+  {
+    marker: "API",
+    title: "Look up an API",
+    description: "Find the high-level exports, important types, runtime notes, and error contract.",
+    href: "/docs/api",
+    link: "API overview",
+  },
+] as const;
 
-const editorWorkflows = [
-  "Apply validated editing commands to a document",
-  "Track selection and editing state",
-  "Integrate undo and redo into your own application",
-];
-
-export default function DocsPage() {
+export default function DocsOverviewPage() {
   return (
-    <main className="docs-page">
-      <section className="docs-intro" aria-labelledby="docs-heading">
-        <p className="eyebrow">Project documentation</p>
-        <h1 id="docs-heading">Choose the path that matches your PPTX task.</h1>
+    <DocsPage
+      eyebrow="Documentation / Overview"
+      title="From PowerPoint bytes to an application."
+      description="Use pptx-glimpse to render presentations or build an editing workflow without running PowerPoint, LibreOffice, or a conversion server."
+      toc={toc}
+    >
+      <section id="choose-a-path">
+        <h2>Choose a path</h2>
         <p>
-          The project has three public packages. Start with <code>pptx-glimpse</code> for an
-          integrated render-and-edit workflow. Reach for the lower-level packages when you need
-          document semantics or a headless editing state machine.
+          Start with the job your application needs to perform. The high-level package covers the
+          common render and edit lifecycles in both Node.js and browser bundles.
+        </p>
+        <div className="docs-path-grid">
+          {paths.map((path) => (
+            <a className="docs-path" href={path.href} key={path.href}>
+              <span>{path.marker}</span>
+              <h3>{path.title}</h3>
+              <p>{path.description}</p>
+              <strong>{path.link} →</strong>
+            </a>
+          ))}
+        </div>
+      </section>
+
+      <section id="workflow">
+        <h2>The high-level workflow</h2>
+        <p>
+          The browser demo follows the same lifecycle exposed by the public API. Files stay as
+          <code>Uint8Array</code> values; your application owns file selection, UI, and storage.
+        </p>
+        <ol className="docs-process">
+          <li>
+            <span>01</span>
+            <div>
+              <strong>Open</strong>
+              <p>Read PPTX bytes from a file, request, object store, or other source.</p>
+            </div>
+          </li>
+          <li>
+            <span>02</span>
+            <div>
+              <strong>Render or edit</strong>
+              <p>Convert slides directly, or keep an editor session for repeated changes.</p>
+            </div>
+          </li>
+          <li>
+            <span>03</span>
+            <div>
+              <strong>Use the output</strong>
+              <p>Embed SVG, write PNG, or save updated PPTX bytes.</p>
+            </div>
+          </li>
+        </ol>
+      </section>
+
+      <section id="packages">
+        <h2>Three packages, one dependency direction</h2>
+        <p>
+          Most applications should begin with <code>pptx-glimpse</code>. The document and editor
+          packages are lower-level building blocks for applications that need to own more of the
+          workflow.
+        </p>
+        <div className="docs-package-stack" aria-label="Package dependency direction">
+          <div>
+            <code>pptx-glimpse</code>
+            <span>render + high-level editing</span>
+          </div>
+          <div>
+            <code>@pptx-glimpse/editor</code>
+            <span>commands + selection + history</span>
+          </div>
+          <div>
+            <code>@pptx-glimpse/document</code>
+            <span>OOXML source + computed view + writing</span>
+          </div>
+        </div>
+        <p>
+          See <a href="/docs/packages">Choose a package</a> for package boundaries, stability, and
+          links to the detailed lower-level guides.
         </p>
       </section>
 
-      <section className="package-routes" aria-label="Documentation routes">
-        <article className="package-route toolkit-route">
-          <div className="route-output" aria-hidden="true">
-            .pptx ↔ .svg
-          </div>
-          <p className="route-label">Recommended starting point</p>
-          <h2>pptx-glimpse</h2>
-          <p className="package-summary">
-            The high-level toolkit that brings PPTX rendering, editing, SVG rerendering, and saving
-            together in one browser- and Node.js-friendly API.
-          </p>
-          <ul>
-            {toolkitWorkflows.map((workflow) => (
-              <li key={workflow}>{workflow}</li>
-            ))}
-          </ul>
-          <div className="route-links">
-            <a className="primary-doc-link" href={TOOLKIT_DOCS_URL}>
-              Start with the toolkit <span aria-hidden="true">→</span>
-            </a>
-            <a href="https://www.npmjs.com/package/pptx-glimpse">View package on npm</a>
-          </div>
-        </article>
-
-        <article className="package-route document-route">
-          <div className="route-output" aria-hidden="true">
-            .pptx
-          </div>
-          <p className="route-label">Read, author, edit, and write</p>
-          <h2>@pptx-glimpse/document</h2>
-          <p className="package-summary">
-            The lower-level OOXML document foundation. It owns the editable source model and a
-            derived computed view; it does not render SVG or PNG.
-          </p>
-          <ul>
-            {documentWorkflows.map((workflow) => (
-              <li key={workflow}>{workflow}</li>
-            ))}
-          </ul>
-          <div className="route-links">
-            <a className="primary-doc-link" href={DOCUMENT_DOCS_URL}>
-              Choose a document workflow <span aria-hidden="true">→</span>
-            </a>
-            <a href="https://www.npmjs.com/package/@pptx-glimpse/document">View package on npm</a>
-          </div>
-        </article>
-
-        <article className="package-route editor-route">
-          <div className="route-output" aria-hidden="true">
-            commands
-          </div>
-          <p className="route-label">Headless editing state</p>
-          <h2>@pptx-glimpse/editor</h2>
-          <p className="package-summary">
-            The lower-level editing engine for validated commands, selection, and undo/redo. It
-            supplies no UI and does not render slides by itself.
-          </p>
-          <ul>
-            {editorWorkflows.map((workflow) => (
-              <li key={workflow}>{workflow}</li>
-            ))}
-          </ul>
-          <div className="route-links">
-            <a className="primary-doc-link" href={EDITOR_DOCS_URL}>
-              Build a headless editor <span aria-hidden="true">→</span>
-            </a>
-            <a href="https://www.npmjs.com/package/@pptx-glimpse/editor">View package on npm</a>
-          </div>
-        </article>
-      </section>
-
-      <aside className="demo-boundary" aria-label="Demo scope">
-        <strong>About this site’s demo</strong>
-        <p>
-          The home page demonstrates the recommended <code>pptx-glimpse</code> workflow: open,
-          render, edit, rerender, and save. Its focused editor covers a supported subset of
-          operations; use the document and editor guides for lower-level API coverage and
-          constraints.
-        </p>
-      </aside>
-    </main>
+      <DocsPager next={{ href: "/docs/getting-started", label: "Getting started" }} />
+    </DocsPage>
   );
 }
