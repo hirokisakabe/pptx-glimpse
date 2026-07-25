@@ -436,6 +436,9 @@ describe("PptxEditorSession", () => {
         editor.apply({ kind: "deleteShape", handle: shape.handle }),
       );
       expectErrorCodeAndCause(renderError, "render-failed", renderCause);
+      expect(editor.shapes(1)).toHaveLength(0);
+      expect(editor.history).toMatchObject({ canUndo: true, undoDepth: 1 });
+      expect(editor.slides[0]?.svg).toContain("Original");
     } finally {
       configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
     }
@@ -472,6 +475,19 @@ describe("PptxEditorSession", () => {
       expect(error.code).toBe("invalid-selection");
       expect(browserEntry.isPptxEditorError(error)).toBe(true);
     }
+  });
+
+  it("recognizes a structurally valid editor error from another realm", () => {
+    const foreignError = {
+      name: "PptxEditorError",
+      code: "render-failed",
+      message: "foreign renderer failed",
+      cause: new Error("foreign cause"),
+    };
+
+    expect(isPptxEditorError(foreignError)).toBe(true);
+    expect(isPptxEditorError({ ...foreignError, code: "unknown" })).toBe(false);
+    expect(isPptxEditorError({ ...foreignError, name: "Error" })).toBe(false);
   });
 
   it("counts unparsed image relationships in image replacement metadata", async () => {

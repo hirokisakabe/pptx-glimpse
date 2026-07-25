@@ -236,6 +236,25 @@ describe("EditorSession text-run commands", () => {
     expect(session.redoDepth).toBe(0);
   });
 
+  it("does not convert an unexpected failure from a supported command into a rejection", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const unexpected = new Error("unexpected command implementation failure");
+
+    expect(() =>
+      session.apply({
+        kind: "replaceTextRunPlainText",
+        handle: requireHandle(firstRun(source).handle),
+        get text(): string {
+          throw unexpected;
+        },
+      }),
+    ).toThrow(unexpected);
+    expect(session.document).toBe(source);
+    expect(session.undoDepth).toBe(0);
+    expect(session.redoDepth).toBe(0);
+  });
+
   it("rejects non-string text from JavaScript callers", async () => {
     const source = readPptx(await buildTextEditFixture());
     const session = createEditorSession(source);

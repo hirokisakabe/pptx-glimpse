@@ -192,18 +192,22 @@ export type PptxEditorErrorCode =
 
 export class PptxEditorError extends Error {
   readonly code: PptxEditorErrorCode;
-  override readonly cause?: unknown;
+  declare readonly cause?: unknown;
 
   constructor(code: PptxEditorErrorCode, message: string, options?: { readonly cause?: unknown }) {
     super(message, options);
     this.name = "PptxEditorError";
     this.code = code;
-    this.cause = options?.cause;
   }
 }
 
 export function isPptxEditorError(value: unknown): value is PptxEditorError {
-  return value instanceof PptxEditorError;
+  return (
+    isRecord(value) &&
+    value.name === "PptxEditorError" &&
+    typeof value.message === "string" &&
+    isPptxEditorErrorCode(value.code)
+  );
 }
 
 type PptxEditorSvgRenderer = (
@@ -468,7 +472,11 @@ function unwrapEditorOperation<Success extends { readonly ok: true }>(
   result: Success | EditorOperationFailure,
 ): Success {
   if (!result.ok) {
-    throw new PptxEditorError(result.code, result.message, { cause: result.cause });
+    throw new PptxEditorError(
+      result.code,
+      result.message,
+      "cause" in result ? { cause: result.cause } : undefined,
+    );
   }
   return result;
 }
@@ -485,6 +493,25 @@ function errorMessage(message: string, cause: unknown): string {
   return cause instanceof Error && cause.message.length > 0
     ? `${message}: ${cause.message}`
     : message;
+}
+
+function isRecord(value: unknown): value is { readonly [key: string]: unknown } {
+  return typeof value === "object" && value !== null;
+}
+
+function isPptxEditorErrorCode(value: unknown): value is PptxEditorErrorCode {
+  switch (value) {
+    case "invalid-command":
+    case "invalid-selection":
+    case "empty-undo-stack":
+    case "empty-redo-stack":
+    case "read-failed":
+    case "render-failed":
+    case "write-failed":
+      return true;
+    default:
+      return false;
+  }
 }
 
 function shapeInfo(

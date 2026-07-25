@@ -405,6 +405,31 @@ const EDITOR_COMMAND_KINDS: ReadonlySet<string> = new Set([
   "deleteSlide",
 ]);
 
+const EXPECTED_COMMAND_REJECTION_PREFIXES = [
+  "replaceTextRunPlainText:",
+  "replaceParagraphPlainText:",
+  "setTextRunProperties:",
+  "clearTextRunProperties:",
+  "setParagraphProperties:",
+  "clearParagraphProperties:",
+  "moveShape:",
+  "resizeShape:",
+  "setShapeTransform:",
+  "setShapeFill:",
+  "setShapeOutline:",
+  "addTextBox:",
+  "addConnector:",
+  "deleteShape:",
+  "replaceImageBytes:",
+  "addEmptySlideFromLayout:",
+  "duplicateSlide:",
+  "moveSlide:",
+  "deleteSlide:",
+  "updateTextRunProperties:",
+  "updateParagraphProperties:",
+  "updateShapeTransform:",
+] as const;
+
 function applyCommandToDocument(
   document: PptxSourceModel,
   command: EditorCommand,
@@ -445,10 +470,16 @@ function attemptCommand(operation: () => PptxSourceModel): ApplyCommandAttempt {
 }
 
 function invalidCommandFailure(cause: unknown): EditorOperationFailure<"invalid-command"> {
+  if (
+    !(cause instanceof Error) ||
+    !EXPECTED_COMMAND_REJECTION_PREFIXES.some((prefix) => cause.message.startsWith(prefix))
+  ) {
+    throw cause;
+  }
   return {
     ok: false,
     code: "invalid-command",
-    message: cause instanceof Error ? cause.message : "Editor command was rejected.",
+    message: cause.message,
     cause,
   };
 }
