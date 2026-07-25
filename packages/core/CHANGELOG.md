@@ -1,5 +1,11 @@
 # pptx-glimpse
 
+## 3.3.1
+
+### Patch Changes
+
+- c5d8491: 公開 workspace package の document / editor を runtime dependency として externalize し、private renderer だけを配布 bundle に含める package 境界へ整理する。
+
 ## 3.3.0
 
 ### Minor Changes
