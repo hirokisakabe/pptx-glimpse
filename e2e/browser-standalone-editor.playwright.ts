@@ -1,11 +1,9 @@
 import { Buffer } from "node:buffer";
-import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { promisify } from "node:util";
 
 import { expect, type Page, test } from "@playwright/test";
 import { build } from "esbuild";
@@ -20,10 +18,6 @@ import {
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
 const corePackageRoot = resolve(repoRoot, "packages/core");
-const documentPackageRoot = resolve(repoRoot, "packages/document");
-const editorPackageRoot = resolve(repoRoot, "packages/editor");
-const rendererPackageRoot = resolve(repoRoot, "packages/renderer");
-const execFileAsync = promisify(execFile);
 const encoder = new TextEncoder();
 const EMU_PER_PIXEL = 9525;
 const RED_PNG_BASE64 =
@@ -32,8 +26,6 @@ const BLUE_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGNkYPjPAANMcBZeDgAx0wEH1s7nlgAAAABJRU5ErkJggg==";
 const RED_PNG = pngBytes(RED_PNG_BASE64);
 const BLUE_PNG = pngBytes(BLUE_PNG_BASE64);
-let coreDistBuildPromise: Promise<void> | null = null;
-
 test("runs a browser-only editor move, resize, text, undo, redo, download, and reopen flow", async ({
   page,
 }) => {
@@ -273,7 +265,6 @@ async function startStandaloneEditor(): Promise<EditorServer> {
 }
 
 async function buildStandaloneEditorBundle(): Promise<string> {
-  await ensureCoreDist();
   const packageResolveDir = await createPackageResolveDir();
   try {
     const result = await build({
@@ -299,23 +290,6 @@ async function buildStandaloneEditorBundle(): Promise<string> {
   } finally {
     await rm(packageResolveDir, { recursive: true, force: true });
   }
-}
-
-async function ensureCoreDist(): Promise<void> {
-  coreDistBuildPromise ??= (async () => {
-    await runPackageBuild(documentPackageRoot);
-    await runPackageBuild(editorPackageRoot);
-    await runPackageBuild(rendererPackageRoot);
-    await runPackageBuild(corePackageRoot);
-  })();
-  await coreDistBuildPromise;
-}
-
-async function runPackageBuild(packageRoot: string): Promise<void> {
-  await execFileAsync(resolve(repoRoot, "node_modules/.bin/tsup"), ["--config", "tsup.config.ts"], {
-    cwd: packageRoot,
-    maxBuffer: 10 * 1024 * 1024,
-  });
 }
 
 async function createPackageResolveDir(): Promise<string> {

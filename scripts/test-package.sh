@@ -25,6 +25,86 @@ echo "Packed: $TARBALL"
 echo "Packed: $DOCUMENT_TARBALL"
 echo "Packed: $EDITOR_TARBALL"
 
+CORE_PACKAGE_DIR="$WORK_DIR/core-package"
+mkdir -p "$CORE_PACKAGE_DIR"
+tar -xzf "$TARBALL_PATH" -C "$CORE_PACKAGE_DIR"
+node --input-type=module - "$CORE_PACKAGE_DIR/package/package.json" << 'TESTEOF'
+import { readFileSync } from "node:fs";
+
+const packageJson = JSON.parse(readFileSync(process.argv[2], "utf8"));
+const expectedDependencies = [
+  "@pptx-glimpse/document",
+  "@pptx-glimpse/editor",
+  "@resvg/resvg-wasm",
+  "fast-xml-parser",
+  "opentype.js",
+  "prosemirror-model",
+];
+const runtimeDependencies = [
+  ...Object.keys(packageJson.dependencies ?? {}),
+  ...Object.keys(packageJson.optionalDependencies ?? {}),
+  ...Object.keys(packageJson.peerDependencies ?? {}),
+].sort();
+if (runtimeDependencies.join("\n") !== expectedDependencies.sort().join("\n")) {
+  throw new Error(
+    `pptx-glimpse runtime dependencies do not match generated JavaScript: ${runtimeDependencies.join(", ")}`,
+  );
+}
+TESTEOF
+node --input-type=module - "$CORE_PACKAGE_DIR/package/dist" << 'TESTEOF'
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const distDir = process.argv[2];
+const files = readdirSync(distDir).filter((file) => /\.(?:[cm]?js|d\.[cm]?ts)$/.test(file));
+const contents = new Map(
+  files.map((file) => [file, readFileSync(join(distDir, file), "utf8")]),
+);
+const javascript = [...contents]
+  .filter(([file]) => /\.[cm]?js$/.test(file))
+  .map(([, content]) => content)
+  .join("\n");
+const declarations = [...contents]
+  .filter(([file]) => /\.d\.[cm]?ts$/.test(file))
+  .map(([, content]) => content)
+  .join("\n");
+
+for (const packageName of ["@pptx-glimpse/document", "@pptx-glimpse/editor"]) {
+  if (!javascript.includes(packageName)) {
+    throw new Error(`generated JavaScript must keep ${packageName} as a package import`);
+  }
+}
+for (const privatePackageName of [
+  "@pptx-glimpse/renderer",
+  "@pptx-glimpse/editor-core",
+]) {
+  if (javascript.includes(privatePackageName) || declarations.includes(privatePackageName)) {
+    throw new Error(`published output contains private package import: ${privatePackageName}`);
+  }
+}
+TESTEOF
+echo "Core package boundary verification passed!"
+
+DOCUMENT_PACKAGE_DIR="$WORK_DIR/document-package"
+mkdir -p "$DOCUMENT_PACKAGE_DIR"
+tar -xzf "$DOCUMENT_TARBALL_PATH" -C "$DOCUMENT_PACKAGE_DIR"
+node --input-type=module - "$DOCUMENT_PACKAGE_DIR/package/package.json" << 'TESTEOF'
+import { readFileSync } from "node:fs";
+
+const packageJson = JSON.parse(readFileSync(process.argv[2], "utf8"));
+const runtimeDependencies = [
+  ...Object.keys(packageJson.dependencies ?? {}),
+  ...Object.keys(packageJson.optionalDependencies ?? {}),
+  ...Object.keys(packageJson.peerDependencies ?? {}),
+].sort();
+if (runtimeDependencies.join("\n") !== ["fast-xml-parser", "fflate"].join("\n")) {
+  throw new Error(
+    `@pptx-glimpse/document runtime dependencies must contain only fast-xml-parser and fflate: ${runtimeDependencies.join(", ")}`,
+  );
+}
+TESTEOF
+echo "Document package boundary verification passed!"
+
 EDITOR_PACKAGE_DIR="$WORK_DIR/editor-package"
 mkdir -p "$EDITOR_PACKAGE_DIR"
 tar -xzf "$EDITOR_TARBALL_PATH" -C "$EDITOR_PACKAGE_DIR"
@@ -58,9 +138,10 @@ echo "Editor package boundary verification passed!"
 # Install in core package test directory
 TEST_DIR="$WORK_DIR/core-test-project"
 mkdir -p "$TEST_DIR"
+cp "$REPO_DIR/shared-fixtures/real-basic-theme.pptx" "$TEST_DIR/fixture.pptx"
 cd "$TEST_DIR"
 npm init -y > /dev/null 2>&1
-npm install "$DOCUMENT_TARBALL_PATH" "$EDITOR_TARBALL_PATH" "$TARBALL_PATH" > /dev/null 2>&1
+npm install "$TARBALL_PATH" > /dev/null 2>&1
 
 echo ""
 
@@ -82,10 +163,15 @@ assert(
   typeof pkg.renderPptxSourceModelToSvg === "function",
   "renderPptxSourceModelToSvg should be a function",
 );
+assert(
+  typeof pkg.createBrowserPptxEditorSession === "function",
+  "createBrowserPptxEditorSession should be a function",
+);
 
 console.log("  convertPptxToSvg: function OK");
 console.log("  convertPptxToPng: function OK");
 console.log("  renderPptxSourceModelToSvg: function OK");
+console.log("  createBrowserPptxEditorSession: function OK");
 console.log("CJS test passed!");
 TESTEOF
 node test-cjs.cjs
@@ -95,7 +181,13 @@ echo ""
 # --- core ESM test ---
 echo "--- Test: pptx-glimpse ESM (import) ---"
 cat > test-esm.mjs << 'TESTEOF'
-import { convertPptxToSvg, convertPptxToPng, renderPptxSourceModelToSvg } from "pptx-glimpse";
+import {
+  convertPptxToSvg,
+  convertPptxToPng,
+  createBrowserPptxEditorSession,
+  renderPptxSourceModelToSvg,
+} from "pptx-glimpse";
+import { readFile } from "node:fs/promises";
 
 const assert = (condition, message) => {
   if (!condition) {
@@ -110,13 +202,99 @@ assert(
   typeof renderPptxSourceModelToSvg === "function",
   "renderPptxSourceModelToSvg should be a function",
 );
+assert(
+  typeof createBrowserPptxEditorSession === "function",
+  "createBrowserPptxEditorSession should be a function",
+);
 
 console.log("  convertPptxToSvg: function OK");
 console.log("  convertPptxToPng: function OK");
 console.log("  renderPptxSourceModelToSvg: function OK");
+console.log("  createBrowserPptxEditorSession: function OK");
+const input = new Uint8Array(await readFile("fixture.pptx"));
+const result = await convertPptxToSvg(input, { skipSystemFonts: true });
+assert(result.slides[0]?.svg.startsWith("<svg"), "Node SVG conversion should produce SVG");
+console.log("  Node SVG conversion: OK");
+const editor = await createBrowserPptxEditorSession(input, { skipSystemFonts: true });
+const run = editor
+  .shapes(1)
+  .flatMap((shape) => shape.textBody?.paragraphs ?? [])
+  .flatMap((paragraph) => paragraph.runs)
+  .find((candidate) => candidate.handle !== undefined);
+assert(run?.handle !== undefined, "Node editor fixture text run should exist");
+const edited = await editor.apply({
+  kind: "replaceTextRunPlainText",
+  handle: run.handle,
+  text: "Node package consumer edited",
+});
+assert(edited.slides[0]?.svg.startsWith("<svg"), "Node editor should rerender SVG");
+assert(editor.save().pptx instanceof Uint8Array, "Node editor should save Uint8Array");
+console.log("  Node high-level editor: OK");
 console.log("ESM test passed!");
 TESTEOF
 node test-esm.mjs
+
+echo ""
+
+# --- core browser consumer bundle and execution test ---
+echo "--- Test: pptx-glimpse browser consumer bundle ---"
+npm install --save-dev esbuild > /dev/null 2>&1
+cat > browser-entry.mjs << 'TESTEOF'
+import { convertPptxToSvg, createBrowserPptxEditorSession } from "pptx-glimpse";
+
+export async function verifyBrowserApis(input) {
+  const converted = await convertPptxToSvg(input, { skipSystemFonts: true });
+  if (!converted.slides[0]?.svg.startsWith("<svg")) {
+    throw new Error("browser SVG conversion did not produce SVG");
+  }
+
+  const session = await createBrowserPptxEditorSession(input, { skipSystemFonts: true });
+  const run = session
+    .shapes(1)
+    .flatMap((shape) => shape.textBody?.paragraphs ?? [])
+    .flatMap((paragraph) => paragraph.runs)
+    .find((candidate) => candidate.handle !== undefined);
+  if (run?.handle === undefined) {
+    throw new Error("browser editor fixture text run not found");
+  }
+  const response = await session.apply({
+    kind: "replaceTextRunPlainText",
+    handle: run.handle,
+    text: "Browser package consumer edited",
+  });
+  if (!response.slides[0]?.svg.startsWith("<svg")) {
+    throw new Error("browser editor did not rerender SVG");
+  }
+  if (!(session.save().pptx instanceof Uint8Array)) {
+    throw new Error("browser editor save did not return Uint8Array");
+  }
+}
+TESTEOF
+cat > build-browser.mjs << 'TESTEOF'
+import { build } from "esbuild";
+
+await build({
+  entryPoints: ["browser-entry.mjs"],
+  bundle: true,
+  outfile: "browser-bundle.mjs",
+  format: "esm",
+  platform: "browser",
+});
+TESTEOF
+node build-browser.mjs
+if grep -E 'node:(fs|path|buffer)|from "(fs|path)"' browser-bundle.mjs; then
+  echo "FAIL: pptx-glimpse browser bundle contains a Node built-in"
+  exit 1
+fi
+cat > run-browser-bundle.mjs << 'TESTEOF'
+import { readFile } from "node:fs/promises";
+
+import { verifyBrowserApis } from "./browser-bundle.mjs";
+
+await verifyBrowserApis(new Uint8Array(await readFile("fixture.pptx")));
+console.log("Browser consumer bundle test passed!");
+TESTEOF
+node run-browser-bundle.mjs
 
 echo ""
 
@@ -135,7 +313,7 @@ cat > tsconfig.json << 'TESTEOF'
     "moduleResolution": "Node16",
     "strict": true,
     "noEmit": true,
-    "skipLibCheck": true,
+    "skipLibCheck": false,
     "types": ["node"]
   },
   "include": ["test-types.ts"]
@@ -143,12 +321,22 @@ cat > tsconfig.json << 'TESTEOF'
 TESTEOF
 
 cat > test-types.ts << 'TESTEOF'
-import { readPptx } from "@pptx-glimpse/document";
-import { collectUsedFonts, convertPptxToSvg, convertPptxToPng, renderPptxSourceModelToSvg } from "pptx-glimpse";
+import {
+  collectUsedFonts,
+  convertPptxToSvg,
+  convertPptxToPng,
+  createBrowserPptxEditorSession,
+  renderPptxSourceModelToSvg,
+} from "pptx-glimpse";
 import type {
   ConvertOptions,
+  EditorCommand,
+  FontBuffer,
+  FontMapping,
+  OpentypeSetup,
   PngConversionReport,
   PptxSourceModel,
+  ResvgWasmInput,
   SvgConversionReport,
   UsedFonts,
 } from "pptx-glimpse";
@@ -159,10 +347,11 @@ const _svgFn: (input: Uint8Array, options?: ConvertOptions) => Promise<SvgConver
 const _pngFn: (input: Uint8Array, options?: ConvertOptions) => Promise<PngConversionReport> =
   convertPptxToPng;
 const _sourceModelSvgFn: (
-  source: ReturnType<typeof readPptx>,
+  source: PptxSourceModel,
   options?: ConvertOptions,
 ) => Promise<SvgConversionReport> = renderPptxSourceModelToSvg;
 const _fontFn: (input: Uint8Array) => UsedFonts = collectUsedFonts;
+const _editorFn = createBrowserPptxEditorSession;
 
 // Verify SlideImage.png is Uint8Array
 async function _verifyPngType(input: Uint8Array) {
@@ -178,26 +367,66 @@ function _verifyBufferInput(input: Buffer) {
   void collectUsedFonts(input);
 }
 
-// Verify @pptx-glimpse/document readPptx() output is accepted by the source-model render API.
-async function _verifyDocumentSourceModel(input: Uint8Array) {
-  const source = readPptx(input);
-  const _source: PptxSourceModel = source;
-  await renderPptxSourceModelToSvg(source);
-  void _source;
-}
-
 // Verify ConvertOptions includes fontDirs
 const _options: ConvertOptions = { slides: [1], width: 960, fontDirs: ["/custom/fonts"] };
+const _fontBuffer: FontBuffer = { name: "Test", data: new Uint8Array() };
+const _fontMapping: FontMapping = { Arial: "Inter" };
+declare const _opentypeSetup: OpentypeSetup;
+const _wasm: ResvgWasmInput = new Uint8Array();
+declare const _editorCommand: EditorCommand;
 void _svgFn;
 void _pngFn;
 void _sourceModelSvgFn;
 void _fontFn;
+void _editorFn;
 void _options;
+void _fontBuffer;
+void _fontMapping;
+void _opentypeSetup;
+void _wasm;
+void _editorCommand;
 void _verifyPngType;
 void _verifyBufferInput;
-void _verifyDocumentSourceModel;
 TESTEOF
 npx tsc --noEmit
+
+cat > tsconfig-browser.json << 'TESTEOF'
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "customConditions": ["browser"],
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": false,
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["test-browser-types.ts"]
+}
+TESTEOF
+cat > test-browser-types.ts << 'TESTEOF'
+import {
+  createBrowserPptxEditorSession,
+  initResvgWasm,
+  type EditorCommand,
+  type PptxSourceModel,
+  type ResvgWasmInput,
+} from "pptx-glimpse";
+
+const _create = createBrowserPptxEditorSession;
+const _init: (wasm: ResvgWasmInput) => Promise<void> = initResvgWasm;
+declare const _source: PptxSourceModel;
+const _command: EditorCommand = {
+  kind: "replaceTextRunPlainText",
+  handle: _source.slides[0].handle!,
+  text: "typed",
+};
+void _create;
+void _init;
+void _command;
+TESTEOF
+npx tsc -p tsconfig-browser.json
 echo "TypeScript type resolution test passed!"
 
 echo ""

@@ -18,17 +18,12 @@ import {
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
 const demoRoot = resolve(repoRoot, "demo");
-const documentPackageRoot = resolve(repoRoot, "packages/document");
-const editorPackageRoot = resolve(repoRoot, "packages/editor");
-const rendererPackageRoot = resolve(repoRoot, "packages/renderer");
-const corePackageRoot = resolve(repoRoot, "packages/core");
 const execFileAsync = promisify(execFile);
 const EMU_PER_PIXEL = 9525;
 const BLUE_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGNkYPjPAANMcBZeDgAx0wEH1s7nlgAAAABJRU5ErkJggg==";
 const BLUE_PNG = new Uint8Array(Buffer.from(BLUE_PNG_BASE64, "base64"));
 
-let coreDistBuildPromise: Promise<void> | null = null;
 let demoBuildPromise: Promise<void> | null = null;
 let demoServer: DemoServer | null = null;
 
@@ -235,30 +230,12 @@ async function startDemoServer(): Promise<DemoServer> {
 
 async function ensureDemoBuild(): Promise<void> {
   demoBuildPromise ??= (async () => {
-    await ensureCoreDist();
     if (!existsSync(resolve(demoRoot, "node_modules/.bin/next"))) {
       throw new Error("demo dependencies are not installed; run `cd demo && npm ci` first.");
     }
     await execFileAsync("npm", ["run", "build"], { cwd: demoRoot, maxBuffer: 20 * 1024 * 1024 });
   })();
   await demoBuildPromise;
-}
-
-async function ensureCoreDist(): Promise<void> {
-  coreDistBuildPromise ??= (async () => {
-    await runPackageBuild(documentPackageRoot);
-    await runPackageBuild(editorPackageRoot);
-    await runPackageBuild(rendererPackageRoot);
-    await runPackageBuild(corePackageRoot);
-  })();
-  await coreDistBuildPromise;
-}
-
-async function runPackageBuild(packageRoot: string): Promise<void> {
-  await execFileAsync(resolve(repoRoot, "node_modules/.bin/tsup"), ["--config", "tsup.config.ts"], {
-    cwd: packageRoot,
-    maxBuffer: 10 * 1024 * 1024,
-  });
 }
 
 async function findFreePort(): Promise<number> {

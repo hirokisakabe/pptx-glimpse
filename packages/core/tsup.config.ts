@@ -5,12 +5,12 @@ export default defineConfig({
   format: ["cjs", "esm"],
   dts: {
     resolve: [
-      "@pptx-glimpse/editor",
       "@pptx-glimpse/renderer",
       "@pptx-glimpse/renderer/png",
       "@pptx-glimpse/renderer/png/browser",
     ],
   },
   clean: true,
-  noExternal: ["@pptx-glimpse/document", "@pptx-glimpse/editor", "@pptx-glimpse/renderer"],
+  external: ["@pptx-glimpse/document", "@pptx-glimpse/editor"],
+  noExternal: ["@pptx-glimpse/renderer"],
 });

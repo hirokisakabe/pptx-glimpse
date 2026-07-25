@@ -13,14 +13,10 @@ import { build } from "esbuild";
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
 const corePackageRoot = resolve(repoRoot, "packages/core");
-const documentPackageRoot = resolve(repoRoot, "packages/document");
-const editorPackageRoot = resolve(repoRoot, "packages/editor");
-const rendererPackageRoot = resolve(repoRoot, "packages/renderer");
 const sharedFixtures = resolve(repoRoot, "shared-fixtures");
 const vrtFixtures = resolve(repoRoot, "vrt/snapshot/fixtures");
 const execFileAsync = promisify(execFile);
 const coreRequire = createRequire(resolve(corePackageRoot, "package.json"));
-let coreDistBuildPromise: Promise<void> | null = null;
 let vrtFixturesPromise: Promise<void> | null = null;
 
 test("runs a browser-only PPTX to SVG viewer for shared fixtures", async ({ page }) => {
@@ -143,7 +139,6 @@ async function startStandaloneViewer(): Promise<ViewerServer> {
 }
 
 async function buildStandaloneViewerBundle(): Promise<string> {
-  await ensureCoreDist();
   const packageResolveDir = await createPackageResolveDir();
   try {
     const result = await build({
@@ -169,23 +164,6 @@ async function buildStandaloneViewerBundle(): Promise<string> {
   } finally {
     await rm(packageResolveDir, { recursive: true, force: true });
   }
-}
-
-async function ensureCoreDist(): Promise<void> {
-  coreDistBuildPromise ??= (async () => {
-    await runPackageBuild(documentPackageRoot);
-    await runPackageBuild(editorPackageRoot);
-    await runPackageBuild(rendererPackageRoot);
-    await runPackageBuild(corePackageRoot);
-  })();
-  await coreDistBuildPromise;
-}
-
-async function runPackageBuild(packageRoot: string): Promise<void> {
-  await execFileAsync(resolve(repoRoot, "node_modules/.bin/tsup"), ["--config", "tsup.config.ts"], {
-    cwd: packageRoot,
-    maxBuffer: 10 * 1024 * 1024,
-  });
 }
 
 async function ensureVrtFixtures(): Promise<void> {

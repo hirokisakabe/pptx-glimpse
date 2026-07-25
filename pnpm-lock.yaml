@@ -95,9 +95,6 @@ importers:
       fast-xml-parser:
         specifier: ^5.7.3
         version: 5.8.0
-      fflate:
-        specifier: ^0.8.2
-        version: 0.8.3
       opentype.js:
         specifier: 1.3.4
         version: 1.3.4
@@ -108,6 +105,9 @@ importers:
       '@pptx-glimpse/renderer':
         specifier: workspace:*
         version: link:../renderer
+      fflate:
+        specifier: ^0.8.2
+        version: 0.8.3
 
   packages/document:
     dependencies:
