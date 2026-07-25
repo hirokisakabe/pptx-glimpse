@@ -7,7 +7,9 @@
 
 No LibreOffice required — just `npm install`.
 
-A lightweight JavaScript library that renders PowerPoint (.pptx) slides as SVG or PNG in Node.js and the browser.
+A TypeScript toolkit for rendering and editing PowerPoint (`.pptx`) files in Node.js and the
+browser. Use the high-level package for SVG/PNG conversion and browser-oriented editing, or build
+on the lower-level document and headless editor packages.
 
 **[Try the Demo](https://glimpse.pptx.app/)** | [npm](https://www.npmjs.com/package/pptx-glimpse)
 
@@ -21,18 +23,16 @@ _Upload a .pptx file → get SVG/PNG output instantly_
 
 ## Choose a package
 
-| If you want to...                                                               | Use                                                                                                                              |
-| ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| Render PPTX slides as SVG or PNG in Node.js or the browser                      | [`pptx-glimpse`](#installation)                                                                                                  |
-| Read PPTX source data or derive a resolved, non-mutating computed view          | [`@pptx-glimpse/document`](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/README.md)                   |
-| Author a new PPTX, edit an existing PPTX, or write PPTX bytes with preservation | [`@pptx-glimpse/document`](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/README.md#choose-a-workflow) |
-| Build a headless command, selection, and undo/redo integration                  | [`@pptx-glimpse/editor`](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/editor/README.md)                       |
+| If you want to...                                                                      | Use                                                                                                            | Level      |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------- |
+| Render PPTX slides as SVG/PNG or build an editor that rerenders and saves PPTX bytes   | [`pptx-glimpse`](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/core/README.md)               | High-level |
+| Read OOXML source data, compute effective values, author/edit documents, or write PPTX | [`@pptx-glimpse/document`](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/README.md) | Low-level  |
+| Apply validated commands with selection and undo/redo, without a UI or renderer        | [`@pptx-glimpse/editor`](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/editor/README.md)     | Low-level  |
 
-`pptx-glimpse` is the rendering package and includes the SVG / PNG conversion APIs documented
-below. `@pptx-glimpse/document` is the lower-level OOXML document package for read, computed-view,
-authoring, editing, and writer workflows. Start with its
-[package guide](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/README.md)
-to choose the relevant workflow and check current feature support.
+Start with `pptx-glimpse` when you want batteries-included rendering or its high-level editor
+session. Use `@pptx-glimpse/document` when your application owns the document workflow, or add
+`@pptx-glimpse/editor` when it needs a headless command and history layer. See each package README
+for its public boundary, runtime support, stability, and limitations.
 
 ## Motivation
 
@@ -71,8 +71,8 @@ npm install pptx-glimpse
 ```
 
 `pptx-glimpse` installs its compatible `@pptx-glimpse/document` and `@pptx-glimpse/editor`
-versions as transitive dependencies. The high-level conversion and editor APIs below do not
-require separate package installs.
+versions as transitive dependencies. Its high-level conversion and editor APIs do not require
+separate package installs.
 
 Install a lower-level package directly when your application imports it. Do not rely on package
 manager hoisting to make a transitive dependency importable:
@@ -85,13 +85,13 @@ npm install @pptx-glimpse/document
 npm install @pptx-glimpse/document @pptx-glimpse/editor
 ```
 
-## Usage
+## Render quick start
 
 ```typescript
-import { readFileSync, writeFileSync } from "fs";
-import { convertPptxToSvg, convertPptxToPng } from "pptx-glimpse";
+import { readFile, writeFile } from "node:fs/promises";
+import { convertPptxToPng, convertPptxToSvg } from "pptx-glimpse";
 
-const pptx = readFileSync("presentation.pptx");
+const pptx = await readFile("presentation.pptx");
 
 // Convert to SVG
 const { slides: svgResults } = await convertPptxToSvg(pptx);
@@ -101,8 +101,11 @@ const { slides: svgResults } = await convertPptxToSvg(pptx);
 const { slides: pngResults } = await convertPptxToPng(pptx);
 // [{ slideNumber: 1, png: Uint8Array, width: 960, height: 540 }, ...]
 
-writeFileSync("slide1.png", pngResults[0].png);
+await writeFile("slide1.png", pngResults[0].png);
 ```
+
+For high-level editing, see the
+[`pptx-glimpse` package README](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/core/README.md#high-level-editing).
 
 The conversion APIs return a report object:
 

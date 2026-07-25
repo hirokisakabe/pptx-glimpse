@@ -1,31 +1,32 @@
 # @pptx-glimpse/editor
 
-UI framework に依存しない `PptxSourceModel` の編集層です。`@pptx-glimpse/document`
-で PPTX を読み書きし、この package で command の検証・適用、selection、undo / redo、
-warning の取得を行います。
+[![npm version](https://img.shields.io/npm/v/%40pptx-glimpse%2Feditor)](https://www.npmjs.com/package/@pptx-glimpse/editor)
+[![CI](https://github.com/hirokisakabe/pptx-glimpse/actions/workflows/ci.yml/badge.svg)](https://github.com/hirokisakabe/pptx-glimpse/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/hirokisakabe/pptx-glimpse/blob/main/LICENSE)
 
-`@pptx-glimpse/editor` は 0.x です。API は独立して利用できますが、command と結果型は
-1.0 までに変更される可能性があります。
+The public, headless editing layer for `PptxSourceModel`. It applies validated commands and manages
+selection and undo/redo history without depending on a DOM, UI framework, or renderer.
 
-## インストール
+This package is published on npm. Install it together with its document-layer dependency so both
+packages are direct dependencies of your application:
 
-```sh
+```bash
 npm install @pptx-glimpse/document @pptx-glimpse/editor
 ```
 
-## 最小例
+## Quick start
 
 ```ts
+import { readFile, writeFile } from "node:fs/promises";
 import { readPptx, writePptx } from "@pptx-glimpse/document";
 import { createEditorSession } from "@pptx-glimpse/editor";
 
-const source = readPptx(input);
-const run = source.slides[0]?.shapes
-  .find((shape) => shape.kind === "shape")
-  ?.textBody?.paragraphs[0]?.runs[0];
+const source = readPptx(await readFile("input.pptx"));
+const run = source.slides[0]?.shapes.find((shape) => shape.kind === "shape")?.textBody
+  ?.paragraphs[0]?.runs[0];
 
 if (run?.handle === undefined) {
-  throw new Error("editable text run not found");
+  throw new Error("No editable text run found");
 }
 
 const session = createEditorSession(source);
@@ -34,33 +35,62 @@ const result = session.apply({
   handle: run.handle,
   text: "Edited",
 });
+
 if (!result.ok) {
   throw new Error(result.message);
 }
 
-const output = writePptx(session.document);
+await writeFile("edited.pptx", writePptx(session.document));
 ```
 
-複数 command は `session.applyAll(commands)` で一つの undo 履歴として適用できます。
-`selectShape()` / `deselectShape()`、`undo()` / `redo()`、`canUndo` / `canRedo` も
-session から利用できます。
+## Commands, history, and selection
 
-## 対応 command
+`session.apply(command)` validates and applies one command. `session.applyAll(commands)` applies a
+batch as one undo-history entry. Failed validation returns an `invalid-command` result without
+changing the document.
 
-- text: `replaceTextRunPlainText`, `replaceParagraphPlainText`,
-  `setTextRunProperties`, `clearTextRunProperties`, `setParagraphProperties`,
-  `clearParagraphProperties`
-- shape: `moveShape`, `resizeShape`, `setShapeTransform`, `setShapeFill`,
-  `setShapeOutline`, `addTextBox`, `addConnector`, `deleteShape`
-- media: `replaceImage`
-- slide: `addEmptySlideFromLayout`, `duplicateSlide`, `moveSlide`, `deleteSlide`
+The released command set includes:
 
-## 既知の制約
+- Text: `replaceTextRunPlainText`, `replaceParagraphPlainText`, `setTextRunProperties`,
+  `clearTextRunProperties`, `setParagraphProperties`, and `clearParagraphProperties`.
+- Shapes: `moveShape`, `resizeShape`, `setShapeTransform`, `setShapeFill`, `setShapeOutline`,
+  `addTextBox`, `addConnector`, and `deleteShape`.
+- Media: `replaceImage`.
+- Slides: `addEmptySlideFromLayout`, `duplicateSlide`, `moveSlide`, and `deleteSlide`.
 
-- source handle がない要素や、document 層が安全に保持できない編集は
-  `invalid-command` として拒否されます。
-- table、chart、SmartArt の新規編集 command はありません。
-- `replaceImage` が共有 media part を更新する場合、参照する複数画像が同時に変わるため
-  `shared-media-part` warning を返します。
-- DOM、React、ProseMirror、renderer は含みません。描画を伴う browser editor facade は
-  `pptx-glimpse` の browser entry を利用してください。
+Use `undo()`, `redo()`, `canUndo`, `canRedo`, `undoDepth`, and `redoDepth` to integrate history.
+`selectShape(handle)` and `deselectShape()` manage a single shape selection. Selection is reconciled
+after commands and history changes, and is cleared if its shape no longer exists.
+
+## Package boundary
+
+Use [`pptx-glimpse`](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/core/README.md)
+when you want high-level rendering plus an edit/rerender/save session. Use
+[`@pptx-glimpse/document`](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/README.md)
+directly for source/computed document semantics, authoring, immutable editing operations, and
+writing without session state.
+
+`@pptx-glimpse/editor` adds command validation, selection, warnings, and history to the document
+model. It does not include React, ProseMirror, a DOM UI, SVG/PNG rendering, or file I/O. Import
+supported APIs from the package root; deep source and `dist` paths are internal.
+
+## Runtime support, stability, and limitations
+
+- Node.js 22 or later is supported.
+- Browser bundlers can use the same byte- and model-oriented APIs; the package has no DOM or
+  Node.js filesystem dependency.
+- `@pptx-glimpse/editor` is a `0.x` package. Commands and result types may change before `1.0.0`.
+- Elements without source handles, and edits the document layer cannot safely preserve, are
+  rejected as `invalid-command`.
+- New table, chart, and SmartArt editing commands are not available.
+- Replacing a shared media part can change multiple image references and returns a
+  `shared-media-part` warning.
+- The current error contract is limited to the released result shapes described by the exported
+  types; no broader error taxonomy is promised.
+
+See the [project README](https://github.com/hirokisakabe/pptx-glimpse#readme) for package selection
+and the demo.
+
+## License
+
+MIT
