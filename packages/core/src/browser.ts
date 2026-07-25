@@ -1,7 +1,6 @@
 import { DEFAULT_OUTPUT_WIDTH } from "@pptx-glimpse/renderer";
 import {
   initResvgWasm as initRendererResvgWasm,
-  type ResvgWasmInput,
   svgToPng,
 } from "@pptx-glimpse/renderer/png/browser";
 
@@ -52,7 +51,8 @@ export {
   createOpentypeTextMeasurerFromBuffers,
 } from "@pptx-glimpse/renderer";
 export { getWarningEntries, getWarningSummary } from "@pptx-glimpse/renderer";
-export type { ResvgWasmInput } from "@pptx-glimpse/renderer/png/browser";
+
+export type ResvgWasmInput = ArrayBuffer | Uint8Array | Response;
 
 export async function convertPptxToPng(
   input: Uint8Array,
