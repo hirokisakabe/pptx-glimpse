@@ -13,8 +13,8 @@ const demoRoot = resolve(here, "..");
 const repoRoot = resolve(demoRoot, "..");
 const nextCli = resolve(demoRoot, "node_modules/next/dist/bin/next");
 const samples = [
-  { id: "basic-theme", filename: "real-basic-theme.pptx" },
-  { id: "product-page", filename: "real-product-page.pptx" },
+  { filename: "real-basic-theme.pptx" },
+  { filename: "real-product-page.pptx" },
 ];
 
 const port = await getFreePort();
@@ -70,13 +70,16 @@ try {
 
   browser = await chromium.launch();
   const page = await browser.newPage();
+  await page.goto(baseUrl);
+  await expect(page.getByTestId("editor-workspace")).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByText("real-basic-theme.pptx")).toBeVisible();
+
   for (const sample of samples) {
-    await page.goto(baseUrl);
-    await page.getByTestId(`sample-${sample.id}`).click();
-    await expect(page.getByTestId("viewer-status")).toContainText("slides rendered", {
-      timeout: 30_000,
-    });
-    await expect(page.locator("svg").first()).toBeVisible();
+    await page
+      .getByTestId("pptx-input")
+      .setInputFiles(resolve(repoRoot, "shared-fixtures", sample.filename));
+    await expect(page.getByText(sample.filename)).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId("editor-slide-frame").locator("svg").first()).toBeVisible();
   }
 } finally {
   await browser?.close();
