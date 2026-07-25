@@ -71,7 +71,7 @@ describe("browser entry", () => {
     const result = await build({
       stdin: {
         contents:
-          'import { convertPptxToPng, convertPptxToSvg, createPptxEditorSession, initResvgWasm, PptxEditorSession } from "pptx-glimpse"; console.log(convertPptxToPng, convertPptxToSvg, createPptxEditorSession, initResvgWasm, PptxEditorSession);',
+          'import { convertPptxToPng, convertPptxToSvg, createPptxEditorSession, initResvgWasm, isPptxEditorError, PptxEditorError, PptxEditorSession } from "pptx-glimpse"; console.log(convertPptxToPng, convertPptxToSvg, createPptxEditorSession, initResvgWasm, isPptxEditorError, PptxEditorError, PptxEditorSession);',
         resolveDir: here,
         sourcefile: "browser-entry-smoke.ts",
         loader: "ts",
