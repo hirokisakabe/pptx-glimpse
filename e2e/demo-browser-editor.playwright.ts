@@ -37,7 +37,7 @@ test.afterAll(async () => {
   demoServer = null;
 });
 
-test("links the rendering demo to package documentation", async ({ page }) => {
+test("links the toolkit demo to all public package documentation", async ({ page }) => {
   if (demoServer === null) throw new Error("demo server was not started");
 
   await page.goto(demoServer.url);
@@ -49,18 +49,58 @@ test("links the rendering demo to package documentation", async ({ page }) => {
   await expect(
     page.getByRole("heading", { name: "@pptx-glimpse/document", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: /Read the rendering guide/ })).toHaveAttribute(
+  await expect(
+    page.getByRole("heading", { name: "@pptx-glimpse/editor", exact: true }),
+  ).toBeVisible();
+  await expect(page.getByRole("link", { name: /Start with the toolkit/ })).toHaveAttribute(
     "href",
-    "https://github.com/hirokisakabe/pptx-glimpse/blob/main/README.md",
+    "https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/core/README.md",
   );
   await expect(page.getByRole("link", { name: /Choose a document workflow/ })).toHaveAttribute(
     "href",
     "https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/README.md",
   );
+  await expect(page.getByRole("link", { name: /Build a headless editor/ })).toHaveAttribute(
+    "href",
+    "https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/editor/README.md",
+  );
 
   const sitemapResponse = await page.request.get(`${demoServer.url}/sitemap.xml`);
   expect(sitemapResponse.ok()).toBe(true);
   expect(await sitemapResponse.text()).toContain("https://glimpse.pptx.app/docs");
+});
+
+test("opens uploaded and sample PPTX files through the primary demo routes", async ({ page }) => {
+  test.setTimeout(120_000);
+  if (demoServer === null) throw new Error("demo server was not started");
+
+  await page.goto(demoServer.url);
+  await expect(
+    page.getByRole("heading", { name: "Open it. Edit it. Save it back to PPTX." }),
+  ).toBeVisible();
+  await expect(page.getByText(/never sent to a server/).first()).toBeVisible();
+  await expect(page.getByRole("button", { name: "Choose PPTX" })).toBeVisible();
+
+  await page
+    .getByTestId("pptx-input")
+    .setInputFiles(resolve(repoRoot, "shared-fixtures/real-basic-theme.pptx"));
+  await expect(page.getByTestId("viewer-status")).toContainText("slides rendered");
+  await expect(page.getByRole("button", { name: "View", exact: true })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.getByTestId("open-editor")).toBeVisible();
+
+  await page.goto(demoServer.url);
+  await page.getByTestId("sample-edit-basic-theme").click();
+  await expect(page.getByTestId("editor-workspace")).toBeVisible();
+  await expect(page.getByTestId("editor-status")).toContainText("ready");
+  await expect(page.getByRole("button", { name: "Download PPTX" })).toBeVisible();
+
+  await page.getByRole("button", { name: "View", exact: true }).click();
+  await expect(page.getByTestId("viewer-status")).toContainText("slides rendered");
+  await page.getByTestId("open-editor").click();
+  await expect(page.getByTestId("editor-workspace")).toBeVisible();
 });
 
 test("runs the public demo browser editor flow entirely client-side", async ({ page }) => {
@@ -85,17 +125,19 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
     const firstEditableTextShape = page
       .locator('[data-testid="shape-hit-area"][data-editable-text="true"]')
       .first();
-    const hitAreaBounds = await firstEditableTextShape.boundingBox();
-    if (hitAreaBounds === null) throw new Error("editable text shape bounds were not available");
     await firstEditableTextShape.dblclick();
     const directTextEditor = page.getByTestId("direct-text-editor");
     await expect(directTextEditor).toBeVisible();
+    const focusedHitAreaBounds = await firstEditableTextShape.boundingBox();
+    if (focusedHitAreaBounds === null) {
+      throw new Error("focused editable text shape bounds were not available");
+    }
     const editorBounds = await directTextEditor.boundingBox();
     if (editorBounds === null) throw new Error("direct text editor bounds were not available");
-    expect(editorBounds.x).toBeCloseTo(hitAreaBounds.x, 0);
-    expect(editorBounds.y).toBeCloseTo(hitAreaBounds.y, 0);
-    expect(editorBounds.width).toBeCloseTo(hitAreaBounds.width, 0);
-    expect(editorBounds.height).toBeCloseTo(hitAreaBounds.height, 0);
+    expect(editorBounds.x).toBeCloseTo(focusedHitAreaBounds.x, 0);
+    expect(editorBounds.y).toBeCloseTo(focusedHitAreaBounds.y, 0);
+    expect(editorBounds.width).toBeCloseTo(focusedHitAreaBounds.width, 0);
+    expect(editorBounds.height).toBeCloseTo(focusedHitAreaBounds.height, 0);
 
     const directTextRun = page.getByTestId("direct-text-editor-run").first();
     await expect(directTextRun).toBeFocused();
