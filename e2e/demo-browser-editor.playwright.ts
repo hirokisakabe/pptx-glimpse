@@ -46,22 +46,15 @@ test("navigates the documentation guides and public package references", async (
   await page.getByRole("link", { name: "Documentation" }).click();
 
   await expect(page).toHaveURL(`${demoServer.url}/docs`);
-  await expect(page).toHaveTitle("Documentation | pptx-glimpse");
-  await expect(
-    page.getByRole("heading", { name: "From PowerPoint bytes to an application." }),
-  ).toBeVisible();
-  const docsNavigation = page
-    .locator(".docs-sidebar")
-    .getByRole("navigation", { name: "Documentation", exact: true });
-  await expect(docsNavigation).toBeVisible();
-  await expect(docsNavigation.getByRole("link", { name: "Overview", exact: true })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  await expect(page).toHaveTitle("Overview | pptx-glimpse");
+  await expect(page.getByRole("heading", { name: "Overview", exact: true })).toBeVisible();
+  const docsSidebar = page.locator(".nextra-sidebar");
+  await expect(docsSidebar).toBeVisible();
+  await expect(docsSidebar.getByRole("link", { name: "Overview", exact: true })).toBeVisible();
 
-  await docsNavigation.getByRole("link", { name: "Packages", exact: true }).click();
+  await docsSidebar.getByRole("link", { name: "Choosing a package", exact: true }).click();
   await expect(page).toHaveURL(`${demoServer.url}/docs/packages`);
-  await expect(page).toHaveTitle("Choose a package | pptx-glimpse");
+  await expect(page).toHaveTitle("Choosing a package | pptx-glimpse");
   await expect(page.getByRole("heading", { name: "pptx-glimpse", exact: true })).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "@pptx-glimpse/document", exact: true }),
@@ -78,8 +71,8 @@ test("navigates the documentation guides and public package references", async (
   }
 
   await page.setViewportSize({ width: 390, height: 720 });
-  await expect(page.locator(".docs-sidebar")).toBeHidden();
-  await expect(page.locator(".docs-mobile-navigation")).toBeVisible();
+  await expect(docsSidebar).toBeHidden();
+  await expect(page.getByRole("button", { name: "Menu" })).toBeVisible();
 
   const sitemapResponse = await page.request.get(`${demoServer.url}/sitemap.xml`);
   expect(sitemapResponse.ok()).toBe(true);
@@ -87,11 +80,14 @@ test("navigates the documentation guides and public package references", async (
   for (const route of [
     "/docs",
     "/docs/getting-started",
+    "/docs/why",
     "/docs/rendering",
     "/docs/editing",
+    "/docs/fonts",
     "/docs/browser",
     "/docs/nodejs",
     "/docs/api",
+    "/docs/feature-support",
     "/docs/packages",
   ]) {
     expect(sitemap).toContain(`https://glimpse.pptx.app${route}`);
