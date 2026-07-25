@@ -4,7 +4,15 @@ import { asEmu, readPptx, type SourceConnector, type SourceShape } from "@pptx-g
 import JSZip from "jszip";
 import { describe, expect, it, vi } from "vitest";
 
-import { createPptxEditorSession } from "./pptx-editor-session.js";
+import { createPptxEditorSession } from "./index.js";
+
+const nodeFontMocks = vi.hoisted(() => ({
+  createOpentypeSetupFromSystem: vi.fn().mockResolvedValue(null),
+}));
+
+vi.mock("@pptx-glimpse/renderer/node", () => ({
+  createOpentypeSetupFromSystem: nodeFontMocks.createOpentypeSetupFromSystem,
+}));
 
 const encoder = new TextEncoder();
 const RED_PNG = pngBytes(
@@ -78,6 +86,21 @@ describe("PptxEditorSession", () => {
       width: 336 * 9525,
       height: 120 * 9525,
     });
+  });
+
+  it("uses the Node font loader selected by the main entry", async () => {
+    nodeFontMocks.createOpentypeSetupFromSystem.mockClear();
+
+    await createPptxEditorSession(await buildShapeFixture(), {
+      fontDirs: ["/app/fonts"],
+      skipSystemFonts: true,
+    });
+
+    expect(nodeFontMocks.createOpentypeSetupFromSystem).toHaveBeenCalledWith(
+      ["/app/fonts"],
+      undefined,
+      true,
+    );
   });
 
   it("applies command batches as one history entry and renders once", async () => {

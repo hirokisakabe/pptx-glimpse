@@ -1,3 +1,8 @@
+import { renderPptxSourceModelToSvg as renderPptxSourceModelToSvgForEditor } from "./converter.js";
+import { configurePptxEditorSessionRenderer } from "./pptx-editor-session.js";
+
+configurePptxEditorSessionRenderer(renderPptxSourceModelToSvgForEditor);
+
 export type {
   ConversionDiagnostic,
   ConvertOptions,

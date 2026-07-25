@@ -4,7 +4,14 @@ import {
   svgToPng,
 } from "@pptx-glimpse/renderer/png/browser";
 
-import { type ConvertOptions, convertPptxToSvg as convertPptxToSvgBase } from "./svg-converter.js";
+import { configurePptxEditorSessionRenderer } from "./pptx-editor-session.js";
+import {
+  type ConvertOptions,
+  convertPptxToSvg as convertPptxToSvgBase,
+  renderPptxSourceModelToSvg as renderPptxSourceModelToSvgForEditor,
+} from "./svg-converter.js";
+
+configurePptxEditorSessionRenderer(renderPptxSourceModelToSvgForEditor);
 
 export type { PngConversionReport, SlideImage } from "./converter.js";
 export type { UsedFonts } from "./font/font-collector.js";

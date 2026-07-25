@@ -28,7 +28,12 @@ import {
   proseMirrorDocJsonToEditorCommands,
   textBodyToProseMirrorDocJson,
 } from "./prosemirror-text-body-compat.js";
-import { type ConvertOptions, renderPptxSourceModelToSvg, type SlideSvg } from "./svg-converter.js";
+import {
+  type ConvertOptions,
+  renderPptxSourceModelToSvg,
+  type SlideSvg,
+  type SvgConversionReport,
+} from "./svg-converter.js";
 import { unsafeBrandAssertion } from "./unsafe-type-assertion.js";
 
 const EMU_PER_INCH = 914400;
@@ -77,7 +82,7 @@ export interface PptxEditorTextRunInfo {
 export interface PptxEditorTextBodyInfo {
   /**
    * @deprecated Use `PptxEditorShapeInfo.textBody` and `applyAll()` with editor commands.
-   * This ProseMirror-compatible JSON bridge is retained for pptx-glimpse 3.x only.
+   * This ProseMirror-compatible JSON bridge is retained temporarily for compatibility.
    */
   readonly docJson: PptxTextBodyProseMirrorDocJson;
 }
@@ -126,7 +131,7 @@ export interface PptxEditorShapeInfo {
   readonly textBody?: PptxEditorTextBodyView;
   /**
    * @deprecated Use `textBody` and `applyAll()` with `@pptx-glimpse/editor` commands.
-   * This ProseMirror-compatible view is retained for pptx-glimpse 3.x only.
+   * This ProseMirror-compatible view is retained temporarily for compatibility.
    */
   readonly editableTextBody?: PptxEditorTextBodyInfo;
   readonly editableImageReplacement?: PptxEditorImageReplacementInfo;
@@ -168,14 +173,28 @@ export interface PptxEditorSaveResponse {
 
 export type PptxEditorRenderOptions = Omit<ConvertOptions, "slides">;
 
+type PptxEditorSvgRenderer = (
+  source: PptxSourceModel,
+  options?: ConvertOptions,
+) => Promise<SvgConversionReport>;
+
+let defaultPptxEditorSvgRenderer: PptxEditorSvgRenderer = renderPptxSourceModelToSvg;
+
+/** @internal Configures the renderer selected by the active package conditional entry. */
+export function configurePptxEditorSessionRenderer(renderer: PptxEditorSvgRenderer): void {
+  defaultPptxEditorSvgRenderer = renderer;
+}
+
 export class PptxEditorSession {
   #session: ReturnType<typeof createEditorSession>;
   #slides: readonly PptxEditorSlideSvg[] = [];
   readonly #renderOptions: PptxEditorRenderOptions;
+  readonly #renderToSvg: PptxEditorSvgRenderer;
 
   private constructor(source: PptxSourceModel, renderOptions: PptxEditorRenderOptions) {
     this.#session = createEditorSession(source);
     this.#renderOptions = renderOptions;
+    this.#renderToSvg = defaultPptxEditorSvgRenderer;
   }
 
   static async create(
@@ -226,7 +245,7 @@ export class PptxEditorSession {
   }
 
   async renderCurrentSlides(): Promise<readonly PptxEditorSlideSvg[]> {
-    const report = await renderPptxSourceModelToSvg(this.#session.document, {
+    const report = await this.#renderToSvg(this.#session.document, {
       textOutput: "text",
       skipSystemFonts: true,
       ...this.#renderOptions,
@@ -330,7 +349,7 @@ export class PptxEditorSession {
 
   /**
    * @deprecated Use `textBody` from `shapes()` and pass generated commands to `applyAll()`.
-   * This ProseMirror-compatible bridge is retained for pptx-glimpse 3.x only.
+   * This ProseMirror-compatible bridge is retained temporarily for compatibility.
    */
   async applyTextBodyDocJson(
     handle: SourceHandle,
