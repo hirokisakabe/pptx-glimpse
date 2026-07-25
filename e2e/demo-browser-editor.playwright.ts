@@ -98,6 +98,12 @@ test("opens the sample editor first and replaces it with an uploaded PPTX", asyn
   test.setTimeout(120_000);
   if (demoServer === null) throw new Error("demo server was not started");
 
+  const sampleResponse = await page.request.get(`${demoServer.url}/samples/editor-demo.pptx`);
+  expect(sampleResponse.ok()).toBe(true);
+  expect(await sampleResponse.body()).toEqual(
+    await readFile(resolve(demoRoot, "assets/editor-demo.pptx")),
+  );
+
   await page.goto(demoServer.url);
   await expect(page.getByTestId("editor-workspace")).toBeVisible();
   const fileNameInput = page.getByRole("textbox", { name: "Presentation file name" });
