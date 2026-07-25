@@ -214,12 +214,24 @@ type PptxEditorSvgRenderer = (
   source: PptxSourceModel,
   options?: ConvertOptions,
 ) => Promise<SvgConversionReport>;
+type PptxEditorAffectedSlidesResolver = (
+  before: PptxSourceModel,
+  after: PptxSourceModel,
+) => ReadonlySet<string> | undefined;
 
 let defaultPptxEditorSvgRenderer: PptxEditorSvgRenderer = renderPptxSourceModelToSvg;
+let defaultAffectedSlidesResolver: PptxEditorAffectedSlidesResolver = affectedSlidePartPaths;
 
 /** @internal Configures the renderer selected by the active package conditional entry. */
 export function configurePptxEditorSessionRenderer(renderer: PptxEditorSvgRenderer): void {
   defaultPptxEditorSvgRenderer = renderer;
+}
+
+/** @internal Configures affected-slide resolution for integration tests. */
+export function configurePptxEditorSessionAffectedSlidesResolver(
+  resolver: PptxEditorAffectedSlidesResolver,
+): void {
+  defaultAffectedSlidesResolver = resolver;
 }
 
 export class PptxEditorSession {
@@ -227,11 +239,13 @@ export class PptxEditorSession {
   #slides: readonly PptxEditorSlideSvg[] = [];
   readonly #renderOptions: PptxEditorRenderOptions;
   readonly #renderToSvg: PptxEditorSvgRenderer;
+  readonly #resolveAffectedSlides: PptxEditorAffectedSlidesResolver;
 
   private constructor(source: PptxSourceModel, renderOptions: PptxEditorRenderOptions) {
     this.#session = createEditorSession(source);
     this.#renderOptions = renderOptions;
     this.#renderToSvg = defaultPptxEditorSvgRenderer;
+    this.#resolveAffectedSlides = defaultAffectedSlidesResolver;
   }
 
   static async create(
@@ -292,7 +306,7 @@ export class PptxEditorSession {
   }
 
   async #renderChangedSlides(before: PptxSourceModel): Promise<void> {
-    const affectedPartPaths = affectedSlidePartPaths(before, this.#session.document);
+    const affectedPartPaths = this.#resolveAffectedSlides(before, this.#session.document);
     await this.#renderSlides(affectedPartPaths);
   }
 

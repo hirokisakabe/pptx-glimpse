@@ -14,6 +14,7 @@ import { renderPptxSourceModelToSvg } from "./converter.js";
 import { createPptxEditorSession, isPptxEditorError, PptxEditorError } from "./index.js";
 import {
   affectedSlidePartPaths,
+  configurePptxEditorSessionAffectedSlidesResolver,
   configurePptxEditorSessionRenderer,
   type PptxEditorErrorCode,
 } from "./pptx-editor-session.js";
@@ -499,7 +500,7 @@ describe("PptxEditorSession", () => {
     }
   });
 
-  it("falls back to all slides when a document change cannot be scoped safely", async () => {
+  it("falls back to rendering all slides when a command change cannot be scoped safely", async () => {
     const before = readPptx(await buildTwoSlideFixture());
     const after = {
       ...before,
@@ -510,6 +511,33 @@ describe("PptxEditorSession", () => {
     };
 
     expect(affectedSlidePartPaths(before, after)).toBeUndefined();
+
+    const renderCalls: Array<readonly number[] | undefined> = [];
+    configurePptxEditorSessionAffectedSlidesResolver(() => undefined);
+    configurePptxEditorSessionRenderer((source, options) => {
+      renderCalls.push(options?.slides);
+      return renderPptxSourceModelToSvg(source, options);
+    });
+    try {
+      const editor = await createPptxEditorSession(await buildTwoSlideFixture(), {
+        skipSystemFonts: true,
+      });
+      const run = editor.shapes(2)[0]?.textBody?.paragraphs[0]?.runs[0];
+      if (run?.handle === undefined) throw new Error("text run handle not found");
+
+      await editor.apply({
+        kind: "replaceTextRunPlainText",
+        handle: run.handle,
+        text: "Fallback edited",
+      });
+
+      expect(renderCalls).toEqual([undefined, undefined]);
+      expect(editor.slides[0]?.svg).toContain("First");
+      expect(editor.slides[1]?.svg).toContain("Fallback edited");
+    } finally {
+      configurePptxEditorSessionAffectedSlidesResolver(affectedSlidePartPaths);
+      configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
+    }
   });
 
   it("rejects deleting the last slide without changing the editor state", async () => {
