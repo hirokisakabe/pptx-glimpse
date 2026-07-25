@@ -26,6 +26,7 @@ _Upload a .pptx file → get SVG/PNG output instantly_
 | Render PPTX slides as SVG or PNG in Node.js or the browser                      | [`pptx-glimpse`](#installation)                                                                                                  |
 | Read PPTX source data or derive a resolved, non-mutating computed view          | [`@pptx-glimpse/document`](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/README.md)                   |
 | Author a new PPTX, edit an existing PPTX, or write PPTX bytes with preservation | [`@pptx-glimpse/document`](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/README.md#choose-a-workflow) |
+| Build a headless command, selection, and undo/redo integration                  | [`@pptx-glimpse/editor`](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/editor/README.md)                       |
 
 `pptx-glimpse` is the rendering package and includes the SVG / PNG conversion APIs documented
 below. `@pptx-glimpse/document` is the lower-level OOXML document package for read, computed-view,
@@ -67,6 +68,21 @@ rather than pixel-perfect rendering of every PowerPoint feature.
 
 ```bash
 npm install pptx-glimpse
+```
+
+`pptx-glimpse` installs its compatible `@pptx-glimpse/document` and `@pptx-glimpse/editor`
+versions as transitive dependencies. The high-level conversion and browser editor APIs below do
+not require separate package installs.
+
+Install a lower-level package directly when your application imports it. Do not rely on package
+manager hoisting to make a transitive dependency importable:
+
+```bash
+# Import readPptx, writePptx, or other document APIs directly
+npm install @pptx-glimpse/document
+
+# Build directly on the headless editor command/session layer
+npm install @pptx-glimpse/document @pptx-glimpse/editor
 ```
 
 ## Usage
