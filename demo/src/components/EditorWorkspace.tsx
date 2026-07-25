@@ -85,6 +85,7 @@ export function EditorWorkspace({
   onOpenPptx,
   onOpenSample,
 }: EditorWorkspaceProps) {
+  const [downloadName, setDownloadName] = useState(() => fileStem(fileName));
   const [editor, setEditor] = useState<EditorSession | null>(null);
   const [slides, setSlides] = useState<PptxEditorSlideSvg[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -139,6 +140,10 @@ export function EditorWorkspace({
   }, [selectedShape]);
 
   const selectedRun = textRuns[selectedRunIndex];
+
+  useEffect(() => {
+    setDownloadName(fileStem(fileName));
+  }, [fileName]);
 
   const syncFromEditor = useCallback(
     (session: EditorSession, preferredIndex = currentIndex) => {
@@ -723,7 +728,7 @@ export function EditorWorkspace({
       );
       const link = document.createElement("a");
       link.href = href;
-      link.download = editedFileName(fileName);
+      link.download = downloadFileName(downloadName, fileName);
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(href), 0);
       dirtyRef.current = false;
@@ -734,7 +739,7 @@ export function EditorWorkspace({
       busyRef.current = false;
       setBusy(false);
     }
-  }, [editor, fileName, waitForDirectTextCommit]);
+  }, [downloadName, editor, fileName, waitForDirectTextCommit]);
 
   if (loadError !== "") {
     return (
@@ -757,7 +762,24 @@ export function EditorWorkspace({
     <section className="editor-workspace" aria-label="PPTX editor" data-testid="editor-workspace">
       <div className="editor-topbar">
         <div className="editor-file">
-          <strong title={fileName}>{fileName}</strong>
+          <label className="editor-file-name">
+            <span className="visually-hidden">Presentation file name</span>
+            <input
+              aria-label="Presentation file name"
+              disabled={busy}
+              maxLength={120}
+              spellCheck={false}
+              style={{
+                width: `${Math.min(Math.max(downloadName.length + 1, 8), 30).toString()}ch`,
+              }}
+              value={downloadName}
+              onBlur={() => {
+                if (downloadName.trim() === "") setDownloadName(fileStem(fileName));
+              }}
+              onChange={(event) => setDownloadName(event.target.value)}
+            />
+            <span aria-hidden="true">.pptx</span>
+          </label>
         </div>
         <div className="editor-status" data-testid="editor-status">
           {message === "" ? null : <span>{message}</span>}
@@ -1283,8 +1305,17 @@ function insertTextAtSelection(text: string): void {
   selection.addRange(range);
 }
 
-function editedFileName(fileName: string): string {
-  return fileName.replace(/\.pptx$/i, "") + ".edited.pptx";
+function fileStem(fileName: string): string {
+  return fileName.replace(/\.pptx$/i, "");
+}
+
+function downloadFileName(downloadName: string, fallbackFileName: string): string {
+  const normalized = downloadName
+    .trim()
+    .replace(/\.pptx$/i, "")
+    .replace(/[/:\\\u0000-\u001f]/g, "-")
+    .replace(/\.+$/g, "");
+  return `${normalized === "" ? fileStem(fallbackFileName) : normalized}.pptx`;
 }
 
 function commandMessage(

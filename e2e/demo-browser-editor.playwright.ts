@@ -84,7 +84,8 @@ test("opens the sample editor first and replaces it with an uploaded PPTX", asyn
 
   await page.goto(demoServer.url);
   await expect(page.getByTestId("editor-workspace")).toBeVisible();
-  await expect(page.getByText("editor-demo.pptx")).toBeVisible();
+  const fileNameInput = page.getByRole("textbox", { name: "Presentation file name" });
+  await expect(fileNameInput).toHaveValue("editor-demo");
   await expect(page.getByRole("button", { name: "Open PPTX" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Download PPTX" })).toBeVisible();
 
@@ -92,7 +93,7 @@ test("opens the sample editor first and replaces it with an uploaded PPTX", asyn
     .getByTestId("pptx-input")
     .setInputFiles(resolve(repoRoot, "shared-fixtures/real-product-page.pptx"));
   await expect(page.getByTestId("editor-workspace")).toBeVisible();
-  await expect(page.getByText("real-product-page.pptx")).toBeVisible();
+  await expect(fileNameInput).toHaveValue("real-product-page");
 
   await page.getByRole("button", { name: "Add text box" }).click();
   page.once("dialog", async (dialog) => {
@@ -100,7 +101,7 @@ test("opens the sample editor first and replaces it with an uploaded PPTX", asyn
     await dialog.dismiss();
   });
   await page.getByRole("button", { name: "Open sample" }).click();
-  await expect(page.getByText("real-product-page.pptx")).toBeVisible();
+  await expect(fileNameInput).toHaveValue("real-product-page");
 
   page.once("dialog", (dialog) => dialog.dismiss());
   await page.getByRole("link", { name: "Documentation" }).click();
@@ -111,13 +112,13 @@ test("opens the sample editor first and replaces it with an uploaded PPTX", asyn
     mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     buffer: Buffer.from("not a PPTX"),
   });
-  await expect(page.getByRole("alert")).toBeVisible();
-  await expect(page.getByText("real-product-page.pptx")).toBeVisible();
+  await expect(page.locator(".replacement-error")).toBeVisible();
+  await expect(fileNameInput).toHaveValue("real-product-page");
 
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Open sample" }).click();
   await expect(page.getByTestId("editor-workspace")).toBeVisible();
-  await expect(page.getByText("editor-demo.pptx")).toBeVisible();
+  await expect(fileNameInput).toHaveValue("editor-demo");
   await expect(
     page.getByRole("heading", { name: "pptx-glimpse browser editor demo" }),
   ).toBeAttached();
@@ -137,6 +138,9 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
 
     await page.goto(demoServer.url);
     await expect(page.getByTestId("editor-workspace")).toBeVisible();
+    const fileNameInput = page.getByRole("textbox", { name: "Presentation file name" });
+    await expect(fileNameInput).toHaveValue("editor-demo");
+    await fileNameInput.fill("browser-workshop");
 
     const slideFrame = page.getByTestId("editor-slide-frame");
     const firstEditableTextShape = page
@@ -190,7 +194,9 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
     await directTextRun.fill("Direct edit saved");
     const focusoutDownload = page.waitForEvent("download");
     await page.getByRole("button", { name: "Download PPTX" }).click();
-    await (await focusoutDownload).saveAs(focusoutSavedPath);
+    const focusoutDownloadedFile = await focusoutDownload;
+    expect(focusoutDownloadedFile.suggestedFilename()).toBe("browser-workshop.pptx");
+    await focusoutDownloadedFile.saveAs(focusoutSavedPath);
     await expect(directTextEditor).toHaveCount(0);
     await expect(slideFrame).toContainText("Direct edit saved");
     expect(
@@ -246,7 +252,9 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
 
     const download = page.waitForEvent("download");
     await page.getByRole("button", { name: "Download PPTX" }).click();
-    await (await download).saveAs(savedPath);
+    const downloadedFile = await download;
+    expect(downloadedFile.suggestedFilename()).toBe("browser-workshop.pptx");
+    await downloadedFile.saveAs(savedPath);
 
     const saved = readPptx(await readFile(savedPath));
     expect(shapeByText(saved, "Direct edit saved")).toBeDefined();

@@ -668,10 +668,41 @@ body {
   min-width: 0;
 }
 
-.editor-file strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.editor-file-name {
+  align-items: center;
+  display: flex;
+  font-weight: 700;
+  min-width: 0;
+}
+
+.editor-file-name input {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 700;
+  max-width: min(240px, 22vw);
+  min-width: 8ch;
+  padding: 6px 4px;
+}
+
+.editor-file-name input:hover {
+  border-color: var(--line);
+}
+
+.editor-file-name input:focus {
+  background: var(--surface);
+  border-color: var(--blueprint);
+  outline: 3px solid rgba(36, 84, 166, 0.14);
+}
+
+.editor-file-name input:disabled {
+  color: var(--muted);
+}
+
+.editor-file-name > span:last-child {
+  color: var(--muted);
 }
 
 .editor-status {
