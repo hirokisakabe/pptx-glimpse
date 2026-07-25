@@ -37,7 +37,7 @@ test.afterAll(async () => {
   demoServer = null;
 });
 
-test("links the toolkit demo to all public package documentation", async ({ page }) => {
+test("navigates the documentation guides and public package references", async ({ page }) => {
   if (demoServer === null) throw new Error("demo server was not started");
 
   await page.goto(demoServer.url);
@@ -47,6 +47,21 @@ test("links the toolkit demo to all public package documentation", async ({ page
 
   await expect(page).toHaveURL(`${demoServer.url}/docs`);
   await expect(page).toHaveTitle("Documentation | pptx-glimpse");
+  await expect(
+    page.getByRole("heading", { name: "From PowerPoint bytes to an application." }),
+  ).toBeVisible();
+  const docsNavigation = page
+    .locator(".docs-sidebar")
+    .getByRole("navigation", { name: "Documentation", exact: true });
+  await expect(docsNavigation).toBeVisible();
+  await expect(docsNavigation.getByRole("link", { name: "Overview", exact: true })).toHaveAttribute(
+    "aria-current",
+    "page",
+  );
+
+  await docsNavigation.getByRole("link", { name: "Packages", exact: true }).click();
+  await expect(page).toHaveURL(`${demoServer.url}/docs/packages`);
+  await expect(page).toHaveTitle("Choose a package | pptx-glimpse");
   await expect(page.getByRole("heading", { name: "pptx-glimpse", exact: true })).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "@pptx-glimpse/document", exact: true }),
@@ -54,28 +69,33 @@ test("links the toolkit demo to all public package documentation", async ({ page
   await expect(
     page.getByRole("heading", { name: "@pptx-glimpse/editor", exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole("link", { name: /Start with the toolkit/ })).toHaveAttribute(
-    "href",
+  for (const href of [
     "https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/core/README.md",
-  );
-  await expect(page.getByRole("link", { name: /Choose a document workflow/ })).toHaveAttribute(
-    "href",
     "https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/README.md",
-  );
-  await expect(page.getByRole("link", { name: /Build a headless editor/ })).toHaveAttribute(
-    "href",
     "https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/editor/README.md",
-  );
+  ]) {
+    await expect(page.locator(`a[href="${href}"]`)).toBeVisible();
+  }
 
-  await page.setViewportSize({ width: 900, height: 720 });
-  await expect(page.locator(".package-routes")).toHaveCSS(
-    "grid-template-columns",
-    /^[0-9.]+px [0-9.]+px$/,
-  );
+  await page.setViewportSize({ width: 390, height: 720 });
+  await expect(page.locator(".docs-sidebar")).toBeHidden();
+  await expect(page.locator(".docs-mobile-navigation")).toBeVisible();
 
   const sitemapResponse = await page.request.get(`${demoServer.url}/sitemap.xml`);
   expect(sitemapResponse.ok()).toBe(true);
-  expect(await sitemapResponse.text()).toContain("https://glimpse.pptx.app/docs");
+  const sitemap = await sitemapResponse.text();
+  for (const route of [
+    "/docs",
+    "/docs/getting-started",
+    "/docs/rendering",
+    "/docs/editing",
+    "/docs/browser",
+    "/docs/nodejs",
+    "/docs/api",
+    "/docs/packages",
+  ]) {
+    expect(sitemap).toContain(`https://glimpse.pptx.app${route}`);
+  }
 });
 
 test("opens the sample editor first and replaces it with an uploaded PPTX", async ({ page }) => {
