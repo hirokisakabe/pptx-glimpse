@@ -67,15 +67,10 @@ dependency direction.
 - [Feature support](https://glimpse.pptx.app/docs/feature-support)
 - [High-level API](https://glimpse.pptx.app/docs/api)
 
-## Development
+## Contributing
 
-Repository setup, architecture, tests, and documentation conventions are described in the
-[repository documentation](docs/README.md). To start the local editor preview:
-
-```bash
-npm install
-npm run dev -- presentation.pptx
-```
+See the [development setup guide](docs/development/setup.md) for repository setup, common
+validation commands, and the local editor preview.
 
 ## License
 
