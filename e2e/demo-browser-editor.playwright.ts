@@ -182,7 +182,7 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
       page.getByTestId("editor-thumbnail-grip").nth(1),
       thumbnailsBeforeSort.nth(2),
     );
-    await expect(page.getByTestId("editor-status")).toContainText("Slide moved to position 3");
+    await expect(page.getByTestId("editor-status")).toContainText("moved to position 3 of 3");
     await expect(page.getByTestId("editor-thumbnail").nth(2)).toContainText(
       "A SMALL, EDITABLE SYSTEM",
     );
@@ -191,17 +191,19 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
     await expect(page.getByTestId("editor-thumbnail").nth(1)).toContainText(
       "A SMALL, EDITABLE SYSTEM",
     );
+    await expect(page.getByTestId("editor-thumbnail").nth(1)).toHaveClass(/active/);
     await page.getByRole("button", { name: "Redo" }).click();
     await expect(page.getByTestId("editor-thumbnail").nth(2)).toContainText(
       "A SMALL, EDITABLE SYSTEM",
     );
+    await expect(page.getByTestId("editor-thumbnail").nth(2)).toHaveClass(/active/);
     await page.getByTestId("editor-thumbnail").nth(2).press("Alt+ArrowUp");
-    await expect(page.getByTestId("editor-status")).toContainText("Slide moved to position 2");
+    await expect(page.getByTestId("editor-status")).toContainText("moved to position 2 of 3");
     await expect(page.getByTestId("editor-thumbnail").nth(1)).toContainText(
       "A SMALL, EDITABLE SYSTEM",
     );
     await page.getByTestId("editor-thumbnail").nth(1).press("Alt+ArrowDown");
-    await expect(page.getByTestId("editor-status")).toContainText("Slide moved to position 3");
+    await expect(page.getByTestId("editor-status")).toContainText("moved to position 3 of 3");
     await page.getByTestId("editor-thumbnail").first().click();
     await expect(page.getByTestId("editor-thumbnail").first()).toHaveClass(/active/);
 

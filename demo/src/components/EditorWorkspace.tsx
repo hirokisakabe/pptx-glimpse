@@ -84,6 +84,8 @@ interface SlideSortDragState {
   readonly pointerId: number;
 }
 
+type PreferredSlideIndex = number | ((session: EditorSession) => number);
+
 type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
 export function EditorWorkspace({
@@ -237,7 +239,7 @@ export function EditorWorkspace({
     async (
       operation: (session: EditorSession) => Promise<string | void> | string | void,
       success: string,
-      preferredIndex = currentIndex,
+      preferredIndex: PreferredSlideIndex = currentIndex,
     ) => {
       if (editor === null) return;
       const directTextCommit = directTextCommitPromiseRef.current;
@@ -248,7 +250,9 @@ export function EditorWorkspace({
       setOperationError("");
       try {
         const messageOverride = await operation(editor);
-        syncFromEditor(editor, preferredIndex);
+        const nextIndex =
+          typeof preferredIndex === "function" ? preferredIndex(editor) : preferredIndex;
+        syncFromEditor(editor, nextIndex);
         dirtyRef.current = editor.history.undoDepth !== cleanUndoDepthRef.current;
         setMessage(messageOverride ?? success);
       } catch (error) {
@@ -612,21 +616,27 @@ export function EditorWorkspace({
     );
   }, [currentIndex, currentSlide, runEditorOperation, slides.length]);
 
-  const handleUndo = useCallback(
-    () =>
-      runEditorOperation(async (session) => {
+  const handleUndo = useCallback(() => {
+    const selectedSlideHandle = currentSlide?.handle;
+    return runEditorOperation(
+      async (session) => {
         await session.undo();
-      }, "Undone"),
-    [runEditorOperation],
-  );
+      },
+      "Undone",
+      (session) => findSlideIndexByHandle(session.slides, selectedSlideHandle, currentIndex),
+    );
+  }, [currentIndex, currentSlide?.handle, runEditorOperation]);
 
-  const handleRedo = useCallback(
-    () =>
-      runEditorOperation(async (session) => {
+  const handleRedo = useCallback(() => {
+    const selectedSlideHandle = currentSlide?.handle;
+    return runEditorOperation(
+      async (session) => {
         await session.redo();
-      }, "Redone"),
-    [runEditorOperation],
-  );
+      },
+      "Redone",
+      (session) => findSlideIndexByHandle(session.slides, selectedSlideHandle, currentIndex),
+    );
+  }, [currentIndex, currentSlide?.handle, runEditorOperation]);
 
   const waitForDirectTextCommit = useCallback(async () => {
     const commit = directTextCommitPromiseRef.current;
@@ -697,8 +707,8 @@ export function EditorWorkspace({
         async (session) => {
           await session.apply({ kind: "moveSlide", handle: slideHandle, toIndex });
         },
-        `Slide moved to position ${(toIndex + 1).toString()}`,
-        toIndex,
+        `Slide ${slide.slideNumber.toString()} moved to position ${(toIndex + 1).toString()} of ${slides.length.toString()}`,
+        (session) => findSlideIndexByHandle(session.slides, slideHandle, toIndex),
       );
     },
     [runEditorOperation, slides],
@@ -714,6 +724,23 @@ export function EditorWorkspace({
     },
     [handleMoveSlide],
   );
+
+  const clearSlideSortDrag = useCallback((pointerId?: number) => {
+    const drag = slideSortDragRef.current;
+    if (drag === null || (pointerId !== undefined && drag.pointerId !== pointerId)) return;
+    slideSortDragRef.current = null;
+    setDraggedSlideIndex(null);
+    setSlideDropTarget(null);
+  }, []);
+
+  useEffect(() => {
+    const handleBlur = () => clearSlideSortDrag();
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("blur", handleBlur);
+      slideSortDragRef.current = null;
+    };
+  }, [clearSlideSortDrag]);
 
   const handleSlideKeyDown = useCallback(
     (index: number, event: React.KeyboardEvent<HTMLButtonElement>) => {
@@ -833,7 +860,7 @@ export function EditorWorkspace({
             <span aria-hidden="true">.pptx</span>
           </label>
         </div>
-        <div className="editor-status" data-testid="editor-status">
+        <div className="editor-status" data-testid="editor-status" role="status">
           {message === "" ? null : <span>{message}</span>}
           {busy ? <span>Working...</span> : null}
         </div>
@@ -877,6 +904,7 @@ export function EditorWorkspace({
                 .join(" ")}
               data-slide-index={index}
               data-testid="editor-thumbnail"
+              aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
               key={
                 slide.handle === undefined ? `slide-${index.toString()}` : handleKey(slide.handle)
               }
@@ -893,13 +921,10 @@ export function EditorWorkspace({
                     event.preventDefault();
                     event.stopPropagation();
                   }}
-                  onPointerCancel={() => {
-                    slideSortDragRef.current = null;
-                    setDraggedSlideIndex(null);
-                    setSlideDropTarget(null);
-                  }}
+                  onLostPointerCapture={(event) => clearSlideSortDrag(event.pointerId)}
+                  onPointerCancel={(event) => clearSlideSortDrag(event.pointerId)}
                   onPointerDown={(event) => {
-                    if (busy || slide.handle === undefined) {
+                    if (busy || slide.handle === undefined || slideSortDragRef.current !== null) {
                       event.preventDefault();
                       return;
                     }
@@ -914,15 +939,13 @@ export function EditorWorkspace({
                     const drag = slideSortDragRef.current;
                     if (drag === null || drag.pointerId !== event.pointerId) return;
                     const target = slideDropTargetAtPoint(event.clientX, event.clientY);
-                    if (target !== null) setSlideDropTarget(target);
+                    setSlideDropTarget(target);
                   }}
                   onPointerUp={(event) => {
                     const drag = slideSortDragRef.current;
                     if (drag === null || drag.pointerId !== event.pointerId) return;
                     const target = slideDropTargetAtPoint(event.clientX, event.clientY);
-                    slideSortDragRef.current = null;
-                    setDraggedSlideIndex(null);
-                    setSlideDropTarget(null);
+                    clearSlideSortDrag(event.pointerId);
                     if (target !== null) handleSlideDrop(drag.fromIndex, target);
                   }}
                   aria-hidden="true"
@@ -1339,6 +1362,18 @@ function handleKey(handle: SourceHandle): string {
     handle.relationshipId ?? "",
     handle.orderingSlot === undefined ? "" : String(handle.orderingSlot),
   ].join("\u0000");
+}
+
+function findSlideIndexByHandle(
+  slides: readonly PptxEditorSlideSvg[],
+  handle: SourceHandle | undefined,
+  fallback: number,
+): number {
+  if (handle === undefined) return fallback;
+  const index = slides.findIndex(
+    (slide) => slide.handle !== undefined && handleKey(slide.handle) === handleKey(handle),
+  );
+  return index === -1 ? fallback : index;
 }
 
 function pxToEmu(value: number): ShapeTransformCommand["offsetX"] {
