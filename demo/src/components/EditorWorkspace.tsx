@@ -74,6 +74,18 @@ interface Point {
   readonly y: number;
 }
 
+interface SlideDropTarget {
+  readonly index: number;
+  readonly edge: "before" | "after";
+}
+
+interface SlideSortDragState {
+  readonly fromIndex: number;
+  readonly pointerId: number;
+}
+
+type PreferredSlideIndex = number | ((session: EditorSession) => number);
+
 type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
 export function EditorWorkspace({
@@ -107,12 +119,15 @@ export function EditorWorkspace({
   const [busy, setBusy] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [operationError, setOperationError] = useState("");
+  const [draggedSlideIndex, setDraggedSlideIndex] = useState<number | null>(null);
+  const [slideDropTarget, setSlideDropTarget] = useState<SlideDropTarget | null>(null);
   const overlayRef = useRef<SVGSVGElement | null>(null);
   const slideFrameRef = useRef<HTMLDivElement | null>(null);
   const directTextEditorRef = useRef<HTMLDivElement | null>(null);
   const directTextEditorStateRef = useRef<DirectTextEditorState | null>(null);
   const directTextCommitPromiseRef = useRef<Promise<boolean> | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
+  const slideSortDragRef = useRef<SlideSortDragState | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const busyRef = useRef(true);
   const dirtyRef = useRef(false);
@@ -224,7 +239,7 @@ export function EditorWorkspace({
     async (
       operation: (session: EditorSession) => Promise<string | void> | string | void,
       success: string,
-      preferredIndex = currentIndex,
+      preferredIndex: PreferredSlideIndex = currentIndex,
     ) => {
       if (editor === null) return;
       const directTextCommit = directTextCommitPromiseRef.current;
@@ -235,7 +250,9 @@ export function EditorWorkspace({
       setOperationError("");
       try {
         const messageOverride = await operation(editor);
-        syncFromEditor(editor, preferredIndex);
+        const nextIndex =
+          typeof preferredIndex === "function" ? preferredIndex(editor) : preferredIndex;
+        syncFromEditor(editor, nextIndex);
         dirtyRef.current = editor.history.undoDepth !== cleanUndoDepthRef.current;
         setMessage(messageOverride ?? success);
       } catch (error) {
@@ -599,21 +616,27 @@ export function EditorWorkspace({
     );
   }, [currentIndex, currentSlide, runEditorOperation, slides.length]);
 
-  const handleUndo = useCallback(
-    () =>
-      runEditorOperation(async (session) => {
+  const handleUndo = useCallback(() => {
+    const selectedSlideHandle = currentSlide?.handle;
+    return runEditorOperation(
+      async (session) => {
         await session.undo();
-      }, "Undone"),
-    [runEditorOperation],
-  );
+      },
+      "Undone",
+      (session) => findSlideIndexByHandle(session.slides, selectedSlideHandle, currentIndex),
+    );
+  }, [currentIndex, currentSlide?.handle, runEditorOperation]);
 
-  const handleRedo = useCallback(
-    () =>
-      runEditorOperation(async (session) => {
+  const handleRedo = useCallback(() => {
+    const selectedSlideHandle = currentSlide?.handle;
+    return runEditorOperation(
+      async (session) => {
         await session.redo();
-      }, "Redone"),
-    [runEditorOperation],
-  );
+      },
+      "Redone",
+      (session) => findSlideIndexByHandle(session.slides, selectedSlideHandle, currentIndex),
+    );
+  }, [currentIndex, currentSlide?.handle, runEditorOperation]);
 
   const waitForDirectTextCommit = useCallback(async () => {
     const commit = directTextCommitPromiseRef.current;
@@ -672,6 +695,62 @@ export function EditorWorkspace({
       if (await waitForDirectTextCommit()) setCurrentIndex(index);
     },
     [waitForDirectTextCommit],
+  );
+
+  const handleMoveSlide = useCallback(
+    async (fromIndex: number, toIndex: number) => {
+      if (fromIndex === toIndex) return;
+      const slide = slides[fromIndex];
+      if (slide?.handle === undefined) return;
+      const slideHandle = slide.handle;
+      await runEditorOperation(
+        async (session) => {
+          await session.apply({ kind: "moveSlide", handle: slideHandle, toIndex });
+        },
+        `Slide ${slide.slideNumber.toString()} moved to position ${(toIndex + 1).toString()} of ${slides.length.toString()}`,
+        (session) => findSlideIndexByHandle(session.slides, slideHandle, toIndex),
+      );
+    },
+    [runEditorOperation, slides],
+  );
+
+  const handleSlideDrop = useCallback(
+    (fromIndex: number, target: SlideDropTarget) => {
+      const insertionIndex = target.index + (target.edge === "after" ? 1 : 0);
+      const toIndex = insertionIndex > fromIndex ? insertionIndex - 1 : insertionIndex;
+      setDraggedSlideIndex(null);
+      setSlideDropTarget(null);
+      void handleMoveSlide(fromIndex, toIndex);
+    },
+    [handleMoveSlide],
+  );
+
+  const clearSlideSortDrag = useCallback((pointerId?: number) => {
+    const drag = slideSortDragRef.current;
+    if (drag === null || (pointerId !== undefined && drag.pointerId !== pointerId)) return;
+    slideSortDragRef.current = null;
+    setDraggedSlideIndex(null);
+    setSlideDropTarget(null);
+  }, []);
+
+  useEffect(() => {
+    const handleBlur = () => clearSlideSortDrag();
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("blur", handleBlur);
+      slideSortDragRef.current = null;
+    };
+  }, [clearSlideSortDrag]);
+
+  const handleSlideKeyDown = useCallback(
+    (index: number, event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+      const toIndex = index + (event.key === "ArrowUp" ? -1 : 1);
+      if (toIndex < 0 || toIndex >= slides.length) return;
+      event.preventDefault();
+      void handleMoveSlide(index, toIndex);
+    },
+    [handleMoveSlide, slides.length],
   );
 
   const handleOpenImageInput = useCallback(async () => {
@@ -781,7 +860,7 @@ export function EditorWorkspace({
             <span aria-hidden="true">.pptx</span>
           </label>
         </div>
-        <div className="editor-status" data-testid="editor-status">
+        <div className="editor-status" data-testid="editor-status" role="status">
           {message === "" ? null : <span>{message}</span>}
           {busy ? <span>Working...</span> : null}
         </div>
@@ -814,14 +893,67 @@ export function EditorWorkspace({
         <aside className="editor-thumbnails" aria-label="Slides">
           {slides.map((slide, index) => (
             <button
-              className={`editor-thumbnail${index === currentIndex ? " active" : ""}`}
+              aria-label={`Slide ${slide.slideNumber.toString()}, position ${(index + 1).toString()} of ${slides.length.toString()}. Drag to reorder, or press Alt with Arrow Up or Arrow Down.`}
+              className={[
+                "editor-thumbnail",
+                index === currentIndex ? "active" : "",
+                index === draggedSlideIndex ? "dragging" : "",
+                slideDropTarget?.index === index ? `drop-${slideDropTarget.edge}` : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              data-slide-index={index}
               data-testid="editor-thumbnail"
-              key={`${slide.slideNumber.toString()}-${index.toString()}`}
+              aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+              key={
+                slide.handle === undefined ? `slide-${index.toString()}` : handleKey(slide.handle)
+              }
               type="button"
               disabled={busy}
               onClick={() => void handleSelectSlide(index)}
+              onKeyDown={(event) => handleSlideKeyDown(index, event)}
             >
-              <span>Slide {slide.slideNumber}</span>
+              <span className="editor-thumbnail-label">
+                <span
+                  className="editor-thumbnail-grip"
+                  data-testid="editor-thumbnail-grip"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  onLostPointerCapture={(event) => clearSlideSortDrag(event.pointerId)}
+                  onPointerCancel={(event) => clearSlideSortDrag(event.pointerId)}
+                  onPointerDown={(event) => {
+                    if (busy || slide.handle === undefined || slideSortDragRef.current !== null) {
+                      event.preventDefault();
+                      return;
+                    }
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    slideSortDragRef.current = { fromIndex: index, pointerId: event.pointerId };
+                    setDraggedSlideIndex(index);
+                    setSlideDropTarget(null);
+                  }}
+                  onPointerMove={(event) => {
+                    const drag = slideSortDragRef.current;
+                    if (drag === null || drag.pointerId !== event.pointerId) return;
+                    const target = slideDropTargetAtPoint(event.clientX, event.clientY);
+                    setSlideDropTarget(target);
+                  }}
+                  onPointerUp={(event) => {
+                    const drag = slideSortDragRef.current;
+                    if (drag === null || drag.pointerId !== event.pointerId) return;
+                    const target = slideDropTargetAtPoint(event.clientX, event.clientY);
+                    clearSlideSortDrag(event.pointerId);
+                    if (target !== null) handleSlideDrop(drag.fromIndex, target);
+                  }}
+                  aria-hidden="true"
+                >
+                  ⠿
+                </span>
+                <span>Slide {slide.slideNumber}</span>
+              </span>
               <span dangerouslySetInnerHTML={{ __html: slide.svg }} />
             </button>
           ))}
@@ -1232,6 +1364,18 @@ function handleKey(handle: SourceHandle): string {
   ].join("\u0000");
 }
 
+function findSlideIndexByHandle(
+  slides: readonly PptxEditorSlideSvg[],
+  handle: SourceHandle | undefined,
+  fallback: number,
+): number {
+  if (handle === undefined) return fallback;
+  const index = slides.findIndex(
+    (slide) => slide.handle !== undefined && handleKey(slide.handle) === handleKey(handle),
+  );
+  return index === -1 ? fallback : index;
+}
+
 function pxToEmu(value: number): ShapeTransformCommand["offsetX"] {
   return Math.round(value * EMU_PER_PIXEL) as ShapeTransformCommand["offsetX"];
 }
@@ -1281,6 +1425,19 @@ function directTextEditorStyle(
 
 function cssAttributeValue(value: string): string {
   return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+}
+
+function slideDropTargetAtPoint(clientX: number, clientY: number): SlideDropTarget | null {
+  const element = document.elementFromPoint(clientX, clientY);
+  const thumbnail = element?.closest<HTMLElement>("[data-slide-index]");
+  if (thumbnail === undefined || thumbnail === null) return null;
+  const index = Number.parseInt(thumbnail.dataset.slideIndex ?? "", 10);
+  if (!Number.isInteger(index)) return null;
+  const bounds = thumbnail.getBoundingClientRect();
+  return {
+    index,
+    edge: clientY < bounds.top + bounds.height / 2 ? "before" : "after",
+  };
 }
 
 function selectElementContents(element: HTMLElement): void {
