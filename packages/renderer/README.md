@@ -22,8 +22,9 @@ Internal exports and model contracts may change without notice. Public consumers
 rendering and font APIs exported from
 [`pptx-glimpse`](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/core/README.md).
 
-See the [project architecture](https://github.com/hirokisakabe/pptx-glimpse#readme) for the public
-package choices.
+See the [root README](https://github.com/hirokisakabe/pptx-glimpse#readme) for public package
+choices and the [architecture overview](../../docs/architecture/overview.md) for repository
+package boundaries.
 
 ## License
 
