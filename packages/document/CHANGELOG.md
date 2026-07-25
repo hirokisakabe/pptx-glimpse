@@ -1,5 +1,12 @@
 # @pptx-glimpse/document
 
+## 0.12.1
+
+### Patch Changes
+
+- ffa4e0c: Add package-specific English README guidance and align public package metadata with the current
+  rendering, document, and editing responsibilities.
+
 ## 0.12.0
 
 ### Minor Changes
