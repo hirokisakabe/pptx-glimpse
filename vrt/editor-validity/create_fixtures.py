@@ -243,6 +243,39 @@ def create_editor_validity_image_fixture(filename, image_base64):
     print(f"  Created: {filename}")
 
 
+def create_editor_validity_table_text_fixture(filename, text):
+    """Fixture pair for existing Table cell text replacement validity checks."""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    title = slide.shapes.add_textbox(Inches(0.4), Inches(0.25), Inches(9.2), Inches(0.5))
+    title.text_frame.text = "LibreOffice editor validity: Table cell text"
+    title.text_frame.paragraphs[0].runs[0].font.size = Pt(18)
+
+    table = slide.shapes.add_table(
+        2,
+        2,
+        Inches(1.0),
+        Inches(1.3),
+        Inches(8.0),
+        Inches(2.2),
+    ).table
+    values = [[text, "Unedited sibling"], ["Preserved row", "Preserved cell"]]
+    for row_index, row in enumerate(table.rows):
+        for column_index, cell in enumerate(row.cells):
+            cell.text = values[row_index][column_index]
+            paragraph = cell.text_frame.paragraphs[0]
+            paragraph.alignment = PP_ALIGN.CENTER
+            run = paragraph.runs[0]
+            run.font.name = "Liberation Sans"
+            run.font.size = Pt(22)
+            run.font.bold = row_index == 0
+            run.font.color.rgb = RGBColor(0x1F, 0x4E, 0x79)
+
+    prs.save(os.path.join(OUTPUT_DIR, filename))
+    print(f"  Created: {filename}")
+
+
 def create_editor_validity_fixtures():
     """PPTX source / expected pairs consumed by editor-validity.test.ts."""
     create_editor_validity_text_fixture(
@@ -290,6 +323,14 @@ def create_editor_validity_fixtures():
     create_editor_validity_image_fixture(
         "editor-validity-image-expected.pptx",
         "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGNkYPjPAANMcBZeDgAx0wEH1s7nlgAAAABJRU5ErkJggg==",
+    )
+    create_editor_validity_table_text_fixture(
+        "editor-validity-table-text-source.pptx",
+        "Original LibreOffice table text",
+    )
+    create_editor_validity_table_text_fixture(
+        "editor-validity-table-text-expected.pptx",
+        "Edited LibreOffice table text",
     )
 
 

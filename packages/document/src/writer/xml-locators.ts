@@ -7,8 +7,13 @@ import type {
 import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 
 export interface TextRunLocator {
+  readonly ownerKind: "shape" | "table";
   readonly shapeNodeId?: string;
   readonly shapeOrderingSlot?: number;
+  readonly tableNodeId?: string;
+  readonly tableOrderingSlot?: number;
+  readonly rowIndex?: number;
+  readonly cellIndex?: number;
   readonly paragraphIndex: number;
   readonly runIndex: number;
 }
@@ -31,6 +36,7 @@ export function parseTextRunLocator(
   const byShapeId = /^text:shape:(.+):p:(\d+):r:(\d+)$/.exec(value);
   if (byShapeId !== null) {
     return {
+      ownerKind: "shape",
       shapeNodeId: byShapeId[1],
       paragraphIndex: Number(byShapeId[2]),
       runIndex: Number(byShapeId[3]),
@@ -40,9 +46,34 @@ export function parseTextRunLocator(
   const byShapeSlot = /^text:shapeSlot:(\d+):p:(\d+):r:(\d+)$/.exec(value);
   if (byShapeSlot !== null) {
     return {
+      ownerKind: "shape",
       shapeOrderingSlot: Number(byShapeSlot[1]),
       paragraphIndex: Number(byShapeSlot[2]),
       runIndex: Number(byShapeSlot[3]),
+    };
+  }
+
+  const byTableId = /^text:table:(.+):row:(\d+):cell:(\d+):p:(\d+):r:(\d+)$/.exec(value);
+  if (byTableId !== null) {
+    return {
+      ownerKind: "table",
+      tableNodeId: byTableId[1],
+      rowIndex: Number(byTableId[2]),
+      cellIndex: Number(byTableId[3]),
+      paragraphIndex: Number(byTableId[4]),
+      runIndex: Number(byTableId[5]),
+    };
+  }
+
+  const byTableSlot = /^text:tableSlot:(\d+):row:(\d+):cell:(\d+):p:(\d+):r:(\d+)$/.exec(value);
+  if (byTableSlot !== null) {
+    return {
+      ownerKind: "table",
+      tableOrderingSlot: Number(byTableSlot[1]),
+      rowIndex: Number(byTableSlot[2]),
+      cellIndex: Number(byTableSlot[3]),
+      paragraphIndex: Number(byTableSlot[4]),
+      runIndex: Number(byTableSlot[5]),
     };
   }
 
@@ -56,6 +87,7 @@ export function parseParagraphLocator(
   const byShapeId = /^text:shape:(.+):p:(\d+)$/.exec(value);
   if (byShapeId !== null) {
     return {
+      ownerKind: "shape",
       shapeNodeId: byShapeId[1],
       paragraphIndex: Number(byShapeId[2]),
     };
@@ -64,8 +96,31 @@ export function parseParagraphLocator(
   const byShapeSlot = /^text:shapeSlot:(\d+):p:(\d+)$/.exec(value);
   if (byShapeSlot !== null) {
     return {
+      ownerKind: "shape",
       shapeOrderingSlot: Number(byShapeSlot[1]),
       paragraphIndex: Number(byShapeSlot[2]),
+    };
+  }
+
+  const byTableId = /^text:table:(.+):row:(\d+):cell:(\d+):p:(\d+)$/.exec(value);
+  if (byTableId !== null) {
+    return {
+      ownerKind: "table",
+      tableNodeId: byTableId[1],
+      rowIndex: Number(byTableId[2]),
+      cellIndex: Number(byTableId[3]),
+      paragraphIndex: Number(byTableId[4]),
+    };
+  }
+
+  const byTableSlot = /^text:tableSlot:(\d+):row:(\d+):cell:(\d+):p:(\d+)$/.exec(value);
+  if (byTableSlot !== null) {
+    return {
+      ownerKind: "table",
+      tableOrderingSlot: Number(byTableSlot[1]),
+      rowIndex: Number(byTableSlot[2]),
+      cellIndex: Number(byTableSlot[3]),
+      paragraphIndex: Number(byTableSlot[4]),
     };
   }
 
@@ -76,6 +131,7 @@ export function locateShape(
   spTree: XmlNode | undefined,
   locator: TextRunLocator | ParagraphTextLocator,
 ): XmlNode | undefined {
+  if (locator.ownerKind !== "shape") return undefined;
   const shapes = getChildArray(spTree, "sp");
   if (locator.shapeNodeId !== undefined) {
     return shapes.find(
@@ -84,7 +140,30 @@ export function locateShape(
     );
   }
   if (locator.shapeOrderingSlot === undefined) return undefined;
-  return getShapeByOrderingSlot(spTree, locator.shapeOrderingSlot);
+  const candidate = getShapeTreeNodeByOrderingSlot(spTree, locator.shapeOrderingSlot);
+  return candidate !== undefined && getChild(candidate, "nvSpPr") !== undefined
+    ? candidate
+    : undefined;
+}
+
+export function locateTable(
+  spTree: XmlNode | undefined,
+  locator: TextRunLocator | ParagraphTextLocator,
+): XmlNode | undefined {
+  if (locator.ownerKind !== "table") return undefined;
+  const frames = getChildArray(spTree, "graphicFrame");
+  if (locator.tableNodeId !== undefined) {
+    return frames.find(
+      (frame) =>
+        getAttr(getChild(getChild(frame, "nvGraphicFramePr"), "cNvPr"), "id") ===
+        locator.tableNodeId,
+    );
+  }
+  if (locator.tableOrderingSlot === undefined) return undefined;
+  const candidate = getShapeTreeNodeByOrderingSlot(spTree, locator.tableOrderingSlot);
+  return candidate !== undefined && getChild(candidate, "nvGraphicFramePr") !== undefined
+    ? candidate
+    : undefined;
 }
 
 export function locateShapeTreeNode(
@@ -129,7 +208,7 @@ function getShapeTreeNodes(value: unknown): XmlNode[] {
   return items.map((item) => unsafeOoxmlBoundaryAssertion<XmlNode>(item));
 }
 
-function getShapeByOrderingSlot(
+function getShapeTreeNodeByOrderingSlot(
   spTree: XmlNode | undefined,
   orderingSlot: number,
 ): XmlNode | undefined {
@@ -145,7 +224,7 @@ function getShapeByOrderingSlot(
     const items = Array.isArray(value) ? value : [value];
     for (const item of items) {
       if (currentSlot === orderingSlot) {
-        return local === "sp" ? unsafeOoxmlBoundaryAssertion<XmlNode>(item) : undefined;
+        return unsafeOoxmlBoundaryAssertion<XmlNode>(item);
       }
       currentSlot++;
     }

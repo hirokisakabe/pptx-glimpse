@@ -13,7 +13,9 @@ import type {
   SourceRunProperties,
   SourceShape,
   SourceSlide,
+  SourceTable,
   SourceTextAlign,
+  SourceTextBody,
   SourceTextRun,
 } from "./index.js";
 
@@ -91,9 +93,10 @@ export function findTextRunBySourceHandle(
 ): SourceTextRun | undefined {
   for (const slide of source.slides) {
     for (const shape of slide.shapes) {
-      if (shape.kind !== "shape") continue;
-      const run = findTextRunInShape(shape, handle);
-      if (run !== undefined) return run;
+      for (const textBody of textBodiesInShape(shape)) {
+        const run = findTextRunInTextBody(textBody, handle);
+        if (run !== undefined) return run;
+      }
     }
   }
   return undefined;
@@ -105,9 +108,10 @@ export function findParagraphBySourceHandle(
 ): SourceParagraph | undefined {
   for (const slide of source.slides) {
     for (const shape of slide.shapes) {
-      if (shape.kind !== "shape") continue;
-      const paragraph = findParagraphInShape(shape, handle);
-      if (paragraph !== undefined) return paragraph;
+      for (const textBody of textBodiesInShape(shape)) {
+        const paragraph = findParagraphInTextBody(textBody, handle);
+        if (paragraph !== undefined) return paragraph;
+      }
     }
   }
   return undefined;
@@ -374,27 +378,36 @@ function mapTextBodyParagraphs(
   const slides = source.slides.map((slide) => {
     let slideChanged = false;
     const shapes = slide.shapes.map((shape) => {
-      if (shape.kind !== "shape" || shape.textBody === undefined) return shape;
-
-      let shapeChanged = false;
-      const paragraphs = shape.textBody.paragraphs.map((paragraph) => {
-        const result = mapParagraph(paragraph);
+      if (shape.kind === "shape" && shape.textBody !== undefined) {
+        const result = mapTextBody(shape.textBody, mapParagraph);
         if (result.matched) matched = true;
-        if (result.paragraph === paragraph) return paragraph;
+        if (!result.changed) return shape;
         changed = true;
-        shapeChanged = true;
         slideChanged = true;
-        return result.paragraph;
-      });
-
-      if (!shapeChanged) return shape;
-      return {
-        ...shape,
-        textBody: {
-          ...shape.textBody,
-          paragraphs,
-        },
-      } satisfies SourceShape;
+        return { ...shape, textBody: result.textBody } satisfies SourceShape;
+      }
+      if (shape.kind === "table") {
+        let tableChanged = false;
+        const rows = shape.table.rows.map((row) => {
+          let rowChanged = false;
+          const cells = row.cells.map((cell) => {
+            if (cell.textBody === undefined) return cell;
+            const result = mapTextBody(cell.textBody, mapParagraph);
+            if (result.matched) matched = true;
+            if (!result.changed) return cell;
+            changed = true;
+            slideChanged = true;
+            tableChanged = true;
+            rowChanged = true;
+            return { ...cell, textBody: result.textBody };
+          });
+          return rowChanged ? { ...row, cells } : row;
+        });
+        return tableChanged
+          ? ({ ...shape, table: { ...shape.table, rows } } satisfies SourceTable)
+          : shape;
+      }
+      return shape;
     });
 
     return slideChanged ? { ...slide, shapes } : slide;
@@ -431,8 +444,45 @@ function patchParagraphProperties(
   return Object.keys(next).length > 0 ? next : undefined;
 }
 
-function findTextRunInShape(shape: SourceShape, handle: SourceHandle): SourceTextRun | undefined {
-  for (const paragraph of shape.textBody?.paragraphs ?? []) {
+interface TextBodyMappingResult {
+  readonly textBody: SourceTextBody;
+  readonly matched: boolean;
+  readonly changed: boolean;
+}
+
+function mapTextBody(
+  textBody: SourceTextBody,
+  mapParagraph: (paragraph: SourceParagraph) => ParagraphMappingResult,
+): TextBodyMappingResult {
+  let matched = false;
+  let changed = false;
+  const paragraphs = textBody.paragraphs.map((paragraph) => {
+    const result = mapParagraph(paragraph);
+    if (result.matched) matched = true;
+    if (result.paragraph === paragraph) return paragraph;
+    changed = true;
+    return result.paragraph;
+  });
+  return {
+    textBody: changed ? { ...textBody, paragraphs } : textBody,
+    matched,
+    changed,
+  };
+}
+
+function textBodiesInShape(shape: SourceSlide["shapes"][number]): readonly SourceTextBody[] {
+  if (shape.kind === "shape") return shape.textBody === undefined ? [] : [shape.textBody];
+  if (shape.kind !== "table") return [];
+  return shape.table.rows.flatMap((row) =>
+    row.cells.flatMap((cell) => (cell.textBody === undefined ? [] : [cell.textBody])),
+  );
+}
+
+function findTextRunInTextBody(
+  textBody: SourceTextBody,
+  handle: SourceHandle,
+): SourceTextRun | undefined {
+  for (const paragraph of textBody.paragraphs) {
     for (const run of paragraph.runs) {
       if (sourceHandlesEqual(run.handle, handle)) return run;
     }
@@ -440,13 +490,11 @@ function findTextRunInShape(shape: SourceShape, handle: SourceHandle): SourceTex
   return undefined;
 }
 
-function findParagraphInShape(
-  shape: SourceShape,
+function findParagraphInTextBody(
+  textBody: SourceTextBody,
   handle: SourceHandle,
 ): SourceParagraph | undefined {
-  return shape.textBody?.paragraphs.find((paragraph) =>
-    sourceHandlesEqual(paragraph.handle, handle),
-  );
+  return textBody.paragraphs.find((paragraph) => sourceHandlesEqual(paragraph.handle, handle));
 }
 
 function assertEditableTextRunProperties(properties: EditableTextRunProperties): void {
