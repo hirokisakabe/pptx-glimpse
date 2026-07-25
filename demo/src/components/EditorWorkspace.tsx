@@ -39,6 +39,23 @@ interface TextRunOption {
   readonly handle: SourceHandle;
 }
 
+interface DirectTextEditorRun {
+  readonly key: string;
+  readonly text: string;
+  readonly handle?: SourceHandle;
+}
+
+interface DirectTextEditorParagraph {
+  readonly key: string;
+  readonly runs: readonly DirectTextEditorRun[];
+}
+
+interface DirectTextEditorState {
+  readonly shapeKey: string;
+  readonly bounds: PptxEditorShapeBoundsPx;
+  readonly paragraphs: readonly DirectTextEditorParagraph[];
+}
+
 interface DragState {
   readonly kind: "move" | "resize";
   readonly handle?: ResizeHandle;
@@ -68,7 +85,7 @@ export function EditorWorkspace({
   const [selectedShapeKey, setSelectedShapeKey] = useState<string | null>(null);
   const [draftBounds, setDraftBounds] = useState<PptxEditorShapeBoundsPx | null>(null);
   const [selectedRunIndex, setSelectedRunIndex] = useState(0);
-  const [textValue, setTextValue] = useState("");
+  const [directTextEditor, setDirectTextEditor] = useState<DirectTextEditorState | null>(null);
   const [fontSize, setFontSize] = useState("24");
   const [typeface, setTypeface] = useState("");
   const [color, setColor] = useState("#2454a6");
@@ -83,9 +100,14 @@ export function EditorWorkspace({
   const [loadError, setLoadError] = useState("");
   const [operationError, setOperationError] = useState("");
   const overlayRef = useRef<SVGSVGElement | null>(null);
+  const slideFrameRef = useRef<HTMLDivElement | null>(null);
+  const directTextEditorRef = useRef<HTMLDivElement | null>(null);
+  const directTextEditorStateRef = useRef<DirectTextEditorState | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const busyRef = useRef(true);
+  const compositionRef = useRef(false);
+  const commitAfterCompositionRef = useRef(false);
 
   const currentSlide = slides[currentIndex];
   const selectedShape = useMemo(() => {
@@ -179,10 +201,6 @@ export function EditorWorkspace({
   }, [selectedShapeKey]);
 
   useEffect(() => {
-    setTextValue(selectedRun?.text ?? "");
-  }, [selectedRun]);
-
-  useEffect(() => {
     if (editor === null) return;
     syncFromEditor(editor, currentIndex);
   }, [currentIndex, editor, syncFromEditor]);
@@ -222,11 +240,12 @@ export function EditorWorkspace({
 
   const handleSelectShape = useCallback(
     (shape: PptxEditorShapeInfo, event?: React.PointerEvent<SVGRectElement>) => {
-      if (busyRef.current) return;
+      if (busyRef.current || directTextEditorStateRef.current !== null) return;
       if (shape.handle === undefined) return;
       editor?.selectShape(shape.handle);
       setSelectedShapeKey(shapeKey(shape));
       setDraftBounds(null);
+      slideFrameRef.current?.focus({ preventScroll: true });
       if (event !== undefined && shape.editableTransform && shape.bounds !== undefined) {
         beginDrag("move", undefined, shape.handle, event, shape.bounds, dragStateRef, overlayRef);
       }
@@ -325,13 +344,146 @@ export function EditorWorkspace({
     [selectedShape],
   );
 
-  const handleApplyText = useCallback(() => {
-    if (selectedRun === undefined) return;
-    return applyCommand(
-      { kind: "replaceTextRunPlainText", handle: selectedRun.handle, text: textValue },
-      "Text updated",
+  const closeDirectTextEditor = useCallback(() => {
+    directTextEditorStateRef.current = null;
+    compositionRef.current = false;
+    commitAfterCompositionRef.current = false;
+    setDirectTextEditor(null);
+    window.setTimeout(() => slideFrameRef.current?.focus({ preventScroll: true }), 0);
+  }, []);
+
+  const commitDirectTextEditor = useCallback(async () => {
+    const activeEditor = directTextEditorStateRef.current;
+    const editorElement = directTextEditorRef.current;
+    if (activeEditor === null || editorElement === null || busyRef.current) return;
+
+    const commands = activeEditor.paragraphs.flatMap((paragraph) =>
+      paragraph.runs.flatMap((run) => {
+        if (run.handle === undefined) return [];
+        const runElement = editorElement.querySelector<HTMLElement>(
+          `[data-text-run-key="${cssAttributeValue(run.key)}"]`,
+        );
+        const text = runElement?.textContent ?? run.text;
+        return text === run.text
+          ? []
+          : [
+              {
+                kind: "replaceTextRunPlainText",
+                handle: run.handle,
+                text,
+              } satisfies EditorCommand,
+            ];
+      }),
     );
-  }, [applyCommand, selectedRun, textValue]);
+
+    closeDirectTextEditor();
+    if (commands.length === 0) {
+      setMessage("Text unchanged");
+      return;
+    }
+    await runEditorOperation(async (session) => {
+      const result = await session.applyAll(commands);
+      return commandMessage("Text updated", result.warnings);
+    }, "Text updated");
+  }, [closeDirectTextEditor, runEditorOperation]);
+
+  const startDirectTextEditor = useCallback(
+    (shape: PptxEditorShapeInfo) => {
+      if (
+        busyRef.current ||
+        directTextEditorStateRef.current !== null ||
+        editor === null ||
+        shape.handle === undefined ||
+        shape.bounds === undefined ||
+        shape.textBody === undefined
+      ) {
+        return;
+      }
+      const paragraphs = shape.textBody.paragraphs.map((paragraph, paragraphIndex) => ({
+        key: `paragraph-${paragraphIndex.toString()}`,
+        runs: paragraph.runs.map((run, runIndex) => ({
+          key: `run-${paragraphIndex.toString()}-${runIndex.toString()}`,
+          text: run.text,
+          ...(run.handle !== undefined ? { handle: run.handle } : {}),
+        })),
+      }));
+      if (!paragraphs.some((paragraph) => paragraph.runs.some((run) => run.handle !== undefined))) {
+        return;
+      }
+
+      dragStateRef.current = null;
+      editor.selectShape(shape.handle);
+      setSelectedShapeKey(shapeKey(shape));
+      setDraftBounds(null);
+      const nextEditor = {
+        shapeKey: shapeKey(shape),
+        bounds: shape.bounds,
+        paragraphs,
+      };
+      directTextEditorStateRef.current = nextEditor;
+      setDirectTextEditor(nextEditor);
+      setMessage("Editing text");
+    },
+    [editor],
+  );
+
+  useEffect(() => {
+    if (directTextEditor === null) return;
+    const firstRun = directTextEditorRef.current?.querySelector<HTMLElement>(
+      '[data-text-run-editable="true"]',
+    );
+    if (firstRun === undefined || firstRun === null) return;
+    firstRun.focus();
+    selectElementContents(firstRun);
+  }, [directTextEditor]);
+
+  const handleDirectTextEditorKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+      if (event.key === "Escape") {
+        event.preventDefault();
+        event.stopPropagation();
+        closeDirectTextEditor();
+        setMessage("Text edit canceled");
+        return;
+      }
+      if (event.key === "Enter") {
+        event.preventDefault();
+        event.stopPropagation();
+        void commitDirectTextEditor();
+      }
+    },
+    [closeDirectTextEditor, commitDirectTextEditor],
+  );
+
+  const handleDirectTextEditorBlur = useCallback(
+    (event: React.FocusEvent<HTMLDivElement>) => {
+      const nextTarget = event.relatedTarget;
+      if (nextTarget instanceof Node && event.currentTarget.contains(nextTarget)) return;
+      if (compositionRef.current) {
+        commitAfterCompositionRef.current = true;
+        return;
+      }
+      void commitDirectTextEditor();
+    },
+    [commitDirectTextEditor],
+  );
+
+  const handleSlideFrameKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLDivElement>) => {
+      if (
+        event.key !== "Enter" ||
+        event.target !== event.currentTarget ||
+        selectedShape === null ||
+        directTextEditorStateRef.current !== null
+      ) {
+        return;
+      }
+      event.preventDefault();
+      startDirectTextEditor(selectedShape);
+    },
+    [selectedShape, startDirectTextEditor],
+  );
 
   const handleApplyTextProperties = useCallback(
     (properties: TextRunProperties) => {
@@ -528,11 +680,19 @@ export function EditorWorkspace({
         </aside>
 
         <div className="editor-stage">
-          <div className="editor-slide-frame" data-testid="editor-slide-frame">
+          <div
+            ref={slideFrameRef}
+            aria-label="Editable slide"
+            className="editor-slide-frame"
+            data-testid="editor-slide-frame"
+            role="group"
+            tabIndex={0}
+            onKeyDown={handleSlideFrameKeyDown}
+          >
             <div dangerouslySetInnerHTML={{ __html: currentSlide.svg }} />
             <svg
               ref={overlayRef}
-              className="editor-selection-overlay"
+              className={`editor-selection-overlay${directTextEditor === null ? "" : " editing"}`}
               data-testid="selection-overlay"
               viewBox={viewBoxFromSvg(currentSlide.svg)}
             >
@@ -544,6 +704,13 @@ export function EditorWorkspace({
                     data-editable-image-replacement={
                       shape.editableImageReplacement !== undefined ? "true" : undefined
                     }
+                    data-editable-text={
+                      shape.textBody?.paragraphs.some((paragraph) =>
+                        paragraph.runs.some((run) => run.handle !== undefined),
+                      )
+                        ? "true"
+                        : undefined
+                    }
                     data-testid="shape-hit-area"
                     key={`${shapeKey(shape)}-${index.toString()}`}
                     x={shape.bounds.x}
@@ -551,6 +718,11 @@ export function EditorWorkspace({
                     width={shape.bounds.width}
                     height={shape.bounds.height}
                     onPointerDown={(event) => handleSelectShape(shape, event)}
+                    onDoubleClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      startDirectTextEditor(shape);
+                    }}
                   />
                 );
               })}
@@ -564,7 +736,7 @@ export function EditorWorkspace({
                     width={selectedShape.bounds.width}
                     height={selectedShape.bounds.height}
                   />
-                  {selectedShape.editableTransform && !busy
+                  {selectedShape.editableTransform && !busy && directTextEditor === null
                     ? (["nw", "ne", "sw", "se"] as const).map((handle) => {
                         const point = handlePoint(selectedShape.bounds!, handle);
                         return (
@@ -584,6 +756,83 @@ export function EditorWorkspace({
                 </>
               ) : null}
             </svg>
+            {directTextEditor !== null ? (
+              <div
+                ref={directTextEditorRef}
+                className="direct-text-editor"
+                data-shape-key={directTextEditor.shapeKey}
+                data-testid="direct-text-editor"
+                style={directTextEditorStyle(
+                  directTextEditor.bounds,
+                  viewBoxFromSvg(currentSlide.svg),
+                )}
+                onBlur={handleDirectTextEditorBlur}
+                onCompositionEnd={() => {
+                  compositionRef.current = false;
+                  if (
+                    commitAfterCompositionRef.current &&
+                    !directTextEditorRef.current?.contains(document.activeElement)
+                  ) {
+                    commitAfterCompositionRef.current = false;
+                    void commitDirectTextEditor();
+                  }
+                }}
+                onCompositionStart={() => {
+                  compositionRef.current = true;
+                  commitAfterCompositionRef.current = false;
+                }}
+                onKeyDown={handleDirectTextEditorKeyDown}
+              >
+                <div className="direct-text-editor-content">
+                  {directTextEditor.paragraphs.map((paragraph) => (
+                    <div
+                      className="direct-text-editor-paragraph"
+                      data-testid="direct-text-editor-paragraph"
+                      key={paragraph.key}
+                    >
+                      {paragraph.runs.map((run) => (
+                        <span
+                          className="direct-text-editor-run"
+                          contentEditable={run.handle === undefined ? undefined : "plaintext-only"}
+                          data-text-run-editable={run.handle === undefined ? undefined : "true"}
+                          data-text-run-key={run.key}
+                          data-testid="direct-text-editor-run"
+                          key={run.key}
+                          role={run.handle === undefined ? undefined : "textbox"}
+                          spellCheck={false}
+                          suppressContentEditableWarning
+                          onBeforeInput={(event) => {
+                            const inputType = event.nativeEvent.inputType;
+                            if (
+                              inputType === "insertParagraph" ||
+                              inputType === "insertLineBreak"
+                            ) {
+                              event.preventDefault();
+                            }
+                          }}
+                          onPaste={(event) => {
+                            event.preventDefault();
+                            insertTextAtSelection(
+                              event.clipboardData.getData("text/plain").replace(/\r?\n/g, " "),
+                            );
+                          }}
+                        >
+                          {run.text}
+                        </span>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+                <button
+                  className="direct-text-editor-done"
+                  data-testid="direct-text-editor-done"
+                  type="button"
+                  onClick={() => void commitDirectTextEditor()}
+                >
+                  Done
+                </button>
+              </div>
+            ) : null}
           </div>
         </div>
 
@@ -658,20 +907,9 @@ export function EditorWorkspace({
                 </option>
               ))}
             </select>
-            <textarea
-              data-testid="text-run-input"
-              disabled={busy || selectedRun === undefined}
-              rows={3}
-              value={textValue}
-              onChange={(event) => setTextValue(event.target.value)}
-            />
-            <button
-              disabled={busy || selectedRun === undefined}
-              type="button"
-              onClick={handleApplyText}
-            >
-              Apply text
-            </button>
+            <p className="panel-note">
+              Double-click the selected text shape or press Enter to edit.
+            </p>
             <div className="format-toolbar" role="group" aria-label="Text style">
               <button
                 disabled={busy || selectedRun === undefined}
@@ -881,6 +1119,50 @@ function viewBoxFromSvg(svg: string): string {
   const width = parsePositiveSvgLength(root.getAttribute("width"));
   const height = parsePositiveSvgLength(root.getAttribute("height"));
   return width === undefined || height === undefined ? fallback : `0 0 ${width} ${height}`;
+}
+
+function directTextEditorStyle(
+  bounds: PptxEditorShapeBoundsPx,
+  viewBox: string,
+): React.CSSProperties {
+  const [minX = 0, minY = 0, width = 960, height = 540] = viewBox
+    .trim()
+    .split(/[\s,]+/)
+    .map(Number);
+  const safeWidth = Number.isFinite(width) && width > 0 ? width : 960;
+  const safeHeight = Number.isFinite(height) && height > 0 ? height : 540;
+  return {
+    left: `${(((bounds.x - minX) / safeWidth) * 100).toString()}%`,
+    top: `${(((bounds.y - minY) / safeHeight) * 100).toString()}%`,
+    width: `${((bounds.width / safeWidth) * 100).toString()}%`,
+    height: `${((bounds.height / safeHeight) * 100).toString()}%`,
+  };
+}
+
+function cssAttributeValue(value: string): string {
+  return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+}
+
+function selectElementContents(element: HTMLElement): void {
+  const selection = window.getSelection();
+  if (selection === null) return;
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function insertTextAtSelection(text: string): void {
+  const selection = window.getSelection();
+  if (selection === null || selection.rangeCount === 0) return;
+  const range = selection.getRangeAt(0);
+  range.deleteContents();
+  const node = document.createTextNode(text);
+  range.insertNode(node);
+  range.setStartAfter(node);
+  range.collapse(true);
+  selection.removeAllRanges();
+  selection.addRange(range);
 }
 
 function editedFileName(fileName: string): string {
