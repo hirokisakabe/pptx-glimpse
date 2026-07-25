@@ -11,6 +11,9 @@
  * This file owns package write orchestration only. Dirty XML patching, presentation
  * topology patching, XML node helpers, edit validation, and part serializers live in
  * sibling modules so each writer responsibility has a single owner.
+ *
+ * Repository-level package and dependency boundaries are documented in the
+ * [architecture overview](../../../../docs/architecture/overview.md).
  */
 
 import { zipSync } from "fflate";

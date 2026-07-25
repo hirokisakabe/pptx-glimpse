@@ -18,6 +18,9 @@
  * layers, source nodes, relationships, and theme context are used as inputs for
  * diagnostics and fallback conversion; only the required render contract is passed to
  * the renderer model.
+ *
+ * Repository-level package and dependency boundaries are documented in the
+ * [architecture overview](../../../docs/architecture/overview.md).
  */
 
 import type {

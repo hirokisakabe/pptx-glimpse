@@ -33,6 +33,9 @@
  * Slide/layout/master/theme cascades, relationship resolution, theme color resolution,
  * placeholder and text style resolution, and similar effective values are derived from
  * the source as a non-mutating computed view.
+ *
+ * Repository-level package and dependency boundaries are documented in the
+ * [architecture overview](../../../../docs/architecture/overview.md).
  */
 
 import type { Diagnostic } from "./diagnostics.js";
