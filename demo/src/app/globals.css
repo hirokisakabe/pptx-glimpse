@@ -814,7 +814,15 @@ body {
   margin-bottom: 8px;
   padding: 4px;
   text-align: left;
+  transition:
+    border-color 120ms ease,
+    opacity 120ms ease,
+    transform 120ms ease;
   width: 100%;
+}
+
+.editor-thumbnail:hover:not(:disabled) {
+  border-color: #aab8c1;
 }
 
 .editor-thumbnail.active {
@@ -822,10 +830,69 @@ body {
   color: var(--blueprint);
 }
 
+.editor-thumbnail.dragging {
+  opacity: 0.42;
+  transform: scale(0.98);
+}
+
+.editor-thumbnail.drop-before,
+.editor-thumbnail.drop-after {
+  position: relative;
+}
+
+.editor-thumbnail.drop-before::before,
+.editor-thumbnail.drop-after::after {
+  background: var(--blueprint);
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px #fafbfc;
+  content: "";
+  height: 3px;
+  left: -4px;
+  pointer-events: none;
+  position: absolute;
+  right: -4px;
+  z-index: 2;
+}
+
+.editor-thumbnail.drop-before::before {
+  top: -7px;
+}
+
+.editor-thumbnail.drop-after::after {
+  bottom: -7px;
+}
+
+.editor-thumbnail-label {
+  align-items: center;
+  display: flex;
+  gap: 5px;
+}
+
+.editor-thumbnail-grip {
+  color: #8a99a3;
+  cursor: grab;
+  font-size: 1rem;
+  letter-spacing: -0.18em;
+  line-height: 1;
+  padding-right: 0.18em;
+  touch-action: none;
+  user-select: none;
+}
+
+.editor-thumbnail:active .editor-thumbnail-grip {
+  cursor: grabbing;
+}
+
 .editor-thumbnail svg {
   display: block;
   height: auto;
   width: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .editor-thumbnail {
+    transition: none;
+  }
 }
 
 .editor-stage {

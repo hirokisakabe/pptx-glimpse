@@ -74,6 +74,16 @@ interface Point {
   readonly y: number;
 }
 
+interface SlideDropTarget {
+  readonly index: number;
+  readonly edge: "before" | "after";
+}
+
+interface SlideSortDragState {
+  readonly fromIndex: number;
+  readonly pointerId: number;
+}
+
 type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
 export function EditorWorkspace({
@@ -107,12 +117,15 @@ export function EditorWorkspace({
   const [busy, setBusy] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [operationError, setOperationError] = useState("");
+  const [draggedSlideIndex, setDraggedSlideIndex] = useState<number | null>(null);
+  const [slideDropTarget, setSlideDropTarget] = useState<SlideDropTarget | null>(null);
   const overlayRef = useRef<SVGSVGElement | null>(null);
   const slideFrameRef = useRef<HTMLDivElement | null>(null);
   const directTextEditorRef = useRef<HTMLDivElement | null>(null);
   const directTextEditorStateRef = useRef<DirectTextEditorState | null>(null);
   const directTextCommitPromiseRef = useRef<Promise<boolean> | null>(null);
   const dragStateRef = useRef<DragState | null>(null);
+  const slideSortDragRef = useRef<SlideSortDragState | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const busyRef = useRef(true);
   const dirtyRef = useRef(false);
@@ -674,6 +687,45 @@ export function EditorWorkspace({
     [waitForDirectTextCommit],
   );
 
+  const handleMoveSlide = useCallback(
+    async (fromIndex: number, toIndex: number) => {
+      if (fromIndex === toIndex) return;
+      const slide = slides[fromIndex];
+      if (slide?.handle === undefined) return;
+      const slideHandle = slide.handle;
+      await runEditorOperation(
+        async (session) => {
+          await session.apply({ kind: "moveSlide", handle: slideHandle, toIndex });
+        },
+        `Slide moved to position ${(toIndex + 1).toString()}`,
+        toIndex,
+      );
+    },
+    [runEditorOperation, slides],
+  );
+
+  const handleSlideDrop = useCallback(
+    (fromIndex: number, target: SlideDropTarget) => {
+      const insertionIndex = target.index + (target.edge === "after" ? 1 : 0);
+      const toIndex = insertionIndex > fromIndex ? insertionIndex - 1 : insertionIndex;
+      setDraggedSlideIndex(null);
+      setSlideDropTarget(null);
+      void handleMoveSlide(fromIndex, toIndex);
+    },
+    [handleMoveSlide],
+  );
+
+  const handleSlideKeyDown = useCallback(
+    (index: number, event: React.KeyboardEvent<HTMLButtonElement>) => {
+      if (!event.altKey || (event.key !== "ArrowUp" && event.key !== "ArrowDown")) return;
+      const toIndex = index + (event.key === "ArrowUp" ? -1 : 1);
+      if (toIndex < 0 || toIndex >= slides.length) return;
+      event.preventDefault();
+      void handleMoveSlide(index, toIndex);
+    },
+    [handleMoveSlide, slides.length],
+  );
+
   const handleOpenImageInput = useCallback(async () => {
     if (await waitForDirectTextCommit()) imageInputRef.current?.click();
   }, [waitForDirectTextCommit]);
@@ -814,14 +866,71 @@ export function EditorWorkspace({
         <aside className="editor-thumbnails" aria-label="Slides">
           {slides.map((slide, index) => (
             <button
-              className={`editor-thumbnail${index === currentIndex ? " active" : ""}`}
+              aria-label={`Slide ${slide.slideNumber.toString()}, position ${(index + 1).toString()} of ${slides.length.toString()}. Drag to reorder, or press Alt with Arrow Up or Arrow Down.`}
+              className={[
+                "editor-thumbnail",
+                index === currentIndex ? "active" : "",
+                index === draggedSlideIndex ? "dragging" : "",
+                slideDropTarget?.index === index ? `drop-${slideDropTarget.edge}` : "",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+              data-slide-index={index}
               data-testid="editor-thumbnail"
-              key={`${slide.slideNumber.toString()}-${index.toString()}`}
+              key={
+                slide.handle === undefined ? `slide-${index.toString()}` : handleKey(slide.handle)
+              }
               type="button"
               disabled={busy}
               onClick={() => void handleSelectSlide(index)}
+              onKeyDown={(event) => handleSlideKeyDown(index, event)}
             >
-              <span>Slide {slide.slideNumber}</span>
+              <span className="editor-thumbnail-label">
+                <span
+                  className="editor-thumbnail-grip"
+                  data-testid="editor-thumbnail-grip"
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                  }}
+                  onPointerCancel={() => {
+                    slideSortDragRef.current = null;
+                    setDraggedSlideIndex(null);
+                    setSlideDropTarget(null);
+                  }}
+                  onPointerDown={(event) => {
+                    if (busy || slide.handle === undefined) {
+                      event.preventDefault();
+                      return;
+                    }
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                    slideSortDragRef.current = { fromIndex: index, pointerId: event.pointerId };
+                    setDraggedSlideIndex(index);
+                    setSlideDropTarget(null);
+                  }}
+                  onPointerMove={(event) => {
+                    const drag = slideSortDragRef.current;
+                    if (drag === null || drag.pointerId !== event.pointerId) return;
+                    const target = slideDropTargetAtPoint(event.clientX, event.clientY);
+                    if (target !== null) setSlideDropTarget(target);
+                  }}
+                  onPointerUp={(event) => {
+                    const drag = slideSortDragRef.current;
+                    if (drag === null || drag.pointerId !== event.pointerId) return;
+                    const target = slideDropTargetAtPoint(event.clientX, event.clientY);
+                    slideSortDragRef.current = null;
+                    setDraggedSlideIndex(null);
+                    setSlideDropTarget(null);
+                    if (target !== null) handleSlideDrop(drag.fromIndex, target);
+                  }}
+                  aria-hidden="true"
+                >
+                  ⠿
+                </span>
+                <span>Slide {slide.slideNumber}</span>
+              </span>
               <span dangerouslySetInnerHTML={{ __html: slide.svg }} />
             </button>
           ))}
@@ -1281,6 +1390,19 @@ function directTextEditorStyle(
 
 function cssAttributeValue(value: string): string {
   return value.replaceAll("\\", "\\\\").replaceAll('"', '\\"');
+}
+
+function slideDropTargetAtPoint(clientX: number, clientY: number): SlideDropTarget | null {
+  const element = document.elementFromPoint(clientX, clientY);
+  const thumbnail = element?.closest<HTMLElement>("[data-slide-index]");
+  if (thumbnail === undefined || thumbnail === null) return null;
+  const index = Number.parseInt(thumbnail.dataset.slideIndex ?? "", 10);
+  if (!Number.isInteger(index)) return null;
+  const bounds = thumbnail.getBoundingClientRect();
+  return {
+    index,
+    edge: clientY < bounds.top + bounds.height / 2 ? "before" : "after",
+  };
 }
 
 function selectElementContents(element: HTMLElement): void {

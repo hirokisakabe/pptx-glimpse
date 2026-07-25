@@ -7,7 +7,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
-import { expect, type Page, test } from "@playwright/test";
+import { expect, type Locator, type Page, test } from "@playwright/test";
 
 import {
   type PptxSourceModel,
@@ -174,6 +174,37 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
     await page.getByRole("button", { name: "Delete", exact: true }).click();
     await expect(page.getByTestId("editor-thumbnail")).toHaveCount(3);
 
+    const thumbnailsBeforeSort = page.getByTestId("editor-thumbnail");
+    await expect(thumbnailsBeforeSort.nth(1)).toContainText("A SMALL, EDITABLE SYSTEM");
+    await expect(thumbnailsBeforeSort.nth(1)).toBeEnabled();
+    await dragElementAfter(
+      page,
+      page.getByTestId("editor-thumbnail-grip").nth(1),
+      thumbnailsBeforeSort.nth(2),
+    );
+    await expect(page.getByTestId("editor-status")).toContainText("Slide moved to position 3");
+    await expect(page.getByTestId("editor-thumbnail").nth(2)).toContainText(
+      "A SMALL, EDITABLE SYSTEM",
+    );
+    await expect(page.getByTestId("editor-thumbnail").nth(2)).toHaveClass(/active/);
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(page.getByTestId("editor-thumbnail").nth(1)).toContainText(
+      "A SMALL, EDITABLE SYSTEM",
+    );
+    await page.getByRole("button", { name: "Redo" }).click();
+    await expect(page.getByTestId("editor-thumbnail").nth(2)).toContainText(
+      "A SMALL, EDITABLE SYSTEM",
+    );
+    await page.getByTestId("editor-thumbnail").nth(2).press("Alt+ArrowUp");
+    await expect(page.getByTestId("editor-status")).toContainText("Slide moved to position 2");
+    await expect(page.getByTestId("editor-thumbnail").nth(1)).toContainText(
+      "A SMALL, EDITABLE SYSTEM",
+    );
+    await page.getByTestId("editor-thumbnail").nth(1).press("Alt+ArrowDown");
+    await expect(page.getByTestId("editor-status")).toContainText("Slide moved to position 3");
+    await page.getByTestId("editor-thumbnail").first().click();
+    await expect(page.getByTestId("editor-thumbnail").first()).toHaveClass(/active/);
+
     await firstEditableTextShape.click();
     await expect(slideFrame).toBeFocused();
     await page.keyboard.press("Enter");
@@ -267,6 +298,7 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
     });
     expect(addedShape.textBody?.paragraphs[0]?.runs[0]?.properties?.bold).toBe(true);
     expect(mediaBytes(saved, "ppt/media/image.png")).toEqual(BLUE_PNG);
+    expect(slideContainsText(saved, 2, "A SMALL, EDITABLE SYSTEM")).toBe(true);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -282,6 +314,25 @@ async function dragSvgPoint(
   await page.mouse.move(start.x, start.y);
   await page.mouse.down();
   await page.mouse.move(end.x, end.y, { steps: 6 });
+  await page.mouse.up();
+}
+
+async function dragElementAfter(page: Page, source: Locator, target: Locator): Promise<void> {
+  const sourceBounds = await source.boundingBox();
+  const targetBounds = await target.boundingBox();
+  if (sourceBounds === null || targetBounds === null) {
+    throw new Error("drag source or target bounds were not available");
+  }
+  await page.mouse.move(
+    sourceBounds.x + sourceBounds.width / 2,
+    sourceBounds.y + sourceBounds.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    targetBounds.x + targetBounds.width / 2,
+    targetBounds.y + targetBounds.height * 0.75,
+    { steps: 12 },
+  );
   await page.mouse.up();
 }
 
@@ -439,6 +490,18 @@ function shapeByText(source: PptxSourceModel, text: string): SourceShape {
     });
   if (shape === undefined) throw new Error(`shape not found: ${text}`);
   return shape;
+}
+
+function slideContainsText(source: PptxSourceModel, index: number, text: string): boolean {
+  return (
+    source.slides[index]?.shapes.some(
+      (node) =>
+        node.kind === "shape" &&
+        node.textBody?.paragraphs.some((paragraph) =>
+          paragraph.runs.some((run) => run.text.includes(text)),
+        ),
+    ) ?? false
+  );
 }
 
 function mediaBytes(source: PptxSourceModel, partPath: string): Uint8Array {
