@@ -37,7 +37,11 @@ const result = session.apply({
 });
 
 if (!result.ok) {
-  throw new Error(result.message);
+  throw new Error(`${result.code}: ${result.message}`, { cause: result.cause });
+}
+
+for (const warning of result.warnings ?? []) {
+  console.warn(warning.code, warning.message);
 }
 
 await writeFile("edited.pptx", writePptx(session.document));
@@ -62,6 +66,40 @@ Use `undo()`, `redo()`, `canUndo`, `canRedo`, `undoDepth`, and `redoDepth` to in
 `selectShape(handle)` and `deselectShape()` manage a single shape selection. Selection is reconciled
 after commands and history changes, and is cleared if its shape no longer exists.
 
+## Operation failures and warnings
+
+Expected failures do not throw. `apply()` / `applyAll()`, `selectShape()`, `undo()`, and `redo()`
+return a discriminated result with the shared `EditorOperationFailure` shape:
+
+```ts
+const result = session.undo();
+if (!result.ok) {
+  switch (result.code) {
+    case "empty-undo-stack":
+      // Disable or ignore the undo action.
+      break;
+    default:
+      console.error(result.message, result.cause);
+  }
+}
+```
+
+The operation codes are `invalid-command`, `invalid-selection`, `empty-undo-stack`, and
+`empty-redo-stack`. Unexpected programmer errors and invariant violations still throw.
+
+Warnings describe successful operations and remain on the success result:
+
+```ts
+const result = session.apply(replaceImageCommand);
+if (result.ok) {
+  for (const warning of result.warnings ?? []) {
+    if (warning.code === "shared-media-part") {
+      console.warn(warning.message);
+    }
+  }
+}
+```
+
 ## Package boundary
 
 Use [`pptx-glimpse`](https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/core/README.md)
@@ -85,8 +123,8 @@ supported APIs from the package root; deep source and `dist` paths are internal.
 - New table, chart, and SmartArt editing commands are not available.
 - Replacing a shared media part can change multiple image references and returns a
   `shared-media-part` warning.
-- The current error contract is limited to the released result shapes described by the exported
-  types; no broader error taxonomy is promised.
+- Expected operation rejection uses the exported `EditorOperationErrorCode` and
+  `EditorOperationFailure` contract.
 
 See the [project README](https://github.com/hirokisakabe/pptx-glimpse#readme) for package selection
 and the demo.

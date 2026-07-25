@@ -56,6 +56,9 @@ validated commands, selection, warnings, and undo/redo history. It does not own 
 parsing/writing, rendering, or application UI. Its public API is the root entry point in
 `packages/editor/src/index.ts`.
 
+Expected editor failures, high-level typed errors, integration wrapping, warnings, and
+atomicity are specified in the focused [editor error contract](../editor-error-contract.md).
+
 ### `pptx-glimpse` (core)
 
 `packages/core` is the high-level public package. It orchestrates reading, computed-view

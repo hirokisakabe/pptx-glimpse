@@ -92,6 +92,40 @@ The session exposes rendered slides, editable shape information, command applica
 undo/redo history, and PPTX serialization. It is headless: the package does not provide a complete
 editor UI.
 
+### Errors and warnings
+
+The high-level session throws `PptxEditorError` for expected editor rejection and read, render, or
+write failures. Use `isPptxEditorError()` to narrow an unknown caught value and branch on its
+machine-readable code:
+
+```ts
+import { createPptxEditorSession, isPptxEditorError } from "pptx-glimpse";
+
+try {
+  const editor = await createPptxEditorSession(input);
+  await editor.undo();
+} catch (error) {
+  if (isPptxEditorError(error)) {
+    console.error(error.code, error.message, error.cause);
+    // invalid-command | invalid-selection | empty-undo-stack | empty-redo-stack
+    // | read-failed | render-failed | write-failed
+  } else {
+    throw error;
+  }
+}
+```
+
+Command warnings do not throw. They remain on successful responses:
+
+```ts
+const response = await editor.apply(replaceImageCommand);
+for (const warning of response.warnings ?? []) {
+  if (warning.code === "shared-media-part") {
+    console.warn(warning.message);
+  }
+}
+```
+
 Use `pptx-glimpse` when one object should coordinate PPTX reading, editor commands, SVG rerendering,
 history, and saving. Use `@pptx-glimpse/editor` directly when your application already owns the
 `PptxSourceModel` and rendering/writing lifecycle and only needs UI-independent commands,
