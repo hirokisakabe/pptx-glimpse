@@ -80,10 +80,60 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
     await expect(page.getByTestId("editor-workspace")).toBeVisible();
     await expect(page.getByTestId("editor-status")).toContainText("ready");
 
+    const slideFrame = page.getByTestId("editor-slide-frame");
+    const firstEditableTextShape = page
+      .locator('[data-testid="shape-hit-area"][data-editable-text="true"]')
+      .first();
+    const hitAreaBounds = await firstEditableTextShape.boundingBox();
+    if (hitAreaBounds === null) throw new Error("editable text shape bounds were not available");
+    await firstEditableTextShape.dblclick();
+    const directTextEditor = page.getByTestId("direct-text-editor");
+    await expect(directTextEditor).toBeVisible();
+    const editorBounds = await directTextEditor.boundingBox();
+    if (editorBounds === null) throw new Error("direct text editor bounds were not available");
+    expect(editorBounds.x).toBeCloseTo(hitAreaBounds.x, 0);
+    expect(editorBounds.y).toBeCloseTo(hitAreaBounds.y, 0);
+    expect(editorBounds.width).toBeCloseTo(hitAreaBounds.width, 0);
+    expect(editorBounds.height).toBeCloseTo(hitAreaBounds.height, 0);
+
+    const directTextRun = page.getByTestId("direct-text-editor-run").first();
+    await expect(directTextRun).toBeFocused();
+    await directTextRun.fill("Canceled direct edit");
+    await directTextRun.press("Escape");
+    await expect(directTextEditor).toHaveCount(0);
+    await expect(slideFrame).not.toContainText("Canceled direct edit");
+    await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+
     await page.getByRole("button", { name: "Duplicate" }).click();
+    await expect(page.getByTestId("editor-status")).toContainText("Slide duplicated");
     await expect(page.getByTestId("editor-thumbnail")).toHaveCount(3);
     await page.getByRole("button", { name: "Delete", exact: true }).click();
     await expect(page.getByTestId("editor-thumbnail")).toHaveCount(2);
+
+    await firstEditableTextShape.click();
+    await expect(slideFrame).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(directTextEditor).toBeVisible();
+    await expect(directTextRun).toBeFocused();
+    await directTextRun.fill("Direct edit done");
+    await page.getByTestId("direct-text-editor-done").click();
+    await expect(slideFrame).toContainText("Direct edit done");
+
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(slideFrame).toContainText("たいとる");
+    await expect(slideFrame).not.toContainText("Direct edit done");
+    await page.getByRole("button", { name: "Redo" }).click();
+    await expect(slideFrame).toContainText("Direct edit done");
+
+    await firstEditableTextShape.dblclick();
+    await directTextRun.fill("Direct edit saved");
+    await page.getByRole("button", { name: "Download PPTX" }).focus();
+    await expect(directTextEditor).toHaveCount(0);
+    await expect(slideFrame).toContainText("Direct edit saved");
+    await page.getByRole("button", { name: "Undo" }).click();
+    await expect(slideFrame).toContainText("Direct edit done");
+    await page.getByRole("button", { name: "Redo" }).click();
+    await expect(slideFrame).toContainText("Direct edit saved");
 
     await page.getByRole("button", { name: "Add text box" }).click();
     await expect(page.getByTestId("selection-box")).toHaveAttribute("x", "96");
@@ -102,8 +152,11 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
     await page.getByRole("button", { name: "Redo" }).click();
     await expect(page.getByTestId("selection-box")).toHaveAttribute("width", "336");
 
-    await page.getByTestId("text-run-input").fill("Added from demo e2e");
-    await page.getByRole("button", { name: "Apply text" }).click();
+    await slideFrame.focus();
+    await page.keyboard.press("Enter");
+    await expect(directTextEditor).toBeVisible();
+    await directTextRun.fill("Added from demo e2e");
+    await page.getByTestId("direct-text-editor-done").click();
     await expect(page.getByTestId("editor-slide-frame")).toContainText("Added from demo e2e");
 
     await page.getByRole("button", { name: "B", exact: true }).click();
@@ -127,6 +180,7 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
     await (await download).saveAs(savedPath);
 
     const saved = readPptx(await readFile(savedPath));
+    expect(shapeByText(saved, "Direct edit saved")).toBeDefined();
     const addedShape = shapeByText(saved, "Added from demo e2e");
     expect(addedShape.transform).toMatchObject({
       offsetX: 120 * EMU_PER_PIXEL,
