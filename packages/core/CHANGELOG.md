@@ -1,5 +1,16 @@
 # pptx-glimpse
 
+## 3.3.0
+
+### Minor Changes
+
+- b5efe3d: UI 非依存の headless 編集 API を `@pptx-glimpse/editor` として公開し、browser editor に command の一括適用と ProseMirror 非依存の text body view を追加する。
+
+### Patch Changes
+
+- Updated dependencies [b5efe3d]
+  - @pptx-glimpse/editor@0.1.0
+
 ## 3.2.8
 
 ### Patch Changes

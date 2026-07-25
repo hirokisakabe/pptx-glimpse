@@ -1,6 +1,6 @@
 {
   "name": "@pptx-glimpse/editor",
-  "version": "0.0.14",
+  "version": "0.1.0",
   "description": "UI-independent commands, selection, history, and validation for PptxSourceModel.",
   "type": "module",
   "main": "./dist/index.cjs",
