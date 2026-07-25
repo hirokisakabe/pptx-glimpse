@@ -13,6 +13,7 @@
   --line: #cfd8dc;
   --blueprint: #2454a6;
   --amber: #b86b1f;
+  --amber-text: #8f4e12;
   --green: #26745b;
   --danger-bg: #fde8e1;
   --danger: #9f2d14;
@@ -248,7 +249,7 @@ body {
 }
 
 .editor-route .route-label {
-  color: var(--amber);
+  color: var(--amber-text);
 }
 
 .package-route h2 {
@@ -279,7 +280,7 @@ body {
 }
 
 .package-route li::before {
-  color: var(--amber);
+  color: var(--amber-text);
   content: "→";
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
   left: 0;
@@ -313,7 +314,7 @@ body {
 }
 
 .editor-route .route-links .primary-doc-link {
-  color: var(--amber);
+  color: var(--amber-text);
 }
 
 .primary-doc-link span {
@@ -970,6 +971,12 @@ body {
 
   .primary-doc-link span {
     transition: none;
+  }
+}
+
+@media (max-width: 1000px) {
+  .package-routes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 

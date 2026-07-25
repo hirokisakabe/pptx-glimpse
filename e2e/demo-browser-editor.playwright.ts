@@ -65,6 +65,12 @@ test("links the toolkit demo to all public package documentation", async ({ page
     "https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/editor/README.md",
   );
 
+  await page.setViewportSize({ width: 900, height: 720 });
+  await expect(page.locator(".package-routes")).toHaveCSS(
+    "grid-template-columns",
+    /^[0-9.]+px [0-9.]+px$/,
+  );
+
   const sitemapResponse = await page.request.get(`${demoServer.url}/sitemap.xml`);
   expect(sitemapResponse.ok()).toBe(true);
   expect(await sitemapResponse.text()).toContain("https://glimpse.pptx.app/docs");
