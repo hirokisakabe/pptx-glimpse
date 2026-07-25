@@ -26,7 +26,9 @@ import {
   type EditableTextRunProperties,
   type EditableTextRunProperty,
   type Emu,
+  findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
+  findTextRunBySourceHandle,
   moveSlide,
   type MoveSlideInput,
   type PptxSourceModel,
@@ -46,7 +48,11 @@ import {
   setShapeOutline,
   setTextRunProperties,
   type SourceHandle,
+  type SourceImage,
+  type SourceParagraph,
   type SourceShapeNode,
+  type SourceSlide,
+  type SourceTextRun,
   type SourceTransform,
   updateShapeTransform,
 } from "@pptx-glimpse/document";
@@ -288,6 +294,185 @@ export class EditorSession {
     this.#selection = undefined;
   }
 
+  replaceTextRunPlainText(run: SourceTextRun, text: string): EditorApplyCommandResult {
+    return this.applyToSourceNode(
+      "replaceTextRunPlainText",
+      run,
+      isSourceTextRun,
+      findTextRunBySourceHandle,
+      (handle) => ({ kind: "replaceTextRunPlainText", handle, text }),
+    );
+  }
+
+  replaceParagraphPlainText(paragraph: SourceParagraph, text: string): EditorApplyCommandResult {
+    return this.applyToSourceNode(
+      "replaceParagraphPlainText",
+      paragraph,
+      isSourceParagraph,
+      findParagraphBySourceHandle,
+      (handle) => ({ kind: "replaceParagraphPlainText", handle, text }),
+    );
+  }
+
+  setTextRunProperties(
+    run: SourceTextRun,
+    properties: EditableTextRunProperties,
+  ): EditorApplyCommandResult {
+    return this.applyToSourceNode(
+      "setTextRunProperties",
+      run,
+      isSourceTextRun,
+      findTextRunBySourceHandle,
+      (handle) => ({ kind: "setTextRunProperties", handle, properties }),
+    );
+  }
+
+  clearTextRunProperties(
+    run: SourceTextRun,
+    properties: readonly EditableTextRunProperty[],
+  ): EditorApplyCommandResult {
+    return this.applyToSourceNode(
+      "clearTextRunProperties",
+      run,
+      isSourceTextRun,
+      findTextRunBySourceHandle,
+      (handle) => ({ kind: "clearTextRunProperties", handle, properties }),
+    );
+  }
+
+  setParagraphProperties(
+    paragraph: SourceParagraph,
+    properties: EditableParagraphProperties,
+  ): EditorApplyCommandResult {
+    return this.applyToSourceNode(
+      "setParagraphProperties",
+      paragraph,
+      isSourceParagraph,
+      findParagraphBySourceHandle,
+      (handle) => ({ kind: "setParagraphProperties", handle, properties }),
+    );
+  }
+
+  clearParagraphProperties(
+    paragraph: SourceParagraph,
+    properties: readonly EditableParagraphProperty[],
+  ): EditorApplyCommandResult {
+    return this.applyToSourceNode(
+      "clearParagraphProperties",
+      paragraph,
+      isSourceParagraph,
+      findParagraphBySourceHandle,
+      (handle) => ({ kind: "clearParagraphProperties", handle, properties }),
+    );
+  }
+
+  moveShape(shape: SourceShapeNode, offsetX: Emu, offsetY: Emu): EditorApplyCommandResult {
+    return this.applyToShapeNode("moveShape", shape, (handle) => ({
+      kind: "moveShape",
+      handle,
+      offsetX,
+      offsetY,
+    }));
+  }
+
+  resizeShape(shape: SourceShapeNode, width: Emu, height: Emu): EditorApplyCommandResult {
+    return this.applyToShapeNode("resizeShape", shape, (handle) => ({
+      kind: "resizeShape",
+      handle,
+      width,
+      height,
+    }));
+  }
+
+  setShapeTransform(
+    shape: SourceShapeNode,
+    transform: Pick<SourceTransform, "offsetX" | "offsetY" | "width" | "height">,
+  ): EditorApplyCommandResult {
+    return this.applyToShapeNode("setShapeTransform", shape, (handle) => ({
+      kind: "setShapeTransform",
+      handle,
+      ...transform,
+    }));
+  }
+
+  setShapeFill(shape: SourceShapeNode, fill: EditableShapeFill): EditorApplyCommandResult {
+    return this.applyToShapeNode("setShapeFill", shape, (handle) => ({
+      kind: "setShapeFill",
+      handle,
+      fill,
+    }));
+  }
+
+  setShapeOutline(shape: SourceShapeNode, outline: EditableShapeOutline): EditorApplyCommandResult {
+    return this.applyToShapeNode("setShapeOutline", shape, (handle) => ({
+      kind: "setShapeOutline",
+      handle,
+      outline,
+    }));
+  }
+
+  addTextBox(slide: SourceSlide, input: AddTextBoxInput): EditorApplyCommandResult {
+    return this.applyToSlide("addTextBox", slide, (slideHandle) => ({
+      kind: "addTextBox",
+      slideHandle,
+      ...input,
+    }));
+  }
+
+  addConnector(slide: SourceSlide, input: AddConnectorInput): EditorApplyCommandResult {
+    return this.applyToSlide("addConnector", slide, (slideHandle) => ({
+      kind: "addConnector",
+      slideHandle,
+      ...input,
+    }));
+  }
+
+  deleteShape(shape: SourceShapeNode): EditorApplyCommandResult {
+    return this.applyToShapeNode("deleteShape", shape, (handle) => ({
+      kind: "deleteShape",
+      handle,
+    }));
+  }
+
+  replaceImage(image: SourceImage, bytes: Uint8Array): EditorApplyCommandResult {
+    return this.applyToSourceNode(
+      "replaceImage",
+      image,
+      isSourceImage,
+      (document, handle) => {
+        const shape = findShapeNodeBySourceHandle(document, handle);
+        return shape?.kind === "image" ? shape : undefined;
+      },
+      (handle) => ({ kind: "replaceImage", handle, bytes }),
+    );
+  }
+
+  addEmptySlideFromLayout(input: AddEmptySlideFromLayoutInput): EditorApplyCommandResult {
+    return this.apply({ kind: "addEmptySlideFromLayout", ...input });
+  }
+
+  duplicateSlide(slide: SourceSlide): EditorApplyCommandResult {
+    return this.applyToSlide("duplicateSlide", slide, (handle) => ({
+      kind: "duplicateSlide",
+      handle,
+    }));
+  }
+
+  moveSlide(slide: SourceSlide, input: MoveSlideInput): EditorApplyCommandResult {
+    return this.applyToSlide("moveSlide", slide, (handle) => ({
+      kind: "moveSlide",
+      handle,
+      ...input,
+    }));
+  }
+
+  deleteSlide(slide: SourceSlide): EditorApplyCommandResult {
+    return this.applyToSlide("deleteSlide", slide, (handle) => ({
+      kind: "deleteSlide",
+      handle,
+    }));
+  }
+
   apply(command: EditorCommand): EditorApplyCommandResult {
     return this.applyAll([command]);
   }
@@ -369,6 +554,57 @@ export class EditorSession {
     if (findShapeNodeBySourceHandle(this.#document, this.#selection.shapeHandle) === undefined) {
       this.#selection = undefined;
     }
+  }
+
+  private applyToShapeNode(
+    operation: string,
+    shape: SourceShapeNode,
+    createCommand: (handle: SourceHandle) => EditorCommand,
+  ): EditorApplyCommandResult {
+    return this.applyToSourceNode(
+      operation,
+      shape,
+      isSourceShapeNode,
+      findShapeNodeBySourceHandle,
+      createCommand,
+    );
+  }
+
+  private applyToSlide(
+    operation: string,
+    slide: SourceSlide,
+    createCommand: (handle: SourceHandle) => EditorCommand,
+  ): EditorApplyCommandResult {
+    return this.applyToSourceNode(
+      operation,
+      slide,
+      isSourceSlide,
+      (document, handle) =>
+        document.slides.find((candidate) => sourceHandlesEqual(candidate.handle, handle)),
+      createCommand,
+    );
+  }
+
+  private applyToSourceNode<Node extends { readonly handle?: SourceHandle }>(
+    operation: string,
+    node: Node,
+    isExpectedNode: (value: unknown) => value is Node,
+    findCurrentNode: (document: PptxSourceModel, handle: SourceHandle) => Node | undefined,
+    createCommand: (handle: SourceHandle) => EditorCommand,
+  ): EditorApplyCommandResult {
+    if (!isExpectedNode(node)) {
+      return invalidSourceNodeFailure(operation, "source node has the wrong target type");
+    }
+    if (node.handle === undefined) {
+      return invalidSourceNodeFailure(operation, "source node does not have a handle");
+    }
+    if (findCurrentNode(this.#document, node.handle) === undefined) {
+      return invalidSourceNodeFailure(
+        operation,
+        "source node handle was not found in the current EditorSession document",
+      );
+    }
+    return this.apply(createCommand(node.handle));
   }
 }
 
@@ -482,6 +718,69 @@ function invalidCommandFailure(cause: unknown): EditorOperationFailure<"invalid-
     message: cause.message,
     cause,
   };
+}
+
+function invalidSourceNodeFailure(
+  operation: string,
+  reason: string,
+): EditorOperationFailure<"invalid-command"> {
+  return {
+    ok: false,
+    code: "invalid-command",
+    message: `${operation}: ${reason}`,
+  };
+}
+
+function isSourceTextRun(value: unknown): value is SourceTextRun {
+  return isObject(value) && value.kind === "textRun";
+}
+
+function isSourceParagraph(value: unknown): value is SourceParagraph {
+  return isObject(value) && Array.isArray(value.runs);
+}
+
+const SOURCE_SHAPE_NODE_KINDS: ReadonlySet<string> = new Set([
+  "shape",
+  "connector",
+  "group",
+  "image",
+  "table",
+  "chart",
+  "smartArt",
+  "raw",
+]);
+
+function isSourceShapeNode(value: unknown): value is SourceShapeNode {
+  return (
+    isObject(value) && typeof value.kind === "string" && SOURCE_SHAPE_NODE_KINDS.has(value.kind)
+  );
+}
+
+function isSourceImage(value: unknown): value is SourceImage {
+  return isObject(value) && value.kind === "image";
+}
+
+function isSourceSlide(value: unknown): value is SourceSlide {
+  return (
+    isObject(value) &&
+    typeof value.partPath === "string" &&
+    typeof value.layoutPartPath === "string" &&
+    Array.isArray(value.shapes)
+  );
+}
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function sourceHandlesEqual(left: SourceHandle | undefined, right: SourceHandle): boolean {
+  return (
+    left !== undefined &&
+    left.partPath === right.partPath &&
+    left.nodeId === right.nodeId &&
+    left.relationshipId === right.relationshipId &&
+    left.orderingSlot === right.orderingSlot
+  );
 }
 
 function executeCommand(document: PptxSourceModel, command: EditorCommand): PptxSourceModel {
