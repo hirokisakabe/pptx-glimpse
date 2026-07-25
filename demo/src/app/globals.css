@@ -117,6 +117,36 @@ body {
   margin-top: 10px;
 }
 
+.capability-flow {
+  align-items: center;
+  display: flex;
+  gap: 0;
+  list-style: none;
+  margin-top: 22px;
+  max-width: 560px;
+}
+
+.capability-flow li {
+  align-items: center;
+  color: var(--ink);
+  display: flex;
+  font-size: 0.86rem;
+  font-weight: 760;
+  gap: 8px;
+}
+
+.capability-flow li:not(:last-child)::after {
+  color: var(--line);
+  content: "→";
+  margin: 0 18px;
+}
+
+.capability-flow span {
+  color: var(--blueprint);
+  font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+  font-size: 0.7rem;
+}
+
 .eyebrow {
   color: var(--blueprint);
   font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
@@ -160,7 +190,7 @@ body {
 .package-routes {
   display: grid;
   gap: 18px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   position: relative;
 }
 
@@ -170,7 +200,7 @@ body {
   border-radius: 8px;
   display: flex;
   flex-direction: column;
-  min-height: 500px;
+  min-height: 520px;
   overflow: hidden;
   padding: 30px;
   position: relative;
@@ -186,6 +216,10 @@ body {
 
 .document-route::before {
   background: var(--green);
+}
+
+.editor-route::before {
+  background: var(--amber);
 }
 
 .route-output {
@@ -213,9 +247,13 @@ body {
   color: var(--green);
 }
 
+.editor-route .route-label {
+  color: var(--amber);
+}
+
 .package-route h2 {
   font-family: "Avenir Next", Avenir, "Segoe UI", sans-serif;
-  font-size: clamp(1.65rem, 3vw, 2.35rem);
+  font-size: clamp(1.35rem, 2vw, 1.55rem);
   letter-spacing: -0.035em;
   line-height: 1.05;
   overflow-wrap: anywhere;
@@ -272,6 +310,10 @@ body {
 
 .document-route .route-links .primary-doc-link {
   color: var(--green);
+}
+
+.editor-route .route-links .primary-doc-link {
+  color: var(--amber);
 }
 
 .primary-doc-link span {
@@ -374,6 +416,15 @@ body {
 
 .file-label.primary:hover {
   background: #183f80;
+}
+
+.file-label.edit-sample {
+  background: var(--green);
+  color: white;
+}
+
+.file-label.edit-sample:hover {
+  background: #195f49;
 }
 
 .file-label.secondary {
@@ -943,6 +994,17 @@ body {
   .package-routes,
   .demo-boundary {
     grid-template-columns: 1fr;
+  }
+
+  .capability-flow {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .capability-flow li:not(:last-child)::after {
+    content: "";
+    margin: 0;
   }
 
   .package-route {

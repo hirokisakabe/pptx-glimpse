@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 
-export const alt = "pptx-glimpse – PPTX to SVG Converter";
+export const alt = "pptx-glimpse – Render, edit, and save PPTX in your browser";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -20,9 +20,9 @@ export default function OgImage() {
       }}
     >
       <div style={{ fontSize: 72, fontWeight: 700, marginBottom: 16 }}>pptx-glimpse</div>
-      <div style={{ fontSize: 32, color: "#94a3b8" }}>PPTX to SVG Converter</div>
-      <div style={{ fontSize: 24, color: "#64748b", marginTop: 24 }}>
-        Open-source TypeScript library
+      <div style={{ fontSize: 34, color: "#c6d4e7" }}>Render → Edit → Save PPTX</div>
+      <div style={{ fontSize: 24, color: "#8fa3bb", marginTop: 24 }}>
+        Local browser demo · no file upload
       </div>
     </div>,
     { ...size },

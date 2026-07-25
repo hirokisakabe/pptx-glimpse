@@ -7,6 +7,7 @@ export function SiteFooter() {
         <a href="https://www.npmjs.com/package/@pptx-glimpse/document">
           @pptx-glimpse/document on npm
         </a>
+        <a href="https://www.npmjs.com/package/@pptx-glimpse/editor">@pptx-glimpse/editor on npm</a>
       </nav>
     </footer>
   );

@@ -13,7 +13,7 @@ const jsonLd = {
   "@type": "SoftwareApplication",
   name: "pptx-glimpse",
   description:
-    "A TypeScript library that converts PowerPoint (PPTX) slides to SVG. Upload a file and preview it locally in the browser.",
+    "A TypeScript toolkit for rendering, editing, and saving PowerPoint (PPTX) files. Try the complete workflow locally in your browser.",
   url: SITE_URL,
   applicationCategory: "DeveloperApplication",
   operatingSystem: "Any",
@@ -32,11 +32,23 @@ export default function Home() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
       <header className="demo-intro">
-        <p className="eyebrow">Browser rendering demo</p>
-        <h1>See your PowerPoint as SVG.</h1>
+        <p className="eyebrow">Browser rendering + editing demo</p>
+        <h1>Open it. Edit it. Save it back to PPTX.</h1>
         <p className="description">
-          Preview PowerPoint slides as SVG in the browser. No upload service, no LibreOffice.
+          View, edit, and resave PowerPoint files entirely in your browser. Your files are never
+          sent to a server, and no LibreOffice installation is required.
         </p>
+        <ol className="capability-flow" aria-label="Demo workflow">
+          <li>
+            <span>01</span> View
+          </li>
+          <li>
+            <span>02</span> Edit
+          </li>
+          <li>
+            <span>03</span> Save PPTX
+          </li>
+        </ol>
       </header>
       <main>
         <UploadViewer />

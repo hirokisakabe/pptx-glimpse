@@ -13,9 +13,9 @@ on the lower-level document and headless editor packages.
 
 **[Try the Demo](https://glimpse.pptx.app/)** | [npm](https://www.npmjs.com/package/pptx-glimpse)
 
-![pptx-glimpse demo](https://raw.githubusercontent.com/hirokisakabe/pptx-glimpse/main/docs/demo.gif)
+![pptx-glimpse browser rendering and editing demo](https://raw.githubusercontent.com/hirokisakabe/pptx-glimpse/main/docs/demo-editor.png)
 
-_Upload a .pptx file → get SVG/PNG output instantly_
+_Open a .pptx locally → view and edit slides → save an updated PPTX_
 
 |                                                   PowerPoint                                                   |                                                    pptx-glimpse                                                    |
 | :------------------------------------------------------------------------------------------------------------: | :----------------------------------------------------------------------------------------------------------------: |
