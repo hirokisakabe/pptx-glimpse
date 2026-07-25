@@ -55,7 +55,7 @@ against its current document.
 
 Every convenience method creates and applies the matching command through the same validation,
 warning, selection-reconciliation, and undo/redo-history path. A successful convenience-method
-call is one undo-history entry.
+call that changes the document creates one undo-history entry.
 
 Use `session.apply(command)` when commands need to be stored, logged, transported by UI code, or
 constructed independently of a source-node object. Use `session.applyAll(commands)` to apply

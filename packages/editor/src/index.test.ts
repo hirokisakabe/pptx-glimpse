@@ -4,6 +4,7 @@ import {
   asEmu,
   asPartPath,
   asPt,
+  asRawSidecarId,
   asSourceNodeId,
   findShapeNodeBySourceHandle,
   type PptxSourceModel,
@@ -133,11 +134,19 @@ describe("EditorSession source-node convenience methods", () => {
     const slideSource = readPptx(await buildTwoSlideFixture());
     const slideSession = createEditorSession(slideSource);
     const first = slideSource.slides[0];
+    const slideWithNonIdentityHandleMetadata = {
+      ...first,
+      handle: {
+        ...requireHandle(first.handle),
+        rawSidecarIds: [asRawSidecarId("non-identity-metadata")],
+      },
+    };
+    expectApplied(slideSession.moveSlide(slideWithNonIdentityHandleMetadata, { toIndex: 1 }));
     expectApplied(slideSession.duplicateSlide(first));
     expectApplied(slideSession.moveSlide(first, { toIndex: 2 }));
     expectApplied(slideSession.deleteSlide(first));
     expect(slideSession.document.slides).toHaveLength(2);
-    expect(slideSession.undoDepth).toBe(3);
+    expect(slideSession.undoDepth).toBe(4);
 
     const layoutSource = readPptx(await buildUnreferencedLayoutFixture());
     const layoutSession = createEditorSession(layoutSource);
@@ -171,6 +180,7 @@ describe("EditorSession source-node convenience methods", () => {
     expect(!missingHandleResult.ok && missingHandleResult.message).toContain(
       "does not have a handle",
     );
+    expect(!missingHandleResult.ok && missingHandleResult.cause).toBeUndefined();
     const absentResult = session.replaceTextRunPlainText(absentRun, "Rejected");
     expect(absentResult).toMatchObject({ ok: false, code: "invalid-command" });
     expect(!absentResult.ok && absentResult.message).toContain("current EditorSession document");

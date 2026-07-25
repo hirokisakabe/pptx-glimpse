@@ -724,12 +724,10 @@ function invalidSourceNodeFailure(
   operation: string,
   reason: string,
 ): EditorOperationFailure<"invalid-command"> {
-  const cause = new Error(`${operation}: ${reason}`);
   return {
     ok: false,
     code: "invalid-command",
-    message: cause.message,
-    cause,
+    message: `${operation}: ${reason}`,
   };
 }
 
@@ -781,17 +779,8 @@ function sourceHandlesEqual(left: SourceHandle | undefined, right: SourceHandle)
     left.partPath === right.partPath &&
     left.nodeId === right.nodeId &&
     left.relationshipId === right.relationshipId &&
-    left.orderingSlot === right.orderingSlot &&
-    stringArraysEqual(left.rawSidecarIds, right.rawSidecarIds)
+    left.orderingSlot === right.orderingSlot
   );
-}
-
-function stringArraysEqual(
-  left: readonly string[] | undefined,
-  right: readonly string[] | undefined,
-): boolean {
-  if (left === undefined || right === undefined) return left === right;
-  return left.length === right.length && left.every((value, index) => value === right[index]);
 }
 
 function executeCommand(document: PptxSourceModel, command: EditorCommand): PptxSourceModel {
