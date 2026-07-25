@@ -24,10 +24,11 @@ npm run inspect        # Inspect PPTX internal XML (e.g., npm run inspect -- fil
 npm run dev -- file.pptx  # Live preview dev server (auto-reload on packages/*/src/ changes)
 ```
 
-CI consists of 5 jobs:
+CI consists of 6 jobs:
 
 - **lint**: `knip` → `lint` → `format:check` → `typecheck` (Node 22 only, runs once)
-- **test**: `test` with coverage → `build` → package verification (Node 22/24/26, coverage report on Node 22)
+- **test**: `test` with coverage → `build` → package verification (Node 22/24/26)
+- **playwright**: Browser E2E tests and demo production verification (Node 22/24/26)
 - **vrt**: Snapshot VRT (Docker-based, self-comparison)
 - **libreoffice-vrt**: LibreOffice VRT for renderer regressions (generates fixtures and reference images via Docker)
 - **editor-validity**: LibreOffice validity checks for editing API output (shares the libreoffice-vrt Docker image, runs independently from renderer VRT)
