@@ -12,8 +12,7 @@ browser. Use the high-level package for SVG/PNG conversion and browser-oriented 
 on the lower-level document and headless editor packages.
 
 **[Try the Demo](https://glimpse.pptx.app/)** |
-[Documentation](https://glimpse.pptx.app/docs) |
-[npm](https://www.npmjs.com/package/pptx-glimpse)
+[Documentation](https://glimpse.pptx.app/docs)
 
 ![pptx-glimpse browser rendering and editing demo](https://raw.githubusercontent.com/hirokisakabe/pptx-glimpse/main/docs/demo-editor.png)
 
