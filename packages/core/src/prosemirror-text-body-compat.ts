@@ -535,16 +535,12 @@ function sourceHandlesEqual(
   right: SourceHandle | undefined,
 ): boolean {
   if (left === undefined || right === undefined) return left === right;
-  return sourceHandleKey(left) === sourceHandleKey(right);
-}
-
-function sourceHandleKey(handle: SourceHandle): string {
-  return [
-    handle.partPath,
-    handle.nodeId ?? "",
-    handle.relationshipId ?? "",
-    handle.orderingSlot ?? "",
-  ].join("\u0000");
+  return (
+    left.partPath === right.partPath &&
+    left.nodeId === right.nodeId &&
+    left.relationshipId === right.relationshipId &&
+    left.orderingSlot === right.orderingSlot
+  );
 }
 
 function stableValueEqual(left: unknown, right: unknown): boolean {

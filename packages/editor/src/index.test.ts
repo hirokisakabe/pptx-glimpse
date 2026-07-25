@@ -85,6 +85,24 @@ describe("EditorSession text-run commands", () => {
     expect(session.canRedo).toBe(false);
   });
 
+  it("keeps redo history when applying a no-op command after undo", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const handle = requireHandle(firstRun(source).handle);
+
+    expectApplied(session.apply({ kind: "replaceTextRunPlainText", handle, text: "Edited text" }));
+    expectHistory(session.undo());
+    const noOp = expectApplied(
+      session.apply({ kind: "replaceTextRunPlainText", handle, text: "Original" }),
+    );
+
+    expect(noOp).toBe(source);
+    expect(session.undoDepth).toBe(0);
+    expect(session.redoDepth).toBe(1);
+    expectHistory(session.redo());
+    expect(firstRun(session.document).text).toBe("Edited text");
+  });
+
   it("keeps the latest edit when the same text run is edited repeatedly", async () => {
     const source = readPptx(await buildTextEditFixture());
     const session = createEditorSession(source);
@@ -175,6 +193,29 @@ describe("EditorSession text-run commands", () => {
     expect(firstRun(session.document).text).toBe("Original");
     expect(session.undoDepth).toBe(0);
     expect(session.redoDepth).toBe(0);
+  });
+
+  it("rejects non-string text from JavaScript callers", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+
+    const runResult = session.apply({
+      kind: "replaceTextRunPlainText",
+      handle: requireHandle(firstRun(source).handle),
+      // @ts-expect-error exercises runtime validation for JavaScript callers.
+      text: 42,
+    });
+    const paragraphResult = session.apply({
+      kind: "replaceParagraphPlainText",
+      handle: requireHandle(firstParagraph(source).handle),
+      // @ts-expect-error exercises runtime validation for JavaScript callers.
+      text: null,
+    });
+
+    expect(runResult).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(paragraphResult).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(session.document).toBe(source);
+    expect(session.undoDepth).toBe(0);
   });
 });
 
@@ -429,6 +470,114 @@ describe("EditorSession text run property commands", () => {
 });
 
 describe("EditorSession paragraph property commands", () => {
+  it("replaces paragraph text as one undoable writer-persisted command", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const session = createEditorSession(source);
+    const handle = requireHandle(firstParagraph(source).handle);
+
+    const edited = expectApplied(
+      session.apply({
+        kind: "replaceParagraphPlainText",
+        handle,
+        text: "Paragraph replacement",
+      }),
+    );
+
+    expect(firstParagraph(edited).runs.map((run) => run.text)).toEqual(["Paragraph replacement"]);
+    expect(firstParagraph(readPptx(writePptx(edited))).runs.map((run) => run.text)).toEqual([
+      "Paragraph replacement",
+    ]);
+    expect(session.undoDepth).toBe(1);
+    expect(firstParagraph(expectHistory(session.undo())).runs.map((run) => run.text)).toEqual([
+      "Original",
+      " Keep ",
+    ]);
+    expect(firstParagraph(expectHistory(session.redo())).runs.map((run) => run.text)).toEqual([
+      "Paragraph replacement",
+    ]);
+  });
+
+  it("rejects paragraph replacement combined with run edits for the same paragraph", async () => {
+    const source = readPptx(await buildTextEditFixture());
+    const paragraphHandle = requireHandle(firstParagraph(source).handle);
+    const runHandle = requireHandle(firstRun(source).handle);
+
+    for (const [orderIndex, commands] of (
+      [
+        [
+          {
+            kind: "setTextRunProperties",
+            handle: runHandle,
+            properties: { bold: false },
+          },
+          {
+            kind: "replaceParagraphPlainText",
+            handle: paragraphHandle,
+            text: "Replacement",
+          },
+        ],
+        [
+          {
+            kind: "replaceParagraphPlainText",
+            handle: paragraphHandle,
+            text: "Replacement",
+          },
+          {
+            kind: "setTextRunProperties",
+            handle: runHandle,
+            properties: { bold: false },
+          },
+        ],
+      ] as const
+    ).entries()) {
+      const session = createEditorSession(source);
+      const result = session.applyAll(commands);
+
+      expect(result, `command order ${String(orderIndex)}`).toMatchObject({
+        ok: false,
+        code: "invalid-command",
+      });
+      expect(session.document).toBe(source);
+      expect(session.undoDepth).toBe(0);
+    }
+
+    const runThenParagraph = createEditorSession(source);
+    expectApplied(
+      runThenParagraph.apply({
+        kind: "setTextRunProperties",
+        handle: runHandle,
+        properties: { bold: false },
+      }),
+    );
+    expect(
+      runThenParagraph.apply({
+        kind: "replaceParagraphPlainText",
+        handle: paragraphHandle,
+        text: "Replacement",
+      }),
+    ).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(runThenParagraph.undoDepth).toBe(1);
+    expect(firstRun(runThenParagraph.document).properties?.bold).toBe(false);
+
+    const paragraphThenRun = createEditorSession(source);
+    expectApplied(
+      paragraphThenRun.apply({
+        kind: "replaceParagraphPlainText",
+        handle: paragraphHandle,
+        text: "Replacement",
+      }),
+    );
+    expect(
+      paragraphThenRun.apply({
+        kind: "setTextRunProperties",
+        handle: runHandle,
+        properties: { bold: false },
+      }),
+    ).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(paragraphThenRun.undoDepth).toBe(1);
+    expect(firstParagraph(paragraphThenRun.document).runs[0].text).toBe("Replacement");
+  });
+
   it("applies paragraph alignment and bullet edits and persists them through write/read", async () => {
     const source = readPptx(await buildTextEditFixture());
     const session = createEditorSession(source);

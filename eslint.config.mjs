@@ -20,7 +20,7 @@ const documentBoundaryRestrictedImportPattern = {
     "pptx-glimpse/*",
   ],
   message:
-    "@pptx-glimpse/document is the lower-level OOXML/PptxSourceModel foundation and must not import renderer or the public core package.",
+    "@pptx-glimpse/document is the lower-level OOXML/PptxSourceModel foundation and must not import editor, renderer, or the public core package.",
 };
 const editorBoundaryRestrictedImportPattern = {
   group: [

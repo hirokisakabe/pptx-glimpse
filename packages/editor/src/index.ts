@@ -291,8 +291,16 @@ export class EditorSession {
         after = applyCommandToDocument(after, command);
         warnings.push(...collectCommandWarnings(after, [command]));
       }
+      assertNoConflictingParagraphAndRunEdits(after.edits);
       after = normalizeEditorEdits(after);
       const dedupedWarnings = dedupeCommandWarnings(warnings);
+      if (after === before) {
+        return {
+          ok: true,
+          document: before,
+          ...(dedupedWarnings.length > 0 ? { warnings: dedupedWarnings } : {}),
+        };
+      }
       this.#document = after;
       this.reconcileSelectionAfterDocumentChange();
       this.#undoStack.push({ before, after });
@@ -353,9 +361,9 @@ function applyCommandToDocument(
 ): PptxSourceModel {
   switch (command.kind) {
     case "replaceTextRunPlainText":
-      return replaceTextRunPlainText(document, command.handle, command.text);
+      return replaceTextRunPlainTextCommand(document, command);
     case "replaceParagraphPlainText":
-      return replaceParagraphPlainText(document, command.handle, command.text);
+      return replaceParagraphPlainTextCommand(document, command);
     case "setTextRunProperties":
       return setTextRunPropertiesCommand(document, command);
     case "clearTextRunProperties":
@@ -391,6 +399,26 @@ function applyCommandToDocument(
     case "deleteSlide":
       return deleteSlide(document, command.handle);
   }
+}
+
+function replaceTextRunPlainTextCommand(
+  document: PptxSourceModel,
+  command: ReplaceTextRunPlainTextCommand,
+): PptxSourceModel {
+  if (typeof command.text !== "string") {
+    throw new Error("replaceTextRunPlainText: text must be a string");
+  }
+  return replaceTextRunPlainText(document, command.handle, command.text);
+}
+
+function replaceParagraphPlainTextCommand(
+  document: PptxSourceModel,
+  command: ReplaceParagraphPlainTextCommand,
+): PptxSourceModel {
+  if (typeof command.text !== "string") {
+    throw new Error("replaceParagraphPlainText: text must be a string");
+  }
+  return replaceParagraphPlainText(document, command.handle, command.text);
 }
 
 function collectCommandWarnings(
@@ -889,6 +917,35 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
     ...document,
     edits: normalizedReversed.reverse(),
   };
+}
+
+function assertNoConflictingParagraphAndRunEdits(
+  edits: readonly PptxSourceModelEdit[] | undefined,
+): void {
+  if (edits === undefined) return;
+  const paragraphEditIndexes = new Map<string, number>();
+  edits.forEach((edit, index) => {
+    if (edit.kind === "replaceParagraphPlainText") {
+      paragraphEditIndexes.set(editHandleNodeKey(edit), index);
+    }
+  });
+
+  for (const [index, edit] of edits.entries()) {
+    if (edit.kind !== "replaceTextRunPlainText" && edit.kind !== "updateTextRunProperties") {
+      continue;
+    }
+    const paragraphKey = textRunParagraphEditKey(edit);
+    const paragraphIndex =
+      paragraphKey === undefined ? undefined : paragraphEditIndexes.get(paragraphKey);
+    if (
+      paragraphIndex !== undefined &&
+      (edit.kind === "updateTextRunProperties" || paragraphIndex < index)
+    ) {
+      throw new Error(
+        `${edit.kind}: run edits cannot be combined with replaceParagraphPlainText for the same paragraph`,
+      );
+    }
+  }
 }
 
 function editorEditsEqual(left: PptxSourceModelEdit, right: PptxSourceModelEdit): boolean {

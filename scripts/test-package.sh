@@ -32,7 +32,11 @@ node --input-type=module - "$EDITOR_PACKAGE_DIR/package/package.json" << 'TESTEO
 import { readFileSync } from "node:fs";
 
 const packageJson = JSON.parse(readFileSync(process.argv[2], "utf8"));
-const runtimeDependencies = Object.keys(packageJson.dependencies ?? {});
+const runtimeDependencies = [
+  ...Object.keys(packageJson.dependencies ?? {}),
+  ...Object.keys(packageJson.optionalDependencies ?? {}),
+  ...Object.keys(packageJson.peerDependencies ?? {}),
+];
 if (
   runtimeDependencies.length !== 1 ||
   runtimeDependencies[0] !== "@pptx-glimpse/document"
@@ -206,12 +210,44 @@ cd "$EDITOR_TEST_DIR"
 npm init -y > /dev/null 2>&1
 npm install "$DOCUMENT_TARBALL_PATH" "$EDITOR_TARBALL_PATH" > /dev/null 2>&1
 
+# --- editor Node CJS test ---
+echo "--- Test: @pptx-glimpse/editor Node CJS consumer ---"
+cat > test-editor-node.cjs << 'TESTEOF'
+const { readFileSync } = require("node:fs");
+
+const { findTextRunBySourceHandle, readPptx } = require("@pptx-glimpse/document");
+const { createEditorSession } = require("@pptx-glimpse/editor");
+
+const source = readPptx(readFileSync("fixture.pptx"));
+const run = source.slides
+  .flatMap((slide) => slide.shapes)
+  .find((shape) => shape.kind === "shape" && shape.textBody?.paragraphs[0]?.runs[0]?.handle)
+  ?.textBody?.paragraphs[0]?.runs[0];
+if (!run?.handle) throw new Error("fixture text run not found");
+
+const session = createEditorSession(source);
+const result = session.apply({
+  kind: "replaceTextRunPlainText",
+  handle: run.handle,
+  text: "CJS consumer edited",
+});
+if (!result.ok) throw new Error(result.message);
+if (findTextRunBySourceHandle(session.document, run.handle)?.text !== "CJS consumer edited") {
+  throw new Error("CJS consumer edit was not applied");
+}
+
+console.log("Editor Node CJS consumer test passed!");
+TESTEOF
+node test-editor-node.cjs
+
+echo ""
+
 # --- editor Node ESM test ---
 echo "--- Test: @pptx-glimpse/editor Node ESM consumer ---"
 cat > test-editor-node.mjs << 'TESTEOF'
 import { readFileSync } from "node:fs";
 
-import { readPptx } from "@pptx-glimpse/document";
+import { findTextRunBySourceHandle, readPptx } from "@pptx-glimpse/document";
 import { createEditorSession } from "@pptx-glimpse/editor";
 
 const source = readPptx(readFileSync("fixture.pptx"));
@@ -228,7 +264,9 @@ const result = session.apply({
   text: "Package consumer edited",
 });
 if (!result.ok) throw new Error(result.message);
-if (session.document === source) throw new Error("editor did not produce an edited document");
+if (findTextRunBySourceHandle(session.document, run.handle)?.text !== "Package consumer edited") {
+  throw new Error("ESM consumer edit was not applied");
+}
 
 console.log("Editor Node ESM consumer test passed!");
 TESTEOF
@@ -288,7 +326,7 @@ cat > tsconfig.json << 'TESTEOF'
     "noEmit": true,
     "skipLibCheck": true
   },
-  "include": ["test-editor-types.ts"]
+  "include": ["test-editor-types.ts", "test-editor-cjs.cts"]
 }
 TESTEOF
 cat > test-editor-types.ts << 'TESTEOF'
@@ -357,6 +395,13 @@ void _history;
 void _selection;
 void _selectResult;
 void _warning;
+TESTEOF
+cat > test-editor-cjs.cts << 'TESTEOF'
+import editor = require("@pptx-glimpse/editor");
+
+declare const source: Parameters<typeof editor.createEditorSession>[0];
+const _session: editor.EditorSession = editor.createEditorSession(source);
+void _session;
 TESTEOF
 npx tsc --noEmit
 echo "Editor TypeScript public API test passed!"

@@ -1,6 +1,7 @@
 import {
   asPartPath,
   asPt,
+  asRawSidecarId,
   asSourceNodeId,
   type SourceHandle,
   type SourceTextBody,
@@ -88,18 +89,123 @@ describe("ProseMirror text body compatibility", () => {
     ]);
   });
 
-  it("rejects unsupported run-like content as before", () => {
+  it("falls back to paragraph replacement when run order changes", () => {
+    const docJson = textBodyToProseMirrorDocJson(textBody);
+    const paragraph = docJson.content?.[0];
+    const firstRun = paragraph?.content?.[0];
+    const secondRun = paragraph?.content?.[1];
+    if (paragraph === undefined || firstRun === undefined || secondRun === undefined) {
+      throw new Error("compatibility fixture is incomplete");
+    }
+
+    expect(
+      proseMirrorDocJsonToEditorCommands(textBody, {
+        type: "doc",
+        content: [{ ...paragraph, content: [secondRun, firstRun] }],
+      }),
+    ).toEqual([
+      {
+        kind: "replaceParagraphPlainText",
+        handle: paragraphHandle,
+        text: " twoOne",
+      },
+    ]);
+  });
+
+  it("preserves run handles when an edit changes text across multiple runs", () => {
+    const docJson = textBodyToProseMirrorDocJson(textBody);
+    const paragraph = docJson.content?.[0];
+    const firstRun = paragraph?.content?.[0];
+    const secondRun = paragraph?.content?.[1];
+    if (paragraph === undefined || firstRun === undefined || secondRun === undefined) {
+      throw new Error("compatibility fixture is incomplete");
+    }
+
+    expect(
+      proseMirrorDocJsonToEditorCommands(textBody, {
+        type: "doc",
+        content: [
+          {
+            ...paragraph,
+            content: [
+              { ...firstRun, text: "OnX" },
+              { ...secondRun, text: "two" },
+            ],
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        kind: "replaceTextRunPlainText",
+        handle: firstRunHandle,
+        text: "OnX",
+      },
+      {
+        kind: "replaceTextRunPlainText",
+        handle: secondRunHandle,
+        text: "two",
+      },
+    ]);
+  });
+
+  it("converts removed and added paragraph properties to clear and set commands", () => {
+    const docJson = textBodyToProseMirrorDocJson(textBody);
+    const paragraph = docJson.content?.[0];
+    if (paragraph === undefined) throw new Error("compatibility fixture is incomplete");
+
+    expect(
+      proseMirrorDocJsonToEditorCommands(textBody, {
+        type: "doc",
+        content: [
+          {
+            ...paragraph,
+            attrs: {
+              ...paragraph.attrs,
+              properties: { bullet: { type: "char", char: "\u2022" } },
+            },
+          },
+        ],
+      }),
+    ).toEqual([
+      {
+        kind: "clearParagraphProperties",
+        handle: paragraphHandle,
+        properties: ["align", "level"],
+      },
+      {
+        kind: "setParagraphProperties",
+        handle: paragraphHandle,
+        properties: { bullet: { type: "char", char: "\u2022" } },
+      },
+    ]);
+  });
+
+  it.each([
+    { text: "", rawSidecars: undefined, expected: /empty text runs/ },
+    { text: "\n", rawSidecars: undefined, expected: /unsupported run-like/ },
+    {
+      text: "One",
+      rawSidecars: [{ id: asRawSidecarId("raw-1"), node: { name: "a:br" } }],
+      expected: /unsupported run-like/,
+    },
+  ] as const)("rejects unsupported run-like content: %#", ({ text, rawSidecars, expected }) => {
     expect(() =>
       textBodyToProseMirrorDocJson({
         ...textBody,
         paragraphs: [
           {
             ...textBody.paragraphs[0],
-            runs: [{ ...textBody.paragraphs[0].runs[0], text: "\n" }],
+            runs: [
+              {
+                ...textBody.paragraphs[0].runs[0],
+                text,
+                ...(rawSidecars !== undefined ? { rawSidecars } : {}),
+              },
+            ],
           },
         ],
       }),
-    ).toThrow(/unsupported run-like/);
+    ).toThrow(expected);
   });
 });
 
