@@ -28,6 +28,8 @@ echo "Packed: $EDITOR_TARBALL"
 CORE_PACKAGE_DIR="$WORK_DIR/core-package"
 mkdir -p "$CORE_PACKAGE_DIR"
 tar -xzf "$TARBALL_PATH" -C "$CORE_PACKAGE_DIR"
+test -f "$CORE_PACKAGE_DIR/package/README.md"
+echo "Core package README verification passed!"
 node --input-type=module - "$CORE_PACKAGE_DIR/package/package.json" << 'TESTEOF'
 import { readFileSync } from "node:fs";
 
@@ -88,6 +90,8 @@ echo "Core package boundary verification passed!"
 DOCUMENT_PACKAGE_DIR="$WORK_DIR/document-package"
 mkdir -p "$DOCUMENT_PACKAGE_DIR"
 tar -xzf "$DOCUMENT_TARBALL_PATH" -C "$DOCUMENT_PACKAGE_DIR"
+test -f "$DOCUMENT_PACKAGE_DIR/package/README.md"
+echo "Document package README verification passed!"
 node --input-type=module - "$DOCUMENT_PACKAGE_DIR/package/package.json" << 'TESTEOF'
 import { readFileSync } from "node:fs";
 
@@ -108,6 +112,8 @@ echo "Document package boundary verification passed!"
 EDITOR_PACKAGE_DIR="$WORK_DIR/editor-package"
 mkdir -p "$EDITOR_PACKAGE_DIR"
 tar -xzf "$EDITOR_TARBALL_PATH" -C "$EDITOR_PACKAGE_DIR"
+test -f "$EDITOR_PACKAGE_DIR/package/README.md"
+echo "Editor package README verification passed!"
 node --input-type=module - "$EDITOR_PACKAGE_DIR/package/package.json" << 'TESTEOF'
 import { readFileSync } from "node:fs";
 

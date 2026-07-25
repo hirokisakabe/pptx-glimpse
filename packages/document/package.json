@@ -1,13 +1,16 @@
 {
   "name": "@pptx-glimpse/document",
   "version": "0.12.0",
-  "description": "PptxSourceModel and OOXML document foundation for pptx-glimpse.",
+  "description": "OOXML document foundation for reading, computed views, authoring, editing, and writing PPTX files.",
   "keywords": [
     "pptx",
     "powerpoint",
     "ooxml",
     "presentation",
-    "document"
+    "document",
+    "reader",
+    "writer",
+    "editing"
   ],
   "type": "module",
   "main": "./dist/index.cjs",
