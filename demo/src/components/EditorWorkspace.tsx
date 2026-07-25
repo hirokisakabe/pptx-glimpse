@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   createPptxEditorSession,
+  isPptxEditorError,
   type PptxEditorShapeBoundsPx,
   type PptxEditorShapeInfo,
   type PptxEditorSlideSvg,
@@ -403,6 +404,11 @@ export function EditorWorkspace({
         } catch (error) {
           setHistory(session.history);
           setOperationError(error instanceof Error ? error.message : String(error));
+          if (isPptxEditorError(error) && error.code === "render-failed") {
+            setMessage("Text updated; slide preview could not refresh");
+            closeDirectTextEditor(restoreFocus);
+            return true;
+          }
           return false;
         } finally {
           busyRef.current = false;
