@@ -121,6 +121,8 @@ test("opens the sample editor first and replaces it with an uploaded PPTX", asyn
   await expect(
     page.getByRole("heading", { name: "pptx-glimpse browser editor demo" }),
   ).toBeAttached();
+  await page.getByRole("link", { name: "Documentation" }).click();
+  await expect(page).toHaveURL(`${demoServer.url}/docs`);
 });
 
 test("runs the public demo browser editor flow entirely client-side", async ({ page }) => {

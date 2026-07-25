@@ -186,6 +186,7 @@ export function EditorWorkspace({
         setShapeOptions([...session.shapes(1).filter((shape) => shape.handle && shape.bounds)]);
         setHistory(session.history);
         setCurrentIndex(0);
+        dirtyRef.current = false;
         setMessage("");
       } catch (error) {
         if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));

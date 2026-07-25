@@ -32,6 +32,7 @@ export function UploadViewer() {
   } | null>(null);
   const [mode, setMode] = useState<DemoMode>("view");
   const initialSampleRequested = useRef(false);
+  const loadRequestIdRef = useRef(0);
   const pptxInputRef = useRef<HTMLInputElement>(null);
   const fontInputRef = useRef<HTMLInputElement>(null);
 
@@ -44,6 +45,7 @@ export function UploadViewer() {
       file: File,
       initialMode: DemoMode = "view",
       selectedFontFiles: readonly File[] = fontFiles,
+      requestId = ++loadRequestIdRef.current,
     ) => {
       const replacing = sourceFile !== null;
       if (replacing) setIsReplacing(true);
@@ -64,6 +66,7 @@ export function UploadViewer() {
         if (report.slides.length === 0) {
           throw new Error("No slides found in the selected file");
         }
+        if (requestId !== loadRequestIdRef.current) return;
 
         setSlides([...report.slides]);
         setSourceFile({ file, fileName: file.name, bytes: pptxBytes });
@@ -73,10 +76,11 @@ export function UploadViewer() {
         setMode(initialMode);
         setPhase("viewing");
       } catch (err) {
+        if (requestId !== loadRequestIdRef.current) return;
         setErrorMessage(err instanceof Error ? err.message : String(err));
         setPhase(replacing ? "viewing" : "error");
       } finally {
-        if (replacing) setIsReplacing(false);
+        if (replacing && requestId === loadRequestIdRef.current) setIsReplacing(false);
       }
     },
     [fontFiles, sourceFile],
@@ -84,6 +88,7 @@ export function UploadViewer() {
 
   const handleSample = useCallback(
     async (sample: SamplePptx, initialMode: SampleOpenMode) => {
+      const requestId = ++loadRequestIdRef.current;
       const replacing = sourceFile !== null;
       if (replacing) setIsReplacing(true);
       else setPhase("loading");
@@ -97,14 +102,15 @@ export function UploadViewer() {
         const file = new File([await response.blob()], sample.filename, {
           type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
         });
-        await handleFile(file, initialMode);
+        await handleFile(file, initialMode, fontFiles, requestId);
       } catch (err) {
+        if (requestId !== loadRequestIdRef.current) return;
         setErrorMessage(err instanceof Error ? err.message : String(err));
         setPhase(replacing ? "viewing" : "error");
         if (replacing) setIsReplacing(false);
       }
     },
-    [handleFile, sourceFile],
+    [fontFiles, handleFile, sourceFile],
   );
 
   useEffect(() => {
