@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { DocsPage, DocsPager } from "@/components/docs/DocsPage";
 
 export const metadata: Metadata = {
@@ -54,12 +55,12 @@ export default function DocsOverviewPage() {
         </p>
         <div className="docs-path-grid">
           {paths.map((path) => (
-            <a className="docs-path" href={path.href} key={path.href}>
+            <Link className="docs-path" href={path.href} key={path.href}>
               <span>{path.marker}</span>
               <h3>{path.title}</h3>
               <p>{path.description}</p>
               <strong>{path.link} →</strong>
-            </a>
+            </Link>
           ))}
         </div>
       </section>
@@ -67,8 +68,9 @@ export default function DocsOverviewPage() {
       <section id="workflow">
         <h2>The high-level workflow</h2>
         <p>
-          The browser demo follows the same lifecycle exposed by the public API. Files stay as
-          <code>Uint8Array</code> values; your application owns file selection, UI, and storage.
+          The browser demo follows the same lifecycle exposed by the public API. PPTX input, PNG
+          output, and saved presentations use <code>Uint8Array</code>; SVG output is a string. Your
+          application owns file selection, UI, and storage.
         </p>
         <ol className="docs-process">
           <li>
@@ -102,23 +104,23 @@ export default function DocsOverviewPage() {
           packages are lower-level building blocks for applications that need to own more of the
           workflow.
         </p>
-        <div className="docs-package-stack" aria-label="Package dependency direction">
-          <div>
+        <ol className="docs-package-stack" aria-label="Packages from highest to lowest level">
+          <li>
             <code>pptx-glimpse</code>
             <span>render + high-level editing</span>
-          </div>
-          <div>
+          </li>
+          <li>
             <code>@pptx-glimpse/editor</code>
             <span>commands + selection + history</span>
-          </div>
-          <div>
+          </li>
+          <li>
             <code>@pptx-glimpse/document</code>
             <span>OOXML source + computed view + writing</span>
-          </div>
-        </div>
+          </li>
+        </ol>
         <p>
-          See <a href="/docs/packages">Choose a package</a> for package boundaries, stability, and
-          links to the detailed lower-level guides.
+          See <Link href="/docs/packages">Choose a package</Link> for package boundaries, stability,
+          and links to the detailed lower-level guides.
         </p>
       </section>
 

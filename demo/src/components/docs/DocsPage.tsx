@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 
 export interface DocsTocItem {
   readonly href: `#${string}`;
@@ -66,18 +67,18 @@ export function DocsPager({
   return (
     <nav className="docs-pager" aria-label="Documentation pages">
       {previous ? (
-        <a href={previous.href}>
+        <Link href={previous.href}>
           <span>Previous</span>
           {previous.label}
-        </a>
+        </Link>
       ) : (
         <span />
       )}
       {next ? (
-        <a href={next.href}>
+        <Link href={next.href}>
           <span>Next</span>
           {next.label}
-        </a>
+        </Link>
       ) : (
         <span />
       )}

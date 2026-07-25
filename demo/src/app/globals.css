@@ -507,7 +507,7 @@ body {
   margin-bottom: 22px;
 }
 
-.docs-package-stack div {
+.docs-package-stack li {
   align-items: center;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -516,11 +516,11 @@ body {
   padding: 14px 16px;
 }
 
-.docs-package-stack div:nth-child(2) {
+.docs-package-stack li:nth-child(2) {
   margin-left: 22px;
 }
 
-.docs-package-stack div:nth-child(3) {
+.docs-package-stack li:nth-child(3) {
   margin-left: 44px;
 }
 
@@ -1495,14 +1495,14 @@ body {
     min-height: 220px;
   }
 
-  .docs-package-stack div {
+  .docs-package-stack li {
     align-items: flex-start;
     flex-direction: column;
     gap: 5px;
   }
 
-  .docs-package-stack div:nth-child(2),
-  .docs-package-stack div:nth-child(3) {
+  .docs-package-stack li:nth-child(2),
+  .docs-package-stack li:nth-child(3) {
     margin-left: 0;
   }
 

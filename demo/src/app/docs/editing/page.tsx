@@ -65,11 +65,11 @@ const run = shapes
     text: "Edited with pptx-glimpse",
   });
 
-  preview.innerHTML = response.slides[0]?.svg ?? "";
+  const updatedSvg = response.slides[0]?.svg;
 }`}</code>
         </pre>
         <p>
-          Successful commands rerender the current document and create history. Use{" "}
+          Successful state-changing commands rerender the current document and create history. Use{" "}
           <code>applyAll</code> when several commands must succeed atomically as one undo entry.
         </p>
         <DocsCallout title="Editing support is intentionally constrained">
@@ -88,7 +88,12 @@ const run = shapes
           The session reconciles selection after edits and history changes.
         </p>
         <pre>
-          <code>{`editor.selectShape(shape.handle);
+          <code>{`const selectableShape = editor.shapes(1)
+  .find((shape) => shape.handle !== undefined);
+
+if (selectableShape?.handle) {
+  editor.selectShape(selectableShape.handle);
+}
 
 if (editor.history.canUndo) {
   await editor.undo();
@@ -104,8 +109,10 @@ if (editor.history.canRedo) {
         <h2>Save the presentation</h2>
         <pre>
           <code>{`const { pptx } = editor.save();
+const copy = new Uint8Array(pptx.byteLength);
+copy.set(pptx);
 
-const blob = new Blob([pptx], {
+const blob = new Blob([copy.buffer], {
   type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 });`}</code>
         </pre>

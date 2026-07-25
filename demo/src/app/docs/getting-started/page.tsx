@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { DocsCallout, DocsPage, DocsPager } from "@/components/docs/DocsPage";
 
 export const metadata: Metadata = {
@@ -77,18 +78,18 @@ if (firstSlide) {
       <section id="next">
         <h2>Choose what comes next</h2>
         <div className="docs-link-list">
-          <a href="/docs/rendering">
+          <Link href="/docs/rendering">
             <strong>Control rendering</strong>
             <span>Selected slides, output size, fonts, SVG text, and browser PNG.</span>
-          </a>
-          <a href="/docs/editing">
+          </Link>
+          <Link href="/docs/editing">
             <strong>Build an editing flow</strong>
             <span>Inspect shapes, apply commands, manage history, and save PPTX bytes.</span>
-          </a>
-          <a href="/docs/packages">
+          </Link>
+          <Link href="/docs/packages">
             <strong>Work below the high-level API</strong>
             <span>Read, author, or edit documents with the lower-level packages.</span>
-          </a>
+          </Link>
         </div>
       </section>
 

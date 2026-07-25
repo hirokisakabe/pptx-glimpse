@@ -33,7 +33,6 @@ const editor = await createPptxEditorSession(input, {
   skipSystemFonts: false,
 });
 
-await editor.apply(command);
 await writeFile("edited.pptx", editor.save().pptx);`}</code>
         </pre>
         <p>
@@ -51,7 +50,11 @@ await writeFile("edited.pptx", editor.save().pptx);`}</code>
           <code>fonts</code> as bytes for the most portable setup.
         </p>
         <pre>
-          <code>{`const report = await convertPptxToPng(pptx, {
+          <code>{`import { readFile } from "node:fs/promises";
+import { convertPptxToPng } from "pptx-glimpse";
+
+const pptx = await readFile("input.pptx");
+const report = await convertPptxToPng(pptx, {
   skipSystemFonts: true,
   fontDirs: ["/app/fonts"],
   fontMapping: {

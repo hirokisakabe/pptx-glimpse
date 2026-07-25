@@ -45,8 +45,13 @@ const pptx = new Uint8Array(await file.arrayBuffer());`}</code>
           allowed to use and provide their bytes through the <code>fonts</code> option.
         </p>
         <pre>
-          <code>{`const inter = await fetch("/fonts/Inter-Regular.ttf")
-  .then((response) => response.arrayBuffer());
+          <code>{`import { convertPptxToSvg } from "pptx-glimpse";
+
+const fontResponse = await fetch("/fonts/Inter-Regular.ttf");
+if (!fontResponse.ok) {
+  throw new Error(\`Failed to load font: HTTP \${fontResponse.status}\`);
+}
+const inter = await fontResponse.arrayBuffer();
 
 const report = await convertPptxToSvg(pptx, {
   fonts: [{ name: "Inter", data: inter }],
@@ -78,10 +83,7 @@ const report = await convertPptxToSvg(pptx, {
         <pre>
           <code>{`import { initResvgWasm, convertPptxToPng } from "pptx-glimpse";
 
-const wasm = await fetch("/resvg.wasm")
-  .then((response) => response.arrayBuffer());
-
-await initResvgWasm(wasm);
+await initResvgWasm(await fetch("/resvg.wasm"));
 const report = await convertPptxToPng(pptx);`}</code>
         </pre>
       </section>

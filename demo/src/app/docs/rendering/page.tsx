@@ -44,8 +44,13 @@ const { slides } = await convertPptxToSvg(pptx, {
   textOutput: "text",
 });
 
-preview.innerHTML = slides[0]?.svg ?? "";`}</code>
+const firstSlideSvg = slides[0]?.svg;`}</code>
         </pre>
+        <p>
+          SVG is active document markup. Before inserting SVG from an untrusted presentation into
+          the DOM, apply an SVG-aware sanitizer and a restrictive Content Security Policy. See the
+          browser runtime guide for details.
+        </p>
       </section>
 
       <section id="options">
