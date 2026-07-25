@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { DocsCallout, DocsPage, DocsPager } from "@/components/docs/DocsPage";
+import { DocsPage, DocsPager } from "@/components/docs/DocsPage";
 
 export const metadata: Metadata = {
-  title: "Render presentations",
+  title: "Rendering presentations",
   description: "Convert PPTX slides to SVG or PNG with pptx-glimpse.",
   alternates: { canonical: "/docs/rendering" },
 };
@@ -17,9 +17,9 @@ const toc = [
 export default function RenderingPage() {
   return (
     <DocsPage
-      eyebrow="Guide / Rendering"
-      title="Turn slides into output you can use."
+      title="Rendering presentations"
       description="Render complete presentations or selected slides as embeddable SVG or PNG bytes. The conversion report also describes unsupported and fallback content."
+      filePath="src/app/docs/rendering/page.tsx"
       toc={toc}
     >
       <section id="svg-or-png">
@@ -101,13 +101,9 @@ const firstSlideSvg = slides[0]?.svg;`}</code>
           SVG defaults to path output for predictable rendering. Set <code>textOutput: "text"</code>{" "}
           to emit native SVG text with embedded subset fonts. Native text is selectable and often
           smaller for CJK-heavy slides, but the viewing environment can affect its rasterization.
+          <strong> PNG always uses paths.</strong> <code>convertPptxToPng</code> ignores SVG text
+          mode and converts text to paths before rasterization.
         </p>
-        <DocsCallout title="PNG always uses paths">
-          <p>
-            <code>convertPptxToPng</code> ignores SVG text mode and converts text to paths before
-            rasterization.
-          </p>
-        </DocsCallout>
       </section>
 
       <section id="reports">

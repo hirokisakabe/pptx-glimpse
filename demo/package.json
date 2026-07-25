@@ -14,10 +14,13 @@
   "dependencies": {
     "@vercel/analytics": "^1.6.1",
     "next": "^15.5.21",
+    "nextra": "^4.5.1",
+    "nextra-theme-docs": "^4.5.1",
     "pptx-glimpse": "file:../packages/core",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "sharp": "^0.34.5"
+    "sharp": "^0.34.5",
+    "shiki": "3.23.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.61.1",

@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
-import Link from "next/link";
+import { Children, cloneElement, isValidElement, type ReactNode } from "react";
+import { useMDXComponents } from "nextra-theme-docs";
+import { codeToHtml } from "shiki";
 
 export interface DocsTocItem {
   readonly href: `#${string}`;
@@ -7,81 +8,95 @@ export interface DocsTocItem {
 }
 
 interface DocsPageProps {
-  readonly eyebrow: string;
   readonly title: string;
   readonly description: string;
+  readonly filePath: `src/app/docs/${string}/page.tsx`;
   readonly toc: readonly DocsTocItem[];
   readonly children: ReactNode;
 }
 
-export function DocsPage({ eyebrow, title, description, toc, children }: DocsPageProps) {
+async function highlightCodeBlocks(node: ReactNode): Promise<ReactNode> {
+  if (Array.isArray(node)) {
+    return Promise.all(Children.toArray(node).map(highlightCodeBlocks));
+  }
+
+  if (!isValidElement<{ children?: ReactNode }>(node)) {
+    return node;
+  }
+
+  if (node.type === "pre") {
+    const code = node.props.children;
+
+    if (
+      isValidElement<{ children?: ReactNode }>(code) &&
+      code.type === "code" &&
+      typeof code.props.children === "string"
+    ) {
+      const html = await codeToHtml(code.props.children, {
+        lang: "typescript",
+        theme: "github-dark",
+      });
+
+      return (
+        <div
+          className="docs-code-block"
+          dangerouslySetInnerHTML={{ __html: html }}
+          key={node.key}
+        />
+      );
+    }
+  }
+
+  if (node.props.children === undefined) {
+    return node;
+  }
+
+  const children = await Promise.all(
+    Children.toArray(node.props.children).map(highlightCodeBlocks),
+  );
+
+  return cloneElement(node, undefined, children);
+}
+
+export async function DocsPage({ title, description, filePath, toc, children }: DocsPageProps) {
+  const Wrapper = useMDXComponents().wrapper;
+  const highlightedChildren = await highlightCodeBlocks(children);
+
+  if (!Wrapper) {
+    throw new Error("Nextra documentation wrapper is unavailable");
+  }
+
   return (
-    <>
-      <article className="docs-article">
+    <Wrapper
+      toc={toc.map((item) => ({
+        depth: 2,
+        id: item.href.slice(1),
+        value: item.label,
+      }))}
+      metadata={{
+        title,
+        description,
+        filePath,
+      }}
+      sourceCode=""
+    >
+      <div className="docs-article">
         <header className="docs-article-header">
-          <p className="eyebrow">{eyebrow}</p>
           <h1>{title}</h1>
           <p>{description}</p>
         </header>
-        <div className="docs-prose">{children}</div>
-      </article>
-
-      <aside className="docs-toc">
-        <p>On this page</p>
-        <nav aria-label="On this page">
-          <ul>
-            {toc.map((item) => (
-              <li key={item.href}>
-                <a href={item.href}>{item.label}</a>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      </aside>
-    </>
-  );
-}
-
-export function DocsCallout({
-  title,
-  children,
-}: {
-  readonly title: string;
-  readonly children: ReactNode;
-}) {
-  return (
-    <aside className="docs-callout">
-      <strong>{title}</strong>
-      <div>{children}</div>
-    </aside>
+        <div className="docs-prose">{highlightedChildren}</div>
+      </div>
+    </Wrapper>
   );
 }
 
 export function DocsPager({
-  previous,
-  next,
+  previous: _previous,
+  next: _next,
 }: {
   readonly previous?: { readonly href: string; readonly label: string };
   readonly next?: { readonly href: string; readonly label: string };
 }) {
-  return (
-    <nav className="docs-pager" aria-label="Documentation pages">
-      {previous ? (
-        <Link href={previous.href}>
-          <span>Previous</span>
-          {previous.label}
-        </Link>
-      ) : (
-        <span />
-      )}
-      {next ? (
-        <Link href={next.href}>
-          <span>Next</span>
-          {next.label}
-        </Link>
-      ) : (
-        <span />
-      )}
-    </nav>
-  );
+  return null;
 }

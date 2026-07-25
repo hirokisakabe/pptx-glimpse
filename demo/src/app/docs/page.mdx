@@ -1,0 +1,43 @@
+import {
+  DocsHero,
+  DocsPackageStack,
+  DocsPathGrid,
+  DocsWorkflow,
+} from "@/components/docs/DocsOverview";
+
+export const metadata = {
+  title: "Overview",
+  description:
+    "Learn how to render, edit, and save PowerPoint files with pptx-glimpse in Node.js and the browser.",
+  alternates: { canonical: "/docs" },
+};
+
+<DocsHero
+  title="Overview"
+  description="Render presentations or build an editing workflow without running PowerPoint, LibreOffice, or a conversion server."
+/>
+
+## Choose a path
+
+Start with the job your application needs to perform. The high-level package covers the common
+render and edit lifecycles in both Node.js and browser bundles.
+
+<DocsPathGrid />
+
+## The high-level workflow
+
+The browser demo follows the same lifecycle exposed by the public API. PPTX input, PNG output, and
+saved presentations use `Uint8Array`; SVG output is a string. Your application owns file selection,
+UI, and storage.
+
+<DocsWorkflow />
+
+## Three packages, one dependency direction
+
+Most applications should begin with `pptx-glimpse`. The document and editor packages are lower-level
+building blocks for applications that need to own more of the workflow.
+
+<DocsPackageStack />
+
+See [Choose a package](/docs/packages) for package boundaries, stability, and links to the detailed
+lower-level guides.

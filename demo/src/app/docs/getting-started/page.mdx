@@ -1,0 +1,57 @@
+import { DocsHero, DocsNextLinks } from "@/components/docs/DocsOverview";
+
+export const metadata = {
+  title: "Getting started",
+  description: "Install pptx-glimpse and render your first PowerPoint slide.",
+  alternates: { canonical: "/docs/getting-started" },
+};
+
+<DocsHero
+  title="Getting started"
+  description="Install the high-level package, pass it PPTX bytes, and receive SVG or PNG output together with diagnostics and support coverage."
+/>
+
+## Requirements
+
+- Node.js 22 or later for Node.js applications and package tooling.
+- A modern browser bundler for browser applications.
+- Font files or known font directories when presentation text must match closely.
+
+**No office installation required.** pptx-glimpse runs in-process. Rendering does not start
+PowerPoint or LibreOffice and does not require a conversion service.
+
+## Install
+
+```bash filename="Terminal"
+npm install pptx-glimpse
+```
+
+The high-level package includes compatible document and editor packages as runtime dependencies.
+Install a lower-level package directly only when your application imports it.
+
+## Render your first slide
+
+In Node.js, read the file as bytes and pass it directly to the converter.
+
+```typescript filename="render-slide.ts" copy
+import { readFile, writeFile } from "node:fs/promises";
+import { convertPptxToPng } from "pptx-glimpse";
+
+const pptx = await readFile("presentation.pptx");
+const report = await convertPptxToPng(pptx, {
+  slides: [1],
+  width: 1920,
+});
+
+const firstSlide = report.slides[0];
+if (firstSlide) {
+  await writeFile("slide-1.png", firstSlide.png);
+}
+```
+
+Each conversion returns `slides`, `diagnostics`, and `supportCoverage`. Check diagnostics when
+content is skipped or rendered with a fallback.
+
+## Choose what comes next
+
+<DocsNextLinks />

@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { DocsCallout, DocsPage, DocsPager } from "@/components/docs/DocsPage";
+import { DocsPage, DocsPager } from "@/components/docs/DocsPage";
 
 export const metadata: Metadata = {
-  title: "Run in Node.js",
+  title: "Node.js usage",
   description: "Render and edit PPTX files in Node.js with explicit font and file handling.",
   alternates: { canonical: "/docs/nodejs" },
 };
@@ -17,9 +17,9 @@ const toc = [
 export default function NodejsPage() {
   return (
     <DocsPage
-      eyebrow="Runtime / Node.js"
-      title="Render inside the Node.js process."
+      title="Node.js usage"
       description="Use Node.js 22 or later to convert and edit PPTX bytes without spawning an office process. File and storage operations remain explicit in your application."
+      filePath="src/app/docs/nodejs/page.tsx"
       toc={toc}
     >
       <section id="files">
@@ -71,12 +71,11 @@ const report = await convertPptxToPng(pptx, {
           output, bundle the exact font files you need, set <code>skipSystemFonts: true</code>, and
           use only explicit font bytes or directories.
         </p>
-        <DocsCallout title="Cache repeated work">
-          <p>
-            For repeated slide renders, read the PPTX once with <code>@pptx-glimpse/document</code>{" "}
-            and pass its source model to <code>renderPptxSourceModelToSvg</code>.
-          </p>
-        </DocsCallout>
+        <p>
+          <strong>Cache repeated work.</strong> For repeated slide renders, read the PPTX once with{" "}
+          <code>@pptx-glimpse/document</code> and pass its source model to{" "}
+          <code>renderPptxSourceModelToSvg</code>.
+        </p>
       </section>
 
       <section id="containers">

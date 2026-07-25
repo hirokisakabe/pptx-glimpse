@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DocsCallout, DocsPage, DocsPager } from "@/components/docs/DocsPage";
+import { DocsPage, DocsPager } from "@/components/docs/DocsPage";
 
 export const metadata: Metadata = {
   title: "High-level API",
@@ -34,9 +34,9 @@ const sessionApis = [
 export default function ApiPage() {
   return (
     <DocsPage
-      eyebrow="Reference / High-level API"
-      title="The public surface, grouped by task."
+      title="High-level API"
       description="This page covers the stable entry points most applications need. TypeScript remains the source of truth for complete signatures and exported types."
+      filePath="src/app/docs/api/page.tsx"
       toc={toc}
     >
       <section id="conversion">
@@ -116,12 +116,11 @@ export default function ApiPage() {
   }
 }`}</code>
         </pre>
-        <DocsCallout title="Warnings do not throw">
-          <p>
-            Successful commands can return warnings, such as replacing a media part referenced by
-            multiple images. Inspect the response before discarding it.
-          </p>
-        </DocsCallout>
+        <p>
+          <strong>Warnings do not throw.</strong> Successful commands can return warnings, such as
+          replacing a media part referenced by multiple images. Inspect the response before
+          discarding it.
+        </p>
       </section>
 
       <DocsPager
