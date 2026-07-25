@@ -30,6 +30,13 @@ paragraph text, shape transforms/fills/outlines, shape deletion, same-format ima
 slide backgrounds, and slide topology. The authoring helpers can add new supported content to a
 slide loaded from an existing PPTX.
 
+The text operations use the same `SourceParagraph` / `SourceTextRun` contract for ordinary shape
+text and existing Table cell text. To edit a Table, locate a cell through
+`SourceTable.table.rows[rowIndex].cells[cellIndex]`, then pass the paragraph or run handle to the
+same `replaceParagraphPlainText`, `replaceTextRunPlainText`, `set*Properties`, or
+`clear*Properties` operation. Table structure, merges, fills, borders, margins, and styles are
+preserved but are not editable through these text operations.
+
 ## Typed edits and raw preservation
 
 The source model deliberately carries both typed nodes and preserved raw material. When a supported
