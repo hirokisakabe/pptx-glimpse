@@ -288,22 +288,73 @@ export class PptxEditorSession {
   }
 
   async renderCurrentSlides(): Promise<readonly PptxEditorSlideSvg[]> {
-    let report: SvgConversionReport;
-    try {
-      report = await this.#renderToSvg(this.#session.document, {
-        textOutput: "text",
-        skipSystemFonts: true,
-        ...this.#renderOptions,
-      });
-    } catch (cause) {
-      throw integrationError("render-failed", "Failed to render editor slides", cause);
+    return this.#renderSlides();
+  }
+
+  async #renderChangedSlides(before: PptxSourceModel): Promise<void> {
+    const affectedPartPaths = affectedSlidePartPaths(before, this.#session.document);
+    await this.#renderSlides(affectedPartPaths);
+  }
+
+  async #renderSlides(
+    affectedPartPaths?: ReadonlySet<string>,
+  ): Promise<readonly PptxEditorSlideSvg[]> {
+    const document = this.#session.document;
+    const cachedByPartPath = new Map(
+      this.#slides.flatMap((slide) =>
+        slide.handle?.partPath === undefined ? [] : [[slide.handle.partPath, slide] as const],
+      ),
+    );
+    const canReuseCache =
+      affectedPartPaths !== undefined &&
+      document.slides.every(
+        (slide) =>
+          slide.handle?.partPath !== undefined &&
+          (affectedPartPaths.has(slide.partPath) || cachedByPartPath.has(slide.partPath)),
+      );
+    const slideNumbers = canReuseCache
+      ? document.slides.flatMap((slide, index) =>
+          affectedPartPaths.has(slide.partPath) ? [index + 1] : [],
+        )
+      : undefined;
+
+    let renderedSlides: SvgConversionReport["slides"] = [];
+    if (slideNumbers === undefined || slideNumbers.length > 0) {
+      try {
+        const report = await this.#renderToSvg(document, {
+          textOutput: "text",
+          skipSystemFonts: true,
+          ...this.#renderOptions,
+          ...(slideNumbers !== undefined ? { slides: slideNumbers } : {}),
+        });
+        renderedSlides = report.slides;
+      } catch (cause) {
+        throw integrationError("render-failed", "Failed to render editor slides", cause);
+      }
     }
-    this.#slides = report.slides.map((slide) => ({
-      ...slide,
-      ...(this.#session.document.slides[slide.slideNumber - 1]?.handle !== undefined
-        ? { handle: this.#session.document.slides[slide.slideNumber - 1]?.handle }
-        : {}),
-    }));
+    const renderedBySlideNumber = new Map(
+      renderedSlides.map((slide) => [slide.slideNumber, slide]),
+    );
+    this.#slides = document.slides.map((sourceSlide, index) => {
+      const slideNumber = index + 1;
+      const rendered = renderedBySlideNumber.get(slideNumber);
+      const cached = cachedByPartPath.get(sourceSlide.partPath);
+      const mayUseCachedSlide =
+        canReuseCache &&
+        affectedPartPaths !== undefined &&
+        !affectedPartPaths.has(sourceSlide.partPath);
+      const slide = rendered ?? (mayUseCachedSlide ? cached : undefined);
+      if (slide === undefined) {
+        throw new Error(
+          `PptxEditorSession: renderer did not return requested slide ${String(slideNumber)}`,
+        );
+      }
+      return {
+        ...slide,
+        slideNumber,
+        ...(sourceSlide.handle !== undefined ? { handle: sourceSlide.handle } : {}),
+      };
+    });
     return this.#slides;
   }
 
@@ -312,9 +363,10 @@ export class PptxEditorSession {
   }
 
   async applyAll(commands: readonly EditorCommand[]): Promise<PptxEditorSlidesResponse> {
+    const before = this.#session.document;
     const result = unwrapEditorOperation(this.#session.applyAll(commands));
     if (commands.length === 0) return this.response(result.warnings);
-    await this.renderCurrentSlides();
+    await this.#renderChangedSlides(before);
     return this.response(result.warnings);
   }
 
@@ -330,6 +382,7 @@ export class PptxEditorSession {
       );
     }
     const existingShapeKeys = new Set(slide.shapes.map(shapeSourceKey));
+    const before = this.#session.document;
     const result = unwrapEditorOperation(
       this.#session.apply({
         kind: "addTextBox",
@@ -343,7 +396,7 @@ export class PptxEditorSession {
       }),
     );
     this.#selectNewShape(slideNumber, existingShapeKeys);
-    await this.renderCurrentSlides();
+    await this.#renderChangedSlides(before);
     return this.response(result.warnings);
   }
 
@@ -359,6 +412,7 @@ export class PptxEditorSession {
       );
     }
     const existingShapeKeys = new Set(slide.shapes.map(shapeSourceKey));
+    const before = this.#session.document;
     const result = unwrapEditorOperation(
       this.#session.apply({
         kind: "addConnector",
@@ -375,13 +429,14 @@ export class PptxEditorSession {
       }),
     );
     this.#selectNewShape(slideNumber, existingShapeKeys);
-    await this.renderCurrentSlides();
+    await this.#renderChangedSlides(before);
     return this.response(result.warnings);
   }
 
   async deleteShape(handle: SourceHandle): Promise<PptxEditorSlidesResponse> {
+    const before = this.#session.document;
     const result = unwrapEditorOperation(this.#session.apply({ kind: "deleteShape", handle }));
-    await this.renderCurrentSlides();
+    await this.#renderChangedSlides(before);
     return this.response(result.warnings);
   }
 
@@ -414,14 +469,16 @@ export class PptxEditorSession {
   }
 
   async undo(): Promise<PptxEditorSlidesResponse> {
+    const before = this.#session.document;
     unwrapEditorOperation(this.#session.undo());
-    await this.renderCurrentSlides();
+    await this.#renderChangedSlides(before);
     return this.response();
   }
 
   async redo(): Promise<PptxEditorSlidesResponse> {
+    const before = this.#session.document;
     unwrapEditorOperation(this.#session.redo());
-    await this.renderCurrentSlides();
+    await this.#renderChangedSlides(before);
     return this.response();
   }
 
@@ -466,6 +523,133 @@ export function createPptxEditorSession(
   renderOptions?: PptxEditorRenderOptions,
 ): Promise<PptxEditorSession> {
   return PptxEditorSession.create(input, renderOptions);
+}
+
+/**
+ * Finds the slide parts whose rendered output may differ between two editor documents.
+ *
+ * An empty set means that topology-only changes can reuse every cached SVG. `undefined`
+ * means that the change cannot be scoped safely and all slides must be rendered.
+ *
+ * @internal
+ */
+export function affectedSlidePartPaths(
+  before: PptxSourceModel,
+  after: PptxSourceModel,
+): ReadonlySet<string> | undefined {
+  if (before === after) return new Set();
+
+  const beforeByPartPath = new Map(before.slides.map((slide) => [slide.partPath, slide]));
+  const affected = new Set<string>();
+  for (const slide of after.slides) {
+    if (beforeByPartPath.get(slide.partPath) !== slide) affected.add(slide.partPath);
+  }
+
+  const beforePartPaths = before.slides.map((slide) => slide.partPath);
+  const afterPartPaths = after.slides.map((slide) => slide.partPath);
+  const afterPartPathSet: ReadonlySet<string> = new Set(afterPartPaths);
+  const topologyChanged =
+    beforePartPaths.length !== afterPartPaths.length ||
+    beforePartPaths.some((partPath, index) => partPath !== afterPartPaths[index]);
+
+  const changedMediaPartPaths = findChangedMediaPartPaths(before, after);
+  let mediaChangeWasScoped = true;
+  for (const mediaPartPath of changedMediaPartPaths) {
+    const beforeReferences = slidePartPathsReferencingMedia(before, mediaPartPath);
+    const afterReferences = slidePartPathsReferencingMedia(after, mediaPartPath);
+    if (beforeReferences === undefined || afterReferences === undefined) {
+      mediaChangeWasScoped = false;
+      continue;
+    }
+    for (const slidePartPath of [...beforeReferences, ...afterReferences]) {
+      if (afterPartPathSet.has(slidePartPath)) affected.add(slidePartPath);
+    }
+  }
+
+  if (changedMediaPartPaths.size > 0 && !mediaChangeWasScoped) return undefined;
+  if (affected.size > 0 || topologyChanged) return affected;
+  if (changedMediaPartPaths.size > 0 && mediaChangeWasScoped) return affected;
+  return undefined;
+}
+
+function findChangedMediaPartPaths(
+  before: PptxSourceModel,
+  after: PptxSourceModel,
+): ReadonlySet<string> {
+  const beforeMedia = new Map(
+    before.packageGraph.media.map((media) => [media.partPath, media.bytes]),
+  );
+  const afterMedia = new Map(
+    after.packageGraph.media.map((media) => [media.partPath, media.bytes]),
+  );
+  const partPaths = new Set([...beforeMedia.keys(), ...afterMedia.keys()]);
+  return new Set(
+    [...partPaths].filter(
+      (partPath) => !bytesEqual(beforeMedia.get(partPath), afterMedia.get(partPath)),
+    ),
+  );
+}
+
+function bytesEqual(left: Uint8Array | undefined, right: Uint8Array | undefined): boolean {
+  if (left === right) return true;
+  if (left === undefined || right === undefined || left.length !== right.length) return false;
+  return left.every((value, index) => value === right[index]);
+}
+
+function slidePartPathsReferencingMedia(
+  source: PptxSourceModel,
+  mediaPartPath: string,
+): ReadonlySet<string> | undefined {
+  const directReferences = new Set<string>();
+  let inheritedReference = false;
+  let unknownReference = false;
+  const slidePartPaths = new Set(source.slides.map((slide) => slide.partPath));
+  const inheritedPartPaths = new Set([
+    ...source.slideLayouts.map((layout) => layout.partPath),
+    ...source.slideMasters.map((master) => master.partPath),
+  ]);
+
+  for (const relationships of source.packageGraph.relationships) {
+    if (
+      !relationships.relationships.some(
+        (relationship) =>
+          relationship.targetMode !== "External" &&
+          resolvePartPath(relationships.sourcePartPath, relationship.target) === mediaPartPath,
+      )
+    ) {
+      continue;
+    }
+    if (slidePartPaths.has(relationships.sourcePartPath)) {
+      directReferences.add(relationships.sourcePartPath);
+    } else if (inheritedPartPaths.has(relationships.sourcePartPath)) {
+      inheritedReference = true;
+    } else {
+      unknownReference = true;
+    }
+  }
+
+  if (inheritedReference) return new Set(source.slides.map((slide) => slide.partPath));
+  if (unknownReference) return undefined;
+  return directReferences;
+}
+
+function resolvePartPath(sourcePartPath: string, target: string): string {
+  if (target.startsWith("/")) return normalizePartPath(target.slice(1));
+  const parent = sourcePartPath.slice(0, Math.max(0, sourcePartPath.lastIndexOf("/") + 1));
+  return normalizePartPath(`${parent}${target}`);
+}
+
+function normalizePartPath(partPath: string): string {
+  const segments: string[] = [];
+  for (const segment of partPath.split("/")) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") {
+      segments.pop();
+    } else {
+      segments.push(segment);
+    }
+  }
+  return segments.join("/");
 }
 
 function unwrapEditorOperation<Success extends { readonly ok: true }>(
