@@ -1,7 +1,7 @@
 {
   "name": "pptx-glimpse",
   "version": "3.3.1",
-  "description": "A lightweight JavaScript library for rendering PowerPoint (.pptx) files as SVG or PNG in Node.js and the browser. No LibreOffice required.",
+  "description": "High-level PPTX rendering and editing toolkit for SVG/PNG output in Node.js and the browser.",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -36,7 +36,10 @@
     "powerpoint",
     "svg",
     "png",
-    "converter"
+    "converter",
+    "editor",
+    "browser",
+    "typescript"
   ],
   "repository": {
     "type": "git",

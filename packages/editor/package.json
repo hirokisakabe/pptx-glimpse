@@ -1,7 +1,7 @@
 {
   "name": "@pptx-glimpse/editor",
   "version": "0.1.0",
-  "description": "UI-independent commands, selection, history, and validation for PptxSourceModel.",
+  "description": "Headless PPTX editing commands, validation, selection, and undo/redo history for PptxSourceModel.",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -35,7 +35,11 @@
     "pptx",
     "powerpoint",
     "editor",
-    "headless"
+    "headless",
+    "commands",
+    "undo",
+    "redo",
+    "selection"
   ],
   "repository": {
     "type": "git",
