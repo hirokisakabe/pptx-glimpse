@@ -1111,7 +1111,7 @@ body {
   border: 2px solid var(--line);
   border-radius: 5px;
   color: var(--muted);
-  cursor: pointer;
+  cursor: grab;
   display: grid;
   font: inherit;
   font-size: 0.78rem;
@@ -1124,7 +1124,21 @@ body {
     border-color 120ms ease,
     opacity 120ms ease,
     transform 120ms ease;
+  touch-action: pan-y;
+  user-select: none;
   width: 100%;
+}
+
+.editor-thumbnail:active:not(:disabled) {
+  cursor: grabbing;
+}
+
+.editor-thumbnail:disabled {
+  cursor: not-allowed;
+}
+
+.editor-thumbnail > * {
+  pointer-events: none;
 }
 
 .editor-thumbnail:hover:not(:disabled) {
@@ -1171,22 +1185,6 @@ body {
 .editor-thumbnail-label {
   align-items: center;
   display: flex;
-  gap: 5px;
-}
-
-.editor-thumbnail-grip {
-  color: #8a99a3;
-  cursor: grab;
-  font-size: 1rem;
-  letter-spacing: -0.18em;
-  line-height: 1;
-  padding-right: 0.18em;
-  touch-action: none;
-  user-select: none;
-}
-
-.editor-thumbnail:active .editor-thumbnail-grip {
-  cursor: grabbing;
 }
 
 .editor-thumbnail svg {
