@@ -13,6 +13,8 @@ import { describe, expect, it, vi } from "vitest";
 import { renderPptxSourceModelToSvg } from "./converter.js";
 import { createPptxEditorSession, isPptxEditorError, PptxEditorError } from "./index.js";
 import {
+  affectedSlidePartPaths,
+  configurePptxEditorSessionAffectedSlidesResolver,
   configurePptxEditorSessionRenderer,
   type PptxEditorErrorCode,
 } from "./pptx-editor-session.js";
@@ -115,38 +117,116 @@ describe("PptxEditorSession", () => {
   });
 
   it("applies command batches as one history entry and renders once", async () => {
-    const editor = await createPptxEditorSession(await buildShapeFixture(), {
-      skipSystemFonts: true,
+    const renderCalls: Array<readonly number[] | undefined> = [];
+    configurePptxEditorSessionRenderer((source, options) => {
+      renderCalls.push(options?.slides);
+      return renderPptxSourceModelToSvg(source, options);
     });
-    const run = editor.shapes(1)[0]?.textBody?.paragraphs[0]?.runs[0];
-    if (run?.handle === undefined) throw new Error("text run handle not found");
-    const renderSpy = vi.spyOn(editor, "renderCurrentSlides");
+    try {
+      const editor = await createPptxEditorSession(await buildShapeFixture(), {
+        skipSystemFonts: true,
+      });
+      const run = editor.shapes(1)[0]?.textBody?.paragraphs[0]?.runs[0];
+      if (run?.handle === undefined) throw new Error("text run handle not found");
 
-    const response = await editor.applyAll([
-      {
+      const response = await editor.applyAll([
+        {
+          kind: "replaceTextRunPlainText",
+          handle: run.handle,
+          text: "Batch edited",
+        },
+        {
+          kind: "setTextRunProperties",
+          handle: run.handle,
+          properties: { bold: true },
+        },
+      ]);
+
+      expect(renderCalls).toEqual([undefined, [1]]);
+      expect(response.history).toMatchObject({ undoDepth: 1, canUndo: true });
+      expect(firstText(editor.document)).toBe("Batch edited");
+      expect(firstShape(editor.document).textBody?.paragraphs[0]?.runs[0]?.properties?.bold).toBe(
+        true,
+      );
+
+      await editor.undo();
+      expect(firstText(editor.document)).toBe("Original");
+      expect(
+        firstShape(editor.document).textBody?.paragraphs[0]?.runs[0]?.properties?.bold,
+      ).toBeUndefined();
+    } finally {
+      configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
+    }
+  });
+
+  it("rerenders only the affected slides for applyAll, undo, and redo", async () => {
+    const renderCalls: Array<readonly number[] | undefined> = [];
+    let renderGeneration = 0;
+    configurePptxEditorSessionRenderer(async (source, options) => {
+      renderGeneration += 1;
+      renderCalls.push(options?.slides);
+      const report = await renderPptxSourceModelToSvg(source, options);
+      return {
+        ...report,
+        slides: report.slides.map((slide) => ({
+          ...slide,
+          svg: `${slide.svg}<!-- render:${String(renderGeneration)} -->`,
+        })),
+      };
+    });
+    try {
+      const editor = await createPptxEditorSession(await buildTwoSlideFixture(), {
+        skipSystemFonts: true,
+      });
+      const initialFirstSvg = editor.slides[0]?.svg;
+      const firstRun = editor.shapes(1)[0]?.textBody?.paragraphs[0]?.runs[0];
+      const secondRun = editor.shapes(2)[0]?.textBody?.paragraphs[0]?.runs[0];
+      if (firstRun?.handle === undefined || secondRun?.handle === undefined) {
+        throw new Error("text run handles not found");
+      }
+
+      await editor.apply({
         kind: "replaceTextRunPlainText",
-        handle: run.handle,
-        text: "Batch edited",
-      },
-      {
-        kind: "setTextRunProperties",
-        handle: run.handle,
-        properties: { bold: true },
-      },
-    ]);
+        handle: secondRun.handle,
+        text: "Second edited",
+      });
+      expect(renderCalls).toEqual([undefined, [2]]);
+      expect(editor.slides[0]?.svg).toBe(initialFirstSvg);
+      expect(editor.slides[1]?.svg).toContain("Second edited");
 
-    expect(renderSpy).toHaveBeenCalledTimes(1);
-    expect(response.history).toMatchObject({ undoDepth: 1, canUndo: true });
-    expect(firstText(editor.document)).toBe("Batch edited");
-    expect(firstShape(editor.document).textBody?.paragraphs[0]?.runs[0]?.properties?.bold).toBe(
-      true,
-    );
+      await editor.applyAll([
+        {
+          kind: "replaceTextRunPlainText",
+          handle: firstRun.handle,
+          text: "First batch edited",
+        },
+        {
+          kind: "replaceTextRunPlainText",
+          handle: secondRun.handle,
+          text: "Second batch edited",
+        },
+        {
+          kind: "setTextRunProperties",
+          handle: secondRun.handle,
+          properties: { bold: true },
+        },
+      ]);
+      expect(renderCalls.at(-1)).toEqual([1, 2]);
+      expect(editor.slides[0]?.svg).toContain("First batch edited");
+      expect(editor.slides[1]?.svg).toContain("Second batch edited");
 
-    await editor.undo();
-    expect(firstText(editor.document)).toBe("Original");
-    expect(
-      firstShape(editor.document).textBody?.paragraphs[0]?.runs[0]?.properties?.bold,
-    ).toBeUndefined();
+      await editor.undo();
+      expect(renderCalls.at(-1)).toEqual([1, 2]);
+      expect(editor.slides[0]?.svg).toContain("First");
+      expect(editor.slides[1]?.svg).toContain("Second edited");
+
+      await editor.redo();
+      expect(renderCalls.at(-1)).toEqual([1, 2]);
+      expect(editor.slides[0]?.svg).toContain("First batch edited");
+      expect(editor.slides[1]?.svg).toContain("Second batch edited");
+    } finally {
+      configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
+    }
   });
 
   it("returns shared media warnings from image replacement commands", async () => {
@@ -176,6 +256,28 @@ describe("PptxEditorSession", () => {
       }),
     ]);
     expect(mediaBytes(editor.document, "ppt/media/image1.png")).toEqual(BLUE_PNG);
+  });
+
+  it("rerenders every slide that references replaced shared media", async () => {
+    const renderCalls: Array<readonly number[] | undefined> = [];
+    configurePptxEditorSessionRenderer((source, options) => {
+      renderCalls.push(options?.slides);
+      return renderPptxSourceModelToSvg(source, options);
+    });
+    try {
+      const editor = await createPptxEditorSession(
+        await buildImageFixture({ includeSecondSlide: true }),
+        { skipSystemFonts: true },
+      );
+      const image = editor.shapes(1).find((shape) => shape.kind === "image");
+      if (image?.handle === undefined) throw new Error("image handle not found");
+
+      await editor.apply({ kind: "replaceImage", handle: image.handle, bytes: BLUE_PNG });
+
+      expect(renderCalls).toEqual([undefined, [1, 2]]);
+    } finally {
+      configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
+    }
   });
 
   it("adds, selects, edits, moves, resizes, saves, deletes, undoes, and redoes a text box", async () => {
@@ -323,41 +425,166 @@ describe("PptxEditorSession", () => {
   });
 
   it("duplicates and deletes slides with render state and history updates", async () => {
-    const editor = await createPptxEditorSession(await buildTwoSlideFixture(), {
-      skipSystemFonts: true,
+    const renderCalls: Array<readonly number[] | undefined> = [];
+    configurePptxEditorSessionRenderer((source, options) => {
+      renderCalls.push(options?.slides);
+      return renderPptxSourceModelToSvg(source, options);
     });
-    const firstSlide = editor.slides[0];
-    if (firstSlide?.handle === undefined) throw new Error("first slide handle not found");
+    try {
+      const editor = await createPptxEditorSession(await buildTwoSlideFixture(), {
+        skipSystemFonts: true,
+      });
+      const firstSlide = editor.slides[0];
+      if (firstSlide?.handle === undefined) throw new Error("first slide handle not found");
 
-    const duplicated = await editor.apply({ kind: "duplicateSlide", handle: firstSlide.handle });
-    expect(duplicated.slides).toHaveLength(3);
-    expect(duplicated.slides.map((slide) => slide.handle?.partPath)).toEqual([
-      "ppt/slides/slide1.xml",
-      "ppt/slides/slide3.xml",
-      "ppt/slides/slide2.xml",
-    ]);
-    expect(duplicated.slides[0]?.svg).toContain("First");
-    expect(duplicated.slides[1]?.svg).toContain("First");
-    expect(duplicated.history).toMatchObject({ canUndo: true, undoDepth: 1 });
+      const duplicated = await editor.apply({ kind: "duplicateSlide", handle: firstSlide.handle });
+      expect(renderCalls).toEqual([undefined, [2]]);
+      expect(duplicated.slides).toHaveLength(3);
+      expect(duplicated.slides.map((slide) => [slide.slideNumber, slide.handle?.partPath])).toEqual(
+        [
+          [1, "ppt/slides/slide1.xml"],
+          [2, "ppt/slides/slide3.xml"],
+          [3, "ppt/slides/slide2.xml"],
+        ],
+      );
+      expect(duplicated.slides[0]?.svg).toContain("First");
+      expect(duplicated.slides[1]?.svg).toContain("First");
+      expect(duplicated.history).toMatchObject({ canUndo: true, undoDepth: 1 });
 
-    const duplicateSlide = duplicated.slides[1];
-    if (duplicateSlide?.handle === undefined) throw new Error("duplicate slide handle not found");
-    const deleted = await editor.apply({ kind: "deleteSlide", handle: duplicateSlide.handle });
-    expect(deleted.slides.map((slide) => slide.handle?.partPath)).toEqual([
-      "ppt/slides/slide1.xml",
-      "ppt/slides/slide2.xml",
-    ]);
-    expect(deleted.history.undoDepth).toBe(2);
+      const moved = await editor.apply({
+        kind: "moveSlide",
+        handle: firstSlide.handle,
+        toIndex: 2,
+      });
+      expect(renderCalls).toEqual([undefined, [2]]);
+      expect(moved.slides.map((slide) => [slide.slideNumber, slide.handle?.partPath])).toEqual([
+        [1, "ppt/slides/slide3.xml"],
+        [2, "ppt/slides/slide2.xml"],
+        [3, "ppt/slides/slide1.xml"],
+      ]);
 
-    expect((await editor.undo()).slides.map((slide) => slide.handle?.partPath)).toEqual([
-      "ppt/slides/slide1.xml",
-      "ppt/slides/slide3.xml",
-      "ppt/slides/slide2.xml",
-    ]);
-    expect((await editor.redo()).slides.map((slide) => slide.handle?.partPath)).toEqual([
-      "ppt/slides/slide1.xml",
-      "ppt/slides/slide2.xml",
-    ]);
+      const duplicateSlide = moved.slides[0];
+      if (duplicateSlide?.handle === undefined) throw new Error("duplicate slide handle not found");
+      const deleted = await editor.apply({ kind: "deleteSlide", handle: duplicateSlide.handle });
+      expect(renderCalls).toEqual([undefined, [2]]);
+      expect(deleted.slides.map((slide) => [slide.slideNumber, slide.handle?.partPath])).toEqual([
+        [1, "ppt/slides/slide2.xml"],
+        [2, "ppt/slides/slide1.xml"],
+      ]);
+      expect(deleted.history.undoDepth).toBe(3);
+
+      expect((await editor.undo()).slides.map((slide) => slide.handle?.partPath)).toEqual([
+        "ppt/slides/slide3.xml",
+        "ppt/slides/slide2.xml",
+        "ppt/slides/slide1.xml",
+      ]);
+      expect(renderCalls.at(-1)).toEqual([1]);
+      const renderCallCountAfterUndo = renderCalls.length;
+      expect((await editor.redo()).slides.map((slide) => slide.handle?.partPath)).toEqual([
+        "ppt/slides/slide2.xml",
+        "ppt/slides/slide1.xml",
+      ]);
+      expect(renderCalls).toHaveLength(renderCallCountAfterUndo);
+
+      const added = await editor.apply({
+        kind: "addEmptySlideFromLayout",
+        layoutPartPath: "ppt/slideLayouts/slideLayout1.xml",
+      });
+      expect(renderCalls.at(-1)).toEqual([3]);
+      expect(added.slides.map((slide) => [slide.slideNumber, slide.handle?.partPath])).toEqual([
+        [1, "ppt/slides/slide2.xml"],
+        [2, "ppt/slides/slide1.xml"],
+        [3, "ppt/slides/slide3.xml"],
+      ]);
+    } finally {
+      configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
+    }
+  });
+
+  it("falls back to rendering all slides when a command change cannot be scoped safely", async () => {
+    const before = readPptx(await buildTwoSlideFixture());
+    const after = {
+      ...before,
+      diagnostics: [
+        ...before.diagnostics,
+        { severity: "warning" as const, code: "unknown-change", message: "unknown change" },
+      ],
+    };
+
+    expect(affectedSlidePartPaths(before, after)).toBeUndefined();
+
+    const renderCalls: Array<readonly number[] | undefined> = [];
+    configurePptxEditorSessionAffectedSlidesResolver(() => undefined);
+    configurePptxEditorSessionRenderer((source, options) => {
+      renderCalls.push(options?.slides);
+      return renderPptxSourceModelToSvg(source, options);
+    });
+    try {
+      const editor = await createPptxEditorSession(await buildTwoSlideFixture(), {
+        skipSystemFonts: true,
+      });
+      const run = editor.shapes(2)[0]?.textBody?.paragraphs[0]?.runs[0];
+      if (run?.handle === undefined) throw new Error("text run handle not found");
+
+      await editor.apply({
+        kind: "replaceTextRunPlainText",
+        handle: run.handle,
+        text: "Fallback edited",
+      });
+
+      expect(renderCalls).toEqual([undefined, undefined]);
+      expect(editor.slides[0]?.svg).toContain("First");
+      expect(editor.slides[1]?.svg).toContain("Fallback edited");
+    } finally {
+      configurePptxEditorSessionAffectedSlidesResolver(affectedSlidePartPaths);
+      configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
+    }
+  });
+
+  it("falls back to all slides when applyAll changes inherited and slide-local content", async () => {
+    const renderCalls: Array<readonly number[] | undefined> = [];
+    configurePptxEditorSessionRenderer((source, options) => {
+      renderCalls.push(options?.slides);
+      return renderPptxSourceModelToSvg(source, options);
+    });
+    try {
+      const editor = await createPptxEditorSession(await buildTwoSlideFixture(), {
+        skipSystemFonts: true,
+      });
+      const layoutHandle = editor.document.slideLayouts[0]?.handle;
+      const secondRun = editor.shapes(2)[0]?.textBody?.paragraphs[0]?.runs[0];
+      if (layoutHandle === undefined || secondRun?.handle === undefined) {
+        throw new Error("layout or text run handle not found");
+      }
+
+      await editor.applyAll([
+        {
+          kind: "addTextBox",
+          slideHandle: layoutHandle,
+          offsetX: asEmu(0),
+          offsetY: asEmu(0),
+          width: asEmu(914400),
+          height: asEmu(914400),
+          text: "Inherited edit",
+        },
+        {
+          kind: "replaceTextRunPlainText",
+          handle: secondRun.handle,
+          text: "Second local edit",
+        },
+      ]);
+
+      expect(renderCalls).toEqual([undefined, undefined]);
+      expect(editor.slides[0]?.svg).toContain(">Inher</");
+      expect(editor.slides[1]?.svg).toContain("Second local edit");
+
+      await editor.undo();
+      expect(renderCalls).toEqual([undefined, undefined, undefined]);
+      expect(editor.slides[0]?.svg).not.toContain(">Inher</");
+      expect(editor.slides[1]?.svg).toContain("Second");
+    } finally {
+      configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
+    }
   });
 
   it("rejects deleting the last slide without changing the editor state", async () => {
@@ -617,7 +844,10 @@ async function buildShapeFixture(
 }
 
 async function buildImageFixture(
-  options: { readonly includeUnusedImageRelationship?: boolean } = {},
+  options: {
+    readonly includeUnusedImageRelationship?: boolean;
+    readonly includeSecondSlide?: boolean;
+  } = {},
 ): Promise<Uint8Array> {
   const zip = new JSZip();
   zip.file(
@@ -629,6 +859,9 @@ async function buildImageFixture(
         `<Default Extension="png" ContentType="image/png"/>` +
         `<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>` +
         `<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+        (options.includeSecondSlide === true
+          ? `<Override PartName="/ppt/slides/slide2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`
+          : "") +
         `</Types>`,
     ),
   );
@@ -644,7 +877,9 @@ async function buildImageFixture(
     "ppt/presentation.xml",
     xml(
       `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
-        `<p:sldIdLst><p:sldId id="256" r:id="rIdSlide1"/></p:sldIdLst>` +
+        `<p:sldIdLst><p:sldId id="256" r:id="rIdSlide1"/>` +
+        (options.includeSecondSlide === true ? `<p:sldId id="257" r:id="rIdSlide2"/>` : "") +
+        `</p:sldIdLst>` +
         `<p:sldSz cx="9144000" cy="5143500"/>` +
         `</p:presentation>`,
     ),
@@ -654,6 +889,9 @@ async function buildImageFixture(
     xml(
       `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
         `<Relationship Id="rIdSlide1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>` +
+        (options.includeSecondSlide === true
+          ? `<Relationship Id="rIdSlide2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide2.xml"/>`
+          : "") +
         `</Relationships>`,
     ),
   );
@@ -683,6 +921,17 @@ async function buildImageFixture(
         `</Relationships>`,
     ),
   );
+  if (options.includeSecondSlide === true) {
+    zip.file("ppt/slides/slide2.xml", zip.file("ppt/slides/slide1.xml")?.async("uint8array"));
+    zip.file(
+      "ppt/slides/_rels/slide2.xml.rels",
+      xml(
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+          `<Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/image1.png"/>` +
+          `</Relationships>`,
+      ),
+    );
+  }
   zip.file("ppt/media/image1.png", RED_PNG);
 
   return zip.generateAsync({ type: "uint8array" });
@@ -699,6 +948,7 @@ async function buildTwoSlideFixture(): Promise<Uint8Array> {
         `<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>` +
         `<Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
         `<Override PartName="/ppt/slides/slide2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>` +
+        `<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>` +
         `</Types>`,
     ),
   );
@@ -730,6 +980,21 @@ async function buildTwoSlideFixture(): Promise<Uint8Array> {
   );
   zip.file("ppt/slides/slide1.xml", textSlideXml(10, "First"));
   zip.file("ppt/slides/slide2.xml", textSlideXml(20, "Second"));
+  const slideLayoutRelationship = xml(
+    `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+      `<Relationship Id="rIdLayout" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>` +
+      `</Relationships>`,
+  );
+  zip.file("ppt/slides/_rels/slide1.xml.rels", slideLayoutRelationship);
+  zip.file("ppt/slides/_rels/slide2.xml.rels", slideLayoutRelationship);
+  zip.file(
+    "ppt/slideLayouts/slideLayout1.xml",
+    xml(
+      `<p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">` +
+        `<p:cSld><p:spTree/></p:cSld>` +
+        `</p:sldLayout>`,
+    ),
+  );
 
   return zip.generateAsync({ type: "uint8array" });
 }
