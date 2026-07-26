@@ -69,13 +69,15 @@ export async function previewPptx(
   const missingSlideNumbers = findMissingSlideNumbers(input.slides, report);
   if (missingSlideNumbers.length > 0) {
     return errorResult(
-      `Slide number${missingSlideNumbers.length === 1 ? "" : "s"} out of range: ${missingSlideNumbers.join(", ")}`,
+      `Requested slide number${missingSlideNumbers.length === 1 ? "" : "s"} could not be rendered or are out of range: ${missingSlideNumbers.join(", ")}`,
     );
   }
 
   const content = report.slides.map((slide) => ({
     type: "image" as const,
-    data: Buffer.from(slide.png).toString("base64"),
+    data: Buffer.from(slide.png.buffer, slide.png.byteOffset, slide.png.byteLength).toString(
+      "base64",
+    ),
     mimeType: "image/png",
   }));
   const structuredContent: PreviewPptxStructuredContent = {

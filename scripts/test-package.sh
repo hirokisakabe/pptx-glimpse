@@ -165,8 +165,16 @@ import { readFileSync } from "node:fs";
 
 const packageJson = JSON.parse(readFileSync(process.argv[2], "utf8"));
 const serverJson = JSON.parse(readFileSync(process.argv[3], "utf8"));
-const runtimeDependencies = Object.keys(packageJson.dependencies ?? {}).sort();
+const runtimeDependencies = [
+  ...Object.keys(packageJson.dependencies ?? {}),
+  ...Object.keys(packageJson.optionalDependencies ?? {}),
+  ...Object.keys(packageJson.peerDependencies ?? {}),
+].sort();
 const expectedDependencies = ["@modelcontextprotocol/sdk", "pptx-glimpse", "zod"].sort();
+const registryPackages = serverJson.packages ?? [];
+const npmPackages = registryPackages.filter(
+  (entry) => entry.registryType === "npm" && entry.identifier === packageJson.name,
+);
 
 if (packageJson.private === true) {
   throw new Error("@pptx-glimpse/mcp must be publishable");
@@ -181,17 +189,18 @@ if (packageJson.mcpName !== serverJson.name) {
 }
 if (
   packageJson.version !== serverJson.version ||
-  packageJson.version !== serverJson.packages?.[0]?.version
+  packageJson.version !== npmPackages[0]?.version
 ) {
   throw new Error("MCP package and Registry metadata versions must match");
 }
 if (
-  serverJson.packages?.[0]?.identifier !== packageJson.name ||
-  serverJson.packages?.[0]?.transport?.type !== "stdio"
+  registryPackages.length !== 1 ||
+  npmPackages.length !== 1 ||
+  npmPackages[0]?.transport?.type !== "stdio"
 ) {
   throw new Error("server.json must describe the npm package with stdio transport");
 }
-if (!serverJson.repository?.subfolder) {
+if (serverJson.repository?.subfolder !== packageJson.repository?.directory) {
   throw new Error("server.json must identify the MCP package monorepo subfolder");
 }
 TESTEOF
@@ -211,12 +220,18 @@ echo ""
 echo "--- Test: @pptx-glimpse/mcp packaged bin ---"
 cat > test-mcp-bin.mjs << 'TESTEOF'
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 const executable = join(process.cwd(), "node_modules", ".bin", "pptx-glimpse-mcp");
+const packageJson = JSON.parse(
+  readFileSync(join(process.cwd(), "node_modules", "@pptx-glimpse", "mcp", "package.json")),
+);
 const child = spawn(executable, [], { stdio: ["pipe", "pipe", "pipe"] });
 let stdout = "";
 let stderr = "";
+let stopping = false;
+let childFailure;
 const responses = new Map();
 const waiters = new Map();
 
@@ -225,7 +240,7 @@ function acceptLine(line) {
   const message = JSON.parse(line);
   if (message.id === undefined) return;
   responses.set(message.id, message);
-  waiters.get(message.id)?.(message);
+  waiters.get(message.id)?.resolve(message);
 }
 
 child.stdout.setEncoding("utf8");
@@ -242,6 +257,25 @@ child.stderr.setEncoding("utf8");
 child.stderr.on("data", (chunk) => {
   stderr += chunk;
 });
+child.once("error", (error) => {
+  rejectWaiters(error);
+});
+child.once("exit", (code, signal) => {
+  if (!stopping) {
+    rejectWaiters(
+      new Error(`MCP server exited before shutdown (code=${code}, signal=${signal}): ${stderr}`),
+    );
+  }
+});
+
+function rejectWaiters(error) {
+  childFailure = error;
+  for (const waiter of waiters.values()) {
+    clearTimeout(waiter.timer);
+    waiter.reject(error);
+  }
+  waiters.clear();
+}
 
 function send(message) {
   child.stdin.write(`${JSON.stringify(message)}\n`);
@@ -250,14 +284,20 @@ function send(message) {
 function response(id) {
   const existing = responses.get(id);
   if (existing !== undefined) return Promise.resolve(existing);
+  if (childFailure !== undefined) return Promise.reject(childFailure);
   return new Promise((resolve, reject) => {
     const timer = setTimeout(
       () => reject(new Error(`Timed out waiting for MCP response ${id}. stderr: ${stderr}`)),
       60000,
     );
-    waiters.set(id, (message) => {
-      clearTimeout(timer);
-      resolve(message);
+    waiters.set(id, {
+      resolve: (message) => {
+        clearTimeout(timer);
+        waiters.delete(id);
+        resolve(message);
+      },
+      reject,
+      timer,
     });
   });
 }
@@ -274,14 +314,26 @@ try {
     },
   });
   const initialized = await response(1);
-  if (initialized.error || initialized.result?.serverInfo?.name !== "pptx-glimpse") {
+  if (
+    initialized.error ||
+    initialized.result?.serverInfo?.name !== "pptx-glimpse" ||
+    initialized.result?.serverInfo?.version !== packageJson.version
+  ) {
     throw new Error(`MCP initialize failed: ${JSON.stringify(initialized)}`);
   }
 
   send({ jsonrpc: "2.0", method: "notifications/initialized" });
   send({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
   const tools = await response(2);
-  if (tools.error || !tools.result?.tools?.some((tool) => tool.name === "preview_pptx")) {
+  const previewTool = tools.result?.tools?.find((tool) => tool.name === "preview_pptx");
+  const slidesSchema = previewTool?.inputSchema?.properties?.slides;
+  if (
+    tools.error ||
+    previewTool === undefined ||
+    slidesSchema?.minItems !== 1 ||
+    slidesSchema?.items?.type !== "integer" ||
+    slidesSchema?.items?.exclusiveMinimum !== 0
+  ) {
     throw new Error(`MCP tool listing failed: ${JSON.stringify(tools)}`);
   }
 
@@ -303,6 +355,8 @@ try {
     image?.type !== "image" ||
     image?.mimeType !== "image/png" ||
     !image?.data?.startsWith("iVBOR") ||
+    preview.result?.content?.length !== 1 ||
+    preview.result?.structuredContent?.slides?.length !== 1 ||
     slide?.slideNumber !== 1 ||
     slide?.contentIndex !== 0
   ) {
@@ -310,6 +364,7 @@ try {
   }
   console.log("MCP initialize, tool listing, and PNG preview passed!");
 } finally {
+  stopping = true;
   child.kill();
 }
 TESTEOF

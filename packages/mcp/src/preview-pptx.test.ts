@@ -4,13 +4,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { PreviewPptxDependencies } from "./preview-pptx.js";
 import { previewPptx } from "./preview-pptx.js";
 
-const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47]);
-
 function report(slideNumbers: number[]): PngConversionReport {
   return {
     slides: slideNumbers.map((slideNumber) => ({
       slideNumber,
-      png,
+      png: new Uint8Array([0x89, 0x50, 0x4e, slideNumber]),
       width: 960,
       height: 540,
     })),
@@ -68,8 +66,8 @@ describe("previewPptx", () => {
 
     expect(result.isError).not.toBe(true);
     expect(result.content).toEqual([
-      { type: "image", data: "iVBORw==", mimeType: "image/png" },
-      { type: "image", data: "iVBORw==", mimeType: "image/png" },
+      { type: "image", data: "iVBOAQ==", mimeType: "image/png" },
+      { type: "image", data: "iVBOAg==", mimeType: "image/png" },
     ]);
     expect(result.structuredContent).toMatchObject({
       slides: [
@@ -79,6 +77,10 @@ describe("previewPptx", () => {
       diagnostics: { total: 1, info: 0, warnings: 1, errors: 0 },
       supportCoverage: {
         overall: { inputElements: 2, outputElements: 2, warnings: 1 },
+        slides: [
+          { slideNumber: 1, inputElements: 1, outputElements: 1 },
+          { slideNumber: 2, inputElements: 1, outputElements: 1 },
+        ],
       },
     });
   });
@@ -140,8 +142,21 @@ describe("previewPptx", () => {
     expect(result).toMatchObject({ isError: true });
     expect(result.content[0]).toMatchObject({
       type: "text",
-      text: "Slide number out of range: 9",
+      text: "Requested slide number could not be rendered or are out of range: 9",
     });
+  });
+
+  it("returns a tool error when the file cannot be read", async () => {
+    const result = await previewPptx(
+      { filePath: "/tmp/unreadable.pptx" },
+      {
+        ...dependencies(),
+        readFile: () => Promise.reject(new Error("permission denied")),
+      },
+    );
+
+    expect(result).toMatchObject({ isError: true });
+    expectTextContent(result, "Unable to read PPTX file '/tmp/unreadable.pptx': permission denied");
   });
 
   it("returns a tool error when PPTX conversion fails", async () => {

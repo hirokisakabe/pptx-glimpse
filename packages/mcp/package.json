@@ -1,6 +1,6 @@
 {
   "name": "@pptx-glimpse/mcp",
-  "version": "0.1.0",
+  "version": "0.0.0",
   "description": "Node.js MCP server for previewing PPTX slides as PNG images.",
   "type": "module",
   "main": "./dist/index.js",

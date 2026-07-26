@@ -158,8 +158,8 @@ publicly published:
 The reusable library packages expose intentional root entry points and build ESM, CommonJS,
 and declaration output with package-specific tsup configurations. Document and editor can
 be installed independently for consumers that own the lower-level workflow. The MCP package
-builds an ESM-only Node.js executable and declarations because its public runtime contract is
-the stdio package bin.
+builds an ESM-only Node.js root API, declarations, and a stdio executable; CommonJS is not
+supported.
 
 The `pptx-glimpse` package declares `@pptx-glimpse/document` and
 `@pptx-glimpse/editor` as runtime dependencies. Its build marks them as `external`, so

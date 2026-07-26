@@ -2,8 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { previewPptx } from "./preview-pptx.js";
-
-const SERVER_VERSION = "0.1.0";
+import { PACKAGE_VERSION } from "./version.js";
 
 const supportCoverageCountsSchema = z.object({
   inputElements: z.number().int().nonnegative(),
@@ -17,7 +16,7 @@ const supportCoverageCountsSchema = z.object({
 export function createPptxGlimpseMcpServer(): McpServer {
   const server = new McpServer({
     name: "pptx-glimpse",
-    version: SERVER_VERSION,
+    version: PACKAGE_VERSION,
   });
 
   server.registerTool(
@@ -29,7 +28,8 @@ export function createPptxGlimpseMcpServer(): McpServer {
       inputSchema: z.object({
         filePath: z.string().min(1).describe("Path to the local PPTX file"),
         slides: z
-          .array(z.number())
+          .array(z.number().int().positive())
+          .min(1)
           .optional()
           .describe("Optional 1-based slide numbers to preview"),
       }),
