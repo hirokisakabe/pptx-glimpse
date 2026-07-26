@@ -1,9 +1,8 @@
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
-import { unzipSync } from "fflate";
+import { unzipSync, zipSync } from "fflate";
 
 import { getAttr, getChild, getChildArray, getNamespacedAttr, parseXml } from "../reader/xml.js";
 import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
-import { buildEmbeddedChartWorkbook } from "./chart-authoring.js";
 import { copyBytes, requireRawBinaryPart } from "./editing-shared.js";
 import type {
   PartPath,
@@ -44,6 +43,9 @@ const SUPPORTED_CHART_ELEMENTS: ReadonlySet<string> = new Set([
   "doughnutChart",
   "radarChart",
 ]);
+const XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const XLSX_MAX_SERIES = 16_383;
+const XLSX_MAX_DATA_POINTS = 1_048_575;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const orderedParser = new XMLParser({
@@ -89,7 +91,8 @@ export function updateChartData(
     chartPartPath,
   );
   const workbookRawPart = requireRawBinaryPart(source, workbookPartPath, "updateChartData");
-  assertSupportedEmbeddedWorkbook(
+  assertWorkbookIsNotShared(source, chartPartPath, workbookPartPath);
+  const workbook = inspectSupportedEmbeddedWorkbook(
     workbookRawPart.bytes,
     binding.sheetName,
     binding.seriesCount,
@@ -97,7 +100,7 @@ export function updateChartData(
   );
 
   const updatedChartBytes = encoder.encode(orderedBuilder.build(orderedRoot));
-  const updatedWorkbookBytes = buildEmbeddedChartWorkbook(input.series);
+  const updatedWorkbookBytes = updateEmbeddedWorkbook(workbook, input);
   const edit = {
     kind: "updateChartData",
     handle,
@@ -133,9 +136,15 @@ function assertUpdateInput(input: UpdateChartDataInput): void {
   if (input.series.length === 0) {
     throw new Error("updateChartData: series must not be empty");
   }
+  if (input.series.length > XLSX_MAX_SERIES) {
+    throw new Error(`updateChartData: series must not exceed ${XLSX_MAX_SERIES}`);
+  }
   const categories = input.series[0]?.categories;
   if (categories === undefined || categories.length === 0) {
     throw new Error("updateChartData: series categories must not be empty");
+  }
+  if (categories.length > XLSX_MAX_DATA_POINTS) {
+    throw new Error(`updateChartData: data points must not exceed ${XLSX_MAX_DATA_POINTS}`);
   }
   for (const [seriesIndex, series] of input.series.entries()) {
     if (typeof series.name !== "string") {
@@ -243,7 +252,31 @@ function requireWorkbookPartPath(
   if (!source.packageGraph.parts.some((part) => part.partPath === workbookPartPath)) {
     throw new Error("updateChartData: embedded workbook part was not found");
   }
+  const workbookPart = source.packageGraph.parts.find((part) => part.partPath === workbookPartPath);
+  if (workbookPart?.contentType !== XLSX_CONTENT_TYPE) {
+    throw new Error("updateChartData: embedded workbook content type is not supported");
+  }
   return workbookPartPath;
+}
+
+function assertWorkbookIsNotShared(
+  source: PptxSourceModel,
+  chartPartPath: PartPath,
+  workbookPartPath: PartPath,
+): void {
+  const referencingChartParts = source.packageGraph.relationships.filter((group) =>
+    group.relationships.some(
+      (relationship) =>
+        PACKAGE_REL_TYPES.has(relationship.type) &&
+        resolveInternalRelationshipTarget(group.sourcePartPath, relationship) === workbookPartPath,
+    ),
+  );
+  if (
+    referencingChartParts.length !== 1 ||
+    referencingChartParts[0]?.sourcePartPath !== chartPartPath
+  ) {
+    throw new Error("updateChartData: embedded workbook is shared by another package part");
+  }
 }
 
 function parseOrderedXml(xml: string): OrderedXmlNode[] {
@@ -266,14 +299,19 @@ function inspectAndUpdateChartXml(
   const chartSpace = requireSingleElement(root, "chartSpace", "chart XML has no chartSpace root");
   const chart = requireSingleChild(chartSpace, "chart");
   const plotArea = requireSingleChild(chart, "plotArea");
-  const supportedCharts = elementChildren(plotArea).filter((entry) => {
-    const name = elementLocalName(entry);
-    return name !== undefined && SUPPORTED_CHART_ELEMENTS.has(name);
-  });
-  if (supportedCharts.length !== 1) {
+  const chartGroups = elementChildren(plotArea).filter((entry) =>
+    elementLocalName(entry)?.endsWith("Chart"),
+  );
+  const chartGroupName =
+    chartGroups[0] === undefined ? undefined : elementLocalName(chartGroups[0]);
+  if (
+    chartGroups.length !== 1 ||
+    chartGroupName === undefined ||
+    !SUPPORTED_CHART_ELEMENTS.has(chartGroupName)
+  ) {
     throw new Error("updateChartData: chart type or combination is not supported");
   }
-  const series = elementChildren(supportedCharts[0]).filter(
+  const series = elementChildren(chartGroups[0]).filter(
     (entry) => elementLocalName(entry) === "ser",
   );
   if (series.length !== input.series.length) {
@@ -425,19 +463,31 @@ function replaceCachePoints(cache: OrderedXmlNode, values: readonly string[]): v
   ]);
 }
 
-function assertSupportedEmbeddedWorkbook(
+interface EditableEmbeddedWorkbook {
+  readonly files: Record<string, Uint8Array>;
+  readonly worksheetPath: string;
+}
+
+function inspectSupportedEmbeddedWorkbook(
   bytes: Uint8Array,
   sheetName: string,
   seriesCount: number,
   pointCount: number,
-): void {
+): EditableEmbeddedWorkbook {
   let files: Record<string, Uint8Array>;
   try {
     files = unzipSync(bytes);
   } catch (cause) {
     throw new Error("updateChartData: embedded workbook is not a readable XLSX package", { cause });
   }
-  if (Object.keys(files).some((path) => path.startsWith("xl/externalLinks/"))) {
+  if (
+    Object.keys(files).some(
+      (path) =>
+        path === "xl/connections.xml" ||
+        path.startsWith("xl/externalLinks/") ||
+        path.startsWith("xl/queryTables/"),
+    )
+  ) {
     throw new Error("updateChartData: external workbook links are not supported");
   }
   const workbookBytes = files["xl/workbook.xml"];
@@ -446,6 +496,9 @@ function assertSupportedEmbeddedWorkbook(
     throw new Error("updateChartData: embedded workbook metadata is incomplete");
   }
   const workbook = getChild(parseXml(decoder.decode(workbookBytes)), "workbook");
+  if (getChild(workbook, "definedNames") !== undefined) {
+    throw new Error("updateChartData: workbook defined names are not supported");
+  }
   const sheets = getChildArray(getChild(workbook, "sheets"), "sheet");
   if (sheets.length !== 1 || getAttr(sheets[0], "name") !== sheetName) {
     throw new Error("updateChartData: embedded workbook must contain one matching worksheet");
@@ -462,11 +515,13 @@ function assertSupportedEmbeddedWorkbook(
       getAttr(relationship, "TargetMode") !== "External",
   );
   const target = getAttr(worksheetRelationship, "Target");
-  const worksheetBytes = target === undefined ? undefined : files[normalizeWorkbookTarget(target)];
-  if (worksheetBytes === undefined) {
+  const worksheetPath = target === undefined ? undefined : normalizeWorkbookTarget(target);
+  const worksheetBytes = worksheetPath === undefined ? undefined : files[worksheetPath];
+  if (worksheetPath === undefined || worksheetBytes === undefined) {
     throw new Error("updateChartData: embedded worksheet relationship cannot be resolved");
   }
   assertSupportedWorksheetLayout(worksheetBytes, seriesCount, pointCount);
+  return { files, worksheetPath };
 }
 
 function assertSupportedWorksheetLayout(
@@ -475,6 +530,23 @@ function assertSupportedWorksheetLayout(
   pointCount: number,
 ): void {
   const worksheet = getChild(parseXml(decoder.decode(bytes)), "worksheet");
+  for (const unsupportedElement of [
+    "autoFilter",
+    "conditionalFormatting",
+    "dataValidations",
+    "drawing",
+    "hyperlinks",
+    "legacyDrawing",
+    "mergeCells",
+    "oleObjects",
+    "tableParts",
+  ]) {
+    if (getChild(worksheet, unsupportedElement) !== undefined) {
+      throw new Error(
+        `updateChartData: worksheet ${unsupportedElement} data layout is not supported`,
+      );
+    }
+  }
   const cells = getChildArray(getChild(worksheet, "sheetData"), "row").flatMap((row) =>
     getChildArray(row, "c"),
   );
@@ -495,6 +567,76 @@ function assertSupportedWorksheetLayout(
     }
     actual.add(reference);
   }
+}
+
+function updateEmbeddedWorkbook(
+  workbook: EditableEmbeddedWorkbook,
+  input: UpdateChartDataInput,
+): Uint8Array {
+  const worksheetRoot = parseOrderedXml(decoder.decode(workbook.files[workbook.worksheetPath]));
+  const worksheet = requireSingleElement(
+    worksheetRoot,
+    "worksheet",
+    "embedded workbook has no worksheet root",
+  );
+  const dimension = requireSingleChild(worksheet, "dimension");
+  setAttribute(
+    dimension,
+    "ref",
+    `A1:${spreadsheetColumn(input.series.length + 1)}${input.series[0].categories.length + 1}`,
+  );
+  const sheetData = requireSingleChild(worksheet, "sheetData");
+  setElementChildren(sheetData, buildWorksheetRows(input));
+  return zipSync({
+    ...workbook.files,
+    [workbook.worksheetPath]: encoder.encode(orderedBuilder.build(worksheetRoot)),
+  });
+}
+
+function buildWorksheetRows(input: UpdateChartDataInput): OrderedXmlNode[] {
+  const headerCells = [
+    worksheetStringCell("A1", "Category"),
+    ...input.series.map((series, index) =>
+      worksheetStringCell(`${spreadsheetColumn(index + 2)}1`, series.name),
+    ),
+  ];
+  const rows = [createElement("row", headerCells, { "@_r": "1" })];
+  for (let row = 0; row < input.series[0].categories.length; row += 1) {
+    rows.push(
+      createElement(
+        "row",
+        [
+          worksheetStringCell(`A${row + 2}`, input.series[0].categories[row]),
+          ...input.series.map((series, index) =>
+            worksheetNumberCell(`${spreadsheetColumn(index + 2)}${row + 2}`, series.values[row]),
+          ),
+        ],
+        { "@_r": String(row + 2) },
+      ),
+    );
+  }
+  return rows;
+}
+
+function worksheetStringCell(reference: string, value: string): OrderedXmlNode {
+  return createElement("c", [createElement("is", [createTextElement("t", value)])], {
+    "@_r": reference,
+    "@_t": "inlineStr",
+  });
+}
+
+function worksheetNumberCell(reference: string, value: number): OrderedXmlNode {
+  return createElement("c", [createElement("v", [{ "#text": String(value) }])], {
+    "@_r": reference,
+  });
+}
+
+function createTextElement(name: string, value: string): OrderedXmlNode {
+  return createElement(
+    name,
+    [{ "#text": value }],
+    value.startsWith(" ") || value.endsWith(" ") ? { "@_xml:space": "preserve" } : undefined,
+  );
 }
 
 function normalizeWorkbookTarget(target: string): string {

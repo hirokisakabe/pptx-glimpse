@@ -58,8 +58,10 @@ const edited = updateChartData(source, chart.handle, {
 This operation currently supports bar, line, pie, area, doughnut, and radar Charts with one
 internal embedded workbook, one worksheet, the existing series count, and the standard tabular
 layout (series names in row 1, categories in column A, values in columns B onward). It rejects
-linked/external data, missing or unresolved relationships, workbook formulas in the data range,
-and other data layouts before changing the model.
+linked/external data, missing or unresolved relationships, combo Charts, workbooks shared by
+multiple Charts, workbook formulas in the data range, and other data layouts before changing the
+model. The operation patches only the target worksheet data and preserves other embedded workbook
+parts such as styles, themes, and document properties.
 
 ## Typed edits and raw preservation
 

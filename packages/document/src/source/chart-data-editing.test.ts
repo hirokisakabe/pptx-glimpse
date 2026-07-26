@@ -59,6 +59,7 @@ describe("updateChartData", () => {
     });
 
     const before = unzipSync(input);
+    const beforeWorkbook = unzipSync(before["ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx"]);
     const output = unzipSync(writePptx(edited));
     const chartXml = decoder.decode(output["ppt/charts/chart1.xml"]);
     expect(chartXml).toContain("<c:barChart>");
@@ -80,6 +81,7 @@ describe("updateChartData", () => {
     expect(worksheet).toContain('<c r="A4" t="inlineStr"><is><t>Jun</t></is></c>');
     expect(worksheet).toContain('<c r="B4"><v>70</v></c>');
     expect(worksheet).toContain('<c r="C4"><v>42</v></c>');
+    expect(workbook["xl/styles.xml"]).toEqual(beforeWorkbook["xl/styles.xml"]);
 
     const rereadChart = createComputedView(readPptx(writePptx(edited))).slides[0]?.elements.find(
       (element) => element.kind === "chart",
@@ -89,6 +91,68 @@ describe("updateChartData", () => {
       "May",
       "Jun",
     ]);
+  });
+
+  it("updates every supported existing category chart type", () => {
+    let source = createPptx();
+    const slideHandle = source.slides[0]?.handle;
+    if (slideHandle === undefined) throw new Error("createPptx should create a first slide");
+    const types = ["bar", "line", "pie", "area", "doughnut", "radar"] as const;
+    for (const [index, chartType] of types.entries()) {
+      source = addChart(source, slideHandle, {
+        chartType,
+        offsetX: asEmu(index * 1000),
+        offsetY: asEmu(0),
+        width: asEmu(1000),
+        height: asEmu(1000),
+        series: [{ name: "Original", categories: ["A", "B"], values: [1, 2] }],
+      });
+    }
+    source = readPptx(writePptx(source));
+    const charts = source.slides[0]?.shapes.filter((shape) => shape.kind === "chart") ?? [];
+    for (const chart of charts) {
+      if (chart.handle === undefined) throw new Error("chart fixture should have a handle");
+      source = updateChartData(source, chart.handle, {
+        series: [{ name: "Edited", categories: ["X", "Y", "Z"], values: [3, 5, 8] }],
+      });
+    }
+
+    const computedCharts = createComputedView(
+      readPptx(writePptx(source)),
+    ).slides[0]?.elements.filter((element) => element.kind === "chart");
+    expect(computedCharts?.map((chart) => chart.chartData?.chartType)).toEqual(types);
+    expect(computedCharts?.every((chart) => chart.chartData?.categories.length === 3)).toBe(true);
+  });
+
+  it("preserves and targets a non-default worksheet name", () => {
+    const files = unzipSync(buildExistingChart());
+    const chartPath = "ppt/charts/chart1.xml";
+    files[chartPath] = replaceAllText(files[chartPath], "Sheet1!", "'Sales Data'!");
+    const workbookPath = "ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx";
+    const workbook = unzipSync(files[workbookPath]);
+    workbook["xl/workbook.xml"] = replaceText(
+      workbook["xl/workbook.xml"],
+      'name="Sheet1"',
+      'name="Sales Data"',
+    );
+    files[workbookPath] = zipFixture(workbook);
+    const source = readPptx(zipFixture(files));
+    const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    if (chart?.handle === undefined) throw new Error("chart fixture should have a handle");
+
+    const output = unzipSync(
+      writePptx(
+        updateChartData(source, chart.handle, {
+          series: [
+            { name: "One", categories: ["A"], values: [1] },
+            { name: "Two", categories: ["A"], values: [2] },
+          ],
+        }),
+      ),
+    );
+    expect(decoder.decode(output[chartPath])).toContain("&apos;Sales Data&apos;!$B$2:$B$2");
+    const outputWorkbook = unzipSync(output[workbookPath]);
+    expect(decoder.decode(outputWorkbook["xl/workbook.xml"])).toContain('name="Sales Data"');
   });
 
   it("rejects missing workbooks, external workbook relationships, and unsupported layouts", () => {
@@ -126,6 +190,31 @@ describe("updateChartData", () => {
     formulaFiles["ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx"] = zipFixture(workbookFiles);
     const formulaSource = readPptx(zipFixture(formulaFiles));
     expectEditFailure(formulaSource, "formulas in the chart data range are not supported");
+
+    const comboFiles = unzipSync(input);
+    comboFiles["ppt/charts/chart1.xml"] = replaceText(
+      comboFiles["ppt/charts/chart1.xml"],
+      "</c:barChart>",
+      "</c:barChart><c:scatterChart/>",
+    );
+    const comboSource = readPptx(zipFixture(comboFiles));
+    expectEditFailure(comboSource, "chart type or combination is not supported");
+
+    const sharedSource = readPptx(buildSharedWorkbookChart());
+    expectEditFailure(sharedSource, "embedded workbook is shared by another package part");
+
+    const source = readPptx(input);
+    const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    if (chart?.handle === undefined) throw new Error("chart fixture should have a handle");
+    expect(() =>
+      updateChartData(source, chart.handle, {
+        series: Array.from({ length: 16_384 }, (_, index) => ({
+          name: `Series ${index}`,
+          categories: ["A"],
+          values: [index],
+        })),
+      }),
+    ).toThrow("series must not exceed 16383");
   });
 });
 
@@ -167,6 +256,32 @@ function buildExistingChart(): Uint8Array {
   return zipFixture(files);
 }
 
+function buildSharedWorkbookChart(): Uint8Array {
+  let source = createPptx();
+  const slideHandle = source.slides[0]?.handle;
+  if (slideHandle === undefined) throw new Error("createPptx should create a first slide");
+  for (let index = 0; index < 2; index += 1) {
+    source = addChart(source, slideHandle, {
+      chartType: "bar",
+      offsetX: asEmu(index * 1000),
+      offsetY: asEmu(0),
+      width: asEmu(1000),
+      height: asEmu(1000),
+      series: [
+        { name: "One", categories: ["A"], values: [1] },
+        { name: "Two", categories: ["A"], values: [2] },
+      ],
+    });
+  }
+  const files = unzipSync(writePptx(source));
+  files["ppt/charts/_rels/chart2.xml.rels"] = replaceText(
+    files["ppt/charts/_rels/chart2.xml.rels"],
+    "../embeddings/Microsoft_Excel_Worksheet2.xlsx",
+    "../embeddings/Microsoft_Excel_Worksheet1.xlsx",
+  );
+  return zipFixture(files);
+}
+
 function expectEditFailure(source: ReturnType<typeof readPptx>, message: string): void {
   const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
   if (chart?.handle === undefined) throw new Error("chart fixture should have a handle");
@@ -185,6 +300,12 @@ function replaceText(bytes: Uint8Array, search: string, replacement: string): Ui
   const value = decoder.decode(bytes);
   if (!value.includes(search)) throw new Error(`fixture text not found: ${search}`);
   return new TextEncoder().encode(value.replace(search, replacement));
+}
+
+function replaceAllText(bytes: Uint8Array, search: string, replacement: string): Uint8Array {
+  const value = decoder.decode(bytes);
+  if (!value.includes(search)) throw new Error(`fixture text not found: ${search}`);
+  return new TextEncoder().encode(value.replaceAll(search, replacement));
 }
 
 function zipFixture(files: Record<string, Uint8Array>): Uint8Array {
