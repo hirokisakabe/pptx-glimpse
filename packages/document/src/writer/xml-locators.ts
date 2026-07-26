@@ -136,6 +136,14 @@ export function locateTable(
       const nested = locateTable(group, locator);
       if (nested !== undefined) return nested;
     }
+    for (const alternateContent of getChildArray(spTree, "AlternateContent")) {
+      for (const branchName of ["Choice", "Fallback"]) {
+        for (const branch of getChildArray(alternateContent, branchName)) {
+          const nested = locateTable(branch, locator);
+          if (nested !== undefined) return nested;
+        }
+      }
+    }
   }
   return undefined;
 }

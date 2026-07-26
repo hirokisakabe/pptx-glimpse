@@ -163,6 +163,10 @@ describe("writePptx - existing table cell text edits", () => {
 
   it("edits a table cell nested in a group", () => {
     const source = readPptx(buildExistingTableFixture("Grouped table run", { inGroup: true }));
+    expect(source.slides[0].shapes[0]?.kind).toBe("group");
+    expect(
+      source.slides[0].shapes[0]?.kind === "group" ? source.slides[0].shapes[0].children : [],
+    ).toEqual(expect.arrayContaining([expect.objectContaining({ kind: "table" })]));
     const run = firstTable(source).table.rows[0].cells[0].textBody!.paragraphs[0].runs[0];
     const edited = replaceTextRunPlainText(
       source,
@@ -170,10 +174,11 @@ describe("writePptx - existing table cell text edits", () => {
       "Edited grouped table run",
     );
 
-    expect(
-      firstTable(readPptx(writePptx(edited))).table.rows[0].cells[0].textBody?.paragraphs[0].runs[0]
-        .text,
-    ).toBe("Edited grouped table run");
+    const reread = readPptx(writePptx(edited));
+    expect(reread.slides[0].shapes[0]?.kind).toBe("group");
+    expect(firstTable(reread).table.rows[0].cells[0].textBody?.paragraphs[0].runs[0].text).toBe(
+      "Edited grouped table run",
+    );
   });
 
   it("does not expose editable text handles for a table without its required shape id", () => {
