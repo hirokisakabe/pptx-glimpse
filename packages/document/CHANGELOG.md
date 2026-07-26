@@ -1,5 +1,16 @@
 # @pptx-glimpse/document
 
+## 0.13.0
+
+### Minor Changes
+
+- 2f33268: 既存 Chart の系列名、category label、数値を chart XML と embedded workbook へ一貫して反映する typed document API と editor command / convenience API を追加する。
+- 93ee164: 既存 Table のセル内 paragraph / run を、通常の shape text と同じ公開 text operation・editor command で編集して保存できるようにする。
+
+### Patch Changes
+
+- 38d59ad: group shape の source-local transform を保持し、nested group の描画合成と fallback 診断を固定する
+
 ## 0.12.1
 
 ### Patch Changes

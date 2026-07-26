@@ -1,6 +1,6 @@
 {
   "name": "@pptx-glimpse/renderer",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "private": true,
   "description": "Internal renderer package: shared SVG/PNG rendering primitives consumed by pptx-glimpse.",
   "type": "module",
