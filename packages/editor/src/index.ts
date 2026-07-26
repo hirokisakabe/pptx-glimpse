@@ -1469,10 +1469,11 @@ function textRunParagraphEditKey(
   edit: PptxSourceModelTextRunEdit | PptxSourceModelTextRunPropertiesEdit,
 ): string | undefined {
   const nodeId = String(edit.handle.nodeId ?? "");
-  const byShapeId = /^(text:shape:.+:p:(\d+)):r:\d+$/.exec(nodeId);
-  const byShapeSlot = /^(text:shapeSlot:\d+:p:(\d+)):r:\d+$/.exec(nodeId);
-  const paragraphNodeId = byShapeId?.[1] ?? byShapeSlot?.[1];
-  const paragraphOrderingSlot = byShapeId?.[2] ?? byShapeSlot?.[2] ?? "";
+  const match = /^(text:(?:shape:.+|shapeSlot:\d+|table:.+:row:\d+:cell:\d+):p:(\d+)):r:\d+$/.exec(
+    nodeId,
+  );
+  const paragraphNodeId = match?.[1];
+  const paragraphOrderingSlot = match?.[2] ?? "";
   if (paragraphNodeId === undefined) return undefined;
   return [
     edit.handle.partPath,

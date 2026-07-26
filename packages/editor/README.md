@@ -54,6 +54,10 @@ application code does not need to extract source handles.
 Nodes captured before earlier edits remain usable because the session resolves their stable handle
 against its current document.
 
+Text methods and commands accept paragraphs and runs from ordinary shape text or existing Table
+cells with the same validation and history behavior. They edit only cell text; Table rows,
+columns, merges, fills, borders, margins, and styles are outside the editor command surface.
+
 Every convenience method creates and applies the matching command through the same validation,
 warning, selection-reconciliation, and undo/redo-history path. A successful convenience-method
 call that changes the document creates one undo-history entry.

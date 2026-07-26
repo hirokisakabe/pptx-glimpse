@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   lint:
     runs-on: ubuntu-latest
@@ -59,15 +63,6 @@ jobs:
       - name: Test with coverage
         run: pnpm run test:coverage
 
-      - name: Install Playwright Chromium
-        run: pnpm exec playwright install --with-deps chromium
-
-      - name: Install demo dependencies
-        run: cd demo && npm ci
-
-      - name: Playwright tests
-        run: pnpm run test:playwright
-
       - name: Upload coverage report
         if: matrix.node-version == 22
         uses: actions/upload-artifact@v4
@@ -111,9 +106,40 @@ jobs:
       - name: Verify package (CJS/ESM/TypeScript)
         run: bash scripts/test-package.sh
 
-      - name: Verify demo production samples
-        if: matrix.node-version == 22
-        run: cd demo && npx playwright install chromium && npm run verify:samples
+  playwright:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22, 24, 26]
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright Chromium
+        run: pnpm exec playwright install --with-deps --only-shell chromium
+
+      - name: Cache demo npm packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: demo-npm-${{ runner.os }}-${{ hashFiles('demo/package-lock.json') }}
+          restore-keys: demo-npm-${{ runner.os }}-
+
+      - name: Install demo dependencies
+        run: cd demo && npm ci
+
+      - name: Playwright tests
+        run: pnpm run test:playwright
 
   vrt:
     runs-on: ubuntu-latest

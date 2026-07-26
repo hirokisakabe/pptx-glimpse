@@ -35,6 +35,7 @@ import {
   type SourceParagraph,
   type SourceShape,
   type SourceShapeNode,
+  type SourceTextBody,
   type SourceTextRun,
   updateChartData,
   writePptx,
@@ -52,6 +53,7 @@ const LIBREOFFICE_IMAGE_CANDIDATES = [
 ].filter((image): image is string => image !== undefined && image.length > 0);
 
 const TEXT_EDITED_VALUE = "Edited LibreOffice text";
+const TABLE_TEXT_EDITED_VALUE = "Edited LibreOffice table text";
 const TRANSFORM_EDIT = {
   offsetX: asEmu(2743200),
   offsetY: asEmu(1920240),
@@ -79,6 +81,23 @@ const LO_EDITOR_VALIDITY_CASES = [
         kind: "replaceTextRunPlainText",
         handle: requireHandle(findTextRun(source, "Original LibreOffice text").handle),
         text: TEXT_EDITED_VALUE,
+      });
+
+      if (!result.ok) throw new Error(result.message);
+      return writePptx(result.document);
+    },
+  },
+  {
+    name: "table cell text replacement",
+    sourceFixture: "editor-validity-table-text-source.pptx",
+    expectedFixture: "editor-validity-table-text-expected.pptx",
+    createEditedPptx: (input: Uint8Array) => {
+      const source = readPptx(input);
+      const session = createEditorSession(source);
+      const result = session.apply({
+        kind: "replaceTextRunPlainText",
+        handle: requireHandle(findTextRun(source, "Original LibreOffice table text").handle),
+        text: TABLE_TEXT_EDITED_VALUE,
       });
 
       if (!result.ok) throw new Error(result.message);
@@ -1253,23 +1272,36 @@ function renderSingleWithLibreOffice(
 
 function findTextRun(source: ReturnType<typeof readPptx>, text: string): SourceTextRun {
   for (const slide of source.slides) {
-    for (const shape of flattenShapes(slide.shapes)) {
-      for (const paragraph of shape.textBody?.paragraphs ?? []) {
-        const run = paragraph.runs.find((candidate) => candidate.text === text);
-        if (run !== undefined) return run;
+    for (const shape of slide.shapes) {
+      for (const textBody of textBodies(shape)) {
+        for (const paragraph of textBody.paragraphs) {
+          const run = paragraph.runs.find((candidate) => candidate.text === text);
+          if (run !== undefined) return run;
+        }
       }
     }
   }
   throw new Error(`Text run not found: ${text}`);
 }
 
+function textBodies(shape: SourceShapeNode): readonly SourceTextBody[] {
+  if (shape.kind === "shape") return shape.textBody === undefined ? [] : [shape.textBody];
+  if (shape.kind === "group") return shape.children.flatMap(textBodies);
+  if (shape.kind !== "table") return [];
+  return shape.table.rows.flatMap((row) =>
+    row.cells.flatMap((cell) => (cell.textBody === undefined ? [] : [cell.textBody])),
+  );
+}
+
 function findParagraph(source: ReturnType<typeof readPptx>, text: string): SourceParagraph {
   for (const slide of source.slides) {
-    for (const shape of flattenShapes(slide.shapes)) {
-      const paragraph = shape.textBody?.paragraphs.find(
-        (candidate) => candidate.runs.map((run) => run.text).join("") === text,
-      );
-      if (paragraph !== undefined) return paragraph;
+    for (const shape of slide.shapes) {
+      for (const textBody of textBodies(shape)) {
+        const paragraph = textBody.paragraphs.find(
+          (candidate) => candidate.runs.map((run) => run.text).join("") === text,
+        );
+        if (paragraph !== undefined) return paragraph;
+      }
     }
   }
   throw new Error(`Paragraph not found: ${text}`);

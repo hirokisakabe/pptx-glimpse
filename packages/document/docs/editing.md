@@ -63,6 +63,15 @@ multiple Charts, workbook formulas in the data range, and other data layouts bef
 model. The operation patches only the target worksheet data and preserves other embedded workbook
 parts such as styles, themes, and document properties.
 
+The text operations use the same `SourceParagraph` / `SourceTextRun` contract for ordinary shape
+text and existing Table cell text. To edit a Table, locate a node through
+`table.table.rows[rowIndex].cells[cellIndex].textBody?.paragraphs[paragraphIndex]`, then pass its
+handle (or a child run handle) to `replaceParagraphPlainText`, `replaceTextRunPlainText`,
+`setTextRunProperties`, `clearTextRunProperties`, `setParagraphProperties`, or
+`clearParagraphProperties`. `replaceParagraphPlainText` replaces all runs with one run and carries
+forward only the first run's properties. Table structure, merges, fills, borders, margins, and
+table style are preserved but are not editable through these text operations.
+
 ## Typed edits and raw preservation
 
 The source model deliberately carries both typed nodes and preserved raw material. When a supported
