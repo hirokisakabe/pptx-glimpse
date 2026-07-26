@@ -36,6 +36,14 @@ PptxSourceModel -> document editing operations -> document writer -> PPTX binary
         +-> editor commands, selection, validation, and history
 ```
 
+Node.js AI clients can enter through the optional MCP integration without creating another
+rendering path:
+
+```text
+AI client -> @pptx-glimpse/mcp (stdio) -> pptx-glimpse public PNG conversion API
+          -> MCP image content + structured diagnostics/support coverage
+```
+
 ## Package and layer responsibilities
 
 ### `@pptx-glimpse/document`
@@ -83,6 +91,18 @@ The renderer is an implementation boundary, not an npm API that applications may
 on. Its subpath entry points isolate shared rendering code, Node-only system-font support,
 and Node/browser PNG initialization.
 
+### `@pptx-glimpse/mcp`
+
+`packages/mcp` is a public, Node.js-only integration package for local AI clients. It owns
+the stdio MCP server, tool schemas, local file loading, PNG content encoding, and MCP Registry
+metadata. Its `preview_pptx` tool delegates PPTX parsing and rendering to the public
+`convertPptxToPng` API from `pptx-glimpse`; it must not duplicate document or rendering
+logic.
+
+MCP SDK and schema dependencies remain private to this integration boundary. Core, document,
+editor, renderer, browser entry points, and UI packages must never depend on
+`@pptx-glimpse/mcp`.
+
 ### Demo and UI
 
 `demo/` is a private Next.js application and an integration consumer of the public
@@ -104,6 +124,8 @@ Allowed workspace dependency direction is:
      pptx-glimpse  ------>  @pptx-glimpse/renderer (private, bundled)
           ^
           |
+          +------------  @pptx-glimpse/mcp (Node.js stdio)
+          |
         demo / UI
 ```
 
@@ -113,26 +135,31 @@ document and editor are lower layers. In concrete terms:
 - `document` has no dependency on another pptx-glimpse workspace package.
 - `editor` may depend on `document`.
 - `core` may depend on `document`, `editor`, and `renderer`.
+- `mcp` may depend on the public `pptx-glimpse` package.
 - demo/UI code may depend on public packages, normally the high-level core package.
 
 Reverse dependencies are forbidden. In particular, `document` must not import from
-`editor`, `core`, `renderer`, or demo/UI; `editor` must not import from `core`, `renderer`,
-or demo/UI; and `renderer` must not import document, editor, core, or demo/UI semantics.
-Shared behavior should stay in the lowest layer that owns the concept, or be passed across
-an adapter, rather than introducing a reverse import.
+`editor`, `core`, `renderer`, MCP, or demo/UI; `editor` must not import from `core`,
+`renderer`, MCP, or demo/UI; `renderer` must not import document, editor, core, MCP, or
+demo/UI semantics; and core must not import MCP. Shared behavior should stay in the lowest
+layer that owns the concept, or be passed across an adapter, rather than introducing a
+reverse import.
 
 ## Publication and build boundaries
 
-The repository root is private and only orchestrates the pnpm workspace. Three packages are
+The repository root is private and only orchestrates the pnpm workspace. Four packages are
 publicly published:
 
 - `@pptx-glimpse/document`
 - `@pptx-glimpse/editor`
 - `pptx-glimpse` from `packages/core`
+- `@pptx-glimpse/mcp`
 
-Each public package exposes an intentional root entry point and builds ESM, CommonJS, and
-declaration output with its package-specific tsup configuration. Document and editor can
-be installed independently for consumers that own the lower-level workflow.
+The reusable library packages expose intentional root entry points and build ESM, CommonJS,
+and declaration output with package-specific tsup configurations. Document and editor can
+be installed independently for consumers that own the lower-level workflow. The MCP package
+builds an ESM-only Node.js root API, declarations, and a stdio executable; CommonJS is not
+supported.
 
 The `pptx-glimpse` package declares `@pptx-glimpse/document` and
 `@pptx-glimpse/editor` as runtime dependencies. Its build marks them as `external`, so
@@ -145,6 +172,10 @@ workspace development/build dependency, and core's tsup configuration includes i
 artifacts rather than installed as a public runtime package. The root tsup configuration
 mirrors this boundary for manual builds; package-specific configurations define normal
 publication.
+
+`@pptx-glimpse/mcp` declares `pptx-glimpse`, the MCP SDK, and its schema library as runtime
+dependencies and keeps each external in its build. This preserves the one-way integration
+boundary and prevents MCP dependencies from entering core's Node or browser artifacts.
 
 These statements must be checked together when the boundary changes:
 
@@ -172,6 +203,10 @@ Code shared by both runtimes belongs in the common core/renderer paths. Platform
 filesystem, system-font, or WASM-loading behavior belongs behind the corresponding Node or
 browser entry point. Browser compatibility is a build-time boundary and must be covered by
 the browser-entry smoke test, not inferred from a Node build succeeding.
+
+The MCP package is intentionally outside the browser surface. It may use Node filesystem,
+`Buffer`, process, and stdio APIs, but none of its source or dependencies may be imported by
+the browser-capable packages.
 
 ## When to split another architecture document
 
