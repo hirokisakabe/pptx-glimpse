@@ -23,6 +23,7 @@ export function reorderShapes(
   if (target.shapes.some(hasAlternateContent)) {
     throw new Error("reorderShapes: mc:AlternateContent shape trees are not supported");
   }
+  assertUniqueDrawingNodeIds(target.shapes);
   if (orderedShapeHandles.length !== target.shapes.length) {
     throw new Error("reorderShapes: ordered handles must contain every target shape exactly once");
   }
@@ -43,6 +44,9 @@ export function reorderShapes(
     seen.add(nodeId);
     const shape = target.shapes.find((candidate) => sourceHandlesEqual(candidate.handle, handle));
     if (shape === undefined) {
+      if (target.shapes.some((candidate) => containsNestedHandle(candidate, handle))) {
+        throw new Error("reorderShapes: nested group shape reordering is not supported");
+      }
       throw new Error("reorderShapes: shape handle was not found in the target drawing part");
     }
     orderedShapes.push(shape);
@@ -63,6 +67,34 @@ export function reorderShapes(
       },
     ],
   };
+}
+
+function assertUniqueDrawingNodeIds(shapes: readonly SourceShapeNode[]): void {
+  const seen = new Set<string>();
+  const visit = (nodes: readonly SourceShapeNode[]): void => {
+    for (const node of nodes) {
+      if (node.nodeId !== undefined) {
+        const nodeId = String(node.nodeId);
+        if (seen.has(nodeId)) {
+          throw new Error(
+            `reorderShapes: duplicate node id '${nodeId}' in the target drawing part is not supported`,
+          );
+        }
+        seen.add(nodeId);
+      }
+      if (node.kind === "group") visit(node.children);
+    }
+  };
+  visit(shapes);
+}
+
+function containsNestedHandle(shape: SourceShapeNode, handle: SourceHandle): boolean {
+  if (shape.kind !== "group") return false;
+  for (const child of shape.children) {
+    if (sourceHandlesEqual(child.handle, handle)) return true;
+    if (containsNestedHandle(child, handle)) return true;
+  }
+  return false;
 }
 
 function hasAlternateContent(shape: SourceShapeNode): boolean {

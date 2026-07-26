@@ -5,7 +5,7 @@ import { createPptx } from "../builder/create-pptx.js";
 import { createPptxAuthoringSession, reorderShapes } from "../index.js";
 import { readPptx } from "../reader/read-pptx.js";
 import { writePptx } from "../writer/write-pptx.js";
-import { asPartPath, type SourceHandle } from "./handles.js";
+import { asPartPath, asSourceNodeId, type SourceHandle } from "./handles.js";
 import { asEmu } from "./units.js";
 
 describe("reorderShapes", () => {
@@ -84,9 +84,10 @@ describe("reorderShapes", () => {
     expect(() =>
       target.reorderShapes([first, { ...second, partPath: asPartPath("ppt/slides/other.xml") }]),
     ).toThrow("different drawing part");
-    expect(() => target.reorderShapes([first, { ...second, orderingSlot: 999 }])).toThrow(
-      "was not found in the target drawing part",
-    );
+    expect(() => target.reorderShapes([first, { ...second, orderingSlot: 999 }])).not.toThrow();
+    expect(() =>
+      target.reorderShapes([first, { ...second, nodeId: undefined, orderingSlot: 999 }]),
+    ).toThrow("every shape handle requires a node id");
   });
 
   it("preserves formatted text and extLst while the root function reorders drawings", () => {
@@ -111,6 +112,42 @@ describe("reorderShapes", () => {
     expect(readPptx(writePptx(reordered)).slides[0]?.shapes.map((shape) => shape.nodeId)).toEqual(
       reversedHandles.map((handle) => handle.nodeId),
     );
+  });
+
+  it("explicitly rejects a nested group child handle", () => {
+    const authored = createTwoShapeSource();
+    const slide = requireValue(authored.slides[0]);
+    const first = requireValue(slide.shapes[0]);
+    const second = requireValue(slide.shapes[1]);
+    const groupId = asSourceNodeId("99");
+    const nested = {
+      ...authored,
+      slides: [
+        {
+          ...slide,
+          shapes: [
+            {
+              kind: "group",
+              nodeId: groupId,
+              children: [first],
+              handle: {
+                partPath: slide.partPath,
+                nodeId: groupId,
+                orderingSlot: 0,
+              },
+            },
+            second,
+          ],
+        },
+      ],
+    } satisfies typeof authored;
+
+    expect(() =>
+      reorderShapes(nested, requireValue(slide.handle), [
+        requireValue(first.handle),
+        requireValue(second.handle),
+      ]),
+    ).toThrow("nested group shape reordering is not supported");
   });
 
   it("rejects an AlternateContent shape tree before creating an edit", () => {

@@ -32,11 +32,13 @@ export function findShapeNodeBySourceHandle(
   source: PptxSourceModel,
   handle: SourceHandle,
 ): SourceShapeNode | undefined {
-  for (const slide of source.slides) {
-    const shape = findShapeNodeInTree(slide.shapes, handle);
-    if (shape !== undefined) return shape;
+  const matches = [...source.slides, ...source.slideLayouts, ...source.slideMasters].flatMap(
+    (target) => findShapeNodesInTree(target.shapes, handle),
+  );
+  if (matches.length > 1) {
+    throw duplicateNodeIdError("findShapeNodeBySourceHandle", handle);
   }
-  return undefined;
+  return matches[0]?.node;
 }
 
 export function updateShapeTransform(
@@ -48,44 +50,25 @@ export function updateShapeTransform(
     throw new Error("updateShapeTransform: shape transform edit requires a node id");
   }
 
-  let matched = false;
-  let changed = false;
-
-  const slides = source.slides.map((slide) => {
-    let slideChanged = false;
-    const shapes = slide.shapes.map((shape) => {
-      if (!sourceHandlesEqual(shape.handle, handle)) return shape;
-      matched = true;
-      if (hasAlternateContentSidecar(shape)) {
-        throw new Error("updateShapeTransform: shapes inside AlternateContent are not supported");
-      }
-      if (!hasEditableTransform(shape)) {
-        throw new Error("updateShapeTransform: shape handle does not reference a shape with xfrm");
-      }
-      if (shapeTransformPositionAndSizeEqual(shape.transform, transform)) return shape;
-      changed = true;
-      slideChanged = true;
-      return {
-        ...shape,
-        transform: {
-          ...shape.transform,
-          offsetX: transform.offsetX,
-          offsetY: transform.offsetY,
-          width: transform.width,
-          height: transform.height,
-        },
-      };
-    });
-    return slideChanged ? { ...slide, shapes } : slide;
-  });
-
-  if (!matched) {
-    if (source.slides.some((slide) => hasNestedShapeNodeWithHandle(slide.shapes, handle))) {
-      throw new Error("updateShapeTransform: nested group shape editing is not supported");
-    }
-    throw new Error("updateShapeTransform: shape handle was not found in PptxSourceModel source");
+  const target = requireUniqueSlideShapeTarget(source, handle, "updateShapeTransform");
+  assertNotAlternateContentTarget(target, "updateShapeTransform");
+  if (!hasEditableTransform(target.node)) {
+    throw new Error("updateShapeTransform: shape handle does not reference a shape with xfrm");
   }
-  if (!changed) return source;
+  if (shapeTransformPositionAndSizeEqual(target.node.transform, transform)) return source;
+  const slides = replaceSlideShapeNode(source, handle, (shape) => {
+    if (!hasEditableTransform(shape)) return shape;
+    return {
+      ...shape,
+      transform: {
+        ...shape.transform,
+        offsetX: transform.offsetX,
+        offsetY: transform.offsetY,
+        width: transform.width,
+        height: transform.height,
+      },
+    };
+  });
 
   return {
     ...source,
@@ -114,39 +97,21 @@ export function setShapeFill(
     throw new Error("setShapeFill: shape fill edit requires a node id");
   }
 
-  let matched = false;
-  let changed = false;
-
-  const slides = source.slides.map((slide) => {
-    let slideChanged = false;
-    const shapes = slide.shapes.map((shape) => {
-      if (!sourceHandlesEqual(shape.handle, handle)) return shape;
-      matched = true;
-      if (shape.kind !== "shape") {
-        throw new Error("setShapeFill: only top-level sp shapes support fill edits");
-      }
-      if (hasAlternateContentSidecar(shape)) {
-        throw new Error("setShapeFill: shapes inside AlternateContent are not supported");
-      }
-      const nextFill = toSourceFill(fill);
-      if (sourceFillEqual(shape.fill, nextFill)) return shape;
-      changed = true;
-      slideChanged = true;
-      return {
-        ...shape,
-        fill: nextFill,
-      } satisfies SourceShape;
-    });
-    return slideChanged ? { ...slide, shapes } : slide;
-  });
-
-  if (!matched) {
-    if (source.slides.some((slide) => hasNestedShapeNodeWithHandle(slide.shapes, handle))) {
-      throw new Error("setShapeFill: nested group shape editing is not supported");
-    }
-    throw new Error("setShapeFill: shape handle was not found in PptxSourceModel source");
+  const target = requireUniqueSlideShapeTarget(source, handle, "setShapeFill");
+  assertNotAlternateContentTarget(target, "setShapeFill");
+  if (target.node.kind !== "shape") {
+    throw new Error("setShapeFill: only sp shapes support fill edits");
   }
-  if (!changed) return source;
+  const nextFill = toSourceFill(fill);
+  if (sourceFillEqual(target.node.fill, nextFill)) return source;
+  const slides = replaceSlideShapeNode(source, handle, (shape) =>
+    shape.kind === "shape"
+      ? ({
+          ...shape,
+          fill: nextFill,
+        } satisfies SourceShape)
+      : shape,
+  );
 
   return {
     ...source,
@@ -165,41 +130,21 @@ export function setShapeOutline(
     throw new Error("setShapeOutline: shape outline edit requires a node id");
   }
 
-  let matched = false;
-  let changed = false;
-
-  const slides = source.slides.map((slide) => {
-    let slideChanged = false;
-    const shapes = slide.shapes.map((shape) => {
-      if (!sourceHandlesEqual(shape.handle, handle)) return shape;
-      matched = true;
-      if (shape.kind !== "shape" && shape.kind !== "connector") {
-        throw new Error(
-          "setShapeOutline: only top-level sp and cxnSp shapes support outline edits",
-        );
-      }
-      if (hasAlternateContentSidecar(shape)) {
-        throw new Error("setShapeOutline: shapes inside AlternateContent are not supported");
-      }
-      const nextOutline = patchSourceOutline(shape.outline, outline);
-      if (sourceOutlineEqual(shape.outline, nextOutline)) return shape;
-      changed = true;
-      slideChanged = true;
-      return {
-        ...shape,
-        outline: nextOutline,
-      } satisfies StyleEditableShapeNode;
-    });
-    return slideChanged ? { ...slide, shapes } : slide;
-  });
-
-  if (!matched) {
-    if (source.slides.some((slide) => hasNestedShapeNodeWithHandle(slide.shapes, handle))) {
-      throw new Error("setShapeOutline: nested group shape editing is not supported");
-    }
-    throw new Error("setShapeOutline: shape handle was not found in PptxSourceModel source");
+  const target = requireUniqueSlideShapeTarget(source, handle, "setShapeOutline");
+  assertNotAlternateContentTarget(target, "setShapeOutline");
+  if (target.node.kind !== "shape" && target.node.kind !== "connector") {
+    throw new Error("setShapeOutline: only sp and cxnSp shapes support outline edits");
   }
-  if (!changed) return source;
+  const nextOutline = patchSourceOutline(target.node.outline, outline);
+  if (sourceOutlineEqual(target.node.outline, nextOutline)) return source;
+  const slides = replaceSlideShapeNode(source, handle, (shape) =>
+    shape.kind === "shape" || shape.kind === "connector"
+      ? ({
+          ...shape,
+          outline: nextOutline,
+        } satisfies StyleEditableShapeNode)
+      : shape,
+  );
 
   return {
     ...source,
@@ -213,35 +158,24 @@ export function deleteShape(source: PptxSourceModel, handle: SourceHandle): Pptx
     throw new Error("deleteShape: shape delete requires a node id");
   }
 
-  let found: SourceShapeNode | undefined;
-  let deleted = false;
+  const target = requireUniqueSlideShapeTarget(source, handle, "deleteShape");
+  if (target.nested) {
+    throw new Error("deleteShape: nested group shape deletion is not supported");
+  }
+  if (target.node.kind !== "shape" && target.node.kind !== "connector") {
+    throw new Error("deleteShape: only top-level sp or cxnSp shapes can be deleted");
+  }
+  assertNotAlternateContentTarget(target, "deleteShape");
+
   const slides = source.slides.map((slide) => {
     let slideChanged = false;
     const nextShapes = slide.shapes.filter((shape) => {
       if (!sourceHandlesEqual(shape.handle, handle)) return true;
-      found = shape;
-      if (shape.kind !== "shape" && shape.kind !== "connector") {
-        throw new Error("deleteShape: only top-level sp or cxnSp shapes can be deleted");
-      }
-      if (hasAlternateContentSidecar(shape)) {
-        throw new Error("deleteShape: shapes inside AlternateContent are not supported");
-      }
-      deleted = true;
       slideChanged = true;
       return false;
     });
     return slideChanged ? { ...slide, shapes: nextShapes } : slide;
   });
-
-  if (!deleted) {
-    if (
-      found === undefined &&
-      source.slides.some((slide) => hasNestedShapeNodeWithHandle(slide.shapes, handle))
-    ) {
-      throw new Error("deleteShape: nested group shape deletion is not supported");
-    }
-    throw new Error("deleteShape: shape handle was not found in PptxSourceModel source");
-  }
 
   const referencingConnector = findConnectorReferencingShape(source, handle);
   if (referencingConnector !== undefined) {
@@ -422,30 +356,93 @@ function assertPositiveFiniteEmu(value: unknown, operationName: string, fieldNam
   }
 }
 
-function findShapeNodeInTree(
-  shapes: readonly SourceShapeNode[],
-  handle: SourceHandle,
-): SourceShapeNode | undefined {
-  for (const shape of shapes) {
-    if (sourceHandlesEqual(shape.handle, handle)) return shape;
-    if (shape.kind === "group") {
-      const child = findShapeNodeInTree(shape.children, handle);
-      if (child !== undefined) return child;
-    }
-  }
-  return undefined;
+interface ShapeNodeMatch {
+  readonly node: SourceShapeNode;
+  readonly nested: boolean;
+  readonly insideAlternateContent: boolean;
 }
 
-function hasNestedShapeNodeWithHandle(
+function findShapeNodesInTree(
   shapes: readonly SourceShapeNode[],
   handle: SourceHandle,
-): boolean {
-  return shapes.some(
-    (shape) =>
-      shape.kind === "group" &&
-      (findShapeNodeInTree(shape.children, handle) !== undefined ||
-        hasNestedShapeNodeWithHandle(shape.children, handle)),
+  depth = 0,
+  insideAlternateContent = false,
+): ShapeNodeMatch[] {
+  const matches: ShapeNodeMatch[] = [];
+  for (const shape of shapes) {
+    const shapeInsideAlternateContent = insideAlternateContent || hasAlternateContentSidecar(shape);
+    if (sourceHandlesEqual(shape.handle, handle)) {
+      matches.push({
+        node: shape,
+        nested: depth > 0,
+        insideAlternateContent: shapeInsideAlternateContent,
+      });
+    }
+    if (shape.kind === "group") {
+      matches.push(
+        ...findShapeNodesInTree(shape.children, handle, depth + 1, shapeInsideAlternateContent),
+      );
+    }
+  }
+  return matches;
+}
+
+function requireUniqueSlideShapeTarget(
+  source: PptxSourceModel,
+  handle: SourceHandle,
+  operationName: string,
+): ShapeNodeMatch {
+  const matches = source.slides.flatMap((slide) => findShapeNodesInTree(slide.shapes, handle));
+  if (matches.length > 1) throw duplicateNodeIdError(operationName, handle);
+  const match = matches[0];
+  if (match === undefined) {
+    throw new Error(`${operationName}: shape handle was not found in PptxSourceModel source`);
+  }
+  return match;
+}
+
+function duplicateNodeIdError(operationName: string, handle: SourceHandle): Error {
+  return new Error(
+    `${operationName}: duplicate node id '${String(handle.nodeId)}' in drawing part '${handle.partPath}' is not supported`,
   );
+}
+
+function assertNotAlternateContentTarget(target: ShapeNodeMatch, operationName: string): void {
+  if (target.insideAlternateContent) {
+    throw new Error(`${operationName}: shapes inside AlternateContent are not supported`);
+  }
+}
+
+function replaceSlideShapeNode(
+  source: PptxSourceModel,
+  handle: SourceHandle,
+  replace: (shape: SourceShapeNode) => SourceShapeNode,
+): PptxSourceModel["slides"] {
+  return source.slides.map((slide) => {
+    const shapes = replaceShapeNodeInTree(slide.shapes, handle, replace);
+    return shapes === slide.shapes ? slide : { ...slide, shapes };
+  });
+}
+
+function replaceShapeNodeInTree(
+  shapes: readonly SourceShapeNode[],
+  handle: SourceHandle,
+  replace: (shape: SourceShapeNode) => SourceShapeNode,
+): readonly SourceShapeNode[] {
+  let changed = false;
+  const nextShapes = shapes.map((shape) => {
+    if (sourceHandlesEqual(shape.handle, handle)) {
+      const next = replace(shape);
+      if (next !== shape) changed = true;
+      return next;
+    }
+    if (shape.kind !== "group") return shape;
+    const children = replaceShapeNodeInTree(shape.children, handle, replace);
+    if (children === shape.children) return shape;
+    changed = true;
+    return { ...shape, children };
+  });
+  return changed ? nextShapes : shapes;
 }
 
 function hasAlternateContentSidecar(shape: SourceShapeNode): boolean {

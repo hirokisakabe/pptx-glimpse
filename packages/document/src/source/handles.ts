@@ -53,11 +53,21 @@ export function asRawSidecarId(value: string): RawSidecarId {
 export interface SourceHandle {
   /** Package part that owns this node. */
   readonly partPath: PartPath;
-  /** Node id inside the part (when available). */
+  /**
+   * Node id inside the part (when available).
+   *
+   * Drawing nodes use `(partPath, nodeId)` as their stable identity. In that case
+   * `orderingSlot` is preservation metadata only and is deliberately ignored when
+   * comparing handles. This lets an existing node retain its identity when a later
+   * group/ungroup operation changes its parent-local sibling position.
+   */
   readonly nodeId?: SourceNodeId;
   /** The relationship id referencing this node (e.g. `r:embed` in blip). */
   readonly relationshipId?: RelationshipId;
-  /** The child's order slot within the parent element. Used to restore order with raw sidecar. */
+  /**
+   * The child's order slot within the parent element. Used to restore order with raw sidecars
+   * and as the identity fallback only when `nodeId` is unavailable.
+   */
   readonly orderingSlot?: number;
   /** Raw sidecar ids associated with this node. */
   readonly rawSidecarIds?: readonly RawSidecarId[];
