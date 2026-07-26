@@ -496,6 +496,56 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it("Preserves group child coordinates and diagnoses missing or zero child extents", () => {
+    const result = adaptComputedViewToRendererModel(
+      createComputedView(
+        buildSource({
+          extraSlideShapes: [
+            {
+              kind: "group",
+              name: "Scaled group",
+              transform: transform(100, 200, 600, 300),
+              childTransform: transform(10, 20, 200, 150),
+              children: [],
+            },
+            {
+              kind: "group",
+              name: "Missing child transform",
+              transform: transform(300, 400, 500, 600),
+              children: [],
+            },
+            {
+              kind: "group",
+              name: "Zero child extent",
+              transform: transform(700, 800, 900, 1000),
+              childTransform: transform(11, 12, 0, 250),
+              children: [],
+            },
+          ],
+        }),
+      ),
+    );
+
+    expect(findElementByAltText(result.slides[0].elements, "Scaled group")).toMatchObject({
+      transform: { offsetX: 100, offsetY: 200, extentWidth: 600, extentHeight: 300 },
+      childTransform: { offsetX: 10, offsetY: 20, extentWidth: 200, extentHeight: 150 },
+    });
+    expect(
+      findElementByAltText(result.slides[0].elements, "Missing child transform"),
+    ).toMatchObject({
+      childTransform: { offsetX: 0, offsetY: 0, extentWidth: 500, extentHeight: 600 },
+    });
+    expect(findElementByAltText(result.slides[0].elements, "Zero child extent")).toMatchObject({
+      childTransform: { offsetX: 11, offsetY: 12, extentWidth: 0, extentHeight: 250 },
+    });
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
+      expect.arrayContaining([
+        "pptx-computed-view-adapter.missing-group-child-transform",
+        "pptx-computed-view-adapter.zero-group-child-extent",
+      ]),
+    );
+  });
+
   it("Normalize document media content types to current parser compatible image mime", () => {
     const source = buildSource({
       extraSlideShapes: [
