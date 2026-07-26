@@ -19,13 +19,13 @@ export interface TextRunLocator {
 
 export type ParagraphTextLocator = Omit<TextRunLocator, "runIndex">;
 
-export interface ShapeLocator {
+interface ShapeLocator {
   readonly nodeId: string;
 }
 
-export type ShapeTreeNodeKind = "sp" | "pic" | "cxnSp" | "graphicFrame" | "grpSp";
+type ShapeTreeNodeKind = "sp" | "pic" | "cxnSp" | "graphicFrame" | "grpSp";
 
-export interface ShapeTreeNodeLocation {
+interface ShapeTreeNodeLocation {
   readonly node: XmlNode;
   readonly nodeKind: ShapeTreeNodeKind;
   readonly parentContainer: XmlNode;
