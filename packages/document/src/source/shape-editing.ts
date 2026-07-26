@@ -370,7 +370,8 @@ function findShapeNodesInTree(
 ): ShapeNodeMatch[] {
   const matches: ShapeNodeMatch[] = [];
   for (const shape of shapes) {
-    const shapeInsideAlternateContent = insideAlternateContent || hasAlternateContentSidecar(shape);
+    const shapeInsideAlternateContent =
+      insideAlternateContent || hasAlternateContentWrapperSidecar(shape);
     if (sourceHandlesEqual(shape.handle, handle)) {
       matches.push({
         node: shape,
@@ -445,9 +446,14 @@ function replaceShapeNodeInTree(
   return changed ? nextShapes : shapes;
 }
 
-function hasAlternateContentSidecar(shape: SourceShapeNode): boolean {
+function hasAlternateContentWrapperSidecar(shape: SourceShapeNode): boolean {
   if (shape.kind === "raw") return false;
-  return shape.rawSidecars?.some((sidecar) => sidecar.node.name === "mc:AlternateContent") ?? false;
+  return (
+    shape.rawSidecars?.some(
+      (sidecar) =>
+        sidecar.node.name === "mc:AlternateContent" && sidecar.orderingSlot === undefined,
+    ) ?? false
+  );
 }
 
 function findConnectorReferencingShape(

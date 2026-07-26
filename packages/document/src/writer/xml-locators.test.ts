@@ -16,10 +16,16 @@ describe("shape tree node locator", () => {
     const inner = getChild(outer, "grpSp");
 
     const location = locateShapeTreeNodeLocation(spTree, { nodeId: "22" });
+    const connectorLocation = locateShapeTreeNodeLocation(spTree, { nodeId: "23" });
 
     expect(location).toMatchObject({ nodeKind: "sp", nested: true });
     expect(location?.parentContainer).toBe(inner);
     expect(getChild(getChild(location?.node, "nvSpPr"), "cNvPr")?.["@_name"]).toBe("Nested target");
+    expect(connectorLocation).toMatchObject({ nodeKind: "cxnSp", nested: true });
+    expect(connectorLocation?.parentContainer).toBe(outer);
+    expect(getChild(getChild(connectorLocation?.node, "nvCxnSpPr"), "cNvPr")?.["@_name"]).toBe(
+      "Nested connector",
+    );
   });
 
   it("rejects duplicate ids across root and group descendants", () => {

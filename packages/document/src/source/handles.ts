@@ -58,8 +58,8 @@ export interface SourceHandle {
    *
    * Drawing nodes use `(partPath, nodeId)` as their stable identity. In that case
    * `orderingSlot` is preservation metadata only and is deliberately ignored when
-   * comparing handles. This lets an existing node retain its identity when a later
-   * group/ungroup operation changes its parent-local sibling position.
+   * comparing handles. This lets an existing node retain its identity when its
+   * parent-local sibling position changes.
    */
   readonly nodeId?: SourceNodeId;
   /** The relationship id referencing this node (e.g. `r:embed` in blip). */
