@@ -219,7 +219,7 @@ export function addChart(
   const shapeId = nextDrawingShapeId(source, slide.shapes, slide.partPath);
   const chartNumber = Number(/(\d+)\.xml$/.exec(chartPartPath)?.[1] ?? 1);
   const chartXml = buildChartXml(input, chartNumber);
-  const workbookBytes = buildEmbeddedWorkbook(input.series);
+  const workbookBytes = buildEmbeddedChartWorkbook(input.series);
   const chartRelationships: PartRelationships = {
     sourcePartPath: chartPartPath,
     relationships: [
@@ -484,7 +484,10 @@ function buildDataPointXml(point: AddChartDataPointInput): string {
   return `<c:dPt><c:idx val="${point.index}"/>${buildShapePropertiesXml(point.fill, point.outline)}</c:dPt>`;
 }
 
-function buildEmbeddedWorkbook(series: readonly AddChartSeriesInput[]): Uint8Array {
+/** Builds the editable workbook shared by new-chart authoring and existing-chart data edits. */
+export function buildEmbeddedChartWorkbook(
+  series: readonly Pick<AddChartSeriesInput, "name" | "categories" | "values">[],
+): Uint8Array {
   const rows = Math.max(...series.map((item) => item.categories.length));
   const cells: string[] = [`<c r="A1" t="inlineStr"><is><t>Category</t></is></c>`];
   series.forEach((item, index) =>

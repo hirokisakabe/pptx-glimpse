@@ -112,6 +112,7 @@ function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
       applySetSlideBackgroundEdit(root, edit);
       return;
     case "replaceImage":
+    case "updateChartData":
     case "addEmptySlideFromLayout":
     case "duplicateSlide":
     case "moveSlide":
