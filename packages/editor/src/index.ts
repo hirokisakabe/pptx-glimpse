@@ -47,6 +47,7 @@ import {
   setShapeFill,
   setShapeOutline,
   setTextRunProperties,
+  type SourceChart,
   type SourceHandle,
   type SourceImage,
   type SourceParagraph,
@@ -54,6 +55,8 @@ import {
   type SourceSlide,
   type SourceTextRun,
   type SourceTransform,
+  updateChartData,
+  type UpdateChartDataInput,
   updateShapeTransform,
 } from "@pptx-glimpse/document";
 
@@ -164,6 +167,12 @@ export interface ReplaceImageCommand {
   readonly bytes: Uint8Array;
 }
 
+/** Update the series data of one chart. @inline */
+export interface UpdateChartDataCommand extends UpdateChartDataInput {
+  readonly kind: "updateChartData";
+  readonly handle: SourceHandle;
+}
+
 /** Add an empty slide based on an existing layout. @inline */
 export interface AddEmptySlideFromLayoutCommand extends AddEmptySlideFromLayoutInput {
   readonly kind: "addEmptySlideFromLayout";
@@ -209,6 +218,7 @@ export interface DeleteSlideCommand {
  * @inlineType AddConnectorCommand
  * @inlineType DeleteShapeCommand
  * @inlineType ReplaceImageCommand
+ * @inlineType UpdateChartDataCommand
  * @inlineType AddEmptySlideFromLayoutCommand
  * @inlineType DuplicateSlideCommand
  * @inlineType MoveSlideCommand
@@ -240,6 +250,7 @@ export type EditorCommand =
   | AddConnectorCommand
   | DeleteShapeCommand
   | ReplaceImageCommand
+  | UpdateChartDataCommand
   | AddEmptySlideFromLayoutCommand
   | DuplicateSlideCommand
   | MoveSlideCommand
@@ -503,6 +514,19 @@ export class EditorSession {
     );
   }
 
+  updateChartData(chart: SourceChart, input: UpdateChartDataInput): EditorApplyCommandResult {
+    return this.applyToSourceNode(
+      "updateChartData",
+      chart,
+      isSourceChart,
+      (document, handle) => {
+        const shape = findShapeNodeBySourceHandle(document, handle);
+        return shape?.kind === "chart" ? shape : undefined;
+      },
+      (handle) => ({ kind: "updateChartData", handle, ...input }),
+    );
+  }
+
   addEmptySlideFromLayout(input: AddEmptySlideFromLayoutInput): EditorApplyCommandResult {
     return this.apply({ kind: "addEmptySlideFromLayout", ...input });
   }
@@ -691,6 +715,7 @@ const EDITOR_COMMAND_KINDS: ReadonlySet<string> = new Set([
   "addConnector",
   "deleteShape",
   "replaceImage",
+  "updateChartData",
   "addEmptySlideFromLayout",
   "duplicateSlide",
   "moveSlide",
@@ -713,6 +738,7 @@ const EXPECTED_COMMAND_REJECTION_PREFIXES = [
   "addConnector:",
   "deleteShape:",
   "replaceImageBytes:",
+  "updateChartData:",
   "addEmptySlideFromLayout:",
   "duplicateSlide:",
   "moveSlide:",
@@ -745,6 +771,7 @@ function applyCommandToDocument(
     case "addConnector":
     case "deleteShape":
     case "replaceImage":
+    case "updateChartData":
     case "addEmptySlideFromLayout":
     case "duplicateSlide":
     case "moveSlide":
@@ -816,6 +843,10 @@ function isSourceImage(value: unknown): value is SourceImage {
   return isObject(value) && value.kind === "image";
 }
 
+function isSourceChart(value: unknown): value is SourceChart {
+  return isObject(value) && value.kind === "chart";
+}
+
 function isSourceSlide(value: unknown): value is SourceSlide {
   return (
     isObject(value) &&
@@ -871,6 +902,8 @@ function executeCommand(document: PptxSourceModel, command: EditorCommand): Pptx
       return deleteShape(document, command.handle);
     case "replaceImage":
       return replaceImageBytes(document, command.handle, command.bytes);
+    case "updateChartData":
+      return updateChartDataCommand(document, command);
     case "addEmptySlideFromLayout":
       return addEmptySlideFromLayout(document, command);
     case "duplicateSlide":
@@ -880,6 +913,27 @@ function executeCommand(document: PptxSourceModel, command: EditorCommand): Pptx
     case "deleteSlide":
       return deleteSlide(document, command.handle);
   }
+}
+
+function updateChartDataCommand(
+  document: PptxSourceModel,
+  command: UpdateChartDataCommand,
+): PptxSourceModel {
+  if (!Array.isArray(command.series) || command.series.length === 0) {
+    throw new Error("updateChartData: series must be a non-empty array");
+  }
+  for (const [index, series] of command.series.entries()) {
+    if (!isObject(series)) {
+      throw new Error(`updateChartData: series[${index}] must be an object`);
+    }
+    if (typeof series.name !== "string") {
+      throw new Error(`updateChartData: series[${index}].name must be a string`);
+    }
+    if (!Array.isArray(series.categories) || !Array.isArray(series.values)) {
+      throw new Error(`updateChartData: series[${index}] categories and values must be arrays`);
+    }
+  }
+  return updateChartData(document, command.handle, command);
 }
 
 function replaceTextRunPlainTextCommand(
@@ -1304,6 +1358,7 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
   const seenShapeTransforms = new Set<string>();
   const seenShapeFills = new Set<string>();
   const seenShapeOutlineProperties = new Map<string, Set<EditableShapeOutlineProperty>>();
+  const seenChartData = new Set<string>();
   const normalizedShapeOutlineEdits = new Map<string, MutableShapeOutlineEdit>();
   const normalizedReversed: PptxSourceModelEdit[] = [];
   let changed = false;
@@ -1390,6 +1445,14 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
       normalizedReversed.push(normalized.edit);
       continue;
     }
+    if (edit.kind === "updateChartData") {
+      const key = sourceHandleKey(edit.handle);
+      if (seenChartData.has(key)) {
+        changed = true;
+        continue;
+      }
+      seenChartData.add(key);
+    }
     normalizedReversed.push(edit);
   }
 
@@ -1451,14 +1514,24 @@ function editHandleNodeKey(
   ].join("\u0000");
 }
 
+function sourceHandleKey(handle: SourceHandle): string {
+  return [
+    handle.partPath,
+    handle.nodeId ?? "",
+    handle.relationshipId ?? "",
+    handle.orderingSlot ?? "",
+  ].join("\u0000");
+}
+
 function textRunParagraphEditKey(
   edit: PptxSourceModelTextRunEdit | PptxSourceModelTextRunPropertiesEdit,
 ): string | undefined {
   const nodeId = String(edit.handle.nodeId ?? "");
-  const byShapeId = /^(text:shape:.+:p:(\d+)):r:\d+$/.exec(nodeId);
-  const byShapeSlot = /^(text:shapeSlot:\d+:p:(\d+)):r:\d+$/.exec(nodeId);
-  const paragraphNodeId = byShapeId?.[1] ?? byShapeSlot?.[1];
-  const paragraphOrderingSlot = byShapeId?.[2] ?? byShapeSlot?.[2] ?? "";
+  const match = /^(text:(?:shape:.+|shapeSlot:\d+|table:.+:row:\d+:cell:\d+):p:(\d+)):r:\d+$/.exec(
+    nodeId,
+  );
+  const paragraphNodeId = match?.[1];
+  const paragraphOrderingSlot = match?.[2] ?? "";
   if (paragraphNodeId === undefined) return undefined;
   return [
     edit.handle.partPath,

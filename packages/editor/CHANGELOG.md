@@ -1,5 +1,19 @@
 # @pptx-glimpse/editor
 
+## 0.3.0
+
+### Minor Changes
+
+- 2f33268: 既存 Chart の系列名、category label、数値を chart XML と embedded workbook へ一貫して反映する typed document API と editor command / convenience API を追加する。
+- 93ee164: 既存 Table のセル内 paragraph / run を、通常の shape text と同じ公開 text operation・editor command で編集して保存できるようにする。
+
+### Patch Changes
+
+- Updated dependencies [2f33268]
+- Updated dependencies [38d59ad]
+- Updated dependencies [93ee164]
+  - @pptx-glimpse/document@0.13.0
+
 ## 0.2.0
 
 ### Minor Changes

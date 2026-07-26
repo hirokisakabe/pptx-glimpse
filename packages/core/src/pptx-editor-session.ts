@@ -9,7 +9,6 @@
 
 import {
   asEmu,
-  findShapeNodeBySourceHandle,
   type MediaPart,
   type PartPath,
   type PptxSourceModel,
@@ -34,11 +33,6 @@ import {
   type EditorOperationFailure,
 } from "@pptx-glimpse/editor";
 
-import {
-  type PptxTextBodyProseMirrorDocJson,
-  proseMirrorDocJsonToEditorCommands,
-  textBodyToProseMirrorDocJson,
-} from "./prosemirror-text-body-compat.js";
 import {
   type ConvertOptions,
   renderPptxSourceModelToSvg,
@@ -97,19 +91,6 @@ export interface PptxEditorSelectionInfo {
 export interface PptxEditorTextRunInfo {
   readonly text: string;
   readonly handle: SourceHandle;
-}
-
-/**
- * Legacy ProseMirror-compatible text body representation.
- *
- * @deprecated Use {@link PptxEditorTextBodyView} and {@link PptxEditorSession.applyAll}.
- */
-export interface PptxEditorTextBodyInfo {
-  /**
-   * @deprecated Use `PptxEditorShapeInfo.textBody` and `applyAll()` with editor commands.
-   * This ProseMirror-compatible JSON bridge is retained temporarily for compatibility.
-   */
-  readonly docJson: PptxTextBodyProseMirrorDocJson;
 }
 
 /**
@@ -174,11 +155,6 @@ export interface PptxEditorShapeInfo {
   readonly editableDelete?: boolean;
   readonly textRuns?: readonly PptxEditorTextRunInfo[];
   readonly textBody?: PptxEditorTextBodyView;
-  /**
-   * @deprecated Use `textBody` and `applyAll()` with `@pptx-glimpse/editor` commands.
-   * This ProseMirror-compatible view is retained temporarily for compatibility.
-   */
-  readonly editableTextBody?: PptxEditorTextBodyInfo;
   readonly editableImageReplacement?: PptxEditorImageReplacementInfo;
 }
 
@@ -619,21 +595,6 @@ export class PptxEditorSession {
   }
 
   /**
-   * @deprecated Use `textBody` from `shapes()` and pass generated commands to `applyAll()`.
-   * This ProseMirror-compatible bridge is retained temporarily for compatibility.
-   */
-  async applyTextBodyDocJson(
-    handle: SourceHandle,
-    docJson: unknown,
-  ): Promise<PptxEditorSlidesResponse> {
-    const textBody = this.#requireEditableShapeTextBody(handle);
-    const commands = proseMirrorDocJsonToEditorCommands(textBody, docJson);
-    if (commands.length === 0) return this.response();
-
-    return this.applyAll(commands);
-  }
-
-  /**
    * Select a shape without changing the document or history.
    *
    * @param handle Handle returned by {@link shapes}.
@@ -686,23 +647,6 @@ export class PptxEditorSession {
       throw integrationError("write-failed", "Failed to write or validate PPTX output", cause);
     }
     return { ok: true, pptx: output, history: this.history };
-  }
-
-  #requireEditableShapeTextBody(handle: SourceHandle): SourceTextBody {
-    const shape = findShapeNodeBySourceHandle(this.#session.document, handle);
-    if (shape === undefined) {
-      throw new PptxEditorError(
-        "invalid-command",
-        "text body edit: shape handle was not found in PptxSourceModel source",
-      );
-    }
-    if (shape.kind !== "shape" || shape.textBody === undefined) {
-      throw new PptxEditorError(
-        "invalid-command",
-        "text body edit: shape does not have editable text body",
-      );
-    }
-    return shape.textBody;
   }
 
   #selectNewShape(slideNumber: number, existingShapeKeys: ReadonlySet<string>): void {
@@ -955,9 +899,6 @@ function shapeInfo(
           textBody: textBodyView(shape.textBody),
         }
       : {}),
-    ...(shape.kind === "shape" && canEditTransform && shape.textBody !== undefined
-      ? editableTextBody(shape.textBody)
-      : {}),
     ...(shape.kind === "image" ? editableImageReplacement(source, shape) : {}),
   };
 
@@ -1030,16 +971,6 @@ function textBodyView(textBody: SourceTextBody): PptxEditorTextBodyView {
       })),
     })),
   };
-}
-
-function editableTextBody(
-  textBody: SourceTextBody,
-): Partial<Pick<PptxEditorShapeInfo, "editableTextBody">> {
-  try {
-    return { editableTextBody: { docJson: textBodyToProseMirrorDocJson(textBody) } };
-  } catch {
-    return {};
-  }
 }
 
 function editableImageReplacement(

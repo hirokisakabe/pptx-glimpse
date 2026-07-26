@@ -157,7 +157,7 @@ export const DEV_EDITOR_CORE_SCRIPT = `    function selectSlide(index) {
         handle: shape.handle,
         editableDelete: shape.editableDelete === true,
         editableTransform: shape.editableTransform,
-        editableTextBody: shape.editableTextBody,
+        textBody: shape.textBody,
         editableImageReplacement: shape.editableImageReplacement,
         bounds: {
           x: shape.bounds.x,

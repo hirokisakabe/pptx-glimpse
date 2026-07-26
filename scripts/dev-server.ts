@@ -9,11 +9,6 @@ import { promisify } from "util";
 import { type WebSocket, WebSocketServer } from "ws";
 
 import {
-  type PptxTextBodyProseMirrorDocJson,
-  proseMirrorDocJsonToEditorCommands,
-  textBodyToProseMirrorDocJson,
-} from "../packages/core/src/prosemirror-text-body-compat.js";
-import {
   asEmu,
   asPartPath,
   asPt,
@@ -22,7 +17,6 @@ import {
   type ConnectorPresetGeometry,
   type EditableTextRunProperties,
   type EditableTextRunProperty,
-  findShapeNodeBySourceHandle,
   type MediaPart,
   type PartPath,
   readPptx,
@@ -31,8 +25,11 @@ import {
   type SourceArrowEndpoint,
   type SourceHandle,
   type SourceImage,
+  type SourceParagraphProperties,
+  type SourceRunProperties,
   type SourceShapeNode,
   type SourceTextBody,
+  type SourceTextBodyProperties,
   type SourceTextRun,
   writePptx,
 } from "../packages/document/src/index.js";
@@ -106,8 +103,22 @@ interface EditorTextRunInfo {
   handle: SourceHandle;
 }
 
-interface EditorTextBodyInfo {
-  docJson: PptxTextBodyProseMirrorDocJson;
+interface EditorTextBodyView {
+  handle?: SourceHandle;
+  properties?: SourceTextBodyProperties;
+  paragraphs: EditorTextParagraphView[];
+}
+
+interface EditorTextParagraphView {
+  handle?: SourceHandle;
+  properties?: SourceParagraphProperties;
+  runs: EditorTextRunView[];
+}
+
+interface EditorTextRunView {
+  handle?: SourceHandle;
+  properties?: SourceRunProperties;
+  text: string;
 }
 
 interface EditorImageReplacementInfo {
@@ -126,7 +137,7 @@ interface EditorShapeInfo {
   editableTransform?: boolean;
   editableDelete?: boolean;
   textRuns?: EditorTextRunInfo[];
-  editableTextBody?: EditorTextBodyInfo;
+  textBody?: EditorTextBodyView;
   editableImageReplacement?: EditorImageReplacementInfo;
 }
 
@@ -246,11 +257,16 @@ export class DevEditorBackend {
   }
 
   async apply(command: EditorCommand): Promise<EditorSlidesResponse> {
+    return this.applyAll([command]);
+  }
+
+  async applyAll(commands: readonly EditorCommand[]): Promise<EditorSlidesResponse> {
     return this.#enqueueMutation(async () => {
-      const result = this.#session.apply(command);
+      const result = this.#session.applyAll(commands);
       if (!result.ok) {
         throw new Error(result.message);
       }
+      if (commands.length === 0) return this.response(result.warnings);
       this.#dirty = true;
       await this.renderCurrentSlides();
       return this.response(result.warnings);
@@ -312,27 +328,6 @@ export class DevEditorBackend {
     });
   }
 
-  async applyTextBodyDocJson(
-    handle: SourceHandle,
-    docJson: unknown,
-  ): Promise<EditorSlidesResponse> {
-    return this.#enqueueMutation(async () => {
-      const textBody = this.#requireEditableShapeTextBody(handle);
-      const commands = proseMirrorDocJsonToEditorCommands(textBody, docJson);
-      if (commands.length === 0) return this.response();
-
-      for (const command of commands) {
-        const result = this.#session.apply(command);
-        if (!result.ok) {
-          throw new Error(result.message);
-        }
-      }
-      this.#dirty = true;
-      await this.renderCurrentSlides();
-      return this.response();
-    });
-  }
-
   async selectShape(handle: SourceHandle): Promise<EditorSlidesResponse> {
     return this.#enqueueMutation(() => {
       const result = this.#session.selectShape(handle);
@@ -384,17 +379,6 @@ export class DevEditorBackend {
       () => undefined,
     );
     return queued;
-  }
-
-  #requireEditableShapeTextBody(handle: SourceHandle): SourceTextBody {
-    const shape = findShapeNodeBySourceHandle(this.#session.document, handle);
-    if (shape === undefined) {
-      throw new Error("text body edit: shape handle was not found in PptxSourceModel source");
-    }
-    if (shape.kind !== "shape" || shape.textBody === undefined) {
-      throw new Error("text body edit: shape does not have editable text body");
-    }
-    return shape.textBody;
   }
 
   #selectNewShape(slideNumber: number, existingShapeKeys: ReadonlySet<string>): void {
@@ -466,10 +450,8 @@ function shapeInfo(
           textRuns: collectTextRuns(
             shape.textBody.paragraphs.flatMap((paragraph) => paragraph.runs),
           ),
+          textBody: textBodyView(shape.textBody),
         }
-      : {}),
-    ...(shape.kind === "shape" && shape.textBody !== undefined && shape.transform !== undefined
-      ? editableTextBody(shape.textBody)
       : {}),
     ...(shape.kind === "image" ? editableImageReplacement(source, shape) : {}),
   };
@@ -529,14 +511,20 @@ function collectTextRuns(runs: readonly SourceTextRun[]): EditorTextRunInfo[] {
   });
 }
 
-function editableTextBody(
-  textBody: SourceTextBody,
-): Partial<Pick<EditorShapeInfo, "editableTextBody">> {
-  try {
-    return { editableTextBody: { docJson: textBodyToProseMirrorDocJson(textBody) } };
-  } catch {
-    return {};
-  }
+function textBodyView(textBody: SourceTextBody): EditorTextBodyView {
+  return {
+    ...(textBody.handle !== undefined ? { handle: textBody.handle } : {}),
+    ...(textBody.properties !== undefined ? { properties: textBody.properties } : {}),
+    paragraphs: textBody.paragraphs.map((paragraph) => ({
+      ...(paragraph.handle !== undefined ? { handle: paragraph.handle } : {}),
+      ...(paragraph.properties !== undefined ? { properties: paragraph.properties } : {}),
+      runs: paragraph.runs.map((run) => ({
+        text: run.text,
+        ...(run.handle !== undefined ? { handle: run.handle } : {}),
+        ...(run.properties !== undefined ? { properties: run.properties } : {}),
+      })),
+    })),
+  };
 }
 
 function editableImageReplacement(
@@ -855,11 +843,10 @@ async function handleRequest(
     return;
   }
 
-  if (url.pathname === "/api/editor/text-body" && req.method === "POST") {
+  if (url.pathname === "/api/editor/commands" && req.method === "POST") {
     const body = await readJsonBody(req);
-    const handle = normalizeHandle(isRecord(body) ? body.handle : undefined);
-    const docJson = isRecord(body) ? body.docJson : undefined;
-    sendJson(res, 200, await backend.applyTextBodyDocJson(handle, docJson));
+    const commands = normalizeCommands(isRecord(body) ? body.commands : undefined);
+    sendJson(res, 200, await backend.applyAll(commands));
     return;
   }
 
@@ -1044,6 +1031,11 @@ function normalizeCommand(command: unknown): EditorCommand {
     };
   }
   throw new Error("unsupported command kind");
+}
+
+function normalizeCommands(commands: unknown): EditorCommand[] {
+  if (!Array.isArray(commands)) throw new Error("commands must be an array");
+  return commands.map(normalizeCommand);
 }
 
 function normalizeSlideNumber(value: unknown): number {

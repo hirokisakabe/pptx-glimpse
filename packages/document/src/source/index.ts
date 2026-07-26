@@ -78,6 +78,8 @@ export type {
   NativeChartTickMark,
   NativeChartType,
   NativeRadarStyle,
+  UpdateChartDataInput,
+  UpdateChartSeriesDataInput,
   UpdateShapeTransformInput,
 } from "./editing.js";
 export {
@@ -105,6 +107,7 @@ export {
   setShapeFill,
   setShapeOutline,
   setTextRunProperties,
+  updateChartData,
   updateShapeTransform,
 } from "./editing.js";
 export type {
@@ -157,6 +160,7 @@ export type {
   PptxSourceModelShapeTransformEdit,
   PptxSourceModelTextRunEdit,
   PptxSourceModelTextRunPropertiesEdit,
+  PptxSourceModelUpdateChartDataEdit,
 } from "./pptx-source-model.js";
 export type {
   SlideSize,

@@ -58,7 +58,13 @@ export interface ConnectorElement {
 
 export interface GroupElement {
   type: "group";
+  /**
+   * Renderer-ready parent-local group viewport. Children are mapped with
+   * `T(off) * R(ext center) * F(ext center) * S(ext / chExt) * T(-chOff)`;
+   * nested `<g>` elements compose ancestor matrices from the outside inward.
+   */
   transform: Transform;
+  /** Renderer-ready child coordinate space; zero extent axes use identity scale. */
   childTransform: Transform;
   children: SlideElement[];
   effects: EffectList | null;

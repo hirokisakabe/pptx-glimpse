@@ -21,9 +21,13 @@ DOCUMENT_TARBALL=$(basename "$DOCUMENT_TARBALL_PATH")
 pnpm --dir packages/editor pack --pack-destination "$WORK_DIR" > /dev/null
 EDITOR_TARBALL_PATH=$(find "$WORK_DIR" -maxdepth 1 -type f -name "pptx-glimpse-editor-*.tgz" -print -quit)
 EDITOR_TARBALL=$(basename "$EDITOR_TARBALL_PATH")
+pnpm --dir packages/mcp pack --pack-destination "$WORK_DIR" > /dev/null
+MCP_TARBALL_PATH=$(find "$WORK_DIR" -maxdepth 1 -type f -name "pptx-glimpse-mcp-*.tgz" -print -quit)
+MCP_TARBALL=$(basename "$MCP_TARBALL_PATH")
 echo "Packed: $TARBALL"
 echo "Packed: $DOCUMENT_TARBALL"
 echo "Packed: $EDITOR_TARBALL"
+echo "Packed: $MCP_TARBALL"
 
 CORE_PACKAGE_DIR="$WORK_DIR/core-package"
 mkdir -p "$CORE_PACKAGE_DIR"
@@ -40,7 +44,6 @@ const expectedDependencies = [
   "@resvg/resvg-wasm",
   "fast-xml-parser",
   "opentype.js",
-  "prosemirror-model",
 ];
 const runtimeDependencies = [
   ...Object.keys(packageJson.dependencies ?? {}),
@@ -88,6 +91,9 @@ for (const removedEditorApi of [
   "BrowserPptxEditorSession",
   "createBrowserPptxEditorSession",
   "BrowserEditor",
+  "PptxEditorTextBodyInfo",
+  "editableTextBody",
+  "applyTextBodyDocJson",
 ]) {
   if (declarations.includes(removedEditorApi)) {
     throw new Error(`published declarations contain removed editor API: ${removedEditorApi}`);
@@ -150,13 +156,221 @@ if grep -R -i "prosemirror" "$EDITOR_PACKAGE_DIR/package/dist"; then
 fi
 echo "Editor package boundary verification passed!"
 
+MCP_PACKAGE_DIR="$WORK_DIR/mcp-package"
+mkdir -p "$MCP_PACKAGE_DIR"
+tar -xzf "$MCP_TARBALL_PATH" -C "$MCP_PACKAGE_DIR"
+test -f "$MCP_PACKAGE_DIR/package/README.md"
+test -f "$MCP_PACKAGE_DIR/package/server.json"
+test -x "$MCP_PACKAGE_DIR/package/dist/cli.js"
+node --input-type=module - "$MCP_PACKAGE_DIR/package/package.json" "$MCP_PACKAGE_DIR/package/server.json" << 'TESTEOF'
+import { readFileSync } from "node:fs";
+
+const packageJson = JSON.parse(readFileSync(process.argv[2], "utf8"));
+const serverJson = JSON.parse(readFileSync(process.argv[3], "utf8"));
+const runtimeDependencies = [
+  ...Object.keys(packageJson.dependencies ?? {}),
+  ...Object.keys(packageJson.optionalDependencies ?? {}),
+  ...Object.keys(packageJson.peerDependencies ?? {}),
+].sort();
+const expectedDependencies = ["@modelcontextprotocol/sdk", "pptx-glimpse", "zod"].sort();
+const registryPackages = serverJson.packages ?? [];
+const npmPackages = registryPackages.filter(
+  (entry) => entry.registryType === "npm" && entry.identifier === packageJson.name,
+);
+
+if (packageJson.private === true) {
+  throw new Error("@pptx-glimpse/mcp must be publishable");
+}
+if (runtimeDependencies.join("\n") !== expectedDependencies.join("\n")) {
+  throw new Error(
+    `@pptx-glimpse/mcp runtime dependencies are invalid: ${runtimeDependencies.join(", ")}`,
+  );
+}
+if (packageJson.mcpName !== serverJson.name) {
+  throw new Error("package.json mcpName must match server.json name");
+}
+if (
+  packageJson.version !== serverJson.version ||
+  packageJson.version !== npmPackages[0]?.version
+) {
+  throw new Error("MCP package and Registry metadata versions must match");
+}
+if (
+  registryPackages.length !== 1 ||
+  npmPackages.length !== 1 ||
+  npmPackages[0]?.transport?.type !== "stdio"
+) {
+  throw new Error("server.json must describe the npm package with stdio transport");
+}
+if (serverJson.repository?.subfolder !== packageJson.repository?.directory) {
+  throw new Error("server.json must identify the MCP package monorepo subfolder");
+}
+TESTEOF
+echo "MCP package metadata verification passed!"
+
 # Install in core package test directory
 TEST_DIR="$WORK_DIR/core-test-project"
 mkdir -p "$TEST_DIR"
 cp "$REPO_DIR/shared-fixtures/real-basic-theme.pptx" "$TEST_DIR/fixture.pptx"
 cd "$TEST_DIR"
 npm init -y > /dev/null 2>&1
-npm install "$DOCUMENT_TARBALL_PATH" "$EDITOR_TARBALL_PATH" "$TARBALL_PATH" > /dev/null 2>&1
+npm install "$DOCUMENT_TARBALL_PATH" "$EDITOR_TARBALL_PATH" "$TARBALL_PATH" "$MCP_TARBALL_PATH" > /dev/null 2>&1
+
+echo ""
+
+# --- MCP packaged bin protocol test ---
+echo "--- Test: @pptx-glimpse/mcp packaged bin ---"
+cat > test-mcp-bin.mjs << 'TESTEOF'
+import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+const executable = join(process.cwd(), "node_modules", ".bin", "pptx-glimpse-mcp");
+const packageJson = JSON.parse(
+  readFileSync(join(process.cwd(), "node_modules", "@pptx-glimpse", "mcp", "package.json")),
+);
+const child = spawn(executable, [], { stdio: ["pipe", "pipe", "pipe"] });
+let stdout = "";
+let stderr = "";
+let stopping = false;
+let childFailure;
+const responses = new Map();
+const waiters = new Map();
+
+function acceptLine(line) {
+  if (line.length === 0) return;
+  const message = JSON.parse(line);
+  if (message.id === undefined) return;
+  responses.set(message.id, message);
+  waiters.get(message.id)?.resolve(message);
+}
+
+child.stdout.setEncoding("utf8");
+child.stdout.on("data", (chunk) => {
+  stdout += chunk;
+  let newline;
+  while ((newline = stdout.indexOf("\n")) >= 0) {
+    const line = stdout.slice(0, newline);
+    stdout = stdout.slice(newline + 1);
+    acceptLine(line);
+  }
+});
+child.stderr.setEncoding("utf8");
+child.stderr.on("data", (chunk) => {
+  stderr += chunk;
+});
+child.once("error", (error) => {
+  rejectWaiters(error);
+});
+child.once("exit", (code, signal) => {
+  if (!stopping) {
+    rejectWaiters(
+      new Error(`MCP server exited before shutdown (code=${code}, signal=${signal}): ${stderr}`),
+    );
+  }
+});
+
+function rejectWaiters(error) {
+  childFailure = error;
+  for (const waiter of waiters.values()) {
+    clearTimeout(waiter.timer);
+    waiter.reject(error);
+  }
+  waiters.clear();
+}
+
+function send(message) {
+  child.stdin.write(`${JSON.stringify(message)}\n`);
+}
+
+function response(id) {
+  const existing = responses.get(id);
+  if (existing !== undefined) return Promise.resolve(existing);
+  if (childFailure !== undefined) return Promise.reject(childFailure);
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(
+      () => reject(new Error(`Timed out waiting for MCP response ${id}. stderr: ${stderr}`)),
+      60000,
+    );
+    waiters.set(id, {
+      resolve: (message) => {
+        clearTimeout(timer);
+        waiters.delete(id);
+        resolve(message);
+      },
+      reject,
+      timer,
+    });
+  });
+}
+
+try {
+  send({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "initialize",
+    params: {
+      protocolVersion: "2025-06-18",
+      capabilities: {},
+      clientInfo: { name: "package-verification", version: "1.0.0" },
+    },
+  });
+  const initialized = await response(1);
+  if (
+    initialized.error ||
+    initialized.result?.serverInfo?.name !== "pptx-glimpse" ||
+    initialized.result?.serverInfo?.version !== packageJson.version
+  ) {
+    throw new Error(`MCP initialize failed: ${JSON.stringify(initialized)}`);
+  }
+
+  send({ jsonrpc: "2.0", method: "notifications/initialized" });
+  send({ jsonrpc: "2.0", id: 2, method: "tools/list", params: {} });
+  const tools = await response(2);
+  const previewTool = tools.result?.tools?.find((tool) => tool.name === "preview_pptx");
+  const slidesSchema = previewTool?.inputSchema?.properties?.slides;
+  if (
+    tools.error ||
+    previewTool === undefined ||
+    slidesSchema?.minItems !== 1 ||
+    slidesSchema?.items?.type !== "integer" ||
+    slidesSchema?.items?.exclusiveMinimum !== 0
+  ) {
+    throw new Error(`MCP tool listing failed: ${JSON.stringify(tools)}`);
+  }
+
+  send({
+    jsonrpc: "2.0",
+    id: 3,
+    method: "tools/call",
+    params: {
+      name: "preview_pptx",
+      arguments: { filePath: join(process.cwd(), "fixture.pptx"), slides: [1] },
+    },
+  });
+  const preview = await response(3);
+  const image = preview.result?.content?.[0];
+  const slide = preview.result?.structuredContent?.slides?.[0];
+  if (
+    preview.error ||
+    preview.result?.isError ||
+    image?.type !== "image" ||
+    image?.mimeType !== "image/png" ||
+    !image?.data?.startsWith("iVBOR") ||
+    preview.result?.content?.length !== 1 ||
+    preview.result?.structuredContent?.slides?.length !== 1 ||
+    slide?.slideNumber !== 1 ||
+    slide?.contentIndex !== 0
+  ) {
+    throw new Error(`MCP preview_pptx failed: ${JSON.stringify(preview)}`);
+  }
+  console.log("MCP initialize, tool listing, and PNG preview passed!");
+} finally {
+  stopping = true;
+  child.kill();
+}
+TESTEOF
+node test-mcp-bin.mjs
 
 echo ""
 

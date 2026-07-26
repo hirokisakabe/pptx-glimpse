@@ -1,5 +1,24 @@
 # pptx-glimpse
 
+## 5.0.0
+
+### Major Changes
+
+- 5075df1: 非推奨の ProseMirror text-body 互換 API（`PptxEditorShapeInfo.editableTextBody`、`PptxEditorTextBodyInfo`、`PptxEditorSession.applyTextBodyDocJson()`）と `prosemirror-model` 依存を削除する。テキスト編集には `PptxEditorShapeInfo.textBody` と `PptxEditorSession.applyAll()` を使用してください。
+
+### Minor Changes
+
+- 2f33268: 既存 Chart の系列名、category label、数値を chart XML と embedded workbook へ一貫して反映する typed document API と editor command / convenience API を追加する。
+
+### Patch Changes
+
+- 38d59ad: group shape の source-local transform を保持し、nested group の描画合成と fallback 診断を固定する
+- Updated dependencies [2f33268]
+- Updated dependencies [38d59ad]
+- Updated dependencies [93ee164]
+  - @pptx-glimpse/document@0.13.0
+  - @pptx-glimpse/editor@0.3.0
+
 ## 4.0.1
 
 ### Patch Changes

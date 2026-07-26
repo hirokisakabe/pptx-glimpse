@@ -181,6 +181,7 @@ export type {
   PptxSourceModelShapeTransformEdit,
   PptxSourceModelTextRunEdit,
   PptxSourceModelTextRunPropertiesEdit,
+  PptxSourceModelUpdateChartDataEdit,
   Pt,
   RawOoxmlNode,
   RawPackagePart,
@@ -274,6 +275,8 @@ export type {
   SourceTransform,
   SourceUnderlineStyle,
   SourceVerticalAnchor,
+  UpdateChartDataInput,
+  UpdateChartSeriesDataInput,
   UpdateShapeTransformInput,
 } from "./source/index.js";
 export {
@@ -305,6 +308,7 @@ export {
   setShapeOutline,
   setSlideBackground,
   setTextRunProperties,
+  updateChartData,
   updateShapeTransform,
 } from "./source/index.js";
 export {

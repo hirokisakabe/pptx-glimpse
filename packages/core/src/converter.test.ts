@@ -63,6 +63,32 @@ describe("native chart writer renderer integration", () => {
     expect(result.slides).toHaveLength(1);
     for (const chartType of types) expect(result.slides[0]?.svg).toContain(`Native ${chartType}`);
   });
+
+  it("renders data updated through the existing-chart document operation", async () => {
+    let source = document.createPptx();
+    const handle = source.slides[0]?.handle;
+    if (handle === undefined) throw new Error("createPptx should create a slide");
+    source = document.addChart(source, handle, {
+      chartType: "bar",
+      offsetX: document.asEmu(500000),
+      offsetY: document.asEmu(500000),
+      width: document.asEmu(5000000),
+      height: document.asEmu(3000000),
+      series: [{ name: "Original", categories: ["Jan", "Feb"], values: [1, 2] }],
+    });
+    const existing = document.readPptx(document.writePptx(source));
+    const chart = existing.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    if (chart?.handle === undefined) throw new Error("existing chart should have a handle");
+    const before = await renderPptxSourceModelToSvg(existing);
+    const edited = document.updateChartData(existing, chart.handle, {
+      series: [{ name: "Updated", categories: ["Apr", "May"], values: [8, 3] }],
+    });
+    const after = await renderPptxSourceModelToSvg(edited);
+
+    expect(after.slides[0]?.svg).not.toBe(before.slides[0]?.svg);
+    expect(after.slides[0]?.svg).toContain("Apr");
+    expect(after.slides[0]?.svg).not.toContain("Jan");
+  });
 });
 
 const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
@@ -527,6 +553,60 @@ describe("convertPptxToSvg", () => {
       outputElements: 3,
       skippedElements: 1,
       warnings: 1,
+    });
+  });
+
+  it("counts group child transform display fallbacks in support coverage", async () => {
+    const source = document.readPptx(testPptx);
+    const transform = {
+      offsetX: document.asEmu(100),
+      offsetY: document.asEmu(200),
+      width: document.asEmu(300),
+      height: document.asEmu(400),
+    };
+    const withGroupFallbacks: document.PptxSourceModel = {
+      ...source,
+      slides: source.slides.map((slide, index) =>
+        index === 0
+          ? {
+              ...slide,
+              shapes: [
+                ...slide.shapes,
+                {
+                  kind: "group",
+                  name: "Missing child transform",
+                  transform,
+                  children: [],
+                },
+                {
+                  kind: "group",
+                  name: "Zero child extent",
+                  transform,
+                  childTransform: {
+                    offsetX: document.asEmu(0),
+                    offsetY: document.asEmu(0),
+                    width: document.asEmu(0),
+                    height: document.asEmu(200),
+                  },
+                  children: [],
+                },
+              ],
+            }
+          : slide,
+      ),
+    };
+
+    const report = await renderPptxSourceModelToSvg(withGroupFallbacks);
+
+    expect(report.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
+      expect.arrayContaining([
+        "pptx-computed-view-adapter.missing-group-child-transform",
+        "pptx-computed-view-adapter.zero-group-child-extent",
+      ]),
+    );
+    expect(report.supportCoverage.slides[0]).toMatchObject({
+      fallbackElements: 2,
+      warnings: 2,
     });
   });
 

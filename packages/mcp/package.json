@@ -1,0 +1,56 @@
+{
+  "name": "@pptx-glimpse/mcp",
+  "version": "0.1.0",
+  "description": "Node.js MCP server for previewing PPTX slides as PNG images.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "pptx-glimpse-mcp": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "server.json"
+  ],
+  "scripts": {
+    "build": "tsup"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "keywords": [
+    "mcp",
+    "pptx",
+    "powerpoint",
+    "png",
+    "preview",
+    "ai"
+  ],
+  "mcpName": "io.github.hirokisakabe/pptx-glimpse",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hirokisakabe/pptx-glimpse.git",
+    "directory": "packages/mcp"
+  },
+  "homepage": "https://github.com/hirokisakabe/pptx-glimpse/tree/main/packages/mcp",
+  "bugs": {
+    "url": "https://github.com/hirokisakabe/pptx-glimpse/issues"
+  },
+  "author": "hirokisakabe",
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "pptx-glimpse": "workspace:^",
+    "zod": "^4.4.3"
+  }
+}

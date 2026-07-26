@@ -510,6 +510,8 @@ function isUnresolvedDiagnosticCode(code: string): boolean {
 function isFallbackDiagnosticCode(code: string): boolean {
   return (
     code === "pptx-computed-view-adapter.missing-transform" ||
+    code === "pptx-computed-view-adapter.missing-group-child-transform" ||
+    code === "pptx-computed-view-adapter.zero-group-child-extent" ||
     code === "pptx-computed-view-adapter.raw-background-ignored" ||
     code === "pptx-computed-view-adapter.raw-fill-ignored"
   );

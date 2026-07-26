@@ -153,7 +153,12 @@ export interface ComputedConnectorElement extends ComputedElementBase {
 export interface ComputedGroupElement extends ComputedElementBase {
   readonly kind: "group";
   readonly sourceNode: SourceGroup;
+  /** Non-destructive projection of the group's parent-local authored transform. */
   readonly transform?: SourceTransform;
+  /**
+   * Non-destructive projection of the authored child coordinate space. Effective
+   * affine composition belongs to the core adapter / renderer boundary.
+   */
   readonly childTransform?: SourceTransform;
   readonly fill?: ComputedFill;
   readonly effects?: ComputedEffectList;
