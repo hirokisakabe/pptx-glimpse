@@ -804,14 +804,14 @@ function parseTableCell(
   orderedCellChildren?: readonly XmlOrderedNode[],
 ): SourceTableCell {
   const tcPr = getChild(tc, "tcPr");
-  const textOrderingSlot = tableOrderingSlot * 1_000_000_000 + rowIndex * 1_000_000 + cellIndex;
   const textBody = parseTextBody(
     getChild(tc, "txBody"),
     partPath,
     nextId,
     tableNodeId,
-    textOrderingSlot,
+    tableOrderingSlot,
     orderedChildChildren(orderedCellChildren, "txBody"),
+    { rowIndex, cellIndex },
   );
   const fill = parseFill(tcPr, nextId);
   const borders = parseCellBorders(tcPr, nextId);

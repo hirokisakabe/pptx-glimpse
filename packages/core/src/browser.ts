@@ -29,7 +29,6 @@ export type {
   PptxEditorShapeInfo,
   PptxEditorSlidesResponse,
   PptxEditorSlideSvg,
-  PptxEditorTextBodyInfo,
   PptxEditorTextBodyView,
   PptxEditorTextParagraphView,
   PptxEditorTextRunInfo,

@@ -88,7 +88,7 @@ test("edits a text shape with the overlay editor, re-renders, and saves text", a
 
     const commandResponse = page.waitForResponse(
       (response) =>
-        response.url().endsWith("/api/editor/text-body") &&
+        response.url().endsWith("/api/editor/commands") &&
         response.request().method() === "POST" &&
         response.ok(),
     );
@@ -141,7 +141,7 @@ test("adds, edits, moves, resizes, saves, and deletes a text box from the UI", a
 
     const textResponse = page.waitForResponse(
       (response) =>
-        response.url().endsWith("/api/editor/text-body") &&
+        response.url().endsWith("/api/editor/commands") &&
         response.request().method() === "POST" &&
         response.ok(),
     );
@@ -311,14 +311,8 @@ test("applies text run decoration from the overlay toolbar with undo and redo", 
     await page.getByTestId("text-run-format-italic").click();
     await italicResponse;
     await expect(page.getByTestId("text-run-format-toolbar")).toBeVisible();
-    const textBodyResponse = page.waitForResponse(
-      (response) =>
-        response.url().endsWith("/api/editor/text-body") &&
-        response.request().method() === "POST" &&
-        response.ok(),
-    );
     await page.getByTestId("text-editor-done").click();
-    await textBodyResponse;
+    await expect(page.getByTestId("text-editor-overlay")).toBeHidden();
 
     const undoResponse = page.waitForResponse(
       (response) => response.url().endsWith("/api/editor/undo") && response.ok(),

@@ -44,7 +44,6 @@ const expectedDependencies = [
   "@resvg/resvg-wasm",
   "fast-xml-parser",
   "opentype.js",
-  "prosemirror-model",
 ];
 const runtimeDependencies = [
   ...Object.keys(packageJson.dependencies ?? {}),
@@ -92,6 +91,9 @@ for (const removedEditorApi of [
   "BrowserPptxEditorSession",
   "createBrowserPptxEditorSession",
   "BrowserEditor",
+  "PptxEditorTextBodyInfo",
+  "editableTextBody",
+  "applyTextBodyDocJson",
 ]) {
   if (declarations.includes(removedEditorApi)) {
     throw new Error(`published declarations contain removed editor API: ${removedEditorApi}`);

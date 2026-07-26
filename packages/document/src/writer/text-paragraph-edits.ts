@@ -10,6 +10,7 @@ import type {
 import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import {
   locateShape,
+  locateTable,
   type ParagraphTextLocator,
   parseParagraphLocator,
   parseTextRunLocator,
@@ -27,8 +28,7 @@ import {
 
 export function applyTextRunEdit(root: XmlNode, edit: PptxSourceModelTextRunEdit): void {
   const locator = parseTextRunLocator(edit.handle.nodeId);
-  const shape = locateTextShape(root, locator);
-  const paragraph = getChildArray(getChild(shape, "txBody"), "p")[locator.paragraphIndex];
+  const paragraph = getChildArray(locateTextBody(root, locator), "p")[locator.paragraphIndex];
   const run = getChildArray(paragraph, "r")[locator.runIndex];
   if (run === undefined) {
     throw new Error(
@@ -76,8 +76,7 @@ export function applyParagraphTextEdit(
   edit: PptxSourceModelParagraphTextEdit,
 ): void {
   const locator = parseParagraphLocator(edit.handle.nodeId);
-  const shape = locateTextShape(root, locator);
-  const paragraphs = getChildArray(getChild(shape, "txBody"), "p");
+  const paragraphs = getChildArray(locateTextBody(root, locator), "p");
   const paragraph = locatePhysicalParagraphForTextEdit(paragraphs, locator, edit.handle.nodeId);
   if (paragraph === undefined) {
     throw new Error(
@@ -93,8 +92,7 @@ export function applyParagraphPropertiesEdit(
 ): void {
   assertParagraphPropertiesEdit(edit);
   const locator = parseParagraphLocator(edit.handle.nodeId);
-  const shape = locateTextShape(root, locator);
-  const paragraphs = getChildArray(getChild(shape, "txBody"), "p");
+  const paragraphs = getChildArray(locateTextBody(root, locator), "p");
   const target = locateParagraphPropertiesForEdit(paragraphs, locator);
   if (target === undefined) {
     throw new Error(
@@ -118,12 +116,21 @@ export function applyParagraphPropertiesEdit(
   if (!hasSet && cleared && xmlNodeIsEmpty(pPr)) deleteParagraphProperties(target.paragraph, pPr);
 }
 
-function locateTextShape(
+function locateTextBody(
   root: XmlNode,
   locator: ReturnType<typeof parseTextRunLocator> | ReturnType<typeof parseParagraphLocator>,
 ): XmlNode | undefined {
   const slide = getChild(root, "sld");
-  return locateShape(getChild(getChild(slide, "cSld"), "spTree"), locator);
+  const spTree = getChild(getChild(slide, "cSld"), "spTree");
+  if (locator.ownerKind === "shape") {
+    return getChild(locateShape(spTree, locator), "txBody");
+  }
+  const table = getChild(getChild(locateTable(spTree, locator), "graphic"), "graphicData");
+  const rows = getChildArray(getChild(table, "tbl"), "tr");
+  const row = locator.rowIndex === undefined ? undefined : rows[locator.rowIndex];
+  const cells = getChildArray(row, "tc");
+  const cell = locator.cellIndex === undefined ? undefined : cells[locator.cellIndex];
+  return getChild(cell, "txBody");
 }
 
 function locateTextRun(
@@ -131,8 +138,7 @@ function locateTextRun(
   nodeId: PptxSourceModelTextRunEdit["handle"]["nodeId"],
 ): XmlNode | undefined {
   const locator = parseTextRunLocator(nodeId);
-  const shape = locateTextShape(root, locator);
-  const paragraph = getChildArray(getChild(shape, "txBody"), "p")[locator.paragraphIndex];
+  const paragraph = getChildArray(locateTextBody(root, locator), "p")[locator.paragraphIndex];
   return getChildArray(paragraph, "r")[locator.runIndex];
 }
 

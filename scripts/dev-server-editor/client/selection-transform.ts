@@ -23,7 +23,7 @@ export const DEV_EDITOR_SELECTION_SCRIPT = `    function renderSelectionOverlay(
         });
         hit.addEventListener("mousedown", function (event) {
           if (activeTextEditor) return;
-          if (event.detail >= 2 && shape.editableTextBody) {
+          if (event.detail >= 2 && shape.textBody) {
             event.preventDefault();
             openTextEditor(shape);
           }
