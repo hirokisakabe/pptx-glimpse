@@ -1,4 +1,5 @@
 import {
+  formatNavigationTitle,
   isValidNavigationPath,
   navigationPathParts,
   normalizeGeneratedMarkdownLinks,
@@ -26,6 +27,7 @@ describe("normalizeGeneratedMarkdownLinks", () => {
   it("does not change prose, external links, or fenced code", () => {
     const source = [
       "Use `README.mdx` as a filename.",
+      "Keep `[example](./page.mdx)` unchanged inside code.",
       "[external](https://example.com/guide.mdx)",
       "```md",
       "[example](/docs/api-reference/node/example.mdx)",
@@ -34,9 +36,31 @@ describe("normalizeGeneratedMarkdownLinks", () => {
 
     expect(normalizeGeneratedMarkdownLinks(source)).toBe(source);
   });
+
+  it("handles long and blockquoted CommonMark fences", () => {
+    const source = [
+      "````md",
+      "```ts",
+      "[long fence](/docs/api-reference/node/example.mdx)",
+      "```",
+      "````",
+      "> ```md",
+      "> [quote](/docs/api-reference/node/example.mdx)",
+      "> ```",
+    ].join("\n");
+
+    expect(normalizeGeneratedMarkdownLinks(source)).toBe(source);
+  });
 });
 
 describe("TypeDoc navigation paths", () => {
+  it.each(["node/index.mdx", "node/interfaces/ConvertOptions.mdx"])(
+    "accepts safe path %j",
+    (path) => {
+      expect(isValidNavigationPath(path)).toBe(true);
+    },
+  );
+
   it("uses POSIX path semantics", () => {
     expect(navigationPathParts("node/interfaces/ConvertOptions.mdx")).toEqual({
       directory: "node/interfaces",
@@ -48,6 +72,17 @@ describe("TypeDoc navigation paths", () => {
     "rejects unsafe path %j",
     (path) => {
       expect(isValidNavigationPath(path)).toBe(false);
+      expect(() => navigationPathParts(path)).toThrow("Invalid TypeDoc navigation path");
     },
   );
+});
+
+describe("formatNavigationTitle", () => {
+  it("formats entry points without changing exported identifiers", () => {
+    expect(formatNavigationTitle("node", "node/index.mdx")).toBe("Node.js entry point");
+    expect(formatNavigationTitle("browser", "browser/index.mdx")).toBe("Browser entry point");
+    expect(
+      formatNavigationTitle("DEFAULT_FONT_MAPPING", "node/variables/DEFAULT_FONT_MAPPING.mdx"),
+    ).toBe("DEFAULT_FONT_MAPPING");
+  });
 });

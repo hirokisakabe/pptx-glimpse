@@ -3,6 +3,7 @@ import { dirname, extname, join, posix, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  formatNavigationTitle,
   isValidNavigationPath,
   navigationPathParts,
   normalizeGeneratedMarkdownLinks,
@@ -57,7 +58,7 @@ async function normalizeGeneratedLinks(directory: string): Promise<void> {
 
 function collectNavigation(item: NavigationItem): void {
   if (item.path !== undefined) {
-    addPath(item.path, formatTitle(item.title));
+    addPath(item.path, formatNavigationTitle(item.title, item.path));
   } else {
     const firstChildPath = item.children?.find((child) => child.path !== undefined)?.path;
     if (firstChildPath !== undefined) {
@@ -65,7 +66,7 @@ function collectNavigation(item: NavigationItem): void {
       addEntry(
         posix.dirname(groupDirectory),
         posix.basename(groupDirectory),
-        formatTitle(item.title),
+        formatNavigationTitle(item.title),
       );
     }
   }
@@ -92,16 +93,6 @@ function addEntry(directory: string, name: string, title: string): void {
     entriesByDirectory.set(directory, entries);
   }
   entries.set(name, title);
-}
-
-function formatTitle(title: string): string {
-  if (title === "node") {
-    return "Node.js entry point";
-  }
-  if (title === "browser") {
-    return "Browser entry point";
-  }
-  return title.replaceAll("_", " ");
 }
 
 function parseNavigation(value: unknown): readonly NavigationItem[] {

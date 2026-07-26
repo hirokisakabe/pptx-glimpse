@@ -39,4 +39,4 @@ versions may be breaking for plugins. Before updating:
 The generator consumes the plugin's navigation JSON, creates Nextra `_meta.ts` files, and
 normalizes generated Markdown links to Nextra's extensionless routes. The generated hierarchy
 keeps runtime entry points and symbol categories grouped while preserving a direct page for every
-exported function, class, interface, and type alias.
+exported function, class, interface, type alias, and variable.

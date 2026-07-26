@@ -162,7 +162,7 @@ export interface PptxEditorShapeBoundsPx {
 /**
  * Editable capabilities and source handles exposed for one slide shape.
  *
- * Optional flags indicate that the corresponding edit is unsupported for the shape.
+ * Capability flags are present and `true` only when the corresponding edit is supported.
  */
 export interface PptxEditorShapeInfo {
   readonly id: string;
@@ -248,7 +248,7 @@ export type PptxEditorErrorCode =
   | "write-failed";
 
 /**
- * Expected high-level editor failure.
+ * Typed high-level failure for expected operation rejections and integration/runtime failures.
  *
  * Use {@link isPptxEditorError} to narrow caught values and branch on {@link code}. Successful
  * commands may still return non-fatal warnings in {@link PptxEditorSlidesResponse.warnings}.
@@ -309,6 +309,10 @@ export function configurePptxEditorSessionAffectedSlidesResolver(
  * Create sessions with {@link createPptxEditorSession}. Mutating methods update history and
  * rerender affected slides. Expected operation failures throw {@link PptxEditorError}; successful
  * edits can return warnings through {@link PptxEditorSlidesResponse}.
+ *
+ * Operation rejections before commit leave the document, selection, and history unchanged. A
+ * rendering failure after a successful mutation does not roll back the committed document or
+ * history; the cached {@link slides} remain unchanged until {@link renderCurrentSlides} succeeds.
  */
 export class PptxEditorSession {
   #session: ReturnType<typeof createEditorSession>;
