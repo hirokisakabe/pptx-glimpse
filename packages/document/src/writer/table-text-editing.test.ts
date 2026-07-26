@@ -111,7 +111,10 @@ describe("writePptx - existing table cell text edits", () => {
       marginTop: 300,
       marginBottom: 400,
     });
-    expect(rereadTable.table.rows[0].cells[0].borders?.left).toBeDefined();
+    expect(rereadTable.table.rows[0].cells[0].borders?.left).toMatchObject({
+      width: 12700,
+      fill: { kind: "solid", color: { kind: "srgb", hex: "4472C4" } },
+    });
     expect(rereadTable.table.rows[0].cells[2]).toMatchObject({ gridSpan: 2 });
     expect(rereadTable.table.rows[0].cells[3]).toMatchObject({ hMerge: true });
     expect(rereadTable.table.rows[1].cells[2].textBody?.paragraphs[0].runs[0].text).toBe(
@@ -132,6 +135,28 @@ describe("writePptx - existing table cell text edits", () => {
     expect(source.edits).toBeUndefined();
     expect(firstTable(source).table.rows[0].cells[0].textBody?.paragraphs[0].runs[0].text).toBe(
       "Original table run",
+    );
+  });
+
+  it("rejects conflicting run and paragraph edits within the same table cell", () => {
+    const source = readPptx(buildExistingTableFixture());
+    const paragraph = firstTable(source).table.rows[0].cells[0].textBody!.paragraphs[0];
+    const runHandle = requireHandle(paragraph.runs[0].handle);
+    const paragraphHandle = requireHandle(paragraph.handle);
+    const textConflict = replaceParagraphPlainText(
+      replaceTextRunPlainText(source, runHandle, "Run edit"),
+      paragraphHandle,
+      "Paragraph edit",
+    );
+    const propertyConflict = replaceParagraphPlainText(
+      setTextRunProperties(source, runHandle, { bold: true }),
+      paragraphHandle,
+      "Paragraph edit",
+    );
+
+    expect(() => writePptx(textConflict)).toThrow(/conflicting text run and paragraph edits/);
+    expect(() => writePptx(propertyConflict)).toThrow(
+      /conflicting text run properties and paragraph edits/,
     );
   });
 });

@@ -11,7 +11,6 @@ export interface TextRunLocator {
   readonly shapeNodeId?: string;
   readonly shapeOrderingSlot?: number;
   readonly tableNodeId?: string;
-  readonly tableOrderingSlot?: number;
   readonly rowIndex?: number;
   readonly cellIndex?: number;
   readonly paragraphIndex: number;
@@ -65,18 +64,6 @@ export function parseTextRunLocator(
     };
   }
 
-  const byTableSlot = /^text:tableSlot:(\d+):row:(\d+):cell:(\d+):p:(\d+):r:(\d+)$/.exec(value);
-  if (byTableSlot !== null) {
-    return {
-      ownerKind: "table",
-      tableOrderingSlot: Number(byTableSlot[1]),
-      rowIndex: Number(byTableSlot[2]),
-      cellIndex: Number(byTableSlot[3]),
-      paragraphIndex: Number(byTableSlot[4]),
-      runIndex: Number(byTableSlot[5]),
-    };
-  }
-
   throw new Error(`writePptx: unsupported text run handle '${value}'`);
 }
 
@@ -113,17 +100,6 @@ export function parseParagraphLocator(
     };
   }
 
-  const byTableSlot = /^text:tableSlot:(\d+):row:(\d+):cell:(\d+):p:(\d+)$/.exec(value);
-  if (byTableSlot !== null) {
-    return {
-      ownerKind: "table",
-      tableOrderingSlot: Number(byTableSlot[1]),
-      rowIndex: Number(byTableSlot[2]),
-      cellIndex: Number(byTableSlot[3]),
-      paragraphIndex: Number(byTableSlot[4]),
-    };
-  }
-
   throw new Error(`writePptx: unsupported paragraph handle '${value}'`);
 }
 
@@ -140,10 +116,7 @@ export function locateShape(
     );
   }
   if (locator.shapeOrderingSlot === undefined) return undefined;
-  const candidate = getShapeTreeNodeByOrderingSlot(spTree, locator.shapeOrderingSlot);
-  return candidate !== undefined && getChild(candidate, "nvSpPr") !== undefined
-    ? candidate
-    : undefined;
+  return getShapeByOrderingSlot(spTree, locator.shapeOrderingSlot);
 }
 
 export function locateTable(
@@ -159,11 +132,7 @@ export function locateTable(
         locator.tableNodeId,
     );
   }
-  if (locator.tableOrderingSlot === undefined) return undefined;
-  const candidate = getShapeTreeNodeByOrderingSlot(spTree, locator.tableOrderingSlot);
-  return candidate !== undefined && getChild(candidate, "nvGraphicFramePr") !== undefined
-    ? candidate
-    : undefined;
+  return undefined;
 }
 
 export function locateShapeTreeNode(
@@ -208,7 +177,7 @@ function getShapeTreeNodes(value: unknown): XmlNode[] {
   return items.map((item) => unsafeOoxmlBoundaryAssertion<XmlNode>(item));
 }
 
-function getShapeTreeNodeByOrderingSlot(
+function getShapeByOrderingSlot(
   spTree: XmlNode | undefined,
   orderingSlot: number,
 ): XmlNode | undefined {
@@ -224,7 +193,7 @@ function getShapeTreeNodeByOrderingSlot(
     const items = Array.isArray(value) ? value : [value];
     for (const item of items) {
       if (currentSlot === orderingSlot) {
-        return unsafeOoxmlBoundaryAssertion<XmlNode>(item);
+        return local === "sp" ? unsafeOoxmlBoundaryAssertion<XmlNode>(item) : undefined;
       }
       currentSlot++;
     }

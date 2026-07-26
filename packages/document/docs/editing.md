@@ -31,11 +31,13 @@ slide backgrounds, and slide topology. The authoring helpers can add new support
 slide loaded from an existing PPTX.
 
 The text operations use the same `SourceParagraph` / `SourceTextRun` contract for ordinary shape
-text and existing Table cell text. To edit a Table, locate a cell through
-`SourceTable.table.rows[rowIndex].cells[cellIndex]`, then pass the paragraph or run handle to the
-same `replaceParagraphPlainText`, `replaceTextRunPlainText`, `set*Properties`, or
-`clear*Properties` operation. Table structure, merges, fills, borders, margins, and styles are
-preserved but are not editable through these text operations.
+text and existing Table cell text. To edit a Table, locate a node through
+`table.table.rows[rowIndex].cells[cellIndex].textBody?.paragraphs[paragraphIndex]`, then pass its
+handle (or a child run handle) to `replaceParagraphPlainText`, `replaceTextRunPlainText`,
+`setTextRunProperties`, `clearTextRunProperties`, `setParagraphProperties`, or
+`clearParagraphProperties`. `replaceParagraphPlainText` replaces all runs with one run and carries
+forward only the first run's properties. Table structure, merges, fills, borders, margins, and
+table style are preserved but are not editable through these text operations.
 
 ## Typed edits and raw preservation
 

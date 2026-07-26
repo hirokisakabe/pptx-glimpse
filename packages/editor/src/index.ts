@@ -1399,10 +1399,9 @@ function textRunParagraphEditKey(
   edit: PptxSourceModelTextRunEdit | PptxSourceModelTextRunPropertiesEdit,
 ): string | undefined {
   const nodeId = String(edit.handle.nodeId ?? "");
-  const match =
-    /^(text:(?:shape:.+|shapeSlot:\d+|table:.+:row:\d+:cell:\d+|tableSlot:\d+:row:\d+:cell:\d+):p:(\d+)):r:\d+$/.exec(
-      nodeId,
-    );
+  const match = /^(text:(?:shape:.+|shapeSlot:\d+|table:.+:row:\d+:cell:\d+):p:(\d+)):r:\d+$/.exec(
+    nodeId,
+  );
   const paragraphNodeId = match?.[1];
   const paragraphOrderingSlot = match?.[2] ?? "";
   if (paragraphNodeId === undefined) return undefined;

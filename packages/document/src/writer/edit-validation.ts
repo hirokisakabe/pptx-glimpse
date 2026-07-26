@@ -167,9 +167,7 @@ function textRunParagraphEditKey(
 ): string | undefined {
   const nodeId = String(edit.handle.nodeId ?? "");
   const paragraphNodeId =
-    /^(text:(?:shape:.+|shapeSlot:\d+|table:.+:row:\d+:cell:\d+|tableSlot:\d+:row:\d+:cell:\d+):p:\d+):r:\d+$/.exec(
-      nodeId,
-    )?.[1];
+    /^(text:(?:shape:.+|shapeSlot:\d+|table:.+:row:\d+:cell:\d+):p:\d+):r:\d+$/.exec(nodeId)?.[1];
   if (paragraphNodeId === undefined) return undefined;
   return [edit.handle.partPath, paragraphNodeId, edit.handle.relationshipId ?? ""].join("\u0000");
 }

@@ -1259,6 +1259,7 @@ function findTextRun(source: ReturnType<typeof readPptx>, text: string): SourceT
 
 function textBodies(shape: SourceShapeNode): readonly SourceTextBody[] {
   if (shape.kind === "shape") return shape.textBody === undefined ? [] : [shape.textBody];
+  if (shape.kind === "group") return shape.children.flatMap(textBodies);
   if (shape.kind !== "table") return [];
   return shape.table.rows.flatMap((row) =>
     row.cells.flatMap((cell) => (cell.textBody === undefined ? [] : [cell.textBody])),

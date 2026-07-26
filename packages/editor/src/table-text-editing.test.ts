@@ -64,8 +64,22 @@ describe("EditorSession existing table cell text", () => {
     expect(session.undoDepth).toBe(2);
     expect(session.undo()).toMatchObject({ ok: true });
     expect(tableRunText(session.document, 0, 1)).toBe("Paragraph target");
+    expect(
+      firstTable(session.document).table.rows[0].cells[0].textBody?.paragraphs[0].runs[0].properties
+        ?.bold,
+    ).toBeUndefined();
+    expect(
+      firstTable(session.document).table.rows[1].cells[1].textBody?.paragraphs[0].properties?.align,
+    ).toBeUndefined();
     expect(session.redo()).toMatchObject({ ok: true });
     expect(tableRunText(session.document, 0, 1)).toBe("Edited through command");
+    expect(
+      firstTable(session.document).table.rows[0].cells[0].textBody?.paragraphs[0].runs[0]
+        .properties,
+    ).toMatchObject({ bold: true });
+    expect(
+      firstTable(session.document).table.rows[1].cells[1].textBody?.paragraphs[0].properties,
+    ).toMatchObject({ align: "right" });
   });
 
   it("rejects handleless, foreign, and absent targets atomically", () => {
