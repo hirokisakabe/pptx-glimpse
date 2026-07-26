@@ -39,7 +39,10 @@ export interface ConvertOptions {
    * Target slide numbers to convert, using PowerPoint-style 1-based numbering.
    *
    * When omitted, every slide in the presentation is converted. Missing or
-   * out-of-range slide numbers produce no output for those entries.
+   * out-of-range slide numbers produce no output for those entries. This option
+   * applies to SVG and PNG conversion in Node.js and browsers.
+   *
+   * @defaultValue All presentation slides.
    */
   slides?: number[];
   /**
@@ -47,7 +50,8 @@ export interface ConvertOptions {
    *
    * PNG output rasterizes to this width while preserving the slide aspect
    * ratio. Defaults to 960. SVG output keeps the slide's native pixel size from
-   * the PPTX slide dimensions and does not use this option.
+   * the PPTX slide dimensions and does not use this option. The PNG behavior is
+   * the same in Node.js and browsers.
    *
    * @defaultValue 960 for PNG conversion; ignored for SVG conversion.
    */
@@ -58,7 +62,7 @@ export interface ConvertOptions {
    * PNG rasterization currently always uses `width`, either the provided value
    * or the default width, so this option is ignored by the public conversion
    * APIs. SVG output keeps the slide's native pixel size and does not use this
-   * option.
+   * option. It therefore has no effective default in either runtime.
    */
   height?: number;
   /**
@@ -67,7 +71,7 @@ export interface ConvertOptions {
    * Defaults to `"off"`. Diagnostics are always collected in the conversion
    * report; this option only controls console output. Use `"warn"` to print
    * summaries, or `"debug"` to print individual warning entries as they are
-   * recorded.
+   * recorded. It applies to SVG and PNG conversion in Node.js and browsers.
    *
    * @defaultValue `"off"`
    */
@@ -78,7 +82,10 @@ export interface ConvertOptions {
    * These directories are searched in addition to system font directories unless
    * `skipSystemFonts` is true. This option uses Node.js filesystem APIs; use
    * `fonts` when rendering in browsers, Edge Runtime, or other environments
-   * where filesystem access is unavailable.
+   * where filesystem access is unavailable. It applies to Node.js SVG and PNG
+   * conversion and is ignored by browser conversion.
+   *
+   * @defaultValue No additional font directories.
    */
   fontDirs?: string[];
   /**
@@ -86,7 +93,10 @@ export interface ConvertOptions {
    *
    * Use this browser-safe option when fonts are fetched from a URL, bundled by
    * an application, or otherwise loaded without Node.js filesystem APIs. When
-   * provided, these font buffers are used instead of system font scanning.
+   * provided, these font buffers are used instead of system font scanning. It
+   * applies to SVG and PNG conversion in Node.js and browsers.
+   *
+   * @defaultValue No caller-provided font buffers.
    */
   fonts?: FontBuffer[];
   /**
@@ -94,7 +104,10 @@ export interface ConvertOptions {
    *
    * Entries are merged with `DEFAULT_FONT_MAPPING`; user-provided entries take
    * precedence. This is useful when a PPTX references proprietary or corporate
-   * fonts that should render with installed alternatives.
+   * fonts that should render with installed alternatives. It applies to SVG and
+   * PNG conversion in Node.js and browsers.
+   *
+   * @defaultValue `DEFAULT_FONT_MAPPING`.
    */
   fontMapping?: FontMapping;
   /**
@@ -103,8 +116,9 @@ export interface ConvertOptions {
    * This is useful in containers or serverless environments where bundled fonts
    * should be the only fonts used.
    *
-   * Node.js supports both values. Browser conversion does not scan the filesystem, so browser
-   * callers should use `fonts` instead.
+   * Node.js SVG and PNG conversion support both values. Browser conversion does not scan the
+   * filesystem, so this option has no effect there and browser callers should use `fonts`
+   * instead.
    *
    * @defaultValue false
    */
@@ -121,6 +135,7 @@ export interface ConvertOptions {
    * loaded through `<img src="...svg">` or sanitized. `convertPptxToPng` ignores
    * this option and always renders with `"path"` output because resvg does not
    * interpret the embedded `@font-face` rules used by SVG text output.
+   * The behavior is the same in Node.js and browsers.
    *
    * @defaultValue `"path"`
    */
