@@ -44,17 +44,13 @@ function collectLinkReplacements(
     const start = node.position.start.offset;
     const end = node.position.end.offset;
     if (start !== undefined && end !== undefined) {
-      const rawLink = source.slice(start, end);
-      const destinationMatch = /\]\(\s*(?:<([^>\n]+)>|([^\s)]+))/.exec(rawLink);
-      const rawDestination = destinationMatch?.[1] ?? destinationMatch?.[2];
-      if (destinationMatch !== null && rawDestination !== undefined) {
+      const destinationRange = findInlineDestinationRange(node, source, start, end);
+      if (destinationRange !== undefined) {
         const normalized = normalizeGeneratedDestination(node.url);
         if (normalized !== undefined) {
-          const destinationOffset = destinationMatch[0].lastIndexOf(rawDestination);
-          const destinationStart = start + destinationMatch.index + destinationOffset;
           replacements.push({
-            start: destinationStart,
-            end: destinationStart + rawDestination.length,
+            start: destinationRange.start,
+            end: destinationRange.end,
             value: normalized,
           });
         }
@@ -67,6 +63,71 @@ function collectLinkReplacements(
       collectLinkReplacements(child, source, replacements);
     }
   }
+}
+
+function findInlineDestinationRange(
+  node: MarkdownNode,
+  source: string,
+  start: number,
+  end: number,
+): { readonly start: number; readonly end: number } | undefined {
+  let labelContentEnd = start + 1;
+  for (const child of node.children ?? []) {
+    if (isMarkdownNode(child)) {
+      labelContentEnd = Math.max(labelContentEnd, child.position?.end.offset ?? labelContentEnd);
+    }
+  }
+
+  const closingBracket = source.indexOf("]", labelContentEnd);
+  if (closingBracket === -1 || closingBracket >= end) {
+    return undefined;
+  }
+
+  let cursor = closingBracket + 1;
+  while (cursor < end && /\s/.test(source[cursor])) cursor += 1;
+  if (source[cursor] !== "(") {
+    return undefined;
+  }
+  cursor += 1;
+  while (cursor < end && /\s/.test(source[cursor])) cursor += 1;
+
+  if (source[cursor] === "<") {
+    const destinationStart = cursor + 1;
+    cursor = destinationStart;
+    while (cursor < end) {
+      if (source[cursor] === "\\" && cursor + 1 < end) {
+        cursor += 2;
+      } else if (source[cursor] === ">") {
+        return { start: destinationStart, end: cursor };
+      } else {
+        cursor += 1;
+      }
+    }
+    return undefined;
+  }
+
+  const destinationStart = cursor;
+  let parenthesisDepth = 0;
+  while (cursor < end) {
+    const character = source[cursor];
+    if (character === "\\" && cursor + 1 < end) {
+      cursor += 2;
+    } else if (character === "(") {
+      parenthesisDepth += 1;
+      cursor += 1;
+    } else if (character === ")") {
+      if (parenthesisDepth === 0) {
+        return { start: destinationStart, end: cursor };
+      }
+      parenthesisDepth -= 1;
+      cursor += 1;
+    } else if (/\s/.test(character) && parenthesisDepth === 0) {
+      return { start: destinationStart, end: cursor };
+    } else {
+      cursor += 1;
+    }
+  }
+  return undefined;
 }
 
 function isMarkdownNode(value: unknown): value is MarkdownNode {

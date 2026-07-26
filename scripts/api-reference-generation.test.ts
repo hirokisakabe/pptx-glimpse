@@ -68,6 +68,23 @@ describe("normalizeGeneratedMarkdownLinks", () => {
 
     expect(normalizeGeneratedMarkdownLinks(source)).toBe(expected);
   });
+
+  it("normalizes balanced, escaped, and angle-bracket destinations without touching labels", () => {
+    const source = [
+      "[balanced](./foo_(bar).mdx)",
+      "[escaped](./foo\\(bar\\).mdx)",
+      "[angle](<./foo bar.mdx>)",
+      "[`label](./fake.mdx)`](./target.mdx)",
+    ].join("\n");
+    const expected = [
+      "[balanced](./foo_(bar))",
+      "[escaped](./foo(bar))",
+      "[angle](<./foo bar>)",
+      "[`label](./fake.mdx)`](./target)",
+    ].join("\n");
+
+    expect(normalizeGeneratedMarkdownLinks(source)).toBe(expected);
+  });
 });
 
 describe("TypeDoc navigation paths", () => {
