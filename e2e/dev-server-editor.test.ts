@@ -64,15 +64,15 @@ describe("dev server editor API", () => {
         bounds: { x: 96, y: 192, width: 288, height: 96 },
       });
       expect(shapes.shapes[0].textRuns[0]).toMatchObject({ text: "Original" });
-      expect(shapes.shapes[0].editableTextBody?.docJson).toMatchObject({
-        type: "doc",
-        content: [
+      expect(shapes.shapes[0].textBody).toMatchObject({
+        paragraphs: [
           {
-            type: "paragraph",
-            content: [{ type: "text", text: "Original" }],
+            runs: [{ text: "Original" }],
           },
         ],
       });
+      const overlayRunHandle = shapes.shapes[0].textBody?.paragraphs[0]?.runs[0]?.handle;
+      if (overlayRunHandle === undefined) throw new Error("text run handle not found");
 
       const edited = await postJson<SlidesResponse>(`${baseUrl}/api/editor/command`, {
         command: {
@@ -92,36 +92,25 @@ describe("dev server editor API", () => {
       expect(redone.slides[0].svg).toContain("Edited");
       expect(redone.history).toMatchObject({ canUndo: true, canRedo: false });
 
-      const overlayEdited = await postJson<SlidesResponse>(`${baseUrl}/api/editor/text-body`, {
-        handle: shapes.shapes[0].handle,
-        docJson: {
-          ...shapes.shapes[0].editableTextBody?.docJson,
-          content: [
-            {
-              ...shapes.shapes[0].editableTextBody?.docJson.content?.[0],
-              content: [
-                {
-                  ...shapes.shapes[0].editableTextBody?.docJson.content?.[0]?.content?.[0],
-                  text: "Overlay edited",
-                },
-              ],
-            },
-          ],
-        },
+      const overlayEdited = await postJson<SlidesResponse>(`${baseUrl}/api/editor/commands`, {
+        commands: [
+          {
+            kind: "replaceTextRunPlainText",
+            handle: overlayRunHandle,
+            text: "Overlay edited",
+          },
+        ],
       });
       expect(overlayEdited.slides[0].svg).toContain("Overlay edited");
 
-      await postJson<SlidesResponse>(`${baseUrl}/api/editor/text-body`, {
-        handle: shapes.shapes[0].handle,
-        docJson: {
-          ...shapes.shapes[0].editableTextBody?.docJson,
-          content: [
-            {
-              ...shapes.shapes[0].editableTextBody?.docJson.content?.[0],
-              content: [],
-            },
-          ],
-        },
+      await postJson<SlidesResponse>(`${baseUrl}/api/editor/commands`, {
+        commands: [
+          {
+            kind: "replaceTextRunPlainText",
+            handle: overlayRunHandle,
+            text: "",
+          },
+        ],
       });
 
       const saved = await postJson<SaveResponse>(`${baseUrl}/api/editor/save`, { path: savedPath });
@@ -519,15 +508,10 @@ interface ShapesResponse {
     bounds?: { x: number; y: number; width: number; height: number };
     editableDelete?: boolean;
     textRuns: Array<{ text: string; handle: unknown }>;
-    editableTextBody?: {
-      docJson: {
-        type: "doc";
-        content?: Array<{
-          type: "paragraph";
-          attrs?: unknown;
-          content?: Array<{ type: "text"; text: string; marks?: unknown }>;
-        }>;
-      };
+    textBody?: {
+      paragraphs: Array<{
+        runs: Array<{ text: string; handle?: unknown }>;
+      }>;
     };
     editableImageReplacement?: {
       contentType: string;
