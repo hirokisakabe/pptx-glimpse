@@ -1,0 +1,23 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "io.github.hirokisakabe/pptx-glimpse",
+  "title": "pptx-glimpse",
+  "description": "Preview selected PPTX slides as PNG images with rendering diagnostics.",
+  "repository": {
+    "url": "https://github.com/hirokisakabe/pptx-glimpse",
+    "source": "github",
+    "subfolder": "packages/mcp"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "npm",
+      "registryBaseUrl": "https://registry.npmjs.org",
+      "identifier": "@pptx-glimpse/mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      }
+    }
+  ]
+}

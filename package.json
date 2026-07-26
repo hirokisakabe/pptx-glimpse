@@ -3,7 +3,7 @@
   "description": "Workspace root for pptx-glimpse packages.",
   "type": "module",
   "scripts": {
-    "build": "pnpm --filter @pptx-glimpse/document build && pnpm --filter @pptx-glimpse/editor build && pnpm --filter @pptx-glimpse/renderer build && pnpm --filter pptx-glimpse build",
+    "build": "pnpm --filter @pptx-glimpse/document build && pnpm --filter @pptx-glimpse/editor build && pnpm --filter @pptx-glimpse/renderer build && pnpm --filter pptx-glimpse build && pnpm --filter @pptx-glimpse/mcp build",
     "audit:type-assertions": "tsx scripts/audit-type-assertions.ts",
     "bench": "vitest bench",
     "lint": "eslint packages/*/src/ vrt/ scripts/ bench/ e2e/",
@@ -29,6 +29,7 @@
     "vrt:editor-validity:fixtures": "docker run --rm -v \"$(pwd)\":/workspace pptx-glimpse-vrt python3 /workspace/vrt/editor-validity/create_fixtures.py",
     "test:package": "pnpm run build && bash scripts/test-package.sh",
     "changeset": "changeset",
+    "version-packages": "changeset version && tsx scripts/sync-mcp-registry-metadata.ts",
     "demo:dev": "cd demo && npm run dev",
     "demo:build": "pnpm run build && cd demo && npm install && npm run build",
     "demo:verify-samples": "pnpm run build && cd demo && npm ci && npx playwright install chromium && npm run verify:samples"

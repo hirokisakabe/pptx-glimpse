@@ -10,6 +10,7 @@ const documentSource = fileURLToPath(new URL("./packages/document/src/index.ts",
 const editorSource = fileURLToPath(
   new URL("./packages/editor/src/index.ts", import.meta.url),
 );
+const coreSource = fileURLToPath(new URL("./packages/core/src/index.ts", import.meta.url));
 const documentBoundaryRestrictedImportPattern = {
   group: [
     "@pptx-glimpse/renderer",
@@ -66,6 +67,7 @@ export default tseslint.config(
           alias: {
             "@pptx-glimpse/document": [documentSource],
             "@pptx-glimpse/editor": [editorSource],
+            "pptx-glimpse": [coreSource],
           },
           mainFields: ["module", "main"],
         }),
@@ -204,6 +206,33 @@ export default tseslint.config(
         "error",
         {
           packageDir: ["packages/core", "."],
+          devDependencies: true,
+          includeInternal: true,
+        },
+      ],
+    },
+  },
+  {
+    files: ["packages/mcp/src/**/*.ts"],
+    ignores: ["packages/mcp/src/**/*.test.ts"],
+    rules: {
+      "import-x/no-extraneous-dependencies": [
+        "error",
+        {
+          packageDir: ["packages/mcp"],
+          devDependencies: false,
+          includeInternal: true,
+        },
+      ],
+    },
+  },
+  {
+    files: ["packages/mcp/src/**/*.test.ts"],
+    rules: {
+      "import-x/no-extraneous-dependencies": [
+        "error",
+        {
+          packageDir: ["packages/mcp", "."],
           devDependencies: true,
           includeInternal: true,
         },
