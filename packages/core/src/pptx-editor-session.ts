@@ -312,7 +312,9 @@ export function configurePptxEditorSessionAffectedSlidesResolver(
  *
  * Operation rejections before commit leave the document, selection, and history unchanged. A
  * rendering failure after a successful mutation does not roll back the committed document or
- * history; the cached {@link slides} remain unchanged until {@link renderCurrentSlides} succeeds.
+ * history, or a selection updated by that mutation. The failed render leaves cached {@link slides}
+ * unchanged; a later successful render updates them, and {@link renderCurrentSlides} can retry
+ * explicitly.
  */
 export class PptxEditorSession {
   #session: ReturnType<typeof createEditorSession>;

@@ -51,6 +51,23 @@ describe("normalizeGeneratedMarkdownLinks", () => {
 
     expect(normalizeGeneratedMarkdownLinks(source)).toBe(source);
   });
+
+  it("preserves links in list fences and normalizes links after literal backticks", () => {
+    const source = [
+      "- ~~~md",
+      "  [list fence](./inside.mdx)",
+      "  ~~~",
+      "Escaped \\` and unmatched ` then [outside](./outside.mdx)",
+    ].join("\n");
+    const expected = [
+      "- ~~~md",
+      "  [list fence](./inside.mdx)",
+      "  ~~~",
+      "Escaped \\` and unmatched ` then [outside](./outside)",
+    ].join("\n");
+
+    expect(normalizeGeneratedMarkdownLinks(source)).toBe(expected);
+  });
 });
 
 describe("TypeDoc navigation paths", () => {
