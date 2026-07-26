@@ -78,6 +78,7 @@ export type PptxSourceModelEdit =
   | PptxSourceModelAddConnectorEdit
   | PptxSourceModelAddPictureEdit
   | PptxSourceModelAddChartEdit
+  | PptxSourceModelUpdateChartDataEdit
   | PptxSourceModelAddTableEdit
   | PptxSourceModelReorderShapesEdit
   | PptxSourceModelDeleteShapeEdit
@@ -217,6 +218,13 @@ export interface PptxSourceModelAddChartEdit {
   readonly workbookPartPath: PartPath;
   /** Serialized `p:graphicFrame` fragment finalized at edit time. */
   readonly xml: string;
+}
+
+export interface PptxSourceModelUpdateChartDataEdit {
+  readonly kind: "updateChartData";
+  readonly handle: SourceHandle;
+  readonly chartPartPath: PartPath;
+  readonly workbookPartPath: PartPath;
 }
 
 export interface PptxSourceModelAddTableEdit {
