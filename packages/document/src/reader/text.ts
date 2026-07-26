@@ -408,22 +408,19 @@ function parseParagraph(
     tableCell,
   );
   const rawSidecars = collectUnknownSidecars(p, KNOWN_PARAGRAPH_CHILDREN, nextId);
+  const nodeId = textNodeId(
+    "paragraph",
+    ownerNodeId,
+    ownerOrderingSlot,
+    paragraphIndex,
+    undefined,
+    tableCell,
+  );
 
   return {
     runs,
     ...(properties !== undefined ? { properties } : {}),
-    handle: {
-      partPath,
-      nodeId: textNodeId(
-        "paragraph",
-        ownerNodeId,
-        ownerOrderingSlot,
-        paragraphIndex,
-        undefined,
-        tableCell,
-      ),
-      orderingSlot: paragraphIndex,
-    },
+    ...(nodeId !== undefined ? { handle: { partPath, nodeId, orderingSlot: paragraphIndex } } : {}),
     ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
   };
 }
@@ -628,23 +625,20 @@ function parseRun(
 ): SourceTextRun {
   const properties = parseRunProperties(getChild(r, "rPr"));
   const rawSidecars = collectRunSidecars(r, nextId);
+  const nodeId = textNodeId(
+    "run",
+    ownerNodeId,
+    ownerOrderingSlot,
+    paragraphIndex,
+    runIndex,
+    tableCell,
+  );
 
   return {
     kind: "textRun",
     text: decodeXmlCharRef(getChildText(r, "t") ?? ""),
     ...(properties !== undefined ? { properties } : {}),
-    handle: {
-      partPath,
-      nodeId: textNodeId(
-        "run",
-        ownerNodeId,
-        ownerOrderingSlot,
-        paragraphIndex,
-        runIndex,
-        tableCell,
-      ),
-      orderingSlot: runIndex,
-    },
+    ...(nodeId !== undefined ? { handle: { partPath, nodeId, orderingSlot: runIndex } } : {}),
     ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
   };
 }
@@ -660,22 +654,19 @@ function parseBreakRun(
   tableCell?: { readonly rowIndex: number; readonly cellIndex: number },
 ): SourceTextRun {
   const properties = parseRunProperties(getChild(br, "rPr"));
+  const nodeId = textNodeId(
+    "run",
+    ownerNodeId,
+    ownerOrderingSlot,
+    paragraphIndex,
+    runIndex,
+    tableCell,
+  );
   return {
     kind: "textRun",
     text: "\n",
     ...(properties !== undefined ? { properties } : {}),
-    handle: {
-      partPath,
-      nodeId: textNodeId(
-        "run",
-        ownerNodeId,
-        ownerOrderingSlot,
-        paragraphIndex,
-        runIndex,
-        tableCell,
-      ),
-      orderingSlot: runIndex,
-    },
+    ...(nodeId !== undefined ? { handle: { partPath, nodeId, orderingSlot: runIndex } } : {}),
   };
 }
 
@@ -750,7 +741,8 @@ function textNodeId(
   paragraphIndex: number,
   runIndex?: number,
   tableCell?: { readonly rowIndex: number; readonly cellIndex: number },
-): SourceNodeId {
+): SourceNodeId | undefined {
+  if (tableCell !== undefined && ownerNodeId === undefined) return undefined;
   const ownerKind = tableCell === undefined ? "shape" : "table";
   const owner =
     ownerNodeId !== undefined

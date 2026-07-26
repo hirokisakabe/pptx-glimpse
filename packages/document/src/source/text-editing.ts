@@ -7,11 +7,13 @@ import type {
   EditableTextRunProperty,
   PptxSourceModel,
   SourceAutoNumScheme,
+  SourceGroup,
   SourceHandle,
   SourceParagraph,
   SourceParagraphProperties,
   SourceRunProperties,
   SourceShape,
+  SourceShapeNode,
   SourceSlide,
   SourceTable,
   SourceTextAlign,
@@ -386,28 +388,12 @@ function mapTextBodyParagraphs(
         slideChanged = true;
         return { ...shape, textBody: result.textBody } satisfies SourceShape;
       }
-      if (shape.kind === "table") {
-        let tableChanged = false;
-        const rows = shape.table.rows.map((row) => {
-          let rowChanged = false;
-          const cells = row.cells.map((cell) => {
-            if (cell.textBody === undefined) return cell;
-            const result = mapTextBody(cell.textBody, mapParagraph);
-            if (result.matched) matched = true;
-            if (!result.changed) return cell;
-            changed = true;
-            slideChanged = true;
-            tableChanged = true;
-            rowChanged = true;
-            return { ...cell, textBody: result.textBody };
-          });
-          return rowChanged ? { ...row, cells } : row;
-        });
-        return tableChanged
-          ? ({ ...shape, table: { ...shape.table, rows } } satisfies SourceTable)
-          : shape;
-      }
-      return shape;
+      const result = mapTableTextInNode(shape, mapParagraph);
+      if (result.matched) matched = true;
+      if (!result.changed) return shape;
+      changed = true;
+      slideChanged = true;
+      return result.node;
     });
 
     return slideChanged ? { ...slide, shapes } : slide;
@@ -444,6 +430,57 @@ function patchParagraphProperties(
   return Object.keys(next).length > 0 ? next : undefined;
 }
 
+interface ShapeNodeTextMappingResult {
+  readonly node: SourceShapeNode;
+  readonly matched: boolean;
+  readonly changed: boolean;
+}
+
+function mapTableTextInNode(
+  node: SourceShapeNode,
+  mapParagraph: (paragraph: SourceParagraph) => ParagraphMappingResult,
+): ShapeNodeTextMappingResult {
+  if (node.kind === "table") {
+    let matched = false;
+    let changed = false;
+    const rows = node.table.rows.map((row) => {
+      let rowChanged = false;
+      const cells = row.cells.map((cell) => {
+        if (cell.textBody === undefined) return cell;
+        const result = mapTextBody(cell.textBody, mapParagraph);
+        if (result.matched) matched = true;
+        if (!result.changed) return cell;
+        changed = true;
+        rowChanged = true;
+        return { ...cell, textBody: result.textBody };
+      });
+      return rowChanged ? { ...row, cells } : row;
+    });
+    return {
+      node: changed ? ({ ...node, table: { ...node.table, rows } } satisfies SourceTable) : node,
+      matched,
+      changed,
+    };
+  }
+  if (node.kind === "group") {
+    let matched = false;
+    let changed = false;
+    const children = node.children.map((child) => {
+      const result = mapTableTextInNode(child, mapParagraph);
+      if (result.matched) matched = true;
+      if (!result.changed) return child;
+      changed = true;
+      return result.node;
+    });
+    return {
+      node: changed ? ({ ...node, children } satisfies SourceGroup) : node,
+      matched,
+      changed,
+    };
+  }
+  return { node, matched: false, changed: false };
+}
+
 interface TextBodyMappingResult {
   readonly textBody: SourceTextBody;
   readonly matched: boolean;
@@ -472,8 +509,13 @@ function mapTextBody(
 
 function textBodiesInShape(shape: SourceSlide["shapes"][number]): readonly SourceTextBody[] {
   if (shape.kind === "shape") return shape.textBody === undefined ? [] : [shape.textBody];
-  if (shape.kind !== "table") return [];
-  return shape.table.rows.flatMap((row) =>
+  return tableTextBodiesInNode(shape);
+}
+
+function tableTextBodiesInNode(node: SourceShapeNode): readonly SourceTextBody[] {
+  if (node.kind === "group") return node.children.flatMap(tableTextBodiesInNode);
+  if (node.kind !== "table") return [];
+  return node.table.rows.flatMap((row) =>
     row.cells.flatMap((cell) => (cell.textBody === undefined ? [] : [cell.textBody])),
   );
 }

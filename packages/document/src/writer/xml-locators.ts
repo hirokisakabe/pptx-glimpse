@@ -126,11 +126,16 @@ export function locateTable(
   if (locator.ownerKind !== "table") return undefined;
   const frames = getChildArray(spTree, "graphicFrame");
   if (locator.tableNodeId !== undefined) {
-    return frames.find(
+    const frame = frames.find(
       (frame) =>
         getAttr(getChild(getChild(frame, "nvGraphicFramePr"), "cNvPr"), "id") ===
         locator.tableNodeId,
     );
+    if (frame !== undefined) return frame;
+    for (const group of getChildArray(spTree, "grpSp")) {
+      const nested = locateTable(group, locator);
+      if (nested !== undefined) return nested;
+    }
   }
   return undefined;
 }

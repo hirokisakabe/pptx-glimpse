@@ -18,6 +18,7 @@ import {
   setParagraphProperties,
   setTextRunProperties,
   type SourceHandle,
+  type SourceShapeNode,
   type SourceTable,
   writePptx,
 } from "../index.js";
@@ -127,7 +128,7 @@ describe("writePptx - existing table cell text edits", () => {
 
   it("rejects a foreign table text handle without changing the source", () => {
     const source = readPptx(buildExistingTableFixture());
-    const other = readPptx(buildExistingTableFixture("Other", true));
+    const other = readPptx(buildExistingTableFixture("Other", { withLeadingShape: true }));
     const foreignRun = firstTable(other).table.rows[0].cells[0].textBody!.paragraphs[0].runs[0];
     expect(() =>
       replaceTextRunPlainText(source, requireHandle(foreignRun.handle), "Rejected"),
@@ -159,14 +160,41 @@ describe("writePptx - existing table cell text edits", () => {
       /conflicting text run properties and paragraph edits/,
     );
   });
+
+  it("edits a table cell nested in a group", () => {
+    const source = readPptx(buildExistingTableFixture("Grouped table run", { inGroup: true }));
+    const run = firstTable(source).table.rows[0].cells[0].textBody!.paragraphs[0].runs[0];
+    const edited = replaceTextRunPlainText(
+      source,
+      requireHandle(run.handle),
+      "Edited grouped table run",
+    );
+
+    expect(
+      firstTable(readPptx(writePptx(edited))).table.rows[0].cells[0].textBody?.paragraphs[0].runs[0]
+        .text,
+    ).toBe("Edited grouped table run");
+  });
+
+  it("does not expose editable text handles for a table without its required shape id", () => {
+    const source = readPptx(buildExistingTableFixture("Invalid table", { omitTableId: true }));
+    const paragraph = firstTable(source).table.rows[0].cells[0].textBody!.paragraphs[0];
+
+    expect(paragraph.handle).toBeUndefined();
+    expect(paragraph.runs[0].handle).toBeUndefined();
+  });
 });
 
 function buildExistingTableFixture(
   firstCellText = "Original table run",
-  withLeadingShape = false,
+  options: {
+    readonly withLeadingShape?: boolean;
+    readonly inGroup?: boolean;
+    readonly omitTableId?: boolean;
+  } = {},
 ): Uint8Array {
   const source = createPptx();
-  const withOptionalShape = withLeadingShape
+  const withOptionalShape = options.withLeadingShape
     ? addTextBox(source, source.slides[0].handle!, {
         offsetX: asEmu(0),
         offsetY: asEmu(0),
@@ -213,10 +241,21 @@ function buildExistingTableFixture(
   });
   const files = unzipSync(writePptx(authored));
   const slidePath = "ppt/slides/slide1.xml";
-  const slideXml = decoder
+  let slideXml = decoder
     .decode(files[slidePath])
     .replace("</a:tcPr>", '<a:extLst><a:ext uri="preserve-cell-sidecar"/></a:extLst></a:tcPr>')
     .replace("</p:sld>", "<p:timing><p:tnLst><p:par/></p:tnLst></p:timing></p:sld>");
+  if (options.omitTableId) {
+    slideXml = slideXml.replace('<p:cNvPr id="1" name="Table 1"/>', '<p:cNvPr name="Table 1"/>');
+  }
+  if (options.inGroup) {
+    slideXml = slideXml.replace(
+      /(<p:graphicFrame>.*<\/p:graphicFrame>)/,
+      `<p:grpSp><p:nvGrpSpPr><p:cNvPr id="20" name="Table Group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
+        `<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="9144000" cy="5143500"/>` +
+        `<a:chOff x="0" y="0"/><a:chExt cx="9144000" cy="5143500"/></a:xfrm></p:grpSpPr>$1</p:grpSp>`,
+    );
+  }
   return zipSync({
     ...files,
     [slidePath]: encoder.encode(slideXml),
@@ -225,9 +264,20 @@ function buildExistingTableFixture(
 }
 
 function firstTable(source: PptxSourceModel): SourceTable {
-  const table = source.slides[0].shapes.find((shape) => shape.kind === "table");
+  const table = findTable(source.slides[0].shapes);
   if (table === undefined) throw new Error("test fixture table is missing");
   return table;
+}
+
+function findTable(nodes: readonly SourceShapeNode[]): SourceTable | undefined {
+  for (const node of nodes) {
+    if (node.kind === "table") return node;
+    if (node.kind === "group") {
+      const nested = findTable(node.children);
+      if (nested !== undefined) return nested;
+    }
+  }
+  return undefined;
 }
 
 function requireHandle(handle: SourceHandle | undefined): SourceHandle {
