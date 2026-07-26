@@ -87,7 +87,6 @@ test("navigates the documentation guides and public package references", async (
     "/docs/browser",
     "/docs/nodejs",
     "/docs/api",
-    "/docs/api-reference",
     "/docs/feature-support",
     "/docs/packages",
   ]) {

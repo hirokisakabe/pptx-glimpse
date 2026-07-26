@@ -3,7 +3,7 @@ import { useMDXComponents } from "../../../../../mdx-components";
 
 export const generateStaticParams = generateStaticParamsFor("mdxPath");
 
-export async function generateMetadata(props: PageProps<"/docs/api-reference/[[...mdxPath]]">) {
+export async function generateMetadata(props: PageProps<"/docs/api/[[...mdxPath]]">) {
   const params = await props.params;
   const { metadata } = await importPage(params.mdxPath);
   return metadata;
@@ -12,7 +12,7 @@ export async function generateMetadata(props: PageProps<"/docs/api-reference/[[.
 const Wrapper = useMDXComponents().wrapper;
 
 export default async function ApiReferencePage(
-  props: PageProps<"/docs/api-reference/[[...mdxPath]]">,
+  props: PageProps<"/docs/api/[[...mdxPath]]">,
 ) {
   if (Wrapper === undefined) {
     throw new Error("Nextra documentation wrapper is unavailable");

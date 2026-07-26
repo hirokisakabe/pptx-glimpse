@@ -1,6 +1,6 @@
 # API reference generation
 
-The API reference at `/docs/api-reference` is generated from the public `pptx-glimpse` Node.js
+The API reference at `/docs/api` is generated from the public `pptx-glimpse` Node.js
 and browser entry points. TypeScript declarations and JSDoc are the source of truth; do not edit
 files under `demo/src/content/` because the directory is deleted and recreated during generation
 and is not tracked by Git.
@@ -36,7 +36,14 @@ versions may be breaking for plugins. Before updating:
 4. Run `npm run build` in `demo/` to verify the generated Markdown with the production Nextra
    compiler.
 
-The generator consumes the plugin's navigation JSON, creates Nextra `_meta.ts` files, and
-normalizes generated Markdown links to Nextra's extensionless routes. The generated hierarchy
-keeps runtime entry points and symbol categories grouped while preserving a direct page for every
-exported function, class, interface, type alias, and variable.
+The generator consumes the plugin's navigation JSON, creates the task-oriented API Reference
+landing page and Nextra `_meta.ts` files, and normalizes generated Markdown links to Nextra's
+extensionless routes. The sidebar groups symbols into Conversion, Editing, Fonts, Reports and
+diagnostics, and Browser-specific API categories. The underlying Node.js and browser entry-point
+directories stay out of the sidebar while preserving a direct page for every exported function,
+class, interface, type alias, and variable.
+
+Some generated pages are also post-processed for readability. Shared conversion options are
+expanded on the functions that accept them, and `EditorCommand` variants are rendered as
+individual `kind` and payload blocks. Change the TypeScript/JSDoc source or the generator when
+these pages need updating; never edit generated Markdown directly.

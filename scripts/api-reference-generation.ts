@@ -2,7 +2,7 @@ import { posix } from "node:path";
 
 import { fromMarkdown } from "mdast-util-from-markdown";
 
-const API_REFERENCE_PREFIX = "/docs/api-reference/";
+const API_REFERENCE_PREFIX = "/docs/api/";
 
 interface MarkdownNode {
   readonly type: string;

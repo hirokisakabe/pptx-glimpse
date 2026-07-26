@@ -3,7 +3,7 @@ import type { NextConfig } from "next";
 import nextra from "nextra";
 
 const withNextra = nextra({
-  contentDirBasePath: "/docs/api-reference",
+  contentDirBasePath: "/docs/api",
 });
 
 const nextConfig: NextConfig = {

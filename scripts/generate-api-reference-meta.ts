@@ -15,15 +15,87 @@ interface NavigationItem {
   readonly children?: readonly NavigationItem[];
 }
 
+interface LandingSection {
+  readonly title: string;
+  readonly description: string;
+  readonly symbols: readonly {
+    readonly entryPoint: "node" | "browser";
+    readonly name: string;
+  }[];
+}
+
+const landingSections: readonly LandingSection[] = [
+  {
+    title: "Conversion",
+    description: "Convert PPTX bytes or an existing source model to SVG or PNG output.",
+    symbols: [
+      { entryPoint: "node", name: "convertPptxToSvg" },
+      { entryPoint: "node", name: "convertPptxToPng" },
+      { entryPoint: "node", name: "renderPptxSourceModelToSvg" },
+      { entryPoint: "node", name: "collectUsedFonts" },
+      { entryPoint: "node", name: "ConvertOptions" },
+    ],
+  },
+  {
+    title: "Editing",
+    description: "Create an editor session, apply commands, inspect results, and save a PPTX.",
+    symbols: [
+      { entryPoint: "node", name: "createPptxEditorSession" },
+      { entryPoint: "node", name: "PptxEditorSession" },
+      { entryPoint: "node", name: "EditorCommand" },
+      { entryPoint: "node", name: "PptxEditorError" },
+    ],
+  },
+  {
+    title: "Fonts",
+    description: "Configure font mapping, font buffers, caches, and text measurement.",
+    symbols: [
+      { entryPoint: "node", name: "createFontMapping" },
+      { entryPoint: "node", name: "FontMapping" },
+      { entryPoint: "node", name: "createOpentypeSetupFromBuffers" },
+      { entryPoint: "node", name: "clearFontCache" },
+    ],
+  },
+  {
+    title: "Reports and diagnostics",
+    description: "Inspect converted slides, diagnostics, warnings, and support coverage.",
+    symbols: [
+      { entryPoint: "node", name: "SvgConversionReport" },
+      { entryPoint: "node", name: "PngConversionReport" },
+      { entryPoint: "node", name: "ConversionDiagnostic" },
+      { entryPoint: "node", name: "SupportCoverage" },
+      { entryPoint: "node", name: "getWarningSummary" },
+    ],
+  },
+  {
+    title: "Browser-specific API",
+    description: "Use browser entry-point signatures and initialize PNG WebAssembly support.",
+    symbols: [
+      { entryPoint: "browser", name: "convertPptxToSvg" },
+      { entryPoint: "browser", name: "convertPptxToPng" },
+      { entryPoint: "browser", name: "renderPptxSourceModelToSvg" },
+      { entryPoint: "browser", name: "initResvgWasm" },
+      { entryPoint: "browser", name: "ResvgWasmInput" },
+    ],
+  },
+];
+
 const repositoryRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const contentDirectory = join(repositoryRoot, "demo/src/content");
 const navigationPath = join(contentDirectory, "navigation.json");
-const entriesByDirectory = new Map<string, Map<string, string>>();
-
+const entriesByDirectory = new Map<string, Map<string, unknown>>();
 const navigation = parseNavigation(JSON.parse(await readFile(navigationPath, "utf8")));
-addEntry("", "index", "API reference");
 
+await writeLandingPage();
+await removeBrowserReexportList();
+await inlineConvertOptions();
+await formatEditorCommandPage();
 await normalizeGeneratedLinks(contentDirectory);
+
+addEntry("", "index", { title: "API Reference", display: "hidden" });
+await addLandingNavigation();
+addEntry("", "node", { title: "Node.js API", display: "hidden" });
+addEntry("", "browser", { title: "Browser-specific API", display: "hidden" });
 
 for (const item of navigation) {
   collectNavigation(item);
@@ -42,6 +114,135 @@ for (const [directory, entries] of entriesByDirectory) {
   await writeFile(join(outputDirectory, "_meta.ts"), source);
 }
 
+async function writeLandingPage(): Promise<void> {
+  const sections = landingSections.map((section) => {
+    const links = section.symbols.map(({ entryPoint, name }) => {
+      const path = findSymbolPath(entryPoint, name);
+      return `- [\`${name}\`](/docs/api/${path.slice(0, -extname(path).length)})`;
+    });
+    return `## ${section.title}\n\n${section.description}\n\n${links.join("\n")}`;
+  });
+
+  await writeFile(
+    join(contentDirectory, "index.mdx"),
+    `# API Reference
+
+This index is generated from the public Node.js and browser entry points. Choose an API by task,
+then open its generated page for the complete signature, options, return value, and related types.
+
+${sections.join("\n\n")}\n`,
+  );
+}
+
+async function addLandingNavigation(): Promise<void> {
+  for (const section of landingSections) {
+    const key = section.title.toLowerCase().replaceAll(/[^a-z0-9]+/g, "-");
+    addEntry("", key, {
+      title: section.title,
+      theme: {
+        collapsed: true,
+      },
+    });
+    addEntry(key, "index", { title: section.title, display: "hidden" });
+
+    const links = section.symbols.map(({ entryPoint, name }) => {
+      const path = findSymbolPath(entryPoint, name);
+      const href = `/docs/api/${path.slice(0, -extname(path).length)}`;
+      addEntry(key, `${entryPoint}-${name}`, { title: name, href });
+      return `- [\`${name}\`](${href})`;
+    });
+
+    const directory = join(contentDirectory, key);
+    await mkdir(directory, { recursive: true });
+    await writeFile(
+      join(directory, "index.mdx"),
+      `# ${section.title}
+
+${section.description}
+
+${links.join("\n")}
+`,
+    );
+  }
+}
+
+async function removeBrowserReexportList(): Promise<void> {
+  const path = join(contentDirectory, "browser/index.mdx");
+  const source = await readFile(path, "utf8");
+  await writeFile(path, source.split("\n## References\n", 1)[0]);
+}
+
+async function inlineConvertOptions(): Promise<void> {
+  const optionsPath = join(contentDirectory, "node/interfaces/ConvertOptions.mdx");
+  const optionsSource = await readFile(optionsPath, "utf8");
+  const propertiesStart = optionsSource.indexOf("\n## Properties\n");
+  if (propertiesStart === -1) {
+    throw new Error("Unable to find generated ConvertOptions properties");
+  }
+
+  const properties = optionsSource.slice(propertiesStart + "\n## Properties\n".length).trim();
+  const targets = [
+    "node/functions/convertPptxToSvg.mdx",
+    "node/functions/convertPptxToPng.mdx",
+    "node/functions/renderPptxSourceModelToSvg.mdx",
+    "browser/functions/convertPptxToSvg.mdx",
+    "browser/functions/convertPptxToPng.mdx",
+    "browser/functions/renderPptxSourceModelToSvg.mdx",
+  ];
+
+  for (const target of targets) {
+    const path = join(contentDirectory, target);
+    const source = await readFile(path, "utf8");
+    const returnsStart = source.indexOf("\n## Returns\n");
+    if (returnsStart === -1) {
+      throw new Error(`Unable to find generated Returns section in ${target}`);
+    }
+    const expanded = `${source.slice(0, returnsStart)}
+
+## ConvertOptions
+
+The options accepted by this function are expanded here from
+[\`ConvertOptions\`](/docs/api/node/interfaces/ConvertOptions).
+
+${properties}
+${source.slice(returnsStart)}`;
+    await writeFile(path, expanded);
+  }
+}
+
+async function formatEditorCommandPage(): Promise<void> {
+  const path = join(contentDirectory, "node/type-aliases/EditorCommand.mdx");
+  const source = await readFile(path, "utf8");
+  const signatureStart = source.indexOf("\n```ts\n");
+  const signatureEnd =
+    signatureStart === -1 ? -1 : source.indexOf("\n```\n", signatureStart + "\n```ts\n".length);
+  if (signatureStart === -1 || signatureEnd === -1) {
+    throw new Error("Unable to find generated EditorCommand union signature");
+  }
+
+  let commandCount = 0;
+  const withoutSignature =
+    source.slice(0, signatureStart) + source.slice(signatureEnd + "\n```\n".length);
+  const formatted = withoutSignature
+    .replace("## Union Members", "## Commands")
+    .replace(/### Type Literal\n\n```ts\n([\s\S]*?)```/g, (_match, declaration: string) => {
+      const kindMatch = declaration.match(/^  kind: "([^"]+)";$/m);
+      if (kindMatch === null) {
+        throw new Error("Unable to find a top-level kind in an EditorCommand union member");
+      }
+      const [kindLine, kind] = kindMatch;
+      const declarationWithoutKind = declaration.replace(`${kindLine}\n`, "");
+      const orderedDeclaration = declarationWithoutKind.replace("{\n", `{\n${kindLine}\n`);
+      commandCount += 1;
+      return `### \`${kind}\`\n\n\`\`\`ts\n${orderedDeclaration}\`\`\``;
+    });
+
+  if (commandCount === 0) {
+    throw new Error("No EditorCommand union members were formatted");
+  }
+  await writeFile(path, formatted);
+}
+
 async function normalizeGeneratedLinks(directory: string): Promise<void> {
   const entries = await readdir(directory, { withFileTypes: true });
   for (const entry of entries) {
@@ -54,6 +255,22 @@ async function normalizeGeneratedLinks(directory: string): Promise<void> {
       await writeFile(path, normalized);
     }
   }
+}
+
+function findSymbolPath(entryPoint: "node" | "browser", symbolName: string): string {
+  const match = flattenNavigation(navigation).find(
+    (item) =>
+      item.path?.startsWith(`${entryPoint}/`) &&
+      posix.basename(item.path, posix.extname(item.path)) === symbolName,
+  );
+  if (match?.path === undefined) {
+    throw new Error(`Unable to find ${entryPoint} API symbol ${symbolName} in TypeDoc navigation`);
+  }
+  return match.path;
+}
+
+function flattenNavigation(items: readonly NavigationItem[]): readonly NavigationItem[] {
+  return items.flatMap((item) => [item, ...flattenNavigation(item.children ?? [])]);
 }
 
 function collectNavigation(item: NavigationItem): void {
@@ -82,11 +299,18 @@ function addPath(path: string, title: string): void {
   addEntry(directory === "." ? "" : directory, name, title);
   if (name === "index" && directory !== ".") {
     const parent = posix.dirname(directory);
-    addEntry(parent === "." ? "" : parent, posix.basename(directory), title);
+    const entryPoint = posix.basename(directory);
+    addEntry(
+      parent === "." ? "" : parent,
+      entryPoint,
+      entryPoint === "node"
+        ? { title: "Node.js API", display: "hidden" }
+        : { title: "Browser-specific API", display: "hidden" },
+    );
   }
 }
 
-function addEntry(directory: string, name: string, title: string): void {
+function addEntry(directory: string, name: string, title: unknown): void {
   let entries = entriesByDirectory.get(directory);
   if (entries === undefined) {
     entries = new Map();

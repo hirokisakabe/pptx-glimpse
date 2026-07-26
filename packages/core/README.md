@@ -29,8 +29,13 @@ if (firstSlide !== undefined) {
 console.log(report.diagnostics);
 ```
 
-Use `convertPptxToSvg` for embeddable SVG output. Both conversion functions return slide results,
-diagnostics, and support coverage. See
+Use
+[`convertPptxToSvg`](https://glimpse.pptx.app/docs/api/node/functions/convertPptxToSvg) for
+embeddable SVG output. Both conversion functions return slide results, diagnostics, and support
+coverage. See the
+[`convertPptxToPng`](https://glimpse.pptx.app/docs/api/node/functions/convertPptxToPng) and
+[`ConvertOptions`](https://glimpse.pptx.app/docs/api/node/interfaces/ConvertOptions) reference,
+and
 [Rendering presentations](https://glimpse.pptx.app/docs/rendering) for slide selection, output
 options, and report handling.
 
@@ -81,7 +86,10 @@ const editor = await createPptxEditorSession(new Uint8Array(pptx), {
 ```
 
 See [Editing presentations](https://glimpse.pptx.app/docs/editing) for commands and workflow
-details.
+details. Complete signatures are available for
+[`createPptxEditorSession`](https://glimpse.pptx.app/docs/api/node/functions/createPptxEditorSession),
+[`PptxEditorSession`](https://glimpse.pptx.app/docs/api/node/classes/PptxEditorSession), and every
+[`EditorCommand`](https://glimpse.pptx.app/docs/api/node/type-aliases/EditorCommand) payload.
 
 ## Runtime notes
 
@@ -97,7 +105,7 @@ Read the detailed guides for
 [font loading and mapping](https://glimpse.pptx.app/docs/fonts),
 [browser usage](https://glimpse.pptx.app/docs/browser),
 [Node.js usage](https://glimpse.pptx.app/docs/nodejs), and the
-[high-level API](https://glimpse.pptx.app/docs/api).
+[API Reference](https://glimpse.pptx.app/docs/api).
 
 ## Choose a package
 

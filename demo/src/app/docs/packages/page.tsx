@@ -112,7 +112,10 @@ export default function PackagesPage() {
         </ul>
       </section>
 
-      <DocsPager previous={{ href: "/docs/api", label: "High-level API" }} />
+      <DocsPager
+        previous={{ href: "/docs/feature-support", label: "Feature support" }}
+        next={{ href: "/docs/api", label: "API Reference" }}
+      />
     </DocsPage>
   );
 }

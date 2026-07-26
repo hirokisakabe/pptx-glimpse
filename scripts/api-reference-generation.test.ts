@@ -10,15 +10,15 @@ describe("normalizeGeneratedMarkdownLinks", () => {
     expect(
       normalizeGeneratedMarkdownLinks(
         [
-          "[function](/docs/api-reference/node/functions/convertPptxToSvg.mdx)",
-          "[module](/docs/api-reference/node/index.mdx#functions)",
+          "[function](/docs/api/node/functions/convertPptxToSvg.mdx)",
+          "[module](/docs/api/node/index.mdx#functions)",
           "[root](../../index.mdx)",
         ].join("\n"),
       ),
     ).toBe(
       [
-        "[function](/docs/api-reference/node/functions/convertPptxToSvg)",
-        "[module](/docs/api-reference/node#functions)",
+        "[function](/docs/api/node/functions/convertPptxToSvg)",
+        "[module](/docs/api/node#functions)",
         "[root](../..)",
       ].join("\n"),
     );
@@ -30,7 +30,7 @@ describe("normalizeGeneratedMarkdownLinks", () => {
       "Keep `[example](./page.mdx)` unchanged inside code.",
       "[external](https://example.com/guide.mdx)",
       "```md",
-      "[example](/docs/api-reference/node/example.mdx)",
+      "[example](/docs/api/node/example.mdx)",
       "```",
     ].join("\n");
 
@@ -41,11 +41,11 @@ describe("normalizeGeneratedMarkdownLinks", () => {
     const source = [
       "````md",
       "```ts",
-      "[long fence](/docs/api-reference/node/example.mdx)",
+      "[long fence](/docs/api/node/example.mdx)",
       "```",
       "````",
       "> ```md",
-      "> [quote](/docs/api-reference/node/example.mdx)",
+      "> [quote](/docs/api/node/example.mdx)",
       "> ```",
     ].join("\n");
 
