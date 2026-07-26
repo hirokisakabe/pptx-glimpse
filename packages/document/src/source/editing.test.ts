@@ -463,7 +463,7 @@ describe("editing shape operations", () => {
       fill: { kind: "solid", color: { kind: "srgb", hex: "FF00AA" } },
     });
     expect(() => setShapeFill(edited, connectorHandle, { kind: "none" })).toThrow(
-      "setShapeFill: only top-level sp shapes support fill edits",
+      "setShapeFill: only sp shapes support fill edits",
     );
   });
 

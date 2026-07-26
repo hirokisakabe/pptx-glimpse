@@ -7,9 +7,13 @@ import type {
   PptxSourceModelShapeTransformEdit,
   SourceHandle,
 } from "../source/index.js";
-import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import { insertChildByOrder } from "./dirty-part-xml-helpers.js";
-import { getShapeTransformNode, locateShapeTreeNode, parseShapeLocator } from "./xml-locators.js";
+import {
+  getShapeTransformNode,
+  locateShapeTreeNode,
+  locateShapeTreeNodeLocation,
+  parseShapeLocator,
+} from "./xml-locators.js";
 import { replaceNodeEntries } from "./xml-node-utils.js";
 
 const FILL_CHILD_LOCAL_NAMES: ReadonlySet<string> = new Set([
@@ -75,7 +79,9 @@ function locateEditableShapeTreeNode(
 ): ShapeTreeNodeLocation {
   const locator = parseShapeLocator(handle, editName);
   const spTree = getChild(getChild(getChild(root, "sld"), "cSld"), "spTree");
-  const shape = locateShapeTreeNodeWithLocalName(spTree, locator.nodeId);
+  const location = locateShapeTreeNodeLocation(spTree, locator);
+  const shape =
+    location === undefined ? undefined : { node: location.node, localName: location.nodeKind };
   if (shape === undefined) {
     throw new Error(
       `writePptx: ${editName} handle '${String(handle.nodeId)}' no longer matches source XML`,
@@ -87,32 +93,6 @@ function locateEditableShapeTreeNode(
     );
   }
   return shape;
-}
-
-function locateShapeTreeNodeWithLocalName(
-  spTree: XmlNode | undefined,
-  nodeId: string,
-): ShapeTreeNodeLocation | undefined {
-  if (spTree === undefined) return undefined;
-  for (const key of Object.keys(spTree)) {
-    if (key.startsWith("@_")) continue;
-    const keyLocalName = localName(key);
-    const value = spTree[key];
-    const items = Array.isArray(value) ? value : [value];
-    for (const item of items) {
-      const node = unsafeOoxmlBoundaryAssertion<XmlNode>(item);
-      const nonVisualProperties =
-        getChild(node, "nvSpPr") ??
-        getChild(node, "nvPicPr") ??
-        getChild(node, "nvCxnSpPr") ??
-        getChild(node, "nvGrpSpPr") ??
-        getChild(node, "nvGraphicFramePr");
-      if (getChild(nonVisualProperties, "cNvPr")?.["@_id"] === nodeId) {
-        return { node, localName: keyLocalName };
-      }
-    }
-  }
-  return undefined;
 }
 
 function ensureShapeProperties(shape: XmlNode): XmlNode {

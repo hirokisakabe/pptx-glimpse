@@ -4206,31 +4206,124 @@ describe("writePptx - shape xfrm edit", () => {
     ).toThrow(/shape handle was not found/);
   });
 
-  it("Rejects nested group child shape handles for this writer slice", () => {
-    const source = readPptx(
+  it("Patches a nested group child by stable node identity and replaces only the dirty slide", () => {
+    const archive = unzipSync(
       buildTextEditFixtureFromSlide(
         `<p:grpSp>` +
-          `<p:nvGrpSpPr><p:cNvPr id="30" name="Group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
-          `<p:grpSpPr><a:xfrm><a:off x="10" y="20"/><a:ext cx="300" cy="400"/><a:chOff x="0" y="0"/><a:chExt cx="300" cy="400"/></a:xfrm></p:grpSpPr>` +
-          `<p:sp><p:nvSpPr><p:cNvPr id="31" name="Child"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:nvGrpSpPr><p:cNvPr id="30" name="Outer Group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
+          `<p:grpSpPr><a:xfrm rot="5400000" flipH="1"><a:off x="10" y="20"/><a:ext cx="300" cy="400"/><a:chOff x="0" y="0"/><a:chExt cx="300" cy="400"/></a:xfrm></p:grpSpPr>` +
+          `<p:grpSp>` +
+          `<p:nvGrpSpPr><p:cNvPr id="31" name="Inner Group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
+          `<p:grpSpPr><a:xfrm><a:off x="5" y="6"/><a:ext cx="100" cy="200"/><a:chOff x="0" y="0"/><a:chExt cx="100" cy="200"/></a:xfrm></p:grpSpPr>` +
+          `<p:sp><p:nvSpPr><p:cNvPr id="32" name="Nested Child"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
           `<p:spPr><a:xfrm><a:off x="1" y="2"/><a:ext cx="3" cy="4"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr>` +
           `</p:sp>` +
+          `</p:grpSp>` +
+          `<p:sp><p:nvSpPr><p:cNvPr id="33" name="Preserved Sibling"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="901" y="902"/><a:ext cx="903" cy="904"/></a:xfrm><a:prstGeom prst="ellipse"/></p:spPr>` +
+          `<p:extLst><p:ext uri="preserve-sibling"/></p:extLst></p:sp>` +
           `</p:grpSp>`,
       ),
     );
-    const group = source.slides[0].shapes[0];
-    if (group.kind !== "group") throw new Error("group not found");
-    const child = group.children[0];
+    archive["ppt/slides/slide2.xml"] = xml(
+      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">` +
+        `<p:cSld name="unrelated-slide"/></p:sld>`,
+    );
+    const input = zipSync(archive);
+    const source = readPptx(input);
+    const outer = source.slides[0].shapes[0];
+    if (outer.kind !== "group") throw new Error("outer group not found");
+    const inner = outer.children[0];
+    if (inner.kind !== "group" || inner.handle === undefined) {
+      throw new Error("inner group not found");
+    }
+    const child = inner.children[0];
+    if (child.kind !== "shape" || child.handle === undefined) {
+      throw new Error("nested child not found");
+    }
+    const stableHandle = { ...child.handle, orderingSlot: 999 };
 
-    expect(findShapeNodeBySourceHandle(source, child.handle!)).toBe(child);
-    expect(() =>
-      updateShapeTransform(source, child.handle!, {
-        offsetX: asEmu(1),
-        offsetY: asEmu(2),
-        width: asEmu(3),
-        height: asEmu(4),
-      }),
-    ).toThrow(/nested group shape editing is not supported/);
+    const edited = setShapeOutline(
+      setShapeFill(
+        updateShapeTransform(
+          updateShapeTransform(
+            source,
+            { ...inner.handle, orderingSlot: 998 },
+            {
+              offsetX: asEmu(51),
+              offsetY: asEmu(61),
+              width: asEmu(101),
+              height: asEmu(201),
+            },
+          ),
+          stableHandle,
+          {
+            offsetX: asEmu(111),
+            offsetY: asEmu(222),
+            width: asEmu(333),
+            height: asEmu(444),
+          },
+        ),
+        stableHandle,
+        { kind: "solid", color: { kind: "srgb", hex: "12ab34" } },
+      ),
+      stableHandle,
+      {
+        width: asEmu(12700),
+        fill: { kind: "solid", color: { kind: "srgb", hex: "56789a" } },
+      },
+    );
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+    const editedChild = findShapeNodeBySourceHandle(reread, child.handle);
+    const editedInner = findShapeNodeBySourceHandle(reread, inner.handle);
+    const rereadOuter = reread.slides[0].shapes[0];
+    if (rereadOuter.kind !== "group") throw new Error("reread outer group not found");
+
+    expect(findShapeNodeBySourceHandle(source, stableHandle)).toBe(child);
+    expect(() => deleteShape(source, stableHandle)).toThrow(
+      /nested group shape deletion is not supported/,
+    );
+    expect(editedChild).toMatchObject({
+      kind: "shape",
+      transform: { offsetX: 111, offsetY: 222, width: 333, height: 444 },
+      fill: { kind: "solid", color: { kind: "srgb", hex: "12AB34" } },
+      outline: {
+        width: 12700,
+        fill: { kind: "solid", color: { kind: "srgb", hex: "56789A" } },
+      },
+    });
+    expect(editedInner).toMatchObject({
+      kind: "group",
+      transform: { offsetX: 51, offsetY: 61, width: 101, height: 201 },
+    });
+    expect(rereadOuter).toMatchObject({
+      transform: {
+        offsetX: 10,
+        offsetY: 20,
+        width: 300,
+        height: 400,
+        rotation: 5400000,
+        flipHorizontal: true,
+      },
+    });
+    expect(
+      rereadOuter.children.map((node) => (node.kind === "raw" ? undefined : node.name)),
+    ).toEqual(["Inner Group", "Preserved Sibling"]);
+    expect(rereadOuter.children[1]).toMatchObject({
+      kind: "shape",
+      transform: { offsetX: 901, offsetY: 902, width: 903, height: 904 },
+    });
+    expect(decoder.decode(getEntry(output, "ppt/slides/slide1.xml"))).toContain(
+      'uri="preserve-sibling"',
+    );
+    expect(getEntry(output, "ppt/slides/slide2.xml")).toEqual(
+      getEntry(input, "ppt/slides/slide2.xml"),
+    );
+    expect(getEntry(output, "docProps/custom.xml")).toEqual(getEntry(input, "docProps/custom.xml"));
+    expect(getEntry(output, "ppt/media/image1.png")).toEqual(
+      getEntry(input, "ppt/media/image1.png"),
+    );
   });
 
   it("Preserves nested group XML and child order across no-edit write and reread", () => {
@@ -4307,6 +4400,104 @@ describe("writePptx - shape xfrm edit", () => {
         height: asEmu(4),
       }),
     ).toThrow(/AlternateContent/);
+  });
+
+  it("Rejects duplicate ids, AlternateContent descendants, and id-less nested targets", () => {
+    const duplicate = readPptx(
+      buildTextEditFixtureFromSlide(
+        `<p:sp><p:nvSpPr><p:cNvPr id="50" name="Root duplicate"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="1" y="2"/><a:ext cx="3" cy="4"/></a:xfrm></p:spPr></p:sp>` +
+          `<p:grpSp>` +
+          `<p:nvGrpSpPr><p:cNvPr id="60" name="Group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
+          `<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="10" cy="10"/><a:chOff x="0" y="0"/><a:chExt cx="10" cy="10"/></a:xfrm></p:grpSpPr>` +
+          `<p:sp><p:nvSpPr><p:cNvPr id="50" name="Nested duplicate"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="1" y="2"/><a:ext cx="3" cy="4"/></a:xfrm></p:spPr></p:sp>` +
+          `</p:grpSp>`,
+      ),
+    );
+    const duplicateHandle = duplicate.slides[0].shapes[0]?.handle;
+    if (duplicateHandle === undefined) throw new Error("duplicate handle not found");
+    expect(() => findShapeNodeBySourceHandle(duplicate, duplicateHandle)).toThrow(
+      /duplicate node id/,
+    );
+    expect(() =>
+      updateShapeTransform(duplicate, duplicateHandle, {
+        offsetX: asEmu(1),
+        offsetY: asEmu(2),
+        width: asEmu(3),
+        height: asEmu(4),
+      }),
+    ).toThrow(/duplicate node id/);
+
+    const alternateContent = readPptx(
+      buildTextEditFixtureFromSlide(
+        `<p:grpSp>` +
+          `<p:nvGrpSpPr><p:cNvPr id="70" name="Group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
+          `<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="10" cy="10"/><a:chOff x="0" y="0"/><a:chExt cx="10" cy="10"/></a:xfrm></p:grpSpPr>` +
+          `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">` +
+          `<mc:Fallback><p:sp><p:nvSpPr><p:cNvPr id="71" name="Fallback child"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="1" y="2"/><a:ext cx="3" cy="4"/></a:xfrm></p:spPr></p:sp></mc:Fallback>` +
+          `</mc:AlternateContent></p:grpSp>`,
+      ),
+    );
+    const alternateGroup = alternateContent.slides[0].shapes[0];
+    if (alternateGroup.kind !== "group") throw new Error("alternate group not found");
+    const alternateChild = alternateGroup.children[0];
+    if (alternateChild?.handle === undefined) throw new Error("alternate child not found");
+    expect(() => setShapeFill(alternateContent, alternateChild.handle!, { kind: "none" })).toThrow(
+      /AlternateContent/,
+    );
+
+    const mixedAlternateContent = readPptx(
+      buildTextEditFixtureFromSlide(
+        `<p:grpSp>` +
+          `<p:nvGrpSpPr><p:cNvPr id="75" name="Mixed Group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
+          `<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="10" cy="10"/><a:chOff x="0" y="0"/><a:chExt cx="10" cy="10"/></a:xfrm></p:grpSpPr>` +
+          `<p:sp><p:nvSpPr><p:cNvPr id="76" name="Regular sibling"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="1" y="2"/><a:ext cx="3" cy="4"/></a:xfrm></p:spPr></p:sp>` +
+          `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">` +
+          `<mc:Fallback><p:sp><p:nvSpPr><p:cNvPr id="77" name="Fallback sibling"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="5" y="6"/><a:ext cx="7" cy="8"/></a:xfrm></p:spPr></p:sp></mc:Fallback>` +
+          `</mc:AlternateContent></p:grpSp>`,
+      ),
+    );
+    const mixedGroup = mixedAlternateContent.slides[0].shapes[0];
+    if (mixedGroup.kind !== "group") throw new Error("mixed group not found");
+    const regularSibling = mixedGroup.children[0];
+    if (regularSibling?.handle === undefined) throw new Error("regular sibling not found");
+    const mixedEdited = setShapeFill(mixedAlternateContent, regularSibling.handle, {
+      kind: "solid",
+      color: { kind: "srgb", hex: "ABCDEF" },
+    });
+    expect(
+      findShapeNodeBySourceHandle(readPptx(writePptx(mixedEdited)), regularSibling.handle),
+    ).toMatchObject({
+      kind: "shape",
+      fill: { kind: "solid", color: { kind: "srgb", hex: "ABCDEF" } },
+    });
+
+    const idless = readPptx(
+      buildTextEditFixtureFromSlide(
+        `<p:grpSp>` +
+          `<p:nvGrpSpPr><p:cNvPr id="80" name="Group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
+          `<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="10" cy="10"/><a:chOff x="0" y="0"/><a:chExt cx="10" cy="10"/></a:xfrm></p:grpSpPr>` +
+          `<p:sp><p:nvSpPr><p:cNvPr name="Idless child"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+          `<p:spPr><a:xfrm><a:off x="1" y="2"/><a:ext cx="3" cy="4"/></a:xfrm></p:spPr></p:sp>` +
+          `</p:grpSp>`,
+      ),
+    );
+    const idlessGroup = idless.slides[0].shapes[0];
+    if (idlessGroup.kind !== "group") throw new Error("idless group not found");
+    const idlessChild = idlessGroup.children[0];
+    if (idlessChild?.handle === undefined) throw new Error("idless child not found");
+    expect(() =>
+      updateShapeTransform(idless, idlessChild.handle!, {
+        offsetX: asEmu(1),
+        offsetY: asEmu(2),
+        width: asEmu(3),
+        height: asEmu(4),
+      }),
+    ).toThrow(/requires a node id/);
   });
 });
 

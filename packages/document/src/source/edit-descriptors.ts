@@ -390,12 +390,25 @@ export function editInsertedShape(edit: PptxSourceModelEdit): InsertedShapeRef |
 
 export function sourceHandlesEqual(left: SourceHandle | undefined, right: SourceHandle): boolean {
   if (left === undefined) return false;
-  return (
-    left.partPath === right.partPath &&
-    left.nodeId === right.nodeId &&
-    left.relationshipId === right.relationshipId &&
-    left.orderingSlot === right.orderingSlot
-  );
+  if (left.partPath !== right.partPath) return false;
+  if (left.nodeId !== undefined || right.nodeId !== undefined) {
+    return left.nodeId !== undefined && right.nodeId !== undefined && left.nodeId === right.nodeId;
+  }
+  if (left.orderingSlot !== undefined || right.orderingSlot !== undefined) {
+    return (
+      left.orderingSlot !== undefined &&
+      right.orderingSlot !== undefined &&
+      left.orderingSlot === right.orderingSlot
+    );
+  }
+  if (left.relationshipId !== undefined || right.relationshipId !== undefined) {
+    return (
+      left.relationshipId !== undefined &&
+      right.relationshipId !== undefined &&
+      left.relationshipId === right.relationshipId
+    );
+  }
+  return true;
 }
 
 function textRunShapeId(handle: SourceHandle): string | undefined {
