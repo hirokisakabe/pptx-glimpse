@@ -135,6 +135,16 @@ describe("updateChartData", () => {
       'name="Sheet1"',
       'name="Sales Data"',
     );
+    const worksheetBytes = workbook["xl/worksheets/sheet1.xml"];
+    delete workbook["xl/worksheets/sheet1.xml"];
+    workbook["xl/chart-data/data.xml"] = worksheetBytes;
+    workbook["xl/_rels/workbook.xml.rels"] = replaceText(
+      workbook["xl/_rels/workbook.xml.rels"],
+      'Target="worksheets/sheet1.xml"',
+      'Target="chart-data/data.xml"',
+    );
+    const workbookXmlBefore = workbook["xl/workbook.xml"];
+    const workbookRelationshipsBefore = workbook["xl/_rels/workbook.xml.rels"];
     files[workbookPath] = zipFixture(workbook);
     const source = readPptx(zipFixture(files));
     const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
@@ -152,7 +162,63 @@ describe("updateChartData", () => {
     );
     expect(decoder.decode(output[chartPath])).toContain("&apos;Sales Data&apos;!$B$2:$B$2");
     const outputWorkbook = unzipSync(output[workbookPath]);
-    expect(decoder.decode(outputWorkbook["xl/workbook.xml"])).toContain('name="Sales Data"');
+    expect(outputWorkbook["xl/workbook.xml"]).toEqual(workbookXmlBefore);
+    expect(outputWorkbook["xl/_rels/workbook.xml.rels"]).toEqual(workbookRelationshipsBefore);
+    expect(decoder.decode(outputWorkbook["xl/chart-data/data.xml"])).toContain("<t>One</t>");
+  });
+
+  it("preserves worksheet prefixes and row and cell formatting attributes", () => {
+    const files = unzipSync(buildExistingChart());
+    const workbookPath = "ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx";
+    const workbook = unzipSync(files[workbookPath]);
+    let worksheet = decoder.decode(workbook["xl/worksheets/sheet1.xml"]);
+    for (const element of [
+      "worksheet",
+      "dimension",
+      "sheetViews",
+      "sheetView",
+      "sheetFormatPr",
+      "sheetData",
+      "row",
+      "c",
+      "is",
+      "t",
+      "v",
+    ]) {
+      worksheet = worksheet
+        .replaceAll(`<${element}`, `<x:${element}`)
+        .replaceAll(`</${element}>`, `</x:${element}>`);
+    }
+    worksheet = worksheet.replace(
+      'xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"',
+      'xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main"',
+    );
+    worksheet = worksheet
+      .replace('<x:row r="1">', '<x:row r="1" ht="22" customHeight="1">')
+      .replace('<x:c r="B1"', '<x:c r="B1" s="0"');
+    workbook["xl/worksheets/sheet1.xml"] = new TextEncoder().encode(worksheet);
+    files[workbookPath] = zipFixture(workbook);
+    const source = readPptx(zipFixture(files));
+    const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    if (chart?.handle === undefined) throw new Error("chart fixture should have a handle");
+
+    const output = unzipSync(
+      writePptx(
+        updateChartData(source, chart.handle, {
+          series: [
+            { name: "One", categories: ["A"], values: [1] },
+            { name: "Two", categories: ["A"], values: [2] },
+          ],
+        }),
+      ),
+    );
+    const outputWorksheet = decoder.decode(
+      unzipSync(output[workbookPath])["xl/worksheets/sheet1.xml"],
+    );
+    expect(outputWorksheet).toContain("<x:sheetData><x:row");
+    expect(outputWorksheet).toContain('ht="22"');
+    expect(outputWorksheet).toContain('customHeight="1"');
+    expect(outputWorksheet).toContain('<x:c r="B1" s="0" t="inlineStr">');
   });
 
   it("rejects missing workbooks, external workbook relationships, and unsupported layouts", () => {
@@ -215,6 +281,17 @@ describe("updateChartData", () => {
         })),
       }),
     ).toThrow("series must not exceed 16383");
+    expect(() =>
+      updateChartData(source, chart.handle, {
+        series: [
+          {
+            name: "Too many points",
+            categories: new Array<string>(1_048_576),
+            values: new Array<number>(1_048_576),
+          },
+        ],
+      }),
+    ).toThrow("data points must not exceed 1048575");
   });
 });
 

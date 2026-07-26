@@ -586,48 +586,90 @@ function updateEmbeddedWorkbook(
     `A1:${spreadsheetColumn(input.series.length + 1)}${input.series[0].categories.length + 1}`,
   );
   const sheetData = requireSingleChild(worksheet, "sheetData");
-  setElementChildren(sheetData, buildWorksheetRows(input));
+  setElementChildren(sheetData, buildWorksheetRows(input, sheetData));
   return zipSync({
     ...workbook.files,
     [workbook.worksheetPath]: encoder.encode(orderedBuilder.build(worksheetRoot)),
   });
 }
 
-function buildWorksheetRows(input: UpdateChartDataInput): OrderedXmlNode[] {
+function buildWorksheetRows(
+  input: UpdateChartDataInput,
+  existingSheetData: OrderedXmlNode,
+): OrderedXmlNode[] {
+  const existingRows = new Map(
+    elementChildren(existingSheetData)
+      .filter((entry) => elementLocalName(entry) === "row")
+      .map((entry) => [attribute(entry, "r"), entry]),
+  );
+  const prefix = elementPrefix(existingSheetData);
   const headerCells = [
-    worksheetStringCell("A1", "Category"),
+    worksheetStringCell("A1", "Category", existingCell(existingRows.get("1"), "A1"), prefix),
     ...input.series.map((series, index) =>
-      worksheetStringCell(`${spreadsheetColumn(index + 2)}1`, series.name),
+      worksheetStringCell(
+        `${spreadsheetColumn(index + 2)}1`,
+        series.name,
+        existingCell(existingRows.get("1"), `${spreadsheetColumn(index + 2)}1`),
+        prefix,
+      ),
     ),
   ];
-  const rows = [createElement("row", headerCells, { "@_r": "1" })];
+  const rows = [
+    createElement(`${prefix}row`, headerCells, preservedAttributes(existingRows.get("1"), "1")),
+  ];
   for (let row = 0; row < input.series[0].categories.length; row += 1) {
+    const rowNumber = String(row + 2);
+    const existingRow = existingRows.get(rowNumber);
     rows.push(
       createElement(
-        "row",
+        `${prefix}row`,
         [
-          worksheetStringCell(`A${row + 2}`, input.series[0].categories[row]),
-          ...input.series.map((series, index) =>
-            worksheetNumberCell(`${spreadsheetColumn(index + 2)}${row + 2}`, series.values[row]),
+          worksheetStringCell(
+            `A${rowNumber}`,
+            input.series[0].categories[row],
+            existingCell(existingRow, `A${rowNumber}`),
+            prefix,
           ),
+          ...input.series.map((series, index) => {
+            const reference = `${spreadsheetColumn(index + 2)}${rowNumber}`;
+            return worksheetNumberCell(
+              reference,
+              series.values[row],
+              existingCell(existingRow, reference),
+              prefix,
+            );
+          }),
         ],
-        { "@_r": String(row + 2) },
+        preservedAttributes(existingRow, rowNumber),
       ),
     );
   }
   return rows;
 }
 
-function worksheetStringCell(reference: string, value: string): OrderedXmlNode {
-  return createElement("c", [createElement("is", [createTextElement("t", value)])], {
-    "@_r": reference,
-    "@_t": "inlineStr",
-  });
+function worksheetStringCell(
+  reference: string,
+  value: string,
+  existing: OrderedXmlNode | undefined,
+  prefix: string,
+): OrderedXmlNode {
+  return createElement(
+    `${prefix}c`,
+    [createElement(`${prefix}is`, [createTextElement(`${prefix}t`, value)])],
+    { ...preservedAttributes(existing, reference), "@_t": "inlineStr" },
+  );
 }
 
-function worksheetNumberCell(reference: string, value: number): OrderedXmlNode {
-  return createElement("c", [createElement("v", [{ "#text": String(value) }])], {
-    "@_r": reference,
+function worksheetNumberCell(
+  reference: string,
+  value: number,
+  existing: OrderedXmlNode | undefined,
+  prefix: string,
+): OrderedXmlNode {
+  const attributes = preservedAttributes(existing, reference);
+  delete attributes["@_t"];
+  return createElement(`${prefix}c`, [createElement(`${prefix}v`, [{ "#text": String(value) }])], {
+    ...attributes,
   });
 }
 
@@ -637,6 +679,32 @@ function createTextElement(name: string, value: string): OrderedXmlNode {
     [{ "#text": value }],
     value.startsWith(" ") || value.endsWith(" ") ? { "@_xml:space": "preserve" } : undefined,
   );
+}
+
+function existingCell(
+  row: OrderedXmlNode | undefined,
+  reference: string,
+): OrderedXmlNode | undefined {
+  return row === undefined
+    ? undefined
+    : elementChildren(row).find(
+        (entry) => elementLocalName(entry) === "c" && attribute(entry, "r") === reference,
+      );
+}
+
+function preservedAttributes(
+  entry: OrderedXmlNode | undefined,
+  reference: string,
+): Record<string, unknown> {
+  const attributes = entry?.[":@"];
+  const result =
+    typeof attributes === "object" && attributes !== null
+      ? { ...unsafeOoxmlBoundaryAssertion<Record<string, unknown>>(attributes) }
+      : {};
+  const referenceKey =
+    Object.keys(result).find((key) => key === "@_r" || key.endsWith(":r")) ?? "@_r";
+  result[referenceKey] = reference;
+  return result;
 }
 
 function normalizeWorkbookTarget(target: string): string {
@@ -729,6 +797,18 @@ function setAttribute(entry: OrderedXmlNode, localName: string, value: string): 
   });
   record[existingKey ?? `@_${localName}`] = value;
   entry[":@"] = record;
+}
+
+function attribute(entry: OrderedXmlNode, localName: string): string | undefined {
+  const attributes = entry[":@"];
+  if (typeof attributes !== "object" || attributes === null) return undefined;
+  const record = unsafeOoxmlBoundaryAssertion<Record<string, unknown>>(attributes);
+  const value = Object.entries(record).find(([key]) => {
+    const name = key.startsWith("@_") ? key.slice(2) : key;
+    const colon = name.indexOf(":");
+    return (colon < 0 ? name : name.slice(colon + 1)) === localName;
+  })?.[1];
+  return typeof value === "string" ? value : undefined;
 }
 
 function namespacedAttribute(entry: OrderedXmlNode, localName: string): string | undefined {
