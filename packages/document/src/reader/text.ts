@@ -122,6 +122,7 @@ export function parseTextBody(
   ownerNodeId: SourceNodeId | undefined,
   ownerOrderingSlot: number,
   orderedTxBody?: readonly XmlOrderedNode[],
+  tableCell?: { readonly rowIndex: number; readonly cellIndex: number },
 ): SourceTextBody | undefined {
   if (!txBody) return undefined;
 
@@ -147,6 +148,7 @@ export function parseTextBody(
         ownerNodeId,
         ownerOrderingSlot,
         logicalParagraphIndex,
+        tableCell,
       );
       paragraphs.push(...split);
       logicalParagraphIndex += split.length;
@@ -161,6 +163,7 @@ export function parseTextBody(
         ownerOrderingSlot,
         logicalParagraphIndex,
         orderedChildren,
+        tableCell,
       ),
     );
     logicalParagraphIndex++;
@@ -215,6 +218,7 @@ function splitInterleavedParagraph(
   ownerNodeId: SourceNodeId | undefined,
   ownerOrderingSlot: number,
   paragraphIndex: number,
+  tableCell?: { readonly rowIndex: number; readonly cellIndex: number },
 ): SourceParagraph[] {
   const pPrList = getChildArray(p, "pPr");
   const rList = getChildArray(p, "r");
@@ -315,6 +319,7 @@ function splitInterleavedParagraph(
       ownerOrderingSlot,
       paragraphIndex + groupIndex,
       group.orderedChildren,
+      tableCell,
     );
     if (groupIndex < groups.length - 1 && paragraph.runs.length > 0) {
       const lastRun = paragraph.runs[paragraph.runs.length - 1];
@@ -389,6 +394,7 @@ function parseParagraph(
   ownerOrderingSlot: number,
   paragraphIndex: number,
   orderedChildren?: readonly XmlOrderedNode[],
+  tableCell?: { readonly rowIndex: number; readonly cellIndex: number },
 ): SourceParagraph {
   const properties = parseParagraphProperties(getChild(p, "pPr"));
   const runs = parseRunsInOrder(
@@ -399,17 +405,22 @@ function parseParagraph(
     ownerOrderingSlot,
     paragraphIndex,
     orderedChildren,
+    tableCell,
   );
   const rawSidecars = collectUnknownSidecars(p, KNOWN_PARAGRAPH_CHILDREN, nextId);
+  const nodeId = textNodeId(
+    "paragraph",
+    ownerNodeId,
+    ownerOrderingSlot,
+    paragraphIndex,
+    undefined,
+    tableCell,
+  );
 
   return {
     runs,
     ...(properties !== undefined ? { properties } : {}),
-    handle: {
-      partPath,
-      nodeId: textNodeId("paragraph", ownerNodeId, ownerOrderingSlot, paragraphIndex),
-      orderingSlot: paragraphIndex,
-    },
+    ...(nodeId !== undefined ? { handle: { partPath, nodeId, orderingSlot: paragraphIndex } } : {}),
     ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
   };
 }
@@ -422,6 +433,7 @@ function parseRunsInOrder(
   ownerOrderingSlot: number,
   paragraphIndex: number,
   orderedChildren?: readonly XmlOrderedNode[],
+  tableCell?: { readonly rowIndex: number; readonly cellIndex: number },
 ): SourceTextRun[] {
   const rList = getChildArray(p, "r");
   const fldList = getChildArray(p, "fld");
@@ -429,7 +441,16 @@ function parseRunsInOrder(
   if (orderedChildren === undefined) {
     return [
       ...rList.map((r, runIndex) =>
-        parseRun(r, partPath, nextId, ownerNodeId, ownerOrderingSlot, paragraphIndex, runIndex),
+        parseRun(
+          r,
+          partPath,
+          nextId,
+          ownerNodeId,
+          ownerOrderingSlot,
+          paragraphIndex,
+          runIndex,
+          tableCell,
+        ),
       ),
       ...fldList.map((fld, index) =>
         parseRun(
@@ -440,6 +461,7 @@ function parseRunsInOrder(
           ownerOrderingSlot,
           paragraphIndex,
           rList.length + index,
+          tableCell,
         ),
       ),
       ...brList.map((br, index) =>
@@ -451,6 +473,7 @@ function parseRunsInOrder(
           ownerOrderingSlot,
           paragraphIndex,
           rList.length + fldList.length + index,
+          tableCell,
         ),
       ),
     ];
@@ -474,6 +497,7 @@ function parseRunsInOrder(
           ownerOrderingSlot,
           paragraphIndex,
           runIndex,
+          tableCell,
         ),
       );
     } else if (tag === "fld" && fldList[index] !== undefined) {
@@ -486,6 +510,7 @@ function parseRunsInOrder(
           ownerOrderingSlot,
           paragraphIndex,
           runIndex,
+          tableCell,
         ),
       );
     } else if (tag === "br" && brList[index] !== undefined) {
@@ -498,6 +523,7 @@ function parseRunsInOrder(
           ownerOrderingSlot,
           paragraphIndex,
           runIndex,
+          tableCell,
         ),
       );
     }
@@ -595,19 +621,24 @@ function parseRun(
   ownerOrderingSlot: number,
   paragraphIndex: number,
   runIndex: number,
+  tableCell?: { readonly rowIndex: number; readonly cellIndex: number },
 ): SourceTextRun {
   const properties = parseRunProperties(getChild(r, "rPr"));
   const rawSidecars = collectRunSidecars(r, nextId);
+  const nodeId = textNodeId(
+    "run",
+    ownerNodeId,
+    ownerOrderingSlot,
+    paragraphIndex,
+    runIndex,
+    tableCell,
+  );
 
   return {
     kind: "textRun",
     text: decodeXmlCharRef(getChildText(r, "t") ?? ""),
     ...(properties !== undefined ? { properties } : {}),
-    handle: {
-      partPath,
-      nodeId: textNodeId("run", ownerNodeId, ownerOrderingSlot, paragraphIndex, runIndex),
-      orderingSlot: runIndex,
-    },
+    ...(nodeId !== undefined ? { handle: { partPath, nodeId, orderingSlot: runIndex } } : {}),
     ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
   };
 }
@@ -620,17 +651,22 @@ function parseBreakRun(
   ownerOrderingSlot: number,
   paragraphIndex: number,
   runIndex: number,
+  tableCell?: { readonly rowIndex: number; readonly cellIndex: number },
 ): SourceTextRun {
   const properties = parseRunProperties(getChild(br, "rPr"));
+  const nodeId = textNodeId(
+    "run",
+    ownerNodeId,
+    ownerOrderingSlot,
+    paragraphIndex,
+    runIndex,
+    tableCell,
+  );
   return {
     kind: "textRun",
     text: "\n",
     ...(properties !== undefined ? { properties } : {}),
-    handle: {
-      partPath,
-      nodeId: textNodeId("run", ownerNodeId, ownerOrderingSlot, paragraphIndex, runIndex),
-      orderingSlot: runIndex,
-    },
+    ...(nodeId !== undefined ? { handle: { partPath, nodeId, orderingSlot: runIndex } } : {}),
   };
 }
 
@@ -704,11 +740,18 @@ function textNodeId(
   ownerOrderingSlot: number,
   paragraphIndex: number,
   runIndex?: number,
-): SourceNodeId {
+  tableCell?: { readonly rowIndex: number; readonly cellIndex: number },
+): SourceNodeId | undefined {
+  if (tableCell !== undefined && ownerNodeId === undefined) return undefined;
+  const ownerKind = tableCell === undefined ? "shape" : "table";
   const owner =
-    ownerNodeId !== undefined ? `shape:${ownerNodeId}` : `shapeSlot:${ownerOrderingSlot}`;
+    ownerNodeId !== undefined
+      ? `${ownerKind}:${ownerNodeId}`
+      : `${ownerKind}Slot:${ownerOrderingSlot}`;
+  const cell =
+    tableCell === undefined ? "" : `:row:${tableCell.rowIndex}:cell:${tableCell.cellIndex}`;
   const suffix = kind === "paragraph" ? `p:${paragraphIndex}` : `p:${paragraphIndex}:r:${runIndex}`;
-  return asSourceNodeId(`text:${owner}:${suffix}`);
+  return asSourceNodeId(`text:${owner}${cell}:${suffix}`);
 }
 
 function orderedKey(node: XmlOrderedNode): string | undefined {

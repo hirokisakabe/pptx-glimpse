@@ -7,8 +7,12 @@ import type {
 import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 
 export interface TextRunLocator {
+  readonly ownerKind: "shape" | "table";
   readonly shapeNodeId?: string;
   readonly shapeOrderingSlot?: number;
+  readonly tableNodeId?: string;
+  readonly rowIndex?: number;
+  readonly cellIndex?: number;
   readonly paragraphIndex: number;
   readonly runIndex: number;
 }
@@ -31,6 +35,7 @@ export function parseTextRunLocator(
   const byShapeId = /^text:shape:(.+):p:(\d+):r:(\d+)$/.exec(value);
   if (byShapeId !== null) {
     return {
+      ownerKind: "shape",
       shapeNodeId: byShapeId[1],
       paragraphIndex: Number(byShapeId[2]),
       runIndex: Number(byShapeId[3]),
@@ -40,9 +45,22 @@ export function parseTextRunLocator(
   const byShapeSlot = /^text:shapeSlot:(\d+):p:(\d+):r:(\d+)$/.exec(value);
   if (byShapeSlot !== null) {
     return {
+      ownerKind: "shape",
       shapeOrderingSlot: Number(byShapeSlot[1]),
       paragraphIndex: Number(byShapeSlot[2]),
       runIndex: Number(byShapeSlot[3]),
+    };
+  }
+
+  const byTableId = /^text:table:(.+):row:(\d+):cell:(\d+):p:(\d+):r:(\d+)$/.exec(value);
+  if (byTableId !== null) {
+    return {
+      ownerKind: "table",
+      tableNodeId: byTableId[1],
+      rowIndex: Number(byTableId[2]),
+      cellIndex: Number(byTableId[3]),
+      paragraphIndex: Number(byTableId[4]),
+      runIndex: Number(byTableId[5]),
     };
   }
 
@@ -56,6 +74,7 @@ export function parseParagraphLocator(
   const byShapeId = /^text:shape:(.+):p:(\d+)$/.exec(value);
   if (byShapeId !== null) {
     return {
+      ownerKind: "shape",
       shapeNodeId: byShapeId[1],
       paragraphIndex: Number(byShapeId[2]),
     };
@@ -64,8 +83,20 @@ export function parseParagraphLocator(
   const byShapeSlot = /^text:shapeSlot:(\d+):p:(\d+)$/.exec(value);
   if (byShapeSlot !== null) {
     return {
+      ownerKind: "shape",
       shapeOrderingSlot: Number(byShapeSlot[1]),
       paragraphIndex: Number(byShapeSlot[2]),
+    };
+  }
+
+  const byTableId = /^text:table:(.+):row:(\d+):cell:(\d+):p:(\d+)$/.exec(value);
+  if (byTableId !== null) {
+    return {
+      ownerKind: "table",
+      tableNodeId: byTableId[1],
+      rowIndex: Number(byTableId[2]),
+      cellIndex: Number(byTableId[3]),
+      paragraphIndex: Number(byTableId[4]),
     };
   }
 
@@ -76,6 +107,7 @@ export function locateShape(
   spTree: XmlNode | undefined,
   locator: TextRunLocator | ParagraphTextLocator,
 ): XmlNode | undefined {
+  if (locator.ownerKind !== "shape") return undefined;
   const shapes = getChildArray(spTree, "sp");
   if (locator.shapeNodeId !== undefined) {
     return shapes.find(
@@ -85,6 +117,35 @@ export function locateShape(
   }
   if (locator.shapeOrderingSlot === undefined) return undefined;
   return getShapeByOrderingSlot(spTree, locator.shapeOrderingSlot);
+}
+
+export function locateTable(
+  spTree: XmlNode | undefined,
+  locator: TextRunLocator | ParagraphTextLocator,
+): XmlNode | undefined {
+  if (locator.ownerKind !== "table") return undefined;
+  const frames = getChildArray(spTree, "graphicFrame");
+  if (locator.tableNodeId !== undefined) {
+    const frame = frames.find(
+      (frame) =>
+        getAttr(getChild(getChild(frame, "nvGraphicFramePr"), "cNvPr"), "id") ===
+        locator.tableNodeId,
+    );
+    if (frame !== undefined) return frame;
+    for (const group of getChildArray(spTree, "grpSp")) {
+      const nested = locateTable(group, locator);
+      if (nested !== undefined) return nested;
+    }
+    for (const alternateContent of getChildArray(spTree, "AlternateContent")) {
+      for (const branchName of ["Choice", "Fallback"]) {
+        for (const branch of getChildArray(alternateContent, branchName)) {
+          const nested = locateTable(branch, locator);
+          if (nested !== undefined) return nested;
+        }
+      }
+    }
+  }
+  return undefined;
 }
 
 export function locateShapeTreeNode(
