@@ -59,9 +59,7 @@ test("runs a browser-only editor move, resize, text, undo, redo, download, and r
     await page.getByRole("button", { name: "Redo" }).click();
     await expect(page.getByTestId("selection-box")).toHaveAttribute("width", "336");
 
-    expect(await page.evaluate(() => window.__pptxGlimpseEditorSmoke?.hasEditableTextBody)).toBe(
-      true,
-    );
+    expect(await page.evaluate(() => window.__pptxGlimpseEditorSmoke?.hasTextBody)).toBe(true);
     await dblclickSvgPoint(page, 240, 240);
     const overlay = page.getByTestId("text-editor-overlay");
     await expect(overlay).toBeVisible();
@@ -449,7 +447,7 @@ function render() {
     (shape) => shape.handle && shape.bounds && (shape.editableTransform || shape.editableImageReplacement),
   );
   window.__pptxGlimpseEditorSmoke = {
-    hasEditableTextBody: shapes.some((shape) => Boolean(shape.editableTextBody)),
+    hasTextBody: shapes.some((shape) => Boolean(shape.textBody)),
   };
   selectedShape = selectedShapeKey
     ? shapes.find((shape) => shapeKey(shape) === selectedShapeKey) || null
@@ -483,7 +481,7 @@ function renderSelectionOverlay() {
     setRectAttributes(hit, shape.bounds);
     hit.addEventListener("pointerdown", (event) => selectShape(shape, event));
     hit.addEventListener("mousedown", (event) => {
-      if (event.detail >= 2 && shape.editableTextBody) {
+      if (event.detail >= 2 && shape.textBody) {
         event.preventDefault();
         openTextEditor(shape);
       }
@@ -591,7 +589,7 @@ async function finishDrag(event) {
 }
 
 function openTextEditor(shape) {
-  if (!shape.editableTextBody || !shape.bounds) return;
+  if (!shape.textBody || !shape.bounds) return;
   closeTextEditor();
   selectedShape = cloneShape(shape);
   selectedShapeKey = shapeKey(shape);
@@ -600,7 +598,7 @@ function openTextEditor(shape) {
   const overlay = document.createElement("div");
   overlay.id = "text-editor-overlay";
   overlay.setAttribute("data-testid", "text-editor-overlay");
-  overlay.appendChild(createTextEditorContent(shape.editableTextBody.docJson));
+  overlay.appendChild(createTextEditorContent(shape.textBody));
   const actions = document.createElement("div");
   actions.className = "text-editor-actions";
   const done = document.createElement("button");
@@ -611,25 +609,25 @@ function openTextEditor(shape) {
   actions.appendChild(done);
   overlay.appendChild(actions);
   container.appendChild(overlay);
-  activeTextEditor = { element: overlay, shape: cloneShape(shape), originalDocJson: shape.editableTextBody.docJson };
+  activeTextEditor = { element: overlay, shape: cloneShape(shape), originalTextBody: shape.textBody };
   positionActiveTextEditor();
   const firstRun = overlay.querySelector(".text-editor-run");
   if (firstRun) firstRun.focus();
 }
 
-function createTextEditorContent(docJson) {
+function createTextEditorContent(textBody) {
   const body = document.createElement("div");
-  (docJson.content || []).forEach((paragraph, paragraphIndex) => {
+  (textBody.paragraphs || []).forEach((paragraph, paragraphIndex) => {
     const paragraphElement = document.createElement("div");
     paragraphElement.dataset.paragraphIndex = String(paragraphIndex);
-    (paragraph.content || []).forEach((textNode, runIndex) => {
+    (paragraph.runs || []).forEach((textRun, runIndex) => {
       const run = document.createElement("span");
       run.className = "text-editor-run";
       run.setAttribute("data-testid", "text-editor-run");
       run.contentEditable = "true";
       run.dataset.paragraphIndex = String(paragraphIndex);
       run.dataset.runIndex = String(runIndex);
-      run.textContent = textNode.text || "";
+      run.textContent = textRun.text || "";
       paragraphElement.appendChild(run);
     });
     body.appendChild(paragraphElement);
@@ -639,10 +637,9 @@ function createTextEditorContent(docJson) {
 
 async function commitTextEditor() {
   if (!activeTextEditor) return;
-  const docJson = textEditorDocJson();
-  const handle = activeTextEditor.shape.handle;
+  const commands = textEditorCommands();
   closeTextEditor();
-  await editor.applyTextBodyDocJson(handle, docJson);
+  if (commands.length > 0) await editor.applyAll(commands);
   render();
   message.textContent = "Applied";
 }
@@ -684,27 +681,23 @@ function syncImageReplacementInput() {
   }
 }
 
-function textEditorDocJson() {
-  const original = activeTextEditor.originalDocJson;
-  return {
-    type: "doc",
-    content: (original.content || []).map((paragraph, paragraphIndex) => {
+function textEditorCommands() {
+  return (activeTextEditor.originalTextBody.paragraphs || []).flatMap(
+    (paragraph, paragraphIndex) => {
       const paragraphElement = activeTextEditor.element.querySelector(
         '.text-editor-run[data-paragraph-index="' + paragraphIndex + '"]'
       )?.parentElement;
-      return {
-        type: "paragraph",
-        attrs: paragraph.attrs || {},
-        content: (paragraph.content || []).flatMap((textNode, runIndex) => {
-          const runElement = paragraphElement?.querySelector(
-            '.text-editor-run[data-run-index="' + runIndex + '"]'
-          );
-          const text = runElement ? runElement.textContent || "" : textNode.text || "";
-          return text.length === 0 ? [] : [{ type: "text", text, marks: textNode.marks || [] }];
-        }),
-      };
-    }),
-  };
+      return (paragraph.runs || []).flatMap((textRun, runIndex) => {
+        const runElement = paragraphElement?.querySelector(
+          '.text-editor-run[data-run-index="' + runIndex + '"]'
+        );
+        const text = runElement ? runElement.textContent || "" : textRun.text || "";
+        return textRun.handle && text !== textRun.text
+          ? [{ kind: "replaceTextRunPlainText", handle: textRun.handle, text }]
+          : [];
+      });
+    },
+  );
 }
 
 function closeTextEditor() {
@@ -974,7 +967,7 @@ async function closeServer(server: Server): Promise<void> {
 declare global {
   interface Window {
     __pptxGlimpseEditorSmoke?: {
-      hasEditableTextBody: boolean;
+      hasTextBody: boolean;
     };
   }
 }
