@@ -776,6 +776,57 @@ describe("createComputedView", () => {
     expect(source).toEqual(before);
   });
 
+  it("Preserves nested group and child transforms as source-local values", () => {
+    const source = buildSource();
+    const childTransform = transform(30, 40, 50, 60);
+    const nestedTransform = {
+      ...transform(70, 80, 90, 100),
+      rotation: asOoxmlAngle(1800000),
+      flipVertical: true,
+    };
+    const nestedChildTransform = transform(7, 8, 45, 25);
+    const leafTransform = transform(9, 10, 11, 12);
+    const group: SourceShapeNode = {
+      kind: "group",
+      name: "Outer local group",
+      transform: transform(100, 200, 300, 400),
+      childTransform,
+      children: [
+        {
+          kind: "group",
+          name: "Nested local group",
+          transform: nestedTransform,
+          childTransform: nestedChildTransform,
+          children: [shape("Local leaf", { transform: leafTransform })],
+        },
+      ],
+    };
+    const extended: PptxSourceModel = {
+      ...source,
+      slides: source.slides.map((slide) =>
+        slide.partPath === "ppt/slides/slide2.xml"
+          ? { ...slide, shapes: [...slide.shapes, group] }
+          : slide,
+      ),
+    };
+
+    const computed = createComputedView(extended).slides[0]?.elements.find(
+      (element): element is ComputedGroupElement =>
+        element.kind === "group" && element.sourceNode.name === "Outer local group",
+    );
+    if (computed === undefined) throw new Error("outer group not found");
+    const nested = computed.children[0];
+    if (nested?.kind !== "group") throw new Error("nested group not found");
+    const leaf = nested.children[0];
+
+    expect(computed.transform).toBe(group.transform);
+    expect(computed.childTransform).toBe(childTransform);
+    expect(nested.transform).toBe(nestedTransform);
+    expect(nested.childTransform).toBe(nestedChildTransform);
+    expect(leaf?.transform).toBe(leafTransform);
+    expect(leaf?.transform).toEqual({ offsetX: 9, offsetY: 10, width: 11, height: 12 });
+  });
+
   it("Apply target slide selection with presentation order slide number", () => {
     const computed = createComputedView(buildSource(), { slides: [2] });
 

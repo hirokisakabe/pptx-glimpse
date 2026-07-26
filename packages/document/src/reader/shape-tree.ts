@@ -410,7 +410,7 @@ function parseGroup(
   const name = getAttr(cNvPr, "name");
   const grpSpPr = getChild(grpSp, "grpSpPr");
   const transform = parseTransform(grpSpPr);
-  const childTransform = parseChildTransform(grpSpPr, transform);
+  const childTransform = parseChildTransform(grpSpPr);
   const fill = parseFill(grpSpPr, nextId);
   const effects = parseEffectList(getChild(grpSpPr, "effectLst"));
   const rawSidecars = [
@@ -923,23 +923,27 @@ function parseAdjustValues(avLst: XmlNode | undefined): Record<string, number> {
   return adjustValues;
 }
 
-function parseChildTransform(
-  grpSpPr: XmlNode | undefined,
-  fallback: SourceTransform | undefined,
-): SourceTransform | undefined {
+function parseChildTransform(grpSpPr: XmlNode | undefined): SourceTransform | undefined {
   const xfrm = getChild(grpSpPr, "xfrm");
   const childOff = getChild(xfrm, "chOff");
   const childExt = getChild(xfrm, "chExt");
-  const offsetX = numericAttr(childOff, "x") ?? 0;
-  const offsetY = numericAttr(childOff, "y") ?? 0;
-  const width = numericAttr(childExt, "cx") ?? fallback?.width;
-  const height = numericAttr(childExt, "cy") ?? fallback?.height;
-  if (width === undefined || height === undefined) return undefined;
+  const offsetX = numericAttr(childOff, "x");
+  const offsetY = numericAttr(childOff, "y");
+  const width = numericAttr(childExt, "cx");
+  const height = numericAttr(childExt, "cy");
+  if (
+    offsetX === undefined ||
+    offsetY === undefined ||
+    width === undefined ||
+    height === undefined
+  ) {
+    return undefined;
+  }
   return {
     offsetX: asEmu(offsetX),
     offsetY: asEmu(offsetY),
-    width: asEmu(Number(width)),
-    height: asEmu(Number(height)),
+    width: asEmu(width),
+    height: asEmu(height),
   };
 }
 
