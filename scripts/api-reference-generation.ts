@@ -46,7 +46,8 @@ function collectLinkReplacements(
     if (start !== undefined && end !== undefined) {
       const destinationRange = findInlineDestinationRange(node, source, start, end);
       if (destinationRange !== undefined) {
-        const normalized = normalizeGeneratedDestination(node.url);
+        const rawDestination = source.slice(destinationRange.start, destinationRange.end);
+        const normalized = normalizeRawGeneratedDestination(rawDestination, node.url);
         if (normalized !== undefined) {
           replacements.push({
             start: destinationRange.start,
@@ -136,26 +137,35 @@ function isMarkdownNode(value: unknown): value is MarkdownNode {
   );
 }
 
-function normalizeGeneratedDestination(destination: string): string | undefined {
+function normalizeRawGeneratedDestination(
+  rawDestination: string,
+  decodedDestination: string,
+): string | undefined {
   const isGeneratedLink =
-    destination.startsWith(API_REFERENCE_PREFIX) ||
-    destination.startsWith("./") ||
-    destination.startsWith("../");
+    decodedDestination.startsWith(API_REFERENCE_PREFIX) ||
+    decodedDestination.startsWith("./") ||
+    decodedDestination.startsWith("../");
   if (!isGeneratedLink) {
     return undefined;
   }
 
-  const hashIndex = destination.indexOf("#");
-  const path = hashIndex === -1 ? destination : destination.slice(0, hashIndex);
-  const hash = hashIndex === -1 ? "" : destination.slice(hashIndex);
-  if (!path.endsWith(".mdx")) {
+  const decodedHashIndex = decodedDestination.indexOf("#");
+  const decodedPath =
+    decodedHashIndex === -1 ? decodedDestination : decodedDestination.slice(0, decodedHashIndex);
+  if (!decodedPath.endsWith(".mdx")) {
     return undefined;
   }
 
-  const withoutExtension = path.endsWith("/index.mdx")
-    ? path.slice(0, -"/index.mdx".length)
-    : path.slice(0, -".mdx".length);
-  return `${withoutExtension}${hash}`;
+  const rawHashIndex = rawDestination.indexOf("#");
+  const rawPath = rawHashIndex === -1 ? rawDestination : rawDestination.slice(0, rawHashIndex);
+  const rawHash = rawHashIndex === -1 ? "" : rawDestination.slice(rawHashIndex);
+  if (rawPath.endsWith("/index.mdx")) {
+    return `${rawPath.slice(0, -"/index.mdx".length)}${rawHash}`;
+  }
+  if (rawPath.endsWith(".mdx")) {
+    return `${rawPath.slice(0, -".mdx".length)}${rawHash}`;
+  }
+  return undefined;
 }
 
 export function formatNavigationTitle(title: string, path?: string): string {

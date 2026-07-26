@@ -74,12 +74,16 @@ describe("normalizeGeneratedMarkdownLinks", () => {
       "[balanced](./foo_(bar).mdx)",
       "[escaped](./foo\\(bar\\).mdx)",
       "[angle](<./foo bar.mdx>)",
+      "[one-sided](./foo\\).mdx)",
+      "[angle escaped](<./foo\\>.mdx>)",
       "[`label](./fake.mdx)`](./target.mdx)",
     ].join("\n");
     const expected = [
       "[balanced](./foo_(bar))",
-      "[escaped](./foo(bar))",
+      "[escaped](./foo\\(bar\\))",
       "[angle](<./foo bar>)",
+      "[one-sided](./foo\\))",
+      "[angle escaped](<./foo\\>>)",
       "[`label](./fake.mdx)`](./target)",
     ].join("\n");
 
