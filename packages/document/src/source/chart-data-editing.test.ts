@@ -257,6 +257,20 @@ describe("updateChartData", () => {
     const formulaSource = readPptx(zipFixture(formulaFiles));
     expectEditFailure(formulaSource, "formulas in the chart data range are not supported");
 
+    const formattedOutsideRangeFiles = unzipSync(input);
+    const formattedWorkbook = unzipSync(
+      formattedOutsideRangeFiles["ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx"],
+    );
+    formattedWorkbook["xl/worksheets/sheet1.xml"] = replaceText(
+      formattedWorkbook["xl/worksheets/sheet1.xml"],
+      "</sheetData>",
+      '<row r="10" hidden="1" customHeight="1"/></sheetData>',
+    );
+    formattedOutsideRangeFiles["ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx"] =
+      zipFixture(formattedWorkbook);
+    const formattedOutsideRangeSource = readPptx(zipFixture(formattedOutsideRangeFiles));
+    expectEditFailure(formattedOutsideRangeSource, "unsupported data layout");
+
     const comboFiles = unzipSync(input);
     comboFiles["ppt/charts/chart1.xml"] = replaceText(
       comboFiles["ppt/charts/chart1.xml"],

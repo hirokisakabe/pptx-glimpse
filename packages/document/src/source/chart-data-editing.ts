@@ -547,9 +547,21 @@ function assertSupportedWorksheetLayout(
       );
     }
   }
-  const cells = getChildArray(getChild(worksheet, "sheetData"), "row").flatMap((row) =>
-    getChildArray(row, "c"),
-  );
+  const rows = getChildArray(getChild(worksheet, "sheetData"), "row");
+  const rowNumbers = new Set<string>();
+  for (const row of rows) {
+    const rowNumber = getAttr(row, "r");
+    if (
+      rowNumber === undefined ||
+      rowNumbers.has(rowNumber) ||
+      !/^[1-9]\d*$/.test(rowNumber) ||
+      Number(rowNumber) > pointCount + 1
+    ) {
+      throw new Error("updateChartData: embedded worksheet uses an unsupported data layout");
+    }
+    rowNumbers.add(rowNumber);
+  }
+  const cells = rows.flatMap((row) => getChildArray(row, "c"));
   const allowed = new Set<string>(["A1"]);
   for (let row = 1; row <= pointCount + 1; row += 1) {
     for (let column = 1; column <= seriesCount + 1; column += 1) {
