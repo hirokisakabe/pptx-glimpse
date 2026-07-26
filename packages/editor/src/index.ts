@@ -213,6 +213,16 @@ export interface DeleteSlideCommand {
  * @inlineType DuplicateSlideCommand
  * @inlineType MoveSlideCommand
  * @inlineType DeleteSlideCommand
+ * @inlineType EditableTextRunProperties
+ * @inlineType EditableTextRunProperty
+ * @inlineType EditableParagraphProperties
+ * @inlineType EditableParagraphProperty
+ * @inlineType EditableShapeFill
+ * @inlineType EditableShapeOutline
+ * @inlineType AddTextBoxBodyPropertiesInput
+ * @inlineType AddTextBoxParagraphInput
+ * @inlineType AddConnectorConnectionEndpointInput
+ * @inlineType AddConnectorOutlineInput
  */
 export type EditorCommand =
   | ReplaceTextRunPlainTextCommand

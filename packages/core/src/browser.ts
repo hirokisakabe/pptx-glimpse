@@ -91,7 +91,8 @@ export type ResvgWasmInput = ArrayBuffer | Uint8Array | Response;
  * scanning are unavailable in browsers; provide font bytes through `options.fonts`.
  *
  * @param input PPTX binary data.
- * @param options Conversion options. PNG output always uses path-based text.
+ * @param options Conversion options. PNG conversion requests path-based text; unresolved fonts
+ * can still fall back to native SVG text before rasterization.
  * @returns Converted slides, diagnostics, and support coverage.
  * @throws An error if resvg WebAssembly has not been initialized.
  */

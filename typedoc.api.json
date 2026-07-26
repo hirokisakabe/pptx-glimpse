@@ -31,5 +31,5 @@
   },
   "treatValidationWarningsAsErrors": true,
   "requiredToBeDocumented": ["Function", "Class", "Interface", "TypeAlias", "Variable"],
-  "intentionallyNotExported": ["PptxTextBodyProseMirrorDocJson", "SystemFontSetupLoader"]
+  "intentionallyNotExported": ["SystemFontSetupLoader"]
 }

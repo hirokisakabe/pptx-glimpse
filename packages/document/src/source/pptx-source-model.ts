@@ -94,6 +94,7 @@ export interface PptxSourceModelTextRunEdit {
   readonly text: string;
 }
 
+/** @inline */
 export type EditableTextRunProperty =
   | "bold"
   | "italic"
@@ -102,6 +103,7 @@ export type EditableTextRunProperty =
   | "color"
   | "typeface";
 
+/** @inline */
 export interface EditableTextRunProperties {
   readonly bold?: boolean;
   readonly italic?: boolean;
@@ -118,8 +120,10 @@ export interface PptxSourceModelTextRunPropertiesEdit {
   readonly clear?: readonly EditableTextRunProperty[];
 }
 
+/** @inline */
 export type EditableParagraphProperty = "align" | "level" | "bullet";
 
+/** @inline */
 export interface EditableParagraphProperties {
   readonly align?: SourceParagraphProperties["align"];
   readonly level?: SourceParagraphProperties["level"];
@@ -148,10 +152,12 @@ export interface PptxSourceModelShapeTransformEdit {
   readonly height: Emu;
 }
 
+/** @inline */
 export type EditableShapeFill =
   | { readonly kind: "none" }
   | { readonly kind: "solid"; readonly color: { readonly kind: "srgb"; readonly hex: string } };
 
+/** @inline */
 export interface EditableShapeOutline {
   readonly width?: Emu;
   readonly fill?: EditableShapeFill;
@@ -185,6 +191,7 @@ export interface PptxSourceModelAddShapeEdit {
   readonly xml: string;
 }
 
+/** @inline */
 export type ConnectorPresetGeometry = "straightConnector1" | "bentConnector3" | "curvedConnector3";
 
 export interface PptxSourceModelAddConnectorEdit {

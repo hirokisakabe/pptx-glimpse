@@ -17,6 +17,7 @@ export default defineConfig({
     globals: true,
     include: [
       "packages/*/src/**/*.test.ts",
+      "scripts/**/*.test.ts",
       "e2e/**/*.test.ts",
       "vrt/editor-validity/editor-validity.test.ts",
     ],

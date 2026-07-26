@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "sync:samples": "node scripts/sync-samples.mjs",
-    "generate:api-reference": "cd .. && pnpm run docs:api:generate",
+    "generate:api-reference": "npm --prefix .. run docs:api:generate",
     "predev": "npm run sync:samples && npm run generate:api-reference",
     "dev": "next dev",
     "prebuild": "npm run sync:samples && npm run generate:api-reference",

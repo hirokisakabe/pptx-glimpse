@@ -22,7 +22,7 @@ export default async function ApiReferencePage(
   const { default: MDXContent, toc, metadata, sourceCode } = await importPage(params.mdxPath);
 
   return (
-    <Wrapper toc={toc} metadata={metadata} sourceCode={sourceCode}>
+    <Wrapper toc={toc} metadata={{ ...metadata, filePath: "" }} sourceCode={sourceCode}>
       <MDXContent {...props} params={params} />
     </Wrapper>
   );

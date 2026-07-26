@@ -47,7 +47,7 @@ export interface SlideImage {
  * Complete result of a PNG conversion.
  */
 export interface PngConversionReport {
-  /** Successfully rasterized PNG slides in the requested order. */
+  /** Successfully rasterized PNG slides in presentation order, filtered by `options.slides`. */
   readonly slides: readonly SlideImage[];
   /** Structured diagnostics collected while parsing and rendering the presentation. */
   readonly diagnostics: SvgConversionReport["diagnostics"];

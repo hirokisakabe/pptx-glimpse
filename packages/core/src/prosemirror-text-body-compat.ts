@@ -48,11 +48,13 @@ const pptxTextBodySchema = new Schema({
   },
 });
 
+/** @inline */
 export interface PptxTextBodyProseMirrorDocJson {
   readonly type: "doc";
   readonly content?: readonly PptxTextBodyProseMirrorParagraphJson[];
 }
 
+/** @inline */
 export interface PptxTextBodyProseMirrorParagraphJson {
   readonly type: "paragraph";
   readonly attrs?: {
@@ -63,12 +65,14 @@ export interface PptxTextBodyProseMirrorParagraphJson {
   readonly content?: readonly PptxTextBodyProseMirrorTextJson[];
 }
 
+/** @inline */
 interface PptxTextBodyProseMirrorTextJson {
   readonly type: "text";
   readonly text: string;
   readonly marks?: readonly PptxTextBodyProseMirrorRunMarkJson[];
 }
 
+/** @inline */
 interface PptxTextBodyProseMirrorRunMarkJson {
   readonly type: "pptxRun";
   /** Read-only source metadata. Formatting edits are not applied from ProseMirror JSON. */

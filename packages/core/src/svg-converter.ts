@@ -133,8 +133,9 @@ export interface ConvertOptions {
    *
    * Embedded fonts and native text may not render as expected when the SVG is
    * loaded through `<img src="...svg">` or sanitized. `convertPptxToPng` ignores
-   * this option and always renders with `"path"` output because resvg does not
-   * interpret the embedded `@font-face` rules used by SVG text output.
+   * this option and requests `"path"` output because resvg does not interpret the embedded
+   * `@font-face` rules used by SVG text output. If a requested font cannot be resolved,
+   * that text can still fall back to native SVG text.
    * The behavior is the same in Node.js and browsers.
    *
    * @defaultValue `"path"`
@@ -234,7 +235,7 @@ export interface SupportCoverage {
  * Complete result of an SVG conversion.
  */
 export interface SvgConversionReport {
-  /** Successfully rendered SVG slides in the requested order. */
+  /** Successfully rendered SVG slides in presentation order, filtered by `options.slides`. */
   readonly slides: readonly SlideSvg[];
   /** Structured diagnostics collected from every conversion layer. */
   readonly diagnostics: readonly ConversionDiagnostic[];

@@ -21,6 +21,7 @@ export const DOCS_NAVIGATION = [
     label: "Reference",
     items: [
       { href: "/docs/api", label: "High-level API" },
+      { href: "/docs/api-reference", label: "Generated API reference" },
       { href: "/docs/feature-support", label: "Feature support" },
       { href: "/docs/packages", label: "Choosing a package" },
     ],
