@@ -5,7 +5,12 @@ immutable operation, and write the returned `PptxSourceModel`:
 
 ```ts
 import { readFile, writeFile } from "node:fs/promises";
-import { readPptx, replaceTextRunPlainText, writePptx } from "@pptx-glimpse/document";
+import {
+  readPptx,
+  replaceTextRunPlainText,
+  updateChartData,
+  writePptx,
+} from "@pptx-glimpse/document";
 
 const source = readPptx(await readFile("input.pptx"));
 const firstTextRun = source.slides
@@ -27,8 +32,34 @@ await writeFile("edited.pptx", writePptx(edited));
 
 The public root API also provides focused operations for supported run and paragraph properties,
 paragraph text, shape transforms/fills/outlines, shape deletion, same-format image replacement,
-slide backgrounds, and slide topology. The authoring helpers can add new supported content to a
-slide loaded from an existing PPTX.
+existing Chart data, slide backgrounds, and slide topology. The authoring helpers can add new
+supported content to a slide loaded from an existing PPTX.
+
+`updateChartData(source, chartHandle, input)` replaces the names, shared category labels, and
+finite numeric values of an existing supported category Chart. It keeps the Chart type, series
+count, title, legend, axes, formatting, and unknown Chart XML, and updates the Chart formulas and
+caches together with its embedded workbook:
+
+```ts
+const chart = source.slides
+  .flatMap((slide) => slide.shapes)
+  .find((shape) => shape.kind === "chart" && shape.handle !== undefined);
+
+if (chart?.handle === undefined) throw new Error("No editable chart found");
+
+const edited = updateChartData(source, chart.handle, {
+  series: [
+    { name: "Revenue", categories: ["Apr", "May"], values: [40, 55] },
+    { name: "Cost", categories: ["Apr", "May"], values: [25, 30] },
+  ],
+});
+```
+
+This operation currently supports bar, line, pie, area, doughnut, and radar Charts with one
+internal embedded workbook, one worksheet, the existing series count, and the standard tabular
+layout (series names in row 1, categories in column A, values in columns B onward). It rejects
+linked/external data, missing or unresolved relationships, workbook formulas in the data range,
+and other data layouts before changing the model.
 
 ## Typed edits and raw preservation
 

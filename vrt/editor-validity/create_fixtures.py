@@ -17,7 +17,9 @@ import os
 import tempfile
 
 from pptx import Presentation
+from pptx.chart.data import CategoryChartData
 from pptx.dml.color import RGBColor
+from pptx.enum.chart import XL_CHART_TYPE
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import PP_ALIGN
 from pptx.oxml.xmlchemy import OxmlElement
@@ -243,6 +245,40 @@ def create_editor_validity_image_fixture(filename, image_base64):
     print(f"  Created: {filename}")
 
 
+def create_editor_validity_chart_fixture(filename, *, expected):
+    """Fixture pair for existing chart data update validity checks."""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    chart_data = CategoryChartData()
+    chart_data.categories = ["Apr", "May", "Jun"] if expected else ["Jan", "Feb"]
+    if expected:
+        chart_data.add_series("Edited revenue", (40, 55, 70))
+        chart_data.add_series("Edited cost", (25, 30, 42))
+    else:
+        chart_data.add_series("Revenue", (10, 20))
+        chart_data.add_series("Cost", (7, 12))
+
+    chart = slide.shapes.add_chart(
+        XL_CHART_TYPE.COLUMN_CLUSTERED,
+        Inches(0.8),
+        Inches(0.7),
+        Inches(8.4),
+        Inches(4.5),
+        chart_data,
+    ).chart
+    chart.has_title = True
+    chart.chart_title.text_frame.text = "LibreOffice editor validity: chart"
+    chart.has_legend = True
+    chart.value_axis.has_major_gridlines = True
+    chart.category_axis.has_title = True
+    chart.category_axis.axis_title.text_frame.text = "Month"
+    chart.value_axis.has_title = True
+    chart.value_axis.axis_title.text_frame.text = "Amount"
+
+    prs.save(os.path.join(OUTPUT_DIR, filename))
+    print(f"  Created: {filename}")
+
+
 def create_editor_validity_fixtures():
     """PPTX source / expected pairs consumed by editor-validity.test.ts."""
     create_editor_validity_text_fixture(
@@ -290,6 +326,14 @@ def create_editor_validity_fixtures():
     create_editor_validity_image_fixture(
         "editor-validity-image-expected.pptx",
         "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGNkYPjPAANMcBZeDgAx0wEH1s7nlgAAAABJRU5ErkJggg==",
+    )
+    create_editor_validity_chart_fixture(
+        "editor-validity-chart-source.pptx",
+        expected=False,
+    )
+    create_editor_validity_chart_fixture(
+        "editor-validity-chart-expected.pptx",
+        expected=True,
     )
 
 

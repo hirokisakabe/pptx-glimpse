@@ -36,6 +36,7 @@ import {
   type SourceShape,
   type SourceShapeNode,
   type SourceTextRun,
+  updateChartData,
   writePptx,
 } from "../../packages/document/src/index.js";
 import { createEditorSession } from "../../packages/editor/src/index.js";
@@ -175,6 +176,32 @@ const LO_EDITOR_VALIDITY_CASES = [
       const source = readPptx(input);
       const image = findFirstImage(source);
       return writePptx(replaceImageBytes(source, requireHandle(image.handle), BLUE_PNG));
+    },
+  },
+  {
+    name: "chart data update",
+    sourceFixture: "editor-validity-chart-source.pptx",
+    expectedFixture: "editor-validity-chart-expected.pptx",
+    createEditedPptx: (input: Uint8Array) => {
+      const source = readPptx(input);
+      const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+      if (chart?.handle === undefined) throw new Error("chart fixture has no editable chart");
+      return writePptx(
+        updateChartData(source, chart.handle, {
+          series: [
+            {
+              name: "Edited revenue",
+              categories: ["Apr", "May", "Jun"],
+              values: [40, 55, 70],
+            },
+            {
+              name: "Edited cost",
+              categories: ["Apr", "May", "Jun"],
+              values: [25, 30, 42],
+            },
+          ],
+        }),
+      );
     },
   },
 ] as const;
