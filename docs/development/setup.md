@@ -46,3 +46,6 @@ pnpm run test -- packages/renderer/src/utils/emu.test.ts
 
 See the root [`package.json`](../../package.json) for additional scripts, including visual
 regression testing, package verification, and fixture generation.
+
+See [API reference generation](./api-reference.md) before changing public API JSDoc or updating
+TypeDoc and its Markdown plugin.

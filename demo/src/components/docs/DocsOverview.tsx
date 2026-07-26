@@ -6,18 +6,21 @@ const paths = [
     title: "Render presentations",
     description: "Convert a complete deck or selected slides to SVG or PNG.",
     href: "/docs/rendering",
+    action: "Open guide",
   },
   {
     marker: "EDIT",
     title: "Build an editing flow",
     description: "Read, inspect, edit, rerender, undo, redo, and save through one session.",
     href: "/docs/editing",
+    action: "Open guide",
   },
   {
     marker: "API",
     title: "Look up an API",
-    description: "Find high-level exports, important types, runtime notes, and errors.",
+    description: "Find complete signatures, options, return values, runtime notes, and errors.",
     href: "/docs/api",
+    action: "Open reference",
   },
 ] as const;
 
@@ -44,7 +47,7 @@ export function DocsPathGrid() {
           <span>{path.marker}</span>
           <h3>{path.title}</h3>
           <p>{path.description}</p>
-          <strong>Open guide →</strong>
+          <strong>{path.action} →</strong>
         </Link>
       ))}
     </div>

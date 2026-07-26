@@ -16,4 +16,5 @@ vrt/editor-validity/diffs/
 vrt/editor-validity/fixtures/
 demo/.next/
 demo/node_modules/
+demo/src/content/
 __pycache__/

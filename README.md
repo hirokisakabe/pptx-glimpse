@@ -35,13 +35,20 @@ console.log(diagnostics);
 ```
 
 For SVG output, selected slides, browser font loading, and conversion reports, see
-[Rendering presentations](https://glimpse.pptx.app/docs/rendering).
+[Rendering presentations](https://glimpse.pptx.app/docs/rendering). Complete signatures and
+options are available for
+[`convertPptxToPng`](https://glimpse.pptx.app/docs/api/node/functions/convertPptxToPng),
+[`convertPptxToSvg`](https://glimpse.pptx.app/docs/api/node/functions/convertPptxToSvg), and
+[`ConvertOptions`](https://glimpse.pptx.app/docs/api/node/interfaces/ConvertOptions).
 
 ## Edit a presentation
 
 `createPptxEditorSession` provides an integrated read, edit, rerender, history, and save workflow.
 See [Editing presentations](https://glimpse.pptx.app/docs/editing) for supported commands and a
-complete example.
+complete example. The API reference documents
+[`createPptxEditorSession`](https://glimpse.pptx.app/docs/api/node/functions/createPptxEditorSession),
+[`PptxEditorSession`](https://glimpse.pptx.app/docs/api/node/classes/PptxEditorSession), and every
+[`EditorCommand`](https://glimpse.pptx.app/docs/api/node/type-aliases/EditorCommand) payload.
 
 ## Choose a package
 
@@ -65,7 +72,7 @@ dependency direction.
 - [Browser usage](https://glimpse.pptx.app/docs/browser)
 - [Node.js usage](https://glimpse.pptx.app/docs/nodejs)
 - [Feature support](https://glimpse.pptx.app/docs/feature-support)
-- [High-level API](https://glimpse.pptx.app/docs/api)
+- [API Reference](https://glimpse.pptx.app/docs/api)
 
 ## Contributing
 

@@ -89,7 +89,7 @@ const report = await convertPptxToPng(pptx, {
 
       <DocsPager
         previous={{ href: "/docs/browser", label: "Run in the browser" }}
-        next={{ href: "/docs/api", label: "High-level API" }}
+        next={{ href: "/docs/feature-support", label: "Feature support" }}
       />
     </DocsPage>
   );

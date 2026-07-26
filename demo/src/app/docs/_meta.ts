@@ -41,17 +41,17 @@ export default {
   nodejs: {
     title: "Node.js usage",
   },
-  "--reference": {
-    type: "separator",
-    title: "Reference",
-  },
-  api: {
-    title: "High-level API",
-  },
   "feature-support": {
     title: "Feature support",
   },
   packages: {
     title: "Choosing a package",
+  },
+  "--reference": {
+    type: "separator",
+    title: "API Reference",
+  },
+  api: {
+    display: "children",
   },
 };

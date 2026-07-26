@@ -70,6 +70,17 @@ test("navigates the documentation guides and public package references", async (
     await expect(page.locator(`a[href="${href}"]`)).toBeVisible();
   }
 
+  await page.goto(`${demoServer.url}/docs/api`);
+  await expect(page.getByRole("heading", { name: "API Reference", exact: true })).toBeVisible();
+  await expect(docsSidebar.getByText("Conversion", { exact: true })).toBeVisible();
+
+  await page.goto(`${demoServer.url}/docs/api/node/functions/convertPptxToSvg`);
+  await expect(page.getByRole("heading", { name: "Function: convertPptxToSvg()" })).toBeVisible();
+  await expect(page.locator("#convertoptions")).toBeVisible();
+
+  await page.goto(`${demoServer.url}/docs/api/browser/functions/initResvgWasm`);
+  await expect(page.getByRole("heading", { name: "Function: initResvgWasm()" })).toBeVisible();
+
   await page.setViewportSize({ width: 390, height: 720 });
   await expect(docsSidebar).toBeHidden();
   await expect(page.getByRole("button", { name: "Menu" })).toBeVisible();

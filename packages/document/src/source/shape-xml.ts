@@ -108,6 +108,7 @@ export type ShapeColorInput = TextBoxColorInput;
 
 export type ShapeGradientFillInput = TextBoxGradientFillInput;
 
+/** @inline */
 export type ShapeFillInput =
   | { readonly kind: "none" }
   | { readonly kind: "solid"; readonly color: ShapeColorInput }
@@ -122,6 +123,7 @@ export interface ShapeEffectsInput extends ShadowEffectsInput {
   readonly glow?: ShapeGlowInput;
 }
 
+/** @inline */
 export interface ShapeOutlineInput {
   readonly width?: Emu;
   readonly fill?: ShapeFillInput;
@@ -159,6 +161,7 @@ export interface TextBoxOutlineInput {
   readonly color?: TextBoxColorInput;
 }
 
+/** @inline */
 export interface TextBoxRunPropertiesInput {
   readonly fontFace?: string;
   readonly fontSize?: Pt;
@@ -176,6 +179,7 @@ export interface TextBoxRunPropertiesInput {
   readonly charSpacing?: number;
 }
 
+/** @inline */
 export interface TextBoxRunInput {
   readonly text: string;
   readonly properties?: TextBoxRunPropertiesInput;
@@ -183,6 +187,7 @@ export interface TextBoxRunInput {
   readonly hyperlink?: string;
 }
 
+/** @inline */
 export interface TextBoxParagraphPropertiesInput {
   readonly align?: SourceTextAlign;
   readonly marginLeft?: Emu;
@@ -191,11 +196,13 @@ export interface TextBoxParagraphPropertiesInput {
   readonly bullet?: TextBoxBulletInput;
 }
 
+/** @inline */
 export interface TextBoxParagraphInput {
   readonly runs: readonly TextBoxRunInput[];
   readonly properties?: TextBoxParagraphPropertiesInput;
 }
 
+/** @inline */
 export interface TextBoxBodyPropertiesInput {
   readonly anchor?: SourceVerticalAnchor;
   readonly marginLeft?: Emu;

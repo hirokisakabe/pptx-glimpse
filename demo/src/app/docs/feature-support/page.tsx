@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { DocsPage } from "@/components/docs/DocsPage";
+import { DocsPage, DocsPager } from "@/components/docs/DocsPage";
 
 export const metadata: Metadata = {
   title: "Feature support",
@@ -108,6 +108,11 @@ export default function FeatureSupportPage() {
         <h2>Not supported</h2>
         <FeatureTable rows={unsupportedRows} />
       </section>
+
+      <DocsPager
+        previous={{ href: "/docs/nodejs", label: "Run in Node.js" }}
+        next={{ href: "/docs/packages", label: "Choose a package" }}
+      />
     </DocsPage>
   );
 }

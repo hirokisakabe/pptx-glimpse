@@ -43,9 +43,15 @@ export interface SlideImage {
   height: number;
 }
 
+/**
+ * Complete result of a PNG conversion.
+ */
 export interface PngConversionReport {
+  /** Successfully rasterized PNG slides in presentation order, filtered by `options.slides`. */
   readonly slides: readonly SlideImage[];
+  /** Structured diagnostics collected while parsing and rendering the presentation. */
   readonly diagnostics: SvgConversionReport["diagnostics"];
+  /** Structural support coverage for the converted presentation. */
   readonly supportCoverage: SupportCoverage;
 }
 

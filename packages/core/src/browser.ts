@@ -1,3 +1,12 @@
+/**
+ * Public browser API for PPTX rendering, inspection, and editing.
+ *
+ * Browser callers provide font bytes directly and must initialize the PNG WebAssembly runtime
+ * before calling {@link convertPptxToPng}. SVG conversion and editing do not require that step.
+ *
+ * @module browser
+ */
+
 import { DEFAULT_OUTPUT_WIDTH } from "@pptx-glimpse/renderer";
 import {
   initResvgWasm as initRendererResvgWasm,
@@ -69,8 +78,23 @@ export {
 } from "@pptx-glimpse/renderer";
 export { getWarningEntries, getWarningSummary } from "@pptx-glimpse/renderer";
 
+/**
+ * Accepted WebAssembly inputs for browser PNG rasterization.
+ */
 export type ResvgWasmInput = ArrayBuffer | Uint8Array | Response;
 
+/**
+ * Convert PPTX bytes to PNG images in a browser.
+ *
+ * Call {@link initResvgWasm} once before using this function. Font directories and system font
+ * scanning are unavailable in browsers; provide font bytes through `options.fonts`.
+ *
+ * @param input PPTX binary data.
+ * @param options Conversion options. PNG conversion requests path-based text; unresolved fonts
+ * can still fall back to native SVG text before rasterization.
+ * @returns Converted slides, diagnostics, and support coverage.
+ * @throws An error if resvg WebAssembly has not been initialized.
+ */
 export async function convertPptxToPng(
   input: Uint8Array,
   options?: ConvertOptions,
@@ -101,6 +125,14 @@ export async function convertPptxToPng(
   };
 }
 
+/**
+ * Initialize browser PNG rasterization with resvg WebAssembly.
+ *
+ * SVG conversion and editor sessions do not require this initialization.
+ *
+ * @param wasm WebAssembly bytes or a fetched `Response`.
+ * @returns A promise that resolves after initialization.
+ */
 export function initResvgWasm(wasm: ResvgWasmInput): Promise<void> {
   return initRendererResvgWasm(wasm);
 }

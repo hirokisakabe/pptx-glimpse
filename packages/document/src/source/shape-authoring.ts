@@ -202,6 +202,7 @@ export interface AddSlideNumberInput extends UpdateShapeTransformInput {
   readonly name?: string;
 }
 
+/** @inline */
 export interface AddConnectorConnectionEndpointInput {
   readonly shapeHandle: SourceHandle;
   /** Unsigned index into the target shape's OOXML connection-site table. */
