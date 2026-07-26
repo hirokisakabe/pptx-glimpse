@@ -135,7 +135,7 @@ export interface SetShapeFillCommand {
   readonly fill: EditableShapeFill;
 }
 
-/** Replace a shape's outline properties. @inline */
+/** Update the specified outline properties while preserving omitted properties. @inline */
 export interface SetShapeOutlineCommand {
   readonly kind: "setShapeOutline";
   readonly handle: SourceHandle;

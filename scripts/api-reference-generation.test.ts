@@ -1,9 +1,65 @@
 import {
+  formatGeneratedEditorCommand,
   formatNavigationTitle,
+  inlineGeneratedConvertOptions,
   isValidNavigationPath,
   navigationPathParts,
   normalizeGeneratedMarkdownLinks,
 } from "./api-reference-generation.js";
+
+describe("generated page post-processing", () => {
+  it("expands ConvertOptions before the return value", () => {
+    const source = "# Function\n\n## Parameters\n\nInput.\n\n## Returns\n\nA report.\n";
+    const result = inlineGeneratedConvertOptions(source, "### width?\n\n`number`");
+
+    expect(result).toContain("## Parameters\n\nInput.\n\n## ConvertOptions");
+    expect(result).toContain("### width?\n\n`number`\n\n## Returns\n\nA report.");
+  });
+
+  it("renders EditorCommand members by kind and moves kind above the payload", () => {
+    const source = `# Type Alias: EditorCommand
+
+\`\`\`ts
+type EditorCommand = First | Second;
+\`\`\`
+
+## Union Members
+
+### Type Literal
+
+\`\`\`ts
+{
+  handle: SourceHandle;
+  kind: "moveShape";
+  offset: {
+    kind: "relative";
+  };
+}
+\`\`\`
+
+### Type Literal
+
+\`\`\`ts
+{
+  kind: "deleteShape";
+  handle: SourceHandle;
+}
+\`\`\`
+`;
+    const result = formatGeneratedEditorCommand(source);
+
+    expect(result).not.toContain("type EditorCommand =");
+    expect(result).toContain("## Commands");
+    expect(result).toContain(`### \`moveShape\`
+
+\`\`\`ts
+{
+  kind: "moveShape";
+  handle: SourceHandle;`);
+    expect(result).toContain('    kind: "relative";');
+    expect(result).toContain("### `deleteShape`");
+  });
+});
 
 describe("normalizeGeneratedMarkdownLinks", () => {
   it("normalizes generated page and index links while preserving anchors", () => {

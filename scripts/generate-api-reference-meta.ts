@@ -3,7 +3,9 @@ import { dirname, extname, join, posix, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  formatGeneratedEditorCommand,
   formatNavigationTitle,
+  inlineGeneratedConvertOptions,
   isValidNavigationPath,
   navigationPathParts,
   normalizeGeneratedMarkdownLinks,
@@ -193,54 +195,18 @@ async function inlineConvertOptions(): Promise<void> {
   for (const target of targets) {
     const path = join(contentDirectory, target);
     const source = await readFile(path, "utf8");
-    const returnsStart = source.indexOf("\n## Returns\n");
-    if (returnsStart === -1) {
-      throw new Error(`Unable to find generated Returns section in ${target}`);
+    try {
+      await writeFile(path, inlineGeneratedConvertOptions(source, properties));
+    } catch (error) {
+      throw new Error(`Unable to inline ConvertOptions in ${target}`, { cause: error });
     }
-    const expanded = `${source.slice(0, returnsStart)}
-
-## ConvertOptions
-
-The options accepted by this function are expanded here from
-[\`ConvertOptions\`](/docs/api/node/interfaces/ConvertOptions).
-
-${properties}
-${source.slice(returnsStart)}`;
-    await writeFile(path, expanded);
   }
 }
 
 async function formatEditorCommandPage(): Promise<void> {
   const path = join(contentDirectory, "node/type-aliases/EditorCommand.mdx");
   const source = await readFile(path, "utf8");
-  const signatureStart = source.indexOf("\n```ts\n");
-  const signatureEnd =
-    signatureStart === -1 ? -1 : source.indexOf("\n```\n", signatureStart + "\n```ts\n".length);
-  if (signatureStart === -1 || signatureEnd === -1) {
-    throw new Error("Unable to find generated EditorCommand union signature");
-  }
-
-  let commandCount = 0;
-  const withoutSignature =
-    source.slice(0, signatureStart) + source.slice(signatureEnd + "\n```\n".length);
-  const formatted = withoutSignature
-    .replace("## Union Members", "## Commands")
-    .replace(/### Type Literal\n\n```ts\n([\s\S]*?)```/g, (_match, declaration: string) => {
-      const kindMatch = declaration.match(/^  kind: "([^"]+)";$/m);
-      if (kindMatch === null) {
-        throw new Error("Unable to find a top-level kind in an EditorCommand union member");
-      }
-      const [kindLine, kind] = kindMatch;
-      const declarationWithoutKind = declaration.replace(`${kindLine}\n`, "");
-      const orderedDeclaration = declarationWithoutKind.replace("{\n", `{\n${kindLine}\n`);
-      commandCount += 1;
-      return `### \`${kind}\`\n\n\`\`\`ts\n${orderedDeclaration}\`\`\``;
-    });
-
-  if (commandCount === 0) {
-    throw new Error("No EditorCommand union members were formatted");
-  }
-  await writeFile(path, formatted);
+  await writeFile(path, formatGeneratedEditorCommand(source));
 }
 
 async function normalizeGeneratedLinks(directory: string): Promise<void> {

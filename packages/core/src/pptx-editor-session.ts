@@ -158,7 +158,9 @@ export interface PptxEditorShapeInfo {
   readonly editableImageReplacement?: PptxEditorImageReplacementInfo;
 }
 
+/** SVG rendering result for one slide in an editor session. */
 export interface PptxEditorSlideSvg extends SlideSvg {
+  /** Stable source handle for the slide, or `undefined` when no handle is available. */
   readonly handle?: SourceHandle;
 }
 
