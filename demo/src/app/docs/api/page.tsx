@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { DocsPage, DocsPager } from "@/components/docs/DocsPage";
 
 export const metadata: Metadata = {
@@ -39,6 +40,12 @@ export default function ApiPage() {
       filePath="src/app/docs/api/page.tsx"
       toc={toc}
     >
+      <p>
+        For complete TypeScript signatures, options, return values, and related types, open the{" "}
+        <Link href="/docs/api-reference">generated API reference</Link>. It is generated from the
+        public Node.js and browser entry points and their JSDoc.
+      </p>
+
       <section id="conversion">
         <h2>Conversion</h2>
         <dl className="docs-api-list">

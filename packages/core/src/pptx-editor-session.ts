@@ -74,6 +74,9 @@ const IMAGE_ACCEPT_BY_CONTENT_TYPE: Readonly<Record<string, string>> = {
   "image/webp": "image/webp,.webp",
 };
 
+/**
+ * Undo/redo availability and stack depth after the latest editor operation.
+ */
 export interface PptxEditorHistoryState {
   readonly canUndo: boolean;
   readonly canRedo: boolean;
@@ -81,15 +84,26 @@ export interface PptxEditorHistoryState {
   readonly redoDepth: number;
 }
 
+/**
+ * Current shape selection.
+ */
 export interface PptxEditorSelectionInfo {
   readonly shapeHandle: SourceHandle;
 }
 
+/**
+ * Legacy plain-text run view with a required editable source handle.
+ */
 export interface PptxEditorTextRunInfo {
   readonly text: string;
   readonly handle: SourceHandle;
 }
 
+/**
+ * Legacy ProseMirror-compatible text body representation.
+ *
+ * @deprecated Use {@link PptxEditorTextBodyView} and {@link PptxEditorSession.applyAll}.
+ */
 export interface PptxEditorTextBodyInfo {
   /**
    * @deprecated Use `PptxEditorShapeInfo.textBody` and `applyAll()` with editor commands.
@@ -98,24 +112,36 @@ export interface PptxEditorTextBodyInfo {
   readonly docJson: PptxTextBodyProseMirrorDocJson;
 }
 
+/**
+ * Editable text body properties and ordered paragraphs for one shape.
+ */
 export interface PptxEditorTextBodyView {
   readonly handle?: SourceHandle;
   readonly properties?: SourceTextBodyProperties;
   readonly paragraphs: readonly PptxEditorTextParagraphView[];
 }
 
+/**
+ * Editable paragraph properties and ordered text runs.
+ */
 export interface PptxEditorTextParagraphView {
   readonly handle?: SourceHandle;
   readonly properties?: SourceParagraphProperties;
   readonly runs: readonly PptxEditorTextRunView[];
 }
 
+/**
+ * Text and editable run properties for one run.
+ */
 export interface PptxEditorTextRunView {
   readonly handle?: SourceHandle;
   readonly properties?: SourceRunProperties;
   readonly text: string;
 }
 
+/**
+ * Media metadata needed to validate and replace an image.
+ */
 export interface PptxEditorImageReplacementInfo {
   readonly contentType: string;
   readonly accept: string;
@@ -123,6 +149,9 @@ export interface PptxEditorImageReplacementInfo {
   readonly sharedReferenceCount: number;
 }
 
+/**
+ * Shape bounds in CSS pixels at 96 DPI.
+ */
 export interface PptxEditorShapeBoundsPx {
   readonly x: number;
   readonly y: number;
@@ -130,6 +159,11 @@ export interface PptxEditorShapeBoundsPx {
   readonly height: number;
 }
 
+/**
+ * Editable capabilities and source handles exposed for one slide shape.
+ *
+ * Optional flags indicate that the corresponding edit is unsupported for the shape.
+ */
 export interface PptxEditorShapeInfo {
   readonly id: string;
   readonly kind: SourceShapeNode["kind"];
@@ -152,6 +186,9 @@ export interface PptxEditorSlideSvg extends SlideSvg {
   readonly handle?: SourceHandle;
 }
 
+/**
+ * Pixel bounds and initial content for {@link PptxEditorSession.addTextBox}.
+ */
 export interface PptxEditorAddTextBoxOptions {
   readonly x?: number;
   readonly y?: number;
@@ -161,6 +198,9 @@ export interface PptxEditorAddTextBoxOptions {
   readonly name?: string;
 }
 
+/**
+ * Pixel bounds and optional name for {@link PptxEditorSession.addConnector}.
+ */
 export interface PptxEditorAddConnectorOptions {
   readonly x?: number;
   readonly y?: number;
@@ -169,6 +209,12 @@ export interface PptxEditorAddConnectorOptions {
   readonly name?: string;
 }
 
+/**
+ * Rendered editor state returned after a successful operation.
+ *
+ * `warnings` reports successful edits with important side effects, such as replacing a media
+ * part shared by multiple shapes. Warnings do not indicate an operation failure.
+ */
 export interface PptxEditorSlidesResponse {
   readonly slides: readonly PptxEditorSlideSvg[];
   readonly history: PptxEditorHistoryState;
@@ -176,20 +222,37 @@ export interface PptxEditorSlidesResponse {
   readonly warnings?: readonly EditorCommandWarning[];
 }
 
+/**
+ * Serialized PPTX bytes and current history state returned by a successful save.
+ */
 export interface PptxEditorSaveResponse {
   readonly ok: true;
   readonly pptx: Uint8Array;
   readonly history: PptxEditorHistoryState;
 }
 
+/**
+ * Conversion options applied when the editor renders its complete presentation.
+ *
+ * Slide selection is managed internally and therefore cannot be supplied.
+ */
 export type PptxEditorRenderOptions = Omit<ConvertOptions, "slides">;
 
+/**
+ * Stable failure codes thrown by the high-level editor.
+ */
 export type PptxEditorErrorCode =
   | EditorOperationErrorCode
   | "read-failed"
   | "render-failed"
   | "write-failed";
 
+/**
+ * Expected high-level editor failure.
+ *
+ * Use {@link isPptxEditorError} to narrow caught values and branch on {@link code}. Successful
+ * commands may still return non-fatal warnings in {@link PptxEditorSlidesResponse.warnings}.
+ */
 export class PptxEditorError extends Error {
   readonly code: PptxEditorErrorCode;
   declare readonly cause?: unknown;
@@ -201,6 +264,12 @@ export class PptxEditorError extends Error {
   }
 }
 
+/**
+ * Test whether an unknown caught value follows the {@link PptxEditorError} contract.
+ *
+ * @param value Caught value to inspect.
+ * @returns `true` when the value contains a known editor error code.
+ */
 export function isPptxEditorError(value: unknown): value is PptxEditorError {
   return (
     isRecord(value) &&
@@ -234,6 +303,13 @@ export function configurePptxEditorSessionAffectedSlidesResolver(
   defaultAffectedSlidesResolver = resolver;
 }
 
+/**
+ * Headless read/edit/render/write session for one PPTX presentation.
+ *
+ * Create sessions with {@link createPptxEditorSession}. Mutating methods update history and
+ * rerender affected slides. Expected operation failures throw {@link PptxEditorError}; successful
+ * edits can return warnings through {@link PptxEditorSlidesResponse}.
+ */
 export class PptxEditorSession {
   #session: ReturnType<typeof createEditorSession>;
   #slides: readonly PptxEditorSlideSvg[] = [];
@@ -248,6 +324,14 @@ export class PptxEditorSession {
     this.#resolveAffectedSlides = defaultAffectedSlidesResolver;
   }
 
+  /**
+   * Parse PPTX bytes, create a session, and render its initial slides.
+   *
+   * @param input PPTX binary data.
+   * @param renderOptions Options reused for editor SVG rendering.
+   * @returns An initialized editor session.
+   * @throws {@link PptxEditorError} with `read-failed` or `render-failed`.
+   */
   static async create(
     input: Uint8Array,
     renderOptions: PptxEditorRenderOptions = {},
@@ -263,14 +347,17 @@ export class PptxEditorSession {
     return editor;
   }
 
+  /** Current immutable PPTX source model after all applied history entries. */
   get document(): PptxSourceModel {
     return this.#session.document;
   }
 
+  /** Latest rendered SVG result for every slide. */
   get slides(): readonly PptxEditorSlideSvg[] {
     return this.#slides;
   }
 
+  /** Current undo/redo availability and stack depths. */
   get history(): PptxEditorHistoryState {
     return {
       canUndo: this.#session.canUndo,
@@ -280,10 +367,17 @@ export class PptxEditorSession {
     };
   }
 
+  /** Currently selected shape, or `undefined` when no shape is selected. */
   get selection(): PptxEditorSelectionInfo | undefined {
     return this.#session.selection;
   }
 
+  /**
+   * Build a snapshot of the current rendered, history, selection, and warning state.
+   *
+   * @param warnings Optional warnings emitted by the operation that produced the state.
+   * @returns The current public editor response.
+   */
   response(warnings?: readonly EditorCommandWarning[]): PptxEditorSlidesResponse {
     return {
       slides: this.#slides,
@@ -293,6 +387,12 @@ export class PptxEditorSession {
     };
   }
 
+  /**
+   * Inspect editable shape capabilities for one slide.
+   *
+   * @param slideNumber PowerPoint-style 1-based slide number.
+   * @returns Shape information, or an empty array when the slide does not exist.
+   */
   shapes(slideNumber: number): readonly PptxEditorShapeInfo[] {
     const slide = this.#session.document.slides[slideNumber - 1];
     if (slide === undefined) return [];
@@ -301,6 +401,12 @@ export class PptxEditorSession {
     );
   }
 
+  /**
+   * Rerender all current slides using the session render options.
+   *
+   * @returns The updated SVG slide cache.
+   * @throws {@link PptxEditorError} with `render-failed`.
+   */
   async renderCurrentSlides(): Promise<readonly PptxEditorSlideSvg[]> {
     return this.#renderSlides();
   }
@@ -372,10 +478,24 @@ export class PptxEditorSession {
     return this.#slides;
   }
 
+  /**
+   * Apply one {@link EditorCommand} as one atomic history entry.
+   *
+   * @param command Discriminated command containing its `kind` and payload.
+   * @returns Updated slides, history, selection, and any non-fatal warnings.
+   * @throws {@link PptxEditorError} with `invalid-command` or `render-failed`.
+   */
   async apply(command: EditorCommand): Promise<PptxEditorSlidesResponse> {
     return this.applyAll([command]);
   }
 
+  /**
+   * Apply commands atomically as one history entry and rerender affected slides.
+   *
+   * @param commands Ordered editor commands. An empty array returns the current state unchanged.
+   * @returns Updated slides, history, selection, and any non-fatal warnings.
+   * @throws {@link PptxEditorError} with `invalid-command` or `render-failed`.
+   */
   async applyAll(commands: readonly EditorCommand[]): Promise<PptxEditorSlidesResponse> {
     const before = this.#session.document;
     const result = unwrapEditorOperation(this.#session.applyAll(commands));
@@ -384,6 +504,14 @@ export class PptxEditorSession {
     return this.response(result.warnings);
   }
 
+  /**
+   * Add and select a text box on one slide.
+   *
+   * @param slideNumber PowerPoint-style 1-based slide number.
+   * @param options Pixel bounds, initial text, and optional shape name.
+   * @returns Updated editor state.
+   * @throws {@link PptxEditorError} with `invalid-command` or `render-failed`.
+   */
   async addTextBox(
     slideNumber = 1,
     options: PptxEditorAddTextBoxOptions = {},
@@ -414,6 +542,14 @@ export class PptxEditorSession {
     return this.response(result.warnings);
   }
 
+  /**
+   * Add and select a straight connector on one slide.
+   *
+   * @param slideNumber PowerPoint-style 1-based slide number.
+   * @param options Pixel bounds and optional shape name.
+   * @returns Updated editor state.
+   * @throws {@link PptxEditorError} with `invalid-command` or `render-failed`.
+   */
   async addConnector(
     slideNumber = 1,
     options: PptxEditorAddConnectorOptions = {},
@@ -447,6 +583,13 @@ export class PptxEditorSession {
     return this.response(result.warnings);
   }
 
+  /**
+   * Delete a shape by stable source handle.
+   *
+   * @param handle Handle returned by {@link shapes}.
+   * @returns Updated editor state.
+   * @throws {@link PptxEditorError} with `invalid-command` or `render-failed`.
+   */
   async deleteShape(handle: SourceHandle): Promise<PptxEditorSlidesResponse> {
     const before = this.#session.document;
     const result = unwrapEditorOperation(this.#session.apply({ kind: "deleteShape", handle }));
@@ -454,6 +597,13 @@ export class PptxEditorSession {
     return this.response(result.warnings);
   }
 
+  /**
+   * Delete the currently selected shape.
+   *
+   * @returns Updated editor state.
+   * @throws {@link PptxEditorError} with `invalid-selection`, `invalid-command`, or
+   * `render-failed`.
+   */
   async deleteSelectedShape(): Promise<PptxEditorSlidesResponse> {
     const selection = this.#session.selection;
     if (selection === undefined) {
@@ -477,11 +627,24 @@ export class PptxEditorSession {
     return this.applyAll(commands);
   }
 
+  /**
+   * Select a shape without changing the document or history.
+   *
+   * @param handle Handle returned by {@link shapes}.
+   * @returns Updated editor state.
+   * @throws {@link PptxEditorError} with `invalid-selection`.
+   */
   selectShape(handle: SourceHandle): PptxEditorSlidesResponse {
     unwrapEditorOperation(this.#session.selectShape(handle));
     return this.response();
   }
 
+  /**
+   * Restore the document before the latest history entry.
+   *
+   * @returns Updated editor state.
+   * @throws {@link PptxEditorError} with `empty-undo-stack` or `render-failed`.
+   */
   async undo(): Promise<PptxEditorSlidesResponse> {
     const before = this.#session.document;
     unwrapEditorOperation(this.#session.undo());
@@ -489,6 +652,12 @@ export class PptxEditorSession {
     return this.response();
   }
 
+  /**
+   * Reapply the latest undone history entry.
+   *
+   * @returns Updated editor state.
+   * @throws {@link PptxEditorError} with `empty-redo-stack` or `render-failed`.
+   */
   async redo(): Promise<PptxEditorSlidesResponse> {
     const before = this.#session.document;
     unwrapEditorOperation(this.#session.redo());
@@ -496,6 +665,12 @@ export class PptxEditorSession {
     return this.response();
   }
 
+  /**
+   * Serialize and validate the current document as PPTX bytes.
+   *
+   * @returns Serialized bytes and current history state.
+   * @throws {@link PptxEditorError} with `write-failed`.
+   */
   save(): PptxEditorSaveResponse {
     let output: Uint8Array;
     try {
@@ -532,6 +707,14 @@ export class PptxEditorSession {
   }
 }
 
+/**
+ * Parse PPTX bytes and create a rendered high-level editor session.
+ *
+ * @param input PPTX binary data.
+ * @param renderOptions Options reused for SVG rendering after edits.
+ * @returns An initialized editor session.
+ * @throws {@link PptxEditorError} with `read-failed` or `render-failed`.
+ */
 export function createPptxEditorSession(
   input: Uint8Array,
   renderOptions?: PptxEditorRenderOptions,

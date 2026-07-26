@@ -39,6 +39,16 @@ jobs:
       - name: Type check
         run: pnpm run typecheck
 
+      - name: Validate API reference
+        run: pnpm run docs:api:validate
+
+      - name: Build Nextra documentation
+        run: |
+          pnpm run build
+          cd demo
+          npm ci
+          npm run build
+
   test:
     runs-on: ubuntu-latest
     permissions:

@@ -57,42 +57,49 @@ import {
   updateShapeTransform,
 } from "@pptx-glimpse/document";
 
+/** Replace the text of one source run. @inline */
 export interface ReplaceTextRunPlainTextCommand {
   readonly kind: "replaceTextRunPlainText";
   readonly handle: SourceHandle;
   readonly text: string;
 }
 
+/** Replace all text in one source paragraph. @inline */
 export interface ReplaceParagraphPlainTextCommand {
   readonly kind: "replaceParagraphPlainText";
   readonly handle: SourceHandle;
   readonly text: string;
 }
 
+/** Set explicitly supplied text-run properties. @inline */
 export interface SetTextRunPropertiesCommand {
   readonly kind: "setTextRunProperties";
   readonly handle: SourceHandle;
   readonly properties: EditableTextRunProperties;
 }
 
+/** Clear selected text-run properties so inherited values apply. @inline */
 export interface ClearTextRunPropertiesCommand {
   readonly kind: "clearTextRunProperties";
   readonly handle: SourceHandle;
   readonly properties: readonly EditableTextRunProperty[];
 }
 
+/** Set explicitly supplied paragraph properties. @inline */
 export interface SetParagraphPropertiesCommand {
   readonly kind: "setParagraphProperties";
   readonly handle: SourceHandle;
   readonly properties: EditableParagraphProperties;
 }
 
+/** Clear selected paragraph properties so inherited values apply. @inline */
 export interface ClearParagraphPropertiesCommand {
   readonly kind: "clearParagraphProperties";
   readonly handle: SourceHandle;
   readonly properties: readonly EditableParagraphProperty[];
 }
 
+/** Move one shape without resizing it. @inline */
 export interface MoveShapeCommand {
   readonly kind: "moveShape";
   readonly handle: SourceHandle;
@@ -100,6 +107,7 @@ export interface MoveShapeCommand {
   readonly offsetY: Emu;
 }
 
+/** Resize one shape without moving its origin. @inline */
 export interface ResizeShapeCommand {
   readonly kind: "resizeShape";
   readonly handle: SourceHandle;
@@ -107,6 +115,7 @@ export interface ResizeShapeCommand {
   readonly height: Emu;
 }
 
+/** Replace a shape's position and size together. @inline */
 export interface SetShapeTransformCommand {
   readonly kind: "setShapeTransform";
   readonly handle: SourceHandle;
@@ -116,58 +125,95 @@ export interface SetShapeTransformCommand {
   readonly height: Emu;
 }
 
+/** Replace a shape's fill properties. @inline */
 export interface SetShapeFillCommand {
   readonly kind: "setShapeFill";
   readonly handle: SourceHandle;
   readonly fill: EditableShapeFill;
 }
 
+/** Replace a shape's outline properties. @inline */
 export interface SetShapeOutlineCommand {
   readonly kind: "setShapeOutline";
   readonly handle: SourceHandle;
   readonly outline: EditableShapeOutline;
 }
 
+/** Add a text box to one slide. @inline */
 export interface AddTextBoxCommand extends AddTextBoxInput {
   readonly kind: "addTextBox";
   readonly slideHandle: SourceHandle;
 }
 
+/** Add a connector to one slide. @inline */
 export interface AddConnectorCommand extends AddConnectorInput {
   readonly kind: "addConnector";
   readonly slideHandle: SourceHandle;
 }
 
+/** Delete one shape. @inline */
 export interface DeleteShapeCommand {
   readonly kind: "deleteShape";
   readonly handle: SourceHandle;
 }
 
+/** Replace the media bytes referenced by one image shape. @inline */
 export interface ReplaceImageCommand {
   readonly kind: "replaceImage";
   readonly handle: SourceHandle;
   readonly bytes: Uint8Array;
 }
 
+/** Add an empty slide based on an existing layout. @inline */
 export interface AddEmptySlideFromLayoutCommand extends AddEmptySlideFromLayoutInput {
   readonly kind: "addEmptySlideFromLayout";
 }
 
+/** Duplicate one slide immediately after its source. @inline */
 export interface DuplicateSlideCommand {
   readonly kind: "duplicateSlide";
   readonly handle: SourceHandle;
 }
 
+/** Move one slide to a new zero-based array position. @inline */
 export interface MoveSlideCommand extends MoveSlideInput {
   readonly kind: "moveSlide";
   readonly handle: SourceHandle;
 }
 
+/** Delete one slide. @inline */
 export interface DeleteSlideCommand {
   readonly kind: "deleteSlide";
   readonly handle: SourceHandle;
 }
 
+/**
+ * All commands accepted by the high-level `apply` and `applyAll` APIs.
+ *
+ * Each union member is discriminated by `kind`. TypeDoc expands the command interfaces here so
+ * consumers of the `pptx-glimpse` re-export can inspect every payload without importing the
+ * lower-level editor package.
+ *
+ * @inlineType ReplaceTextRunPlainTextCommand
+ * @inlineType ReplaceParagraphPlainTextCommand
+ * @inlineType SetTextRunPropertiesCommand
+ * @inlineType ClearTextRunPropertiesCommand
+ * @inlineType SetParagraphPropertiesCommand
+ * @inlineType ClearParagraphPropertiesCommand
+ * @inlineType MoveShapeCommand
+ * @inlineType ResizeShapeCommand
+ * @inlineType SetShapeTransformCommand
+ * @inlineType SetShapeFillCommand
+ * @inlineType SetShapeOutlineCommand
+ * @inlineType AddTextBoxCommand
+ * @inlineType AddConnectorCommand
+ * @inlineType DeleteShapeCommand
+ * @inlineType ReplaceImageCommand
+ * @inlineType AddEmptySlideFromLayoutCommand
+ * @inlineType DuplicateSlideCommand
+ * @inlineType MoveSlideCommand
+ * @inlineType DeleteSlideCommand
+ */
 export type EditorCommand =
   | ReplaceTextRunPlainTextCommand
   | ReplaceParagraphPlainTextCommand

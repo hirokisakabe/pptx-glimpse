@@ -48,6 +48,8 @@ export interface ConvertOptions {
    * PNG output rasterizes to this width while preserving the slide aspect
    * ratio. Defaults to 960. SVG output keeps the slide's native pixel size from
    * the PPTX slide dimensions and does not use this option.
+   *
+   * @defaultValue 960 for PNG conversion; ignored for SVG conversion.
    */
   width?: number;
   /**
@@ -66,6 +68,8 @@ export interface ConvertOptions {
    * report; this option only controls console output. Use `"warn"` to print
    * summaries, or `"debug"` to print individual warning entries as they are
    * recorded.
+   *
+   * @defaultValue `"off"`
    */
   logLevel?: LogLevel;
   /**
@@ -98,6 +102,11 @@ export interface ConvertOptions {
    *
    * This is useful in containers or serverless environments where bundled fonts
    * should be the only fonts used.
+   *
+   * Node.js supports both values. Browser conversion does not scan the filesystem, so browser
+   * callers should use `fonts` instead.
+   *
+   * @defaultValue false
    */
   skipSystemFonts?: boolean;
   /**
@@ -112,6 +121,8 @@ export interface ConvertOptions {
    * loaded through `<img src="...svg">` or sanitized. `convertPptxToPng` ignores
    * this option and always renders with `"path"` output because resvg does not
    * interpret the embedded `@font-face` rules used by SVG text output.
+   *
+   * @defaultValue `"path"`
    */
   textOutput?: "path" | "text";
 }
@@ -130,17 +141,31 @@ export interface SlideSvg {
   svg: string;
 }
 
+/**
+ * A structured warning, error, or informational event collected during conversion.
+ */
 export interface ConversionDiagnostic {
+  /** Pipeline layer that emitted the diagnostic. */
   readonly source: "document" | "computed-view" | "renderer-adapter" | "renderer";
+  /** Diagnostic severity. Conversion can still return output when warnings are present. */
   readonly severity: "info" | "warning" | "error";
+  /** Stable machine-readable diagnostic identifier. */
   readonly code: string;
+  /** Human-readable explanation of the event. */
   readonly message: string;
+  /** Affected 1-based slide number, when the event belongs to one slide. */
   readonly slideNumber?: number;
+  /** Affected OOXML package part path, when known. */
   readonly sourcePartPath?: string;
+  /** Additional renderer-specific context, when available. */
   readonly context?: string;
+  /** Stable source-model handle for the affected element, when available. */
   readonly handle?: SourceHandle;
 }
 
+/**
+ * Element and warning totals used to summarize how much of the input was rendered.
+ */
 export interface SupportCoverageCounts {
   /**
    * Number of PPTX source/computed elements considered for rendering.
@@ -168,21 +193,37 @@ export interface SupportCoverageCounts {
   readonly warnings: number;
 }
 
+/**
+ * Support coverage totals for one slide.
+ */
 export interface SlideSupportCoverage extends SupportCoverageCounts {
+  /** Original 1-based slide number. */
   readonly slideNumber: number;
 }
 
+/**
+ * Presentation-level and per-slide support/renderability coverage.
+ *
+ * Coverage is structural and does not measure visual or pixel accuracy.
+ */
 export interface SupportCoverage {
   /**
    * Support/renderability coverage summary. This is not a visual-match or pixel accuracy metric.
    */
   readonly overall: SupportCoverageCounts;
+  /** Per-slide coverage in presentation order. */
   readonly slides: readonly SlideSupportCoverage[];
 }
 
+/**
+ * Complete result of an SVG conversion.
+ */
 export interface SvgConversionReport {
+  /** Successfully rendered SVG slides in the requested order. */
   readonly slides: readonly SlideSvg[];
+  /** Structured diagnostics collected from every conversion layer. */
   readonly diagnostics: readonly ConversionDiagnostic[];
+  /** Structural support coverage for the converted presentation. */
   readonly supportCoverage: SupportCoverage;
 }
 

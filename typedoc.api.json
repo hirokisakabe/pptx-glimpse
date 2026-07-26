@@ -1,0 +1,35 @@
+{
+  "$schema": "./node_modules/typedoc-plugin-markdown/typedoc-plugin-markdown.schema.json",
+  "entryPoints": ["./packages/core/src/index.ts", "./packages/core/src/browser.ts"],
+  "entryPointStrategy": "resolve",
+  "alwaysCreateEntryPointModule": true,
+  "tsconfig": "./tsconfig.json",
+  "plugin": ["typedoc-plugin-markdown"],
+  "out": "./demo/src/content",
+  "name": "pptx-glimpse API",
+  "readme": "none",
+  "mergeReadme": true,
+  "router": "member",
+  "entryFileName": "index",
+  "fileExtension": ".mdx",
+  "cleanOutputDir": true,
+  "excludeInternal": true,
+  "sanitizeComments": true,
+  "useHTMLAnchors": true,
+  "publicPath": "/docs/api-reference/",
+  "navigationJson": "./demo/src/content/navigation.json",
+  "navigation": {
+    "includeGroups": true,
+    "includeFolders": true
+  },
+  "validation": {
+    "invalidLink": true,
+    "invalidPath": true,
+    "notDocumented": true,
+    "notExported": true,
+    "rewrittenLink": true
+  },
+  "treatValidationWarningsAsErrors": true,
+  "requiredToBeDocumented": ["Function", "Class", "Interface", "TypeAlias", "Variable"],
+  "intentionallyNotExported": ["PptxTextBodyProseMirrorDocJson", "SystemFontSetupLoader"]
+}

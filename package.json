@@ -4,6 +4,8 @@
   "type": "module",
   "scripts": {
     "build": "pnpm --filter @pptx-glimpse/document build && pnpm --filter @pptx-glimpse/editor build && pnpm --filter @pptx-glimpse/renderer build && pnpm --filter pptx-glimpse build",
+    "docs:api:generate": "typedoc --options typedoc.api.json && tsx scripts/generate-api-reference-meta.ts",
+    "docs:api:validate": "typedoc --options typedoc.api.json --emit none",
     "audit:type-assertions": "tsx scripts/audit-type-assertions.ts",
     "bench": "vitest bench",
     "lint": "eslint packages/*/src/ vrt/ scripts/ bench/ e2e/",
@@ -58,6 +60,8 @@
     "sharp": "^0.35.0",
     "tsup": "^8.0.0",
     "tsx": "^4.21.0",
+    "typedoc": "0.28.20",
+    "typedoc-plugin-markdown": "4.12.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.55.0",
     "vitest": "^4.1.0",

@@ -48,6 +48,9 @@ export default {
   api: {
     title: "High-level API",
   },
+  "api-reference": {
+    title: "Generated API reference",
+  },
   "feature-support": {
     title: "Feature support",
   },

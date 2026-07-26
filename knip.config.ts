@@ -14,6 +14,7 @@ const config: KnipConfig = {
         "e2e/browser-standalone-editor.playwright.ts",
         "e2e/demo-browser-editor.playwright.ts",
       ],
+      ignoreDependencies: ["typedoc-plugin-markdown"],
     },
     "packages/core": {
       ignoreDependencies: ["@resvg/resvg-wasm"],
