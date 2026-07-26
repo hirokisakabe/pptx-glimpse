@@ -424,7 +424,23 @@ export interface SourceGroup {
   readonly kind: "group";
   readonly nodeId?: SourceNodeId;
   readonly name?: string;
+  /**
+   * Authored `off` / `ext` / `rot` / `flip*` of the group viewport in its immediate
+   * parent coordinate space. This is source-local data, never a slide-absolute or
+   * pixel-space transform.
+   */
   readonly transform?: SourceTransform;
+  /**
+   * Authored `chOff` / `chExt` defining the coordinate space used by immediate
+   * children. A complete transform is exposed only when all four values are present;
+   * malformed or missing source values remain preserved in the raw package and are
+   * handled as a renderer-boundary fallback.
+   *
+   * A child point is mapped to the parent coordinate space as
+   * `T(off) * R(ext center) * F(ext center) * S(ext / chExt) * T(-chOff)`.
+   * Nested groups repeat this contract recursively. Child transforms therefore remain
+   * local and must not be overwritten with composed or absolute values.
+   */
   readonly childTransform?: SourceTransform;
   readonly fill?: SourceFill;
   readonly effects?: SourceEffectList;

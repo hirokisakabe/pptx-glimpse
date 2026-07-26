@@ -739,6 +739,40 @@ describe("readPptx - typed shape detail (synthetic)", () => {
     });
   });
 
+  it("Keeps zero group child extents and does not synthesize incomplete child transforms", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<p:grpSp>` +
+          `<p:nvGrpSpPr><p:cNvPr id="60" name="Zero child extent"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
+          `<p:grpSpPr><a:xfrm><a:off x="10" y="20"/><a:ext cx="300" cy="400"/>` +
+          `<a:chOff x="5" y="6"/><a:chExt cx="0" cy="40"/></a:xfrm></p:grpSpPr>` +
+          `</p:grpSp>` +
+          `<p:grpSp>` +
+          `<p:nvGrpSpPr><p:cNvPr id="61" name="Missing child extent"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
+          `<p:grpSpPr><a:xfrm><a:off x="100" y="200"/><a:ext cx="300" cy="400"/>` +
+          `<a:chOff x="50" y="60"/></a:xfrm></p:grpSpPr>` +
+          `</p:grpSp>`,
+      ),
+    );
+
+    const [zeroExtent, missingExtent] = unsafeFixtureAssertion<[SourceGroup, SourceGroup]>(
+      source.slides[0].shapes,
+    );
+    expect(zeroExtent.childTransform).toEqual({
+      offsetX: 5,
+      offsetY: 6,
+      width: 0,
+      height: 40,
+    });
+    expect(missingExtent.transform).toEqual({
+      offsetX: 100,
+      offsetY: 200,
+      width: 300,
+      height: 400,
+    });
+    expect(missingExtent.childTransform).toBeUndefined();
+  });
+
   it("Read Strict OOXML chart graphicData URI as chart source node", () => {
     const source = readPptx(
       buildSyntheticPptx(

@@ -115,6 +115,8 @@ function renderGroup(group: GroupElement, context: RendererContext): RenderResul
   const chX = emuToPixels(group.childTransform.offsetX);
   const chY = emuToPixels(group.childTransform.offsetY);
 
+  // Invalid zero chExt axes are retained through the document/adapter layers. Keep
+  // rendering deterministic without inventing a replacement source extent.
   const scaleX = chW !== 0 ? w / chW : 1;
   const scaleY = chH !== 0 ? h / chH : 1;
 

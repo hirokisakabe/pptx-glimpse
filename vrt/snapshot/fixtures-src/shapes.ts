@@ -497,11 +497,63 @@ async function createGroupsFixture(): Promise<void> {
   const slide3 = wrapSlideXml(`${rotFlipHGroup}${rotFlipVGroup}${flipHVGroup}`);
   const rels3 = slideRelsXml();
 
+  // Slide 4: Source-local child origin/scale and nested affine composition.
+  const nestedTransformGroup = `<p:grpSp>
+  <p:nvGrpSpPr><p:cNvPr id="70" name="Nested Transform Outer"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+  <p:grpSpPr>
+    <a:xfrm rot="${20 * 60000}" flipH="1">
+      <a:off x="1200000" y="700000"/>
+      <a:ext cx="6500000" cy="3500000"/>
+      <a:chOff x="500000" y="250000"/>
+      <a:chExt cx="3250000" cy="1750000"/>
+    </a:xfrm>
+  </p:grpSpPr>
+  ${shapeXml(71, "Outer Coordinate Marker", {
+    preset: "roundRect",
+    x: 500000,
+    y: 250000,
+    cx: 900000,
+    cy: 500000,
+    fillXml: solidFillXml("4472C4"),
+    textBodyXml: textBodyXmlHelper("outer", { fontSize: 10, color: "FFFFFF" }),
+  })}
+  <p:grpSp>
+    <p:nvGrpSpPr><p:cNvPr id="72" name="Nested Transform Inner"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+    <p:grpSpPr>
+      <a:xfrm rot="${-35 * 60000}" flipV="1">
+        <a:off x="1550000" y="600000"/>
+        <a:ext cx="1400000" cy="900000"/>
+        <a:chOff x="200000" y="100000"/>
+        <a:chExt cx="700000" cy="300000"/>
+      </a:xfrm>
+    </p:grpSpPr>
+    ${shapeXml(73, "Nested Rect", {
+      preset: "rect",
+      x: 200000,
+      y: 100000,
+      cx: 300000,
+      cy: 180000,
+      fillXml: solidFillXml("70AD47"),
+    })}
+    ${shapeXml(74, "Nested Arrow", {
+      preset: "rightArrow",
+      x: 540000,
+      y: 180000,
+      cx: 300000,
+      cy: 160000,
+      fillXml: solidFillXml("FFC000"),
+    })}
+  </p:grpSp>
+</p:grpSp>`;
+  const slide4 = wrapSlideXml(nestedTransformGroup);
+  const rels4 = slideRelsXml();
+
   const buffer = await buildPptx({
     slides: [
       { xml: slide1, rels: rels1 },
       { xml: slide2, rels: rels2 },
       { xml: slide3, rels: rels3 },
+      { xml: slide4, rels: rels4 },
     ],
   });
   savePptx(buffer, "groups.pptx");

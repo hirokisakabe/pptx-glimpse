@@ -89,6 +89,8 @@ export interface RendererAdapterDiagnostic {
   readonly severity: "warning";
   readonly code:
     | "pptx-computed-view-adapter.missing-transform"
+    | "pptx-computed-view-adapter.missing-group-child-transform"
+    | "pptx-computed-view-adapter.zero-group-child-extent"
     | "pptx-computed-view-adapter.raw-element-skipped"
     | "pptx-computed-view-adapter.raw-background-ignored"
     | "pptx-computed-view-adapter.raw-fill-ignored"
@@ -233,21 +235,11 @@ function adaptGroup(
   diagnostics: DiagnosticSink,
 ): GroupElement {
   const transform = adaptTransform(group.transform, slide, diagnostics, group.sourcePartPath);
+  const childTransform = adaptGroupChildTransform(group, transform, slide, diagnostics);
   return {
     type: "group",
     transform,
-    childTransform:
-      group.childTransform !== undefined
-        ? adaptTransform(group.childTransform, slide, diagnostics, group.sourcePartPath)
-        : {
-            offsetX: asEmu(0),
-            offsetY: asEmu(0),
-            extentWidth: transform.extentWidth,
-            extentHeight: transform.extentHeight,
-            rotation: 0,
-            flipH: false,
-            flipV: false,
-          },
+    childTransform,
     children: group.children.flatMap((child) => adaptElement(child, slide, diagnostics)),
     effects:
       group.effects !== undefined
@@ -255,6 +247,49 @@ function adaptGroup(
         : null,
     ...(group.sourceNode.name !== undefined ? { altText: group.sourceNode.name } : {}),
   };
+}
+
+function adaptGroupChildTransform(
+  group: ComputedGroupElement,
+  groupTransform: Transform,
+  slide: ComputedSlide,
+  diagnostics: DiagnosticSink,
+): Transform {
+  if (group.childTransform === undefined) {
+    pushAdapterWarning(
+      diagnostics,
+      "pptx-computed-view-adapter.missing-group-child-transform",
+      "Group chOff/chExt is incomplete; rendering uses chOff=(0,0) and chExt=group ext.",
+      slide,
+      group.sourcePartPath,
+    );
+    return {
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      extentWidth: groupTransform.extentWidth,
+      extentHeight: groupTransform.extentHeight,
+      rotation: 0,
+      flipH: false,
+      flipV: false,
+    };
+  }
+
+  const childTransform = adaptTransform(
+    group.childTransform,
+    slide,
+    diagnostics,
+    group.sourcePartPath,
+  );
+  if (childTransform.extentWidth === 0 || childTransform.extentHeight === 0) {
+    pushAdapterWarning(
+      diagnostics,
+      "pptx-computed-view-adapter.zero-group-child-extent",
+      "Group chExt contains a zero axis; rendering uses identity scale for that axis.",
+      slide,
+      group.sourcePartPath,
+    );
+  }
+  return childTransform;
 }
 
 function adaptChart(

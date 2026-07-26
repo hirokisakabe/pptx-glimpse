@@ -4233,6 +4233,58 @@ describe("writePptx - shape xfrm edit", () => {
     ).toThrow(/nested group shape editing is not supported/);
   });
 
+  it("Preserves nested group XML and child order across no-edit write and reread", () => {
+    const input = buildTextEditFixtureFromSlide(
+      `<p:grpSp>` +
+        `<p:nvGrpSpPr><p:cNvPr id="30" name="Outer Group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
+        `<p:grpSpPr><a:xfrm rot="5400000" flipH="1"><a:off x="10" y="20"/><a:ext cx="600" cy="400"/>` +
+        `<a:chOff x="50" y="60"/><a:chExt cx="300" cy="100"/></a:xfrm></p:grpSpPr>` +
+        `<p:sp><p:nvSpPr><p:cNvPr id="31" name="First Child"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+        `<p:spPr><a:xfrm><a:off x="51" y="61"/><a:ext cx="20" cy="30"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:sp>` +
+        `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="32" name="Second Child"/><p:cNvCxnSpPr/><p:nvPr/></p:nvCxnSpPr>` +
+        `<p:spPr><a:xfrm><a:off x="71" y="81"/><a:ext cx="40" cy="50"/></a:xfrm><a:prstGeom prst="straightConnector1"/></p:spPr></p:cxnSp>` +
+        `<p:grpSp>` +
+        `<p:nvGrpSpPr><p:cNvPr id="33" name="Third Nested Group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
+        `<p:grpSpPr><a:xfrm flipV="1"><a:off x="91" y="101"/><a:ext cx="120" cy="80"/>` +
+        `<a:chOff x="9" y="10"/><a:chExt cx="60" cy="20"/></a:xfrm></p:grpSpPr>` +
+        `</p:grpSp>` +
+        `</p:grpSp>`,
+    );
+    const originalSlideXml = decoder.decode(getEntry(input, "ppt/slides/slide1.xml"));
+
+    const output = writePptx(readPptx(input));
+    const writtenSlideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+    const reread = readPptx(output);
+    const outer = reread.slides[0].shapes[0];
+    if (outer?.kind !== "group") throw new Error("outer group not found");
+    const nested = outer.children[2];
+    if (nested?.kind !== "group") throw new Error("nested group not found");
+
+    expect(writtenSlideXml).toBe(originalSlideXml);
+    expect(outer.children.map((child) => (child.kind === "raw" ? undefined : child.name))).toEqual([
+      "First Child",
+      "Second Child",
+      "Third Nested Group",
+    ]);
+    expect(outer).toMatchObject({
+      transform: {
+        offsetX: 10,
+        offsetY: 20,
+        width: 600,
+        height: 400,
+        rotation: 5400000,
+        flipHorizontal: true,
+      },
+      childTransform: { offsetX: 50, offsetY: 60, width: 300, height: 100 },
+    });
+    expect(nested.childTransform).toEqual({
+      offsetX: 9,
+      offsetY: 10,
+      width: 60,
+      height: 20,
+    });
+  });
+
   it("Rejects AlternateContent fallback shape handles for this writer slice", () => {
     const source = readPptx(
       buildTextEditFixtureFromSlide(
