@@ -1,5 +1,5 @@
 export const DEV_EDITOR_TEXT_EDITING_SCRIPT = `    function openTextEditor(shape) {
-      if (!shape || !shape.handle || !shape.bounds || !shape.editableTextBody) return;
+      if (!shape || !shape.handle || !shape.bounds || !shape.textBody) return;
       if (activeTextEditor) return;
       if (dragState) {
         dragState = null;
@@ -16,7 +16,7 @@ export const DEV_EDITOR_TEXT_EDITING_SCRIPT = `    function openTextEditor(shape
       overlay.setAttribute("data-testid", "text-editor-overlay");
       overlay.dataset.shapeKey = selectedShapeKey || "";
       overlay.appendChild(createTextRunFormatToolbar());
-      overlay.appendChild(createTextEditorContent(shape.editableTextBody.docJson));
+      overlay.appendChild(createTextEditorContent(shape.textBody));
 
       var actions = document.createElement("div");
       actions.className = "text-editor-actions";
@@ -53,7 +53,7 @@ export const DEV_EDITOR_TEXT_EDITING_SCRIPT = `    function openTextEditor(shape
       activeTextEditor = {
         element: overlay,
         shape: cloneShape(shape),
-        originalDocJson: shape.editableTextBody.docJson,
+        originalTextBody: shape.textBody,
         selectedRunElement: null,
         committing: false,
         commitPromise: null
@@ -177,15 +177,11 @@ export const DEV_EDITOR_TEXT_EDITING_SCRIPT = `    function openTextEditor(shape
       var element = activeTextEditor.selectedRunElement;
       var paragraphIndex = Number(element.dataset.paragraphIndex || "-1");
       var runIndex = Number(element.dataset.runIndex || "-1");
-      var paragraph = (activeTextEditor.originalDocJson.content || [])[paragraphIndex];
-      var textNode = paragraph && (paragraph.content || [])[runIndex];
-      var mark = textNode && (textNode.marks || []).find(function (candidate) {
-        return candidate.type === "pptxRun";
-      });
-      var attrs = mark && mark.attrs ? mark.attrs : {};
+      var paragraph = (activeTextEditor.originalTextBody.paragraphs || [])[paragraphIndex];
+      var textRun = paragraph && (paragraph.runs || [])[runIndex];
       return {
-        handle: attrs.handle || null,
-        properties: attrs.properties || {}
+        handle: textRun && textRun.handle ? textRun.handle : null,
+        properties: textRun && textRun.properties ? textRun.properties : {}
       };
     }
 
@@ -316,14 +312,9 @@ export const DEV_EDITOR_TEXT_EDITING_SCRIPT = `    function openTextEditor(shape
     }
 
     function patchActiveTextRunProperties(command) {
-      var textNode = activeTextRunTextNode();
-      if (!textNode) return;
-      var mark = (textNode.marks || []).find(function (candidate) {
-        return candidate.type === "pptxRun";
-      });
-      if (!mark) return;
-      var attrs = mark.attrs || {};
-      var properties = { ...(attrs.properties || {}) };
+      var textRun = activeTextRun();
+      if (!textRun) return;
+      var properties = { ...(textRun.properties || {}) };
       if (command.kind === "setTextRunProperties") {
         Object.keys(command.properties || {}).forEach(function (property) {
           properties[property] = command.properties[property];
@@ -334,19 +325,18 @@ export const DEV_EDITOR_TEXT_EDITING_SCRIPT = `    function openTextEditor(shape
           delete properties[property];
         });
       }
-      attrs.properties = Object.keys(properties).length > 0 ? properties : null;
-      mark.attrs = attrs;
+      textRun.properties = Object.keys(properties).length > 0 ? properties : undefined;
       refreshTextRunFormatToolbar();
       syncActiveTextRunStyle(properties);
     }
 
-    function activeTextRunTextNode() {
+    function activeTextRun() {
       if (!activeTextEditor || !activeTextEditor.selectedRunElement) return null;
       var element = activeTextEditor.selectedRunElement;
       var paragraphIndex = Number(element.dataset.paragraphIndex || "-1");
       var runIndex = Number(element.dataset.runIndex || "-1");
-      var paragraph = (activeTextEditor.originalDocJson.content || [])[paragraphIndex];
-      return paragraph && (paragraph.content || [])[runIndex] ? paragraph.content[runIndex] : null;
+      var paragraph = (activeTextEditor.originalTextBody.paragraphs || [])[paragraphIndex];
+      return paragraph && (paragraph.runs || [])[runIndex] ? paragraph.runs[runIndex] : null;
     }
 
     function syncActiveTextRunStyle(properties) {
@@ -365,22 +355,22 @@ export const DEV_EDITOR_TEXT_EDITING_SCRIPT = `    function openTextEditor(shape
           : "";
     }
 
-    function createTextEditorContent(docJson) {
+    function createTextEditorContent(textBody) {
       var body = document.createElement("div");
       body.setAttribute("data-testid", "text-editor-content");
-      (docJson.content || []).forEach(function (paragraph, paragraphIndex) {
+      (textBody.paragraphs || []).forEach(function (paragraph, paragraphIndex) {
         var paragraphElement = document.createElement("div");
         paragraphElement.className = "text-editor-paragraph";
         paragraphElement.dataset.paragraphIndex = String(paragraphIndex);
-        (paragraph.content || []).forEach(function (textNode, runIndex) {
+        (paragraph.runs || []).forEach(function (textRun, runIndex) {
           var run = document.createElement("span");
           run.className = "text-editor-run";
           run.setAttribute("data-testid", "text-editor-run");
           run.contentEditable = "true";
           run.dataset.paragraphIndex = String(paragraphIndex);
           run.dataset.runIndex = String(runIndex);
-          run.textContent = textNode.text || "";
-          applyTextRunStyle(run, textNode);
+          run.textContent = textRun.text || "";
+          applyTextRunStyle(run, textRun);
           run.addEventListener("focus", function () {
             setActiveTextRunElement(run);
           });
@@ -406,11 +396,8 @@ export const DEV_EDITOR_TEXT_EDITING_SCRIPT = `    function openTextEditor(shape
       return body;
     }
 
-    function applyTextRunStyle(run, textNode) {
-      var mark = (textNode.marks || []).find(function (candidate) {
-        return candidate.type === "pptxRun";
-      });
-      var properties = mark && mark.attrs && mark.attrs.properties ? mark.attrs.properties : {};
+    function applyTextRunStyle(run, textRun) {
+      var properties = textRun.properties || {};
       if (properties.bold === true) run.style.fontWeight = "700";
       if (properties.italic === true) run.style.fontStyle = "italic";
       if (properties.underline === true) run.style.textDecoration = "underline";
@@ -459,53 +446,42 @@ export const DEV_EDITOR_TEXT_EDITING_SCRIPT = `    function openTextEditor(shape
       };
     }
 
-    function textEditorDocJson() {
-      if (!activeTextEditor) return null;
-      var original = activeTextEditor.originalDocJson;
-      var paragraphs = [];
-      (original.content || []).forEach(function (paragraph, paragraphIndex) {
+    function textEditorCommands() {
+      if (!activeTextEditor) return [];
+      var commands = [];
+      (activeTextEditor.originalTextBody.paragraphs || []).forEach(function (paragraph, paragraphIndex) {
         var paragraphElement = activeTextEditor.element.querySelector(
           '.text-editor-paragraph[data-paragraph-index="' + paragraphIndex + '"]'
         );
-        var content = [];
-        var emptyRunCount = 0;
-        (paragraph.content || []).forEach(function (textNode, runIndex) {
+        (paragraph.runs || []).forEach(function (textRun, runIndex) {
           var runElement = paragraphElement
             ? paragraphElement.querySelector('.text-editor-run[data-run-index="' + runIndex + '"]')
             : null;
-          var text = runElement ? runElement.textContent || "" : textNode.text || "";
-          if (text.length === 0) {
-            emptyRunCount += 1;
-            return;
+          var text = runElement ? runElement.textContent || "" : textRun.text || "";
+          if (textRun.handle && text !== textRun.text) {
+            commands.push({
+              kind: "replaceTextRunPlainText",
+              handle: textRun.handle,
+              text: text
+            });
           }
-          content.push({
-            type: "text",
-            text: text,
-            marks: textNode.marks || []
-          });
-        });
-        if (emptyRunCount > 0 && content.length > 0) {
-          throw new Error("Clearing individual runs in multi-run text is unsupported.");
-        }
-        paragraphs.push({
-          type: "paragraph",
-          attrs: paragraph.attrs || {},
-          content: content
         });
       });
-      return { type: "doc", content: paragraphs };
+      return commands;
     }
 
     function commitTextEditor() {
       if (!activeTextEditor) return Promise.resolve();
       var editor = activeTextEditor;
       if (editor.committing) return editor.commitPromise || Promise.resolve();
-      var docJson = textEditorDocJson();
-      if (!docJson) return Promise.resolve();
+      var commands = textEditorCommands();
+      if (commands.length === 0) {
+        closeTextEditor(editor);
+        return Promise.resolve();
+      }
       editor.committing = true;
-      editor.commitPromise = postJson("/api/editor/text-body", {
-        handle: editor.shape.handle,
-        docJson: docJson
+      editor.commitPromise = postJson("/api/editor/commands", {
+        commands: commands
       })
         .then(function (data) {
           closeTextEditor(editor);

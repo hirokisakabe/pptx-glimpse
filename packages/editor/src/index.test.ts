@@ -1,14 +1,17 @@
 import { Buffer } from "node:buffer";
 
 import {
+  addChart,
   asEmu,
   asPartPath,
   asPt,
   asRawSidecarId,
   asSourceNodeId,
+  createPptx,
   findShapeNodeBySourceHandle,
   type PptxSourceModel,
   readPptx,
+  type SourceChart,
   type SourceConnector,
   type SourceHandle,
   type SourceImage,
@@ -1332,6 +1335,66 @@ describe("EditorSession image replacement commands", () => {
   });
 });
 
+describe("EditorSession chart data commands", () => {
+  it("applies the convenience API and command with undo/redo history", () => {
+    const source = buildChartEditSource();
+    const chart = firstChart(source);
+    const session = createEditorSession(source);
+    const firstResult = session.updateChartData(chart, {
+      series: [
+        { name: "Edited 1", categories: ["A", "B", "C"], values: [3, 5, 8] },
+        { name: "Edited 2", categories: ["A", "B", "C"], values: [2, 4, 6] },
+      ],
+    });
+    expectApplied(firstResult);
+    expect(chartXml(session.document)).toContain("Edited 1");
+    expect(chartXml(session.document)).toContain("Sheet1!$B$2:$B$4");
+    expect(session.undoDepth).toBe(1);
+
+    expect(chartXml(expectHistory(session.undo()))).toContain("Original 1");
+    expect(chartXml(expectHistory(session.redo()))).toContain("Edited 1");
+
+    const commandResult = session.apply({
+      kind: "updateChartData",
+      handle: requireHandle(chart.handle),
+      series: [
+        { name: "Command 1", categories: ["X", "Y"], values: [10, 20] },
+        { name: "Command 2", categories: ["X", "Y"], values: [7, 12] },
+      ],
+    });
+    expectApplied(commandResult);
+    expect(chartXml(session.document)).toContain("Command 2");
+    expect(session.undoDepth).toBe(2);
+  });
+
+  it("rejects invalid chart updates without changing document, selection, or history", () => {
+    const source = buildChartEditSource();
+    const chart = firstChart(source);
+    const session = createEditorSession(source);
+    const handle = requireHandle(chart.handle);
+    expect(session.selectShape(handle)).toMatchObject({ ok: true });
+    const before = session.document;
+
+    const result = session.apply({
+      kind: "updateChartData",
+      handle,
+      series: [{ name: "Only one", categories: ["A"], values: [1] }],
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      code: "invalid-command",
+    });
+    expect(result.ok ? undefined : result.message).toContain(
+      "changing the existing series count is not supported",
+    );
+    expect(session.document).toBe(before);
+    expect(session.selection).toEqual({ shapeHandle: handle });
+    expect(session.undoDepth).toBe(0);
+    expect(session.redoDepth).toBe(0);
+  });
+});
+
 describe("EditorSession xfrm commands", () => {
   it("applies move and resize edits and persists them through write/read round-trip", async () => {
     const source = readPptx(await buildTextEditFixture());
@@ -2271,6 +2334,37 @@ function firstImage(source: PptxSourceModel): SourceImage {
   const image = source.slides[0].shapes.find((node): node is SourceImage => node.kind === "image");
   if (image === undefined) throw new Error("image not found");
   return image;
+}
+
+function firstChart(source: PptxSourceModel): SourceChart {
+  const chart = source.slides[0].shapes.find((node): node is SourceChart => node.kind === "chart");
+  if (chart === undefined) throw new Error("chart not found");
+  return chart;
+}
+
+function buildChartEditSource(): PptxSourceModel {
+  let source = createPptx();
+  const slideHandle = requireHandle(source.slides[0]?.handle);
+  source = addChart(source, slideHandle, {
+    chartType: "bar",
+    offsetX: asEmu(100),
+    offsetY: asEmu(200),
+    width: asEmu(3000),
+    height: asEmu(2000),
+    series: [
+      { name: "Original 1", categories: ["A", "B"], values: [1, 2] },
+      { name: "Original 2", categories: ["A", "B"], values: [3, 4] },
+    ],
+  });
+  return readPptx(writePptx(source));
+}
+
+function chartXml(source: PptxSourceModel): string {
+  const chartPart = source.packageGraph.rawParts?.find(
+    (part) => part.partPath === "ppt/charts/chart1.xml",
+  );
+  if (chartPart?.kind !== "binary") throw new Error("chart XML part not found");
+  return new TextDecoder().decode(chartPart.bytes);
 }
 
 function mediaBytes(source: PptxSourceModel, partPath: string): Uint8Array {

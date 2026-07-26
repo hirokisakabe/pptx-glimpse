@@ -63,6 +63,32 @@ describe("native chart writer renderer integration", () => {
     expect(result.slides).toHaveLength(1);
     for (const chartType of types) expect(result.slides[0]?.svg).toContain(`Native ${chartType}`);
   });
+
+  it("renders data updated through the existing-chart document operation", async () => {
+    let source = document.createPptx();
+    const handle = source.slides[0]?.handle;
+    if (handle === undefined) throw new Error("createPptx should create a slide");
+    source = document.addChart(source, handle, {
+      chartType: "bar",
+      offsetX: document.asEmu(500000),
+      offsetY: document.asEmu(500000),
+      width: document.asEmu(5000000),
+      height: document.asEmu(3000000),
+      series: [{ name: "Original", categories: ["Jan", "Feb"], values: [1, 2] }],
+    });
+    const existing = document.readPptx(document.writePptx(source));
+    const chart = existing.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    if (chart?.handle === undefined) throw new Error("existing chart should have a handle");
+    const before = await renderPptxSourceModelToSvg(existing);
+    const edited = document.updateChartData(existing, chart.handle, {
+      series: [{ name: "Updated", categories: ["Apr", "May"], values: [8, 3] }],
+    });
+    const after = await renderPptxSourceModelToSvg(edited);
+
+    expect(after.slides[0]?.svg).not.toBe(before.slides[0]?.svg);
+    expect(after.slides[0]?.svg).toContain("Apr");
+    expect(after.slides[0]?.svg).not.toContain("Jan");
+  });
 });
 
 const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>

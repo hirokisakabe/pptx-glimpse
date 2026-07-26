@@ -62,7 +62,8 @@ describe("PptxEditorSession", () => {
     });
     expect(shape.textBody?.paragraphs[0]?.handle).toBeDefined();
     expect(shape.textBody?.paragraphs[0]?.runs[0]?.handle).toBeDefined();
-    expect(shape.editableTextBody).toBeDefined();
+    const runHandle = shape.textBody?.paragraphs[0]?.runs[0]?.handle;
+    if (runHandle === undefined) throw new Error("text run handle not found");
 
     await editor.apply({
       kind: "setShapeTransform",
@@ -72,15 +73,10 @@ describe("PptxEditorSession", () => {
       width: asEmu(336 * 9525),
       height: asEmu(120 * 9525),
     });
-    await editor.applyTextBodyDocJson(shape.handle, {
-      type: "doc",
-      content: [
-        {
-          type: "paragraph",
-          attrs: {},
-          content: [{ type: "text", text: "Node edited", marks: [] }],
-        },
-      ],
+    await editor.apply({
+      kind: "replaceTextRunPlainText",
+      handle: runHandle,
+      text: "Node edited",
     });
 
     expect(editor.history.undoDepth).toBe(2);
@@ -296,18 +292,16 @@ describe("PptxEditorSession", () => {
       bounds: { x: 96, y: 96, width: 288, height: 72 },
       editableDelete: true,
     });
-    expect(addedShape.editableTextBody).toBeDefined();
+    const addedRunHandle = addedShape.textBody?.paragraphs[0]?.runs[0]?.handle;
+    if (addedRunHandle === undefined) throw new Error("added text run handle not found");
 
-    await editor.applyTextBodyDocJson(addedShape.handle, {
-      type: "doc",
-      content: [
-        {
-          type: "paragraph",
-          attrs: {},
-          content: [{ type: "text", text: "Added edited", marks: [] }],
-        },
-      ],
-    });
+    await editor.applyAll([
+      {
+        kind: "replaceTextRunPlainText",
+        handle: addedRunHandle,
+        text: "Added edited",
+      },
+    ]);
     await editor.apply({
       kind: "setShapeTransform",
       handle: addedShape.handle,
