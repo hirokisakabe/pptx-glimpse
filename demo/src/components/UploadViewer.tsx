@@ -155,30 +155,17 @@ export function UploadViewer() {
       const loaded = presentation.loaded;
       return (
         <>
-          <div className="editor-replacement-shell" aria-busy={isReplacing}>
-            <div inert={isReplacing ? true : undefined}>
-              <EditorWorkspace
-                key={presentation.requestId}
-                editor={loaded.editor}
-                fileName={loaded.fileName}
-                fontFileCount={fontFiles.length}
-                onAddFonts={() => fontInputRef.current?.click()}
-                onOpenPptx={() => pptxInputRef.current?.click()}
-                onOpenSample={() => void handleSample(SAMPLE_PPTX_FILES[0], "edit")}
-              />
-            </div>
-            {errorMessage === "" ? null : (
-              <div className="replacement-error" role="alert">
-                {errorMessage}
-              </div>
-            )}
-            {isReplacing ? (
-              <div className="replacement-loading" data-testid="replacement-loading">
-                <div className="loading-mark" aria-hidden="true" />
-                <span>Opening presentation...</span>
-              </div>
-            ) : null}
-          </div>
+          <ReplacementShell errorMessage={errorMessage} isReplacing={isReplacing}>
+            <EditorWorkspace
+              key={presentation.requestId}
+              editor={loaded.editor}
+              fileName={loaded.fileName}
+              fontFileCount={fontFiles.length}
+              onAddFonts={() => fontInputRef.current?.click()}
+              onOpenPptx={() => pptxInputRef.current?.click()}
+              onOpenSample={() => void handleSample(SAMPLE_PPTX_FILES[0], "edit")}
+            />
+          </ReplacementShell>
           <input
             ref={pptxInputRef}
             data-testid="pptx-input"
@@ -201,7 +188,7 @@ export function UploadViewer() {
     }
 
     return (
-      <>
+      <ReplacementShell errorMessage={errorMessage} isReplacing={isReplacing}>
         <div className="viewer-toolbar">
           <div className="viewer-summary" data-testid="viewer-status">
             <span>{slides.length} slides rendered</span>
@@ -234,7 +221,7 @@ export function UploadViewer() {
           onFontFiles={handleFontFiles}
           onSample={handleSample}
         />
-      </>
+      </ReplacementShell>
     );
   }
 
@@ -245,5 +232,32 @@ export function UploadViewer() {
       onFontFiles={handleFontFiles}
       onSample={handleSample}
     />
+  );
+}
+
+function ReplacementShell({
+  children,
+  errorMessage,
+  isReplacing,
+}: {
+  readonly children: React.ReactNode;
+  readonly errorMessage: string;
+  readonly isReplacing: boolean;
+}) {
+  return (
+    <div className="editor-replacement-shell" aria-busy={isReplacing}>
+      <div inert={isReplacing ? true : undefined}>{children}</div>
+      {errorMessage === "" ? null : (
+        <div className="replacement-error" role="alert">
+          {errorMessage}
+        </div>
+      )}
+      {isReplacing ? (
+        <div className="replacement-loading" data-testid="replacement-loading">
+          <div className="loading-mark" aria-hidden="true" />
+          <span>Opening presentation...</span>
+        </div>
+      ) : null}
+    </div>
   );
 }

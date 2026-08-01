@@ -125,6 +125,15 @@ test("opens a sample through the view-specific loading path", async ({ page }) =
 
   await expect(page.getByTestId("slide-container")).toBeVisible();
   await expect(page.getByTestId("viewer-status")).toContainText("3 slides rendered");
+  await page.getByTestId("pptx-input").setInputFiles({
+    name: "invalid.pptx",
+    mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    buffer: Buffer.from("not a PPTX"),
+  });
+  await expect(page.locator(".replacement-error")).toBeVisible();
+  await expect(page.getByTestId("slide-container")).toBeVisible();
+  await expect(page.getByTestId("viewer-status")).toContainText("3 slides rendered");
+
   await page.getByTestId("open-editor").click();
   await expect(page.getByTestId("editor-workspace")).toBeVisible();
 });
