@@ -14,8 +14,10 @@ import {
   applyAddTableEdit,
   applyAddTextBoxEdit,
   applyDeleteShapeEdit,
+  applyGroupShapesEdit,
   applyReorderShapesEdit,
   applySetSlideBackgroundEdit,
+  applyUngroupShapeEdit,
 } from "./shape-tree-edits.js";
 import {
   applyParagraphPropertiesEdit,
@@ -107,6 +109,12 @@ function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
       return;
     case "reorderShapes":
       applyReorderShapesEdit(root, edit);
+      return;
+    case "groupShapes":
+      applyGroupShapesEdit(root, edit);
+      return;
+    case "ungroupShape":
+      applyUngroupShapeEdit(root, edit);
       return;
     case "setSlideBackground":
       applySetSlideBackgroundEdit(root, edit);

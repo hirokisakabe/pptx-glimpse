@@ -77,15 +77,14 @@ export function preserveNamespaceDeclarations(
     ([key]) => key === "@_xmlns" || key.startsWith("@_xmlns:"),
   );
   if (declarations.length === 0) return replacement;
-  return {
-    ...Object.fromEntries(declarations),
-    ...unsafeOoxmlBoundaryAssertion<XmlNode>(replacement),
-  };
+  const replacementNode = unsafeOoxmlBoundaryAssertion<XmlNode>(replacement);
+  for (const [key, value] of declarations) replacementNode[key] ??= value;
+  return replacementNode;
 }
 
 export function parseShapeFragmentXml(
   xml: string,
-  rootLocalName: "sp" | "cxnSp" | "pic" | "graphicFrame",
+  rootLocalName: "sp" | "cxnSp" | "pic" | "graphicFrame" | "grpSp",
 ): XmlNode {
   const node = getChild(parseXmlForEditing(xml), rootLocalName);
   if (node === undefined) {

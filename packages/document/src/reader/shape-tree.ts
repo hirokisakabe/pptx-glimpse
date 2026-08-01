@@ -200,17 +200,23 @@ function parseShapeTreeOrdered(
 ): SourceShapeNode[] {
   const nodes: SourceShapeNode[] = [];
   const tagCounters: Record<string, number> = {};
+  const containerPropertyKeys = new Set(
+    ["nvGrpSpPr", "grpSpPr", "extLst"].flatMap((name) => {
+      const key = preferredQualifiedChildKey(spTree, name);
+      return key === undefined ? [] : [key];
+    }),
+  );
   let orderingSlot = 0;
 
   for (const child of orderedChildren) {
-    const key = Object.keys(child).find((candidate) => candidate !== ":@");
-    if (key === undefined) continue;
+    const key = orderedElementKey(child);
+    if (key === undefined || key.startsWith("#")) continue;
     const local = localName(key);
 
     if (local === "AlternateContent") {
-      const index = tagCounters[local] ?? 0;
-      tagCounters[local] = index + 1;
-      const alternateContents = getChildArray(spTree, "AlternateContent");
+      const index = tagCounters[key] ?? 0;
+      tagCounters[key] = index + 1;
+      const alternateContents = getQualifiedChildArray(spTree, key);
       const alternateContent = alternateContents[index];
       if (alternateContent !== undefined) {
         nodes.push(...parseAlternateContent(alternateContent, partPath, nextId, orderingSlot));
@@ -219,13 +225,20 @@ function parseShapeTreeOrdered(
       continue;
     }
 
-    if (!SHAPE_TREE_NODE_TAGS.has(local)) continue;
-    const index = tagCounters[local] ?? 0;
-    tagCounters[local] = index + 1;
-    const node = getChildArray(spTree, local)[index];
+    // The container's own properties are not z-order nodes. Every other child must remain in
+    // the typed sequence, including unsupported extensions, so topology edits cannot mistake
+    // shapes separated by preserved XML for consecutive siblings.
+    if (containerPropertyKeys.has(key)) continue;
+    const index = tagCounters[key] ?? 0;
+    tagCounters[key] = index + 1;
+    const node = getQualifiedChildArray(spTree, key)[index];
     if (node === undefined) continue;
 
-    nodes.push(parseShapeTreeNode(local, node, child, partPath, nextId, orderingSlot));
+    nodes.push(
+      SHAPE_TREE_NODE_TAGS.has(local)
+        ? parseShapeTreeNode(local, node, child, partPath, nextId, orderingSlot)
+        : parseRawShapeNode(key, node, partPath, nextId, orderingSlot),
+    );
     orderingSlot++;
   }
 
@@ -246,9 +259,10 @@ function parseShapeTreeNode(
     return parseConnector(node, partPath, nextId, orderingSlot, orderedNode);
   }
   if (local === "grpSp") {
+    const orderedKey = orderedNode === undefined ? undefined : orderedElementKey(orderedNode);
     const orderedGroupChildren = unsafeOoxmlBoundaryAssertion<
       readonly XmlOrderedNode[] | undefined
-    >(orderedNode?.[local]);
+    >(orderedKey === undefined ? undefined : orderedNode?.[orderedKey]);
     return parseGroup(node, partPath, nextId, orderingSlot, orderedGroupChildren);
   }
   if (local === "graphicFrame") {
@@ -414,6 +428,9 @@ function parseGroup(
   const fill = parseFill(grpSpPr, nextId);
   const effects = parseEffectList(getChild(grpSpPr, "effectLst"));
   const rawSidecars = [
+    ...(groupNonVisualPropertiesAreMinimal(nvGrpSpPr)
+      ? []
+      : [makeSidecar("p:nvGrpSpPr", nvGrpSpPr, nextId)]),
     ...collectUnknownSidecars(grpSp, KNOWN_GROUP_CHILDREN, nextId),
     ...collectUnknownSidecars(grpSpPr, KNOWN_SP_PR_CHILDREN, nextId),
     ...collectEffectSidecars(grpSpPr, effects, nextId),
@@ -431,6 +448,63 @@ function parseGroup(
     handle: { partPath, ...(nodeId !== undefined ? { nodeId } : {}), orderingSlot },
     ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
   };
+}
+
+function groupNonVisualPropertiesAreMinimal(nonVisual: XmlNode | undefined): boolean {
+  if (nonVisual === undefined) return false;
+  const cNvPr = getChild(nonVisual, "cNvPr");
+  const cNvGrpSpPr = getChild(nonVisual, "cNvGrpSpPr");
+  const nvPr = getChild(nonVisual, "nvPr");
+  if (
+    cNvPr === undefined ||
+    cNvGrpSpPr === undefined ||
+    nvPr === undefined ||
+    getChildArray(nonVisual, "cNvPr").length !== 1 ||
+    getChildArray(nonVisual, "cNvGrpSpPr").length !== 1 ||
+    getChildArray(nonVisual, "nvPr").length !== 1
+  ) {
+    return false;
+  }
+  const knownChildren = new Set(["cNvPr", "cNvGrpSpPr", "nvPr"]);
+  if (
+    Object.keys(nonVisual).some(
+      (key) => !key.startsWith("@_") && key !== "#text" && !knownChildren.has(localName(key)),
+    )
+  ) {
+    return false;
+  }
+  return (
+    xmlNodeAttributesAreAllowed(nonVisual, new Set()) &&
+    xmlNodeHasOnlyAttributes(cNvPr, new Set(["id", "name"])) &&
+    xmlNodeHasOnlyAttributes(cNvGrpSpPr, new Set()) &&
+    xmlNodeHasOnlyAttributes(nvPr, new Set())
+  );
+}
+
+function xmlNodeHasOnlyAttributes(node: XmlNode, allowed: ReadonlySet<string>): boolean {
+  return Object.keys(node).every((key) => {
+    if (key === "#text") return String(node[key]).trim().length === 0;
+    if (!key.startsWith("@_")) return false;
+    const qualifiedName = key.slice(2);
+    return (
+      qualifiedName === "xmlns" ||
+      qualifiedName.startsWith("xmlns:") ||
+      (!qualifiedName.includes(":") && allowed.has(qualifiedName))
+    );
+  });
+}
+
+function xmlNodeAttributesAreAllowed(node: XmlNode, allowed: ReadonlySet<string>): boolean {
+  return Object.keys(node)
+    .filter((key) => key.startsWith("@_"))
+    .every((key) => {
+      const qualifiedName = key.slice(2);
+      return (
+        qualifiedName === "xmlns" ||
+        qualifiedName.startsWith("xmlns:") ||
+        (!qualifiedName.includes(":") && allowed.has(qualifiedName))
+      );
+    });
 }
 
 function parseImage(
@@ -989,11 +1063,11 @@ function orderedChildChildren(
   childLocalName: string,
 ): readonly XmlOrderedNode[] | undefined {
   const child = parent?.find((entry) => {
-    const key = Object.keys(entry).find((candidate) => candidate !== ":@");
+    const key = orderedElementKey(entry);
     return key !== undefined && localName(key) === childLocalName;
   });
   if (child === undefined) return undefined;
-  const key = Object.keys(child).find((candidate) => candidate !== ":@");
+  const key = orderedElementKey(child);
   const value = key !== undefined ? child[key] : undefined;
   return Array.isArray(value) ? (value as readonly XmlOrderedNode[]) : undefined;
 }
@@ -1005,11 +1079,11 @@ function orderedChildChildrenList(
   if (parent === undefined) return [];
   return parent
     .filter((entry) => {
-      const key = Object.keys(entry).find((candidate) => candidate !== ":@");
+      const key = orderedElementKey(entry);
       return key !== undefined && localName(key) === childLocalName;
     })
     .map((entry) => {
-      const key = Object.keys(entry).find((candidate) => candidate !== ":@");
+      const key = orderedElementKey(entry);
       const value = key !== undefined ? entry[key] : undefined;
       return Array.isArray(value) ? (value as readonly XmlOrderedNode[]) : undefined;
     });
@@ -1021,9 +1095,33 @@ function orderedNestedChildChildren(
   childLocalName: string,
 ): readonly XmlOrderedNode[] | undefined {
   if (node === undefined) return undefined;
-  const parentChildren = node[parentLocalName];
+  const parentKey = Object.keys(node).find(
+    (key) => key !== ":@" && localName(key) === parentLocalName,
+  );
+  const parentChildren = parentKey === undefined ? undefined : node[parentKey];
   return orderedChildChildren(
     Array.isArray(parentChildren) ? (parentChildren as readonly XmlOrderedNode[]) : undefined,
     childLocalName,
+  );
+}
+
+function orderedElementKey(node: XmlOrderedNode): string | undefined {
+  return Object.keys(node).find((key) => key !== ":@");
+}
+
+function getQualifiedChildArray(node: XmlNode, key: string): XmlNode[] {
+  const value = node[key];
+  if (value === undefined || value === null) return [];
+  return unsafeOoxmlBoundaryAssertion<XmlNode[]>(Array.isArray(value) ? value : [value]);
+}
+
+function preferredQualifiedChildKey(node: XmlNode, childLocalName: string): string | undefined {
+  const candidates = Object.keys(node).filter(
+    (key) => !key.startsWith("@_") && localName(key) === childLocalName,
+  );
+  return (
+    candidates.find((key) => key === `p:${childLocalName}`) ??
+    candidates.find((key) => key === childLocalName) ??
+    (candidates.length === 1 ? candidates[0] : undefined)
   );
 }

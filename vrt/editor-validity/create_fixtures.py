@@ -312,6 +312,70 @@ def create_editor_validity_table_text_fixture(filename, text):
     print(f"  Created: {filename}")
 
 
+def create_editor_validity_group_fixture(filename, *, grouped):
+    """Fixture pair for lossless existing group / ungroup topology edits."""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    title = slide.shapes.add_textbox(Inches(0.4), Inches(0.25), Inches(9.2), Inches(0.5))
+    title.text_frame.text = "LibreOffice editor validity: group topology"
+    title.text_frame.paragraphs[0].runs[0].font.size = Pt(18)
+
+    first = slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(1.0), Inches(1.4), Inches(3.0), Inches(1.4)
+    )
+    first.name = "Group Target 1"
+    first.fill.solid()
+    first.fill.fore_color.rgb = RGBColor(0x44, 0x72, 0xC4)
+    first.line.color.rgb = RGBColor(0x20, 0x38, 0x64)
+    first.line.width = Pt(1.5)
+
+    second = slide.shapes.add_shape(
+        MSO_SHAPE.OVAL, Inches(5.0), Inches(2.5), Inches(3.0), Inches(1.4)
+    )
+    second.name = "Group Target 2"
+    second.fill.solid()
+    second.fill.fore_color.rgb = RGBColor(0xED, 0x7D, 0x31)
+    second.line.color.rgb = RGBColor(0x84, 0x36, 0x10)
+    second.line.width = Pt(1.5)
+
+    if grouped:
+        group_left = Inches(1.0)
+        group_top = Inches(1.4)
+        group_width = Inches(7.0)
+        group_height = Inches(2.5)
+        group = OxmlElement("p:grpSp")
+        non_visual = OxmlElement("p:nvGrpSpPr")
+        properties = OxmlElement("p:cNvPr")
+        properties.set("id", "100")
+        properties.set("name", "Expected Group")
+        non_visual.append(properties)
+        non_visual.append(OxmlElement("p:cNvGrpSpPr"))
+        non_visual.append(OxmlElement("p:nvPr"))
+        group.append(non_visual)
+
+        group_properties = OxmlElement("p:grpSpPr")
+        transform = OxmlElement("a:xfrm")
+        for tag, attributes in [
+            ("a:off", {"x": group_left, "y": group_top}),
+            ("a:ext", {"cx": group_width, "cy": group_height}),
+            ("a:chOff", {"x": group_left, "y": group_top}),
+            ("a:chExt", {"cx": group_width, "cy": group_height}),
+        ]:
+            element = OxmlElement(tag)
+            for name, value in attributes.items():
+                element.set(name, str(int(value)))
+            transform.append(element)
+        group_properties.append(transform)
+        group.append(group_properties)
+        group.append(first._element)
+        group.append(second._element)
+        slide.shapes._spTree.append(group)
+
+    prs.save(os.path.join(OUTPUT_DIR, filename))
+    print(f"  Created: {filename}")
+
+
 def create_editor_validity_fixtures():
     """PPTX source / expected pairs consumed by editor-validity.test.ts."""
     create_editor_validity_text_fixture(
@@ -375,6 +439,14 @@ def create_editor_validity_fixtures():
     create_editor_validity_table_text_fixture(
         "editor-validity-table-text-expected.pptx",
         "Edited LibreOffice table text",
+    )
+    create_editor_validity_group_fixture(
+        "editor-validity-group-source.pptx",
+        grouped=False,
+    )
+    create_editor_validity_group_fixture(
+        "editor-validity-group-expected.pptx",
+        grouped=True,
     )
 
 

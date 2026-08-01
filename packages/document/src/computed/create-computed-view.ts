@@ -6,7 +6,7 @@ import {
   localName,
   navigateOrdered,
   parseXml,
-  parseXmlOrdered,
+  parseXmlOrderedQualified,
   type XmlNode,
 } from "../reader/xml.js";
 import type {
@@ -560,7 +560,7 @@ function computeDiagramDrawing(
 
   const orderedSpTree =
     spTree !== undefined
-      ? navigateOrdered(parseXmlOrdered(drawingXml), ["drawing", "spTree"])
+      ? navigateOrdered(parseXmlOrderedQualified(drawingXml), ["drawing", "spTree"])
       : undefined;
   const sourceChildren =
     spTree !== undefined

@@ -81,6 +81,8 @@ export type PptxSourceModelEdit =
   | PptxSourceModelUpdateChartDataEdit
   | PptxSourceModelAddTableEdit
   | PptxSourceModelReorderShapesEdit
+  | PptxSourceModelGroupShapesEdit
+  | PptxSourceModelUngroupShapeEdit
   | PptxSourceModelDeleteShapeEdit
   | PptxSourceModelReplaceImageEdit
   | PptxSourceModelAddEmptySlideFromLayoutEdit
@@ -246,6 +248,23 @@ export interface PptxSourceModelReorderShapesEdit {
   readonly kind: "reorderShapes";
   readonly targetPartPath: PartPath;
   readonly shapeIds: readonly string[];
+}
+
+export interface PptxSourceModelGroupShapesEdit {
+  readonly kind: "groupShapes";
+  readonly targetPartPath: PartPath;
+  /** Immediate parent group id. Omitted for the root `p:spTree`. */
+  readonly parentGroupId?: string;
+  readonly shapeIds: readonly string[];
+  readonly groupId: string;
+  /** Serialized minimal `p:grpSp` header finalized at edit time. */
+  readonly xml: string;
+}
+
+export interface PptxSourceModelUngroupShapeEdit {
+  readonly kind: "ungroupShape";
+  readonly targetPartPath: PartPath;
+  readonly groupId: string;
 }
 
 export interface PptxSourceModelDeleteShapeEdit {

@@ -149,6 +149,7 @@ export type {
   PptxSourceModelDeleteSlideEdit,
   PptxSourceModelDuplicateSlideEdit,
   PptxSourceModelEdit,
+  PptxSourceModelGroupShapesEdit,
   PptxSourceModelMoveSlideEdit,
   PptxSourceModelParagraphPropertiesEdit,
   PptxSourceModelParagraphTextEdit,
@@ -160,6 +161,7 @@ export type {
   PptxSourceModelShapeTransformEdit,
   PptxSourceModelTextRunEdit,
   PptxSourceModelTextRunPropertiesEdit,
+  PptxSourceModelUngroupShapeEdit,
   PptxSourceModelUpdateChartDataEdit,
 } from "./pptx-source-model.js";
 export type {
@@ -177,6 +179,7 @@ export type {
   SourceThemeFormatScheme,
 } from "./presentation.js";
 export type { RawOoxmlNode, RawPackagePart, RawSidecar } from "./raw.js";
+export { groupShapes, ungroupShape } from "./shape-grouping.js";
 export { reorderShapes } from "./shape-ordering.js";
 export type {
   SourceArrowEndpoint,
