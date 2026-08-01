@@ -968,7 +968,9 @@ function slidePartPathsReferencingMedia(
     }
     const layout = layouts.get(relationships.sourcePartPath);
     if (layout !== undefined) {
-      const backgroundOnly = backgroundUsesRelationship(layout.background, relationshipIds);
+      const backgroundOnly =
+        backgroundUsesRelationship(layout.background, relationshipIds) &&
+        backgroundEditOwnsRelationship(source, layout.partPath, mediaPartPath, relationshipIds);
       for (const slide of source.slides) {
         if (
           slide.layoutPartPath === layout.partPath &&
@@ -981,7 +983,9 @@ function slidePartPathsReferencingMedia(
     }
     const master = masters.get(relationships.sourcePartPath);
     if (master !== undefined) {
-      const backgroundOnly = backgroundUsesRelationship(master.background, relationshipIds);
+      const backgroundOnly =
+        backgroundUsesRelationship(master.background, relationshipIds) &&
+        backgroundEditOwnsRelationship(source, master.partPath, mediaPartPath, relationshipIds);
       for (const slide of source.slides) {
         const slideLayout = layouts.get(slide.layoutPartPath);
         if (
@@ -999,6 +1003,36 @@ function slidePartPathsReferencingMedia(
 
   if (unknownReference) return undefined;
   return directReferences;
+}
+
+/**
+ * Newly authored background image relationships are target-local and cannot also be used by a
+ * shape. Existing package relationships may be shared with arbitrary drawing content, so they
+ * must conservatively invalidate the whole layout/master hierarchy.
+ */
+function backgroundEditOwnsRelationship(
+  source: PptxSourceModel,
+  ownerPartPath: string,
+  mediaPartPath: string,
+  relationshipIds: ReadonlySet<string>,
+): boolean {
+  return (source.edits ?? []).some((edit) => {
+    if (edit.kind === "setBackground") {
+      return (
+        edit.targetPartPath === ownerPartPath &&
+        edit.mediaPartPath === mediaPartPath &&
+        edit.relationshipId !== undefined &&
+        relationshipIds.has(edit.relationshipId)
+      );
+    }
+    return (
+      edit.kind === "setSlideBackground" &&
+      edit.slidePartPath === ownerPartPath &&
+      edit.mediaPartPath === mediaPartPath &&
+      edit.relationshipId !== undefined &&
+      relationshipIds.has(edit.relationshipId)
+    );
+  });
 }
 
 function backgroundUsesRelationship(

@@ -400,15 +400,24 @@ export type PptxSourceModelSetBackgroundEdit = {
   readonly kind: "setBackground";
   /** Slide, layout, or master part whose direct `p:bg` is replaced or removed. */
   readonly targetPartPath: PartPath;
-  /** Serialized `p:bg` fragment finalized at edit time. Omitted to clear the direct background. */
-  readonly xml?: string;
 } & (
   | {
+      /** Omitted only when clearing the direct background. */
+      readonly xml?: never;
+      readonly relationshipId?: never;
+      readonly mediaPartPath?: never;
+      readonly contentType?: never;
+    }
+  | {
+      /** Serialized `p:bg` fragment finalized at edit time. */
+      readonly xml: string;
       readonly relationshipId: RelationshipId;
       readonly mediaPartPath: PartPath;
       readonly contentType: string;
     }
   | {
+      /** Serialized `p:bg` fragment finalized at edit time. */
+      readonly xml: string;
       readonly relationshipId?: never;
       readonly mediaPartPath?: never;
       readonly contentType?: never;

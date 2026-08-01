@@ -80,7 +80,11 @@ describe("PptxAuthoringSession", () => {
   });
 
   it("switches slide, layout, and master targets without part-local id or ordering collisions", () => {
-    const source = createPptx();
+    const source = createPptx({
+      slideMaster: {
+        background: { kind: "solid", color: { kind: "srgb", hex: "AABBCC" } },
+      },
+    });
     const firstSlide = requireHandle(source.slides[0]?.handle);
     const layout = source.slideLayouts[0];
     const layoutHandle = requireHandle(layout?.handle);
@@ -137,6 +141,10 @@ describe("PptxAuthoringSession", () => {
     });
     session.target(masterHandle).clearBackground();
     expect(session.source.slideMasters[0]?.background).toBeUndefined();
+    expect(session.source.edits?.at(-1)).toEqual({
+      kind: "setBackground",
+      targetPartPath: masterHandle.partPath,
+    });
   });
 
   it("groups authored drawing kinds and supports the same target abstraction for native groups", () => {

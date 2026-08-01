@@ -347,9 +347,15 @@ typed background.
 import { clearBackground, readPptx, setBackground, writePptx } from "@pptx-glimpse/document";
 
 const source = readPptx(templateBytes);
-const master = source.slideMasters[0]?.handle;
-const layout = source.slideLayouts[0]?.handle;
-if (master === undefined || layout === undefined) throw new Error("Missing template hierarchy");
+const masterNode = source.slideMasters[0];
+const layoutNode = source.slideLayouts.find(
+  (candidate) => candidate.partPath === masterNode?.layoutPartPaths[0],
+);
+const master = masterNode?.handle;
+const layout = layoutNode?.handle;
+if (master === undefined || layout === undefined || layoutNode.background === undefined) {
+  throw new Error("Missing editable template hierarchy or direct layout background");
+}
 
 const withMasterBackground = setBackground(source, master, {
   kind: "solid",

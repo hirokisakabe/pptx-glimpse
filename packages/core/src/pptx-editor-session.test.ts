@@ -1,10 +1,11 @@
 import { Buffer } from "node:buffer";
 
 import {
+  addEmptySlideFromLayout,
   addShape,
+  addSlideLayout,
   asEmu,
   asOoxmlPercent,
-  asPartPath,
   asSourceNodeId,
   createPptx,
   readPptx,
@@ -587,31 +588,16 @@ describe("PptxEditorSession", () => {
     ) {
       throw new Error("createPptx should create a slide, layout, and master");
     }
-    const secondLayoutPartPath = asPartPath("ppt/slideLayouts/slideLayout2.xml");
-    const secondSlidePartPath = asPartPath("ppt/slides/slide2.xml");
-    const secondLayout = {
-      ...firstLayout,
-      partPath: secondLayoutPartPath,
-      handle: { partPath: secondLayoutPartPath },
-    };
-    const secondSlide = {
-      ...firstSlide,
-      partPath: secondSlidePartPath,
-      layoutPartPath: secondLayoutPartPath,
-      handle: { partPath: secondSlidePartPath },
-      background: {
-        kind: "fill" as const,
-        fill: {
-          kind: "solid" as const,
-          color: { kind: "srgb" as const, hex: "FFFFFF" },
-        },
-      },
-    };
-    const before = {
-      ...created,
-      slides: [firstSlide, secondSlide],
-      slideLayouts: [firstLayout, secondLayout],
-    };
+    let before = addSlideLayout(created, master.handle, { name: "Second layout" });
+    const secondLayout = before.slideLayouts.at(-1);
+    if (secondLayout === undefined) throw new Error("second layout was not authored");
+    before = addEmptySlideFromLayout(before, { layoutPartPath: secondLayout.partPath });
+    const secondSlide = before.slides.at(-1);
+    if (secondSlide?.handle === undefined) throw new Error("second slide was not authored");
+    before = setBackground(before, secondSlide.handle, {
+      kind: "solid",
+      color: { kind: "srgb", hex: "FFFFFF" },
+    });
 
     const afterMaster = setBackground(before, master.handle, {
       kind: "solid",
@@ -625,6 +611,11 @@ describe("PptxEditorSession", () => {
     expect(affectedSlidePartPaths(before, afterMasterImage)).toEqual(
       new Set([firstSlide.partPath]),
     );
+    const renderedMaster = await renderPptxSourceModelToSvg(afterMaster, {
+      skipSystemFonts: true,
+    });
+    expect(renderedMaster.slides[0]?.svg).toContain('fill="#112233"');
+    expect(renderedMaster.slides[1]?.svg).toContain('fill="#ffffff"');
 
     const afterLayout = setBackground(before, firstLayout.handle, {
       kind: "solid",
@@ -633,6 +624,7 @@ describe("PptxEditorSession", () => {
     expect(affectedSlidePartPaths(before, afterLayout)).toEqual(new Set([firstSlide.partPath]));
     const rendered = await renderPptxSourceModelToSvg(afterLayout, { skipSystemFonts: true });
     expect(rendered.slides[0]?.svg).toContain('fill="#445566"');
+    expect(rendered.slides[1]?.svg).toContain('fill="#ffffff"');
   });
 
   it("scopes applyAll changes across inherited and slide-local content", async () => {

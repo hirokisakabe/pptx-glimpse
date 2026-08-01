@@ -1712,7 +1712,10 @@ describe("writePptx - from-scratch builder", () => {
 
     const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xdb, 1, 2, 3]);
     const layoutOutput = writePptx(
-      setBackground(base, layoutHandle, { kind: "image", bytes: jpeg }),
+      setBackground(masterReread, requireHandle(masterReread.slideLayouts[0]?.handle), {
+        kind: "image",
+        bytes: jpeg,
+      }),
     );
     const layoutArchive = unzipSync(layoutOutput);
     const layoutReread = readPptx(layoutOutput);
@@ -1727,7 +1730,11 @@ describe("writePptx - from-scratch builder", () => {
       writePptx(clearBackground(layoutReread, requireHandle(layoutReread.slideLayouts[0]?.handle))),
     );
     expect(clearedLayout.slideLayouts[0]?.background).toBeUndefined();
-    expect(createComputedView(clearedLayout).slides[0]?.background).toBeUndefined();
+    expect(createComputedView(clearedLayout).slides[0]?.background?.sourceLayer).toBe("master");
+    expect(createComputedView(clearedLayout).slides[0]?.background?.source).toMatchObject({
+      kind: "fill",
+      fill: { kind: "gradient", gradientType: "linear" },
+    });
 
     const clearedOutput = writePptx(
       clearBackground(masterReread, requireHandle(masterReread.slideMasters[0]?.handle)),
