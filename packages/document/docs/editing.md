@@ -71,10 +71,10 @@ change appearance. It also rejects a group referenced by a connector. A removed 
 reserved for the edit session and is not reused by a later group operation. Every rejection is
 atomic because validation completes before a new source model or edit record is created.
 
-`updateChartData(source, chartHandle, input)` replaces the names, shared category labels, and
-finite numeric values of an existing supported category Chart. It keeps the Chart type, series
-count, title, legend, axes, formatting, and unknown Chart XML, and updates the Chart formulas and
-caches together with its embedded workbook:
+`updateChartData(source, chartHandle, input)` replaces the series topology, names, shared category
+labels, and finite numeric values of an existing supported category Chart. It keeps the Chart
+type, title, legend, axes, and unknown chart-level XML, and updates the Chart formulas and caches
+together with its embedded workbook:
 
 ```ts
 const chart = source.slides
@@ -92,12 +92,19 @@ const edited = updateChartData(source, chart.handle, {
 ```
 
 This operation currently supports bar, line, pie, area, doughnut, and radar Charts with one
-internal embedded workbook, one worksheet, the existing series count, and the standard tabular
-layout (series names in row 1, categories in column A, values in columns B onward). It rejects
-linked/external data, missing or unresolved relationships, combo Charts, workbooks shared by
-multiple Charts, workbook formulas in the data range, and other data layouts before changing the
-model. The operation patches only the target worksheet data and preserves other embedded workbook
-parts such as styles, themes, and document properties.
+internal embedded workbook, one worksheet, and the standard tabular layout (series names in row 1,
+categories in column A, values in columns B onward). Retained series are matched by position and
+keep their formatting and unknown series XML. New trailing series clone the last original series
+as a formatting template before their `idx`, `order`, formulas, and caches are rewritten; this
+means explicitly formatted source series intentionally provide the default appearance for added
+series. Removing series truncates the trailing series, so formatting and unknown XML owned by a
+removed series are removed with it while retained and chart-level XML stay intact. The worksheet
+range and cells expand or shrink to the resulting series count.
+
+The operation rejects linked/external data, missing or unresolved relationships, combo Charts,
+workbooks shared by multiple Charts, workbook formulas in the data range, and other data layouts
+before changing the model. It patches only the target worksheet data and preserves other embedded
+workbook parts such as styles, themes, and document properties.
 
 The text operations use the same `SourceParagraph` / `SourceTextRun` contract for ordinary shape
 text and existing Table cell text. To edit a Table, locate a node through

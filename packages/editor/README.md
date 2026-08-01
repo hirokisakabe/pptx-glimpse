@@ -80,8 +80,8 @@ The released command set includes:
   and connector references can be expanded losslessly; see the document package's
   [group constraints](../document/docs/editing.md#lossless-group-and-ungroup).
 - Media: `replaceImage`.
-- Charts: `updateChartData` for names, shared category labels, and numeric values of a supported
-  existing category Chart with an internal editable workbook.
+- Charts: `updateChartData` for series addition/removal, names, shared category labels, and numeric
+  values of a supported existing category Chart with an internal editable workbook.
 - Slides: `addEmptySlideFromLayout`, `duplicateSlide`, `moveSlide`, and `deleteSlide`.
 
 Use `undo()`, `redo()`, `canUndo`, `canRedo`, `undoDepth`, and `redoDepth` to integrate history.
