@@ -109,9 +109,10 @@ export function applyReorderShapesEdit(
   edit: PptxSourceModelReorderShapesEdit,
 ): void {
   const spTree = getShapeTree(root, edit.targetPartPath);
+  const container = groupParentContainer(spTree, edit.parentGroupId, "reorder");
   const current: { key: string; value: unknown }[] = [];
   const shapeById = new Map<string, { key: string; value: unknown }>();
-  for (const [key, grouped] of Object.entries(spTree)) {
+  for (const [key, grouped] of Object.entries(container)) {
     if (key.startsWith("@_")) continue;
     const values = Array.isArray(grouped)
       ? unsafeOoxmlBoundaryAssertion<unknown[]>(grouped)
@@ -119,9 +120,13 @@ export function applyReorderShapesEdit(
     for (const value of values) {
       const entry = { key, value };
       current.push(entry);
-      if (localName(key) === "nvGrpSpPr" || localName(key) === "grpSpPr") continue;
       const nodeId = shapeTreeEntryNodeId(value);
-      if (nodeId !== undefined) shapeById.set(nodeId, entry);
+      if (nodeId !== undefined) {
+        if (shapeById.has(nodeId)) {
+          throw new Error(`writePptx: duplicate shape id '${nodeId}' in reordered container`);
+        }
+        shapeById.set(nodeId, entry);
+      }
     }
   }
   if (shapeById.size !== edit.shapeIds.length) {
@@ -136,7 +141,7 @@ export function applyReorderShapesEdit(
   });
   let orderedShapeIndex = 0;
   setXmlChildOrder(
-    spTree,
+    container,
     current.map((entry) =>
       shapeTreeEntryNodeId(entry.value) === undefined ? entry : orderedShapes[orderedShapeIndex++],
     ),

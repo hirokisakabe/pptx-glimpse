@@ -5,7 +5,8 @@ import { createPptx } from "../builder/create-pptx.js";
 import { createPptxAuthoringSession, reorderShapes } from "../index.js";
 import { readPptx } from "../reader/read-pptx.js";
 import { writePptx } from "../writer/write-pptx.js";
-import { asPartPath, asSourceNodeId, type SourceHandle } from "./handles.js";
+import { asPartPath, asRawSidecarId, asSourceNodeId, type SourceHandle } from "./handles.js";
+import type { SourceGroup, SourceShapeNode } from "./shapes.js";
 import { asEmu } from "./units.js";
 
 describe("reorderShapes", () => {
@@ -121,40 +122,100 @@ describe("reorderShapes", () => {
     );
   });
 
-  it("explicitly rejects a nested group child handle", () => {
-    const authored = createTwoShapeSource();
-    const slide = requireValue(authored.slides[0]);
-    const first = requireValue(slide.shapes[0]);
-    const second = requireValue(slide.shapes[1]);
-    const groupId = asSourceNodeId("99");
-    const nested = {
-      ...authored,
+  it("immutably reorders only a native group's direct children and preserves identity on write/read", () => {
+    const source = createPptx();
+    const session = createPptxAuthoringSession(source);
+    const root = session.target(requireValue(source.slides[0]?.handle));
+    const firstHandle = addRect(root, 0);
+    const secondHandle = addRect(root, 2000);
+    const siblingHandle = addRect(root, 4000);
+    const groupHandle = root.groupShapes([firstHandle, secondHandle]);
+    const beforeSlide = requireValue(session.source.slides[0]);
+    const beforeGroup = requireGroup(beforeSlide.shapes[0]);
+    const beforeSibling = requireValue(beforeSlide.shapes[1]);
+    const beforeTransform = beforeGroup.transform;
+    const beforeChildTransform = beforeGroup.childTransform;
+
+    session.target(groupHandle).reorderShapes([secondHandle, firstHandle]);
+
+    const afterSlide = requireValue(session.source.slides[0]);
+    const afterGroup = requireGroup(afterSlide.shapes[0]);
+    expect(afterSlide).not.toBe(beforeSlide);
+    expect(afterGroup).not.toBe(beforeGroup);
+    expect(afterSlide.shapes[1]).toBe(beforeSibling);
+    expect(afterGroup.children).toEqual([beforeGroup.children[1], beforeGroup.children[0]]);
+    expect(afterGroup.transform).toBe(beforeTransform);
+    expect(afterGroup.childTransform).toBe(beforeChildTransform);
+    expect(session.source.edits?.at(-1)).toEqual({
+      kind: "reorderShapes",
+      targetPartPath: groupHandle.partPath,
+      parentGroupId: String(groupHandle.nodeId),
+      shapeIds: [String(secondHandle.nodeId), String(firstHandle.nodeId)],
+    });
+
+    const rereadSlide = requireValue(readPptx(writePptx(session.source)).slides[0]);
+    const rereadGroup = requireGroup(rereadSlide.shapes[0]);
+    expect(rereadSlide.shapes[1]?.nodeId).toBe(siblingHandle.nodeId);
+    expect(rereadGroup.nodeId).toBe(groupHandle.nodeId);
+    expect(rereadGroup.children.map((child) => child.nodeId)).toEqual([
+      secondHandle.nodeId,
+      firstHandle.nodeId,
+    ]);
+    expect(rereadGroup.children.map((child) => child.handle?.nodeId)).toEqual([
+      secondHandle.nodeId,
+      firstHandle.nodeId,
+    ]);
+    expect(rereadGroup.transform).toEqual(beforeTransform);
+    expect(rereadGroup.childTransform).toEqual(beforeChildTransform);
+  });
+
+  it("atomically rejects non-direct children, foreign parts, and AlternateContent for a group", () => {
+    const source = createPptx();
+    const session = createPptxAuthoringSession(source);
+    const root = session.target(requireValue(source.slides[0]?.handle));
+    const first = addRect(root, 0);
+    const second = addRect(root, 2000);
+    const third = addRect(root, 4000);
+    const innerGroup = root.groupShapes([first, second]);
+    const outerGroup = root.groupShapes([innerGroup, third]);
+    const before = session.source;
+
+    expect(() => session.target(outerGroup).reorderShapes([first, third])).toThrow(
+      "every shape must be a direct child of the target",
+    );
+    expect(() =>
+      session
+        .target(outerGroup)
+        .reorderShapes([innerGroup, { ...third, partPath: asPartPath("ppt/slides/other.xml") }]),
+    ).toThrow("different drawing part");
+    expect(session.source).toBe(before);
+
+    const slide = requireValue(before.slides[0]);
+    const alternateContent = {
+      ...before,
       slides: [
         {
           ...slide,
-          shapes: [
-            {
-              kind: "group",
-              nodeId: groupId,
-              children: [first],
-              handle: {
-                partPath: slide.partPath,
-                nodeId: groupId,
-                orderingSlot: 0,
-              },
-            },
-            second,
-          ],
+          shapes: slide.shapes.map((shape) =>
+            shape.kind === "group"
+              ? {
+                  ...shape,
+                  rawSidecars: [
+                    {
+                      id: asRawSidecarId("alternate-content"),
+                      node: { name: "mc:AlternateContent" },
+                    },
+                  ],
+                }
+              : shape,
+          ),
         },
       ],
-    } satisfies typeof authored;
-
-    expect(() =>
-      reorderShapes(nested, requireValue(slide.handle), [
-        requireValue(first.handle),
-        requireValue(second.handle),
-      ]),
-    ).toThrow("nested group shape reordering is not supported");
+    } satisfies typeof before;
+    expect(() => reorderShapes(alternateContent, outerGroup, [third, innerGroup])).toThrow(
+      "mc:AlternateContent shape trees are not supported",
+    );
+    expect(alternateContent.edits).toBe(before.edits);
   });
 
   it("rejects duplicate ids at the root and across group descendants without changing source", () => {
@@ -251,6 +312,11 @@ function addRect(target: Target, offsetX: number): SourceHandle {
 function requireValue<T>(value: T | undefined): T {
   if (value === undefined) throw new Error("test fixture value is missing");
   return value;
+}
+
+function requireGroup(shape: SourceShapeNode | undefined): SourceGroup {
+  if (shape?.kind !== "group") throw new Error("test fixture group is missing");
+  return shape;
 }
 
 function createTwoShapeSource() {

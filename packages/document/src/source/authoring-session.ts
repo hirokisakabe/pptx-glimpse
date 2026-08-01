@@ -37,8 +37,8 @@ import type { AddTableInput } from "./table-authoring.js";
 import { addTable } from "./table-authoring.js";
 
 /**
- * Consecutive authoring operations bound to one slide, layout, or master handle. A native group
- * handle is supported only by `groupShapes`, which groups its consecutive direct children.
+ * Consecutive authoring operations bound to one slide, layout, or master handle. Native group
+ * handles are supported by the direct-child `groupShapes` and `reorderShapes` operations.
  */
 export interface PptxAuthoringTarget {
   addTextBox(input: AddTextBoxInput): SourceHandle;
@@ -59,6 +59,7 @@ export interface PptxAuthoringTarget {
    */
   groupShapes(shapeHandles: readonly SourceHandle[]): SourceHandle;
   setSlideBackground(input: SetSlideBackgroundInput): void;
+  /** Reorders every direct child of this slide, layout, master, or native group exactly once. */
   reorderShapes(orderedShapeHandles: readonly SourceHandle[]): void;
 }
 
@@ -92,7 +93,7 @@ export class PptxAuthoringSession {
 
   /**
    * Creates an authoring scope bound to a slide, layout, or master handle. A native group handle
-   * is also accepted for the `groupShapes` direct-child operation.
+   * is also accepted for the `groupShapes` and `reorderShapes` direct-child operations.
    */
   target(targetHandle: SourceHandle): PptxAuthoringTarget {
     return {
