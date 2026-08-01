@@ -313,10 +313,26 @@ let createPptxEditorSessionWithDependencies: (
   dependencies: PptxEditorSessionDependencies,
 ) => Promise<PptxEditorSession>;
 
+/** @internal Reads input and renders a session created by an entry-specific class. */
+export async function initializePptxEditorSession<T extends PptxEditorSession>(
+  input: Uint8Array,
+  createSession: (source: PptxSourceModel) => T,
+): Promise<T> {
+  let source: PptxSourceModel;
+  try {
+    source = readPptx(input);
+  } catch (cause) {
+    throw integrationError("read-failed", "Failed to read PPTX input", cause);
+  }
+  const editor = createSession(source);
+  await editor.renderCurrentSlides();
+  return editor;
+}
+
 /**
  * Headless read/edit/render/write session for one PPTX presentation.
  *
- * Create sessions with {@link createPptxEditorSession}. Mutating methods update history and
+ * Create sessions with {@link PptxEditorSession.create}. Mutating methods update history and
  * rerender affected slides. Expected operation failures throw {@link PptxEditorError}; successful
  * edits can return warnings through {@link PptxEditorSlidesResponse}.
  *
@@ -335,19 +351,14 @@ export class PptxEditorSession {
 
   static {
     createPptxEditorSessionWithDependencies = async (input, renderOptions, dependencies) => {
-      let source: PptxSourceModel;
-      try {
-        source = readPptx(input);
-      } catch (cause) {
-        throw integrationError("read-failed", "Failed to read PPTX input", cause);
-      }
-      const editor = new PptxEditorSession(source, renderOptions, dependencies);
-      await editor.renderCurrentSlides();
-      return editor;
+      return initializePptxEditorSession(
+        input,
+        (source) => new PptxEditorSession(source, renderOptions, dependencies),
+      );
     };
   }
 
-  private constructor(
+  protected constructor(
     source: PptxSourceModel,
     renderOptions: PptxEditorRenderOptions,
     dependencies: PptxEditorSessionDependencies,

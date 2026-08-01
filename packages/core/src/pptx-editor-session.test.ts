@@ -19,7 +19,12 @@ import JSZip from "jszip";
 import { describe, expect, it, vi } from "vitest";
 
 import { renderPptxSourceModelToSvg } from "./converter.js";
-import { createPptxEditorSession, isPptxEditorError, PptxEditorError } from "./index.js";
+import {
+  createPptxEditorSession,
+  isPptxEditorError,
+  PptxEditorError,
+  PptxEditorSession,
+} from "./index.js";
 import {
   affectedSlidePartPaths,
   createPptxEditorSessionFactory,
@@ -132,6 +137,24 @@ describe("PptxEditorSession", () => {
     expect(nodeFontMocks.createOpentypeSetupFromSystem).not.toHaveBeenCalled();
 
     await createPptxEditorSession(input, renderOptions);
+    expect(nodeFontMocks.createOpentypeSetupFromSystem).toHaveBeenCalledOnce();
+  });
+
+  it("keeps Node and browser static session factories entry-specific", async () => {
+    const browserEntry = await import("./browser.js");
+    nodeFontMocks.createOpentypeSetupFromSystem.mockClear();
+    const input = await buildShapeFixture();
+    const renderOptions = {
+      fontDirs: ["/static-node-fonts"],
+      skipSystemFonts: true,
+    };
+
+    const browserEditor = await browserEntry.PptxEditorSession.create(input, renderOptions);
+    expect(browserEditor).toBeInstanceOf(browserEntry.PptxEditorSession);
+    expect(nodeFontMocks.createOpentypeSetupFromSystem).not.toHaveBeenCalled();
+
+    const nodeEditor = await PptxEditorSession.create(input, renderOptions);
+    expect(nodeEditor).toBeInstanceOf(PptxEditorSession);
     expect(nodeFontMocks.createOpentypeSetupFromSystem).toHaveBeenCalledOnce();
   });
 
