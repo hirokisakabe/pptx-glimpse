@@ -1,8 +1,10 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
     "rootDir": ".",
-    "noEmit": true
+    "noEmit": true,
+    "types": ["node", "vitest/globals"]
   },
   "include": ["packages/*/src/**/*", "vrt/**/*", "scripts/**/*", "bench/**/*", "e2e/**/*"],
   "exclude": ["node_modules", "dist", "**/dist"]

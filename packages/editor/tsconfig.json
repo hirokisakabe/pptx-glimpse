@@ -1,9 +1,8 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "baseUrl": "../..",
     "paths": {
-      "@pptx-glimpse/document": ["packages/document/dist/index.d.ts"]
+      "@pptx-glimpse/document": ["../document/dist/index.d.ts"]
     },
     "rootDir": "./src",
     "outDir": "./dist"
