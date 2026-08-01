@@ -50,13 +50,13 @@ export function updateShapeTransform(
     throw new Error("updateShapeTransform: shape transform edit requires a node id");
   }
 
-  const target = requireUniqueSlideShapeTarget(source, handle, "updateShapeTransform");
+  const target = requireUniqueDrawingShapeTarget(source, handle, "updateShapeTransform");
   assertNotAlternateContentTarget(target, "updateShapeTransform");
   if (!hasEditableTransform(target.node)) {
     throw new Error("updateShapeTransform: shape handle does not reference a shape with xfrm");
   }
   if (shapeTransformPositionAndSizeEqual(target.node.transform, transform)) return source;
-  const slides = replaceSlideShapeNode(source, handle, (shape) => {
+  const drawingParts = replaceDrawingShapeNode(source, handle, (shape) => {
     if (!hasEditableTransform(shape)) return shape;
     return {
       ...shape,
@@ -72,7 +72,7 @@ export function updateShapeTransform(
 
   return {
     ...source,
-    slides,
+    ...drawingParts,
     edits: [
       ...(source.edits ?? []),
       {
@@ -97,14 +97,14 @@ export function setShapeFill(
     throw new Error("setShapeFill: shape fill edit requires a node id");
   }
 
-  const target = requireUniqueSlideShapeTarget(source, handle, "setShapeFill");
+  const target = requireUniqueDrawingShapeTarget(source, handle, "setShapeFill");
   assertNotAlternateContentTarget(target, "setShapeFill");
   if (target.node.kind !== "shape") {
     throw new Error("setShapeFill: only sp shapes support fill edits");
   }
   const nextFill = toSourceFill(fill);
   if (sourceFillEqual(target.node.fill, nextFill)) return source;
-  const slides = replaceSlideShapeNode(source, handle, (shape) =>
+  const drawingParts = replaceDrawingShapeNode(source, handle, (shape) =>
     shape.kind === "shape"
       ? ({
           ...shape,
@@ -115,7 +115,7 @@ export function setShapeFill(
 
   return {
     ...source,
-    slides,
+    ...drawingParts,
     edits: appendShapeFillEdit(source.edits ?? [], handle, fill),
   };
 }
@@ -130,14 +130,14 @@ export function setShapeOutline(
     throw new Error("setShapeOutline: shape outline edit requires a node id");
   }
 
-  const target = requireUniqueSlideShapeTarget(source, handle, "setShapeOutline");
+  const target = requireUniqueDrawingShapeTarget(source, handle, "setShapeOutline");
   assertNotAlternateContentTarget(target, "setShapeOutline");
   if (target.node.kind !== "shape" && target.node.kind !== "connector") {
     throw new Error("setShapeOutline: only sp and cxnSp shapes support outline edits");
   }
   const nextOutline = patchSourceOutline(target.node.outline, outline);
   if (sourceOutlineEqual(target.node.outline, nextOutline)) return source;
-  const slides = replaceSlideShapeNode(source, handle, (shape) =>
+  const drawingParts = replaceDrawingShapeNode(source, handle, (shape) =>
     shape.kind === "shape" || shape.kind === "connector"
       ? ({
           ...shape,
@@ -148,7 +148,7 @@ export function setShapeOutline(
 
   return {
     ...source,
-    slides,
+    ...drawingParts,
     edits: appendShapeOutlineEdit(source.edits ?? [], handle, outline),
   };
 }
@@ -402,6 +402,22 @@ export function requireUniqueSlideShapeTarget(
   return match;
 }
 
+function requireUniqueDrawingShapeTarget(
+  source: PptxSourceModel,
+  handle: SourceHandle,
+  operationName: string,
+): ShapeNodeMatch {
+  const matches = [...source.slides, ...source.slideLayouts, ...source.slideMasters].flatMap(
+    (target) => findShapeNodesInTree(target.shapes, handle),
+  );
+  if (matches.length > 1) throw duplicateNodeIdError(operationName, handle);
+  const match = matches[0];
+  if (match === undefined) {
+    throw new Error(`${operationName}: shape handle was not found in PptxSourceModel source`);
+  }
+  return match;
+}
+
 function duplicateNodeIdError(operationName: string, handle: SourceHandle): Error {
   return new Error(
     `${operationName}: duplicate node id '${String(handle.nodeId)}' in drawing part '${handle.partPath}' is not supported`,
@@ -426,6 +442,32 @@ export function replaceSlideShapeNode(
     const shapes = replaceShapeNodeInTree(slide.shapes, handle, replace);
     return shapes === slide.shapes ? slide : { ...slide, shapes };
   });
+}
+
+function replaceDrawingShapeNode(
+  source: PptxSourceModel,
+  handle: SourceHandle,
+  replace: (shape: SourceShapeNode) => SourceShapeNode,
+): Pick<PptxSourceModel, "slides" | "slideLayouts" | "slideMasters"> {
+  const replaceTargets = <
+    T extends {
+      readonly partPath: SourceHandle["partPath"];
+      readonly shapes: readonly SourceShapeNode[];
+    },
+  >(
+    targets: readonly T[],
+  ): readonly T[] =>
+    targets.map((target) => {
+      if (target.partPath !== handle.partPath) return target;
+      const shapes = replaceShapeNodeInTree(target.shapes, handle, replace);
+      return shapes === target.shapes ? target : { ...target, shapes };
+    });
+
+  return {
+    slides: replaceTargets(source.slides),
+    slideLayouts: replaceTargets(source.slideLayouts),
+    slideMasters: replaceTargets(source.slideMasters),
+  };
 }
 
 function replaceShapeNodeInTree(
