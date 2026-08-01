@@ -356,7 +356,7 @@ function assertPositiveFiniteEmu(value: unknown, operationName: string, fieldNam
   }
 }
 
-export interface ShapeNodeMatch {
+interface ShapeNodeMatch {
   readonly node: SourceShapeNode;
   readonly nested: boolean;
   readonly insideAlternateContent: boolean;
