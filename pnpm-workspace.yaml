@@ -7,4 +7,4 @@ allowBuilds:
   unrs-resolver: true
 
 patchedDependencies:
-  tsup: patches/tsup.patch
+  tsup@8.5.1: patches/tsup.patch
