@@ -1554,7 +1554,10 @@ describe("EditorSession chart data commands", () => {
     const result = session.apply({
       kind: "updateChartData",
       handle,
-      series: [{ name: "Only one", categories: ["A"], values: [1] }],
+      series: [
+        { name: "One", categories: ["A"], values: [1] },
+        { name: "Two", categories: ["B"], values: [2] },
+      ],
     });
 
     expect(result).toMatchObject({
@@ -1562,7 +1565,7 @@ describe("EditorSession chart data commands", () => {
       code: "invalid-command",
     });
     expect(result.ok ? undefined : result.message).toContain(
-      "changing the existing series count is not supported",
+      "every series must use identical category labels",
     );
     expect(session.document).toBe(before);
     expect(session.selection).toEqual({ shapeHandle: handle });

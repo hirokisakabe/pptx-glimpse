@@ -93,6 +93,81 @@ describe("updateChartData", () => {
     ]);
   });
 
+  it("adds series by cloning the last series formatting and synchronizes the workbook", () => {
+    const files = unzipSync(buildExistingChart());
+    files["ppt/charts/chart1.xml"] = addSeriesExtensionMarkers(files["ppt/charts/chart1.xml"]);
+    const source = readPptx(zipFixture(files));
+    const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    if (chart?.handle === undefined) throw new Error("chart fixture should have a handle");
+
+    const output = unzipSync(
+      writePptx(
+        updateChartData(source, chart.handle, {
+          series: [
+            { name: "Revenue", categories: ["Apr", "May"], values: [40, 55] },
+            { name: "Cost", categories: ["Apr", "May"], values: [25, 30] },
+            { name: "Profit", categories: ["Apr", "May"], values: [15, 25] },
+          ],
+        }),
+      ),
+    );
+    const chartXml = decoder.decode(output["ppt/charts/chart1.xml"]);
+    expect(chartXml.match(/<c:ser>/g)).toHaveLength(3);
+    expect(chartXml).toContain('<c:idx val="0"/><c:order val="0"/>');
+    expect(chartXml).toContain('<c:idx val="1"/><c:order val="1"/>');
+    expect(chartXml).toContain('<c:idx val="2"/><c:order val="2"/>');
+    expect(chartXml).toContain("Sheet1!$D$1");
+    expect(chartXml).toContain("Sheet1!$D$2:$D$3");
+    expect(chartXml.match(/uri="series-1"/g)).toHaveLength(1);
+    expect(chartXml.match(/uri="series-2"/g)).toHaveLength(2);
+    expect(chartXml.match(/val="ED7D31"/g)).toHaveLength(4);
+
+    const workbook = unzipSync(output["ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx"]);
+    const worksheet = decoder.decode(workbook["xl/worksheets/sheet1.xml"]);
+    expect(worksheet).toContain('dimension ref="A1:D3"');
+    expect(worksheet).toContain('<c r="D1" t="inlineStr"><is><t>Profit</t></is></c>');
+    expect(worksheet).toContain('<c r="D3"><v>25</v></c>');
+
+    const rereadChart = createComputedView(readPptx(zipFixture(output))).slides[0]?.elements.find(
+      (element) => element.kind === "chart",
+    );
+    expect(rereadChart?.kind === "chart" ? rereadChart.chartData?.series : undefined).toMatchObject(
+      [
+        { name: "Revenue", values: [40, 55] },
+        { name: "Cost", values: [25, 30] },
+        { name: "Profit", values: [15, 25] },
+      ],
+    );
+  });
+
+  it("removes trailing series with their XML while preserving retained series XML", () => {
+    const files = unzipSync(buildExistingChart());
+    files["ppt/charts/chart1.xml"] = addSeriesExtensionMarkers(files["ppt/charts/chart1.xml"]);
+    const source = readPptx(zipFixture(files));
+    const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    if (chart?.handle === undefined) throw new Error("chart fixture should have a handle");
+
+    const output = unzipSync(
+      writePptx(
+        updateChartData(source, chart.handle, {
+          series: [{ name: "Only", categories: ["Apr", "May"], values: [40, 55] }],
+        }),
+      ),
+    );
+    const chartXml = decoder.decode(output["ppt/charts/chart1.xml"]);
+    expect(chartXml.match(/<c:ser>/g)).toHaveLength(1);
+    expect(chartXml).toContain('uri="series-1"');
+    expect(chartXml).not.toContain('uri="series-2"');
+    expect(chartXml).toContain('<c:idx val="0"/><c:order val="0"/>');
+    expect(chartXml).not.toContain("Sheet1!$C$1");
+    expect(chartXml).toContain('uri="preserve-me"');
+
+    const workbook = unzipSync(output["ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx"]);
+    const worksheet = decoder.decode(workbook["xl/worksheets/sheet1.xml"]);
+    expect(worksheet).toContain('dimension ref="A1:B3"');
+    expect(worksheet).not.toContain('<c r="C1"');
+  });
+
   it("updates every supported existing category chart type", () => {
     let source = createPptx();
     const slideHandle = source.slides[0]?.handle;
@@ -113,7 +188,10 @@ describe("updateChartData", () => {
     for (const chart of charts) {
       if (chart.handle === undefined) throw new Error("chart fixture should have a handle");
       source = updateChartData(source, chart.handle, {
-        series: [{ name: "Edited", categories: ["X", "Y", "Z"], values: [3, 5, 8] }],
+        series: [
+          { name: "Edited", categories: ["X", "Y", "Z"], values: [3, 5, 8] },
+          { name: "Added", categories: ["X", "Y", "Z"], values: [2, 4, 6] },
+        ],
       });
     }
 
@@ -122,6 +200,7 @@ describe("updateChartData", () => {
     ).slides[0]?.elements.filter((element) => element.kind === "chart");
     expect(computedCharts?.map((chart) => chart.chartData?.chartType)).toEqual(types);
     expect(computedCharts?.every((chart) => chart.chartData?.categories.length === 3)).toBe(true);
+    expect(computedCharts?.every((chart) => chart.chartData?.series.length === 2)).toBe(true);
   });
 
   it("preserves and targets a non-default worksheet name", () => {
@@ -397,6 +476,16 @@ function replaceAllText(bytes: Uint8Array, search: string, replacement: string):
   const value = decoder.decode(bytes);
   if (!value.includes(search)) throw new Error(`fixture text not found: ${search}`);
   return new TextEncoder().encode(value.replaceAll(search, replacement));
+}
+
+function addSeriesExtensionMarkers(bytes: Uint8Array): Uint8Array {
+  let index = 0;
+  return new TextEncoder().encode(
+    decoder.decode(bytes).replaceAll("</c:ser>", () => {
+      index += 1;
+      return `<c:extLst><c:ext uri="series-${index}"><c:unknown val="kept"/></c:ext></c:extLst></c:ser>`;
+    }),
+  );
 }
 
 function zipFixture(files: Record<string, Uint8Array>): Uint8Array {

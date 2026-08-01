@@ -68,8 +68,9 @@ const orderedBuilder = new XMLBuilder({
 /**
  * Replaces the data bound to an existing category chart while preserving all non-data chart XML.
  *
- * The supported layout is deliberately narrow: one embedded workbook, one worksheet, the existing
- * series count, names in row 1, categories in column A, and values in columns B onward.
+ * The supported layout is deliberately narrow: one embedded workbook, one worksheet, names in row
+ * 1, categories in column A, and values in columns B onward. Retained series preserve their XML;
+ * appended series clone the last existing series as their formatting template.
  */
 export function updateChartData(
   source: PptxSourceModel,
@@ -95,7 +96,7 @@ export function updateChartData(
   const workbook = inspectSupportedEmbeddedWorkbook(
     workbookRawPart.bytes,
     binding.sheetName,
-    binding.seriesCount,
+    binding.existingSeriesCount,
     binding.pointCount,
   );
 
@@ -293,7 +294,7 @@ function inspectAndUpdateChartXml(
 ): {
   readonly externalDataRelationshipId: string;
   readonly sheetName: string;
-  readonly seriesCount: number;
+  readonly existingSeriesCount: number;
   readonly pointCount: number;
 } {
   const chartSpace = requireSingleElement(root, "chartSpace", "chart XML has no chartSpace root");
@@ -311,16 +312,14 @@ function inspectAndUpdateChartXml(
   ) {
     throw new Error("updateChartData: chart type or combination is not supported");
   }
-  const series = elementChildren(chartGroups[0]).filter(
+  const existingSeries = elementChildren(chartGroups[0]).filter(
     (entry) => elementLocalName(entry) === "ser",
   );
-  if (series.length !== input.series.length) {
-    throw new Error("updateChartData: changing the existing series count is not supported");
-  }
 
   let sheetName: string | undefined;
+  const sheetTokens: string[] = [];
   let pointCount: number | undefined;
-  for (const [index, seriesEntry] of series.entries()) {
+  for (const [index, seriesEntry] of existingSeries.entries()) {
     const tx = requireSingleChild(seriesEntry, "tx");
     const txRef = requireSingleChild(tx, "strRef");
     const category = requireSingleChild(seriesEntry, "cat");
@@ -347,18 +346,34 @@ function inspectAndUpdateChartXml(
       throw new Error("updateChartData: chart series use inconsistent data ranges");
     }
     sheetName = txFormula.sheetName;
+    sheetTokens.push(txFormula.sheetToken);
     pointCount = seriesPointCount;
+  }
 
-    setFormula(txRef, `${txFormula.sheetToken}!$${spreadsheetColumn(index + 2)}$1`);
+  if (sheetName === undefined || pointCount === undefined) {
+    throw new Error("updateChartData: chart has no series");
+  }
+
+  const series = resizeChartSeries(chartGroups[0], existingSeries, input.series.length);
+  for (const [index, seriesEntry] of series.entries()) {
+    const sheetToken = sheetTokens[index] ?? sheetTokens.at(-1);
+    if (sheetToken === undefined) throw new Error("updateChartData: chart has no series");
+    setAttribute(requireSingleChild(seriesEntry, "idx"), "val", String(index));
+    setAttribute(requireSingleChild(seriesEntry, "order"), "val", String(index));
+    const tx = requireSingleChild(seriesEntry, "tx");
+    const txRef = requireSingleChild(tx, "strRef");
+    const category = requireSingleChild(seriesEntry, "cat");
+    const categoryRef = requireSingleChild(category, "strRef");
+    const value = requireSingleChild(seriesEntry, "val");
+    const valueRef = requireSingleChild(value, "numRef");
+
+    setFormula(txRef, `${sheetToken}!$${spreadsheetColumn(index + 2)}$1`);
     setStringCache(requireSingleChild(txRef, "strCache"), [input.series[index].name]);
-    setFormula(
-      categoryRef,
-      `${txFormula.sheetToken}!$A$2:$A$${input.series[index].categories.length + 1}`,
-    );
+    setFormula(categoryRef, `${sheetToken}!$A$2:$A$${input.series[index].categories.length + 1}`);
     setStringCache(requireSingleChild(categoryRef, "strCache"), input.series[index].categories);
     setFormula(
       valueRef,
-      `${txFormula.sheetToken}!$${spreadsheetColumn(index + 2)}$2:$${spreadsheetColumn(index + 2)}$${input.series[index].values.length + 1}`,
+      `${sheetToken}!$${spreadsheetColumn(index + 2)}$2:$${spreadsheetColumn(index + 2)}$${input.series[index].values.length + 1}`,
     );
     setNumberCache(requireSingleChild(valueRef, "numCache"), input.series[index].values);
   }
@@ -368,15 +383,43 @@ function inspectAndUpdateChartXml(
   if (externalDataRelationshipId === undefined) {
     throw new Error("updateChartData: chart externalData has no relationship id");
   }
-  if (sheetName === undefined || pointCount === undefined) {
-    throw new Error("updateChartData: chart has no series");
-  }
   return {
     externalDataRelationshipId,
     sheetName,
-    seriesCount: series.length,
+    existingSeriesCount: existingSeries.length,
     pointCount,
   };
+}
+
+function resizeChartSeries(
+  chartGroup: OrderedXmlNode,
+  existingSeries: readonly OrderedXmlNode[],
+  desiredCount: number,
+): OrderedXmlNode[] {
+  const retainedSeries = existingSeries.slice(0, desiredCount);
+  const children = mutableElementChildren(chartGroup);
+  let seenSeries = 0;
+  const retainedChildren = children.filter((entry) => {
+    if (elementLocalName(entry) !== "ser") return true;
+    const retain = seenSeries < desiredCount;
+    seenSeries += 1;
+    return retain;
+  });
+  if (desiredCount > existingSeries.length) {
+    const template = existingSeries.at(-1);
+    if (template === undefined) throw new Error("updateChartData: chart has no series");
+    const addedSeries = Array.from({ length: desiredCount - existingSeries.length }, () =>
+      structuredClone(template),
+    );
+    let lastSeriesIndex = -1;
+    for (const [index, entry] of retainedChildren.entries()) {
+      if (elementLocalName(entry) === "ser") lastSeriesIndex = index;
+    }
+    retainedChildren.splice(lastSeriesIndex + 1, 0, ...addedSeries);
+    retainedSeries.push(...addedSeries);
+  }
+  setElementChildren(chartGroup, retainedChildren);
+  return retainedSeries;
 }
 
 interface ParsedFormula {
