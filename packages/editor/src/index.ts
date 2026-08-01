@@ -1615,103 +1615,132 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
 
   for (let index = edits.length - 1; index >= 0; index -= 1) {
     const edit = edits[index];
-    if (edit.kind === "replaceTextRunPlainText") {
-      const key = editHandleNodeKey(edit);
-      const paragraphKey = textRunParagraphEditKey(edit);
-      if (paragraphKey !== undefined && seenParagraphs.has(paragraphKey)) {
-        changed = true;
+    switch (edit.kind) {
+      case "replaceTextRunPlainText": {
+        const key = editHandleNodeKey(edit);
+        const paragraphKey = textRunParagraphEditKey(edit);
+        if (
+          (paragraphKey !== undefined && seenParagraphs.has(paragraphKey)) ||
+          seenTextRuns.has(key)
+        ) {
+          changed = true;
+          continue;
+        }
+        seenTextRuns.add(key);
+        normalizedReversed.push(edit);
         continue;
       }
-      if (seenTextRuns.has(key)) {
-        changed = true;
+      case "updateTextRunProperties": {
+        const paragraphKey = textRunParagraphEditKey(edit);
+        if (paragraphKey !== undefined && seenParagraphs.has(paragraphKey)) {
+          changed = true;
+          continue;
+        }
+        const normalized = normalizeTextRunPropertiesEdit(edit, seenTextRunProperties);
+        if (normalized === undefined) {
+          changed = true;
+          continue;
+        }
+        if (!editorEditsEqual(normalized, edit)) changed = true;
+        normalizedReversed.push(normalized);
         continue;
       }
-      seenTextRuns.add(key);
+      case "updateParagraphProperties": {
+        const normalized = normalizeParagraphPropertiesEdit(edit, seenParagraphProperties);
+        if (normalized === undefined) {
+          changed = true;
+          continue;
+        }
+        if (!editorEditsEqual(normalized, edit)) changed = true;
+        normalizedReversed.push(normalized);
+        continue;
+      }
+      case "replaceParagraphPlainText": {
+        const key = editHandleNodeKey(edit);
+        if (seenParagraphs.has(key)) {
+          changed = true;
+          continue;
+        }
+        seenParagraphs.add(key);
+        normalizedReversed.push(edit);
+        continue;
+      }
+      case "updateShapeTransform": {
+        const key = editHandleNodeKey(edit);
+        if (seenShapeTransforms.has(key)) {
+          changed = true;
+          continue;
+        }
+        seenShapeTransforms.add(key);
+        normalizedReversed.push(edit);
+        continue;
+      }
+      case "updateShapeFill": {
+        const key = editHandleNodeKey(edit);
+        if (seenShapeFills.has(key)) {
+          changed = true;
+          continue;
+        }
+        seenShapeFills.add(key);
+        normalizedReversed.push(edit);
+        continue;
+      }
+      case "updatePictureCrop": {
+        const key = editHandleNodeKey(edit);
+        if (seenPictureCrops.has(key)) {
+          changed = true;
+          continue;
+        }
+        seenPictureCrops.add(key);
+        normalizedReversed.push(edit);
+        continue;
+      }
+      case "updateShapeOutline": {
+        const normalized = normalizeShapeOutlineEdit(
+          edit,
+          seenShapeOutlineProperties,
+          normalizedShapeOutlineEdits,
+        );
+        if (normalized === undefined || normalized.merged) {
+          changed = true;
+          continue;
+        }
+        if (!editorEditsEqual(normalized.edit, edit)) changed = true;
+        normalizedReversed.push(normalized.edit);
+        continue;
+      }
+      case "updateChartData": {
+        const key = sourceHandleKey(edit.handle);
+        if (seenChartData.has(key)) {
+          changed = true;
+          continue;
+        }
+        seenChartData.add(key);
+        normalizedReversed.push(edit);
+        continue;
+      }
+      case "addChart":
+      case "addConnector":
+      case "addEmptySlideFromLayout":
+      case "addPicture":
+      case "addShape":
+      case "addSlideLayout":
+      case "addTable":
+      case "addTextBox":
+      case "cloneSlideLayout":
+      case "deleteShape":
+      case "deleteSlide":
+      case "duplicateSlide":
+      case "groupShapes":
+      case "moveSlide":
+      case "reorderShapes":
+      case "replaceImage":
+      case "setBackground":
+      case "setSlideBackground":
+      case "ungroupShape":
+      case "updateTableCellProperties":
+        normalizedReversed.push(edit);
     }
-    if (edit.kind === "updateTextRunProperties") {
-      const paragraphKey = textRunParagraphEditKey(edit);
-      if (paragraphKey !== undefined && seenParagraphs.has(paragraphKey)) {
-        changed = true;
-        continue;
-      }
-      const normalized = normalizeTextRunPropertiesEdit(edit, seenTextRunProperties);
-      if (normalized === undefined) {
-        changed = true;
-        continue;
-      }
-      if (!editorEditsEqual(normalized, edit)) changed = true;
-      normalizedReversed.push(normalized);
-      continue;
-    }
-    if (edit.kind === "updateParagraphProperties") {
-      const normalized = normalizeParagraphPropertiesEdit(edit, seenParagraphProperties);
-      if (normalized === undefined) {
-        changed = true;
-        continue;
-      }
-      if (!editorEditsEqual(normalized, edit)) changed = true;
-      normalizedReversed.push(normalized);
-      continue;
-    }
-    if (edit.kind === "replaceParagraphPlainText") {
-      const key = editHandleNodeKey(edit);
-      if (seenParagraphs.has(key)) {
-        changed = true;
-        continue;
-      }
-      seenParagraphs.add(key);
-    }
-    if (edit.kind === "updateShapeTransform") {
-      const key = editHandleNodeKey(edit);
-      if (seenShapeTransforms.has(key)) {
-        changed = true;
-        continue;
-      }
-      seenShapeTransforms.add(key);
-    }
-    if (edit.kind === "updateShapeFill") {
-      const key = editHandleNodeKey(edit);
-      if (seenShapeFills.has(key)) {
-        changed = true;
-        continue;
-      }
-      seenShapeFills.add(key);
-    }
-    if (edit.kind === "updatePictureCrop") {
-      const key = editHandleNodeKey(edit);
-      if (seenPictureCrops.has(key)) {
-        changed = true;
-        continue;
-      }
-      seenPictureCrops.add(key);
-    }
-    if (edit.kind === "updateShapeOutline") {
-      const normalized = normalizeShapeOutlineEdit(
-        edit,
-        seenShapeOutlineProperties,
-        normalizedShapeOutlineEdits,
-      );
-      if (normalized === undefined) {
-        changed = true;
-        continue;
-      }
-      if (normalized.merged) {
-        changed = true;
-        continue;
-      }
-      if (!editorEditsEqual(normalized.edit, edit)) changed = true;
-      normalizedReversed.push(normalized.edit);
-      continue;
-    }
-    if (edit.kind === "updateChartData") {
-      const key = sourceHandleKey(edit.handle);
-      if (seenChartData.has(key)) {
-        changed = true;
-        continue;
-      }
-      seenChartData.add(key);
-    }
-    normalizedReversed.push(edit);
   }
 
   if (!changed && normalizedReversed.length === edits.length) return document;
