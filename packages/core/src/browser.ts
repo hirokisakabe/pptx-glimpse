@@ -7,20 +7,52 @@
  * @module browser
  */
 
+import type { PptxSourceModel } from "@pptx-glimpse/document";
 import { DEFAULT_OUTPUT_WIDTH } from "@pptx-glimpse/renderer";
 import {
   initResvgWasm as initRendererResvgWasm,
   svgToPng,
 } from "@pptx-glimpse/renderer/png/browser";
 
-import { configurePptxEditorSessionRenderer } from "./pptx-editor-session.js";
+import {
+  affectedSlidePartPaths,
+  initializePptxEditorSession,
+  type PptxEditorRenderOptions,
+  PptxEditorSession as BasePptxEditorSession,
+} from "./pptx-editor-session.js";
 import {
   type ConvertOptions,
   convertPptxToSvg as convertPptxToSvgBase,
   renderPptxSourceModelToSvg as renderPptxSourceModelToSvgForEditor,
 } from "./svg-converter.js";
 
-configurePptxEditorSessionRenderer(renderPptxSourceModelToSvgForEditor);
+/** Headless read/edit/render/write session using the browser renderer. */
+export class PptxEditorSession extends BasePptxEditorSession {
+  private constructor(source: PptxSourceModel, renderOptions: PptxEditorRenderOptions) {
+    super(source, renderOptions, {
+      renderToSvg: renderPptxSourceModelToSvgForEditor,
+      resolveAffectedSlides: affectedSlidePartPaths,
+    });
+  }
+
+  static override async create(
+    input: Uint8Array,
+    renderOptions: PptxEditorRenderOptions = {},
+  ): Promise<PptxEditorSession> {
+    return initializePptxEditorSession(
+      input,
+      (source) => new PptxEditorSession(source, renderOptions),
+    );
+  }
+}
+
+/** Parse PPTX bytes and create a rendered browser editor session. */
+export function createPptxEditorSession(
+  input: Uint8Array,
+  renderOptions?: PptxEditorRenderOptions,
+): Promise<PptxEditorSession> {
+  return PptxEditorSession.create(input, renderOptions);
+}
 
 export type { PngConversionReport, SlideImage } from "./converter.js";
 export type { UsedFonts } from "./font/font-collector.js";
@@ -45,12 +77,7 @@ export type {
   PptxEditorTextRunInfo,
   PptxEditorTextRunView,
 } from "./pptx-editor-session.js";
-export {
-  createPptxEditorSession,
-  isPptxEditorError,
-  PptxEditorError,
-  PptxEditorSession,
-} from "./pptx-editor-session.js";
+export { isPptxEditorError, PptxEditorError } from "./pptx-editor-session.js";
 export type {
   ConversionDiagnostic,
   ConvertOptions,

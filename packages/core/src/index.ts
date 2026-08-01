@@ -7,10 +7,43 @@
  * @module node
  */
 
-import { renderPptxSourceModelToSvg as renderPptxSourceModelToSvgForEditor } from "./converter.js";
-import { configurePptxEditorSessionRenderer } from "./pptx-editor-session.js";
+import type { PptxSourceModel } from "@pptx-glimpse/document";
 
-configurePptxEditorSessionRenderer(renderPptxSourceModelToSvgForEditor);
+import { renderPptxSourceModelToSvg as renderPptxSourceModelToSvgForEditor } from "./converter.js";
+import {
+  affectedSlidePartPaths,
+  initializePptxEditorSession,
+  type PptxEditorRenderOptions,
+  PptxEditorSession as BasePptxEditorSession,
+} from "./pptx-editor-session.js";
+
+/** Headless read/edit/render/write session using the Node renderer. */
+export class PptxEditorSession extends BasePptxEditorSession {
+  private constructor(source: PptxSourceModel, renderOptions: PptxEditorRenderOptions) {
+    super(source, renderOptions, {
+      renderToSvg: renderPptxSourceModelToSvgForEditor,
+      resolveAffectedSlides: affectedSlidePartPaths,
+    });
+  }
+
+  static override async create(
+    input: Uint8Array,
+    renderOptions: PptxEditorRenderOptions = {},
+  ): Promise<PptxEditorSession> {
+    return initializePptxEditorSession(
+      input,
+      (source) => new PptxEditorSession(source, renderOptions),
+    );
+  }
+}
+
+/** Parse PPTX bytes and create a rendered Node editor session. */
+export function createPptxEditorSession(
+  input: Uint8Array,
+  renderOptions?: PptxEditorRenderOptions,
+): Promise<PptxEditorSession> {
+  return PptxEditorSession.create(input, renderOptions);
+}
 
 export type {
   ConversionDiagnostic,
@@ -47,12 +80,7 @@ export type {
   PptxEditorTextRunInfo,
   PptxEditorTextRunView,
 } from "./pptx-editor-session.js";
-export {
-  createPptxEditorSession,
-  isPptxEditorError,
-  PptxEditorError,
-  PptxEditorSession,
-} from "./pptx-editor-session.js";
+export { isPptxEditorError, PptxEditorError } from "./pptx-editor-session.js";
 export type { SourceHandle } from "@pptx-glimpse/document";
 export type {
   EditorCommand,
