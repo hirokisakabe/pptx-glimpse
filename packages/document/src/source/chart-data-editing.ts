@@ -44,6 +44,8 @@ const SUPPORTED_CHART_ELEMENTS: ReadonlySet<string> = new Set([
   "radarChart",
 ]);
 const XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const CHART_2014_NAMESPACE = "http://schemas.microsoft.com/office/drawing/2014/chart";
+const SERIES_UNIQUE_ID_EXTENSION_URI = "{C3380CC4-5D6E-409C-BE32-E72D297353CC}";
 const XLSX_MAX_SERIES = 16_383;
 const XLSX_MAX_DATA_POINTS = 1_048_575;
 const encoder = new TextEncoder();
@@ -359,7 +361,7 @@ function inspectAndUpdateChartXml(
     );
   }
 
-  const series = resizeChartSeries(chartGroups[0], existingSeries, input.series.length);
+  const series = resizeChartSeries(chartSpace, chartGroups[0], existingSeries, input.series.length);
   const addedSeriesIdentities =
     input.series.length > existingSeries.length
       ? nextAddedSeriesIdentities(existingSeries, input.series.length - existingSeries.length)
@@ -446,6 +448,7 @@ function seriesIdentityValue(series: OrderedXmlNode, localName: "idx" | "order")
 }
 
 function resizeChartSeries(
+  chartSpace: OrderedXmlNode,
   chartGroup: OrderedXmlNode,
   existingSeries: readonly OrderedXmlNode[],
   desiredCount: number,
@@ -462,7 +465,7 @@ function resizeChartSeries(
   if (desiredCount > existingSeries.length) {
     const template = existingSeries.at(-1);
     if (template === undefined) throw new Error("updateChartData: chart has no series");
-    const rewriteUniqueId = createAddedSeriesUniqueIdRewriter(existingSeries, template);
+    const rewriteUniqueId = createAddedSeriesUniqueIdRewriter(chartSpace, existingSeries, template);
     const addedSeries = Array.from({ length: desiredCount - existingSeries.length }, () => {
       const clone = structuredClone(template);
       rewriteUniqueId(clone);
@@ -488,23 +491,26 @@ function hasExplicitLegendEntries(chart: OrderedXmlNode): boolean {
 }
 
 function createAddedSeriesUniqueIdRewriter(
+  chartSpace: OrderedXmlNode,
   existingSeries: readonly OrderedXmlNode[],
   template: OrderedXmlNode,
 ): (clone: OrderedXmlNode) => void {
-  const existingValues = existingSeries.flatMap((series) => seriesUniqueIdElements(series));
-  const normalized = existingValues.map(({ value }) => normalizeGuid(value));
-  const used = new Set(normalized.map(({ hex }) => hex));
-  if (used.size !== normalized.length) {
+  const existingValues = existingSeries.flatMap((series) =>
+    seriesIdentityUniqueIdElements(series, chartSpace),
+  );
+  const normalizedSeriesIds = existingValues.map(({ value }) => normalizeGuid(value));
+  if (new Set(normalizedSeriesIds.map(({ hex }) => hex)).size !== normalizedSeriesIds.length) {
     throw new Error("updateChartData: chart series uniqueId values must be unique");
   }
-  const templateIds = seriesUniqueIdElements(template);
+  const used = new Set(chartGuidUniqueIdValues(chartSpace).map(({ hex }) => hex));
+  const templateIds = seriesIdentityUniqueIdElements(template, chartSpace);
   if (templateIds.length === 0) return () => undefined;
   if (templateIds.length !== 1) {
     throw new Error("updateChartData: chart series uniqueId layout is not supported");
   }
   let previous = normalizeGuid(templateIds[0].value);
   return (clone) => {
-    const cloneIds = seriesUniqueIdElements(clone);
+    const cloneIds = seriesIdentityUniqueIdElements(clone);
     if (cloneIds.length !== 1) {
       throw new Error("updateChartData: chart series uniqueId layout is not supported");
     }
@@ -519,7 +525,10 @@ interface SeriesUniqueIdElement {
   readonly value: string;
 }
 
-function seriesUniqueIdElements(series: OrderedXmlNode): SeriesUniqueIdElement[] {
+function seriesIdentityUniqueIdElements(
+  series: OrderedXmlNode,
+  namespaceRoot?: OrderedXmlNode,
+): SeriesUniqueIdElement[] {
   const extensionLists = elementChildren(series).filter(
     (entry) => elementLocalName(entry) === "extLst",
   );
@@ -528,8 +537,23 @@ function seriesUniqueIdElements(series: OrderedXmlNode): SeriesUniqueIdElement[]
   }
   const extensionList = extensionLists[0];
   if (extensionList === undefined) return [];
-  return descendantElements(extensionList)
-    .filter((entry) => elementLocalName(entry) === "uniqueId")
+  const identityExtensions = elementChildren(extensionList).filter(
+    (entry) =>
+      elementLocalName(entry) === "ext" &&
+      attribute(entry, "uri")?.toUpperCase() === SERIES_UNIQUE_ID_EXTENSION_URI,
+  );
+  if (identityExtensions.length > 1) {
+    throw new Error("updateChartData: chart series uniqueId layout is not supported");
+  }
+  const identityExtension = identityExtensions[0];
+  if (identityExtension === undefined) return [];
+  return elementChildren(identityExtension)
+    .filter(
+      (entry) =>
+        elementLocalName(entry) === "uniqueId" &&
+        (namespaceRoot === undefined ||
+          elementNamespaceUri(namespaceRoot, entry) === CHART_2014_NAMESPACE),
+    )
     .map((element) => {
       const value = attribute(element, "val");
       if (value === undefined) {
@@ -539,9 +563,63 @@ function seriesUniqueIdElements(series: OrderedXmlNode): SeriesUniqueIdElement[]
     });
 }
 
-function descendantElements(entry: OrderedXmlNode): OrderedXmlNode[] {
-  const children = [...elementChildren(entry)];
-  return children.flatMap((child) => [child, ...descendantElements(child)]);
+function chartGuidUniqueIdValues(chartSpace: OrderedXmlNode): NormalizedGuid[] {
+  const values: NormalizedGuid[] = [];
+  visitElements(chartSpace, {}, (entry, namespaces) => {
+    if (
+      elementLocalName(entry) !== "uniqueId" ||
+      namespaceUriForElement(entry, namespaces) !== CHART_2014_NAMESPACE
+    ) {
+      return;
+    }
+    const value = attribute(entry, "val");
+    if (value !== undefined && isGuid(value)) values.push(normalizeGuid(value));
+  });
+  return values;
+}
+
+function elementNamespaceUri(root: OrderedXmlNode, target: OrderedXmlNode): string | undefined {
+  let result: string | undefined;
+  visitElements(root, {}, (entry, namespaces) => {
+    if (entry === target) result = namespaceUriForElement(entry, namespaces);
+  });
+  return result;
+}
+
+function visitElements(
+  entry: OrderedXmlNode,
+  inheritedNamespaces: Readonly<Record<string, string>>,
+  visit: (entry: OrderedXmlNode, namespaces: Readonly<Record<string, string>>) => void,
+): void {
+  const namespaces = { ...inheritedNamespaces };
+  const attributes = entry[":@"];
+  if (typeof attributes === "object" && attributes !== null) {
+    for (const [key, value] of Object.entries(
+      unsafeOoxmlBoundaryAssertion<Record<string, unknown>>(attributes),
+    )) {
+      if (typeof value !== "string") continue;
+      const name = key.startsWith("@_") ? key.slice(2) : key;
+      if (name === "xmlns") namespaces[""] = value;
+      else if (name.startsWith("xmlns:")) namespaces[name.slice("xmlns:".length)] = value;
+    }
+  }
+  visit(entry, namespaces);
+  for (const child of elementChildren(entry)) visitElements(child, namespaces, visit);
+}
+
+function namespaceUriForElement(
+  entry: OrderedXmlNode,
+  namespaces: Readonly<Record<string, string>>,
+): string | undefined {
+  const name = elementName(entry);
+  if (name === undefined) return undefined;
+  const colon = name.indexOf(":");
+  return namespaces[colon < 0 ? "" : name.slice(0, colon)];
+}
+
+function isGuid(value: string): boolean {
+  const match = /^(\{?)[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}(\}?)$/.exec(value);
+  return match !== null && (match[1] === "{") === (match[2] === "}");
 }
 
 interface NormalizedGuid {
