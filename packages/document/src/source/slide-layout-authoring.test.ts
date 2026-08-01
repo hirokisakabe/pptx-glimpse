@@ -258,6 +258,9 @@ describe("addSlideLayout", () => {
     expect(masterXml).toContain(
       `<p:sldLayoutId id="${cloneEdit.newLayoutNumericId}" r:id="${cloneEdit.newRelationshipId}"`,
     );
+    expect(readPptx(writePptx(edited)).slideMasters[0]?.layoutPartPaths).toEqual([
+      cloneEdit.newLayoutPartPath,
+    ]);
   });
 
   it("supports the immutable function flow when adding a slide from the new layout", () => {
@@ -413,7 +416,14 @@ describe("cloneSlideLayout", () => {
 
     expect(clonedRaw.handle?.partPath).toBe(cloned.partPath);
     const handles = cloned.shapes.map((shape) => requireValue(shape.handle));
-    expect(() => session.target(clonedHandle).reorderShapes([...handles].reverse())).not.toThrow();
+    const reversedHandles = [...handles].reverse();
+    session.target(clonedHandle).reorderShapes(reversedHandles);
+    const reread = readPptx(writePptx(session.source));
+    expect(
+      reread.slideLayouts
+        .find((candidate) => candidate.partPath === cloned.partPath)
+        ?.shapes.map((shape) => shape.nodeId),
+    ).toEqual(reversedHandles.map((handle) => handle.nodeId));
   });
 
   it("shares relationship targets, allocates collisions, and returns an authoring handle", () => {
