@@ -355,11 +355,18 @@ function inspectAndUpdateChartXml(
   }
 
   const series = resizeChartSeries(chartGroups[0], existingSeries, input.series.length);
+  const addedSeriesIdentities =
+    input.series.length > existingSeries.length
+      ? nextAddedSeriesIdentities(existingSeries, input.series.length - existingSeries.length)
+      : [];
   for (const [index, seriesEntry] of series.entries()) {
     const sheetToken = sheetTokens[index] ?? sheetTokens.at(-1);
     if (sheetToken === undefined) throw new Error("updateChartData: chart has no series");
-    setAttribute(requireSingleChild(seriesEntry, "idx"), "val", String(index));
-    setAttribute(requireSingleChild(seriesEntry, "order"), "val", String(index));
+    const addedIdentity = addedSeriesIdentities[index - existingSeries.length];
+    if (addedIdentity !== undefined) {
+      setAttribute(requireSingleChild(seriesEntry, "idx"), "val", String(addedIdentity.index));
+      setAttribute(requireSingleChild(seriesEntry, "order"), "val", String(addedIdentity.order));
+    }
     const tx = requireSingleChild(seriesEntry, "tx");
     const txRef = requireSingleChild(tx, "strRef");
     const category = requireSingleChild(seriesEntry, "cat");
@@ -389,6 +396,48 @@ function inspectAndUpdateChartXml(
     existingSeriesCount: existingSeries.length,
     pointCount,
   };
+}
+
+interface SeriesIdentity {
+  readonly index: number;
+  readonly order: number;
+}
+
+function nextAddedSeriesIdentities(
+  existingSeries: readonly OrderedXmlNode[],
+  addedCount: number,
+): SeriesIdentity[] {
+  const identities = existingSeries.map((series) => ({
+    index: seriesIdentityValue(series, "idx"),
+    order: seriesIdentityValue(series, "order"),
+  }));
+  if (
+    new Set(identities.map((identity) => identity.index)).size !== identities.length ||
+    new Set(identities.map((identity) => identity.order)).size !== identities.length
+  ) {
+    throw new Error("updateChartData: chart series idx/order values must be unique");
+  }
+  const maxIndex = Math.max(...identities.map((identity) => identity.index));
+  const maxOrder = Math.max(...identities.map((identity) => identity.order));
+  if (maxIndex + addedCount > 0xffff_ffff || maxOrder + addedCount > 0xffff_ffff) {
+    throw new Error("updateChartData: chart series idx/order values cannot be extended");
+  }
+  return Array.from({ length: addedCount }, (_, offset) => ({
+    index: maxIndex + offset + 1,
+    order: maxOrder + offset + 1,
+  }));
+}
+
+function seriesIdentityValue(series: OrderedXmlNode, localName: "idx" | "order"): number {
+  const value = attribute(requireSingleChild(series, localName), "val");
+  if (value === undefined || !/^\d+$/.test(value)) {
+    throw new Error(`updateChartData: chart series ${localName} value is invalid`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed > 0xffff_ffff) {
+    throw new Error(`updateChartData: chart series ${localName} value is invalid`);
+  }
+  return parsed;
 }
 
 function resizeChartSeries(

@@ -96,6 +96,16 @@ describe("updateChartData", () => {
   it("adds series by cloning the last series formatting and synchronizes the workbook", () => {
     const files = unzipSync(buildExistingChart());
     files["ppt/charts/chart1.xml"] = addSeriesExtensionMarkers(files["ppt/charts/chart1.xml"]);
+    files["ppt/charts/chart1.xml"] = replaceText(
+      files["ppt/charts/chart1.xml"],
+      '<c:idx val="1"/><c:order val="1"/>',
+      '<c:idx val="7"/><c:order val="9"/>',
+    );
+    files["ppt/charts/chart1.xml"] = replaceText(
+      files["ppt/charts/chart1.xml"],
+      "<c:legend>",
+      '<c:legend><c:legendEntry><c:idx val="7"/><c:delete val="1"/></c:legendEntry>',
+    );
     const source = readPptx(zipFixture(files));
     const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
     if (chart?.handle === undefined) throw new Error("chart fixture should have a handle");
@@ -114,8 +124,11 @@ describe("updateChartData", () => {
     const chartXml = decoder.decode(output["ppt/charts/chart1.xml"]);
     expect(chartXml.match(/<c:ser>/g)).toHaveLength(3);
     expect(chartXml).toContain('<c:idx val="0"/><c:order val="0"/>');
-    expect(chartXml).toContain('<c:idx val="1"/><c:order val="1"/>');
-    expect(chartXml).toContain('<c:idx val="2"/><c:order val="2"/>');
+    expect(chartXml).toContain('<c:idx val="7"/><c:order val="9"/>');
+    expect(chartXml).toContain('<c:idx val="8"/><c:order val="10"/>');
+    expect(chartXml).toContain(
+      '<c:legendEntry><c:idx val="7"/><c:delete val="1"/></c:legendEntry>',
+    );
     expect(chartXml).toContain("Sheet1!$D$1");
     expect(chartXml).toContain("Sheet1!$D$2:$D$3");
     expect(chartXml.match(/uri="series-1"/g)).toHaveLength(1);
@@ -361,6 +374,28 @@ describe("updateChartData", () => {
 
     const sharedSource = readPptx(buildSharedWorkbookChart());
     expectEditFailure(sharedSource, "embedded workbook is shared by another package part");
+
+    const duplicateIdentityFiles = unzipSync(input);
+    duplicateIdentityFiles["ppt/charts/chart1.xml"] = replaceText(
+      duplicateIdentityFiles["ppt/charts/chart1.xml"],
+      '<c:idx val="1"/>',
+      '<c:idx val="0"/>',
+    );
+    const duplicateIdentitySource = readPptx(zipFixture(duplicateIdentityFiles));
+    const duplicateIdentityChart = duplicateIdentitySource.slides[0]?.shapes.find(
+      (shape) => shape.kind === "chart",
+    );
+    if (duplicateIdentityChart?.handle === undefined)
+      throw new Error("chart fixture should have a handle");
+    expect(() =>
+      updateChartData(duplicateIdentitySource, duplicateIdentityChart.handle, {
+        series: [
+          { name: "One", categories: ["A"], values: [1] },
+          { name: "Two", categories: ["A"], values: [2] },
+          { name: "Three", categories: ["A"], values: [3] },
+        ],
+      }),
+    ).toThrow("chart series idx/order values must be unique");
 
     const source = readPptx(input);
     const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
