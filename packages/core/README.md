@@ -91,7 +91,9 @@ const editor = await createPptxEditorSession(new Uint8Array(pptx), {
 ```
 
 See [Editing presentations](https://glimpse.pptx.app/docs/editing) for commands and workflow
-details. Complete signatures are available for
+details, including stretch-picture `setPictureCrop` / `clearPictureCrop` commands that rerender
+the affected slide and persist the crop change by updating or removing `a:srcRect`. Complete
+signatures are available for
 [`createPptxEditorSession`](https://glimpse.pptx.app/docs/api/node/functions/createPptxEditorSession),
 [`PptxEditorSession`](https://glimpse.pptx.app/docs/api/node/classes/PptxEditorSession), and every
 [`EditorCommand`](https://glimpse.pptx.app/docs/api/node/type-aliases/EditorCommand) payload.

@@ -37,6 +37,8 @@ export type {
   AddPictureInput,
 } from "./picture-authoring.js";
 export { addPicture } from "./picture-authoring.js";
+export type { SetPictureCropInput } from "./picture-crop-editing.js";
+export { clearPictureCrop, setPictureCrop } from "./picture-crop-editing.js";
 export type {
   EditableTableCellBorder,
   EditableTableCellProperties,
@@ -96,6 +98,13 @@ export {
   setShapeOutline,
   updateShapeTransform,
 } from "./shape-editing.js";
+export type {
+  AddSlideLayoutBackgroundInput,
+  AddSlideLayoutInput,
+  AddSlideLayoutMarginInput,
+  SlideLayoutType,
+} from "./slide-layout-authoring.js";
+export { addSlideLayout } from "./slide-layout-authoring.js";
 export type { AddEmptySlideFromLayoutInput } from "./slide-topology.js";
 export type { MoveSlideInput } from "./slide-topology.js";
 export {

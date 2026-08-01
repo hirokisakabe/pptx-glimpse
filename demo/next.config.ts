@@ -8,13 +8,11 @@ const withNextra = nextra({
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: resolve(import.meta.dirname, ".."),
-  webpack: (config) => {
-    config.resolve = config.resolve ?? {};
-    config.resolve.alias = {
-      ...config.resolve.alias,
-      "pptx-glimpse$": resolve(import.meta.dirname, "../packages/core/dist/browser.js"),
-    };
-    return config;
+  turbopack: {
+    resolveAlias: {
+      "next-mdx-import-source-file": "./mdx-components.tsx",
+      "pptx-glimpse": "../packages/core/dist/browser.js",
+    },
   },
 };
 

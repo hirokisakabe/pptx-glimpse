@@ -1,9 +1,10 @@
 import { type ChildProcessWithoutNullStreams, execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
+import { builtinModules } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -467,8 +468,40 @@ async function ensureDemoBuild(): Promise<void> {
       throw new Error("demo dependencies are not installed; run `cd demo && npm ci` first.");
     }
     await execFileAsync("npm", ["run", "build"], { cwd: demoRoot, maxBuffer: 20 * 1024 * 1024 });
+    await assertDemoBrowserBundle();
   })();
   await demoBuildPromise;
+}
+
+async function assertDemoBrowserBundle(): Promise<void> {
+  const chunksDirectory = resolve(demoRoot, ".next/static/chunks");
+  const chunkPaths = await collectJavaScriptFiles(chunksDirectory);
+  expect(chunkPaths.length, "the demo build should emit browser chunks").toBeGreaterThan(0);
+  const builtinSpecifierPattern = builtinModules
+    .map((specifier) => specifier.replace(/^node:/, ""))
+    .map((specifier) => specifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  const nodeOnlyPattern = new RegExp(
+    `(?:node:(?:${builtinSpecifierPattern})|\\[externals\\]/(?:node:)?(?:${builtinSpecifierPattern})|(?:from|import|import\\s*\\(|require\\s*\\()\\s*["'](?:${builtinSpecifierPattern})["']|node-font-loader|packages/core/dist/index)`,
+  );
+
+  for (const chunkPath of chunkPaths) {
+    const source = await readFile(chunkPath, "utf8");
+    const chunkName = relative(chunksDirectory, chunkPath);
+    expect(source, `${chunkName} includes a Node-only dependency`).not.toMatch(nodeOnlyPattern);
+  }
+}
+
+async function collectJavaScriptFiles(directory: string): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const nestedFiles = await Promise.all(
+    entries.map(async (entry) => {
+      const entryPath = resolve(directory, entry.name);
+      if (entry.isDirectory()) return collectJavaScriptFiles(entryPath);
+      return entry.isFile() && entry.name.endsWith(".js") ? [entryPath] : [];
+    }),
+  );
+  return nestedFiles.flat();
 }
 
 async function findFreePort(): Promise<number> {

@@ -521,8 +521,18 @@ function parseImage(
   const blip = getChild(blipFill, "blip");
   const embed = getNamespacedAttr(blip, "embed");
   const crop = parseCrop(getChild(blipFill, "srcRect"));
-  const stretch = parseStretch(getChild(blipFill, "stretch"));
-  const tile = parseImageFillTile(getChild(blipFill, "tile"));
+  const stretchNode = getChild(blipFill, "stretch");
+  const tileNode = getChild(blipFill, "tile");
+  const stretchCount = countChildrenByLocalName(blipFill, "stretch");
+  const tileCount = countChildrenByLocalName(blipFill, "tile");
+  const stretch = parseStretch(stretchNode);
+  const tile = parseImageFillTile(tileNode);
+  const blipFillMode =
+    stretchCount === 1 && tileCount === 0
+      ? "stretch"
+      : tileCount === 1 && stretchCount === 0
+        ? "tile"
+        : undefined;
   const blipEffects = parseBlipEffects(blip);
 
   const spPr = getChild(pic, "spPr");
@@ -545,6 +555,7 @@ function parseImage(
     ...(transform !== undefined ? { transform } : {}),
     ...(embed !== undefined ? { blipRelationshipId: asRelationshipId(embed) } : {}),
     ...(crop !== undefined ? { crop } : {}),
+    ...(blipFillMode !== undefined ? { blipFillMode } : {}),
     ...(stretch !== undefined ? { stretch } : {}),
     ...(tile !== undefined ? { tile } : {}),
     ...(effects !== undefined ? { effects } : {}),
@@ -557,6 +568,14 @@ function parseImage(
     },
     ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
   };
+}
+
+function countChildrenByLocalName(parent: XmlNode | undefined, name: string): number {
+  if (parent === undefined) return 0;
+  return Object.entries(parent).reduce((count, [key, value]) => {
+    if (key.startsWith("@_") || localName(key) !== name) return count;
+    return count + (Array.isArray(value) ? value.length : 1);
+  }, 0);
 }
 
 function collectEffectSidecars(

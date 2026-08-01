@@ -31,6 +31,7 @@ import {
   addTable,
   addTextBox,
   clearParagraphProperties,
+  clearPictureCrop,
   clearTextRunProperties,
   deleteShape,
   deleteSlide,
@@ -43,6 +44,7 @@ import {
   replaceParagraphPlainText,
   replaceTextRunPlainText,
   setParagraphProperties,
+  setPictureCrop,
   setShapeFill,
   setShapeOutline,
   setTextRunProperties,
@@ -150,10 +152,12 @@ function buildMediaReplacementFixture(
         `</Relationships>`,
     ),
     "ppt/slides/slide1.xml": xml(
-      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"${imageRelationshipPrefix === "r" ? "" : ` xmlns:${imageRelationshipPrefix}="http://schemas.openxmlformats.org/officeDocument/2006/relationships"`} xmlns:v="urn:schemas-microsoft-com:vml">` +
+      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"${imageRelationshipPrefix === "r" ? "" : ` xmlns:${imageRelationshipPrefix}="http://schemas.openxmlformats.org/officeDocument/2006/relationships"`} xmlns:v="urn:schemas-microsoft-com:vml" xmlns:x="urn:test:unknown">` +
         `<p:cSld><p:spTree>` +
         `<p:pic><p:nvPicPr><p:cNvPr id="20" name="Replace Target"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
-        `<p:blipFill><a:blip ${imageRelationshipPrefix}:embed="rIdImage1"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+        `<p:blipFill data-preserve="yes"><a:blip ${imageRelationshipPrefix}:embed="rIdImage1"/><x:keep value="yes"/>` +
+        `<a:srcRect l="1000" x:l="preserve"><x:inside value="yes"/></a:srcRect>` +
+        `<a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
         `<p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:pic>` +
         (shared === true
           ? `<p:pic><p:nvPicPr><p:cNvPr id="21" name="Keep Shared"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
@@ -2755,8 +2759,8 @@ describe("writePptx - no-edit round-trip", () => {
     const output = writePptx(replaceImageBytes(source, target.handle, BLUE_PNG));
     const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
 
-    expect(slideXml).toContain(`<a:blip rel:embed="rId3"/>`);
-    expect(slideXml).not.toContain(`<a:blip r:embed="rId3"/>`);
+    expect(slideXml).toContain(`rel:embed="rId3"`);
+    expect(slideXml).not.toContain(`r:embed="rId3"`);
   });
 
   it("updates the final reference in place after another shared picture is isolated", () => {
@@ -2828,6 +2832,89 @@ describe("writePptx - no-edit round-trip", () => {
     });
     expect(getEntry(output, "ppt/media/image1.png")).toEqual(RED_PNG);
     expect(slideXml).toContain(`<v:imagedata r:id="rIdImage1"/>`);
+  });
+
+  it("patches and clears only the targeted stretch picture srcRect, then rereads it", () => {
+    const input = buildMediaReplacementFixture();
+    const source = readPptx(input);
+    const image = source.slides[0]?.shapes.find((shape) => shape.kind === "image");
+    if (image?.handle === undefined) throw new Error("picture crop fixture was not parsed");
+    expect(image.blipFillMode).toBe("stretch");
+
+    const cropped = setPictureCrop(source, image.handle, {
+      left: asOoxmlPercent(12000),
+      top: asOoxmlPercent(3000),
+      right: asOoxmlPercent(8000),
+      bottom: asOoxmlPercent(4000),
+    });
+    const croppedOutput = writePptx(cropped);
+    const croppedXml = decoder.decode(getEntry(croppedOutput, "ppt/slides/slide1.xml"));
+    const reread = readPptx(croppedOutput);
+    const rereadImage = reread.slides[0]?.shapes.find((shape) => shape.kind === "image");
+
+    expect(croppedXml).toContain(`<a:srcRect x:l="preserve" l="12000" t="3000" r="8000" b="4000">`);
+    expect(croppedXml).toContain(`data-preserve="yes"`);
+    expect(croppedXml).toContain(`<x:keep value="yes"/>`);
+    expect(croppedXml).toContain(`x:l="preserve"`);
+    expect(croppedXml).toContain(`<x:inside value="yes"/>`);
+    expect(croppedXml).toContain(`<a:stretch><a:fillRect/></a:stretch>`);
+    expect(rereadImage?.crop).toEqual({ left: 12000, top: 3000, right: 8000, bottom: 4000 });
+
+    const clearedOutput = writePptx(clearPictureCrop(cropped, image.handle));
+    const clearedXml = decoder.decode(getEntry(clearedOutput, "ppt/slides/slide1.xml"));
+    const clearedImage = readPptx(clearedOutput).slides[0]?.shapes.find(
+      (shape) => shape.kind === "image",
+    );
+    expect(clearedXml).not.toContain("srcRect");
+    expect(clearedXml).toContain(`<x:keep value="yes"/>`);
+    expect(clearedImage?.crop).toBeUndefined();
+  });
+
+  it("uses the existing DrawingML prefix when inserting picture srcRect", () => {
+    const entries = unzipSync(buildMediaReplacementFixture());
+    const slidePath = "ppt/slides/slide1.xml";
+    const slideXml = decoder
+      .decode(entries[slidePath])
+      .replace(`<a:srcRect l="1000" x:l="preserve"><x:inside value="yes"/></a:srcRect>`, "")
+      .replace(
+        `<a:stretch><a:fillRect/></a:stretch>`,
+        `<d:stretch xmlns:d="http://schemas.openxmlformats.org/drawingml/2006/main"><a:fillRect/></d:stretch>`,
+      );
+    entries[slidePath] = encoder.encode(slideXml);
+    const source = readPptx(zipSync(entries));
+    const image = source.slides[0]?.shapes.find((shape) => shape.kind === "image");
+    if (image?.handle === undefined) throw new Error("prefixed picture was not parsed");
+
+    const output = writePptx(setPictureCrop(source, image.handle, { left: asOoxmlPercent(10000) }));
+    const writtenXml = decoder.decode(getEntry(output, slidePath));
+
+    expect(writtenXml).toContain(
+      `<d:srcRect l="10000" xmlns:d="http://schemas.openxmlformats.org/drawingml/2006/main"/>`,
+    );
+    expect(writtenXml).not.toContain(`<a:srcRect`);
+  });
+
+  it("rejects duplicate picture crop edits even when relationship ids differ", () => {
+    const source = readPptx(buildMediaReplacementFixture());
+    const image = source.slides[0]?.shapes.find((shape) => shape.kind === "image");
+    if (image?.handle === undefined) throw new Error("picture crop fixture was not parsed");
+    const conflicted = {
+      ...source,
+      edits: [
+        {
+          kind: "updatePictureCrop" as const,
+          handle: image.handle,
+          crop: { left: asOoxmlPercent(10000) },
+        },
+        {
+          kind: "updatePictureCrop" as const,
+          handle: { ...image.handle, relationshipId: undefined },
+          crop: { right: asOoxmlPercent(10000) },
+        },
+      ],
+    };
+
+    expect(() => writePptx(conflicted)).toThrow(/conflicting picture crop edits/);
   });
 
   it("Can write xml raw package material in serializable range", () => {

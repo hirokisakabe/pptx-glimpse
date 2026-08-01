@@ -20,7 +20,7 @@
  * edits into raw material, such as duplicating a slide with dirty slide-part edits, are
  * rejected at runtime instead of guessing.
  *
- * New-content edits (new slides, text boxes, shapes, connectors, pictures) finalize their XML and id
+ * New-content edits (new slides, layouts, text boxes, shapes, connectors, pictures) finalize their XML and id
  * numbering at edit time and record them on the edit; the writer only applies
  * insertion positions. To keep the edited in-memory model and the written XML derived
  * from that single finalized fragment, `source/shape-xml.ts` and the edit-time slide
@@ -48,7 +48,7 @@ import type {
   SourceSlideMaster,
   SourceTheme,
 } from "./presentation.js";
-import type { SourceParagraphProperties } from "./shapes.js";
+import type { SourceImageCrop, SourceParagraphProperties } from "./shapes.js";
 import type { Emu, Pt } from "./units.js";
 
 export interface PptxSourceModel {
@@ -73,6 +73,7 @@ export type PptxSourceModelEdit =
   | PptxSourceModelShapeTransformEdit
   | PptxSourceModelShapeFillEdit
   | PptxSourceModelShapeOutlineEdit
+  | PptxSourceModelPictureCropEdit
   | PptxSourceModelTableCellPropertiesEdit
   | PptxSourceModelAddShapeEdit
   | PptxSourceModelAddTextBoxEdit
@@ -86,6 +87,7 @@ export type PptxSourceModelEdit =
   | PptxSourceModelUngroupShapeEdit
   | PptxSourceModelDeleteShapeEdit
   | PptxSourceModelReplaceImageEdit
+  | PptxSourceModelAddSlideLayoutEdit
   | PptxSourceModelAddEmptySlideFromLayoutEdit
   | PptxSourceModelDuplicateSlideEdit
   | PptxSourceModelMoveSlideEdit
@@ -177,6 +179,13 @@ export interface PptxSourceModelShapeOutlineEdit {
   readonly kind: "updateShapeOutline";
   readonly handle: SourceHandle;
   readonly outline: EditableShapeOutline;
+}
+
+export interface PptxSourceModelPictureCropEdit {
+  readonly kind: "updatePictureCrop";
+  readonly handle: SourceHandle;
+  /** Omitted to remove the targeted `a:srcRect`. */
+  readonly crop?: SourceImageCrop;
 }
 
 /** @inline */
@@ -290,6 +299,19 @@ export interface PptxSourceModelAddTableEdit {
   readonly shapeId: string;
   /** Serialized `p:graphicFrame` fragment finalized at edit time. */
   readonly xml: string;
+}
+
+export interface PptxSourceModelAddSlideLayoutEdit {
+  readonly kind: "addSlideLayout";
+  readonly masterPartPath: PartPath;
+  readonly newLayoutPartPath: PartPath;
+  readonly newRelationshipId: RelationshipId;
+  readonly newLayoutNumericId: number;
+  /** Existing relationship-order layouts materialized when the master had no id list. */
+  readonly initialLayoutEntries: readonly {
+    readonly relationshipId: RelationshipId;
+    readonly numericId: number;
+  }[];
 }
 
 export interface PptxSourceModelReorderShapesEdit {

@@ -13,6 +13,7 @@ import {
   addEmptySlideFromLayout,
   addPicture,
   addShape,
+  addSlideLayout,
   addSlideNumber,
   addTable,
   addTextBox,
@@ -30,6 +31,7 @@ import {
   moveSlide,
   readPptx,
   replaceImageBytes,
+  setPictureCrop,
   setSlideBackground,
   setTableCellProperties,
   type SourceConnector,
@@ -227,6 +229,23 @@ const LO_EDITOR_VALIDITY_CASES = [
       const source = readPptx(input);
       const image = findFirstImage(source);
       return writePptx(replaceImageBytes(source, requireHandle(image.handle), BLUE_PNG));
+    },
+  },
+  {
+    name: "picture crop",
+    sourceFixture: "editor-validity-picture-crop-source.pptx",
+    expectedFixture: "editor-validity-picture-crop-expected.pptx",
+    createEditedPptx: (input: Uint8Array) => {
+      const source = readPptx(input);
+      const image = findFirstImage(source);
+      return writePptx(
+        setPictureCrop(source, requireHandle(image.handle), {
+          left: asOoxmlPercent(25000),
+          top: asOoxmlPercent(10000),
+          right: asOoxmlPercent(5000),
+          bottom: asOoxmlPercent(15000),
+        }),
+      );
     },
   },
   {
@@ -948,6 +967,48 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
     renderSingleWithLibreOffice(
       libreOfficeImage,
       "editor-validity-from-scratch-authored-master.pptx",
+      writePptx(source),
+    );
+  });
+
+  it("opens a from-scratch PPTX with an additional authored slide layout", () => {
+    let source = createPptx();
+    const masterHandle = requireHandle(source.slideMasters[0]?.handle);
+    source = addSlideLayout(source, masterHandle, {
+      name: "LibreOffice Additional Layout",
+      type: "titleOnly",
+      show: true,
+      background: { kind: "solid", color: { kind: "srgb", hex: "E2E8F0" } },
+      margin: {
+        left: asEmu(120000),
+        right: asEmu(120000),
+        top: asEmu(80000),
+        bottom: asEmu(80000),
+      },
+    });
+    const layout = source.slideLayouts.at(-1);
+    if (layout?.handle === undefined) throw new Error("additional layout was not authored");
+    source = addShape(source, layout.handle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(0),
+      offsetY: asEmu(4850000),
+      width: asEmu(9144000),
+      height: asEmu(293500),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "4472C4" } },
+    });
+    source = addEmptySlideFromLayout(source, { layoutPartPath: layout.partPath });
+    const slideHandle = requireHandle(source.slides.at(-1)?.handle);
+    source = addTextBox(source, slideHandle, {
+      offsetX: asEmu(914400),
+      offsetY: asEmu(1371600),
+      width: asEmu(7315200),
+      height: asEmu(914400),
+      text: "Additional authored layout",
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-from-scratch-additional-layout.pptx",
       writePptx(source),
     );
   });

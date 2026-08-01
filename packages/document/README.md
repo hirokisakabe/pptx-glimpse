@@ -55,10 +55,12 @@ Import supported APIs only from the package root:
 
 ```ts
 import {
+  asOoxmlPercent,
   createComputedView,
   createPptx,
   readPptx,
   replaceTextRunPlainText,
+  setPictureCrop,
   writePptx,
 } from "@pptx-glimpse/document";
 ```

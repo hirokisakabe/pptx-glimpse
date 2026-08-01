@@ -11,6 +11,7 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
   const shapeKeys = new Set<string>();
   const shapeFillKeys = new Set<string>();
   const shapeOutlineKeys = new Set<string>();
+  const pictureCropKeys = new Set<string>();
   const deletedShapeKeys = new Set<string>();
   const slideBackgroundKeys = new Set<string>();
   const textRunEdits: PptxSourceModelTextRunEdit[] = [];
@@ -87,6 +88,16 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
         shapeOutlineKeys.add(key);
         break;
       }
+      case "updatePictureCrop": {
+        const key = [edit.handle.partPath, edit.handle.nodeId ?? ""].join("\u0000");
+        if (pictureCropKeys.has(key)) {
+          throw new Error(
+            `writePptx: conflicting picture crop edits for handle '${String(edit.handle.nodeId)}'`,
+          );
+        }
+        pictureCropKeys.add(key);
+        break;
+      }
       case "updateTableCellProperties":
         break;
       case "reorderShapes": {
@@ -123,6 +134,7 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
       }
       case "replaceImage":
       case "updateChartData":
+      case "addSlideLayout":
       case "addEmptySlideFromLayout":
       case "duplicateSlide":
       case "moveSlide":
