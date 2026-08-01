@@ -129,6 +129,13 @@ describe("writePptx - existing table cell property edits", () => {
         }),
       ),
     ).toThrow("is not a supported border style");
+    expect(() =>
+      setTableCellProperties(
+        source,
+        address,
+        unsafeFixtureAssertion<EditableTableCellProperties>({ fill: null }),
+      ),
+    ).toThrow("fill must be a fill object");
     expect(source.edits).toBeUndefined();
     expect(firstTable(source).table.rows[0].cells[0].fill).toMatchObject({
       kind: "solid",
@@ -166,6 +173,95 @@ describe("writePptx - existing table cell property edits", () => {
       color: { kind: "srgb", hex: "70AD47" },
     });
     expect(decoder.decode(unzipSync(output)[slidePath])).toContain('uri="preserve-cell-sidecar"');
+  });
+
+  it("inserts border sides in schema order", () => {
+    const files = unzipSync(buildFixture());
+    const slidePath = "ppt/slides/slide1.xml";
+    files[slidePath] = encoder.encode(
+      decoder.decode(files[slidePath]).replaceAll("a:lnL", "a:lnT"),
+    );
+    const source = readPptx(zipSync(files));
+    const table = firstTable(source);
+    const edited = setTableCellProperties(
+      source,
+      { tableHandle: requireHandle(table.handle), rowIndex: 0, cellIndex: 0 },
+      {
+        borders: {
+          left: {
+            width: asEmu(25400),
+            fill: { kind: "solid", color: { kind: "srgb", hex: "C00000" } },
+          },
+        },
+      },
+    );
+    const slideXml = decoder.decode(unzipSync(writePptx(edited))[slidePath]);
+
+    expect(slideXml.indexOf("<a:lnL")).toBeLessThan(slideXml.indexOf("<a:lnT"));
+  });
+
+  it("preserves an alternate DrawingML namespace prefix for inserted properties", () => {
+    const files = unzipSync(buildFixture());
+    const slidePath = "ppt/slides/slide1.xml";
+    files[slidePath] = encoder.encode(
+      decoder
+        .decode(files[slidePath])
+        .replace(
+          'xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"',
+          'xmlns:d="http://schemas.openxmlformats.org/drawingml/2006/main"',
+        )
+        .replaceAll("<a:", "<d:")
+        .replaceAll("</a:", "</d:"),
+    );
+    const source = readPptx(zipSync(files));
+    const table = firstTable(source);
+    const edited = setTableCellProperties(
+      source,
+      { tableHandle: requireHandle(table.handle), rowIndex: 1, cellIndex: 1 },
+      {
+        fill: { kind: "solid", color: { kind: "srgb", hex: "70AD47" } },
+        borders: {
+          bottom: {
+            width: asEmu(12700),
+            fill: { kind: "solid", color: { kind: "srgb", hex: "4472C4" } },
+          },
+        },
+      },
+    );
+    const output = writePptx(edited);
+    const slideXml = decoder.decode(unzipSync(output)[slidePath]);
+
+    expect(slideXml).toContain("<d:solidFill>");
+    expect(slideXml).toContain("<d:lnB");
+    expect(slideXml).not.toContain("<a:");
+    expect(firstTable(readPptx(output)).table.rows[1].cells[1].fill).toMatchObject({
+      kind: "solid",
+      color: { hex: "70AD47" },
+    });
+  });
+
+  it("rejects a Table inside AlternateContent before creating an edit", () => {
+    const files = unzipSync(buildFixture());
+    const slidePath = "ppt/slides/slide1.xml";
+    files[slidePath] = encoder.encode(
+      decoder
+        .decode(files[slidePath])
+        .replace(
+          /(<p:graphicFrame>.*<\/p:graphicFrame>)/,
+          '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice Requires="p14">$1</mc:Choice></mc:AlternateContent>',
+        ),
+    );
+    const source = readPptx(zipSync(files));
+    const table = firstTable(source);
+
+    expect(() =>
+      setTableCellProperties(
+        source,
+        { tableHandle: requireHandle(table.handle), rowIndex: 0, cellIndex: 0 },
+        { marginLeft: asEmu(1) },
+      ),
+    ).toThrow("tables inside AlternateContent are not supported");
+    expect(source.edits).toBeUndefined();
   });
 });
 

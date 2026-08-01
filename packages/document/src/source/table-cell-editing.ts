@@ -115,8 +115,8 @@ function findTarget(
   | { readonly slide: SourceSlide; readonly table: SourceTable; readonly cell: SourceTableCell }
   | undefined {
   const matches = source.slides.flatMap((slide) =>
-    findTables(slide.shapes).flatMap((table) =>
-      sourceHandlesEqual(table.handle, address.tableHandle) ? [{ slide, table }] : [],
+    findTables(slide.shapes).flatMap((match) =>
+      sourceHandlesEqual(match.table.handle, address.tableHandle) ? [{ slide, ...match }] : [],
     ),
   );
   if (matches.length > 1) {
@@ -125,6 +125,9 @@ function findTarget(
     );
   }
   const match = matches[0];
+  if (match?.insideAlternateContent) {
+    throw new Error("updateTableCellProperties: tables inside AlternateContent are not supported");
+  }
   const cell = match?.table.table.rows[address.rowIndex]?.cells[address.cellIndex];
   return match === undefined || cell === undefined ? undefined : { ...match, cell };
 }
@@ -161,14 +164,38 @@ function replaceTableCell(
 }
 
 function containsTable(nodes: readonly SourceShapeNode[], address: TableCellAddress): boolean {
-  return findTables(nodes).some((table) => sourceHandlesEqual(table.handle, address.tableHandle));
+  return findTables(nodes).some((match) =>
+    sourceHandlesEqual(match.table.handle, address.tableHandle),
+  );
 }
 
-function findTables(nodes: readonly SourceShapeNode[]): SourceTable[] {
-  return nodes.flatMap((node) => {
-    if (node.kind === "table") return [node];
-    return node.kind === "group" ? findTables(node.children) : [];
+interface TableMatch {
+  readonly table: SourceTable;
+  readonly insideAlternateContent: boolean;
+}
+
+function findTables(
+  nodes: readonly SourceShapeNode[],
+  insideAlternateContent = false,
+): TableMatch[] {
+  return nodes.flatMap((node): TableMatch[] => {
+    const nodeInsideAlternateContent =
+      insideAlternateContent || hasAlternateContentWrapperSidecar(node);
+    if (node.kind === "table") {
+      return [{ table: node, insideAlternateContent: nodeInsideAlternateContent }];
+    }
+    return node.kind === "group" ? findTables(node.children, nodeInsideAlternateContent) : [];
   });
+}
+
+function hasAlternateContentWrapperSidecar(node: SourceShapeNode): boolean {
+  if (node.kind === "raw") return false;
+  return (
+    node.rawSidecars?.some(
+      (sidecar) =>
+        sidecar.node.name === "mc:AlternateContent" && sidecar.orderingSlot === undefined,
+    ) ?? false
+  );
 }
 
 function patchCell(
@@ -317,15 +344,20 @@ function assertBorder(border: EditableTableCellBorder, operation: string, path: 
   if (border.fill !== undefined) assertFill(border.fill, operation, `${path}.fill`);
 }
 
-function assertFill(fill: EditableShapeFill, operation: string, path: string): void {
+function assertFill(fill: unknown, operation: string, path: string): void {
+  if (!isRecord(fill)) throw new Error(`${operation}: ${path} must be a fill object`);
   if (fill.kind === "none") return;
   if (fill.kind !== "solid")
     throw new Error(`${operation}: ${path} supports only solid and none fills`);
-  if (fill.color?.kind !== "srgb")
+  if (!isRecord(fill.color) || fill.color.kind !== "srgb")
     throw new Error(`${operation}: ${path} supports only srgb solid colors`);
-  if (!/^[0-9A-Fa-f]{6}$/.test(fill.color.hex)) {
+  if (typeof fill.color.hex !== "string" || !/^[0-9A-Fa-f]{6}$/.test(fill.color.hex)) {
     throw new Error(`${operation}: ${path} srgb color must be a 6-digit hex value`);
   }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function hasSetValues(properties: EditableTableCellProperties): boolean {

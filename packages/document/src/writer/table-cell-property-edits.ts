@@ -4,7 +4,7 @@ import type {
   EditableTableCellBorder,
   PptxSourceModelTableCellPropertiesEdit,
 } from "../source/index.js";
-import { insertChildByOrder } from "./dirty-part-xml-helpers.js";
+import { insertChildByOrder, qualifiedSiblingName } from "./dirty-part-xml-helpers.js";
 import { locateShapeTreeNodeLocation, parseShapeLocator } from "./xml-locators.js";
 import { deleteChild, replaceNodeEntries, xmlNodeIsEmpty } from "./xml-node-utils.js";
 
@@ -41,7 +41,8 @@ export function applyTableCellPropertiesEdit(
 
   const hasSet = hasSetValues(edit.set);
   if (!hasChild(cell, "tcPr") && !hasSet) return;
-  const tcPr = ensureCellProperties(cell);
+  const cellProperties = ensureCellProperties(cell);
+  const tcPr = cellProperties.node;
 
   for (const property of edit.clear ?? []) clearCellProperty(tcPr, property);
   const set = edit.set;
@@ -49,30 +50,41 @@ export function applyTableCellPropertiesEdit(
   if (set?.marginRight !== undefined) tcPr["@_marR"] = String(set.marginRight);
   if (set?.marginTop !== undefined) tcPr["@_marT"] = String(set.marginTop);
   if (set?.marginBottom !== undefined) tcPr["@_marB"] = String(set.marginBottom);
-  if (set?.fill !== undefined) replaceFillChild(tcPr, set.fill, false);
+  if (set?.fill !== undefined) {
+    replaceFillChild(tcPr, set.fill, false, cellProperties.key);
+  }
   if (set?.borders !== undefined) {
     for (const side of ["left", "right", "top", "bottom"] as const) {
       const border = set.borders[side];
-      if (border !== undefined) applyBorderPatch(tcPr, side, border);
+      if (border !== undefined) applyBorderPatch(tcPr, cellProperties.key, side, border);
     }
   }
   if (xmlNodeIsEmpty(tcPr)) deleteChild(cell, "tcPr");
 }
 
-function ensureCellProperties(cell: XmlNode): XmlNode {
+interface EnsuredXmlChild {
+  readonly node: XmlNode;
+  readonly key: string;
+}
+
+function ensureCellProperties(cell: XmlNode): EnsuredXmlChild {
   for (const [key, value] of Object.entries(cell)) {
     if (key.startsWith("@_") || localName(key) !== "tcPr") continue;
-    if (isXmlNode(value)) return value;
+    if (isXmlNode(value)) return { node: value, key };
     if (Array.isArray(value) || value !== "") {
       throw new Error("writePptx: table cell has unsupported duplicate or malformed tcPr XML");
     }
     const replacement: XmlNode = {};
     cell[key] = replacement;
-    return replacement;
+    return { node: replacement, key };
   }
   const properties: XmlNode = {};
-  insertChildByOrder(cell, "a:tcPr", properties, (name) => name === "extLst");
-  return properties;
+  const siblingKey = Object.keys(cell).find(
+    (key) => !key.startsWith("@_") && localName(key) === "txBody",
+  );
+  const key = qualifiedSiblingName(siblingKey ?? "a:txBody", "tcPr");
+  insertChildByOrder(cell, key, properties, (name) => name === "extLst");
+  return { node: properties, key };
 }
 
 function isXmlNode(value: unknown): value is XmlNode {
@@ -116,49 +128,55 @@ function clearCellProperty(
 
 function applyBorderPatch(
   tcPr: XmlNode,
+  tcPrKey: string,
   side: "left" | "right" | "top" | "bottom",
   patch: EditableTableCellBorder,
 ): void {
   const local = { left: "lnL", right: "lnR", top: "lnT", bottom: "lnB" }[side];
-  const line = ensureBorderLine(tcPr, local);
-  if (patch.width !== undefined) line["@_w"] = String(patch.width);
-  if (patch.fill !== undefined) replaceFillChild(line, patch.fill, true);
+  const line = ensureBorderLine(tcPr, tcPrKey, local);
+  if (patch.width !== undefined) line.node["@_w"] = String(patch.width);
+  if (patch.fill !== undefined) replaceFillChild(line.node, patch.fill, true, line.key);
 }
 
-function ensureBorderLine(tcPr: XmlNode, local: string): XmlNode {
+function ensureBorderLine(tcPr: XmlNode, tcPrKey: string, local: string): EnsuredXmlChild {
   for (const [key, value] of Object.entries(tcPr)) {
     if (key.startsWith("@_") || localName(key) !== local) continue;
-    if (isXmlNode(value)) return value;
+    if (isXmlNode(value)) return { node: value, key };
     if (Array.isArray(value) || value !== "") {
       throw new Error(`writePptx: table cell has unsupported duplicate or malformed ${local} XML`);
     }
     const replacement: XmlNode = {};
     tcPr[key] = replacement;
-    return replacement;
+    return { node: replacement, key };
   }
   const line: XmlNode = {};
-  insertChildByOrder(tcPr, `a:${local}`, line, (name) =>
-    [
-      "lnTlToBr",
-      "lnBlToTr",
-      "cell3D",
-      "noFill",
-      "solidFill",
-      "gradFill",
-      "blipFill",
-      "pattFill",
-      "grpFill",
-      "extLst",
-    ].includes(name),
+  const key = qualifiedSiblingName(tcPrKey, local);
+  insertChildByOrder(
+    tcPr,
+    key,
+    line,
+    (name) => tableCellPropertyOrder(name) > tableCellPropertyOrder(local),
   );
-  return line;
+  return { node: line, key };
 }
 
-function replaceFillChild(parent: XmlNode, fill: EditableShapeFill, lineFill: boolean): void {
+function replaceFillChild(
+  parent: XmlNode,
+  fill: EditableShapeFill,
+  lineFill: boolean,
+  namespaceSiblingKey: string,
+): void {
   removeFillChildren(parent);
-  const key = fill.kind === "none" ? "a:noFill" : "a:solidFill";
+  const local = fill.kind === "none" ? "noFill" : "solidFill";
+  const key = qualifiedSiblingName(namespaceSiblingKey, local);
   const value =
-    fill.kind === "none" ? {} : { "a:srgbClr": { "@_val": fill.color.hex.toUpperCase() } };
+    fill.kind === "none"
+      ? {}
+      : {
+          [qualifiedSiblingName(namespaceSiblingKey, "srgbClr")]: {
+            "@_val": fill.color.hex.toUpperCase(),
+          },
+        };
   insertChildByOrder(parent, key, value, (name) =>
     lineFill
       ? [
@@ -173,6 +191,28 @@ function replaceFillChild(parent: XmlNode, fill: EditableShapeFill, lineFill: bo
         ].includes(name)
       : name === "extLst",
   );
+}
+
+const TABLE_CELL_PROPERTY_ORDER = [
+  "lnL",
+  "lnR",
+  "lnT",
+  "lnB",
+  "lnTlToBr",
+  "lnBlToTr",
+  "cell3D",
+  "noFill",
+  "solidFill",
+  "gradFill",
+  "blipFill",
+  "pattFill",
+  "grpFill",
+  "extLst",
+] as const;
+
+function tableCellPropertyOrder(local: string): number {
+  const index = TABLE_CELL_PROPERTY_ORDER.findIndex((name) => name === local);
+  return index === -1 ? -1 : index;
 }
 
 function removeFillChildren(parent: XmlNode): void {
