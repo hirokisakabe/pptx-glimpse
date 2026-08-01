@@ -255,7 +255,9 @@ const EDIT_KIND_DESCRIPTORS: {
     reservedPartPaths: (edit) => [edit.targetPartPath],
     dirtyPartPath: (edit) => edit.targetPartPath,
     targetsShape: (edit, shapeHandle) =>
-      edit.targetPartPath === shapeHandle.partPath && edit.groupId === String(shapeHandle.nodeId),
+      edit.targetPartPath === shapeHandle.partPath &&
+      (edit.groupId === String(shapeHandle.nodeId) ||
+        edit.shapeIds.includes(String(shapeHandle.nodeId))),
     invalidatingPartPaths: (edit) => [edit.targetPartPath],
     reservedShapeId: (edit, slidePartPath) =>
       edit.targetPartPath === slidePartPath ? edit.groupId : undefined,

@@ -9,6 +9,7 @@
 import { nextDrawingShapeId } from "./drawing-authoring-allocation.js";
 import type { PartPath, SourceHandle, SourceNodeId } from "./handles.js";
 import type { PptxSourceModel } from "./pptx-source-model.js";
+import { parseShapeNodeXml } from "./shape-xml.js";
 import type { SourceGroup, SourceShapeNode, SourceTransform } from "./shapes.js";
 import { asEmu } from "./units.js";
 
@@ -81,6 +82,9 @@ export function groupShapes(
   ) {
     throw new Error("groupShapes: selected shapes must have the same immediate parent");
   }
+  if (parent !== target.shapes && parentGroupId === undefined) {
+    throw new Error("groupShapes: the immediate parent group requires a node id");
+  }
   const orderedLocations = [...locations].sort((left, right) => left.index - right.index);
   const firstIndex = orderedLocations[0]?.index ?? -1;
   if (orderedLocations.some((location, index) => location.index !== firstIndex + index)) {
@@ -97,20 +101,19 @@ export function groupShapes(
     width: asEmu(Math.ceil(bounds.right) - Math.floor(bounds.left)),
     height: asEmu(Math.ceil(bounds.bottom) - Math.floor(bounds.top)),
   };
+  const groupName = `Group ${groupId}`;
+  const groupXml = createGroupXml(String(groupId), groupName, transform);
+  const parsedGroup = parseShapeNodeXml(
+    groupXml,
+    target.partPath,
+    children[0]?.handle?.orderingSlot ?? firstIndex,
+  );
+  if (parsedGroup.kind !== "group") {
+    throw new Error("groupShapes: finalized group XML did not produce a group shape");
+  }
   const group: SourceGroup = {
-    kind: "group",
-    nodeId: groupId,
-    name: `Group ${groupId}`,
-    transform,
-    childTransform: transform,
+    ...parsedGroup,
     children,
-    handle: {
-      partPath: target.partPath,
-      nodeId: groupId,
-      ...(children[0]?.handle?.orderingSlot !== undefined
-        ? { orderingSlot: children[0].handle.orderingSlot }
-        : {}),
-    },
   };
   const nextParent = [
     ...parent.slice(0, firstIndex),
@@ -129,14 +132,32 @@ export function groupShapes(
         ...(parentGroupId !== undefined ? { parentGroupId: String(parentGroupId) } : {}),
         shapeIds: children.map((child) => String(child.nodeId)),
         groupId: String(groupId),
-        groupName: group.name ?? `Group ${groupId}`,
-        offsetX: transform.offsetX,
-        offsetY: transform.offsetY,
-        width: transform.width,
-        height: transform.height,
+        xml: groupXml,
       },
     ],
   };
+}
+
+function createGroupXml(groupId: string, groupName: string, transform: SourceTransform): string {
+  return (
+    `<p:grpSp xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ` +
+    `xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">` +
+    `<p:nvGrpSpPr><p:cNvPr id="${groupId}" name="${escapeXmlAttribute(groupName)}"/>` +
+    `<p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
+    `<p:grpSpPr><a:xfrm><a:off x="${transform.offsetX}" y="${transform.offsetY}"/>` +
+    `<a:ext cx="${transform.width}" cy="${transform.height}"/>` +
+    `<a:chOff x="${transform.offsetX}" y="${transform.offsetY}"/>` +
+    `<a:chExt cx="${transform.width}" cy="${transform.height}"/>` +
+    `</a:xfrm></p:grpSpPr></p:grpSp>`
+  );
+}
+
+function escapeXmlAttribute(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }
 
 /** Expands one identity-mapped group into its immediate parent without changing child nodes. */
@@ -155,6 +176,9 @@ export function ungroupShape(source: PptxSourceModel, groupHandle: SourceHandle)
     throw new Error("ungroupShape: handle does not reference a group shape");
   }
   const group = location.node;
+  if (location.parent !== target.shapes && location.parentGroupId === undefined) {
+    throw new Error("ungroupShape: the immediate parent group requires a node id");
+  }
   if (!hasIdentityChildMapping(group)) {
     throw new Error("ungroupShape: group transform is not a lossless identity child mapping");
   }

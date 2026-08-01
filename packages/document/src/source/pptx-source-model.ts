@@ -257,11 +257,8 @@ export interface PptxSourceModelGroupShapesEdit {
   readonly parentGroupId?: string;
   readonly shapeIds: readonly string[];
   readonly groupId: string;
-  readonly groupName: string;
-  readonly offsetX: Emu;
-  readonly offsetY: Emu;
-  readonly width: Emu;
-  readonly height: Emu;
+  /** Serialized minimal `p:grpSp` header finalized at edit time. */
+  readonly xml: string;
 }
 
 export interface PptxSourceModelUngroupShapeEdit {

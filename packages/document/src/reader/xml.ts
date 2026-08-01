@@ -39,7 +39,7 @@ const parser = new XMLParser({
 
 const orderedParser = new XMLParser({
   preserveOrder: true,
-  removeNSPrefix: true,
+  removeNSPrefix: false,
   ignoreAttributes: true,
   trimValues: false,
 });
@@ -59,12 +59,19 @@ export function navigateOrdered(
 ): XmlOrderedNode[] | undefined {
   let current: readonly XmlOrderedNode[] = ordered;
   for (const key of path) {
-    const entry = current.find((item) => key in item);
-    const value = entry?.[key];
+    const entry = current.find((item) =>
+      Object.keys(item).some((candidate) => candidate !== ":@" && localName(candidate) === key),
+    );
+    const qualifiedKey = entry === undefined ? undefined : orderedElementKey(entry);
+    const value = qualifiedKey === undefined ? undefined : entry?.[qualifiedKey];
     if (!Array.isArray(value)) return undefined;
     current = unsafeOoxmlBoundaryAssertion<XmlOrderedNode[]>(value);
   }
   return [...current];
+}
+
+function orderedElementKey(node: XmlOrderedNode): string | undefined {
+  return Object.keys(node).find((key) => key !== ":@");
 }
 
 /** Extracts the local part (`foo`) from a qualified name such as `a:foo`. */

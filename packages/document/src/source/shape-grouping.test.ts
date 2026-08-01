@@ -7,6 +7,7 @@ import {
   addShape,
   asEmu,
   asOoxmlAngle,
+  asSourceNodeId,
   groupShapes,
   type PptxSourceModel,
   type SourceConnector,
@@ -75,6 +76,50 @@ describe("groupShapes and ungroupShape", () => {
     );
   });
 
+  it("rejects a forged group edit whose finalized shell already has children", () => {
+    const source = existingShapes(2);
+    const handles = requireValue(source.slides[0]).shapes.map((shape) =>
+      requireValue(shape.handle),
+    );
+    const grouped = groupShapes(source, handles);
+    const forged: PptxSourceModel = {
+      ...grouped,
+      edits: grouped.edits?.map((edit) =>
+        edit.kind === "groupShapes"
+          ? { ...edit, xml: edit.xml.replace("</p:grpSp>", "<p:grpSp/></p:grpSp>") }
+          : edit,
+      ),
+    };
+
+    expect(() => writePptx(forged)).toThrow("grouped XML must be an empty group shell");
+  });
+
+  it("rejects nested edits when the immediate parent group has no node id", () => {
+    const existing = existingShapes(3);
+    const handles = requireValue(existing.slides[0]).shapes.map((shape) =>
+      requireValue(shape.handle),
+    );
+    const withInner = groupShapes(existing, handles.slice(0, 2));
+    const inner = requireGroup(withInner.slides[0]?.shapes[0]);
+    const idlessInnerParent = replaceFirstGroup(withInner, withoutGroupId(inner));
+    const idlessInnerParentBefore = structuredClone(idlessInnerParent);
+
+    expect(() => groupShapes(idlessInnerParent, handles.slice(0, 2))).toThrow(
+      "the immediate parent group requires a node id",
+    );
+    expect(idlessInnerParent).toEqual(idlessInnerParentBefore);
+
+    const withOuter = groupShapes(withInner, [requireValue(inner.handle), handles[2]]);
+    const outer = requireGroup(withOuter.slides[0]?.shapes[0]);
+    const idlessOuterParent = replaceFirstGroup(withOuter, withoutGroupId(outer));
+    const idlessOuterParentBefore = structuredClone(idlessOuterParent);
+
+    expect(() => ungroupShape(idlessOuterParent, requireValue(inner.handle))).toThrow(
+      "the immediate parent group requires a node id",
+    );
+    expect(idlessOuterParent).toEqual(idlessOuterParentBefore);
+  });
+
   it("keeps internal connector endpoint ids through group and reread", () => {
     let source = createPptx();
     const slideHandle = requireValue(source.slides[0]?.handle);
@@ -123,6 +168,7 @@ describe("groupShapes and ungroupShape", () => {
 
   it("rejects non-contiguous siblings and selection-crossing connectors atomically", () => {
     const existing = existingShapes(3);
+    const existingBefore = structuredClone(existing);
     const handles = requireValue(existing.slides[0]).shapes.map((shape) =>
       requireValue(shape.handle),
     );
@@ -130,6 +176,7 @@ describe("groupShapes and ungroupShape", () => {
       "selected shapes must be consecutive siblings",
     );
     expect(existing.edits).toBeUndefined();
+    expect(existing).toEqual(existingBefore);
 
     let connected = createPptx();
     const slideHandle = requireValue(connected.slides[0]?.handle);
@@ -146,6 +193,7 @@ describe("groupShapes and ungroupShape", () => {
       end: { shapeHandle: requireValue(targets[1]?.handle), connectionSiteIndex: 1 },
     });
     const beforeEdits = connected.edits;
+    const connectedBefore = structuredClone(connected);
     expect(() =>
       groupShapes(
         connected,
@@ -153,6 +201,39 @@ describe("groupShapes and ungroupShape", () => {
       ),
     ).toThrow("connector endpoint crosses the selection boundary");
     expect(connected.edits).toBe(beforeEdits);
+    expect(connected).toEqual(connectedBefore);
+  });
+
+  it("treats preserved unsupported shape-tree nodes as z-order siblings", () => {
+    const archive = unzipSync(writePptx(existingShapes(2)));
+    const slidePath = "ppt/slides/slide1.xml";
+    const slideXml = new TextDecoder().decode(requireValue(archive[slidePath]));
+    archive[slidePath] = new TextEncoder().encode(
+      slideXml.replace(
+        "</p:sp><p:sp>",
+        '</p:sp><p:contentPart/><p14:grpSpPr xmlns:p14="urn:extension"/><p:sp>',
+      ),
+    );
+    const source = readPptx(zipSync(archive));
+    const sourceBefore = structuredClone(source);
+    const handles = requireValue(source.slides[0])
+      .shapes.filter((shape) => shape.nodeId !== undefined)
+      .map((shape) => requireValue(shape.handle));
+
+    expect(source.slides[0]?.shapes.map((shape) => shape.kind)).toEqual([
+      "shape",
+      "raw",
+      "raw",
+      "shape",
+    ]);
+    expect(source.slides[0]?.shapes[2]?.kind).toBe("raw");
+    if (source.slides[0]?.shapes[2]?.kind === "raw") {
+      expect(source.slides[0].shapes[2].raw.node.name).toBe("p14:grpSpPr");
+    }
+    expect(() => groupShapes(source, handles)).toThrow(
+      "selected shapes must be consecutive siblings",
+    );
+    expect(source).toEqual(sourceBefore);
   });
 
   it("rejects an mc:AlternateContent selection before creating an edit", () => {
@@ -173,6 +254,7 @@ describe("groupShapes and ungroupShape", () => {
         ),
     );
     const source = readPptx(zipSync(archive));
+    const sourceBefore = structuredClone(source);
     const handles = requireValue(source.slides[0]).shapes.map((shape) =>
       requireValue(shape.handle),
     );
@@ -181,6 +263,7 @@ describe("groupShapes and ungroupShape", () => {
       "mc:AlternateContent nodes are not supported",
     );
     expect(source.edits).toBeUndefined();
+    expect(source).toEqual(sourceBefore);
   });
 
   it("rejects referenced or non-lossless groups atomically", () => {
@@ -194,10 +277,12 @@ describe("groupShapes and ungroupShape", () => {
       ...group,
       transform: { ...requireValue(group.transform), rotation: asOoxmlAngle(60000) },
     });
+    const rotatedBefore = structuredClone(rotated);
     expect(() => ungroupShape(rotated, requireValue(group.handle))).toThrow(
       "not a lossless identity child mapping",
     );
     expect(rotated.edits).toBe(grouped.edits);
+    expect(rotated).toEqual(rotatedBefore);
 
     const sibling = requireValue(grouped.slides[0]?.shapes[1]);
     const referencingConnector: SourceConnector = {
@@ -217,10 +302,82 @@ describe("groupShapes and ungroupShape", () => {
       ),
     };
     const beforeEdits = referenced.edits;
+    const referencedBefore = structuredClone(referenced);
     expect(() => ungroupShape(referenced, requireValue(group.handle))).toThrow(
       "group is referenced by connector",
     );
     expect(referenced.edits).toBe(beforeEdits);
+    expect(referenced).toEqual(referencedBefore);
+  });
+
+  it("rejects group non-visual metadata that cannot be losslessly discarded", () => {
+    const source = existingShapes(2);
+    const handles = requireValue(source.slides[0]).shapes.map((shape) =>
+      requireValue(shape.handle),
+    );
+    const grouped = groupShapes(source, handles);
+    const slidePath = "ppt/slides/slide1.xml";
+    const groupId = requireValue(requireGroup(grouped.slides[0]?.shapes[0]).nodeId);
+    const mutations = [
+      (xml: string) =>
+        xml.replaceAll(
+          "<p:cNvGrpSpPr/>",
+          '<p:cNvGrpSpPr><a:grpSpLocks noUngrp="1"/></p:cNvGrpSpPr>',
+        ),
+      (xml: string) =>
+        xml.replaceAll("<p:nvGrpSpPr>", '<p:nvGrpSpPr xmlns:vendor="urn:vendor" vendor:flag="1">'),
+      (xml: string) =>
+        xml.replace(
+          `id="${groupId}" name="Group ${groupId}"`,
+          `id="${groupId}" name="Group ${groupId}" xmlns:vendor="urn:vendor" vendor:id="${groupId}"`,
+        ),
+    ];
+
+    for (const mutate of mutations) {
+      const archive = unzipSync(writePptx(grouped));
+      const slideXml = new TextDecoder().decode(requireValue(archive[slidePath]));
+      archive[slidePath] = new TextEncoder().encode(mutate(slideXml));
+      const reread = readPptx(zipSync(archive));
+      const group = requireGroup(reread.slides[0]?.shapes[0]);
+      const sourceBefore = structuredClone(reread);
+
+      expect(() => ungroupShape(reread, requireValue(group.handle))).toThrow(
+        "group appearance or unknown XML cannot be losslessly expanded",
+      );
+      expect(reread).toEqual(sourceBefore);
+    }
+  });
+
+  it("preserves group-local namespace declarations when children are expanded", () => {
+    const source = existingShapes(2);
+    const handles = requireValue(source.slides[0]).shapes.map((shape) =>
+      requireValue(shape.handle),
+    );
+    const grouped = groupShapes(source, handles);
+    const archive = unzipSync(writePptx(grouped));
+    const slidePath = "ppt/slides/slide1.xml";
+    const slideXml = new TextDecoder().decode(requireValue(archive[slidePath]));
+    archive[slidePath] = new TextEncoder().encode(
+      slideXml
+        .replace("<p:grpSp xmlns:a=", '<p:grpSp xmlns:v="urn:group-local" xmlns:a=')
+        .replace("</p:nvSpPr><p:spPr>", "</p:nvSpPr><v:before/><p:spPr>")
+        .replace("</p:sp>", "<v:metadata/></p:sp>"),
+    );
+    const reread = readPptx(zipSync(archive));
+    const group = requireGroup(reread.slides[0]?.shapes[0]);
+    const output = writePptx(ungroupShape(reread, requireValue(group.handle)));
+    const outputXml = new TextDecoder().decode(requireValue(unzipSync(output)[slidePath]));
+    const expandedShapeXml = requireValue(outputXml.match(/<p:sp\b[^>]*>.*?<\/p:sp>/s)?.[0]);
+
+    expect(expandedShapeXml).toContain('xmlns:v="urn:group-local"');
+    expect(expandedShapeXml).toContain("<v:metadata/>");
+    expect(expandedShapeXml.indexOf("</p:nvSpPr>")).toBeLessThan(
+      expandedShapeXml.indexOf("<v:before/>"),
+    );
+    expect(expandedShapeXml.indexOf("<v:before/>")).toBeLessThan(
+      expandedShapeXml.indexOf("<p:spPr>"),
+    );
+    expect(() => readPptx(output)).not.toThrow();
   });
 
   it("never reuses group ids after ungroup and includes descendant and pending ids", () => {
@@ -230,6 +387,25 @@ describe("groupShapes and ungroupShape", () => {
     );
     const firstGrouped = groupShapes(existing, handles.slice(0, 2));
     const firstGroup = requireGroup(firstGrouped.slides[0]?.shapes[0]);
+    const firstChild = requireValue(firstGroup.children[0]);
+    const descendantId = asSourceNodeId("99");
+    const withHighDescendant = replaceFirstGroup(firstGrouped, {
+      ...firstGroup,
+      children: [
+        {
+          ...firstChild,
+          nodeId: descendantId,
+          handle: { ...requireValue(firstChild.handle), nodeId: descendantId },
+        },
+        ...firstGroup.children.slice(1),
+      ],
+    });
+    const outerGrouped = groupShapes(withHighDescendant, [
+      requireValue(firstGroup.handle),
+      handles[2],
+    ]);
+    expect(requireGroup(outerGrouped.slides[0]?.shapes[0]).nodeId).toBe("100");
+
     const ungrouped = ungroupShape(firstGrouped, requireValue(firstGroup.handle));
     const regrouped = groupShapes(ungrouped, handles.slice(0, 2));
     const secondGroup = requireGroup(regrouped.slides[0]?.shapes[0]);
@@ -265,6 +441,14 @@ function replaceFirstGroup(source: PptxSourceModel, group: SourceGroup): PptxSou
       index === 0 ? { ...slide, shapes: [group, ...slide.shapes.slice(1)] } : slide,
     ),
   };
+}
+
+function withoutGroupId(group: SourceGroup): SourceGroup {
+  const { nodeId: _nodeId, ...withoutNodeId } = group;
+  const { nodeId: _handleNodeId, ...handle } = requireValue(group.handle);
+  void _nodeId;
+  void _handleNodeId;
+  return { ...withoutNodeId, handle };
 }
 
 function requireGroup(node: PptxSourceModel["slides"][number]["shapes"][number] | undefined) {

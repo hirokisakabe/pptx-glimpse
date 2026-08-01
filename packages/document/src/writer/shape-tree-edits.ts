@@ -173,7 +173,13 @@ export function applyGroupShapesEdit(root: XmlNode, edit: PptxSourceModelGroupSh
     throw new Error("writePptx: grouped shapes are not consecutive siblings");
   }
 
-  const group = createGroupXml(edit);
+  const group = parseShapeFragmentXml(edit.xml, "grpSp");
+  if (shapeTreeNodeId(group) !== edit.groupId) {
+    throw new Error(`writePptx: grouped XML id does not match '${edit.groupId}'`);
+  }
+  if (getXmlChildOrder(group).some(isShapeTreeEntry)) {
+    throw new Error("writePptx: grouped XML must be an empty group shell");
+  }
   for (const entry of selectedEntries) {
     appendShapeTreeNodeAtEnd(group, entry.key, unsafeOoxmlBoundaryAssertion<XmlNode>(entry.value));
   }
@@ -194,7 +200,12 @@ export function applyUngroupShapeEdit(root: XmlNode, edit: PptxSourceModelUngrou
     throw new Error(`writePptx: ungroup target '${edit.groupId}' is not a group shape`);
   }
   assertIdentityGroupXml(location.node, edit.groupId);
-  const children = getXmlChildOrder(location.node).filter(isShapeTreeEntry);
+  const children = getXmlChildOrder(location.node)
+    .filter(isShapeTreeEntry)
+    .map((entry) => ({
+      key: entry.key,
+      value: preserveNamespaceDeclarations(location.node, entry.value),
+    }));
   const parentOrder = getXmlChildOrder(location.parentContainer);
   const groupIndex = parentOrder.findIndex((entry) => entry.value === location.node);
   if (groupIndex < 0) {
@@ -292,21 +303,6 @@ function groupParentContainer(
   return location.node;
 }
 
-function createGroupXml(edit: PptxSourceModelGroupShapesEdit): XmlNode {
-  const xml =
-    `<p:grpSp xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ` +
-    `xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">` +
-    `<p:nvGrpSpPr><p:cNvPr id="${edit.groupId}" name="${escapeXmlAttribute(edit.groupName)}"/>` +
-    `<p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
-    `<p:grpSpPr><a:xfrm><a:off x="${edit.offsetX}" y="${edit.offsetY}"/>` +
-    `<a:ext cx="${edit.width}" cy="${edit.height}"/>` +
-    `<a:chOff x="${edit.offsetX}" y="${edit.offsetY}"/>` +
-    `<a:chExt cx="${edit.width}" cy="${edit.height}"/></a:xfrm></p:grpSpPr></p:grpSp>`;
-  const group = getChild(parseXmlForEditing(xml), "grpSp");
-  if (group === undefined) throw new Error("writePptx: failed to create group XML");
-  return group;
-}
-
 function assertIdentityGroupXml(group: XmlNode, groupId: string): void {
   const groupProperties = getChild(group, "grpSpPr");
   const xfrm = getChild(groupProperties, "xfrm");
@@ -334,13 +330,72 @@ function assertIdentityGroupXml(group: XmlNode, groupId: string): void {
   const unsupportedProperties = getXmlChildOrder(groupProperties ?? {}).some(
     (entry) => localName(entry.key) !== "xfrm",
   );
+  const unsupportedNonVisual = !hasMinimalGroupNonVisualProperties(group);
   const unsupportedGroupChildren = getXmlChildOrder(group).some((entry) => {
     const name = localName(entry.key);
     return name !== "nvGrpSpPr" && name !== "grpSpPr" && !isShapeTreeEntry(entry);
   });
-  if (!identity || unsupportedProperties || unsupportedGroupChildren) {
+  if (!identity || unsupportedProperties || unsupportedNonVisual || unsupportedGroupChildren) {
     throw new Error(`writePptx: group '${groupId}' cannot be losslessly expanded`);
   }
+}
+
+function hasMinimalGroupNonVisualProperties(group: XmlNode): boolean {
+  const nonVisual = getChild(group, "nvGrpSpPr");
+  const cNvPr = getChild(nonVisual, "cNvPr");
+  const cNvGrpSpPr = getChild(nonVisual, "cNvGrpSpPr");
+  const nvPr = getChild(nonVisual, "nvPr");
+  if (
+    nonVisual === undefined ||
+    cNvPr === undefined ||
+    cNvGrpSpPr === undefined ||
+    nvPr === undefined
+  ) {
+    return false;
+  }
+  const nonVisualOrder = getXmlChildOrder(nonVisual);
+  if (
+    nonVisualOrder.some(
+      (entry) => !["cNvPr", "cNvGrpSpPr", "nvPr"].includes(localName(entry.key)),
+    ) ||
+    ["cNvPr", "cNvGrpSpPr", "nvPr"].some(
+      (name) => nonVisualOrder.filter((entry) => localName(entry.key) === name).length !== 1,
+    )
+  ) {
+    return false;
+  }
+  return (
+    xmlNodeAttributesAreAllowed(nonVisual, new Set()) &&
+    xmlNodeHasOnlyAttributes(cNvPr, new Set(["id", "name"])) &&
+    xmlNodeHasOnlyAttributes(cNvGrpSpPr, new Set()) &&
+    xmlNodeHasOnlyAttributes(nvPr, new Set())
+  );
+}
+
+function xmlNodeHasOnlyAttributes(node: XmlNode, allowed: ReadonlySet<string>): boolean {
+  return Object.keys(node).every((key) => {
+    if (key === "#text") return String(node[key]).trim().length === 0;
+    if (!key.startsWith("@_")) return false;
+    const qualifiedName = key.slice(2);
+    return (
+      qualifiedName === "xmlns" ||
+      qualifiedName.startsWith("xmlns:") ||
+      (!qualifiedName.includes(":") && allowed.has(qualifiedName))
+    );
+  });
+}
+
+function xmlNodeAttributesAreAllowed(node: XmlNode, allowed: ReadonlySet<string>): boolean {
+  return Object.keys(node)
+    .filter((key) => key.startsWith("@_"))
+    .every((key) => {
+      const qualifiedName = key.slice(2);
+      return (
+        qualifiedName === "xmlns" ||
+        qualifiedName.startsWith("xmlns:") ||
+        (!qualifiedName.includes(":") && allowed.has(qualifiedName))
+      );
+    });
 }
 
 function isShapeTreeEntry(entry: { readonly key: string; readonly value: unknown }): boolean {
@@ -367,14 +422,6 @@ function replaceContainerChildren(
 
 function isTrueXmlAttribute(value: string | undefined): boolean {
   return value === "1" || value === "true";
-}
-
-function escapeXmlAttribute(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
 }
 
 function shapeTreeNodeId(node: XmlNode): string | undefined {
