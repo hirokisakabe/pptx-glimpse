@@ -89,7 +89,7 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
         break;
       }
       case "updatePictureCrop": {
-        const key = editHandleNodeKey(edit);
+        const key = [edit.handle.partPath, edit.handle.nodeId ?? ""].join("\u0000");
         if (pictureCropKeys.has(key)) {
           throw new Error(
             `writePptx: conflicting picture crop edits for handle '${String(edit.handle.nodeId)}'`,

@@ -41,13 +41,11 @@ supported content to a slide loaded from an existing PPTX.
 `clearPictureCrop` removes it:
 
 ```ts
-import {
-  asOoxmlPercent,
-  clearPictureCrop,
-  setPictureCrop,
-} from "@pptx-glimpse/document";
+import { asOoxmlPercent, clearPictureCrop, setPictureCrop } from "@pptx-glimpse/document";
 
-const picture = source.slides[0]?.shapes.find((shape) => shape.kind === "image");
+const picture = source.slides[0]?.shapes.find(
+  (shape) => shape.kind === "image" && shape.blipFillMode === "stretch",
+);
 if (picture?.handle === undefined) throw new Error("No editable picture found");
 
 const cropped = setPictureCrop(source, picture.handle, {

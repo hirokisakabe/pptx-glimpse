@@ -12,6 +12,7 @@ import {
   replaceSlideShapeNode,
   requireUniqueSlideShapeTarget,
 } from "./shape-editing.js";
+import { asOoxmlPercent } from "./units.js";
 
 /**
  * Crop insets in OOXML percentage units (`100000` = 100%). Omitted edges mean zero.
@@ -94,10 +95,10 @@ function normalizeCrop(
     throw new Error(`${operationName}: top + bottom must be less than 100000`);
   }
   const crop: SourceImageCrop = {
-    ...(left !== 0 ? { left: input.left } : {}),
-    ...(top !== 0 ? { top: input.top } : {}),
-    ...(right !== 0 ? { right: input.right } : {}),
-    ...(bottom !== 0 ? { bottom: input.bottom } : {}),
+    ...(left !== 0 ? { left } : {}),
+    ...(top !== 0 ? { top } : {}),
+    ...(right !== 0 ? { right } : {}),
+    ...(bottom !== 0 ? { bottom } : {}),
   };
   return Object.keys(crop).length === 0 ? undefined : crop;
 }
@@ -106,8 +107,8 @@ function normalizeInset(
   value: OoxmlPercent | undefined,
   operationName: string,
   fieldName: keyof SetPictureCropInput,
-): number {
-  if (value === undefined) return 0;
+): OoxmlPercent {
+  if (value === undefined) return asOoxmlPercent(0);
   if (!Number.isInteger(value) || value < 0 || value > 100000) {
     throw new Error(
       `${operationName}: ${fieldName} must be an integer OOXML percentage from 0 through 100000`,

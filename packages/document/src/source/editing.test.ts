@@ -1818,7 +1818,8 @@ describe("editing media and slide topology operations", () => {
       }),
     ).toBe(cropped);
 
-    const cleared = clearPictureCrop(cropped, imageHandle);
+    const cleared = expectNonMutating(cropped, () => clearPictureCrop(cropped, imageHandle));
+    expect(imageByName(cropped, "Picture").crop).toEqual({ left: 10000, bottom: 25000 });
     expect(imageByName(cleared, "Picture").crop).toBeUndefined();
     expect(cleared.edits).toEqual([{ kind: "updatePictureCrop", handle: imageHandle }]);
     expect(clearPictureCrop(cleared, imageHandle)).toBe(cleared);
@@ -1852,6 +1853,12 @@ describe("editing media and slide topology operations", () => {
         right: asOoxmlPercent(50000),
       }),
     ).toThrow(/left \+ right must be less than 100000/);
+    expect(() =>
+      setPictureCrop(source, imageHandle, {
+        top: asOoxmlPercent(50000),
+        bottom: asOoxmlPercent(50000),
+      }),
+    ).toThrow(/top \+ bottom must be less than 100000/);
     expect(() => setPictureCrop(source, imageHandle, { top: asOoxmlPercent(1.5) })).toThrow(
       /top must be an integer OOXML percentage/,
     );
@@ -1868,6 +1875,23 @@ describe("editing media and slide topology operations", () => {
     expect(() => clearPictureCrop(tiled, imageHandle)).toThrow(
       /only picture blipFill with exactly one stretch is supported/,
     );
+  });
+
+  it("reads each crop input property once before storing its validated value", () => {
+    const source = buildSourceModel();
+    const imageHandle = requireHandle(imageByName(source, "Picture").handle);
+    let reads = 0;
+    const input = {
+      get left() {
+        reads += 1;
+        return asOoxmlPercent(reads === 1 ? 10000 : 100000);
+      },
+    };
+
+    const edited = setPictureCrop(source, imageHandle, input);
+
+    expect(reads).toBe(1);
+    expect(imageByName(edited, "Picture").crop).toEqual({ left: 10000 });
   });
 
   it("replaces image bytes after validating content type and records shared reference count", () => {

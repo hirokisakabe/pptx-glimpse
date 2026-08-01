@@ -151,7 +151,9 @@ function buildMediaReplacementFixture(): Uint8Array {
       `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:x="urn:test:unknown">` +
         `<p:cSld><p:spTree>` +
         `<p:pic><p:nvPicPr><p:cNvPr id="20" name="Replace Target"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
-        `<p:blipFill data-preserve="yes"><a:blip r:embed="rIdImage1"/><x:keep value="yes"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+        `<p:blipFill data-preserve="yes"><a:blip r:embed="rIdImage1"/><x:keep value="yes"/>` +
+        `<a:srcRect l="1000" x:l="preserve"><x:inside value="yes"/></a:srcRect>` +
+        `<a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
         `<p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:pic>` +
         `</p:spTree></p:cSld>` +
         `</p:sld>`,
@@ -2710,9 +2712,11 @@ describe("writePptx - no-edit round-trip", () => {
     const reread = readPptx(croppedOutput);
     const rereadImage = reread.slides[0]?.shapes.find((shape) => shape.kind === "image");
 
-    expect(croppedXml).toContain(`<a:srcRect l="12000" t="3000" r="8000" b="4000"/>`);
+    expect(croppedXml).toContain(`<a:srcRect x:l="preserve" l="12000" t="3000" r="8000" b="4000">`);
     expect(croppedXml).toContain(`data-preserve="yes"`);
     expect(croppedXml).toContain(`<x:keep value="yes"/>`);
+    expect(croppedXml).toContain(`x:l="preserve"`);
+    expect(croppedXml).toContain(`<x:inside value="yes"/>`);
     expect(croppedXml).toContain(`<a:stretch><a:fillRect/></a:stretch>`);
     expect(rereadImage?.crop).toEqual({ left: 12000, top: 3000, right: 8000, bottom: 4000 });
 
@@ -2724,6 +2728,50 @@ describe("writePptx - no-edit round-trip", () => {
     expect(clearedXml).not.toContain("srcRect");
     expect(clearedXml).toContain(`<x:keep value="yes"/>`);
     expect(clearedImage?.crop).toBeUndefined();
+  });
+
+  it("uses the existing DrawingML prefix when inserting picture srcRect", () => {
+    const entries = unzipSync(buildMediaReplacementFixture());
+    const slidePath = "ppt/slides/slide1.xml";
+    const slideXml = decoder
+      .decode(entries[slidePath])
+      .replaceAll("xmlns:a=", "xmlns:d=")
+      .replaceAll("<a:", "<d:")
+      .replaceAll("</a:", "</d:")
+      .replace(`<d:srcRect l="1000" x:l="preserve"><x:inside value="yes"/></d:srcRect>`, "");
+    entries[slidePath] = encoder.encode(slideXml);
+    const source = readPptx(zipSync(entries));
+    const image = source.slides[0]?.shapes.find((shape) => shape.kind === "image");
+    if (image?.handle === undefined) throw new Error("prefixed picture was not parsed");
+
+    const output = writePptx(setPictureCrop(source, image.handle, { left: asOoxmlPercent(10000) }));
+    const writtenXml = decoder.decode(getEntry(output, slidePath));
+
+    expect(writtenXml).toContain(`<d:srcRect l="10000"/>`);
+    expect(writtenXml).not.toContain(`<a:srcRect`);
+  });
+
+  it("rejects duplicate picture crop edits even when relationship ids differ", () => {
+    const source = readPptx(buildMediaReplacementFixture());
+    const image = source.slides[0]?.shapes.find((shape) => shape.kind === "image");
+    if (image?.handle === undefined) throw new Error("picture crop fixture was not parsed");
+    const conflicted = {
+      ...source,
+      edits: [
+        {
+          kind: "updatePictureCrop" as const,
+          handle: image.handle,
+          crop: { left: asOoxmlPercent(10000) },
+        },
+        {
+          kind: "updatePictureCrop" as const,
+          handle: { ...image.handle, relationshipId: undefined },
+          crop: { right: asOoxmlPercent(10000) },
+        },
+      ],
+    };
+
+    expect(() => writePptx(conflicted)).toThrow(/conflicting picture crop edits/);
   });
 
   it("Can write xml raw package material in serializable range", () => {

@@ -610,7 +610,7 @@ export class EditorSession {
         const shape = findShapeNodeBySourceHandle(document, handle);
         return shape?.kind === "image" ? shape : undefined;
       },
-      (handle) => ({ kind: "setPictureCrop", handle, ...crop }),
+      (handle) => ({ ...crop, kind: "setPictureCrop", handle }),
     );
   }
 

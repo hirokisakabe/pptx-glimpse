@@ -1544,6 +1544,26 @@ describe("EditorSession picture crop commands", () => {
     });
   });
 
+  it("does not let extra crop input properties override the convenience command target", async () => {
+    const source = readPptx(await buildImageReplacementFixture());
+    const image = firstImage(source);
+    const imageHandle = requireHandle(image.handle);
+    const session = createEditorSession(source);
+    const cropWithOverrides = {
+      left: asOoxmlPercent(10000),
+      kind: "clearPictureCrop" as const,
+      handle: requireHandle(firstShape(source).handle),
+    };
+
+    const edited = expectApplied(session.setPictureCrop(image, cropWithOverrides));
+
+    expect(firstImage(edited).crop).toEqual({ left: 10000 });
+    expect(edited.edits?.at(-1)).toMatchObject({
+      kind: "updatePictureCrop",
+      handle: imageHandle,
+    });
+  });
+
   it("normalizes repeated crop commands and rejects invalid input atomically", async () => {
     const source = readPptx(await buildImageReplacementFixture());
     const imageHandle = requireHandle(firstImage(source).handle);

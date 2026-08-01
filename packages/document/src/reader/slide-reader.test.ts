@@ -491,6 +491,24 @@ describe("readPptx - typed shape detail (synthetic)", () => {
     expect(image.blipFillMode).toBe("tile");
   });
 
+  it("leaves missing, mixed, and duplicate-prefix picture fill modes ambiguous", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        `<p:pic><p:nvPicPr><p:cNvPr id="20" name="Missing Mode"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+          `<p:blipFill><a:blip r:embed="rIdImage"/></p:blipFill><p:spPr/></p:pic>` +
+          `<p:pic><p:nvPicPr><p:cNvPr id="21" name="Mixed Mode"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+          `<p:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch><a:tile/></p:blipFill><p:spPr/></p:pic>` +
+          `<p:pic><p:nvPicPr><p:cNvPr id="22" name="Duplicate Mode"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+          `<p:blipFill xmlns:d="http://schemas.openxmlformats.org/drawingml/2006/main"><a:blip r:embed="rIdImage"/>` +
+          `<a:stretch><a:fillRect/></a:stretch><d:stretch><d:fillRect/></d:stretch></p:blipFill><p:spPr/></p:pic>`,
+      ),
+    );
+
+    expect(
+      source.slides[0].shapes.map((shape) => shape.kind === "image" && shape.blipFillMode),
+    ).toEqual([undefined, undefined, undefined]);
+  });
+
   it("Read image shape effects and blip effects as typed source effects", () => {
     const source = readPptx(
       buildSyntheticPptx(

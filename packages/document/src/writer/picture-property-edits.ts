@@ -1,6 +1,6 @@
 import { getChild, localName, type XmlNode } from "../reader/xml.js";
 import type { PptxSourceModelPictureCropEdit } from "../source/index.js";
-import { insertChildByOrder } from "./dirty-part-xml-helpers.js";
+import { insertChildByOrder, qualifiedSiblingName } from "./dirty-part-xml-helpers.js";
 import { locateShapeTreeNodeLocation, parseShapeLocator } from "./xml-locators.js";
 import { deleteChild } from "./xml-node-utils.js";
 
@@ -35,9 +35,15 @@ export function applyPictureCropEdit(root: XmlNode, edit: PptxSourceModelPicture
 
   const srcRect = getChild(blipFill, "srcRect");
   if (srcRect === undefined) {
+    const stretchKey = Object.keys(blipFill).find(
+      (key) => !key.startsWith("@_") && localName(key) === "stretch",
+    );
+    if (stretchKey === undefined) {
+      throw new Error("writePptx: picture crop target has no qualified stretch element");
+    }
     insertChildByOrder(
       blipFill,
-      "a:srcRect",
+      qualifiedSiblingName(stretchKey, "srcRect"),
       cropAttributes(edit.crop),
       (name) => name === "tile" || name === "stretch",
     );
@@ -66,8 +72,5 @@ function countChildren(parent: XmlNode, childName: string): number {
 }
 
 function isCropAttribute(key: string): boolean {
-  if (!key.startsWith("@_")) return false;
-  const name = key.slice(2);
-  const separator = name.indexOf(":");
-  return CROP_ATTRIBUTE_LOCAL_NAMES.has(separator === -1 ? name : name.slice(separator + 1));
+  return key.startsWith("@_") && CROP_ATTRIBUTE_LOCAL_NAMES.has(key.slice(2));
 }
