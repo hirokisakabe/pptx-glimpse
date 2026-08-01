@@ -141,6 +141,7 @@ const picture = target.addPicture({
   height: asEmu(914400),
 });
 const group = target.groupShapes([shape, picture]);
+session.target(group).reorderShapes([picture, shape]);
 ```
 
 Supported from-scratch children are generic shapes/text boxes, PNG/JPEG pictures, connectors,
@@ -149,12 +150,14 @@ groups. The target may be the slide/layout/master or a native group, and every g
 be a consecutive direct child of that target. SmartArt, raw preserved nodes, consumer node ids,
 consumer layout primitives, and connector rerouting are outside this API.
 
-`reorderShapes` requires every top-level drawing in the target exactly once. Because the reorder
+`reorderShapes` accepts a slide, layout, master, or native group target and requires every direct
+child drawing in that target exactly once. It never moves a drawing across parents. Because the
 operation is applied after earlier additions, a connector can be placed behind its connection
-targets without weakening endpoint validation. Non-drawing shape-tree children remain in place;
-shape trees containing `mc:AlternateContent` are rejected by this initial API. The standalone
-`reorderShapes(source, targetHandle, orderedShapeHandles)` root export provides the same operation
-without a session.
+targets without weakening endpoint validation. Non-drawing children of the selected container
+remain in place. Missing, duplicate, foreign-part, and non-direct handles are rejected, as are
+drawing parts with duplicate node ids or `mc:AlternateContent`; validation is atomic. The
+standalone `reorderShapes(source, targetHandle, orderedShapeHandles)` root export provides the same
+operation without a session.
 
 ## OOXML percentages, angles, and effects
 
