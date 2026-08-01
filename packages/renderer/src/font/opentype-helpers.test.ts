@@ -242,21 +242,21 @@ describe("createOpentypeSetupFromSystem cache", () => {
    * Prevent OOM due to full loading of system fonts.
    */
   async function setupTestFont(): Promise<void> {
-    const { mkdtemp, writeFile } = await import("node:fs/promises");
-    const { join } = await import("node:path");
-    const { tmpdir } = await import("node:os");
-    testFontDir = await mkdtemp(join(tmpdir(), "pptx-glimpse-test-fonts-"));
-    testFontPath = join(testFontDir, "CacheTestFont.ttf");
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const os = await import("node:os");
+    testFontDir = await fs.mkdtemp(path.join(os.tmpdir(), "pptx-glimpse-test-fonts-"));
+    testFontPath = path.join(testFontDir, "CacheTestFont.ttf");
     const buffer = await createTestFontBuffer("CacheTestFont");
-    await writeFile(testFontPath, Buffer.from(buffer));
+    await fs.writeFile(testFontPath, Buffer.from(buffer));
   }
 
   afterEach(async () => {
     clearFontCache();
     vi.restoreAllMocks();
     if (testFontDir) {
-      const { rm } = await import("node:fs/promises");
-      await rm(testFontDir, { recursive: true, force: true });
+      const fs = await import("node:fs/promises");
+      await fs.rm(testFontDir, { recursive: true, force: true });
       testFontDir = null;
       testFontPath = null;
     }
