@@ -59,6 +59,13 @@ export function appendXmlChildAtEnd(node: XmlNode, key: string, value: XmlNode):
   xmlChildOrder.set(node, order);
 }
 
+/** Returns heterogeneous children in their preserved document order. */
+export function getXmlChildOrder(
+  node: XmlNode,
+): readonly { readonly key: string; readonly value: unknown }[] {
+  return [...(xmlChildOrder.get(node) ?? flattenChildren(node))];
+}
+
 /** Replace the remembered heterogeneous child order without changing grouped values. */
 export function setXmlChildOrder(
   node: XmlNode,

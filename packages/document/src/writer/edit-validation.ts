@@ -93,6 +93,22 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
         }
         break;
       }
+      case "groupShapes": {
+        if (new Set(edit.shapeIds).size !== edit.shapeIds.length) {
+          throw new Error("writePptx: grouped shape ids contain a duplicate shape");
+        }
+        if (edit.shapeIds.length < 2) {
+          throw new Error("writePptx: grouped shape ids must contain at least two shapes");
+        }
+        const key = [edit.targetPartPath, edit.groupId].join("\u0000");
+        if (addedShapeKeys.has(key)) {
+          throw new Error(`writePptx: conflicting shape additions for shape id '${edit.groupId}'`);
+        }
+        addedShapeKeys.add(key);
+        break;
+      }
+      case "ungroupShape":
+        break;
       case "deleteShape": {
         const key = editHandleNodeKey(edit);
         if (deletedShapeKeys.has(key)) {

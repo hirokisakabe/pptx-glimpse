@@ -44,6 +44,13 @@ const orderedParser = new XMLParser({
   trimValues: false,
 });
 
+const qualifiedOrderedParser = new XMLParser({
+  preserveOrder: true,
+  removeNSPrefix: false,
+  ignoreAttributes: true,
+  trimValues: false,
+});
+
 /** Parse an XML string and return the root object. */
 export function parseXml(xml: string): XmlNode {
   return unsafeOoxmlBoundaryAssertion<XmlNode>(parser.parse(xml));
@@ -53,18 +60,30 @@ export function parseXmlOrdered(xml: string): XmlOrderedNode[] {
   return unsafeOoxmlBoundaryAssertion<XmlOrderedNode[]>(orderedParser.parse(xml));
 }
 
+/** Parse ordered XML while retaining qualified element names for shape-tree topology. */
+export function parseXmlOrderedQualified(xml: string): XmlOrderedNode[] {
+  return unsafeOoxmlBoundaryAssertion<XmlOrderedNode[]>(qualifiedOrderedParser.parse(xml));
+}
+
 export function navigateOrdered(
   ordered: readonly XmlOrderedNode[],
   path: readonly string[],
 ): XmlOrderedNode[] | undefined {
   let current: readonly XmlOrderedNode[] = ordered;
   for (const key of path) {
-    const entry = current.find((item) => key in item);
-    const value = entry?.[key];
+    const entry = current.find((item) =>
+      Object.keys(item).some((candidate) => candidate !== ":@" && localName(candidate) === key),
+    );
+    const qualifiedKey = entry === undefined ? undefined : orderedElementKey(entry);
+    const value = qualifiedKey === undefined ? undefined : entry?.[qualifiedKey];
     if (!Array.isArray(value)) return undefined;
     current = unsafeOoxmlBoundaryAssertion<XmlOrderedNode[]>(value);
   }
   return [...current];
+}
+
+function orderedElementKey(node: XmlOrderedNode): string | undefined {
+  return Object.keys(node).find((key) => key !== ":@");
 }
 
 /** Extracts the local part (`foo`) from a qualified name such as `a:foo`. */

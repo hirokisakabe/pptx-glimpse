@@ -35,6 +35,42 @@ paragraph text, shape transforms/fills/outlines, shape deletion, same-format ima
 existing Chart data, slide backgrounds, and slide topology. The authoring helpers can add new
 supported content to a slide loaded from an existing PPTX.
 
+## Lossless group and ungroup
+
+`groupShapes(source, shapeHandles)` replaces two or more consecutive siblings with one native
+group while retaining each child node id, source handle identity, transform, and relative z-order.
+The handles may target root-level nodes or children of the same existing group:
+
+```ts
+import { groupShapes, ungroupShape } from "@pptx-glimpse/document";
+
+const slide = source.slides[0];
+const selected = slide?.shapes
+  .slice(0, 2)
+  .flatMap((shape) => (shape.handle === undefined ? [] : [shape.handle]));
+if (selected === undefined || selected.length !== 2) {
+  throw new Error("Two editable sibling shapes are required");
+}
+
+const grouped = groupShapes(source, selected);
+const group = grouped.slides[0]?.shapes.find((shape) => shape.kind === "group");
+if (group?.handle === undefined) throw new Error("Group was not created");
+
+const restored = ungroupShape(grouped, group.handle);
+```
+
+The new group uses the union of the child transform bounds and an identity child-coordinate
+mapping (`off == chOff`, `ext == chExt`) so child transforms do not change. Grouping rejects
+different parents, non-consecutive selections, missing/duplicate node ids,
+`mc:AlternateContent`, incomplete child transforms, and connector endpoints crossing the
+selection boundary. Internal connector endpoint ids remain unchanged.
+
+`ungroupShape` expands children into the group z-order slot only when the authored group mapping
+is identity and the group has no fill, effects, or unknown group-level XML whose removal could
+change appearance. It also rejects a group referenced by a connector. A removed group id stays
+reserved for the edit session and is not reused by a later group operation. Every rejection is
+atomic because validation completes before a new source model or edit record is created.
+
 `updateChartData(source, chartHandle, input)` replaces the names, shared category labels, and
 finite numeric values of an existing supported category Chart. It keeps the Chart type, series
 count, title, legend, axes, formatting, and unknown Chart XML, and updates the Chart formulas and

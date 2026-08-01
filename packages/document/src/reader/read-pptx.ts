@@ -57,6 +57,7 @@ import {
   navigateOrdered,
   parseXml,
   parseXmlOrdered,
+  parseXmlOrderedQualified,
   type XmlNode,
   type XmlOrderedNode,
 } from "./xml.js";
@@ -304,7 +305,10 @@ function parsePartRoot(
     return undefined;
   }
   const orderedRoot = includeOrderedRoot
-    ? (navigateOrdered(parseXmlOrdered(xml), [rootLocalName]) ?? [])
+    ? (navigateOrdered(
+        rootLocalName === "theme" ? parseXmlOrdered(xml) : parseXmlOrderedQualified(xml),
+        [rootLocalName],
+      ) ?? [])
     : [];
   return { root, orderedRoot };
 }
