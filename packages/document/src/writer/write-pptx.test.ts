@@ -41,6 +41,7 @@ import {
   findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
+  groupShapes,
   moveSlide,
   replaceImageBytes,
   replaceParagraphPlainText,
@@ -4646,6 +4647,124 @@ describe("writePptx - paragraph text replacement", () => {
 });
 
 describe("writePptx - shape xfrm edit", () => {
+  it("edits existing master and nested layout shape properties by part-local identity", () => {
+    let authored = createPptx();
+    const masterHandle = authored.slideMasters[0]?.handle;
+    const layoutHandle = authored.slideLayouts[0]?.handle;
+    if (masterHandle === undefined || layoutHandle === undefined) {
+      throw new Error("master or layout handle not found");
+    }
+    authored = addShape(authored, layoutHandle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(10),
+      offsetY: asEmu(20),
+      width: asEmu(300),
+      height: asEmu(400),
+    });
+    authored = addShape(authored, layoutHandle, {
+      geometry: { kind: "preset", preset: "ellipse" },
+      offsetX: asEmu(500),
+      offsetY: asEmu(600),
+      width: asEmu(700),
+      height: asEmu(800),
+    });
+    const layoutShapes = authored.slideLayouts[0]?.shapes ?? [];
+    authored = groupShapes(authored, [
+      requireHandle(layoutShapes.at(-2)?.handle),
+      requireHandle(layoutShapes.at(-1)?.handle),
+    ]);
+    authored = addShape(authored, masterHandle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(900),
+      offsetY: asEmu(1000),
+      width: asEmu(1100),
+      height: asEmu(1200),
+    });
+    const existing = readPptx(writePptx(authored));
+    const layoutGroup = existing.slideLayouts[0]?.shapes.at(-1);
+    const masterShape = existing.slideMasters[0]?.shapes.at(-1);
+    if (layoutGroup?.kind !== "group" || masterShape?.handle === undefined) {
+      throw new Error("existing group or master shape not found");
+    }
+    const nestedShape = layoutGroup.children[0];
+    if (nestedShape?.handle === undefined) throw new Error("nested layout shape not found");
+
+    let edited = updateShapeTransform(existing, nestedShape.handle, {
+      offsetX: asEmu(111),
+      offsetY: asEmu(222),
+      width: asEmu(333),
+      height: asEmu(444),
+    });
+    edited = setShapeFill(edited, nestedShape.handle, {
+      kind: "solid",
+      color: { kind: "srgb", hex: "12AB34" },
+    });
+    edited = setShapeOutline(edited, masterShape.handle, {
+      width: asEmu(12700),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "56789A" } },
+    });
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+
+    expect(findShapeNodeBySourceHandle(reread, nestedShape.handle)).toMatchObject({
+      kind: "shape",
+      transform: { offsetX: 111, offsetY: 222, width: 333, height: 444 },
+      fill: { kind: "solid", color: { kind: "srgb", hex: "12AB34" } },
+    });
+    expect(findShapeNodeBySourceHandle(reread, masterShape.handle)).toMatchObject({
+      outline: {
+        width: 12700,
+        fill: { kind: "solid", color: { kind: "srgb", hex: "56789A" } },
+      },
+    });
+    expect(decoder.decode(getEntry(output, layoutHandle.partPath))).toContain(
+      '<a:off x="111" y="222"',
+    );
+    expect(decoder.decode(getEntry(output, masterHandle.partPath))).toContain("56789A");
+  });
+
+  it("rejects duplicate ids and AlternateContent targets in layout parts", () => {
+    const base = unzipSync(writePptx(createPptx()));
+    const layoutPath = "ppt/slideLayouts/slideLayout1.xml";
+    const originalLayout = base[layoutPath];
+    if (originalLayout === undefined) throw new Error("layout part not found");
+    const original = decoder.decode(originalLayout);
+    const shapeXml = (id: string, name: string) =>
+      `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${name}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+      `<p:spPr><a:xfrm><a:off x="1" y="2"/><a:ext cx="3" cy="4"/></a:xfrm>` +
+      `<a:prstGeom prst="rect"/></p:spPr></p:sp>`;
+
+    const duplicateFiles = { ...base };
+    duplicateFiles[layoutPath] = encoder.encode(
+      original.replace(
+        "</p:spTree>",
+        `${shapeXml("50", "First")}${shapeXml("50", "Second")}</p:spTree>`,
+      ),
+    );
+    const duplicate = readPptx(zipSync(duplicateFiles));
+    const duplicateHandle = duplicate.slideLayouts[0]?.shapes.at(-2)?.handle;
+    if (duplicateHandle === undefined) throw new Error("duplicate layout handle not found");
+    expect(() => setShapeFill(duplicate, duplicateHandle, { kind: "none" })).toThrow(
+      /duplicate node id/,
+    );
+
+    const alternateFiles = { ...base };
+    alternateFiles[layoutPath] = encoder.encode(
+      original.replace(
+        "</p:spTree>",
+        `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">` +
+          `<mc:Fallback>${shapeXml("60", "Fallback")}</mc:Fallback></mc:AlternateContent>` +
+          `</p:spTree>`,
+      ),
+    );
+    const alternate = readPptx(zipSync(alternateFiles));
+    const alternateHandle = alternate.slideLayouts[0]?.shapes.at(-1)?.handle;
+    if (alternateHandle === undefined) throw new Error("AlternateContent handle not found");
+    expect(() => setShapeFill(alternate, alternateHandle, { kind: "none" })).toThrow(
+      /AlternateContent/,
+    );
+  });
+
   it("Apply offset and extent update to PptxSourceModel source and reflect in PPTX after write", () => {
     const source = readPptx(buildTextEditFixture());
     const shape = firstShape(source);

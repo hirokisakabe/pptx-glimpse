@@ -135,6 +135,7 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
       case "replaceImage":
       case "updateChartData":
       case "addSlideLayout":
+      case "cloneSlideLayout":
       case "addEmptySlideFromLayout":
       case "duplicateSlide":
       case "moveSlide":

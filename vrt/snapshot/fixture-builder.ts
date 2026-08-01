@@ -8,7 +8,7 @@ import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-export type FixtureCreator = () => Promise<void>;
+type FixtureCreator = () => Promise<void>;
 export type FixtureCreatorMap = Record<string, FixtureCreator>;
 
 // --- Constants ---

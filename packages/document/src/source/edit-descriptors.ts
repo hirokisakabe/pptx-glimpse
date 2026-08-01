@@ -335,6 +335,20 @@ const EDIT_KIND_DESCRIPTORS: {
     insertedSlidePartPath: () => undefined,
     insertedShape: () => undefined,
   },
+  cloneSlideLayout: {
+    reservedPartPaths: (edit) => [
+      edit.masterPartPath,
+      edit.sourceLayoutPartPath,
+      edit.newLayoutPartPath,
+    ],
+    dirtyPartPath: (edit) => edit.masterPartPath,
+    targetsShape: () => false,
+    invalidatingPartPaths: (edit) => [edit.masterPartPath, edit.newLayoutPartPath],
+    reservedShapeId: () => undefined,
+    slideTopologyOperation: () => undefined,
+    insertedSlidePartPath: () => undefined,
+    insertedShape: () => undefined,
+  },
   addEmptySlideFromLayout: {
     reservedPartPaths: (edit) => [edit.layoutPartPath, edit.newSlidePartPath],
     dirtyPartPath: () => undefined,

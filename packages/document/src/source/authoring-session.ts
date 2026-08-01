@@ -33,8 +33,8 @@ import {
   setBackground,
   setSlideBackground,
 } from "./slide-background-authoring.js";
-import type { AddSlideLayoutInput } from "./slide-layout-authoring.js";
-import { addSlideLayout } from "./slide-layout-authoring.js";
+import type { AddSlideLayoutInput, CloneSlideLayoutInput } from "./slide-layout-authoring.js";
+import { addSlideLayout, cloneSlideLayout } from "./slide-layout-authoring.js";
 import type { AddEmptySlideFromLayoutInput } from "./slide-topology.js";
 import { addEmptySlideFromLayout } from "./slide-topology.js";
 import type { AddTableInput } from "./table-authoring.js";
@@ -193,6 +193,23 @@ export class PptxAuthoringSession {
     if (handle === undefined) {
       throw new Error(
         "PptxAuthoringSession.addSlideLayout: operation did not produce a layout handle",
+      );
+    }
+    this.#source = updated;
+    return handle;
+  }
+
+  /** Clones a preserved layout within its master and returns its authoring target handle. */
+  cloneSlideLayout(layoutHandle: SourceHandle, input: CloneSlideLayoutInput): SourceHandle {
+    const updated = cloneSlideLayout(this.#source, layoutHandle, input);
+    const edit = updated.edits?.at(-1);
+    const handle =
+      edit?.kind === "cloneSlideLayout"
+        ? updated.slideLayouts.find((layout) => layout.partPath === edit.newLayoutPartPath)?.handle
+        : undefined;
+    if (handle === undefined) {
+      throw new Error(
+        "PptxAuthoringSession.cloneSlideLayout: operation did not produce a layout handle",
       );
     }
     this.#source = updated;

@@ -30,7 +30,7 @@ export function applyShapeTransformEdit(
   edit: PptxSourceModelShapeTransformEdit,
 ): void {
   const locator = parseShapeLocator(edit.handle, "shape transform edit");
-  const spTree = getChild(getChild(getChild(root, "sld"), "cSld"), "spTree");
+  const spTree = getDrawingShapeTree(root);
   const shape = locateShapeTreeNode(spTree, locator);
   const xfrm = getShapeTransformNode(shape);
   if (xfrm === undefined) {
@@ -78,7 +78,7 @@ function locateEditableShapeTreeNode(
   editName: string,
 ): ShapeTreeNodeLocation {
   const locator = parseShapeLocator(handle, editName);
-  const spTree = getChild(getChild(getChild(root, "sld"), "cSld"), "spTree");
+  const spTree = getDrawingShapeTree(root);
   const location = locateShapeTreeNodeLocation(spTree, locator);
   const shape =
     location === undefined ? undefined : { node: location.node, localName: location.nodeKind };
@@ -93,6 +93,12 @@ function locateEditableShapeTreeNode(
     );
   }
   return shape;
+}
+
+function getDrawingShapeTree(root: XmlNode): XmlNode | undefined {
+  const drawingPart =
+    getChild(root, "sld") ?? getChild(root, "sldLayout") ?? getChild(root, "sldMaster");
+  return getChild(getChild(drawingPart, "cSld"), "spTree");
 }
 
 function ensureShapeProperties(shape: XmlNode): XmlNode {

@@ -336,7 +336,7 @@ export type ComputedFill =
     }
   | { readonly kind: "raw"; readonly source: SourceFill };
 
-export interface ComputedGradientStop {
+interface ComputedGradientStop {
   readonly position: number;
   readonly color: ComputedColor;
 }
@@ -355,7 +355,7 @@ export interface ComputedEffectList {
   readonly softEdge?: SourceEffectList["softEdge"];
 }
 
-export interface ComputedOuterShadow {
+interface ComputedOuterShadow {
   readonly blurRadius: Emu;
   readonly distance: Emu;
   readonly direction: number;
@@ -364,14 +364,14 @@ export interface ComputedOuterShadow {
   readonly rotateWithShape: boolean;
 }
 
-export interface ComputedInnerShadow {
+interface ComputedInnerShadow {
   readonly blurRadius: Emu;
   readonly distance: Emu;
   readonly direction: number;
   readonly color: ComputedColor;
 }
 
-export interface ComputedGlow {
+interface ComputedGlow {
   readonly radius: Emu;
   readonly color: ComputedColor;
 }
@@ -413,7 +413,7 @@ export interface ComputedParagraph {
   readonly runs: readonly ComputedTextRun[];
 }
 
-export interface ComputedParagraphProperties extends Omit<
+interface ComputedParagraphProperties extends Omit<
   SourceParagraphProperties,
   "bulletColor" | "defaultRunProperties"
 > {

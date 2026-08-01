@@ -10,6 +10,7 @@ import {
   createPptx,
   readPptx,
   setBackground,
+  setShapeFill,
   type SourceConnector,
   type SourceShape,
   writePptx,
@@ -627,7 +628,54 @@ describe("PptxEditorSession", () => {
     expect(rendered.slides[1]?.svg).toContain('fill="#ffffff"');
   });
 
-  it("scopes applyAll changes across inherited and slide-local content", async () => {
+  it("resolves affected slides for layout and master shape property edits", async () => {
+    const source = readPptx(await buildLayoutCatalogFixture());
+    const layout = source.slideLayouts.find(
+      (candidate) => candidate.partPath === "ppt/slideLayouts/slideLayout2.xml",
+    );
+    const master = source.slideMasters.find(
+      (candidate) => candidate.partPath === "ppt/slideMasters/slideMaster1.xml",
+    );
+    if (layout?.handle === undefined || master?.handle === undefined) {
+      throw new Error("layout or master handle not found");
+    }
+    const withLayoutShape = addShape(source, layout.handle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(1),
+      offsetY: asEmu(2),
+      width: asEmu(3),
+      height: asEmu(4),
+    });
+    const layoutShape = withLayoutShape.slideLayouts
+      .find((candidate) => candidate.partPath === layout.partPath)
+      ?.shapes.at(-1);
+    if (layoutShape?.handle === undefined) throw new Error("layout shape handle not found");
+    const editedLayout = setShapeFill(withLayoutShape, layoutShape.handle, { kind: "none" });
+
+    expect([...affectedSlidePartPaths(withLayoutShape, editedLayout)!]).toEqual([
+      "ppt/slides/slide2.xml",
+      "ppt/slides/slide3.xml",
+    ]);
+
+    const withMasterShape = addShape(source, master.handle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(1),
+      offsetY: asEmu(2),
+      width: asEmu(3),
+      height: asEmu(4),
+    });
+    const masterShape = withMasterShape.slideMasters
+      .find((candidate) => candidate.partPath === master.partPath)
+      ?.shapes.at(-1);
+    if (masterShape?.handle === undefined) throw new Error("master shape handle not found");
+    const editedMaster = setShapeFill(withMasterShape, masterShape.handle, { kind: "none" });
+
+    expect([...affectedSlidePartPaths(withMasterShape, editedMaster)!]).toEqual([
+      "ppt/slides/slide1.xml",
+    ]);
+  });
+
+  it("resolves all affected slides when applyAll changes inherited and slide-local content", async () => {
     const renderCalls: Array<readonly number[] | undefined> = [];
     configurePptxEditorSessionRenderer((source, options) => {
       renderCalls.push(options?.slides);

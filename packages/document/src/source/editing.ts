@@ -102,9 +102,10 @@ export type {
   AddSlideLayoutBackgroundInput,
   AddSlideLayoutInput,
   AddSlideLayoutMarginInput,
+  CloneSlideLayoutInput,
   SlideLayoutType,
 } from "./slide-layout-authoring.js";
-export { addSlideLayout } from "./slide-layout-authoring.js";
+export { addSlideLayout, cloneSlideLayout } from "./slide-layout-authoring.js";
 export type { AddEmptySlideFromLayoutInput } from "./slide-topology.js";
 export type { MoveSlideInput } from "./slide-topology.js";
 export {
