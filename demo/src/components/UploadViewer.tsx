@@ -8,20 +8,29 @@ import { type DemoMode, type LoadedPresentation, loadPresentation } from "./load
 import { SlideViewer } from "./SlideViewer";
 import { ThumbnailStrip } from "./ThumbnailStrip";
 
-type Phase = "upload" | "loading" | "viewing" | "error";
-
 interface ActivePresentation {
   readonly requestId: number;
   readonly loaded: LoadedPresentation;
 }
 
+type ReplacementState =
+  | { readonly status: "idle" }
+  | { readonly status: "loading" }
+  | { readonly status: "error"; readonly message: string };
+
+type ViewerState =
+  | { readonly phase: "loading" }
+  | { readonly phase: "error"; readonly message: string }
+  | {
+      readonly phase: "viewing";
+      readonly presentation: ActivePresentation;
+      readonly replacement: ReplacementState;
+    };
+
 export function UploadViewer() {
-  const [phase, setPhase] = useState<Phase>("loading");
+  const [viewerState, setViewerState] = useState<ViewerState>({ phase: "loading" });
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [isReplacing, setIsReplacing] = useState(false);
   const [fontFiles, setFontFiles] = useState<File[]>([]);
-  const [presentation, setPresentation] = useState<ActivePresentation | null>(null);
   const initialSampleRequested = useRef(false);
   const loadRequestIdRef = useRef(0);
   const pptxInputRef = useRef<HTMLInputElement>(null);
@@ -38,36 +47,43 @@ export function UploadViewer() {
       selectedFontFiles: readonly File[] = fontFiles,
       requestId = ++loadRequestIdRef.current,
     ) => {
-      const replacing = presentation !== null;
-      if (replacing) setIsReplacing(true);
-      else setPhase("loading");
-      setErrorMessage("");
+      setViewerState((state) =>
+        state.phase === "viewing"
+          ? { ...state, replacement: { status: "loading" } }
+          : { phase: "loading" },
+      );
 
       try {
         const loaded = await loadPresentation(file, initialMode, selectedFontFiles);
         if (requestId !== loadRequestIdRef.current) return;
 
-        setPresentation({ requestId, loaded });
         setCurrentIndex(0);
-        setPhase("viewing");
+        setViewerState({
+          phase: "viewing",
+          presentation: { requestId, loaded },
+          replacement: { status: "idle" },
+        });
       } catch (err) {
         if (requestId !== loadRequestIdRef.current) return;
-        setErrorMessage(err instanceof Error ? err.message : String(err));
-        setPhase(replacing ? "viewing" : "error");
-      } finally {
-        if (replacing && requestId === loadRequestIdRef.current) setIsReplacing(false);
+        const message = err instanceof Error ? err.message : String(err);
+        setViewerState((state) =>
+          state.phase === "viewing"
+            ? { ...state, replacement: { status: "error", message } }
+            : { phase: "error", message },
+        );
       }
     },
-    [fontFiles, presentation],
+    [fontFiles],
   );
 
   const handleSample = useCallback(
     async (sample: SamplePptx, initialMode: SampleOpenMode) => {
       const requestId = ++loadRequestIdRef.current;
-      const replacing = presentation !== null;
-      if (replacing) setIsReplacing(true);
-      else setPhase("loading");
-      setErrorMessage("");
+      setViewerState((state) =>
+        state.phase === "viewing"
+          ? { ...state, replacement: { status: "loading" } }
+          : { phase: "loading" },
+      );
 
       try {
         const response = await fetch(sample.href);
@@ -81,12 +97,15 @@ export function UploadViewer() {
         await handleFile(file, initialMode, fontFiles, requestId);
       } catch (err) {
         if (requestId !== loadRequestIdRef.current) return;
-        setErrorMessage(err instanceof Error ? err.message : String(err));
-        setPhase(replacing ? "viewing" : "error");
-        if (replacing) setIsReplacing(false);
+        const message = err instanceof Error ? err.message : String(err);
+        setViewerState((state) =>
+          state.phase === "viewing"
+            ? { ...state, replacement: { status: "error", message } }
+            : { phase: "error", message },
+        );
       }
     },
-    [fontFiles, handleFile, presentation],
+    [fontFiles, handleFile],
   );
 
   useEffect(() => {
@@ -109,12 +128,17 @@ export function UploadViewer() {
       const files = Array.from(event.target.files ?? []);
       event.target.value = "";
       handleFontFiles(files);
-      if (presentation !== null) void handleFile(presentation.loaded.file, "edit", files);
+      if (viewerState.phase === "viewing") {
+        void handleFile(viewerState.presentation.loaded.file, "edit", files);
+      }
     },
-    [handleFile, handleFontFiles, presentation],
+    [handleFile, handleFontFiles, viewerState],
   );
 
-  const slides = presentation?.loaded.mode === "view" ? presentation.loaded.slides : [];
+  const slides =
+    viewerState.phase === "viewing" && viewerState.presentation.loaded.mode === "view"
+      ? viewerState.presentation.loaded.slides
+      : [];
 
   const handleNavigate = useCallback(
     (index: number) => {
@@ -125,114 +149,107 @@ export function UploadViewer() {
     [slides.length],
   );
 
-  if (phase === "loading") {
-    return (
-      <div className="loading" data-testid="viewer-status">
-        <div className="loading-mark" aria-hidden="true" />
-        <p>Converting in this browser...</p>
-      </div>
-    );
-  }
-
-  if (phase === "error") {
-    return (
-      <>
-        <div className="error" data-testid="viewer-error">
-          {errorMessage}
+  switch (viewerState.phase) {
+    case "loading":
+      return (
+        <div className="loading" data-testid="viewer-status">
+          <div className="loading-mark" aria-hidden="true" />
+          <p>Converting in this browser...</p>
         </div>
-        <DropZone
-          fontFiles={fontFiles}
-          onFile={handleFile}
-          onFontFiles={handleFontFiles}
-          onSample={handleSample}
-        />
-      </>
-    );
-  }
-
-  if (phase === "viewing") {
-    if (presentation?.loaded.mode === "edit") {
-      const loaded = presentation.loaded;
+      );
+    case "error":
       return (
         <>
-          <ReplacementShell errorMessage={errorMessage} isReplacing={isReplacing}>
-            <EditorWorkspace
-              key={presentation.requestId}
-              editor={loaded.editor}
-              fileName={loaded.fileName}
-              fontFileCount={fontFiles.length}
-              onAddFonts={() => fontInputRef.current?.click()}
-              onOpenPptx={() => pptxInputRef.current?.click()}
-              onOpenSample={() => void handleSample(SAMPLE_PPTX_FILES[0], "edit")}
-            />
-          </ReplacementShell>
-          <input
-            ref={pptxInputRef}
-            data-testid="pptx-input"
-            type="file"
-            accept=".pptx"
-            hidden
-            onChange={handlePptxChange}
-          />
-          <input
-            ref={fontInputRef}
-            data-testid="font-input"
-            type="file"
-            accept=".ttf,.otf,.ttc,font/ttf,font/otf"
-            hidden
-            multiple
-            onChange={handleFontChange}
+          <div className="error" data-testid="viewer-error">
+            {viewerState.message}
+          </div>
+          <DropZone
+            fontFiles={fontFiles}
+            onFile={handleFile}
+            onFontFiles={handleFontFiles}
+            onSample={handleSample}
           />
         </>
       );
+    case "viewing": {
+      const { presentation, replacement } = viewerState;
+      const replacementProps = {
+        errorMessage: replacement.status === "error" ? replacement.message : "",
+        isReplacing: replacement.status === "loading",
+      };
+
+      if (presentation.loaded.mode === "edit") {
+        const loaded = presentation.loaded;
+        return (
+          <>
+            <ReplacementShell {...replacementProps}>
+              <EditorWorkspace
+                key={presentation.requestId}
+                editor={loaded.editor}
+                fileName={loaded.fileName}
+                fontFileCount={fontFiles.length}
+                onAddFonts={() => fontInputRef.current?.click()}
+                onOpenPptx={() => pptxInputRef.current?.click()}
+                onOpenSample={() => void handleSample(SAMPLE_PPTX_FILES[0], "edit")}
+              />
+            </ReplacementShell>
+            <input
+              ref={pptxInputRef}
+              data-testid="pptx-input"
+              type="file"
+              accept=".pptx"
+              hidden
+              onChange={handlePptxChange}
+            />
+            <input
+              ref={fontInputRef}
+              data-testid="font-input"
+              type="file"
+              accept=".ttf,.otf,.ttc,font/ttf,font/otf"
+              hidden
+              multiple
+              onChange={handleFontChange}
+            />
+          </>
+        );
+      }
+
+      return (
+        <ReplacementShell {...replacementProps}>
+          <div className="viewer-toolbar">
+            <div className="viewer-summary" data-testid="viewer-status">
+              <span>{slides.length} slides rendered</span>
+              <span>
+                {presentation.loaded.fonts.length} font file
+                {presentation.loaded.fonts.length === 1 ? "" : "s"} provided for this render
+              </span>
+            </div>
+            <div className="mode-switch" role="group" aria-label="Demo mode">
+              <button aria-pressed="true" type="button">
+                View
+              </button>
+              <button
+                data-testid="open-editor"
+                type="button"
+                onClick={() => void handleFile(presentation.loaded.file, "edit")}
+              >
+                Edit
+              </button>
+            </div>
+          </div>
+          <SlideViewer slides={slides} currentIndex={currentIndex} onNavigate={handleNavigate} />
+          <ThumbnailStrip slides={slides} currentIndex={currentIndex} onSelect={handleNavigate} />
+          <DropZone
+            compact
+            fontFiles={fontFiles}
+            onFile={handleFile}
+            onFontFiles={handleFontFiles}
+            onSample={handleSample}
+          />
+        </ReplacementShell>
+      );
     }
-
-    return (
-      <ReplacementShell errorMessage={errorMessage} isReplacing={isReplacing}>
-        <div className="viewer-toolbar">
-          <div className="viewer-summary" data-testid="viewer-status">
-            <span>{slides.length} slides rendered</span>
-            <span>
-              {presentation?.loaded.fonts.length ?? 0} font file
-              {presentation?.loaded.fonts.length === 1 ? "" : "s"} provided for this render
-            </span>
-          </div>
-          <div className="mode-switch" role="group" aria-label="Demo mode">
-            <button aria-pressed="true" type="button">
-              View
-            </button>
-            <button
-              data-testid="open-editor"
-              type="button"
-              onClick={() => {
-                if (presentation !== null) void handleFile(presentation.loaded.file, "edit");
-              }}
-            >
-              Edit
-            </button>
-          </div>
-        </div>
-        <SlideViewer slides={slides} currentIndex={currentIndex} onNavigate={handleNavigate} />
-        <ThumbnailStrip slides={slides} currentIndex={currentIndex} onSelect={handleNavigate} />
-        <DropZone
-          compact
-          fontFiles={fontFiles}
-          onFile={handleFile}
-          onFontFiles={handleFontFiles}
-          onSample={handleSample}
-        />
-      </ReplacementShell>
-    );
   }
-
-  return (
-    <DropZone
-      fontFiles={fontFiles}
-      onFile={handleFile}
-      onFontFiles={handleFontFiles}
-      onSample={handleSample}
-    />
-  );
 }
 
 function ReplacementShell({
