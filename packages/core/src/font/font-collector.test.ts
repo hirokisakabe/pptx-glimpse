@@ -207,9 +207,13 @@ const themeWithoutRegionalFonts = theme1
   .replace('\n        <a:cs typeface="Arial"/>', "");
 
 const themeWithEmptyRegionalFonts = theme1
-  .replaceAll(
+  .replace(
     '<a:ea typeface="MS PGothic"/>',
-    '<a:ea typeface=""/><a:font script="Jpan" typeface="Japanese Fallback"/>',
+    '<a:ea typeface=""/><a:font script="Jpan" typeface="Major Japanese Fallback"/>',
+  )
+  .replace(
+    '<a:ea typeface="MS PGothic"/>',
+    '<a:ea typeface=""/><a:font script="Jpan" typeface="Minor Japanese Fallback"/>',
   )
   .replace('<a:cs typeface="Times New Roman"/>', '<a:cs typeface=""/>')
   .replace('<a:cs typeface="Arial"/>', '<a:cs typeface=""/>');
@@ -373,16 +377,23 @@ describe("collectUsedFonts", () => {
 
   it("uses Jpan when the direct East Asian typeface is explicitly empty", async () => {
     const pptx = await createTestPptx({
-      slideXml: slideWithThemeAliases,
-      themeXml: themeWithEmptyRegionalFonts,
+      contentTypesXml: contentTypesWithSecondSlide,
+      presentationXmlOverride: presentationWithTwoSlidesXml,
+      presentationRelsXml: presentationWithTwoSlidesRels,
+      extraFiles: {
+        "ppt/slides/slide2.xml": slideWithThemeAliases,
+        "ppt/slides/_rels/slide2.xml.rels": slide2Rels,
+        "ppt/slideMasters/slideMaster2.xml": slideMaster1,
+        "ppt/slideMasters/_rels/slideMaster2.xml.rels": slideMaster2Rels,
+        "ppt/slideLayouts/slideLayout2.xml": slideLayout1,
+        "ppt/slideLayouts/_rels/slideLayout2.xml.rels": slideLayout2Rels,
+        "ppt/theme/theme2.xml": themeWithEmptyRegionalFonts,
+      },
     });
     const result = collectUsedFonts(pptx);
 
-    expect(result.theme.majorFontEa).toBeNull();
-    expect(result.theme.minorFontEa).toBeNull();
-    expect(result.theme.majorFontCs).toBeNull();
-    expect(result.theme.minorFontCs).toBeNull();
-    expect(result.fonts).toContain("Japanese Fallback");
+    expect(result.fonts).toContain("Major Japanese Fallback");
+    expect(result.fonts).toContain("Minor Japanese Fallback");
     expect(result.fonts).not.toContain("");
     expect(result.fonts).not.toContain("+mj-ea");
     expect(result.fonts).not.toContain("+mn-ea");
