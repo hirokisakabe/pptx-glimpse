@@ -165,6 +165,10 @@ export default tseslint.config(
               message:
                 "unsafeFixtureAssertion is test-only; production code must use a boundary-specific helper.",
             },
+            {
+              group: ["**/*.test-helpers.js"],
+              message: "Test helpers must not be imported from production package sources.",
+            },
           ],
         },
       ],
