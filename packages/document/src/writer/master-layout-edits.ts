@@ -5,7 +5,10 @@ import {
   localName,
   type XmlNode,
 } from "../reader/xml.js";
-import type { PptxSourceModelAddSlideLayoutEdit } from "../source/index.js";
+import type {
+  PptxSourceModelAddSlideLayoutEdit,
+  PptxSourceModelCloneSlideLayoutEdit,
+} from "../source/index.js";
 import {
   namespacedAttributeKey,
   namespacedChildKey,
@@ -25,6 +28,34 @@ export function applyAddSlideLayoutEdit(
   if (existingLayoutIdList === undefined) {
     appendLayoutIds(layoutIdList, edit.initialLayoutEntries);
   }
+  insertLayoutId(layoutIdList, edit, getChildArray(layoutIdList, "sldLayoutId").length);
+}
+
+export function applyCloneSlideLayoutEdit(
+  root: XmlNode,
+  edit: PptxSourceModelCloneSlideLayoutEdit,
+): void {
+  const master = getChild(root, "sldMaster");
+  if (master === undefined) {
+    throw new Error("writePptx: slide master part does not contain p:sldMaster root");
+  }
+  const existingLayoutIdList = getChild(master, "sldLayoutIdLst");
+  const layoutIdList = existingLayoutIdList ?? createLayoutIdList(master);
+  if (existingLayoutIdList === undefined) {
+    appendLayoutIds(layoutIdList, edit.initialLayoutEntries);
+  }
+  insertLayoutId(layoutIdList, edit, edit.insertAt);
+}
+
+type SlideLayoutInsertionEdit =
+  | PptxSourceModelAddSlideLayoutEdit
+  | PptxSourceModelCloneSlideLayoutEdit;
+
+function insertLayoutId(
+  layoutIdList: XmlNode,
+  edit: SlideLayoutInsertionEdit,
+  insertAt: number,
+): void {
   const items = getChildArray(layoutIdList, "sldLayoutId");
   if (
     items.some(
@@ -38,18 +69,25 @@ export function applyAddSlideLayoutEdit(
   const itemKey = namespacedChildKey(layoutIdList, "p:sldLayoutId", "sldLayoutId");
   const relationshipAttributeKey =
     items[0] === undefined ? "@_r:id" : namespacedAttributeKey(items[0], "r:id", "id");
-  layoutIdList[itemKey] = [
-    ...items,
+  const inserted = [
+    ...items.slice(0, insertAt),
     {
       "@_id": String(edit.newLayoutNumericId),
       [relationshipAttributeKey]: edit.newRelationshipId,
     },
+    ...items.slice(insertAt),
   ];
+  replaceNodeEntries(
+    layoutIdList,
+    Object.entries(layoutIdList).map(([key, value]) =>
+      key === itemKey ? [key, inserted] : [key, value],
+    ),
+  );
 }
 
 function appendLayoutIds(
   layoutIdList: XmlNode,
-  entries: PptxSourceModelAddSlideLayoutEdit["initialLayoutEntries"],
+  entries: SlideLayoutInsertionEdit["initialLayoutEntries"],
 ): void {
   if (entries.length === 0) return;
   const itemKey = namespacedChildKey(layoutIdList, "p:sldLayoutId", "sldLayoutId");

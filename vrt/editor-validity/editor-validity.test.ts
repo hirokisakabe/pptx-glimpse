@@ -1013,6 +1013,36 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
     );
   });
 
+  it("opens an existing PPTX with a cloned slide layout", () => {
+    const input = readFileSync(
+      new URL("../../shared-fixtures/real-basic-theme.pptx", import.meta.url),
+    );
+    const source = readPptx(input);
+    const sourceLayout = source.slideLayouts.at(-1);
+    if (sourceLayout?.handle === undefined) throw new Error("fixture has no cloneable layout");
+    const session = createPptxAuthoringSession(source);
+    const clonedHandle = session.cloneSlideLayout(sourceLayout.handle, {
+      name: "LibreOffice Cloned Layout",
+      insertAt: 0,
+    });
+    const slideHandle = session.addEmptySlideFromLayout({
+      layoutPartPath: clonedHandle.partPath,
+    });
+    session.target(slideHandle).addTextBox({
+      offsetX: asEmu(914400),
+      offsetY: asEmu(1371600),
+      width: asEmu(7315200),
+      height: asEmu(914400),
+      text: "Cloned existing layout",
+    });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-cloned-layout.pptx",
+      writePptx(session.source),
+    );
+  });
+
   it("opens a from-scratch PPTX with individual slide backgrounds", async () => {
     let source = createPptx();
     const masterHandle = requireHandle(source.slideMasters[0]?.handle);
