@@ -1,12 +1,15 @@
 import { Buffer } from "node:buffer";
 
 import {
+  addEmptySlideFromLayout,
   addShape,
+  addSlideLayout,
   asEmu,
   asOoxmlPercent,
   asSourceNodeId,
   createPptx,
   readPptx,
+  setBackground,
   setShapeFill,
   type SourceConnector,
   type SourceShape,
@@ -572,6 +575,57 @@ describe("PptxEditorSession", () => {
       configurePptxEditorSessionAffectedSlidesResolver(affectedSlidePartPaths);
       configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
     }
+  });
+
+  it("scopes and renders inherited master and layout background changes", async () => {
+    const created = createPptx();
+    const firstSlide = created.slides[0];
+    const firstLayout = created.slideLayouts[0];
+    const master = created.slideMasters[0];
+    if (
+      firstSlide === undefined ||
+      firstLayout?.handle === undefined ||
+      master?.handle === undefined
+    ) {
+      throw new Error("createPptx should create a slide, layout, and master");
+    }
+    let before = addSlideLayout(created, master.handle, { name: "Second layout" });
+    const secondLayout = before.slideLayouts.at(-1);
+    if (secondLayout === undefined) throw new Error("second layout was not authored");
+    before = addEmptySlideFromLayout(before, { layoutPartPath: secondLayout.partPath });
+    const secondSlide = before.slides.at(-1);
+    if (secondSlide?.handle === undefined) throw new Error("second slide was not authored");
+    before = setBackground(before, secondSlide.handle, {
+      kind: "solid",
+      color: { kind: "srgb", hex: "FFFFFF" },
+    });
+
+    const afterMaster = setBackground(before, master.handle, {
+      kind: "solid",
+      color: { kind: "srgb", hex: "112233" },
+    });
+    expect(affectedSlidePartPaths(before, afterMaster)).toEqual(new Set([firstSlide.partPath]));
+    const afterMasterImage = setBackground(before, master.handle, {
+      kind: "image",
+      bytes: RED_PNG,
+    });
+    expect(affectedSlidePartPaths(before, afterMasterImage)).toEqual(
+      new Set([firstSlide.partPath]),
+    );
+    const renderedMaster = await renderPptxSourceModelToSvg(afterMaster, {
+      skipSystemFonts: true,
+    });
+    expect(renderedMaster.slides[0]?.svg).toContain('fill="#112233"');
+    expect(renderedMaster.slides[1]?.svg).toContain('fill="#ffffff"');
+
+    const afterLayout = setBackground(before, firstLayout.handle, {
+      kind: "solid",
+      color: { kind: "srgb", hex: "445566" },
+    });
+    expect(affectedSlidePartPaths(before, afterLayout)).toEqual(new Set([firstSlide.partPath]));
+    const rendered = await renderPptxSourceModelToSvg(afterLayout, { skipSystemFonts: true });
+    expect(rendered.slides[0]?.svg).toContain('fill="#445566"');
+    expect(rendered.slides[1]?.svg).toContain('fill="#ffffff"');
   });
 
   it("resolves affected slides for layout and master shape property edits", async () => {

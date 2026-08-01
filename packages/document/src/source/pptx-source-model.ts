@@ -93,6 +93,7 @@ export type PptxSourceModelEdit =
   | PptxSourceModelDuplicateSlideEdit
   | PptxSourceModelMoveSlideEdit
   | PptxSourceModelDeleteSlideEdit
+  | PptxSourceModelSetBackgroundEdit
   | PptxSourceModelSetSlideBackgroundEdit;
 
 export interface PptxSourceModelTextRunEdit {
@@ -414,10 +415,38 @@ export interface PptxSourceModelDeleteSlideEdit {
   readonly relationshipId: RelationshipId;
 }
 
+export type PptxSourceModelSetBackgroundEdit = {
+  readonly kind: "setBackground";
+  /** Slide, layout, or master part whose direct `p:bg` is replaced or removed. */
+  readonly targetPartPath: PartPath;
+} & (
+  | {
+      /** Omitted only when clearing the direct background. */
+      readonly xml?: never;
+      readonly relationshipId?: never;
+      readonly mediaPartPath?: never;
+      readonly contentType?: never;
+    }
+  | {
+      /** Serialized `p:bg` fragment finalized at edit time. */
+      readonly xml: string;
+      readonly relationshipId: RelationshipId;
+      readonly mediaPartPath: PartPath;
+      readonly contentType: string;
+    }
+  | {
+      /** Serialized `p:bg` fragment finalized at edit time. */
+      readonly xml: string;
+      readonly relationshipId?: never;
+      readonly mediaPartPath?: never;
+      readonly contentType?: never;
+    }
+);
+
+/** @deprecated Compatibility journal entry produced by `setSlideBackground`. */
 export type PptxSourceModelSetSlideBackgroundEdit = {
   readonly kind: "setSlideBackground";
   readonly slidePartPath: PartPath;
-  /** Serialized `p:bg` fragment finalized at edit time. The writer only splices it. */
   readonly xml: string;
 } & (
   | {

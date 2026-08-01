@@ -16,11 +16,14 @@ import {
   readPptx,
   type Relationship,
   type RelationshipId,
+  type SourceBackground,
   type SourceHandle,
   type SourceImage,
   type SourceParagraphProperties,
   type SourceRunProperties,
   type SourceShapeNode,
+  type SourceSlideLayout,
+  type SourceSlideMaster,
   type SourceTextBody,
   type SourceTextBodyProperties,
   type SourceTextRun,
@@ -825,6 +828,39 @@ export function affectedSlidePartPaths(
   const beforePartPaths = before.slides.map((slide) => slide.partPath);
   const afterPartPaths = after.slides.map((slide) => slide.partPath);
   const afterPartPathSet: ReadonlySet<string> = new Set(afterPartPaths);
+
+  const beforeLayouts = new Map(before.slideLayouts.map((layout) => [layout.partPath, layout]));
+  const afterLayouts = new Map(after.slideLayouts.map((layout) => [layout.partPath, layout]));
+  const changedLayoutPartPaths = changedHierarchyPartPaths(beforeLayouts, afterLayouts);
+  for (const slide of after.slides) {
+    if (!changedLayoutPartPaths.has(slide.layoutPartPath)) continue;
+    const previous = beforeLayouts.get(slide.layoutPartPath);
+    const current = afterLayouts.get(slide.layoutPartPath);
+    const backgroundOnly =
+      previous !== undefined &&
+      current !== undefined &&
+      onlyLayoutBackgroundChanged(previous, current);
+    if (!backgroundOnly || slide.background === undefined) {
+      affected.add(slide.partPath);
+    }
+  }
+
+  const beforeMasters = new Map(before.slideMasters.map((master) => [master.partPath, master]));
+  const afterMasters = new Map(after.slideMasters.map((master) => [master.partPath, master]));
+  const changedMasterPartPaths = changedHierarchyPartPaths(beforeMasters, afterMasters);
+  for (const slide of after.slides) {
+    const layout = afterLayouts.get(slide.layoutPartPath);
+    if (layout === undefined || !changedMasterPartPaths.has(layout.masterPartPath)) continue;
+    const previous = beforeMasters.get(layout.masterPartPath);
+    const current = afterMasters.get(layout.masterPartPath);
+    const backgroundOnly =
+      previous !== undefined &&
+      current !== undefined &&
+      onlyMasterBackgroundChanged(previous, current);
+    if (!backgroundOnly || (slide.background === undefined && layout.background === undefined)) {
+      affected.add(slide.partPath);
+    }
+  }
   const topologyChanged =
     beforePartPaths.length !== afterPartPaths.length ||
     beforePartPaths.some((partPath, index) => partPath !== afterPartPaths[index]);
@@ -864,6 +900,36 @@ function nonDrawingRenderingInputsChanged(
   );
 }
 
+function changedHierarchyPartPaths<T>(
+  before: ReadonlyMap<string, T>,
+  after: ReadonlyMap<string, T>,
+): ReadonlySet<string> {
+  const partPaths = new Set([...before.keys(), ...after.keys()]);
+  return new Set([...partPaths].filter((partPath) => before.get(partPath) !== after.get(partPath)));
+}
+
+function onlyLayoutBackgroundChanged(before: SourceSlideLayout, after: SourceSlideLayout): boolean {
+  return (
+    before.background !== after.background &&
+    before.masterPartPath === after.masterPartPath &&
+    before.colorMapOverride === after.colorMapOverride &&
+    before.showMasterShapes === after.showMasterShapes &&
+    before.shapes === after.shapes &&
+    before.rawSidecars === after.rawSidecars
+  );
+}
+
+function onlyMasterBackgroundChanged(before: SourceSlideMaster, after: SourceSlideMaster): boolean {
+  return (
+    before.background !== after.background &&
+    before.themePartPath === after.themePartPath &&
+    before.colorMap === after.colorMap &&
+    before.txStyles === after.txStyles &&
+    before.shapes === after.shapes &&
+    before.rawSidecars === after.rawSidecars
+  );
+}
+
 interface ChangedInheritedDrawingPartPaths {
   readonly layoutPartPaths: ReadonlySet<string>;
   readonly masterPartPaths: ReadonlySet<string>;
@@ -889,16 +955,16 @@ function changedShapeOnlyPartPaths<
     const previous = beforeByPartPath.get(part.partPath);
     if (previous === undefined) return undefined;
     if (previous === part) continue;
-    if (!sameReferencesExceptShapes(previous, part)) return undefined;
+    if (!sameReferencesExceptShapesAndBackground(previous, part)) return undefined;
     if (previous.shapes !== part.shapes) changed.add(part.partPath);
   }
   return changed;
 }
 
-function sameReferencesExceptShapes(before: object, after: object): boolean {
+function sameReferencesExceptShapesAndBackground(before: object, after: object): boolean {
   const keys = new Set([...Object.keys(before), ...Object.keys(after)]);
   for (const key of keys) {
-    if (key === "shapes") continue;
+    if (key === "shapes" || key === "background") continue;
     if (Reflect.get(before, key) !== Reflect.get(after, key)) return false;
   }
   return true;
@@ -940,36 +1006,104 @@ function slidePartPathsReferencingMedia(
   mediaPartPath: string,
 ): ReadonlySet<string> | undefined {
   const directReferences = new Set<string>();
-  let inheritedReference = false;
   let unknownReference = false;
   const slidePartPaths = new Set(source.slides.map((slide) => slide.partPath));
-  const inheritedPartPaths = new Set([
-    ...source.slideLayouts.map((layout) => layout.partPath),
-    ...source.slideMasters.map((master) => master.partPath),
-  ]);
+  const layouts = new Map(source.slideLayouts.map((layout) => [layout.partPath, layout]));
+  const masters = new Map(source.slideMasters.map((master) => [master.partPath, master]));
 
   for (const relationships of source.packageGraph.relationships) {
-    if (
-      !relationships.relationships.some(
-        (relationship) =>
-          relationship.targetMode !== "External" &&
-          resolvePartPath(relationships.sourcePartPath, relationship.target) === mediaPartPath,
-      )
-    ) {
-      continue;
-    }
+    const relationshipIds = new Set(
+      relationships.relationships.flatMap((relationship) =>
+        relationship.targetMode !== "External" &&
+        resolvePartPath(relationships.sourcePartPath, relationship.target) === mediaPartPath
+          ? [relationship.id]
+          : [],
+      ),
+    );
+    if (relationshipIds.size === 0) continue;
     if (slidePartPaths.has(relationships.sourcePartPath)) {
       directReferences.add(relationships.sourcePartPath);
-    } else if (inheritedPartPaths.has(relationships.sourcePartPath)) {
-      inheritedReference = true;
-    } else {
-      unknownReference = true;
+      continue;
     }
+    const layout = layouts.get(relationships.sourcePartPath);
+    if (layout !== undefined) {
+      const backgroundOnly =
+        backgroundUsesRelationship(layout.background, relationshipIds) &&
+        backgroundEditOwnsRelationship(source, layout.partPath, mediaPartPath, relationshipIds);
+      for (const slide of source.slides) {
+        if (
+          slide.layoutPartPath === layout.partPath &&
+          (!backgroundOnly || slide.background === undefined)
+        ) {
+          directReferences.add(slide.partPath);
+        }
+      }
+      continue;
+    }
+    const master = masters.get(relationships.sourcePartPath);
+    if (master !== undefined) {
+      const backgroundOnly =
+        backgroundUsesRelationship(master.background, relationshipIds) &&
+        backgroundEditOwnsRelationship(source, master.partPath, mediaPartPath, relationshipIds);
+      for (const slide of source.slides) {
+        const slideLayout = layouts.get(slide.layoutPartPath);
+        if (
+          slideLayout?.masterPartPath === master.partPath &&
+          (!backgroundOnly ||
+            (slide.background === undefined && slideLayout.background === undefined))
+        ) {
+          directReferences.add(slide.partPath);
+        }
+      }
+      continue;
+    }
+    unknownReference = true;
   }
 
-  if (inheritedReference) return new Set(source.slides.map((slide) => slide.partPath));
   if (unknownReference) return undefined;
   return directReferences;
+}
+
+/**
+ * Newly authored background image relationships are target-local and cannot also be used by a
+ * shape. Existing package relationships may be shared with arbitrary drawing content, so they
+ * must conservatively invalidate the whole layout/master hierarchy.
+ */
+function backgroundEditOwnsRelationship(
+  source: PptxSourceModel,
+  ownerPartPath: string,
+  mediaPartPath: string,
+  relationshipIds: ReadonlySet<string>,
+): boolean {
+  return (source.edits ?? []).some((edit) => {
+    if (edit.kind === "setBackground") {
+      return (
+        edit.targetPartPath === ownerPartPath &&
+        edit.mediaPartPath === mediaPartPath &&
+        edit.relationshipId !== undefined &&
+        relationshipIds.has(edit.relationshipId)
+      );
+    }
+    return (
+      edit.kind === "setSlideBackground" &&
+      edit.slidePartPath === ownerPartPath &&
+      edit.mediaPartPath === mediaPartPath &&
+      edit.relationshipId !== undefined &&
+      relationshipIds.has(edit.relationshipId)
+    );
+  });
+}
+
+function backgroundUsesRelationship(
+  background: SourceBackground | undefined,
+  relationshipIds: ReadonlySet<string>,
+): boolean {
+  return (
+    background?.kind === "fill" &&
+    background.fill.kind === "image" &&
+    background.fill.blipRelationshipId !== undefined &&
+    relationshipIds.has(background.fill.blipRelationshipId)
+  );
 }
 
 function resolvePartPath(sourcePartPath: string, target: string): string {

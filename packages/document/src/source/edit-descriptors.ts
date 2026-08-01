@@ -405,6 +405,22 @@ const EDIT_KIND_DESCRIPTORS: {
     insertedSlidePartPath: () => undefined,
     insertedShape: () => undefined,
   },
+  setBackground: {
+    reservedPartPaths: (edit) => [
+      edit.targetPartPath,
+      ...(edit.mediaPartPath === undefined ? [] : [edit.mediaPartPath]),
+    ],
+    dirtyPartPath: (edit) => edit.targetPartPath,
+    targetsShape: () => false,
+    invalidatingPartPaths: (edit) => [
+      edit.targetPartPath,
+      ...(edit.mediaPartPath === undefined ? [] : [edit.mediaPartPath]),
+    ],
+    reservedShapeId: () => undefined,
+    slideTopologyOperation: () => undefined,
+    insertedSlidePartPath: () => undefined,
+    insertedShape: () => undefined,
+  },
   setSlideBackground: {
     reservedPartPaths: (edit) => [
       edit.slidePartPath,

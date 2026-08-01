@@ -331,6 +331,43 @@ authoring.target(productSlideHandle).addTextBox({
 });
 ```
 
+### Editing existing backgrounds
+
+`setBackground(source, handle, input)` and `clearBackground(source, handle)` are the common
+background-editing API for existing slides, layouts, and masters. `setSlideBackground` remains as
+a slide-only compatibility API. Direct backgrounds support solid sRGB, linear/radial gradients,
+and PNG/JPEG bytes; clearing removes the target's direct `p:bg` and restores slide → layout →
+master fallback.
+
+Image edits allocate a new media part and relationship owned by the target slide/layout/master
+part. Replaced or cleared image relationships and media are retained as raw package material, so
+the operation does not perform an orphan sweep. The writer replaces or removes only `p:cSld/p:bg`:
+unknown siblings, namespace declarations needed by retained XML, and unrelated raw sidecars remain
+preserved. Unsupported content inside the replaced `p:bg` is intentionally replaced with the new
+typed background.
+
+```ts
+import { clearBackground, readPptx, setBackground, writePptx } from "@pptx-glimpse/document";
+
+const source = readPptx(templateBytes);
+const masterNode = source.slideMasters[0];
+const layoutNode = source.slideLayouts.find(
+  (candidate) => candidate.partPath === masterNode?.layoutPartPaths[0],
+);
+const master = masterNode?.handle;
+const layout = layoutNode?.handle;
+if (master === undefined || layout === undefined || layoutNode.background === undefined) {
+  throw new Error("Missing editable template hierarchy or direct layout background");
+}
+
+const withMasterBackground = setBackground(source, master, {
+  kind: "solid",
+  color: { kind: "srgb", hex: "F8FAFC" },
+});
+const edited = clearBackground(withMasterBackground, layout);
+const output = writePptx(edited);
+```
+
 An existing layout can be cloned within its current master with `cloneSlideLayout`, or with
 `PptxAuthoringSession.cloneSlideLayout`. The required `name` becomes the clone's author-visible
 name. `insertAt` is a zero-based insertion position in that master's layout catalog; when omitted,
