@@ -166,7 +166,68 @@ describe("addSlideLayout", () => {
         },
       }),
     ).toThrow("margin.left must be a finite non-negative EMU value");
+    for (const margin of [null, 1, [], { left: 0 }, { left: 0, right: 0, top: 0 }]) {
+      expect(() =>
+        addSlideLayout(source, masterHandle, {
+          name: "Malformed margin",
+          // @ts-expect-error Runtime validation protects JavaScript callers.
+          margin,
+        }),
+      ).toThrow();
+    }
+    for (const left of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() =>
+        addSlideLayout(source, masterHandle, {
+          name: "Non-finite margin",
+          margin: {
+            left: asEmu(left),
+            right: asEmu(0),
+            top: asEmu(0),
+            bottom: asEmu(0),
+          },
+        }),
+      ).toThrow("margin.left must be a finite non-negative EMU value");
+    }
     expect(source.slideLayouts).toHaveLength(1);
+  });
+
+  it("materializes relationship-order layouts before transition content when the id list is absent", () => {
+    const original = createPptx();
+    const master = requireValue(original.slideMasters[0]);
+    const masterHandle = requireValue(master.handle);
+    const decoder = new TextDecoder();
+    const encoder = new TextEncoder();
+    const source = {
+      ...original,
+      packageGraph: {
+        ...original.packageGraph,
+        rawParts: requireValue(original.packageGraph.rawParts).map((part) => {
+          if (part.partPath !== master.partPath || part.kind !== "binary") return part;
+          const xml = decoder
+            .decode(part.bytes)
+            .replace(/<p:sldLayoutIdLst>[\s\S]*?<\/p:sldLayoutIdLst>/, "")
+            .replace("<p:txStyles>", "<p:transition/><p:timing/><p:hf/><p:txStyles>");
+          return { ...part, bytes: encoder.encode(xml) };
+        }),
+      },
+    };
+
+    const edited = addSlideLayout(source, masterHandle, { name: "Added after fallback" });
+    const output = writePptx(edited);
+    const masterXml = strFromU8(
+      requireValue(unzipSync(output)["ppt/slideMasters/slideMaster1.xml"]),
+    );
+    const layoutListIndex = masterXml.indexOf("<p:sldLayoutIdLst>");
+    expect(layoutListIndex).toBeGreaterThan(masterXml.indexOf("<p:clrMap"));
+    expect(layoutListIndex).toBeLessThan(masterXml.indexOf("<p:transition"));
+    expect(masterXml.indexOf("<p:transition")).toBeLessThan(masterXml.indexOf("<p:timing"));
+    expect(masterXml.indexOf("<p:timing")).toBeLessThan(masterXml.indexOf("<p:hf"));
+    expect(masterXml).toContain('<p:sldLayoutId id="2147483649" r:id="rId1"');
+    expect(masterXml).toContain('<p:sldLayoutId id="2147483650" r:id="rId3"');
+    expect(readPptx(output).slideMasters[0]?.layoutPartPaths).toEqual([
+      "ppt/slideLayouts/slideLayout1.xml",
+      "ppt/slideLayouts/slideLayout2.xml",
+    ]);
   });
 
   it("supports the immutable function flow when adding a slide from the new layout", () => {

@@ -25,6 +25,7 @@ import {
   nextNumberedPartPath,
   nextRelationshipId,
 } from "./package-graph-mutations.js";
+import { resolveInternalRelationshipTarget } from "./package-paths.js";
 import type { Emu } from "./units.js";
 
 export type SlideLayoutType =
@@ -166,7 +167,8 @@ export function addSlideLayout(
     ".xml",
   );
   const newRelationshipId = nextRelationshipId(masterRelationships.relationships);
-  const newLayoutNumericId = nextLayoutNumericId(source, master.partPath);
+  const idAllocation = layoutIdAllocation(source, master.partPath, master.layoutPartPaths);
+  const newLayoutNumericId = idAllocation.newLayoutNumericId;
   const layoutMasterRelationship: Relationship = {
     id: asRelationshipId("rId1"),
     type: SLIDE_MASTER_REL_TYPE,
@@ -261,6 +263,7 @@ export function addSlideLayout(
     newLayoutPartPath,
     newRelationshipId,
     newLayoutNumericId,
+    initialLayoutEntries: idAllocation.initialLayoutEntries,
   } satisfies PptxSourceModelAddSlideLayoutEdit;
 
   return {
@@ -302,6 +305,9 @@ function normalizeInput(input: AddSlideLayoutInput): NormalizedAddSlideLayoutInp
   }
   if (input.background !== undefined) assertBackground(input.background);
   if (input.margin !== undefined) {
+    if (typeof input.margin !== "object" || input.margin === null || Array.isArray(input.margin)) {
+      throw new Error("addSlideLayout: margin must be an object");
+    }
     assertMargin(input.margin.left, "margin.left");
     assertMargin(input.margin.right, "margin.right");
     assertMargin(input.margin.top, "margin.top");
@@ -375,7 +381,14 @@ function requireMasterRelationships(
   return relationships;
 }
 
-function nextLayoutNumericId(source: PptxSourceModel, masterPartPath: PartPath): number {
+function layoutIdAllocation(
+  source: PptxSourceModel,
+  masterPartPath: PartPath,
+  layoutPartPaths: readonly PartPath[],
+): {
+  readonly initialLayoutEntries: PptxSourceModelAddSlideLayoutEdit["initialLayoutEntries"];
+  readonly newLayoutNumericId: number;
+} {
   const rawPart = requireRawBinaryPart(source, masterPartPath, "addSlideLayout");
   const root = parseXml(textDecoder.decode(rawPart.bytes));
   const master = getChild(root, "sldMaster");
@@ -383,19 +396,59 @@ function nextLayoutNumericId(source: PptxSourceModel, masterPartPath: PartPath):
     throw new Error("addSlideLayout: slide master part does not contain p:sldMaster root");
   }
   const used = new Set<number>();
-  for (const item of getChildArray(getChild(master, "sldLayoutIdLst"), "sldLayoutId")) {
+  const layoutIdList = getChild(master, "sldLayoutIdLst");
+  for (const item of getChildArray(layoutIdList, "sldLayoutId")) {
     const id = Number(getAttr(item, "id"));
     if (Number.isInteger(id) && id >= 0 && id <= MAX_UINT32) used.add(id);
   }
-  for (const edit of source.edits ?? []) {
-    if (edit.kind === "addSlideLayout" && edit.masterPartPath === masterPartPath) {
-      used.add(edit.newLayoutNumericId);
-    }
+  const pendingEdits = (source.edits ?? []).filter(
+    (edit): edit is PptxSourceModelAddSlideLayoutEdit =>
+      edit.kind === "addSlideLayout" && edit.masterPartPath === masterPartPath,
+  );
+  for (const edit of pendingEdits) {
+    for (const entry of edit.initialLayoutEntries) used.add(entry.numericId);
+    used.add(edit.newLayoutNumericId);
   }
+  const initialLayoutEntries =
+    layoutIdList === undefined && pendingEdits.length === 0
+      ? allocateInitialLayoutEntries(source, masterPartPath, layoutPartPaths, used)
+      : [];
+  for (const entry of initialLayoutEntries) used.add(entry.numericId);
   for (let candidate = FIRST_LAYOUT_NUMERIC_ID; candidate <= MAX_UINT32; candidate += 1) {
-    if (!used.has(candidate)) return candidate;
+    if (!used.has(candidate)) return { initialLayoutEntries, newLayoutNumericId: candidate };
   }
   throw new Error("addSlideLayout: no unused p:sldLayoutId ID remains");
+}
+
+function allocateInitialLayoutEntries(
+  source: PptxSourceModel,
+  masterPartPath: PartPath,
+  layoutPartPaths: readonly PartPath[],
+  used: Set<number>,
+): PptxSourceModelAddSlideLayoutEdit["initialLayoutEntries"] {
+  const relationships = requireMasterRelationships(source, masterPartPath).relationships;
+  let candidate = FIRST_LAYOUT_NUMERIC_ID;
+  return layoutPartPaths.map((layoutPartPath) => {
+    const relationship = relationships.find(
+      (item) =>
+        item.type === SLIDE_LAYOUT_REL_TYPE &&
+        item.targetMode !== "External" &&
+        resolveInternalRelationshipTarget(masterPartPath, item) === layoutPartPath,
+    );
+    if (relationship === undefined) {
+      throw new Error(
+        `addSlideLayout: layout relationship for '${layoutPartPath}' was not found in the slide master`,
+      );
+    }
+    while (used.has(candidate) && candidate <= MAX_UINT32) candidate += 1;
+    if (candidate > MAX_UINT32) {
+      throw new Error("addSlideLayout: no unused p:sldLayoutId ID remains");
+    }
+    const entry = { relationshipId: relationship.id, numericId: candidate };
+    used.add(candidate);
+    candidate += 1;
+    return entry;
+  });
 }
 
 function sourceBackground(

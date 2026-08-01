@@ -251,6 +251,11 @@ export interface PptxSourceModelAddSlideLayoutEdit {
   readonly newLayoutPartPath: PartPath;
   readonly newRelationshipId: RelationshipId;
   readonly newLayoutNumericId: number;
+  /** Existing relationship-order layouts materialized when the master had no id list. */
+  readonly initialLayoutEntries: readonly {
+    readonly relationshipId: RelationshipId;
+    readonly numericId: number;
+  }[];
 }
 
 export interface PptxSourceModelReorderShapesEdit {

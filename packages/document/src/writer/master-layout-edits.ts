@@ -20,7 +20,11 @@ export function applyAddSlideLayoutEdit(
   if (master === undefined) {
     throw new Error("writePptx: slide master part does not contain p:sldMaster root");
   }
-  const layoutIdList = getChild(master, "sldLayoutIdLst") ?? createLayoutIdList(master);
+  const existingLayoutIdList = getChild(master, "sldLayoutIdLst");
+  const layoutIdList = existingLayoutIdList ?? createLayoutIdList(master);
+  if (existingLayoutIdList === undefined) {
+    appendLayoutIds(layoutIdList, edit.initialLayoutEntries);
+  }
   const items = getChildArray(layoutIdList, "sldLayoutId");
   if (
     items.some(
@@ -43,6 +47,18 @@ export function applyAddSlideLayoutEdit(
   ];
 }
 
+function appendLayoutIds(
+  layoutIdList: XmlNode,
+  entries: PptxSourceModelAddSlideLayoutEdit["initialLayoutEntries"],
+): void {
+  if (entries.length === 0) return;
+  const itemKey = namespacedChildKey(layoutIdList, "p:sldLayoutId", "sldLayoutId");
+  layoutIdList[itemKey] = entries.map((entry) => ({
+    "@_id": String(entry.numericId),
+    "@_r:id": entry.relationshipId,
+  }));
+}
+
 function createLayoutIdList(master: XmlNode): XmlNode {
   const key = namespacedChildKey(master, "p:sldLayoutIdLst", "sldLayoutIdLst");
   const created: XmlNode = {};
@@ -52,7 +68,7 @@ function createLayoutIdList(master: XmlNode): XmlNode {
     if (
       !inserted &&
       !entry[0].startsWith("@_") &&
-      (localName(entry[0]) === "txStyles" || localName(entry[0]) === "extLst")
+      ["transition", "timing", "hf", "txStyles", "extLst"].includes(localName(entry[0]))
     ) {
       entries.push([key, created]);
       inserted = true;
