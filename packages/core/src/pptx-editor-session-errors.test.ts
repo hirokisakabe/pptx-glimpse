@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { renderPptxSourceModelToSvg } from "./converter.js";
 import { createPptxEditorSession, isPptxEditorError } from "./index.js";
-import { configurePptxEditorSessionRenderer } from "./pptx-editor-session.js";
+import { createPptxEditorSessionFactory } from "./pptx-editor-session.js";
 import {
   buildLayoutCatalogFixture,
   buildShapeFixture,
@@ -63,38 +63,37 @@ describe("PptxEditorSession - errors", () => {
     expectErrorCodeAndCause(readError, "read-failed");
 
     const renderCause = new Error("renderer unavailable");
-    configurePptxEditorSessionRenderer(() => Promise.reject(renderCause));
-    try {
-      const initialRenderError = await capturePptxEditorError(
-        createPptxEditorSession(await buildShapeFixture(), { skipSystemFonts: true }),
-      );
-      expectErrorCodeAndCause(initialRenderError, "render-failed", renderCause);
-    } finally {
-      configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
-    }
+    const createFailingEditorSession = createPptxEditorSessionFactory(() =>
+      Promise.reject(renderCause),
+    );
+    const initialRenderError = await capturePptxEditorError(
+      createFailingEditorSession(await buildShapeFixture(), { skipSystemFonts: true }),
+    );
+    expectErrorCodeAndCause(initialRenderError, "render-failed", renderCause);
 
     let renderCount = 0;
-    configurePptxEditorSessionRenderer(async (source, options) => {
-      renderCount += 1;
-      if (renderCount > 1) throw renderCause;
-      return renderPptxSourceModelToSvg(source, options);
-    });
-    try {
-      const editor = await createPptxEditorSession(await buildShapeFixture(), {
+    const createEventuallyFailingEditorSession = createPptxEditorSessionFactory(
+      async (source, options) => {
+        renderCount += 1;
+        if (renderCount > 1) throw renderCause;
+        return renderPptxSourceModelToSvg(source, options);
+      },
+    );
+    const renderFailingEditor = await createEventuallyFailingEditorSession(
+      await buildShapeFixture(),
+      {
         skipSystemFonts: true,
-      });
-      const shape = editor.shapes(1)[0];
-      if (shape?.handle === undefined) throw new Error("shape handle not found");
-      const renderError = await capturePptxEditorError(
-        editor.apply({ kind: "deleteShape", handle: shape.handle }),
-      );
-      expectErrorCodeAndCause(renderError, "render-failed", renderCause);
-      expect(editor.shapes(1)).toHaveLength(0);
-      expect(editor.history).toMatchObject({ canUndo: true, undoDepth: 1 });
-      expect(editor.slides[0]?.svg).toContain("Original");
-    } finally {
-      configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
-    }
+      },
+    );
+    const shape = renderFailingEditor.shapes(1)[0];
+    if (shape?.handle === undefined) throw new Error("shape handle not found");
+    const renderError = await capturePptxEditorError(
+      renderFailingEditor.apply({ kind: "deleteShape", handle: shape.handle }),
+    );
+    expectErrorCodeAndCause(renderError, "render-failed", renderCause);
+    expect(renderFailingEditor.shapes(1)).toHaveLength(0);
+    expect(renderFailingEditor.history).toMatchObject({ canUndo: true, undoDepth: 1 });
+    expect(renderFailingEditor.slides[0]?.svg).toContain("Original");
 
     const editor = await createPptxEditorSession(await buildShapeFixture(), {
       skipSystemFonts: true,

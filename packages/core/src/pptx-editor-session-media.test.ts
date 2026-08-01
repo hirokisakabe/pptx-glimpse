@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { renderPptxSourceModelToSvg } from "./converter.js";
 import { createPptxEditorSession } from "./index.js";
-import { configurePptxEditorSessionRenderer } from "./pptx-editor-session.js";
+import { createPptxEditorSessionFactory } from "./pptx-editor-session.js";
 import {
   BLUE_PNG,
   buildImageFixture,
@@ -44,57 +44,49 @@ describe("PptxEditorSession - media", () => {
 
   it("applies picture crop, rerenders the target slide, and saves the srcRect", async () => {
     const renderCalls: Array<readonly number[] | undefined> = [];
-    configurePptxEditorSessionRenderer((source, options) => {
+    const createTestEditorSession = createPptxEditorSessionFactory((source, options) => {
       renderCalls.push(options?.slides);
       return renderPptxSourceModelToSvg(source, options);
     });
-    try {
-      const editor = await createPptxEditorSession(await buildImageFixture(), {
-        skipSystemFonts: true,
-      });
-      const image = editor.shapes(1).find((shape) => shape.kind === "image");
-      if (image?.handle === undefined) throw new Error("image handle not found");
-      const beforeSvg = editor.slides[0]?.svg;
+    const editor = await createTestEditorSession(await buildImageFixture(), {
+      skipSystemFonts: true,
+    });
+    const image = editor.shapes(1).find((shape) => shape.kind === "image");
+    if (image?.handle === undefined) throw new Error("image handle not found");
+    const beforeSvg = editor.slides[0]?.svg;
 
-      await editor.apply({
-        kind: "setPictureCrop",
-        handle: image.handle,
-        left: asOoxmlPercent(25000),
-        top: asOoxmlPercent(10000),
-      });
+    await editor.apply({
+      kind: "setPictureCrop",
+      handle: image.handle,
+      left: asOoxmlPercent(25000),
+      top: asOoxmlPercent(10000),
+    });
 
-      expect(renderCalls).toEqual([undefined, [1]]);
-      expect(editor.slides[0]?.svg).not.toBe(beforeSvg);
-      const saved = readPptx(editor.save().pptx);
-      expect(saved.slides[0]?.shapes.find((shape) => shape.kind === "image")?.crop).toEqual({
-        left: 25000,
-        top: 10000,
-      });
-    } finally {
-      configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
-    }
+    expect(renderCalls).toEqual([undefined, [1]]);
+    expect(editor.slides[0]?.svg).not.toBe(beforeSvg);
+    const saved = readPptx(editor.save().pptx);
+    expect(saved.slides[0]?.shapes.find((shape) => shape.kind === "image")?.crop).toEqual({
+      left: 25000,
+      top: 10000,
+    });
   });
 
   it("rerenders only the picture owner after copy-on-write replacement", async () => {
     const renderCalls: Array<readonly number[] | undefined> = [];
-    configurePptxEditorSessionRenderer((source, options) => {
+    const createTestEditorSession = createPptxEditorSessionFactory((source, options) => {
       renderCalls.push(options?.slides);
       return renderPptxSourceModelToSvg(source, options);
     });
-    try {
-      const editor = await createPptxEditorSession(
-        await buildImageFixture({ includeSecondSlide: true }),
-        { skipSystemFonts: true },
-      );
-      const image = editor.shapes(1).find((shape) => shape.kind === "image");
-      if (image?.handle === undefined) throw new Error("image handle not found");
+    const editor = await createTestEditorSession(
+      await buildImageFixture({ includeSecondSlide: true }),
+      { skipSystemFonts: true },
+    );
+    const image = editor.shapes(1).find((shape) => shape.kind === "image");
+    if (image?.handle === undefined) throw new Error("image handle not found");
 
-      await editor.apply({ kind: "replaceImage", handle: image.handle, bytes: BLUE_PNG });
+    await editor.apply({ kind: "replaceImage", handle: image.handle, bytes: BLUE_PNG });
 
-      expect(renderCalls).toEqual([undefined, [1]]);
-    } finally {
-      configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
-    }
+    expect(renderCalls).toEqual([undefined, [1]]);
   });
 
   it("counts unparsed image relationships in image replacement metadata", async () => {

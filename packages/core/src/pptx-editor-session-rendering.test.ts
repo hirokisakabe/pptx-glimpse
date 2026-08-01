@@ -2,8 +2,8 @@ import { asEmu, readPptx } from "@pptx-glimpse/document";
 import { describe, expect, it, vi } from "vitest";
 
 import { renderPptxSourceModelToSvg } from "./converter.js";
-import { createPptxEditorSession } from "./index.js";
-import { configurePptxEditorSessionRenderer } from "./pptx-editor-session.js";
+import { createPptxEditorSession, PptxEditorSession } from "./index.js";
+import { createPptxEditorSessionFactory } from "./pptx-editor-session.js";
 import {
   buildShapeFixture,
   buildTwoSlideFixture,
@@ -96,53 +96,83 @@ describe("PptxEditorSession - rendering", () => {
     );
   });
 
+  it("keeps Node and browser static session factories entry-specific", async () => {
+    const browserEntry = await import("./browser.js");
+    nodeFontMocks.createOpentypeSetupFromSystem.mockClear();
+    const input = await buildShapeFixture();
+    const renderOptions = {
+      fontDirs: ["/static-node-fonts"],
+      skipSystemFonts: true,
+    };
+
+    const browserEditor = await browserEntry.PptxEditorSession.create(input, renderOptions);
+    expect(browserEditor).toBeInstanceOf(browserEntry.PptxEditorSession);
+    expect(nodeFontMocks.createOpentypeSetupFromSystem).not.toHaveBeenCalled();
+
+    const nodeEditor = await PptxEditorSession.create(input, renderOptions);
+    expect(nodeEditor).toBeInstanceOf(PptxEditorSession);
+    expect(nodeFontMocks.createOpentypeSetupFromSystem).toHaveBeenCalledOnce();
+  });
+
+  it("keeps Node and browser editor factories isolated regardless of import order", async () => {
+    const browserEntry = await import("./browser.js");
+    nodeFontMocks.createOpentypeSetupFromSystem.mockClear();
+    const input = await buildShapeFixture();
+    const renderOptions = {
+      fontDirs: ["/isolated-node-fonts"],
+      skipSystemFonts: true,
+    };
+
+    await browserEntry.createPptxEditorSession(input, renderOptions);
+    expect(nodeFontMocks.createOpentypeSetupFromSystem).not.toHaveBeenCalled();
+
+    await createPptxEditorSession(input, renderOptions);
+    expect(nodeFontMocks.createOpentypeSetupFromSystem).toHaveBeenCalledOnce();
+  });
+
   it("applies command batches as one history entry and renders once", async () => {
     const renderCalls: Array<readonly number[] | undefined> = [];
-    configurePptxEditorSessionRenderer((source, options) => {
+    const createTestEditorSession = createPptxEditorSessionFactory((source, options) => {
       renderCalls.push(options?.slides);
       return renderPptxSourceModelToSvg(source, options);
     });
-    try {
-      const editor = await createPptxEditorSession(await buildShapeFixture(), {
-        skipSystemFonts: true,
-      });
-      const run = editor.shapes(1)[0]?.textBody?.paragraphs[0]?.runs[0];
-      if (run?.handle === undefined) throw new Error("text run handle not found");
+    const editor = await createTestEditorSession(await buildShapeFixture(), {
+      skipSystemFonts: true,
+    });
+    const run = editor.shapes(1)[0]?.textBody?.paragraphs[0]?.runs[0];
+    if (run?.handle === undefined) throw new Error("text run handle not found");
 
-      const response = await editor.applyAll([
-        {
-          kind: "replaceTextRunPlainText",
-          handle: run.handle,
-          text: "Batch edited",
-        },
-        {
-          kind: "setTextRunProperties",
-          handle: run.handle,
-          properties: { bold: true },
-        },
-      ]);
+    const response = await editor.applyAll([
+      {
+        kind: "replaceTextRunPlainText",
+        handle: run.handle,
+        text: "Batch edited",
+      },
+      {
+        kind: "setTextRunProperties",
+        handle: run.handle,
+        properties: { bold: true },
+      },
+    ]);
 
-      expect(renderCalls).toEqual([undefined, [1]]);
-      expect(response.history).toMatchObject({ undoDepth: 1, canUndo: true });
-      expect(firstText(editor.document)).toBe("Batch edited");
-      expect(firstShape(editor.document).textBody?.paragraphs[0]?.runs[0]?.properties?.bold).toBe(
-        true,
-      );
+    expect(renderCalls).toEqual([undefined, [1]]);
+    expect(response.history).toMatchObject({ undoDepth: 1, canUndo: true });
+    expect(firstText(editor.document)).toBe("Batch edited");
+    expect(firstShape(editor.document).textBody?.paragraphs[0]?.runs[0]?.properties?.bold).toBe(
+      true,
+    );
 
-      await editor.undo();
-      expect(firstText(editor.document)).toBe("Original");
-      expect(
-        firstShape(editor.document).textBody?.paragraphs[0]?.runs[0]?.properties?.bold,
-      ).toBeUndefined();
-    } finally {
-      configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
-    }
+    await editor.undo();
+    expect(firstText(editor.document)).toBe("Original");
+    expect(
+      firstShape(editor.document).textBody?.paragraphs[0]?.runs[0]?.properties?.bold,
+    ).toBeUndefined();
   });
 
   it("rerenders only the affected slides for applyAll, undo, and redo", async () => {
     const renderCalls: Array<readonly number[] | undefined> = [];
     let renderGeneration = 0;
-    configurePptxEditorSessionRenderer(async (source, options) => {
+    const createTestEditorSession = createPptxEditorSessionFactory(async (source, options) => {
       renderGeneration += 1;
       renderCalls.push(options?.slides);
       const report = await renderPptxSourceModelToSvg(source, options);
@@ -154,58 +184,54 @@ describe("PptxEditorSession - rendering", () => {
         })),
       };
     });
-    try {
-      const editor = await createPptxEditorSession(await buildTwoSlideFixture(), {
-        skipSystemFonts: true,
-      });
-      const initialFirstSvg = editor.slides[0]?.svg;
-      const firstRun = editor.shapes(1)[0]?.textBody?.paragraphs[0]?.runs[0];
-      const secondRun = editor.shapes(2)[0]?.textBody?.paragraphs[0]?.runs[0];
-      if (firstRun?.handle === undefined || secondRun?.handle === undefined) {
-        throw new Error("text run handles not found");
-      }
+    const editor = await createTestEditorSession(await buildTwoSlideFixture(), {
+      skipSystemFonts: true,
+    });
+    const initialFirstSvg = editor.slides[0]?.svg;
+    const firstRun = editor.shapes(1)[0]?.textBody?.paragraphs[0]?.runs[0];
+    const secondRun = editor.shapes(2)[0]?.textBody?.paragraphs[0]?.runs[0];
+    if (firstRun?.handle === undefined || secondRun?.handle === undefined) {
+      throw new Error("text run handles not found");
+    }
 
-      await editor.apply({
+    await editor.apply({
+      kind: "replaceTextRunPlainText",
+      handle: secondRun.handle,
+      text: "Second edited",
+    });
+    expect(renderCalls).toEqual([undefined, [2]]);
+    expect(editor.slides[0]?.svg).toBe(initialFirstSvg);
+    expect(editor.slides[1]?.svg).toContain("Second edited");
+
+    await editor.applyAll([
+      {
+        kind: "replaceTextRunPlainText",
+        handle: firstRun.handle,
+        text: "First batch edited",
+      },
+      {
         kind: "replaceTextRunPlainText",
         handle: secondRun.handle,
-        text: "Second edited",
-      });
-      expect(renderCalls).toEqual([undefined, [2]]);
-      expect(editor.slides[0]?.svg).toBe(initialFirstSvg);
-      expect(editor.slides[1]?.svg).toContain("Second edited");
+        text: "Second batch edited",
+      },
+      {
+        kind: "setTextRunProperties",
+        handle: secondRun.handle,
+        properties: { bold: true },
+      },
+    ]);
+    expect(renderCalls.at(-1)).toEqual([1, 2]);
+    expect(editor.slides[0]?.svg).toContain("First batch edited");
+    expect(editor.slides[1]?.svg).toContain("Second batch edited");
 
-      await editor.applyAll([
-        {
-          kind: "replaceTextRunPlainText",
-          handle: firstRun.handle,
-          text: "First batch edited",
-        },
-        {
-          kind: "replaceTextRunPlainText",
-          handle: secondRun.handle,
-          text: "Second batch edited",
-        },
-        {
-          kind: "setTextRunProperties",
-          handle: secondRun.handle,
-          properties: { bold: true },
-        },
-      ]);
-      expect(renderCalls.at(-1)).toEqual([1, 2]);
-      expect(editor.slides[0]?.svg).toContain("First batch edited");
-      expect(editor.slides[1]?.svg).toContain("Second batch edited");
+    await editor.undo();
+    expect(renderCalls.at(-1)).toEqual([1, 2]);
+    expect(editor.slides[0]?.svg).toContain("First");
+    expect(editor.slides[1]?.svg).toContain("Second edited");
 
-      await editor.undo();
-      expect(renderCalls.at(-1)).toEqual([1, 2]);
-      expect(editor.slides[0]?.svg).toContain("First");
-      expect(editor.slides[1]?.svg).toContain("Second edited");
-
-      await editor.redo();
-      expect(renderCalls.at(-1)).toEqual([1, 2]);
-      expect(editor.slides[0]?.svg).toContain("First batch edited");
-      expect(editor.slides[1]?.svg).toContain("Second batch edited");
-    } finally {
-      configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
-    }
+    await editor.redo();
+    expect(renderCalls.at(-1)).toEqual([1, 2]);
+    expect(editor.slides[0]?.svg).toContain("First batch edited");
+    expect(editor.slides[1]?.svg).toContain("Second batch edited");
   });
 });
