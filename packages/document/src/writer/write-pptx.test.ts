@@ -2735,10 +2735,11 @@ describe("writePptx - no-edit round-trip", () => {
     const slidePath = "ppt/slides/slide1.xml";
     const slideXml = decoder
       .decode(entries[slidePath])
-      .replaceAll("xmlns:a=", "xmlns:d=")
-      .replaceAll("<a:", "<d:")
-      .replaceAll("</a:", "</d:")
-      .replace(`<d:srcRect l="1000" x:l="preserve"><x:inside value="yes"/></d:srcRect>`, "");
+      .replace(`<a:srcRect l="1000" x:l="preserve"><x:inside value="yes"/></a:srcRect>`, "")
+      .replace(
+        `<a:stretch><a:fillRect/></a:stretch>`,
+        `<d:stretch xmlns:d="http://schemas.openxmlformats.org/drawingml/2006/main"><a:fillRect/></d:stretch>`,
+      );
     entries[slidePath] = encoder.encode(slideXml);
     const source = readPptx(zipSync(entries));
     const image = source.slides[0]?.shapes.find((shape) => shape.kind === "image");
@@ -2747,7 +2748,9 @@ describe("writePptx - no-edit round-trip", () => {
     const output = writePptx(setPictureCrop(source, image.handle, { left: asOoxmlPercent(10000) }));
     const writtenXml = decoder.decode(getEntry(output, slidePath));
 
-    expect(writtenXml).toContain(`<d:srcRect l="10000"/>`);
+    expect(writtenXml).toContain(
+      `<d:srcRect l="10000" xmlns:d="http://schemas.openxmlformats.org/drawingml/2006/main"/>`,
+    );
     expect(writtenXml).not.toContain(`<a:srcRect`);
   });
 

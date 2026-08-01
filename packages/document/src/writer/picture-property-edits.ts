@@ -41,10 +41,14 @@ export function applyPictureCropEdit(root: XmlNode, edit: PptxSourceModelPicture
     if (stretchKey === undefined) {
       throw new Error("writePptx: picture crop target has no qualified stretch element");
     }
+    const srcRectNode = cropAttributes(edit.crop);
+    for (const [key, value] of Object.entries(getChild(blipFill, "stretch") ?? {})) {
+      if (key === "@_xmlns" || key.startsWith("@_xmlns:")) srcRectNode[key] = value;
+    }
     insertChildByOrder(
       blipFill,
       qualifiedSiblingName(stretchKey, "srcRect"),
-      cropAttributes(edit.crop),
+      srcRectNode,
       (name) => name === "tile" || name === "stretch",
     );
     return;
