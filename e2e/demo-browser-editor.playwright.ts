@@ -482,7 +482,7 @@ async function assertDemoBrowserBundle(): Promise<void> {
     .map((specifier) => specifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
     .join("|");
   const nodeOnlyPattern = new RegExp(
-    `(?:node:(?:${builtinSpecifierPattern})|(?:from|import|import\\s*\\(|require\\s*\\()\\s*["'](?:${builtinSpecifierPattern})["']|node-font-loader|packages/core/dist/index)`,
+    `(?:node:(?:${builtinSpecifierPattern})|\\[externals\\]/(?:node:)?(?:${builtinSpecifierPattern})|(?:from|import|import\\s*\\(|require\\s*\\()\\s*["'](?:${builtinSpecifierPattern})["']|node-font-loader|packages/core/dist/index)`,
   );
 
   for (const chunkPath of chunkPaths) {
