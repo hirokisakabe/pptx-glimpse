@@ -39,6 +39,7 @@ import {
   findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
+  groupShapes,
   moveSlide,
   replaceImageBytes,
   replaceParagraphPlainText,
@@ -635,6 +636,227 @@ function findTextRun(source: ReturnType<typeof readPptx>, text: string): SourceT
 }
 
 describe("writePptx - from-scratch builder", () => {
+  it("writes, reads, and computes a customized theme color and script font scheme", () => {
+    let source = createPptx({
+      theme: {
+        name: "Product & Theme",
+        colorScheme: {
+          name: "Product Colors",
+          dk1: "102030",
+          lt1: "F0F1F2",
+          dk2: "203040",
+          lt2: "E0E1E2",
+          accent1: "12ab34",
+          accent2: "223344",
+          accent3: "334455",
+          accent4: "445566",
+          accent5: "556677",
+          accent6: "667788",
+          hlink: "0055cc",
+          folHlink: "775599",
+        },
+        fontScheme: {
+          name: "Product Fonts",
+          major: {
+            latin: "Brand Display",
+            eastAsian: "Noto Sans CJK JP",
+            complexScript: "Noto Sans Arabic",
+          },
+          minor: {
+            latin: "Brand Text",
+            eastAsian: "Yu Gothic",
+            complexScript: "Arial",
+          },
+        },
+      },
+    });
+    const slideHandle = source.slides[0]?.handle;
+    if (slideHandle === undefined) throw new Error("createPptx should create a first slide");
+    source = addShape(source, slideHandle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(100000),
+      offsetY: asEmu(100000),
+      width: asEmu(1000000),
+      height: asEmu(500000),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "FFFFFF" } },
+      paragraphs: [{ runs: [{ text: "Script fonts", properties: { fontFace: "+mj-lt" } }] }],
+    });
+
+    const output = writePptx(source);
+    const themeXml = decoder.decode(getEntry(output, "ppt/theme/theme1.xml"));
+    expect(themeXml).toContain(`name="Product &amp; Theme"`);
+    expect(themeXml).toContain(`<a:clrScheme name="Product Colors">`);
+    expect(themeXml).toContain(`<a:dk1><a:srgbClr val="102030"/></a:dk1>`);
+    expect(themeXml).toContain(`<a:accent1><a:srgbClr val="12AB34"/></a:accent1>`);
+    const expectedColors = {
+      dk1: "102030",
+      lt1: "F0F1F2",
+      dk2: "203040",
+      lt2: "E0E1E2",
+      accent1: "12AB34",
+      accent2: "223344",
+      accent3: "334455",
+      accent4: "445566",
+      accent5: "556677",
+      accent6: "667788",
+      hlink: "0055CC",
+      folHlink: "775599",
+    };
+    for (const [slot, hex] of Object.entries(expectedColors)) {
+      expect(themeXml).toContain(`<a:${slot}><a:srgbClr val="${hex}"/></a:${slot}>`);
+    }
+    expect(themeXml).toContain(`<a:fontScheme name="Product Fonts">`);
+    expect(themeXml).toContain(
+      `<a:majorFont><a:latin typeface="Brand Display"/><a:ea typeface="Noto Sans CJK JP"/>` +
+        `<a:cs typeface="Noto Sans Arabic"/></a:majorFont>`,
+    );
+
+    const archive = unzipSync(output);
+    const slideXml = decoder
+      .decode(getEntry(output, "ppt/slides/slide1.xml"))
+      .replace(`<a:srgbClr val="FFFFFF"/>`, `<a:schemeClr val="accent1"/>`)
+      .replace(
+        `<a:latin typeface="+mj-lt"/><a:ea typeface="+mj-lt"/><a:cs typeface="+mj-lt"/>`,
+        `<a:latin typeface="+mj-lt"/><a:ea typeface="+mj-ea"/><a:cs typeface="+mj-cs"/>`,
+      );
+    const reread = readPptx(
+      zipSync({ ...archive, "ppt/slides/slide1.xml": encoder.encode(slideXml) }),
+    );
+    expect(reread.diagnostics).toEqual([]);
+    expect(reread.themes[0]).toMatchObject({
+      name: "Product & Theme",
+      colorScheme: {
+        colors: {
+          dk1: { kind: "srgb", hex: "102030" },
+          accent1: { kind: "srgb", hex: "12AB34" },
+          accent2: { kind: "srgb", hex: "223344" },
+          hlink: { kind: "srgb", hex: "0055CC" },
+        },
+      },
+      fontScheme: {
+        majorLatin: "Brand Display",
+        majorEastAsian: "Noto Sans CJK JP",
+        majorComplexScript: "Noto Sans Arabic",
+        minorLatin: "Brand Text",
+        minorEastAsian: "Yu Gothic",
+        minorComplexScript: "Arial",
+      },
+    });
+    const computedShape = createComputedView(reread).slides[0]?.elements[0];
+    expect(computedShape).toMatchObject({
+      kind: "shape",
+      fill: { kind: "solid", color: { hex: "#12ab34" } },
+      textBody: {
+        paragraphs: [
+          {
+            runs: [
+              {
+                properties: {
+                  typeface: "Brand Display",
+                  typefaceEa: "Noto Sans CJK JP",
+                  typefaceCs: "Noto Sans Arabic",
+                },
+              },
+            ],
+          },
+        ],
+      },
+    });
+  });
+
+  it("applies theme defaults per field and rejects invalid theme inputs", () => {
+    const source = createPptx({
+      theme: {
+        colorScheme: { accent1: "abcdef" },
+        fontScheme: { major: { eastAsian: "", complexScript: "" } },
+      },
+    });
+    expect(source.themes[0]).toMatchObject({
+      name: "Office Theme",
+      colorScheme: {
+        colors: {
+          dk1: { kind: "system", value: "windowText", lastColor: "000000" },
+          accent1: { kind: "srgb", hex: "ABCDEF" },
+          accent2: { kind: "srgb", hex: "ED7D31" },
+        },
+      },
+      fontScheme: {
+        majorLatin: "Aptos Display",
+        minorLatin: "Aptos",
+        majorEastAsian: "",
+        majorComplexScript: "",
+      },
+    });
+    const themeXml = decoder.decode(getEntry(writePptx(source), "ppt/theme/theme1.xml"));
+    expect(themeXml).toContain(`<a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>`);
+    expect(readPptx(writePptx(source)).themes[0]?.fontScheme).toMatchObject({
+      majorEastAsian: "",
+      minorEastAsian: "",
+      majorComplexScript: "",
+      minorComplexScript: "",
+    });
+
+    expect(() => createPptx({ theme: { colorScheme: { accent1: "12345" } } })).toThrow(
+      /theme\.colorScheme\.accent1 must be a 6-digit RGB color/,
+    );
+    expect(() => createPptx({ theme: { fontScheme: { major: { latin: "" } } } })).toThrow(
+      /theme\.fontScheme\.major\.latin must be a non-empty string/,
+    );
+    expect(() =>
+      createPptx({ theme: { fontScheme: { minor: { eastAsian: "bad\nfont" } } } }),
+    ).toThrow(/forbidden in an XML attribute/);
+  });
+
+  it("keeps empty script typefaces distinct from Jpan fallback during computation", () => {
+    let source = createPptx();
+    const slideHandle = source.slides[0]?.handle;
+    if (slideHandle === undefined) throw new Error("createPptx should create a first slide");
+    source = addShape(source, slideHandle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(100000),
+      offsetY: asEmu(100000),
+      width: asEmu(1000000),
+      height: asEmu(500000),
+      paragraphs: [
+        { runs: [{ text: "East Asian", properties: { fontFace: "+mj-ea" } }] },
+        { runs: [{ text: "Complex", properties: { fontFace: "+mj-cs" } }] },
+      ],
+    });
+    const directRuns = createComputedView(source).slides[0]?.elements[0];
+    expect(directRuns).toMatchObject({
+      kind: "shape",
+      textBody: {
+        paragraphs: [
+          { runs: [{ properties: { typeface: "+mj-ea" } }] },
+          { runs: [{ properties: { typeface: "+mj-cs" } }] },
+        ],
+      },
+    });
+
+    const archive = unzipSync(writePptx(source));
+    const themePath = "ppt/theme/theme1.xml";
+    const themeXml = decoder
+      .decode(archive[themePath])
+      .replace(
+        `<a:ea typeface=""/>`,
+        `<a:ea typeface=""/><a:font script="Jpan" typeface="Japanese Fallback"/>`,
+      );
+    const reread = readPptx(zipSync({ ...archive, [themePath]: encoder.encode(themeXml) }));
+    expect(reread.themes[0]?.fontScheme).toMatchObject({
+      majorEastAsian: "",
+      majorJapanese: "Japanese Fallback",
+    });
+    expect(createComputedView(reread).slides[0]?.elements[0]).toMatchObject({
+      kind: "shape",
+      textBody: {
+        paragraphs: [
+          { runs: [{ properties: { typeface: "Japanese Fallback" } }] },
+          { runs: [{ properties: { typeface: "+mj-cs" } }] },
+        ],
+      },
+    });
+  });
+
   it("preserves alternating shape and picture sibling order after write and reread", () => {
     let source = createPptx();
     const slideHandle = source.slides[0]?.handle;
@@ -4329,6 +4551,124 @@ describe("writePptx - paragraph text replacement", () => {
 });
 
 describe("writePptx - shape xfrm edit", () => {
+  it("edits existing master and nested layout shape properties by part-local identity", () => {
+    let authored = createPptx();
+    const masterHandle = authored.slideMasters[0]?.handle;
+    const layoutHandle = authored.slideLayouts[0]?.handle;
+    if (masterHandle === undefined || layoutHandle === undefined) {
+      throw new Error("master or layout handle not found");
+    }
+    authored = addShape(authored, layoutHandle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(10),
+      offsetY: asEmu(20),
+      width: asEmu(300),
+      height: asEmu(400),
+    });
+    authored = addShape(authored, layoutHandle, {
+      geometry: { kind: "preset", preset: "ellipse" },
+      offsetX: asEmu(500),
+      offsetY: asEmu(600),
+      width: asEmu(700),
+      height: asEmu(800),
+    });
+    const layoutShapes = authored.slideLayouts[0]?.shapes ?? [];
+    authored = groupShapes(authored, [
+      requireHandle(layoutShapes.at(-2)?.handle),
+      requireHandle(layoutShapes.at(-1)?.handle),
+    ]);
+    authored = addShape(authored, masterHandle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(900),
+      offsetY: asEmu(1000),
+      width: asEmu(1100),
+      height: asEmu(1200),
+    });
+    const existing = readPptx(writePptx(authored));
+    const layoutGroup = existing.slideLayouts[0]?.shapes.at(-1);
+    const masterShape = existing.slideMasters[0]?.shapes.at(-1);
+    if (layoutGroup?.kind !== "group" || masterShape?.handle === undefined) {
+      throw new Error("existing group or master shape not found");
+    }
+    const nestedShape = layoutGroup.children[0];
+    if (nestedShape?.handle === undefined) throw new Error("nested layout shape not found");
+
+    let edited = updateShapeTransform(existing, nestedShape.handle, {
+      offsetX: asEmu(111),
+      offsetY: asEmu(222),
+      width: asEmu(333),
+      height: asEmu(444),
+    });
+    edited = setShapeFill(edited, nestedShape.handle, {
+      kind: "solid",
+      color: { kind: "srgb", hex: "12AB34" },
+    });
+    edited = setShapeOutline(edited, masterShape.handle, {
+      width: asEmu(12700),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "56789A" } },
+    });
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+
+    expect(findShapeNodeBySourceHandle(reread, nestedShape.handle)).toMatchObject({
+      kind: "shape",
+      transform: { offsetX: 111, offsetY: 222, width: 333, height: 444 },
+      fill: { kind: "solid", color: { kind: "srgb", hex: "12AB34" } },
+    });
+    expect(findShapeNodeBySourceHandle(reread, masterShape.handle)).toMatchObject({
+      outline: {
+        width: 12700,
+        fill: { kind: "solid", color: { kind: "srgb", hex: "56789A" } },
+      },
+    });
+    expect(decoder.decode(getEntry(output, layoutHandle.partPath))).toContain(
+      '<a:off x="111" y="222"',
+    );
+    expect(decoder.decode(getEntry(output, masterHandle.partPath))).toContain("56789A");
+  });
+
+  it("rejects duplicate ids and AlternateContent targets in layout parts", () => {
+    const base = unzipSync(writePptx(createPptx()));
+    const layoutPath = "ppt/slideLayouts/slideLayout1.xml";
+    const originalLayout = base[layoutPath];
+    if (originalLayout === undefined) throw new Error("layout part not found");
+    const original = decoder.decode(originalLayout);
+    const shapeXml = (id: string, name: string) =>
+      `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${name}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+      `<p:spPr><a:xfrm><a:off x="1" y="2"/><a:ext cx="3" cy="4"/></a:xfrm>` +
+      `<a:prstGeom prst="rect"/></p:spPr></p:sp>`;
+
+    const duplicateFiles = { ...base };
+    duplicateFiles[layoutPath] = encoder.encode(
+      original.replace(
+        "</p:spTree>",
+        `${shapeXml("50", "First")}${shapeXml("50", "Second")}</p:spTree>`,
+      ),
+    );
+    const duplicate = readPptx(zipSync(duplicateFiles));
+    const duplicateHandle = duplicate.slideLayouts[0]?.shapes.at(-2)?.handle;
+    if (duplicateHandle === undefined) throw new Error("duplicate layout handle not found");
+    expect(() => setShapeFill(duplicate, duplicateHandle, { kind: "none" })).toThrow(
+      /duplicate node id/,
+    );
+
+    const alternateFiles = { ...base };
+    alternateFiles[layoutPath] = encoder.encode(
+      original.replace(
+        "</p:spTree>",
+        `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006">` +
+          `<mc:Fallback>${shapeXml("60", "Fallback")}</mc:Fallback></mc:AlternateContent>` +
+          `</p:spTree>`,
+      ),
+    );
+    const alternate = readPptx(zipSync(alternateFiles));
+    const alternateHandle = alternate.slideLayouts[0]?.shapes.at(-1)?.handle;
+    if (alternateHandle === undefined) throw new Error("AlternateContent handle not found");
+    expect(() => setShapeFill(alternate, alternateHandle, { kind: "none" })).toThrow(
+      /AlternateContent/,
+    );
+  });
+
   it("Apply offset and extent update to PptxSourceModel source and reflect in PPTX after write", () => {
     const source = readPptx(buildTextEditFixture());
     const shape = firstShape(source);

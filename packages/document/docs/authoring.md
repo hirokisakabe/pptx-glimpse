@@ -34,6 +34,55 @@ helpers cover supported text boxes, shapes, connectors, pictures, tables, charts
 backgrounds, and slide topology. Slide, layout, and master handles can be authoring targets where
 the operation supports that scope.
 
+## Theme colors and fonts
+
+`createPptx({ theme })` customizes the single theme used by the generated master. The `theme`,
+`colorScheme`, `fontScheme`, `major`, and `minor` objects are optional. Every omitted field is
+filled independently from the default theme, so callers can override one brand color or font
+without copying the complete scheme.
+
+The color scheme accepts six-digit RGB strings for the twelve OOXML slots: `dk1`, `lt1`, `dk2`,
+`lt2`, `accent1` through `accent6`, `hlink`, and `folHlink`. Latin fonts default to
+`Aptos Display` for major and `Aptos` for minor. East Asian and complex-script fonts default to
+an empty OOXML typeface, which lets PowerPoint or LibreOffice choose an appropriate font. Set
+those fields when deterministic script-specific selection is required; an explicit empty string
+is supported for them. Latin typefaces must be non-empty.
+
+```ts
+import { createPptx } from "@pptx-glimpse/document";
+
+const source = createPptx({
+  theme: {
+    name: "Product Theme",
+    colorScheme: {
+      name: "Product Colors",
+      dk1: "102030",
+      accent1: "0067C5",
+      accent2: "F59E0B",
+    },
+    fontScheme: {
+      name: "Product Fonts",
+      major: {
+        latin: "Brand Display",
+        eastAsian: "Noto Sans CJK JP",
+        complexScript: "Noto Sans Arabic",
+      },
+      minor: {
+        latin: "Brand Text",
+        eastAsian: "Noto Sans CJK JP",
+        complexScript: "Noto Sans Arabic",
+      },
+    },
+  },
+});
+```
+
+Shapes, text, and charts in the resulting package that use scheme colors or script-qualified
+theme-font tokens such as `+mj-lt`, `+mn-ea`, and `+mj-cs` are resolved through these values by
+the normal write/read/computed/render pipeline. This API creates one theme for the generated
+master; editing themes in an existing presentation and authoring a format scheme remain outside
+its scope.
+
 ## Consecutive operations
 
 For consecutive operations, a target-scoped session retains the latest immutable source and

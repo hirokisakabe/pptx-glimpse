@@ -40,6 +40,38 @@ const CONVERTER_TEST_SCOPE = [
 ] as const;
 
 describe("native chart writer renderer integration", () => {
+  it("renders createPptx theme colors and fonts after a write/read boundary", async () => {
+    let source = document.createPptx({
+      theme: {
+        colorScheme: { accent1: "123456" },
+        fontScheme: { major: { latin: "Theme Display" } },
+      },
+    });
+    const handle = source.slides[0]?.handle;
+    if (handle === undefined) throw new Error("createPptx should create a slide");
+    source = document.addShape(source, handle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: document.asEmu(100000),
+      offsetY: document.asEmu(100000),
+      width: document.asEmu(2000000),
+      height: document.asEmu(1000000),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "FFFFFF" } },
+      paragraphs: [{ runs: [{ text: "Themed text", properties: { fontFace: "+mj-lt" } }] }],
+    });
+
+    const archive = await JSZip.loadAsync(document.writePptx(source));
+    const slidePart = archive.file("ppt/slides/slide1.xml");
+    if (slidePart === null) throw new Error("written PPTX should contain slide1.xml");
+    const slideXml = (await slidePart.async("string")).replace(
+      `<a:srgbClr val="FFFFFF"/>`,
+      `<a:schemeClr val="accent1"/>`,
+    );
+    archive.file("ppt/slides/slide1.xml", slideXml);
+    const report = await convertPptxToSvg(await archive.generateAsync({ type: "uint8array" }));
+    expect(report.slides[0]?.svg).toContain('fill="#123456"');
+    expect(report.slides[0]?.svg).toContain("Theme Display");
+  });
+
   it("renders every chart type produced by the document builder", async () => {
     const source = document.createPptx();
     const handle = source.slides[0]?.handle;
@@ -517,6 +549,68 @@ describe("public conversion orchestration", () => {
     expect(reread.slides[1]?.layoutPartPath).toBe(layoutHandle.partPath);
     expect(report.slides[0]?.svg).toContain("4472c4");
     expect(report.slides[0]?.svg).toContain("Added layout render");
+  });
+
+  it("writes, rereads, and renders existing master and layout shape property edits", async () => {
+    let authored = document.createPptx();
+    const masterHandle = authored.slideMasters[0]?.handle;
+    const layoutHandle = authored.slideLayouts[0]?.handle;
+    if (masterHandle === undefined || layoutHandle === undefined) {
+      throw new Error("from-scratch master or layout handle is missing");
+    }
+    authored = document.addShape(authored, masterHandle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: document.asEmu(100000),
+      offsetY: document.asEmu(100000),
+      width: document.asEmu(1000000),
+      height: document.asEmu(500000),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "000000" } },
+    });
+    authored = document.addShape(authored, layoutHandle, {
+      geometry: { kind: "preset", preset: "ellipse" },
+      offsetX: document.asEmu(1200000),
+      offsetY: document.asEmu(100000),
+      width: document.asEmu(1000000),
+      height: document.asEmu(500000),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "000000" } },
+    });
+    const existing = document.readPptx(document.writePptx(authored));
+    const masterShape = existing.slideMasters[0]?.shapes.at(-1);
+    const layoutShape = existing.slideLayouts[0]?.shapes.at(-1);
+    if (masterShape?.handle === undefined || layoutShape?.handle === undefined) {
+      throw new Error("existing master or layout shape handle is missing");
+    }
+
+    let edited = document.updateShapeTransform(existing, layoutShape.handle, {
+      offsetX: document.asEmu(1400000),
+      offsetY: document.asEmu(200000),
+      width: document.asEmu(1200000),
+      height: document.asEmu(600000),
+    });
+    edited = document.setShapeFill(edited, layoutShape.handle, {
+      kind: "solid",
+      color: { kind: "srgb", hex: "12AB34" },
+    });
+    edited = document.setShapeOutline(edited, masterShape.handle, {
+      width: document.asEmu(12700),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "56789A" } },
+    });
+
+    const reread = document.readPptx(document.writePptx(edited));
+    const report = await renderPptxSourceModelToSvg(reread);
+
+    expect(document.findShapeNodeBySourceHandle(reread, layoutShape.handle)).toMatchObject({
+      transform: { offsetX: 1400000, offsetY: 200000, width: 1200000, height: 600000 },
+      fill: { kind: "solid", color: { kind: "srgb", hex: "12AB34" } },
+    });
+    expect(document.findShapeNodeBySourceHandle(reread, masterShape.handle)).toMatchObject({
+      outline: {
+        width: 12700,
+        fill: { kind: "solid", color: { kind: "srgb", hex: "56789A" } },
+      },
+    });
+    expect(report.slides[0]?.svg).toContain("12ab34");
+    expect(report.slides[0]?.svg).toContain("56789a");
   });
 
   it("keeps concurrent source-model renders isolated by font options", async () => {
