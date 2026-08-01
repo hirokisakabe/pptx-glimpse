@@ -122,7 +122,7 @@ describe("reorderShapes", () => {
     );
   });
 
-  it("immutably reorders only a native group's direct children and preserves identity on write/read", () => {
+  it("immutably reorders only a nested native group's direct children and preserves identity on write/read", () => {
     const source = createPptx();
     const session = createPptxAuthoringSession(source);
     const root = session.target(requireValue(source.slides[0]?.handle));
@@ -130,19 +130,23 @@ describe("reorderShapes", () => {
     const secondHandle = addRect(root, 2000);
     const siblingHandle = addRect(root, 4000);
     const groupHandle = root.groupShapes([firstHandle, secondHandle]);
+    const outerGroupHandle = root.groupShapes([groupHandle, siblingHandle]);
     const beforeSlide = requireValue(session.source.slides[0]);
-    const beforeGroup = requireGroup(beforeSlide.shapes[0]);
-    const beforeSibling = requireValue(beforeSlide.shapes[1]);
+    const beforeOuterGroup = requireGroup(beforeSlide.shapes[0]);
+    const beforeGroup = requireGroup(beforeOuterGroup.children[0]);
+    const beforeSibling = requireValue(beforeOuterGroup.children[1]);
     const beforeTransform = beforeGroup.transform;
     const beforeChildTransform = beforeGroup.childTransform;
 
     session.target(groupHandle).reorderShapes([secondHandle, firstHandle]);
 
     const afterSlide = requireValue(session.source.slides[0]);
-    const afterGroup = requireGroup(afterSlide.shapes[0]);
+    const afterOuterGroup = requireGroup(afterSlide.shapes[0]);
+    const afterGroup = requireGroup(afterOuterGroup.children[0]);
     expect(afterSlide).not.toBe(beforeSlide);
+    expect(afterOuterGroup).not.toBe(beforeOuterGroup);
     expect(afterGroup).not.toBe(beforeGroup);
-    expect(afterSlide.shapes[1]).toBe(beforeSibling);
+    expect(afterOuterGroup.children[1]).toBe(beforeSibling);
     expect(afterGroup.children).toEqual([beforeGroup.children[1], beforeGroup.children[0]]);
     expect(afterGroup.transform).toBe(beforeTransform);
     expect(afterGroup.childTransform).toBe(beforeChildTransform);
@@ -154,8 +158,10 @@ describe("reorderShapes", () => {
     });
 
     const rereadSlide = requireValue(readPptx(writePptx(session.source)).slides[0]);
-    const rereadGroup = requireGroup(rereadSlide.shapes[0]);
-    expect(rereadSlide.shapes[1]?.nodeId).toBe(siblingHandle.nodeId);
+    const rereadOuterGroup = requireGroup(rereadSlide.shapes[0]);
+    const rereadGroup = requireGroup(rereadOuterGroup.children[0]);
+    expect(rereadOuterGroup.nodeId).toBe(outerGroupHandle.nodeId);
+    expect(rereadOuterGroup.children[1]?.nodeId).toBe(siblingHandle.nodeId);
     expect(rereadGroup.nodeId).toBe(groupHandle.nodeId);
     expect(rereadGroup.children.map((child) => child.nodeId)).toEqual([
       secondHandle.nodeId,
