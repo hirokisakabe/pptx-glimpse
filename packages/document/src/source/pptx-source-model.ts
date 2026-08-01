@@ -334,6 +334,8 @@ export interface PptxSourceModelCloneSlideLayoutEdit {
 export interface PptxSourceModelReorderShapesEdit {
   readonly kind: "reorderShapes";
   readonly targetPartPath: PartPath;
+  /** Direct-child container group id. Omitted for the root `p:spTree`. */
+  readonly parentGroupId?: string;
   readonly shapeIds: readonly string[];
 }
 

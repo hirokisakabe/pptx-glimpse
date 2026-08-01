@@ -109,19 +109,16 @@ export function applyReorderShapesEdit(
   edit: PptxSourceModelReorderShapesEdit,
 ): void {
   const spTree = getShapeTree(root, edit.targetPartPath);
-  const current: { key: string; value: unknown }[] = [];
+  const container = groupParentContainer(spTree, edit.parentGroupId, "reorder");
+  const current = completeRememberedChildOrder(container);
   const shapeById = new Map<string, { key: string; value: unknown }>();
-  for (const [key, grouped] of Object.entries(spTree)) {
-    if (key.startsWith("@_")) continue;
-    const values = Array.isArray(grouped)
-      ? unsafeOoxmlBoundaryAssertion<unknown[]>(grouped)
-      : [grouped];
-    for (const value of values) {
-      const entry = { key, value };
-      current.push(entry);
-      if (localName(key) === "nvGrpSpPr" || localName(key) === "grpSpPr") continue;
-      const nodeId = shapeTreeEntryNodeId(value);
-      if (nodeId !== undefined) shapeById.set(nodeId, entry);
+  for (const entry of current) {
+    const nodeId = shapeTreeEntryNodeId(entry.value);
+    if (nodeId !== undefined) {
+      if (shapeById.has(nodeId)) {
+        throw new Error(`writePptx: duplicate shape id '${nodeId}' in reordered container`);
+      }
+      shapeById.set(nodeId, entry);
     }
   }
   if (shapeById.size !== edit.shapeIds.length) {
@@ -136,11 +133,29 @@ export function applyReorderShapesEdit(
   });
   let orderedShapeIndex = 0;
   setXmlChildOrder(
-    spTree,
+    container,
     current.map((entry) =>
       shapeTreeEntryNodeId(entry.value) === undefined ? entry : orderedShapes[orderedShapeIndex++],
     ),
   );
+}
+
+function completeRememberedChildOrder(container: XmlNode): { key: string; value: unknown }[] {
+  const remembered = [...getXmlChildOrder(container)];
+  const remaining = Object.entries(container).flatMap(([key, grouped]) => {
+    if (key.startsWith("@_") || key === "?xml") return [];
+    const values = Array.isArray(grouped)
+      ? unsafeOoxmlBoundaryAssertion<unknown[]>(grouped)
+      : [grouped];
+    return values.map((value) => ({ key, value }));
+  });
+  for (const entry of remembered) {
+    const index = remaining.findIndex(
+      (candidate) => candidate.key === entry.key && candidate.value === entry.value,
+    );
+    if (index >= 0) remaining.splice(index, 1);
+  }
+  return [...remembered, ...remaining];
 }
 
 export function applyGroupShapesEdit(root: XmlNode, edit: PptxSourceModelGroupShapesEdit): void {
