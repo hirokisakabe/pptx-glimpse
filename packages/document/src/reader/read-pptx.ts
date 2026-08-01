@@ -53,6 +53,7 @@ import {
   getChild,
   getChildArray,
   getNamespacedAttr,
+  hasChild,
   navigateOrdered,
   parseXml,
   parseXmlOrdered,
@@ -161,6 +162,11 @@ function readSlideHierarchy(
 ): SlideHierarchy {
   const slides: SourceSlide[] = [];
   const layoutPaths = new OrderedPathSet();
+  const masterPaths = new OrderedPathSet();
+
+  for (const masterPath of presentation.slideMasterPartPaths) {
+    masterPaths.add(masterPath);
+  }
 
   for (const slidePath of presentation.slidePartPaths) {
     const part = parsePartRoot(entries, slidePath, "sld", diagnostics, true);
@@ -188,7 +194,6 @@ function readSlideHierarchy(
   }
 
   const slideLayouts: SourceSlideLayout[] = [];
-  const masterPaths = new OrderedPathSet();
   for (const layoutPath of layoutPaths.values()) {
     const part = parsePartRoot(entries, layoutPath, "sldLayout", diagnostics, true);
     if (part === undefined) continue;
@@ -204,14 +209,6 @@ function readSlideHierarchy(
       ),
     );
   }
-  for (const masterPath of resolveAllRels(
-    relationships,
-    presentation.partPath,
-    SLIDE_MASTER_REL_TYPE,
-  )) {
-    masterPaths.add(masterPath);
-  }
-
   const slideMasters: SourceSlideMaster[] = [];
   const themePaths = new OrderedPathSet();
   for (const masterPath of masterPaths.values()) {
@@ -219,7 +216,17 @@ function readSlideHierarchy(
     if (part === undefined) continue;
     const themePath = resolveSingleRel(relationships, masterPath, THEME_REL_TYPE);
     if (themePath !== undefined) themePaths.add(themePath);
-    const masterLayoutPaths = resolveAllRels(relationships, masterPath, SLIDE_LAYOUT_REL_TYPE);
+    const masterLayoutPaths = resolveOrderedRelationshipPaths({
+      root: part.root,
+      sourcePartPath: masterPath,
+      relationships,
+      listName: "sldLayoutIdLst",
+      itemName: "sldLayoutId",
+      relationshipType: SLIDE_LAYOUT_REL_TYPE,
+      relationshipLabel: "slide layout",
+      diagnosticCodePrefix: "slide-layout",
+      diagnostics,
+    });
     slideMasters.push(
       parseSlideMaster(
         part.root,
@@ -448,6 +455,18 @@ function readPresentation(
     (rel) => rel.sourcePartPath === presentationPath,
   )?.relationships;
 
+  const slideMasterPartPaths = resolveOrderedRelationshipPaths({
+    root,
+    sourcePartPath: presentationPartPath,
+    relationships,
+    listName: "sldMasterIdLst",
+    itemName: "sldMasterId",
+    relationshipType: SLIDE_MASTER_REL_TYPE,
+    relationshipLabel: "slide master",
+    diagnosticCodePrefix: "slide-master",
+    diagnostics,
+  });
+
   const slidePartPaths: PartPath[] = [];
   const sldIdLst = getChild(root, "sldIdLst");
   for (const sldId of getChildArray(sldIdLst, "sldId")) {
@@ -484,9 +503,89 @@ function readPresentation(
     partPath: presentationPartPath,
     ...(slideSize !== undefined ? { slideSize } : {}),
     ...(defaultTextStyle !== undefined ? { defaultTextStyle } : {}),
+    slideMasterPartPaths,
     slidePartPaths,
     handle: { partPath: presentationPartPath },
   };
+}
+
+interface OrderedRelationshipPathsInput {
+  readonly root: XmlNode;
+  readonly sourcePartPath: PartPath;
+  readonly relationships: readonly PartRelationships[];
+  readonly listName: string;
+  readonly itemName: string;
+  readonly relationshipType: string;
+  readonly relationshipLabel: string;
+  readonly diagnosticCodePrefix: string;
+  readonly diagnostics: Diagnostic[];
+}
+
+/**
+ * Resolves an OOXML relationship-id list in authoring order. Relationship order is used only
+ * when the id-list element itself is absent, matching Office's legacy-package fallback.
+ */
+function resolveOrderedRelationshipPaths(input: OrderedRelationshipPathsInput): PartPath[] {
+  if (!hasChild(input.root, input.listName)) {
+    return resolveAllRels(input.relationships, input.sourcePartPath, input.relationshipType);
+  }
+
+  const sourceRelationships = input.relationships.find(
+    (entry) => entry.sourcePartPath === input.sourcePartPath,
+  )?.relationships;
+  const paths: PartPath[] = [];
+  const list = getChild(input.root, input.listName);
+
+  for (const item of getChildArray(list, input.itemName)) {
+    const relId = getNamespacedAttr(item, "id");
+    const handle = {
+      partPath: input.sourcePartPath,
+      ...(relId !== undefined ? { relationshipId: asRelationshipId(relId) } : {}),
+    };
+    if (relId === undefined) {
+      input.diagnostics.push({
+        severity: "warning",
+        code: `${input.diagnosticCodePrefix}-relationship-unresolved`,
+        message: `${input.itemName} in ${input.sourcePartPath} has no relationship id`,
+        handle,
+      });
+      continue;
+    }
+
+    const relationship = sourceRelationships?.find((candidate) => candidate.id === relId);
+    if (relationship === undefined) {
+      input.diagnostics.push({
+        severity: "warning",
+        code: `${input.diagnosticCodePrefix}-relationship-unresolved`,
+        message: `${input.relationshipLabel} relationship '${relId}' referenced by '${input.sourcePartPath}' could not be resolved`,
+        handle,
+      });
+      continue;
+    }
+    if (relationship.type !== input.relationshipType || relationship.targetMode === "External") {
+      input.diagnostics.push({
+        severity: "warning",
+        code: `${input.diagnosticCodePrefix}-relationship-invalid`,
+        message: `relationship '${relId}' referenced by ${input.itemName} is not an internal ${input.relationshipLabel} relationship`,
+        handle,
+      });
+      continue;
+    }
+
+    const target = resolveInternalRelationshipTarget(input.sourcePartPath, relationship);
+    if (target === undefined) {
+      input.diagnostics.push({
+        severity: "warning",
+        code: `${input.diagnosticCodePrefix}-relationship-unresolved`,
+        message: `${input.relationshipLabel} relationship '${relId}' referenced by '${input.sourcePartPath}' could not be resolved`,
+        handle,
+      });
+      continue;
+    }
+    paths.push(target);
+  }
+
+  return paths;
 }
 
 function readSlideSize(presentationRoot: XmlNode | undefined): SlideSize | undefined {

@@ -2107,6 +2107,7 @@ function buildSourceModel(): PptxSourceModel {
     presentation: {
       partPath: presentationPath,
       slideSize: { width: asEmu(9144000), height: asEmu(5143500) },
+      slideMasterPartPaths: [],
       slidePartPaths: [slide1Path, slide2Path],
     },
     slides: [

@@ -112,6 +112,7 @@ describe("PptxSourceModel source model types", () => {
       presentation: {
         partPath: asPartPath("ppt/presentation.xml"),
         slideSize: { width: asEmu(9144000), height: asEmu(5143500) },
+        slideMasterPartPaths: [masterPath],
         slidePartPaths: [slidePath],
       },
       slides: [

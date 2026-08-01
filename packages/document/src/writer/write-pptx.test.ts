@@ -287,7 +287,7 @@ function buildUnreferencedLayoutFixture(): Uint8Array {
     ),
     "ppt/presentation.xml": xml(
       `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
-        `<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rIdMaster1"/><p:sldMasterId id="2147483649" r:id="rIdMaster2"/></p:sldMasterIdLst>` +
+        `<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rIdMaster2"/><p:sldMasterId id="2147483649" r:id="rIdMaster1"/></p:sldMasterIdLst>` +
         `<p:sldIdLst><p:sldId id="256" r:id="rIdSlide1"/></p:sldIdLst>` +
         `<p:sldSz cx="9144000" cy="5143500"/>` +
         `</p:presentation>`,
@@ -343,8 +343,8 @@ function buildUnreferencedLayoutFixture(): Uint8Array {
       `<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
         `<p:cSld><p:spTree/></p:cSld>` +
         `<p:sldLayoutIdLst>` +
-        `<p:sldLayoutId id="2147483649" r:id="rIdLayout1"/>` +
-        `<p:sldLayoutId id="2147483650" r:id="rIdLayout2"/>` +
+        `<p:sldLayoutId id="2147483649" r:id="rIdLayout2"/>` +
+        `<p:sldLayoutId id="2147483650" r:id="rIdLayout1"/>` +
         `</p:sldLayoutIdLst>` +
         `</p:sldMaster>`,
     ),
@@ -2618,6 +2618,30 @@ describe("writePptx - no-edit round-trip", () => {
       `show="0"`,
     );
     expect(reread.slideLayouts[0]?.show).toBe(false);
+  });
+
+  it("preserves master and layout id-list order in no-edit round-trip", () => {
+    const original = readPptx(buildUnreferencedLayoutFixture());
+    const reread = readPptx(writePptx(original));
+    const originalMaster1 = original.slideMasters.find(
+      (master) => master.partPath === "ppt/slideMasters/slideMaster1.xml",
+    );
+    const rereadMaster1 = reread.slideMasters.find(
+      (master) => master.partPath === "ppt/slideMasters/slideMaster1.xml",
+    );
+
+    expect(original.presentation.slideMasterPartPaths).toEqual([
+      "ppt/slideMasters/slideMaster2.xml",
+      "ppt/slideMasters/slideMaster1.xml",
+    ]);
+    expect(reread.presentation.slideMasterPartPaths).toEqual(
+      original.presentation.slideMasterPartPaths,
+    );
+    expect(originalMaster1?.layoutPartPaths).toEqual([
+      "ppt/slideLayouts/slideLayout2.xml",
+      "ppt/slideLayouts/slideLayout1.xml",
+    ]);
+    expect(rereadMaster1?.layoutPartPaths).toEqual(originalMaster1?.layoutPartPaths);
   });
 
   it("Preserving media bytes and unsupported raw package material", () => {

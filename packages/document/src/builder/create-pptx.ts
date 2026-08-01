@@ -137,6 +137,7 @@ export function createPptx(options: CreatePptxOptions = {}): PptxSourceModel {
     presentation: {
       partPath: PRESENTATION_PART,
       slideSize,
+      slideMasterPartPaths: [SLIDE_MASTER_PART],
       slidePartPaths: [SLIDE_PART],
       handle: { partPath: PRESENTATION_PART },
     },
