@@ -133,6 +133,9 @@ describe("updateChartData", () => {
     expect(chartXml).toContain("Sheet1!$D$2:$D$3");
     expect(chartXml.match(/uri="series-1"/g)).toHaveLength(1);
     expect(chartXml.match(/uri="series-2"/g)).toHaveLength(2);
+    expect(chartXml.match(/val="\{00000000-0000-0000-0000-000000000001\}"/g)).toHaveLength(1);
+    expect(chartXml.match(/val="\{00000000-0000-0000-0000-000000000002\}"/g)).toHaveLength(1);
+    expect(chartXml.match(/val="\{00000000-0000-0000-0000-000000000003\}"/g)).toHaveLength(1);
     expect(chartXml.match(/val="ED7D31"/g)).toHaveLength(4);
 
     const workbook = unzipSync(output["ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx"]);
@@ -397,6 +400,24 @@ describe("updateChartData", () => {
       }),
     ).toThrow("chart series idx/order values must be unique");
 
+    const explicitLegendFiles = unzipSync(input);
+    explicitLegendFiles["ppt/charts/chart1.xml"] = replaceText(
+      explicitLegendFiles["ppt/charts/chart1.xml"],
+      "<c:legend>",
+      '<c:legend><c:legendEntry><c:idx val="1"/><c:delete val="1"/></c:legendEntry>',
+    );
+    const explicitLegendSource = readPptx(zipFixture(explicitLegendFiles));
+    const explicitLegendChart = explicitLegendSource.slides[0]?.shapes.find(
+      (shape) => shape.kind === "chart",
+    );
+    if (explicitLegendChart?.handle === undefined)
+      throw new Error("chart fixture should have a handle");
+    expect(() =>
+      updateChartData(explicitLegendSource, explicitLegendChart.handle, {
+        series: [{ name: "Only", categories: ["A"], values: [1] }],
+      }),
+    ).toThrow("removing series with explicit legend entries is not supported");
+
     const source = readPptx(input);
     const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
     if (chart?.handle === undefined) throw new Error("chart fixture should have a handle");
@@ -518,7 +539,8 @@ function addSeriesExtensionMarkers(bytes: Uint8Array): Uint8Array {
   return new TextEncoder().encode(
     decoder.decode(bytes).replaceAll("</c:ser>", () => {
       index += 1;
-      return `<c:extLst><c:ext uri="series-${index}"><c:unknown val="kept"/></c:ext></c:extLst></c:ser>`;
+      const uniqueId = String(index).padStart(12, "0");
+      return `<c:extLst><c:ext uri="series-${index}"><c:unknown val="kept"/></c:ext><c:ext uri="{02D57815-91ED-43cb-92C2-25804820EDAC}"><c16:uniqueId xmlns:c16="http://schemas.microsoft.com/office/drawing/2014/chart" val="{00000000-0000-0000-0000-${uniqueId}}"/></c:ext></c:extLst></c:ser>`;
     }),
   );
 }

@@ -98,10 +98,12 @@ keep their formatting and unknown series XML. New trailing series clone the last
 as a formatting template before their formulas and caches are rewritten. Retained `idx` / `order`
 values stay unchanged so chart-level references remain valid; additions receive values after the
 largest existing `idx` / `order`. This means explicitly formatted source series intentionally
-provide the default appearance for added series. Removing series truncates the trailing series, so
-formatting and unknown XML owned by a removed series are removed with it while retained and
-chart-level XML stay intact. The worksheet range and cells expand or shrink to the resulting series
-count.
+provide the default appearance for added series. A cloned Microsoft `c16:uniqueId` receives a new,
+non-conflicting GUID rather than copying series identity. Removing series truncates the trailing
+series, so formatting and unknown XML owned by a removed series are removed with it while retained
+and chart-level XML stay intact. Because explicit legend entries have chart-type-dependent index
+semantics, removal rejects Charts that contain them instead of leaving a stale reference. The
+worksheet range and cells expand or shrink to the resulting series count.
 
 The operation rejects linked/external data, missing or unresolved relationships, combo Charts,
 workbooks shared by multiple Charts, workbook formulas in the data range, and other data layouts

@@ -353,6 +353,11 @@ function inspectAndUpdateChartXml(
   if (sheetName === undefined || pointCount === undefined) {
     throw new Error("updateChartData: chart has no series");
   }
+  if (input.series.length < existingSeries.length && hasExplicitLegendEntries(chart)) {
+    throw new Error(
+      "updateChartData: removing series with explicit legend entries is not supported",
+    );
+  }
 
   const series = resizeChartSeries(chartGroups[0], existingSeries, input.series.length);
   const addedSeriesIdentities =
@@ -457,9 +462,12 @@ function resizeChartSeries(
   if (desiredCount > existingSeries.length) {
     const template = existingSeries.at(-1);
     if (template === undefined) throw new Error("updateChartData: chart has no series");
-    const addedSeries = Array.from({ length: desiredCount - existingSeries.length }, () =>
-      structuredClone(template),
-    );
+    const rewriteUniqueId = createAddedSeriesUniqueIdRewriter(existingSeries, template);
+    const addedSeries = Array.from({ length: desiredCount - existingSeries.length }, () => {
+      const clone = structuredClone(template);
+      rewriteUniqueId(clone);
+      return clone;
+    });
     let lastSeriesIndex = -1;
     for (const [index, entry] of retainedChildren.entries()) {
       if (elementLocalName(entry) === "ser") lastSeriesIndex = index;
@@ -469,6 +477,114 @@ function resizeChartSeries(
   }
   setElementChildren(chartGroup, retainedChildren);
   return retainedSeries;
+}
+
+function hasExplicitLegendEntries(chart: OrderedXmlNode): boolean {
+  const legend = elementChildren(chart).find((entry) => elementLocalName(entry) === "legend");
+  return (
+    legend !== undefined &&
+    elementChildren(legend).some((entry) => elementLocalName(entry) === "legendEntry")
+  );
+}
+
+function createAddedSeriesUniqueIdRewriter(
+  existingSeries: readonly OrderedXmlNode[],
+  template: OrderedXmlNode,
+): (clone: OrderedXmlNode) => void {
+  const existingValues = existingSeries.flatMap((series) => seriesUniqueIdElements(series));
+  const normalized = existingValues.map(({ value }) => normalizeGuid(value));
+  const used = new Set(normalized.map(({ hex }) => hex));
+  if (used.size !== normalized.length) {
+    throw new Error("updateChartData: chart series uniqueId values must be unique");
+  }
+  const templateIds = seriesUniqueIdElements(template);
+  if (templateIds.length === 0) return () => undefined;
+  if (templateIds.length !== 1) {
+    throw new Error("updateChartData: chart series uniqueId layout is not supported");
+  }
+  let previous = normalizeGuid(templateIds[0].value);
+  return (clone) => {
+    const cloneIds = seriesUniqueIdElements(clone);
+    if (cloneIds.length !== 1) {
+      throw new Error("updateChartData: chart series uniqueId layout is not supported");
+    }
+    previous = nextGuid(previous, used);
+    used.add(previous.hex);
+    setAttribute(cloneIds[0].element, "val", formatGuid(previous));
+  };
+}
+
+interface SeriesUniqueIdElement {
+  readonly element: OrderedXmlNode;
+  readonly value: string;
+}
+
+function seriesUniqueIdElements(series: OrderedXmlNode): SeriesUniqueIdElement[] {
+  const extensionLists = elementChildren(series).filter(
+    (entry) => elementLocalName(entry) === "extLst",
+  );
+  if (extensionLists.length > 1) {
+    throw new Error("updateChartData: chart series extension layout is not supported");
+  }
+  const extensionList = extensionLists[0];
+  if (extensionList === undefined) return [];
+  return descendantElements(extensionList)
+    .filter((entry) => elementLocalName(entry) === "uniqueId")
+    .map((element) => {
+      const value = attribute(element, "val");
+      if (value === undefined) {
+        throw new Error("updateChartData: chart series uniqueId value is invalid");
+      }
+      return { element, value };
+    });
+}
+
+function descendantElements(entry: OrderedXmlNode): OrderedXmlNode[] {
+  const children = [...elementChildren(entry)];
+  return children.flatMap((child) => [child, ...descendantElements(child)]);
+}
+
+interface NormalizedGuid {
+  readonly hex: string;
+  readonly braces: boolean;
+  readonly lowercase: boolean;
+}
+
+function normalizeGuid(value: string): NormalizedGuid {
+  const match =
+    /^(\{?)([0-9A-Fa-f]{8})-([0-9A-Fa-f]{4})-([0-9A-Fa-f]{4})-([0-9A-Fa-f]{4})-([0-9A-Fa-f]{12})(\}?)$/.exec(
+      value,
+    );
+  if (match === null || (match[1] === "{") !== (match[7] === "}")) {
+    throw new Error("updateChartData: chart series uniqueId value is invalid");
+  }
+  const body = match.slice(2, 7).join("");
+  return {
+    hex: body.toUpperCase(),
+    braces: match[1] === "{",
+    lowercase: body === body.toLowerCase(),
+  };
+}
+
+function nextGuid(previous: NormalizedGuid, used: ReadonlySet<string>): NormalizedGuid {
+  const modulus = 1n << 128n;
+  let value = (BigInt(`0x${previous.hex}`) + 1n) % modulus;
+  while (used.has(value.toString(16).toUpperCase().padStart(32, "0"))) {
+    value = (value + 1n) % modulus;
+  }
+  return { ...previous, hex: value.toString(16).toUpperCase().padStart(32, "0") };
+}
+
+function formatGuid(guid: NormalizedGuid): string {
+  const body = [
+    guid.hex.slice(0, 8),
+    guid.hex.slice(8, 12),
+    guid.hex.slice(12, 16),
+    guid.hex.slice(16, 20),
+    guid.hex.slice(20),
+  ].join("-");
+  const formatted = guid.lowercase ? body.toLowerCase() : body;
+  return guid.braces ? `{${formatted}}` : formatted;
 }
 
 interface ParsedFormula {
