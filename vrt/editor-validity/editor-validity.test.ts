@@ -25,11 +25,13 @@ import {
   deleteShape,
   deleteSlide,
   duplicateSlide,
+  groupShapes,
   moveSlide,
   readPptx,
   replaceImageBytes,
   setSlideBackground,
   type SourceConnector,
+  type SourceGroup,
   type SourceHandle,
   type SourceImage,
   type SourceParagraph,
@@ -37,6 +39,7 @@ import {
   type SourceShapeNode,
   type SourceTextBody,
   type SourceTextRun,
+  ungroupShape,
   updateChartData,
   writePptx,
 } from "../../packages/document/src/index.js";
@@ -221,6 +224,34 @@ const LO_EDITOR_VALIDITY_CASES = [
           ],
         }),
       );
+    },
+  },
+  {
+    name: "group shapes",
+    sourceFixture: "editor-validity-group-source.pptx",
+    expectedFixture: "editor-validity-group-expected.pptx",
+    createEditedPptx: (input: Uint8Array) => {
+      const source = readPptx(input);
+      const slideShapes = source.slides[0]?.shapes ?? [];
+      return writePptx(
+        groupShapes(source, [
+          requireHandle(findShapeByName(slideShapes, "Group Target 1").handle),
+          requireHandle(findShapeByName(slideShapes, "Group Target 2").handle),
+        ]),
+      );
+    },
+  },
+  {
+    name: "ungroup shape",
+    sourceFixture: "editor-validity-group-expected.pptx",
+    expectedFixture: "editor-validity-group-source.pptx",
+    createEditedPptx: (input: Uint8Array) => {
+      const source = readPptx(input);
+      const group = source.slides[0]?.shapes.find(
+        (shape): shape is SourceGroup => shape.kind === "group",
+      );
+      if (group?.handle === undefined) throw new Error("group fixture has no editable group");
+      return writePptx(ungroupShape(source, group.handle));
     },
   },
 ] as const;
