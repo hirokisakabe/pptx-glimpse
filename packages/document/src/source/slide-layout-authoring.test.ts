@@ -7,6 +7,7 @@ import {
   addEmptySlideFromLayout,
   addSlideLayout,
   asEmu,
+  cloneSlideLayout,
   createPptx,
   createPptxAuthoringSession,
   readPptx,
@@ -230,6 +231,38 @@ describe("addSlideLayout", () => {
     ]);
   });
 
+  it("writes the first inserted entry into an existing empty layout id list", () => {
+    const original = createPptx();
+    const master = requireValue(original.slideMasters[0]);
+    const layout = requireValue(original.slideLayouts[0]);
+    const decoder = new TextDecoder();
+    const encoder = new TextEncoder();
+    const source = {
+      ...original,
+      packageGraph: {
+        ...original.packageGraph,
+        rawParts: requireValue(original.packageGraph.rawParts).map((part) => {
+          if (part.partPath !== master.partPath || part.kind !== "binary") return part;
+          const xml = decoder
+            .decode(part.bytes)
+            .replace(/<p:sldLayoutIdLst>[\s\S]*?<\/p:sldLayoutIdLst>/, "<p:sldLayoutIdLst/>");
+          return { ...part, bytes: encoder.encode(xml) };
+        }),
+      },
+    };
+
+    const edited = cloneSlideLayout(source, requireValue(layout.handle), { name: "First Entry" });
+    const cloneEdit = requireValue(edited.edits?.at(-1));
+    if (cloneEdit.kind !== "cloneSlideLayout") throw new Error("clone edit was not recorded");
+    const masterXml = strFromU8(requireValue(unzipSync(writePptx(edited))[master.partPath]));
+    expect(masterXml).toContain(
+      `<p:sldLayoutId id="${cloneEdit.newLayoutNumericId}" r:id="${cloneEdit.newRelationshipId}"`,
+    );
+    expect(readPptx(writePptx(edited)).slideMasters[0]?.layoutPartPaths).toEqual([
+      cloneEdit.newLayoutPartPath,
+    ]);
+  });
+
   it("supports the immutable function flow when adding a slide from the new layout", () => {
     const source = createPptx();
     const masterHandle = requireValue(source.slideMasters[0]?.handle);
@@ -266,6 +299,253 @@ describe("addSlideLayout", () => {
       type: "cust",
       show: true,
     });
+  });
+});
+
+describe("cloneSlideLayout", () => {
+  it("preserves raw layout XML and child order while inserting a renamed clone", () => {
+    const input = readFileSync(
+      new URL("../../../../shared-fixtures/real-basic-theme.pptx", import.meta.url),
+    );
+    const source = readPptx(input);
+    const layout = requireValue(source.slideLayouts[0]);
+    const layoutHandle = requireValue(layout.handle);
+    const edited = cloneSlideLayout(source, layoutHandle, {
+      name: "Cloned & $ Layout",
+      insertAt: 0,
+    });
+    const cloned = requireValue(edited.slideLayouts[0]);
+
+    expect(cloned).toMatchObject({
+      name: "Cloned & $ Layout",
+      masterPartPath: layout.masterPartPath,
+    });
+    expect(cloned.shapes).toHaveLength(layout.shapes.length);
+    expect(cloned.partPath).not.toBe(layout.partPath);
+    expect(edited.slideMasters[0]?.layoutPartPaths[0]).toBe(cloned.partPath);
+
+    const originalFiles = unzipSync(input);
+    const output = writePptx(edited);
+    const outputFiles = unzipSync(output);
+    const originalXml = strFromU8(requireValue(originalFiles[layout.partPath]));
+    const clonedXml = strFromU8(requireValue(outputFiles[cloned.partPath]));
+    expect(clonedXml).toBe(
+      originalXml.replace('<p:cSld name="TITLE">', '<p:cSld name="Cloned &amp; $ Layout">'),
+    );
+
+    const reread = readPptx(output);
+    expect(reread.slideMasters[0]?.layoutPartPaths[0]).toBe(cloned.partPath);
+    expect(
+      reread.slideLayouts.find((candidate) => candidate.partPath === cloned.partPath),
+    ).toMatchObject({
+      partPath: cloned.partPath,
+      masterPartPath: layout.masterPartPath,
+      name: "Cloned & $ Layout",
+    });
+    expect(
+      reread.slideLayouts.find((candidate) => candidate.partPath === cloned.partPath)?.shapes,
+    ).toHaveLength(layout.shapes.length);
+  });
+
+  it("renames the real cSld element when a comment contains a decoy start tag", () => {
+    const input = readFileSync(
+      new URL("../../../../shared-fixtures/real-basic-theme.pptx", import.meta.url),
+    );
+    const original = readPptx(input);
+    const layout = requireValue(original.slideLayouts[0]);
+    const decoder = new TextDecoder();
+    const encoder = new TextEncoder();
+    const decoy = '<!-- <p:cSld name="DECOY"> -->';
+    const source = {
+      ...original,
+      packageGraph: {
+        ...original.packageGraph,
+        rawParts: requireValue(original.packageGraph.rawParts).map((part) => {
+          if (part.partPath !== layout.partPath || part.kind !== "binary") return part;
+          return {
+            ...part,
+            bytes: encoder.encode(decoder.decode(part.bytes).replace("<p:cSld", `${decoy}<p:cSld`)),
+          };
+        }),
+      },
+    };
+
+    const edited = cloneSlideLayout(source, requireValue(layout.handle), { name: "Real Name" });
+    const cloned = requireValue(
+      edited.slideLayouts.find((candidate) => candidate.name === "Real Name"),
+    );
+    const clonedXml = strFromU8(requireValue(unzipSync(writePptx(edited))[cloned.partPath]));
+    expect(clonedXml).toContain(decoy);
+    expect(clonedXml).toContain('<p:cSld name="Real Name">');
+    expect(clonedXml).not.toContain('<p:cSld name="DECOY" name="Real Name">');
+  });
+
+  it("rebases raw shape handles so the cloned layout accepts shape ordering edits", () => {
+    const input = readFileSync(
+      new URL("../../../../shared-fixtures/real-basic-theme.pptx", import.meta.url),
+    );
+    const original = readPptx(input);
+    const layout = requireValue(original.slideLayouts[0]);
+    const group = requireValue(layout.shapes.find((shape) => shape.kind === "group"));
+    if (group.kind !== "group") throw new Error("test fixture group shape is missing");
+    const rawShape = {
+      kind: "raw" as const,
+      nodeId: group.nodeId,
+      raw: requireValue(group.rawSidecars?.[0]),
+      handle: requireValue(group.handle),
+    };
+    const source = {
+      ...original,
+      slideLayouts: original.slideLayouts.map((candidate) =>
+        candidate.partPath === layout.partPath
+          ? {
+              ...candidate,
+              shapes: candidate.shapes.map((shape) => (shape === group ? rawShape : shape)),
+            }
+          : candidate,
+      ),
+    };
+    const session = createPptxAuthoringSession(source);
+    const clonedHandle = session.cloneSlideLayout(requireValue(layout.handle), {
+      name: "Raw Clone",
+    });
+    const cloned = requireValue(
+      session.source.slideLayouts.find((candidate) => candidate.partPath === clonedHandle.partPath),
+    );
+    const clonedRaw = requireValue(cloned.shapes.find((shape) => shape.kind === "raw"));
+
+    expect(clonedRaw.handle?.partPath).toBe(cloned.partPath);
+    const handles = cloned.shapes.map((shape) => requireValue(shape.handle));
+    const reversedHandles = [...handles].reverse();
+    session.target(clonedHandle).reorderShapes(reversedHandles);
+    const reread = readPptx(writePptx(session.source));
+    expect(
+      reread.slideLayouts
+        .find((candidate) => candidate.partPath === cloned.partPath)
+        ?.shapes.map((shape) => shape.nodeId),
+    ).toEqual(reversedHandles.map((handle) => handle.nodeId));
+  });
+
+  it("shares relationship targets, allocates collisions, and returns an authoring handle", () => {
+    let source = createPptx();
+    const masterHandle = requireValue(source.slideMasters[0]?.handle);
+    source = addSlideLayout(source, masterHandle, {
+      name: "Image Source",
+      background: { kind: "image", bytes: PNG_BYTES },
+    });
+    const sourceLayout = requireValue(source.slideLayouts.at(-1));
+    const sourceLayoutHandle = requireValue(sourceLayout.handle);
+    const mediaBefore = source.packageGraph.media;
+    const existingPartPaths = new Set(source.packageGraph.parts.map((part) => part.partPath));
+    const master = requireValue(source.slideMasters[0]);
+    const existingMasterRelationshipIds = new Set(
+      requireValue(
+        source.packageGraph.relationships.find(
+          (relationships) => relationships.sourcePartPath === master.partPath,
+        ),
+      ).relationships.map((relationship) => relationship.id),
+    );
+    const masterXmlBefore = strFromU8(requireValue(unzipSync(writePptx(source))[master.partPath]));
+    const existingNumericIds = new Set(
+      [...masterXmlBefore.matchAll(/<p:sldLayoutId id="(\d+)"/g)].map((match) => Number(match[1])),
+    );
+
+    source = cloneSlideLayout(source, sourceLayoutHandle, {
+      name: "Image Clone One",
+      insertAt: 1,
+    });
+    source = cloneSlideLayout(source, sourceLayoutHandle, {
+      name: "Image Clone Two",
+      insertAt: 3,
+    });
+
+    const clones = source.slideLayouts.filter((layout) => layout.name?.startsWith("Image Clone"));
+    expect(clones.map((layout) => layout.partPath)).toEqual([
+      "ppt/slideLayouts/slideLayout3.xml",
+      "ppt/slideLayouts/slideLayout4.xml",
+    ]);
+    expect(source.packageGraph.media).toEqual(mediaBefore);
+    const sourceRelationships = requireValue(
+      source.packageGraph.relationships.find(
+        (relationships) => relationships.sourcePartPath === sourceLayout.partPath,
+      ),
+    );
+    for (const clone of clones) {
+      const relationships = requireValue(
+        source.packageGraph.relationships.find(
+          (candidate) => candidate.sourcePartPath === clone.partPath,
+        ),
+      );
+      expect(relationships.relationships).toEqual(sourceRelationships.relationships);
+    }
+
+    const session = createPptxAuthoringSession(source);
+    const clonedHandle = session.cloneSlideLayout(sourceLayoutHandle, {
+      name: "Session Clone",
+      insertAt: 0,
+    });
+    session.target(clonedHandle).addShape({
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(1000000),
+      height: asEmu(500000),
+    });
+
+    const reread = readPptx(writePptx(session.source));
+    expect(
+      reread.slideLayouts.find((layout) => layout.partPath === clonedHandle.partPath),
+    ).toMatchObject({
+      partPath: clonedHandle.partPath,
+      name: "Session Clone",
+    });
+    expect(
+      reread.slideLayouts.find((layout) => layout.partPath === clonedHandle.partPath)?.shapes,
+    ).toHaveLength(sourceLayout.shapes.length + 1);
+    const cloneEdits = session.source.edits?.filter((edit) => edit.kind === "cloneSlideLayout");
+    expect(new Set(cloneEdits?.map((edit) => edit.newLayoutPartPath)).size).toBe(3);
+    expect(new Set(cloneEdits?.map((edit) => edit.newRelationshipId)).size).toBe(3);
+    expect(new Set(cloneEdits?.map((edit) => edit.newLayoutNumericId)).size).toBe(3);
+    for (const edit of requireValue(cloneEdits)) {
+      expect(existingPartPaths.has(edit.newLayoutPartPath)).toBe(false);
+      expect(existingMasterRelationshipIds.has(edit.newRelationshipId)).toBe(false);
+      expect(existingNumericIds.has(edit.newLayoutNumericId)).toBe(false);
+    }
+  });
+
+  it("inserts immediately after the source layout when insertAt is omitted", () => {
+    const original = createPptx();
+    const layout = requireValue(original.slideLayouts[0]);
+    const edited = cloneSlideLayout(original, requireValue(layout.handle), {
+      name: "Default Position",
+    });
+    const cloned = requireValue(
+      edited.slideLayouts.find((candidate) => candidate.name === "Default Position"),
+    );
+    expect(edited.slideMasters[0]?.layoutPartPaths).toEqual([layout.partPath, cloned.partPath]);
+  });
+
+  it("rejects invalid positions and layouts with pending raw-part edits", () => {
+    const original = createPptx();
+    const layout = requireValue(original.slideLayouts[0]);
+    const layoutHandle = requireValue(layout.handle);
+    for (const insertAt of [2, -1, 0.5, Number.NaN]) {
+      expect(() =>
+        cloneSlideLayout(original, layoutHandle, { name: "Invalid position", insertAt }),
+      ).toThrow("insertAt must be an integer insertion index");
+    }
+
+    const dirty = createPptxAuthoringSession(original);
+    dirty.target(layoutHandle).addShape({
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(1000000),
+      height: asEmu(500000),
+    });
+    expect(() => cloneSlideLayout(dirty.source, layoutHandle, { name: "Dirty clone" })).toThrow(
+      "pending dirty part edits is unsupported",
+    );
   });
 });
 

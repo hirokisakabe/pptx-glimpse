@@ -1,8 +1,11 @@
 import { getAttr, getChild, getChildArray, parseXml } from "../reader/xml.js";
-import { sourceHandlesEqual } from "./edit-descriptors.js";
+import { editReservedPartPaths, sourceHandlesEqual } from "./edit-descriptors.js";
 import {
+  cloneJson,
   copyBytes,
+  hasDirtyEditForPart,
   IMAGE_REL_TYPE,
+  insertAtReadonly,
   relativeTarget,
   requireRawBinaryPart,
   SLIDE_LAYOUT_REL_TYPE,
@@ -12,9 +15,11 @@ import type { MediaPart, PartRelationships, PptxSourceModel, Relationship } from
 import type {
   PartPath,
   PptxSourceModelAddSlideLayoutEdit,
+  PptxSourceModelCloneSlideLayoutEdit,
   RelationshipId,
   SourceBackground,
   SourceHandle,
+  SourceShapeNode,
   SourceSlideLayout,
 } from "./index.js";
 import { asRelationshipId } from "./index.js";
@@ -93,6 +98,13 @@ export interface AddSlideLayoutInput {
   readonly margin?: AddSlideLayoutMarginInput;
 }
 
+export interface CloneSlideLayoutInput {
+  /** Non-empty author-visible `p:cSld@name` for the cloned layout. */
+  readonly name: string;
+  /** Zero-based insertion position within the source layout's master. Defaults after the source. */
+  readonly insertAt?: number;
+}
+
 const SLIDE_LAYOUT_CONTENT_TYPE =
   "application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml";
 const SLIDE_MASTER_REL_TYPE =
@@ -160,14 +172,17 @@ export function addSlideLayout(
   const masterRelationships = requireMasterRelationships(source, master.partPath);
   const newLayoutPartPath = nextNumberedPartPath(
     source.packageGraph,
-    source.edits?.flatMap((edit) =>
-      edit.kind === "addSlideLayout" ? [edit.newLayoutPartPath] : [],
-    ) ?? [],
+    source.edits?.flatMap((edit) => editReservedPartPaths(edit)) ?? [],
     SLIDE_LAYOUT_PART_PREFIX,
     ".xml",
   );
   const newRelationshipId = nextRelationshipId(masterRelationships.relationships);
-  const idAllocation = layoutIdAllocation(source, master.partPath, master.layoutPartPaths);
+  const idAllocation = layoutIdAllocation(
+    source,
+    master.partPath,
+    master.layoutPartPaths,
+    "addSlideLayout",
+  );
   const newLayoutNumericId = idAllocation.newLayoutNumericId;
   const layoutMasterRelationship: Relationship = {
     id: asRelationshipId("rId1"),
@@ -279,6 +294,130 @@ export function addSlideLayout(
   };
 }
 
+/** Clones one preserved layout within its existing master and returns an updated source. */
+export function cloneSlideLayout(
+  source: PptxSourceModel,
+  layoutHandle: SourceHandle,
+  input: CloneSlideLayoutInput,
+): PptxSourceModel {
+  const normalized = normalizeCloneInput(input);
+  const sourceLayoutIndex = source.slideLayouts.findIndex((layout) =>
+    sourceHandlesEqual(layout.handle, layoutHandle),
+  );
+  const sourceLayout = source.slideLayouts[sourceLayoutIndex];
+  if (sourceLayout === undefined) {
+    throw new Error(
+      "cloneSlideLayout: slide layout handle was not found in PptxSourceModel source",
+    );
+  }
+  if (hasDirtyEditForPart(source.edits ?? [], sourceLayout.partPath)) {
+    throw new Error(
+      "cloneSlideLayout: cloning a slide layout with pending dirty part edits is unsupported",
+    );
+  }
+
+  const masterIndex = source.slideMasters.findIndex(
+    (master) => master.partPath === sourceLayout.masterPartPath,
+  );
+  const master = source.slideMasters[masterIndex];
+  if (master === undefined) {
+    throw new Error("cloneSlideLayout: source slide layout master was not found");
+  }
+  const sourceIndexInMaster = master.layoutPartPaths.indexOf(sourceLayout.partPath);
+  if (sourceIndexInMaster < 0) {
+    throw new Error("cloneSlideLayout: source slide layout is not listed by its master");
+  }
+  const insertAt = normalized.insertAt ?? sourceIndexInMaster + 1;
+  if (!Number.isInteger(insertAt) || insertAt < 0 || insertAt > master.layoutPartPaths.length) {
+    throw new Error(
+      "cloneSlideLayout: insertAt must be an integer insertion index in the master layout range",
+    );
+  }
+
+  const sourceRawLayout = requireRawBinaryPart(source, sourceLayout.partPath, "cloneSlideLayout");
+  const sourceRelationships = source.packageGraph.relationships.find(
+    (relationships) => relationships.sourcePartPath === sourceLayout.partPath,
+  );
+  if (sourceRelationships === undefined) {
+    throw new Error("cloneSlideLayout: source slide layout relationships were not found");
+  }
+  const sourceMasterRelationship = sourceRelationships.relationships.find(
+    (relationship) =>
+      relationship.type === SLIDE_MASTER_REL_TYPE &&
+      relationship.targetMode !== "External" &&
+      resolveInternalRelationshipTarget(sourceLayout.partPath, relationship) === master.partPath,
+  );
+  if (sourceMasterRelationship === undefined) {
+    throw new Error("cloneSlideLayout: source slide layout does not reference its master");
+  }
+
+  const masterRelationships = requireMasterRelationships(
+    source,
+    master.partPath,
+    "cloneSlideLayout",
+  );
+  const newLayoutPartPath = nextNumberedPartPath(
+    source.packageGraph,
+    source.edits?.flatMap((edit) => editReservedPartPaths(edit)) ?? [],
+    SLIDE_LAYOUT_PART_PREFIX,
+    ".xml",
+  );
+  const newRelationshipId = nextRelationshipId(masterRelationships.relationships);
+  const idAllocation = layoutIdAllocation(
+    source,
+    master.partPath,
+    master.layoutPartPaths,
+    "cloneSlideLayout",
+  );
+  const newLayoutRelationships: PartRelationships = {
+    sourcePartPath: newLayoutPartPath,
+    relationships: sourceRelationships.relationships.map((relationship) => {
+      const targetPartPath = resolveInternalRelationshipTarget(sourceLayout.partPath, relationship);
+      return targetPartPath === undefined
+        ? { ...relationship }
+        : { ...relationship, target: relativeTarget(newLayoutPartPath, targetPartPath) };
+    }),
+  };
+  const layoutContentType =
+    source.packageGraph.parts.find((part) => part.partPath === sourceLayout.partPath)
+      ?.contentType ?? SLIDE_LAYOUT_CONTENT_TYPE;
+  let packageGraph = addPackagePart(source.packageGraph, {
+    partPath: newLayoutPartPath,
+    contentType: layoutContentType,
+    bytes: cloneLayoutXmlWithName(sourceRawLayout.bytes, normalized.name),
+    relationships: newLayoutRelationships,
+  });
+  packageGraph = addPartRelationship(packageGraph, master.partPath, {
+    id: newRelationshipId,
+    type: SLIDE_LAYOUT_REL_TYPE,
+    target: relativeTarget(master.partPath, newLayoutPartPath),
+  });
+
+  const newLayoutPartPaths = insertAtReadonly(master.layoutPartPaths, insertAt, newLayoutPartPath);
+  const globalInsertAt = globalLayoutInsertIndex(source, master.layoutPartPaths, insertAt);
+  const newLayout = cloneLayoutModel(sourceLayout, newLayoutPartPath, normalized.name);
+  const edit = {
+    kind: "cloneSlideLayout",
+    masterPartPath: master.partPath,
+    sourceLayoutPartPath: sourceLayout.partPath,
+    newLayoutPartPath,
+    newRelationshipId,
+    newLayoutNumericId: idAllocation.newLayoutNumericId,
+    insertAt,
+    initialLayoutEntries: idAllocation.initialLayoutEntries,
+  } satisfies PptxSourceModelCloneSlideLayoutEdit;
+
+  return {
+    ...source,
+    slideLayouts: insertAtReadonly(source.slideLayouts, globalInsertAt, newLayout),
+    slideMasters: source.slideMasters.map((candidate, index) =>
+      index === masterIndex ? { ...candidate, layoutPartPaths: newLayoutPartPaths } : candidate,
+    ),
+    packageGraph,
+    edits: [...(source.edits ?? []), edit],
+  };
+}
+
 interface NormalizedAddSlideLayoutInput {
   readonly name: string;
   readonly type: SlideLayoutType;
@@ -322,6 +461,20 @@ function normalizeInput(input: AddSlideLayoutInput): NormalizedAddSlideLayoutInp
   };
 }
 
+function normalizeCloneInput(input: CloneSlideLayoutInput): CloneSlideLayoutInput {
+  if (typeof input !== "object" || input === null) {
+    throw new Error("cloneSlideLayout: input must be a slide layout clone object");
+  }
+  if (typeof input.name !== "string" || input.name.trim() === "") {
+    throw new Error("cloneSlideLayout: name must be a non-empty string");
+  }
+  assertValidXmlAttribute(input.name, "name", "cloneSlideLayout");
+  return {
+    name: input.name.trim(),
+    ...(input.insertAt === undefined ? {} : { insertAt: input.insertAt }),
+  };
+}
+
 function assertBackground(input: AddSlideLayoutBackgroundInput): void {
   if (typeof input !== "object" || input === null) {
     throw new Error("addSlideLayout: background must be a background object");
@@ -351,7 +504,11 @@ function assertMargin(value: unknown, field: string): void {
   }
 }
 
-function assertValidXmlAttribute(value: string, field: string): void {
+function assertValidXmlAttribute(
+  value: string,
+  field: string,
+  operationName = "addSlideLayout",
+): void {
   for (let index = 0; index < value.length; index += 1) {
     const codePoint = value.codePointAt(index);
     if (codePoint === undefined) continue;
@@ -362,7 +519,7 @@ function assertValidXmlAttribute(value: string, field: string): void {
       codePoint !== 0xfffe &&
       codePoint !== 0xffff;
     if (!valid) {
-      throw new Error(`addSlideLayout: ${field} contains a character forbidden in XML`);
+      throw new Error(`${operationName}: ${field} contains a character forbidden in XML`);
     }
     if (codePoint > 0xffff) index += 1;
   }
@@ -371,12 +528,13 @@ function assertValidXmlAttribute(value: string, field: string): void {
 function requireMasterRelationships(
   source: PptxSourceModel,
   masterPartPath: PartPath,
+  operationName = "addSlideLayout",
 ): PartRelationships {
   const relationships = source.packageGraph.relationships.find(
     (candidate) => candidate.sourcePartPath === masterPartPath,
   );
   if (relationships === undefined) {
-    throw new Error("addSlideLayout: slide master relationships were not found");
+    throw new Error(`${operationName}: slide master relationships were not found`);
   }
   return relationships;
 }
@@ -385,15 +543,16 @@ function layoutIdAllocation(
   source: PptxSourceModel,
   masterPartPath: PartPath,
   layoutPartPaths: readonly PartPath[],
+  operationName: "addSlideLayout" | "cloneSlideLayout",
 ): {
   readonly initialLayoutEntries: PptxSourceModelAddSlideLayoutEdit["initialLayoutEntries"];
   readonly newLayoutNumericId: number;
 } {
-  const rawPart = requireRawBinaryPart(source, masterPartPath, "addSlideLayout");
+  const rawPart = requireRawBinaryPart(source, masterPartPath, operationName);
   const root = parseXml(textDecoder.decode(rawPart.bytes));
   const master = getChild(root, "sldMaster");
   if (master === undefined) {
-    throw new Error("addSlideLayout: slide master part does not contain p:sldMaster root");
+    throw new Error(`${operationName}: slide master part does not contain p:sldMaster root`);
   }
   const used = new Set<number>();
   const layoutIdList = getChild(master, "sldLayoutIdLst");
@@ -402,8 +561,9 @@ function layoutIdAllocation(
     if (Number.isInteger(id) && id >= 0 && id <= MAX_UINT32) used.add(id);
   }
   const pendingEdits = (source.edits ?? []).filter(
-    (edit): edit is PptxSourceModelAddSlideLayoutEdit =>
-      edit.kind === "addSlideLayout" && edit.masterPartPath === masterPartPath,
+    (edit): edit is PptxSourceModelAddSlideLayoutEdit | PptxSourceModelCloneSlideLayoutEdit =>
+      (edit.kind === "addSlideLayout" || edit.kind === "cloneSlideLayout") &&
+      edit.masterPartPath === masterPartPath,
   );
   for (const edit of pendingEdits) {
     for (const entry of edit.initialLayoutEntries) used.add(entry.numericId);
@@ -411,13 +571,13 @@ function layoutIdAllocation(
   }
   const initialLayoutEntries =
     layoutIdList === undefined && pendingEdits.length === 0
-      ? allocateInitialLayoutEntries(source, masterPartPath, layoutPartPaths, used)
+      ? allocateInitialLayoutEntries(source, masterPartPath, layoutPartPaths, used, operationName)
       : [];
   for (const entry of initialLayoutEntries) used.add(entry.numericId);
   for (let candidate = FIRST_LAYOUT_NUMERIC_ID; candidate <= MAX_UINT32; candidate += 1) {
     if (!used.has(candidate)) return { initialLayoutEntries, newLayoutNumericId: candidate };
   }
-  throw new Error("addSlideLayout: no unused p:sldLayoutId ID remains");
+  throw new Error(`${operationName}: no unused p:sldLayoutId ID remains`);
 }
 
 function allocateInitialLayoutEntries(
@@ -425,8 +585,13 @@ function allocateInitialLayoutEntries(
   masterPartPath: PartPath,
   layoutPartPaths: readonly PartPath[],
   used: Set<number>,
+  operationName: "addSlideLayout" | "cloneSlideLayout",
 ): PptxSourceModelAddSlideLayoutEdit["initialLayoutEntries"] {
-  const relationships = requireMasterRelationships(source, masterPartPath).relationships;
+  const relationships = requireMasterRelationships(
+    source,
+    masterPartPath,
+    operationName,
+  ).relationships;
   let candidate = FIRST_LAYOUT_NUMERIC_ID;
   return layoutPartPaths.map((layoutPartPath) => {
     const relationship = relationships.find(
@@ -437,12 +602,12 @@ function allocateInitialLayoutEntries(
     );
     if (relationship === undefined) {
       throw new Error(
-        `addSlideLayout: layout relationship for '${layoutPartPath}' was not found in the slide master`,
+        `${operationName}: layout relationship for '${layoutPartPath}' was not found in the slide master`,
       );
     }
     while (used.has(candidate) && candidate <= MAX_UINT32) candidate += 1;
     if (candidate > MAX_UINT32) {
-      throw new Error("addSlideLayout: no unused p:sldLayoutId ID remains");
+      throw new Error(`${operationName}: no unused p:sldLayoutId ID remains`);
     }
     const entry = { relationshipId: relationship.id, numericId: candidate };
     used.add(candidate);
@@ -528,4 +693,143 @@ function escapeXmlAttribute(value: string): string {
     .replaceAll('"', "&quot;")
     .replaceAll("<", "&lt;")
     .replaceAll(">", "&gt;");
+}
+
+function cloneLayoutXmlWithName(bytes: Uint8Array, name: string): Uint8Array {
+  const xml = textDecoder.decode(bytes);
+  const elementStart = findXmlElementStart(xml, "cSld");
+  if (elementStart === undefined) {
+    throw new Error("cloneSlideLayout: source slide layout part does not contain p:cSld");
+  }
+  const tagEnd = findXmlStartTagEnd(xml, elementStart.nameEnd);
+  const startTag = xml.slice(elementStart.index, tagEnd + 1);
+  const escapedName = escapeXmlAttribute(name);
+  const namePattern = /(\sname\s*=\s*)(["'])([\s\S]*?)\2/;
+  const renamed = namePattern.test(startTag)
+    ? startTag.replace(namePattern, (_match, prefix: string) => `${prefix}"${escapedName}"`)
+    : startTag.replace(/\s*\/?\>$/, (ending) => ` name="${escapedName}"${ending}`);
+  return textEncoder.encode(xml.slice(0, elementStart.index) + renamed + xml.slice(tagEnd + 1));
+}
+
+function findXmlElementStart(
+  xml: string,
+  localName: string,
+): { readonly index: number; readonly nameEnd: number } | undefined {
+  let index = 0;
+  while ((index = xml.indexOf("<", index)) >= 0) {
+    if (xml.startsWith("<!--", index)) {
+      index = skipXmlSection(xml, index + 4, "-->");
+      continue;
+    }
+    if (xml.startsWith("<![CDATA[", index)) {
+      index = skipXmlSection(xml, index + 9, "]]>");
+      continue;
+    }
+    if (xml.startsWith("<?", index)) {
+      index = skipXmlSection(xml, index + 2, "?>");
+      continue;
+    }
+    if (xml.startsWith("<!", index)) {
+      index = findXmlStartTagEnd(xml, index + 2) + 1;
+      continue;
+    }
+    if (xml.startsWith("</", index)) {
+      index += 2;
+      continue;
+    }
+    const nameMatch = /^<([A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?)(?=[\s/>])/.exec(xml.slice(index));
+    if (nameMatch !== null) {
+      const qualifiedName = nameMatch[1];
+      if (qualifiedName?.split(":").at(-1) === localName) {
+        return { index, nameEnd: index + nameMatch[0].length };
+      }
+      index += nameMatch[0].length;
+      continue;
+    }
+    index += 1;
+  }
+  return undefined;
+}
+
+function skipXmlSection(xml: string, fromIndex: number, terminator: string): number {
+  const end = xml.indexOf(terminator, fromIndex);
+  if (end < 0) throw new Error("cloneSlideLayout: source slide layout XML is incomplete");
+  return end + terminator.length;
+}
+
+function findXmlStartTagEnd(xml: string, fromIndex: number): number {
+  let quote: string | undefined;
+  for (let index = fromIndex; index < xml.length; index += 1) {
+    const character = xml[index];
+    if (quote !== undefined) {
+      if (character === quote) quote = undefined;
+      continue;
+    }
+    if (character === '"' || character === "'") quote = character;
+    else if (character === ">") return index;
+  }
+  throw new Error("cloneSlideLayout: source slide layout p:cSld start tag is incomplete");
+}
+
+function globalLayoutInsertIndex(
+  source: PptxSourceModel,
+  masterLayoutPartPaths: readonly PartPath[],
+  insertAt: number,
+): number {
+  const following = masterLayoutPartPaths[insertAt];
+  if (following !== undefined) {
+    const index = source.slideLayouts.findIndex((layout) => layout.partPath === following);
+    if (index >= 0) return index;
+  }
+  const preceding = masterLayoutPartPaths[insertAt - 1];
+  if (preceding !== undefined) {
+    const index = source.slideLayouts.findIndex((layout) => layout.partPath === preceding);
+    if (index >= 0) return index + 1;
+  }
+  return source.slideLayouts.length;
+}
+
+function cloneLayoutModel(
+  sourceLayout: SourceSlideLayout,
+  partPath: PartPath,
+  name: string,
+): SourceSlideLayout {
+  const cloned = cloneJson(sourceLayout);
+  return {
+    ...cloned,
+    partPath,
+    name,
+    handle: { partPath },
+    shapes: cloned.shapes.map((shape) => withShapePartPath(shape, partPath)),
+  };
+}
+
+function withShapePartPath(shape: SourceShapeNode, partPath: PartPath): SourceShapeNode {
+  const handle = shape.handle === undefined ? undefined : { ...shape.handle, partPath };
+  if (shape.kind === "raw") return { ...shape, ...(handle === undefined ? {} : { handle }) };
+  if (shape.kind === "group") {
+    return {
+      ...shape,
+      ...(handle === undefined ? {} : { handle }),
+      children: shape.children.map((child) => withShapePartPath(child, partPath)),
+    };
+  }
+  if (shape.kind !== "shape" || shape.textBody === undefined) {
+    return { ...shape, ...(handle === undefined ? {} : { handle }) };
+  }
+  return {
+    ...shape,
+    ...(handle === undefined ? {} : { handle }),
+    textBody: {
+      ...shape.textBody,
+      paragraphs: shape.textBody.paragraphs.map((paragraph) => ({
+        ...paragraph,
+        ...(paragraph.handle === undefined ? {} : { handle: { ...paragraph.handle, partPath } }),
+        runs: paragraph.runs.map((run) => ({
+          ...run,
+          ...(run.handle === undefined ? {} : { handle: { ...run.handle, partPath } }),
+        })),
+      })),
+    },
+  };
 }

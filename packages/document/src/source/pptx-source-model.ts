@@ -88,6 +88,7 @@ export type PptxSourceModelEdit =
   | PptxSourceModelDeleteShapeEdit
   | PptxSourceModelReplaceImageEdit
   | PptxSourceModelAddSlideLayoutEdit
+  | PptxSourceModelCloneSlideLayoutEdit
   | PptxSourceModelAddEmptySlideFromLayoutEdit
   | PptxSourceModelDuplicateSlideEdit
   | PptxSourceModelMoveSlideEdit
@@ -307,6 +308,22 @@ export interface PptxSourceModelAddSlideLayoutEdit {
   readonly newLayoutPartPath: PartPath;
   readonly newRelationshipId: RelationshipId;
   readonly newLayoutNumericId: number;
+  /** Existing relationship-order layouts materialized when the master had no id list. */
+  readonly initialLayoutEntries: readonly {
+    readonly relationshipId: RelationshipId;
+    readonly numericId: number;
+  }[];
+}
+
+export interface PptxSourceModelCloneSlideLayoutEdit {
+  readonly kind: "cloneSlideLayout";
+  readonly masterPartPath: PartPath;
+  readonly sourceLayoutPartPath: PartPath;
+  readonly newLayoutPartPath: PartPath;
+  readonly newRelationshipId: RelationshipId;
+  readonly newLayoutNumericId: number;
+  /** Zero-based insertion position within the master's layout id list. */
+  readonly insertAt: number;
   /** Existing relationship-order layouts materialized when the master had no id list. */
   readonly initialLayoutEntries: readonly {
     readonly relationshipId: RelationshipId;
