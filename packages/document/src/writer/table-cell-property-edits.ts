@@ -68,8 +68,13 @@ interface EnsuredXmlChild {
 }
 
 function ensureCellProperties(cell: XmlNode): EnsuredXmlChild {
-  for (const [key, value] of Object.entries(cell)) {
-    if (key.startsWith("@_") || localName(key) !== "tcPr") continue;
+  const matches = childEntriesByLocalName(cell, "tcPr");
+  if (matches.length > 1) {
+    throw new Error("writePptx: table cell has unsupported duplicate or malformed tcPr XML");
+  }
+  const match = matches[0];
+  if (match !== undefined) {
+    const [key, value] = match;
     if (isXmlNode(value)) return { node: value, key };
     if (Array.isArray(value) || value !== "") {
       throw new Error("writePptx: table cell has unsupported duplicate or malformed tcPr XML");
@@ -89,6 +94,10 @@ function ensureCellProperties(cell: XmlNode): EnsuredXmlChild {
 
 function isXmlNode(value: unknown): value is XmlNode {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function childEntriesByLocalName(node: XmlNode, name: string): [string, unknown][] {
+  return Object.entries(node).filter(([key]) => !key.startsWith("@_") && localName(key) === name);
 }
 
 function clearCellProperty(
@@ -139,8 +148,13 @@ function applyBorderPatch(
 }
 
 function ensureBorderLine(tcPr: XmlNode, tcPrKey: string, local: string): EnsuredXmlChild {
-  for (const [key, value] of Object.entries(tcPr)) {
-    if (key.startsWith("@_") || localName(key) !== local) continue;
+  const matches = childEntriesByLocalName(tcPr, local);
+  if (matches.length > 1) {
+    throw new Error(`writePptx: table cell has unsupported duplicate or malformed ${local} XML`);
+  }
+  const match = matches[0];
+  if (match !== undefined) {
+    const [key, value] = match;
     if (isXmlNode(value)) return { node: value, key };
     if (Array.isArray(value) || value !== "") {
       throw new Error(`writePptx: table cell has unsupported duplicate or malformed ${local} XML`);

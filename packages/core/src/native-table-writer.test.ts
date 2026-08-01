@@ -72,8 +72,25 @@ describe("native table writer rendering", () => {
     const report = await renderPptxSourceModelToSvg(reread, { skipSystemFonts: true });
     const svg = report.slides[0].svg;
     const rereadTable = reread.slides[0].shapes.find((shape) => shape.kind === "table");
+    const targetCell = rereadTable?.table.rows[0].cells[0];
+    const siblingCell = rereadTable?.table.rows[0].cells[1];
 
-    expect(rereadTable?.table.rows[0].cells[0].marginLeft).toBe(asEmu(457200));
+    expect(targetCell).toMatchObject({
+      fill: { kind: "solid", color: { kind: "srgb", hex: "F4B183" } },
+      borders: {
+        bottom: {
+          width: 25400,
+          fill: { kind: "solid", color: { kind: "srgb", hex: "C00000" } },
+        },
+      },
+      marginLeft: 457200,
+    });
+    expect(siblingCell?.fill).toBeUndefined();
+    expect(svg).toContain('<rect x="0" y="0" width="288" height="96" fill="#f4b183"/>');
+    expect(svg).toContain(
+      '<line x1="0" y1="96" x2="288" y2="96" stroke-width="2.6666666666666665" stroke="#c00000"/>',
+    );
+    expect(svg).toContain('<tspan x="48" dy="0" text-anchor="start" >Edited cell</tspan>');
     expect(svg).toContain("Edited cell");
     expect(svg).toContain("#f4b183");
     expect(svg).toContain("#c00000");

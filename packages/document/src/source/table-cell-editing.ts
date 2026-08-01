@@ -39,6 +39,9 @@ const SET_PROPERTY_KEYS: ReadonlySet<string> = new Set([
 ]);
 const BORDER_SIDE_KEYS: ReadonlySet<string> = new Set(["top", "bottom", "left", "right"]);
 const BORDER_PROPERTY_KEYS: ReadonlySet<string> = new Set(["width", "fill"]);
+const NONE_FILL_KEYS: ReadonlySet<string> = new Set(["kind"]);
+const SOLID_FILL_KEYS: ReadonlySet<string> = new Set(["kind", "color"]);
+const SRGB_COLOR_KEYS: ReadonlySet<string> = new Set(["kind", "hex"]);
 
 type MutableTableCell = { -readonly [K in keyof SourceTableCell]: SourceTableCell[K] };
 type MutableCellBorders = { -readonly [K in keyof SourceCellBorders]: SourceCellBorders[K] };
@@ -346,13 +349,31 @@ function assertBorder(border: EditableTableCellBorder, operation: string, path: 
 
 function assertFill(fill: unknown, operation: string, path: string): void {
   if (!isRecord(fill)) throw new Error(`${operation}: ${path} must be a fill object`);
-  if (fill.kind === "none") return;
+  if (fill.kind === "none") {
+    assertOnlyKeys(fill, NONE_FILL_KEYS, operation, path);
+    return;
+  }
   if (fill.kind !== "solid")
     throw new Error(`${operation}: ${path} supports only solid and none fills`);
+  assertOnlyKeys(fill, SOLID_FILL_KEYS, operation, path);
   if (!isRecord(fill.color) || fill.color.kind !== "srgb")
     throw new Error(`${operation}: ${path} supports only srgb solid colors`);
+  assertOnlyKeys(fill.color, SRGB_COLOR_KEYS, operation, `${path}.color`);
   if (typeof fill.color.hex !== "string" || !/^[0-9A-Fa-f]{6}$/.test(fill.color.hex)) {
     throw new Error(`${operation}: ${path} srgb color must be a 6-digit hex value`);
+  }
+}
+
+function assertOnlyKeys(
+  value: Record<string, unknown>,
+  allowed: ReadonlySet<string>,
+  operation: string,
+  path: string,
+): void {
+  for (const property of Object.keys(value)) {
+    if (!allowed.has(property)) {
+      throw new Error(`${operation}: ${path}.${property} is not a supported fill property`);
+    }
   }
 }
 
@@ -372,5 +393,18 @@ function hasSetValues(properties: EditableTableCellProperties): boolean {
 }
 
 function stableValueEqual(left: unknown, right: unknown): boolean {
-  return JSON.stringify(left) === JSON.stringify(right);
+  if (Object.is(left, right)) return true;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right)) return false;
+    if (left.length !== right.length) return false;
+    return left.every((value, index) => stableValueEqual(value, right[index]));
+  }
+  if (isRecord(left) || isRecord(right)) {
+    if (!isRecord(left) || !isRecord(right)) return false;
+    const leftKeys = Object.keys(left).sort();
+    const rightKeys = Object.keys(right).sort();
+    if (!stableValueEqual(leftKeys, rightKeys)) return false;
+    return leftKeys.every((key) => stableValueEqual(left[key], right[key]));
+  }
+  return false;
 }

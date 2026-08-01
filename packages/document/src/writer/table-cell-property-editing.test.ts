@@ -136,6 +136,18 @@ describe("writePptx - existing table cell property edits", () => {
         unsafeFixtureAssertion<EditableTableCellProperties>({ fill: null }),
       ),
     ).toThrow("fill must be a fill object");
+    expect(() =>
+      setTableCellProperties(
+        source,
+        address,
+        unsafeFixtureAssertion<EditableTableCellProperties>({
+          fill: {
+            kind: "solid",
+            color: { kind: "srgb", hex: "D9EAF7", alpha: 50 },
+          },
+        }),
+      ),
+    ).toThrow("fill.color.alpha is not a supported fill property");
     expect(source.edits).toBeUndefined();
     expect(firstTable(source).table.rows[0].cells[0].fill).toMatchObject({
       kind: "solid",
@@ -265,6 +277,74 @@ describe("writePptx - existing table cell property edits", () => {
       ),
     ).toThrow("tables inside AlternateContent are not supported");
     expect(source.edits).toBeUndefined();
+  });
+
+  it("rejects duplicate cell property and border elements with different prefixes", () => {
+    const slidePath = "ppt/slides/slide1.xml";
+    const drawingNamespace = "http://schemas.openxmlformats.org/drawingml/2006/main";
+    const buildDuplicateSource = (xmlPatch: (xml: string) => string) => {
+      const files = unzipSync(buildFixture());
+      const slideXml = decoder
+        .decode(files[slidePath])
+        .replace(
+          `xmlns:a="${drawingNamespace}"`,
+          `xmlns:a="${drawingNamespace}" xmlns:d="${drawingNamespace}"`,
+        );
+      files[slidePath] = encoder.encode(xmlPatch(slideXml));
+      return readPptx(zipSync(files));
+    };
+
+    const duplicateProperties = buildDuplicateSource((xml) =>
+      xml.replace("</a:tcPr>", "</a:tcPr><d:tcPr/>"),
+    );
+    const propertiesTable = firstTable(duplicateProperties);
+    const propertiesEdited = setTableCellProperties(
+      duplicateProperties,
+      { tableHandle: requireHandle(propertiesTable.handle), rowIndex: 0, cellIndex: 0 },
+      { marginLeft: asEmu(500) },
+    );
+    expect(() => writePptx(propertiesEdited)).toThrow("duplicate or malformed tcPr XML");
+
+    const duplicateBorder = buildDuplicateSource((xml) =>
+      xml.replace("</a:lnL>", "</a:lnL><a:lnR/><d:lnR/>"),
+    );
+    const borderTable = firstTable(duplicateBorder);
+    const borderEdited = setTableCellProperties(
+      duplicateBorder,
+      { tableHandle: requireHandle(borderTable.handle), rowIndex: 0, cellIndex: 0 },
+      { borders: { right: { width: asEmu(12700) } } },
+    );
+    expect(() => writePptx(borderEdited)).toThrow("duplicate or malformed lnR XML");
+  });
+
+  it("edits a Table nested in a group while preserving its sibling cells", () => {
+    const files = unzipSync(buildFixture());
+    const slidePath = "ppt/slides/slide1.xml";
+    files[slidePath] = encoder.encode(
+      decoder
+        .decode(files[slidePath])
+        .replace(
+          /(<p:graphicFrame>.*<\/p:graphicFrame>)/,
+          '<p:grpSp><p:nvGrpSpPr><p:cNvPr id="20" name="Table Group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="9144000" cy="5143500"/><a:chOff x="0" y="0"/><a:chExt cx="9144000" cy="5143500"/></a:xfrm></p:grpSpPr>$1</p:grpSp>',
+        ),
+    );
+    const source = readPptx(zipSync(files));
+    const table = firstTable(source);
+    const edited = setTableCellProperties(
+      source,
+      { tableHandle: requireHandle(table.handle), rowIndex: 1, cellIndex: 0 },
+      { fill: { kind: "solid", color: { kind: "srgb", hex: "70AD47" } } },
+    );
+    const reread = readPptx(writePptx(edited));
+
+    expect(reread.slides[0].shapes[0]?.kind).toBe("group");
+    expect(firstTable(reread).table.rows[1].cells[0].fill).toMatchObject({
+      kind: "solid",
+      color: { hex: "70AD47" },
+    });
+    expect(firstTable(reread).table.rows[1].cells[1].textBody?.paragraphs[0].runs[0].text).toBe(
+      "Sibling B",
+    );
   });
 });
 
