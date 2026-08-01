@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import JSZip from "jszip";
 import sharp from "sharp";
 
 import {
@@ -419,6 +420,68 @@ describeOrSkip("LibreOffice slide topology validity", { timeout: 120000 }, () =>
 });
 
 describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 120000 }, () => {
+  it("opens a from-scratch PPTX with a customized theme", async () => {
+    let source = createPptx({
+      theme: {
+        name: "LibreOffice Theme",
+        colorScheme: { accent1: "0067C5", accent2: "F59E0B" },
+        fontScheme: {
+          major: {
+            latin: "Liberation Sans",
+            eastAsian: "Noto Sans CJK JP",
+            complexScript: "Liberation Sans",
+          },
+          minor: {
+            latin: "Liberation Sans",
+            eastAsian: "Noto Sans CJK JP",
+            complexScript: "Liberation Sans",
+          },
+        },
+      },
+    });
+    const handle = requireHandle(source.slides[0]?.handle);
+    source = addShape(source, handle, {
+      geometry: { kind: "preset", preset: "roundRect" },
+      offsetX: asEmu(914400),
+      offsetY: asEmu(914400),
+      width: asEmu(5486400),
+      height: asEmu(1828800),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "0067C5" } },
+      paragraphs: [
+        {
+          runs: [
+            {
+              text: "Customized theme / カスタムテーマ",
+              properties: {
+                fontFace: "+mj-lt",
+                fontSize: asPt(24),
+                color: { kind: "srgb", hex: "FFFFFF" },
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    const archive = await JSZip.loadAsync(writePptx(source));
+    const slidePart = archive.file("ppt/slides/slide1.xml");
+    if (slidePart === null) throw new Error("written PPTX should contain slide1.xml");
+    const slideXml = (await slidePart.async("string")).replace(
+      `<a:srgbClr val="0067C5"/>`,
+      `<a:schemeClr val="accent1"/>`,
+    );
+    if (!slideXml.includes(`<a:schemeClr val="accent1"/>`)) {
+      throw new Error("custom-theme validity fixture should reference accent1");
+    }
+    archive.file("ppt/slides/slide1.xml", slideXml);
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-from-scratch-custom-theme.pptx",
+      await archive.generateAsync({ type: "uint8array" }),
+    );
+  });
+
   it("opens from-scratch PPTX with native charts and embedded workbooks", () => {
     const source = createPptx();
     const handle = requireHandle(source.slides[0]?.handle);

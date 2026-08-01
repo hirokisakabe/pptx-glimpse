@@ -41,6 +41,52 @@ export interface CreatePptxOptions {
   readonly slideSize?: SlideSize;
   readonly slideMaster?: CreatePptxSlideMasterOptions;
   readonly slideLayout?: CreatePptxSlideLayoutOptions;
+  readonly theme?: CreatePptxThemeOptions;
+}
+
+export interface CreatePptxThemeOptions {
+  /** Author-visible theme name. Defaults to `Office Theme`. */
+  readonly name?: string;
+  readonly colorScheme?: CreatePptxThemeColorSchemeOptions;
+  readonly fontScheme?: CreatePptxThemeFontSchemeOptions;
+}
+
+/**
+ * Theme color scheme. Every field is optional and falls back independently to the
+ * default Office color scheme used by `createPptx()`.
+ */
+export interface CreatePptxThemeColorSchemeOptions {
+  readonly name?: string;
+  readonly dk1?: string;
+  readonly lt1?: string;
+  readonly dk2?: string;
+  readonly lt2?: string;
+  readonly accent1?: string;
+  readonly accent2?: string;
+  readonly accent3?: string;
+  readonly accent4?: string;
+  readonly accent5?: string;
+  readonly accent6?: string;
+  readonly hlink?: string;
+  readonly folHlink?: string;
+}
+
+export interface CreatePptxThemeFontSchemeOptions {
+  readonly name?: string;
+  readonly major?: CreatePptxThemeFontSetOptions;
+  readonly minor?: CreatePptxThemeFontSetOptions;
+}
+
+/**
+ * Script-specific theme fonts. Latin defaults to Aptos Display (major) or Aptos
+ * (minor). East Asian and complex-script fonts default to the OOXML empty typeface,
+ * which delegates selection to the consuming Office application. An explicit empty
+ * string is therefore accepted for `eastAsian` and `complexScript`, but not `latin`.
+ */
+export interface CreatePptxThemeFontSetOptions {
+  readonly latin?: string;
+  readonly eastAsian?: string;
+  readonly complexScript?: string;
 }
 
 export type CreatePptxBackground =
@@ -71,7 +117,62 @@ interface NormalizedCreatePptxOptions {
   readonly background?: CreatePptxBackground;
   readonly margin?: SlideLayoutMargin;
   readonly backgroundImage?: SupportedImageType;
+  readonly theme: NormalizedTheme;
 }
+
+interface NormalizedTheme {
+  readonly name: string;
+  readonly colorSchemeName: string;
+  readonly colors: Readonly<Record<ThemeColorSlot, NormalizedThemeColor>>;
+  readonly fontSchemeName: string;
+  readonly majorFont: NormalizedThemeFontSet;
+  readonly minorFont: NormalizedThemeFontSet;
+}
+
+interface NormalizedThemeFontSet {
+  readonly latin: string;
+  readonly eastAsian: string;
+  readonly complexScript: string;
+}
+
+type NormalizedThemeColor =
+  | { readonly kind: "srgb"; readonly hex: string }
+  | {
+      readonly kind: "system";
+      readonly value: "window" | "windowText";
+      readonly lastColor: string;
+    };
+
+const THEME_COLOR_SLOTS = [
+  "dk1",
+  "lt1",
+  "dk2",
+  "lt2",
+  "accent1",
+  "accent2",
+  "accent3",
+  "accent4",
+  "accent5",
+  "accent6",
+  "hlink",
+  "folHlink",
+] as const;
+type ThemeColorSlot = (typeof THEME_COLOR_SLOTS)[number];
+
+const DEFAULT_THEME_COLORS: Readonly<Record<ThemeColorSlot, NormalizedThemeColor>> = {
+  dk1: { kind: "system", value: "windowText", lastColor: "000000" },
+  lt1: { kind: "system", value: "window", lastColor: "FFFFFF" },
+  dk2: { kind: "srgb", hex: "44546A" },
+  lt2: { kind: "srgb", hex: "E7E6E6" },
+  accent1: { kind: "srgb", hex: "4472C4" },
+  accent2: { kind: "srgb", hex: "ED7D31" },
+  accent3: { kind: "srgb", hex: "A5A5A5" },
+  accent4: { kind: "srgb", hex: "FFC000" },
+  accent5: { kind: "srgb", hex: "5B9BD5" },
+  accent6: { kind: "srgb", hex: "70AD47" },
+  hlink: { kind: "srgb", hex: "0563C1" },
+  folHlink: { kind: "srgb", hex: "954F72" },
+};
 
 const textEncoder = new TextEncoder();
 
@@ -182,7 +283,7 @@ export function createPptx(options: CreatePptxOptions = {}): PptxSourceModel {
         handle: { partPath: SLIDE_MASTER_PART },
       },
     ],
-    themes: [createThemeSource()],
+    themes: [createThemeSource(normalized.theme)],
     diagnostics: [],
   };
 }
@@ -217,6 +318,7 @@ function normalizeOptions(options: CreatePptxOptions): NormalizedCreatePptxOptio
     assertFiniteEmu(margin.top, "slideLayout.margin.top");
     assertFiniteEmu(margin.bottom, "slideLayout.margin.bottom");
   }
+  const theme = normalizeTheme(options.theme);
   return {
     slideSize,
     masterName,
@@ -224,7 +326,65 @@ function normalizeOptions(options: CreatePptxOptions): NormalizedCreatePptxOptio
     ...(background !== undefined ? { background } : {}),
     ...(margin !== undefined ? { margin } : {}),
     ...(backgroundImage !== undefined ? { backgroundImage } : {}),
+    theme,
   };
+}
+
+function normalizeTheme(theme: CreatePptxThemeOptions | undefined): NormalizedTheme {
+  const colorScheme = theme?.colorScheme;
+  const color = (slot: ThemeColorSlot): NormalizedThemeColor => {
+    const value = colorScheme?.[slot];
+    if (value === undefined) return DEFAULT_THEME_COLORS[slot];
+    assertHexColor(value, `theme.colorScheme.${slot}`);
+    return { kind: "srgb", hex: value.toUpperCase() };
+  };
+  const colors = {
+    dk1: color("dk1"),
+    lt1: color("lt1"),
+    dk2: color("dk2"),
+    lt2: color("lt2"),
+    accent1: color("accent1"),
+    accent2: color("accent2"),
+    accent3: color("accent3"),
+    accent4: color("accent4"),
+    accent5: color("accent5"),
+    accent6: color("accent6"),
+    hlink: color("hlink"),
+    folHlink: color("folHlink"),
+  } satisfies Readonly<Record<ThemeColorSlot, NormalizedThemeColor>>;
+
+  return {
+    name: normalizeName(theme?.name, "theme.name", "Office Theme"),
+    colorSchemeName: normalizeName(colorScheme?.name, "theme.colorScheme.name", "Office"),
+    colors,
+    fontSchemeName: normalizeName(theme?.fontScheme?.name, "theme.fontScheme.name", "Office"),
+    majorFont: normalizeThemeFontSet(theme?.fontScheme?.major, "major", "Aptos Display"),
+    minorFont: normalizeThemeFontSet(theme?.fontScheme?.minor, "minor", "Aptos"),
+  };
+}
+
+function normalizeThemeFontSet(
+  font: CreatePptxThemeFontSetOptions | undefined,
+  kind: "major" | "minor",
+  defaultLatin: string,
+): NormalizedThemeFontSet {
+  return {
+    latin: normalizeName(font?.latin, `theme.fontScheme.${kind}.latin`, defaultLatin),
+    eastAsian: normalizeOptionalTypeface(font?.eastAsian, `theme.fontScheme.${kind}.eastAsian`),
+    complexScript: normalizeOptionalTypeface(
+      font?.complexScript,
+      `theme.fontScheme.${kind}.complexScript`,
+    ),
+  };
+}
+
+function normalizeOptionalTypeface(value: string | undefined, field: string): string {
+  if (value === undefined) return "";
+  if (typeof value !== "string") {
+    throw new Error(`createPptx: ${field} must be a string`);
+  }
+  assertValidXmlName(value, field);
+  return value.trim();
 }
 
 function normalizeName(value: string | undefined, field: string, fallback: string): string {
@@ -253,8 +413,8 @@ function assertValidXmlName(value: string, field: string): void {
   }
 }
 
-function assertHexColor(value: string, field: string): void {
-  if (!/^[0-9A-Fa-f]{6}$/.test(value)) {
+function assertHexColor(value: unknown, field: string): asserts value is string {
+  if (typeof value !== "string" || !/^[0-9A-Fa-f]{6}$/.test(value)) {
     throw new Error(`createPptx: ${field} must be a 6-digit RGB color`);
   }
 }
@@ -298,33 +458,20 @@ function createDefaultColorMap(): SourceColorMap {
   };
 }
 
-function createThemeSource(): SourceTheme {
+function createThemeSource(theme: NormalizedTheme): SourceTheme {
   return {
     partPath: THEME_PART,
-    name: "Office Theme",
+    name: theme.name,
     colorScheme: {
-      colors: {
-        dk1: { kind: "system", value: "windowText", lastColor: "000000" },
-        lt1: { kind: "system", value: "window", lastColor: "FFFFFF" },
-        dk2: { kind: "srgb", hex: "44546A" },
-        lt2: { kind: "srgb", hex: "E7E6E6" },
-        accent1: { kind: "srgb", hex: "4472C4" },
-        accent2: { kind: "srgb", hex: "ED7D31" },
-        accent3: { kind: "srgb", hex: "A5A5A5" },
-        accent4: { kind: "srgb", hex: "FFC000" },
-        accent5: { kind: "srgb", hex: "5B9BD5" },
-        accent6: { kind: "srgb", hex: "70AD47" },
-        hlink: { kind: "srgb", hex: "0563C1" },
-        folHlink: { kind: "srgb", hex: "954F72" },
-      },
+      colors: theme.colors,
     },
     fontScheme: {
-      majorLatin: "Aptos Display",
-      minorLatin: "Aptos",
-      majorEastAsian: "",
-      minorEastAsian: "",
-      majorComplexScript: "",
-      minorComplexScript: "",
+      majorLatin: theme.majorFont.latin,
+      minorLatin: theme.minorFont.latin,
+      majorEastAsian: theme.majorFont.eastAsian,
+      minorEastAsian: theme.minorFont.eastAsian,
+      majorComplexScript: theme.majorFont.complexScript,
+      minorComplexScript: theme.minorFont.complexScript,
     },
     formatScheme: createThemeFormatScheme(),
     handle: { partPath: THEME_PART },
@@ -479,7 +626,7 @@ function createRawParts(options: NormalizedCreatePptxOptions): RawPackagePart[] 
     rawXml(SLIDE_PART, SLIDE_CONTENT_TYPE, slideXml()),
     rawXml(SLIDE_LAYOUT_PART, SLIDE_LAYOUT_CONTENT_TYPE, slideLayoutXml(options.layoutName)),
     rawXml(SLIDE_MASTER_PART, SLIDE_MASTER_CONTENT_TYPE, slideMasterXml(options)),
-    rawXml(THEME_PART, THEME_CONTENT_TYPE, themeXml()),
+    rawXml(THEME_PART, THEME_CONTENT_TYPE, themeXml(options.theme)),
     rawXml(APP_PROPS_PART, APP_PROPS_CONTENT_TYPE, appPropertiesXml(options.slideSize)),
     rawXml(CORE_PROPS_PART, CORE_PROPS_CONTENT_TYPE, corePropertiesXml()),
   ];
@@ -625,41 +772,49 @@ function emptyGroupShapeProperties(): string {
   );
 }
 
-function themeXml(): string {
+function themeXml(theme: NormalizedTheme): string {
   return xmlPart(
     `<a:theme xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ` +
-      `name="Office Theme">` +
-      `<a:themeElements>${colorSchemeXml()}${fontSchemeXml()}${formatSchemeXml()}</a:themeElements>` +
+      `name="${escapeXmlAttribute(theme.name)}">` +
+      `<a:themeElements>${colorSchemeXml(theme)}${fontSchemeXml(theme)}${formatSchemeXml()}</a:themeElements>` +
       `<a:objectDefaults/><a:extraClrSchemeLst/>` +
       `</a:theme>`,
   );
 }
 
-function colorSchemeXml(): string {
+function colorSchemeXml(theme: NormalizedTheme): string {
   return (
-    `<a:clrScheme name="Office">` +
-    `<a:dk1><a:sysClr val="windowText" lastClr="000000"/></a:dk1>` +
-    `<a:lt1><a:sysClr val="window" lastClr="FFFFFF"/></a:lt1>` +
-    `<a:dk2><a:srgbClr val="44546A"/></a:dk2>` +
-    `<a:lt2><a:srgbClr val="E7E6E6"/></a:lt2>` +
-    `<a:accent1><a:srgbClr val="4472C4"/></a:accent1>` +
-    `<a:accent2><a:srgbClr val="ED7D31"/></a:accent2>` +
-    `<a:accent3><a:srgbClr val="A5A5A5"/></a:accent3>` +
-    `<a:accent4><a:srgbClr val="FFC000"/></a:accent4>` +
-    `<a:accent5><a:srgbClr val="5B9BD5"/></a:accent5>` +
-    `<a:accent6><a:srgbClr val="70AD47"/></a:accent6>` +
-    `<a:hlink><a:srgbClr val="0563C1"/></a:hlink>` +
-    `<a:folHlink><a:srgbClr val="954F72"/></a:folHlink>` +
+    `<a:clrScheme name="${escapeXmlAttribute(theme.colorSchemeName)}">` +
+    THEME_COLOR_SLOTS.map(
+      (slot) => `<a:${slot}>${themeColorXml(theme.colors[slot])}</a:${slot}>`,
+    ).join("") +
     `</a:clrScheme>`
   );
 }
 
-function fontSchemeXml(): string {
+function themeColorXml(color: NormalizedThemeColor): string {
+  return color.kind === "srgb"
+    ? `<a:srgbClr val="${color.hex}"/>`
+    : `<a:sysClr val="${color.value}" lastClr="${color.lastColor}"/>`;
+}
+
+function fontSchemeXml(theme: NormalizedTheme): string {
   return (
-    `<a:fontScheme name="Office">` +
-    `<a:majorFont><a:latin typeface="Aptos Display"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont>` +
-    `<a:minorFont><a:latin typeface="Aptos"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont>` +
+    `<a:fontScheme name="${escapeXmlAttribute(theme.fontSchemeName)}">` +
+    themeFontSetXml("majorFont", theme.majorFont) +
+    themeFontSetXml("minorFont", theme.minorFont) +
     `</a:fontScheme>`
+  );
+}
+
+function themeFontSetXml(
+  elementName: "majorFont" | "minorFont",
+  font: NormalizedThemeFontSet,
+): string {
+  return (
+    `<a:${elementName}><a:latin typeface="${escapeXmlAttribute(font.latin)}"/>` +
+    `<a:ea typeface="${escapeXmlAttribute(font.eastAsian)}"/>` +
+    `<a:cs typeface="${escapeXmlAttribute(font.complexScript)}"/></a:${elementName}>`
   );
 }
 

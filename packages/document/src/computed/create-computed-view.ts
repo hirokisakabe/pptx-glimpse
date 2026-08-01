@@ -1213,16 +1213,20 @@ function resolveThemeTypeface(context: ComputeContext, typeface: string): string
     case "+mn-lt":
       return scheme.minorLatin ?? typeface;
     case "+mj-ea":
-      return scheme.majorEastAsian ?? scheme.majorJapanese ?? typeface;
+      return nonEmptyTypeface(scheme.majorEastAsian) ?? scheme.majorJapanese ?? typeface;
     case "+mn-ea":
-      return scheme.minorEastAsian ?? scheme.minorJapanese ?? typeface;
+      return nonEmptyTypeface(scheme.minorEastAsian) ?? scheme.minorJapanese ?? typeface;
     case "+mj-cs":
-      return scheme.majorComplexScript ?? typeface;
+      return nonEmptyTypeface(scheme.majorComplexScript) ?? typeface;
     case "+mn-cs":
-      return scheme.minorComplexScript ?? typeface;
+      return nonEmptyTypeface(scheme.minorComplexScript) ?? typeface;
     default:
       return typeface;
   }
+}
+
+function nonEmptyTypeface(typeface: string | undefined): string | undefined {
+  return typeface === "" ? undefined : typeface;
 }
 
 function isEmptyPlaceholder(shape: SourceShape): boolean {

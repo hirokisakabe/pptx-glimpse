@@ -252,8 +252,8 @@ function parseFontScheme(fontScheme: XmlNode | undefined): SourceThemeFontScheme
   const minorFont = getChild(fontScheme, "minorFont");
   const majorLatin = getAttr(getChild(majorFont, "latin"), "typeface");
   const minorLatin = getAttr(getChild(minorFont, "latin"), "typeface");
-  const majorEastAsian = resolveEastAsianFont(majorFont);
-  const minorEastAsian = resolveEastAsianFont(minorFont);
+  const majorEastAsian = getAttr(getChild(majorFont, "ea"), "typeface");
+  const minorEastAsian = getAttr(getChild(minorFont, "ea"), "typeface");
   const majorComplexScript = getAttr(getChild(majorFont, "cs"), "typeface");
   const minorComplexScript = getAttr(getChild(minorFont, "cs"), "typeface");
   const majorJapanese = findScriptFont(majorFont, "Jpan");
@@ -261,21 +261,16 @@ function parseFontScheme(fontScheme: XmlNode | undefined): SourceThemeFontScheme
   const scheme: SourceThemeFontScheme = {
     ...(isNonEmpty(majorLatin) ? { majorLatin } : {}),
     ...(isNonEmpty(minorLatin) ? { minorLatin } : {}),
-    ...(isNonEmpty(majorEastAsian) ? { majorEastAsian } : {}),
-    ...(isNonEmpty(minorEastAsian) ? { minorEastAsian } : {}),
-    // Preserve explicit empty complex script fonts so scheme references can
-    // resolve distinctly from missing values.
+    // Preserve explicit empty East Asian and complex script fonts so authored
+    // application-selected typefaces survive a write/read boundary.
+    ...(majorEastAsian !== undefined ? { majorEastAsian } : {}),
+    ...(minorEastAsian !== undefined ? { minorEastAsian } : {}),
     ...(majorComplexScript !== undefined ? { majorComplexScript } : {}),
     ...(minorComplexScript !== undefined ? { minorComplexScript } : {}),
     ...(isNonEmpty(majorJapanese) ? { majorJapanese } : {}),
     ...(isNonEmpty(minorJapanese) ? { minorJapanese } : {}),
   };
   return Object.keys(scheme).length > 0 ? scheme : undefined;
-}
-
-function resolveEastAsianFont(fontNode: XmlNode | undefined): string | undefined {
-  const typeface = getAttr(getChild(fontNode, "ea"), "typeface");
-  return isNonEmpty(typeface) ? typeface : findScriptFont(fontNode, "Jpan");
 }
 
 function findScriptFont(fontNode: XmlNode | undefined, script: string): string | undefined {

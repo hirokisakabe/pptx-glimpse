@@ -17,6 +17,10 @@ export type {
   CreatePptxOptions,
   CreatePptxSlideLayoutOptions,
   CreatePptxSlideMasterOptions,
+  CreatePptxThemeColorSchemeOptions,
+  CreatePptxThemeFontSchemeOptions,
+  CreatePptxThemeFontSetOptions,
+  CreatePptxThemeOptions,
   SlideLayoutMargin,
 } from "./builder/index.js";
 export { createPptx } from "./builder/index.js";
