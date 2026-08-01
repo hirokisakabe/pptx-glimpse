@@ -238,6 +238,46 @@ describe("addMediaPartRelationship", () => {
       }),
     ).toThrow("operation-specific: application/not-png");
   });
+
+  it("can register a media override when its extension default conflicts", () => {
+    const graph = buildGraph({
+      contentTypes: {
+        defaults: [
+          { extension: "rels", contentType: RELS_CONTENT_TYPE },
+          { extension: "png", contentType: "application/not-png" },
+        ],
+        overrides: [],
+      },
+    });
+    const media = {
+      partPath: asPartPath("ppt/media/image1.png"),
+      contentType: "image/png",
+      bytes: new Uint8Array([1]),
+    };
+
+    const next = addMediaPartRelationship(graph, {
+      ownerPartPath: SLIDE_PATH,
+      media,
+      extension: "png",
+      relationship: {
+        id: asRelationshipId("rId2"),
+        type: IMAGE_REL_TYPE,
+        target: "../media/image1.png",
+      },
+      useOverrideOnContentTypeDefaultConflict: true,
+      contentTypeDefaultConflictError: (existingContentType) =>
+        new Error(`unexpected: ${existingContentType}`),
+    });
+
+    expect(next.contentTypes.defaults).toContainEqual({
+      extension: "png",
+      contentType: "application/not-png",
+    });
+    expect(next.contentTypes.overrides).toContainEqual({
+      partName: media.partPath,
+      contentType: "image/png",
+    });
+  });
 });
 
 describe("removePackageParts", () => {

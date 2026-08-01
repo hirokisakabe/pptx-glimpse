@@ -1225,7 +1225,10 @@ function collectCommandWarnings(
         break;
       }
     }
-    if (edit === undefined || edit.sharedReferenceCount <= 1) continue;
+    // Shared replacements are isolated by the document layer. Retain the public warning
+    // shape for compatibility, but emit it only if an in-place shared edit is ever supplied.
+    if (edit === undefined || edit.mode === "copyOnWrite" || edit.sharedReferenceCount <= 1)
+      continue;
     warnings.push({
       code: "shared-media-part",
       mediaPartPath: edit.mediaPartPath,

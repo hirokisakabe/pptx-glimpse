@@ -229,7 +229,7 @@ describe("PptxEditorSession", () => {
     }
   });
 
-  it("returns shared media warnings from image replacement commands", async () => {
+  it("isolates shared media replacements without warnings", async () => {
     const editor = await createPptxEditorSession(await buildImageFixture(), {
       skipSystemFonts: true,
     });
@@ -248,14 +248,15 @@ describe("PptxEditorSession", () => {
       bytes: BLUE_PNG,
     });
 
-    expect(result.warnings).toEqual([
-      expect.objectContaining({
-        code: "shared-media-part",
-        mediaPartPath: "ppt/media/image1.png",
-        referenceCount: 2,
-      }),
-    ]);
-    expect(mediaBytes(editor.document, "ppt/media/image1.png")).toEqual(BLUE_PNG);
+    expect(result.warnings).toBeUndefined();
+    expect(mediaBytes(editor.document, "ppt/media/image1.png")).toEqual(RED_PNG);
+    expect(mediaBytes(editor.document, "ppt/media/image2.png")).toEqual(BLUE_PNG);
+    expect(
+      editor.shapes(1).find((shape) => shape.name === "Shared Picture A")?.editableImageReplacement,
+    ).toMatchObject({ mediaPartPath: "ppt/media/image2.png", sharedReferenceCount: 1 });
+    expect(
+      editor.shapes(1).find((shape) => shape.name === "Shared Picture B")?.editableImageReplacement,
+    ).toMatchObject({ mediaPartPath: "ppt/media/image1.png", sharedReferenceCount: 1 });
   });
 
   it("applies picture crop, rerenders the target slide, and saves the srcRect", async () => {
@@ -291,7 +292,7 @@ describe("PptxEditorSession", () => {
     }
   });
 
-  it("rerenders every slide that references replaced shared media", async () => {
+  it("rerenders only the picture owner after copy-on-write replacement", async () => {
     const renderCalls: Array<readonly number[] | undefined> = [];
     configurePptxEditorSessionRenderer((source, options) => {
       renderCalls.push(options?.slides);
@@ -307,7 +308,7 @@ describe("PptxEditorSession", () => {
 
       await editor.apply({ kind: "replaceImage", handle: image.handle, bytes: BLUE_PNG });
 
-      expect(renderCalls).toEqual([undefined, [1, 2]]);
+      expect(renderCalls).toEqual([undefined, [1]]);
     } finally {
       configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
     }
@@ -813,6 +814,16 @@ describe("PptxEditorSession", () => {
 
     expect(image?.editableImageReplacement?.sharedReferenceCount).toBe(3);
   });
+
+  it("counts preserved image fills in image replacement metadata", async () => {
+    const editor = await createPptxEditorSession(
+      await buildImageFixture({ includeImageFill: true }),
+      { skipSystemFonts: true },
+    );
+    const image = editor.shapes(1).find((shape) => shape.kind === "image");
+
+    expect(image?.editableImageReplacement?.sharedReferenceCount).toBe(3);
+  });
 });
 
 function buildGroupCommandFixture(): Uint8Array {
@@ -948,6 +959,7 @@ async function buildShapeFixture(
 
 async function buildImageFixture(
   options: {
+    readonly includeImageFill?: boolean;
     readonly includeUnusedImageRelationship?: boolean;
     readonly includeSecondSlide?: boolean;
   } = {},
@@ -1009,6 +1021,11 @@ async function buildImageFixture(
         `<p:pic><p:nvPicPr><p:cNvPr id="21" name="Shared Picture B"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
         `<p:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
         `<p:spPr><a:xfrm><a:off x="1828800" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:pic>` +
+        (options.includeImageFill === true
+          ? `<p:sp><p:nvSpPr><p:cNvPr id="22" name="Shared Fill"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+            `<p:spPr><a:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch></a:blipFill>` +
+            `<a:prstGeom prst="rect"/></p:spPr></p:sp>`
+          : "") +
         `</p:spTree></p:cSld>` +
         `</p:sld>`,
     ),

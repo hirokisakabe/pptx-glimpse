@@ -345,9 +345,21 @@ export interface PptxSourceModelDeleteShapeEdit {
 export interface PptxSourceModelReplaceImageEdit {
   readonly kind: "replaceImage";
   readonly handle: SourceHandle;
+  /**
+   * Single-reference parts are updated in place; shared parts use an isolated copy.
+   * Omitted legacy edit records are interpreted as in-place replacements.
+   */
+  readonly mode?: "inPlace" | "copyOnWrite";
+  /** Media part referenced before this edit. Defaults to `mediaPartPath` for legacy records. */
+  readonly sourceMediaPartPath?: PartPath;
+  /** Relationship referenced by the target picture before this edit. */
+  readonly sourceRelationshipId?: RelationshipId;
+  /** Media part that contains the replacement bytes after this edit. */
   readonly mediaPartPath: PartPath;
   readonly contentType: string;
   readonly sharedReferenceCount: number;
+  /** New relationship assigned to the target picture for copy-on-write edits. */
+  readonly replacementRelationshipId?: RelationshipId;
 }
 
 export interface PptxSourceModelAddEmptySlideFromLayoutEdit {

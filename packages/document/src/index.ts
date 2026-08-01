@@ -312,6 +312,7 @@ export {
   clearPictureCrop,
   clearTableCellProperties,
   clearTextRunProperties,
+  countImageReferencesToMedia,
   createPptxAuthoringSession,
   deleteShape,
   deleteSlide,

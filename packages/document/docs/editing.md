@@ -35,6 +35,21 @@ paragraph text, shape transforms/fills/outlines, shape deletion, same-format ima
 existing Chart data, slide backgrounds, and slide topology. The authoring helpers can add new
 supported content to a slide loaded from an existing PPTX.
 
+### Image replacement copy-on-write contract
+
+`replaceImageBytes` keeps the replacement media content type equal to the source media content
+type. When exactly one picture/reference uses the media part, it replaces that part's bytes in
+place. When the media part has two or more known package references, it allocates the next unused
+`ppt/media/imageN.<extension>` path and owner-local `rIdN`, registers the matching content type,
+and patches only the selected picture's `a:blip@r:embed`. Other pictures continue to reference the
+original media bytes.
+
+The operation does not run a package-wide orphan sweep: in-place replacement creates no orphan,
+and copy-on-write retains the original because other references still use it. New media paths are
+reserved by the active edit journal. Editor undo restores the pre-edit snapshot (and removes that
+reservation); redo restores the exact post-edit snapshot, including the allocated path and
+relationship. A new edit branch after undo may therefore reuse the released allocation.
+
 ## Picture crop
 
 `setPictureCrop` changes the DrawingML `a:srcRect` of an existing picture and
