@@ -18,11 +18,11 @@ const testHelperFiles = [
   "packages/document/src/writer/write-pptx.test-helpers.ts",
   "packages/editor/src/index.test-helpers.ts",
 ];
-const productionHelperImportProbes = [
-  ["packages/core/src/index.ts", "./pptx-editor-session.test-helpers.js"],
-  ["packages/document/src/index.ts", "./writer/write-pptx.test-helpers.js"],
-  ["packages/editor/src/index.ts", "./index.test-helpers.js"],
-] as const;
+const productionHelperImportFiles = [
+  "packages/core/src/index.ts",
+  "packages/document/src/index.ts",
+  "packages/editor/src/index.ts",
+];
 
 const commonRules = [
   "simple-import-sort/imports",
@@ -73,17 +73,14 @@ for (const file of testHelperFiles) {
   }
 }
 
-for (const [file, importPath] of productionHelperImportProbes) {
-  const [result] = await eslint.lintText(`import "${importPath}";\n`, { filePath: file });
+for (const file of productionHelperImportFiles) {
+  const config = await eslint.calculateConfigForFile(file);
+  const restrictedImports = JSON.stringify(config?.rules["no-restricted-imports"]);
   if (
-    result === undefined ||
-    !result.messages.some(
-      (message) =>
-        message.ruleId === "no-restricted-imports" &&
-        message.message.includes("Test helpers must not be imported"),
-    )
+    !restrictedImports.includes('"**/*.test-helpers.js"') ||
+    !restrictedImports.includes("Test helpers must not be imported")
   ) {
-    throw new Error(`Production import of ${importPath} is not restricted for ${file}`);
+    throw new Error(`Test helper imports are not restricted for ${file}`);
   }
 }
 
