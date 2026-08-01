@@ -188,6 +188,19 @@ These statements must be checked together when the boundary changes:
 
 ## Node and browser runtime policy
 
+The repository pins `@types/node` to the latest release line for the minimum supported Node.js
+major, not the newest available Node.js major. The root workspace and demo must use the same
+range. This keeps package typechecking aligned with the `engines.node` floor and prevents APIs
+introduced only in a newer runtime from entering source unnoticed. When code genuinely needs a
+newer API, keep it behind feature detection or an isolated runtime-specific boundary instead of
+raising the ambient type surface globally.
+
+Ambient types are allowlisted per TypeScript configuration. `tsconfig.json` supplies Node types to
+package source, `tsconfig.eslint.json` adds Vitest globals for tests while covering scripts and
+other tooling, and `demo/tsconfig.json` supplies Node and React types for the Next.js application.
+Keep these `types` lists explicit when adding another compilation context so dependency-provided
+globals do not silently change its API surface.
+
 The document and editor layers operate on `Uint8Array` data and keep their public behavior
 independent of UI and renderer concerns. Node.js `Buffer` works as a `Uint8Array` subtype,
 but public binary contracts use `Uint8Array`.
