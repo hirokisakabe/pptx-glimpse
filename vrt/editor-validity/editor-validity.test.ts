@@ -222,6 +222,32 @@ const LO_EDITOR_VALIDITY_CASES = [
               categories: ["Apr", "May", "Jun"],
               values: [25, 30, 42],
             },
+            {
+              name: "Edited profit",
+              categories: ["Apr", "May", "Jun"],
+              values: [15, 25, 28],
+            },
+          ],
+        }),
+      );
+    },
+  },
+  {
+    name: "chart series removal",
+    sourceFixture: "editor-validity-chart-removal-source.pptx",
+    expectedFixture: "editor-validity-chart-removal-expected.pptx",
+    createEditedPptx: (input: Uint8Array) => {
+      const source = readPptx(input);
+      const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+      if (chart?.handle === undefined) throw new Error("chart fixture has no editable chart");
+      return writePptx(
+        updateChartData(source, chart.handle, {
+          series: [
+            {
+              name: "Edited revenue",
+              categories: ["Apr", "May", "Jun"],
+              values: [40, 55, 70],
+            },
           ],
         }),
       );

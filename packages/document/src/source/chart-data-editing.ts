@@ -44,6 +44,8 @@ const SUPPORTED_CHART_ELEMENTS: ReadonlySet<string> = new Set([
   "radarChart",
 ]);
 const XLSX_CONTENT_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+const CHART_2014_NAMESPACE = "http://schemas.microsoft.com/office/drawing/2014/chart";
+const SERIES_UNIQUE_ID_EXTENSION_URI = "{C3380CC4-5D6E-409C-BE32-E72D297353CC}";
 const XLSX_MAX_SERIES = 16_383;
 const XLSX_MAX_DATA_POINTS = 1_048_575;
 const encoder = new TextEncoder();
@@ -68,8 +70,9 @@ const orderedBuilder = new XMLBuilder({
 /**
  * Replaces the data bound to an existing category chart while preserving all non-data chart XML.
  *
- * The supported layout is deliberately narrow: one embedded workbook, one worksheet, the existing
- * series count, names in row 1, categories in column A, and values in columns B onward.
+ * The supported layout is deliberately narrow: one embedded workbook, one worksheet, names in row
+ * 1, categories in column A, and values in columns B onward. Retained series preserve their XML;
+ * appended series clone the last existing series as their formatting template.
  */
 export function updateChartData(
   source: PptxSourceModel,
@@ -95,7 +98,7 @@ export function updateChartData(
   const workbook = inspectSupportedEmbeddedWorkbook(
     workbookRawPart.bytes,
     binding.sheetName,
-    binding.seriesCount,
+    binding.existingSeriesCount,
     binding.pointCount,
   );
 
@@ -293,7 +296,7 @@ function inspectAndUpdateChartXml(
 ): {
   readonly externalDataRelationshipId: string;
   readonly sheetName: string;
-  readonly seriesCount: number;
+  readonly existingSeriesCount: number;
   readonly pointCount: number;
 } {
   const chartSpace = requireSingleElement(root, "chartSpace", "chart XML has no chartSpace root");
@@ -311,16 +314,14 @@ function inspectAndUpdateChartXml(
   ) {
     throw new Error("updateChartData: chart type or combination is not supported");
   }
-  const series = elementChildren(chartGroups[0]).filter(
+  const existingSeries = elementChildren(chartGroups[0]).filter(
     (entry) => elementLocalName(entry) === "ser",
   );
-  if (series.length !== input.series.length) {
-    throw new Error("updateChartData: changing the existing series count is not supported");
-  }
 
   let sheetName: string | undefined;
+  const sheetTokens: string[] = [];
   let pointCount: number | undefined;
-  for (const [index, seriesEntry] of series.entries()) {
+  for (const [index, seriesEntry] of existingSeries.entries()) {
     const tx = requireSingleChild(seriesEntry, "tx");
     const txRef = requireSingleChild(tx, "strRef");
     const category = requireSingleChild(seriesEntry, "cat");
@@ -347,18 +348,46 @@ function inspectAndUpdateChartXml(
       throw new Error("updateChartData: chart series use inconsistent data ranges");
     }
     sheetName = txFormula.sheetName;
+    sheetTokens.push(txFormula.sheetToken);
     pointCount = seriesPointCount;
+  }
 
-    setFormula(txRef, `${txFormula.sheetToken}!$${spreadsheetColumn(index + 2)}$1`);
-    setStringCache(requireSingleChild(txRef, "strCache"), [input.series[index].name]);
-    setFormula(
-      categoryRef,
-      `${txFormula.sheetToken}!$A$2:$A$${input.series[index].categories.length + 1}`,
+  if (sheetName === undefined || pointCount === undefined) {
+    throw new Error("updateChartData: chart has no series");
+  }
+  if (input.series.length < existingSeries.length && hasExplicitLegendEntries(chart)) {
+    throw new Error(
+      "updateChartData: removing series with explicit legend entries is not supported",
     );
+  }
+
+  const series = resizeChartSeries(chartSpace, chartGroups[0], existingSeries, input.series.length);
+  const addedSeriesIdentities =
+    input.series.length > existingSeries.length
+      ? nextAddedSeriesIdentities(existingSeries, input.series.length - existingSeries.length)
+      : [];
+  for (const [index, seriesEntry] of series.entries()) {
+    const sheetToken = sheetTokens[index] ?? sheetTokens.at(-1);
+    if (sheetToken === undefined) throw new Error("updateChartData: chart has no series");
+    const addedIdentity = addedSeriesIdentities[index - existingSeries.length];
+    if (addedIdentity !== undefined) {
+      setAttribute(requireSingleChild(seriesEntry, "idx"), "val", String(addedIdentity.index));
+      setAttribute(requireSingleChild(seriesEntry, "order"), "val", String(addedIdentity.order));
+    }
+    const tx = requireSingleChild(seriesEntry, "tx");
+    const txRef = requireSingleChild(tx, "strRef");
+    const category = requireSingleChild(seriesEntry, "cat");
+    const categoryRef = requireSingleChild(category, "strRef");
+    const value = requireSingleChild(seriesEntry, "val");
+    const valueRef = requireSingleChild(value, "numRef");
+
+    setFormula(txRef, `${sheetToken}!$${spreadsheetColumn(index + 2)}$1`);
+    setStringCache(requireSingleChild(txRef, "strCache"), [input.series[index].name]);
+    setFormula(categoryRef, `${sheetToken}!$A$2:$A$${input.series[index].categories.length + 1}`);
     setStringCache(requireSingleChild(categoryRef, "strCache"), input.series[index].categories);
     setFormula(
       valueRef,
-      `${txFormula.sheetToken}!$${spreadsheetColumn(index + 2)}$2:$${spreadsheetColumn(index + 2)}$${input.series[index].values.length + 1}`,
+      `${sheetToken}!$${spreadsheetColumn(index + 2)}$2:$${spreadsheetColumn(index + 2)}$${input.series[index].values.length + 1}`,
     );
     setNumberCache(requireSingleChild(valueRef, "numCache"), input.series[index].values);
   }
@@ -368,15 +397,267 @@ function inspectAndUpdateChartXml(
   if (externalDataRelationshipId === undefined) {
     throw new Error("updateChartData: chart externalData has no relationship id");
   }
-  if (sheetName === undefined || pointCount === undefined) {
-    throw new Error("updateChartData: chart has no series");
-  }
   return {
     externalDataRelationshipId,
     sheetName,
-    seriesCount: series.length,
+    existingSeriesCount: existingSeries.length,
     pointCount,
   };
+}
+
+interface SeriesIdentity {
+  readonly index: number;
+  readonly order: number;
+}
+
+function nextAddedSeriesIdentities(
+  existingSeries: readonly OrderedXmlNode[],
+  addedCount: number,
+): SeriesIdentity[] {
+  const identities = existingSeries.map((series) => ({
+    index: seriesIdentityValue(series, "idx"),
+    order: seriesIdentityValue(series, "order"),
+  }));
+  if (
+    new Set(identities.map((identity) => identity.index)).size !== identities.length ||
+    new Set(identities.map((identity) => identity.order)).size !== identities.length
+  ) {
+    throw new Error("updateChartData: chart series idx/order values must be unique");
+  }
+  const maxIndex = Math.max(...identities.map((identity) => identity.index));
+  const maxOrder = Math.max(...identities.map((identity) => identity.order));
+  if (maxIndex + addedCount > 0xffff_ffff || maxOrder + addedCount > 0xffff_ffff) {
+    throw new Error("updateChartData: chart series idx/order values cannot be extended");
+  }
+  return Array.from({ length: addedCount }, (_, offset) => ({
+    index: maxIndex + offset + 1,
+    order: maxOrder + offset + 1,
+  }));
+}
+
+function seriesIdentityValue(series: OrderedXmlNode, localName: "idx" | "order"): number {
+  const value = attribute(requireSingleChild(series, localName), "val");
+  if (value === undefined || !/^\d+$/.test(value)) {
+    throw new Error(`updateChartData: chart series ${localName} value is invalid`);
+  }
+  const parsed = Number(value);
+  if (!Number.isSafeInteger(parsed) || parsed > 0xffff_ffff) {
+    throw new Error(`updateChartData: chart series ${localName} value is invalid`);
+  }
+  return parsed;
+}
+
+function resizeChartSeries(
+  chartSpace: OrderedXmlNode,
+  chartGroup: OrderedXmlNode,
+  existingSeries: readonly OrderedXmlNode[],
+  desiredCount: number,
+): OrderedXmlNode[] {
+  const retainedSeries = existingSeries.slice(0, desiredCount);
+  const children = mutableElementChildren(chartGroup);
+  let seenSeries = 0;
+  const retainedChildren = children.filter((entry) => {
+    if (elementLocalName(entry) !== "ser") return true;
+    const retain = seenSeries < desiredCount;
+    seenSeries += 1;
+    return retain;
+  });
+  if (desiredCount > existingSeries.length) {
+    const template = existingSeries.at(-1);
+    if (template === undefined) throw new Error("updateChartData: chart has no series");
+    const rewriteUniqueId = createAddedSeriesUniqueIdRewriter(chartSpace, existingSeries, template);
+    const addedSeries = Array.from({ length: desiredCount - existingSeries.length }, () => {
+      const clone = structuredClone(template);
+      rewriteUniqueId(clone);
+      return clone;
+    });
+    let lastSeriesIndex = -1;
+    for (const [index, entry] of retainedChildren.entries()) {
+      if (elementLocalName(entry) === "ser") lastSeriesIndex = index;
+    }
+    retainedChildren.splice(lastSeriesIndex + 1, 0, ...addedSeries);
+    retainedSeries.push(...addedSeries);
+  }
+  setElementChildren(chartGroup, retainedChildren);
+  return retainedSeries;
+}
+
+function hasExplicitLegendEntries(chart: OrderedXmlNode): boolean {
+  const legend = elementChildren(chart).find((entry) => elementLocalName(entry) === "legend");
+  return (
+    legend !== undefined &&
+    elementChildren(legend).some((entry) => elementLocalName(entry) === "legendEntry")
+  );
+}
+
+function createAddedSeriesUniqueIdRewriter(
+  chartSpace: OrderedXmlNode,
+  existingSeries: readonly OrderedXmlNode[],
+  template: OrderedXmlNode,
+): (clone: OrderedXmlNode) => void {
+  const chartUniqueIds = inspectChartUniqueIds(chartSpace);
+  const existingValues = existingSeries.flatMap((series) =>
+    seriesIdentityUniqueIdElements(series, chartUniqueIds.namespaceUris),
+  );
+  const normalizedSeriesIds = existingValues.map(({ value }) => normalizeGuid(value));
+  if (new Set(normalizedSeriesIds.map(({ hex }) => hex)).size !== normalizedSeriesIds.length) {
+    throw new Error("updateChartData: chart series uniqueId values must be unique");
+  }
+  const used = new Set(chartUniqueIds.guids.map(({ hex }) => hex));
+  const templateIds = seriesIdentityUniqueIdElements(template, chartUniqueIds.namespaceUris);
+  if (templateIds.length === 0) return () => undefined;
+  if (templateIds.length !== 1) {
+    throw new Error("updateChartData: chart series uniqueId layout is not supported");
+  }
+  let previous = normalizeGuid(templateIds[0].value);
+  return (clone) => {
+    const cloneIds = seriesIdentityUniqueIdElements(clone);
+    if (cloneIds.length !== 1) {
+      throw new Error("updateChartData: chart series uniqueId layout is not supported");
+    }
+    previous = nextGuid(previous, used);
+    used.add(previous.hex);
+    setAttribute(cloneIds[0].element, "val", formatGuid(previous));
+  };
+}
+
+interface SeriesUniqueIdElement {
+  readonly element: OrderedXmlNode;
+  readonly value: string;
+}
+
+function seriesIdentityUniqueIdElements(
+  series: OrderedXmlNode,
+  namespaceUris?: ReadonlyMap<OrderedXmlNode, string | undefined>,
+): SeriesUniqueIdElement[] {
+  const extensionLists = elementChildren(series).filter(
+    (entry) => elementLocalName(entry) === "extLst",
+  );
+  if (extensionLists.length > 1) {
+    throw new Error("updateChartData: chart series extension layout is not supported");
+  }
+  const extensionList = extensionLists[0];
+  if (extensionList === undefined) return [];
+  const identityExtensions = elementChildren(extensionList).filter(
+    (entry) =>
+      elementLocalName(entry) === "ext" &&
+      attribute(entry, "uri")?.toUpperCase() === SERIES_UNIQUE_ID_EXTENSION_URI,
+  );
+  if (identityExtensions.length > 1) {
+    throw new Error("updateChartData: chart series uniqueId layout is not supported");
+  }
+  const identityExtension = identityExtensions[0];
+  if (identityExtension === undefined) return [];
+  return elementChildren(identityExtension)
+    .filter(
+      (entry) =>
+        elementLocalName(entry) === "uniqueId" &&
+        (namespaceUris === undefined || namespaceUris.get(entry) === CHART_2014_NAMESPACE),
+    )
+    .map((element) => {
+      const value = attribute(element, "val");
+      if (value === undefined) {
+        throw new Error("updateChartData: chart series uniqueId value is invalid");
+      }
+      return { element, value };
+    });
+}
+
+function inspectChartUniqueIds(chartSpace: OrderedXmlNode): {
+  readonly namespaceUris: ReadonlyMap<OrderedXmlNode, string | undefined>;
+  readonly guids: readonly NormalizedGuid[];
+} {
+  const namespaceUris = new Map<OrderedXmlNode, string | undefined>();
+  const guids: NormalizedGuid[] = [];
+  visitElements(chartSpace, {}, (entry, namespaces) => {
+    const namespaceUri = namespaceUriForElement(entry, namespaces);
+    namespaceUris.set(entry, namespaceUri);
+    if (elementLocalName(entry) !== "uniqueId" || namespaceUri !== CHART_2014_NAMESPACE) {
+      return;
+    }
+    const value = attribute(entry, "val");
+    if (value !== undefined && isGuid(value)) guids.push(normalizeGuid(value));
+  });
+  return { namespaceUris, guids };
+}
+
+function visitElements(
+  entry: OrderedXmlNode,
+  inheritedNamespaces: Readonly<Record<string, string>>,
+  visit: (entry: OrderedXmlNode, namespaces: Readonly<Record<string, string>>) => void,
+): void {
+  const namespaces = { ...inheritedNamespaces };
+  const attributes = entry[":@"];
+  if (typeof attributes === "object" && attributes !== null) {
+    for (const [key, value] of Object.entries(
+      unsafeOoxmlBoundaryAssertion<Record<string, unknown>>(attributes),
+    )) {
+      if (typeof value !== "string") continue;
+      const name = key.startsWith("@_") ? key.slice(2) : key;
+      if (name === "xmlns") namespaces[""] = value;
+      else if (name.startsWith("xmlns:")) namespaces[name.slice("xmlns:".length)] = value;
+    }
+  }
+  visit(entry, namespaces);
+  for (const child of elementChildren(entry)) visitElements(child, namespaces, visit);
+}
+
+function namespaceUriForElement(
+  entry: OrderedXmlNode,
+  namespaces: Readonly<Record<string, string>>,
+): string | undefined {
+  const name = elementName(entry);
+  if (name === undefined) return undefined;
+  const colon = name.indexOf(":");
+  return namespaces[colon < 0 ? "" : name.slice(0, colon)];
+}
+
+function isGuid(value: string): boolean {
+  const match = /^(\{?)[0-9A-Fa-f]{8}(?:-[0-9A-Fa-f]{4}){3}-[0-9A-Fa-f]{12}(\}?)$/.exec(value);
+  return match !== null && (match[1] === "{") === (match[2] === "}");
+}
+
+interface NormalizedGuid {
+  readonly hex: string;
+  readonly braces: boolean;
+  readonly lowercase: boolean;
+}
+
+function normalizeGuid(value: string): NormalizedGuid {
+  const match =
+    /^(\{?)([0-9A-Fa-f]{8})-([0-9A-Fa-f]{4})-([0-9A-Fa-f]{4})-([0-9A-Fa-f]{4})-([0-9A-Fa-f]{12})(\}?)$/.exec(
+      value,
+    );
+  if (match === null || (match[1] === "{") !== (match[7] === "}")) {
+    throw new Error("updateChartData: chart series uniqueId value is invalid");
+  }
+  const body = match.slice(2, 7).join("");
+  return {
+    hex: body.toUpperCase(),
+    braces: match[1] === "{",
+    lowercase: body === body.toLowerCase(),
+  };
+}
+
+function nextGuid(previous: NormalizedGuid, used: ReadonlySet<string>): NormalizedGuid {
+  const modulus = 1n << 128n;
+  let value = (BigInt(`0x${previous.hex}`) + 1n) % modulus;
+  while (used.has(value.toString(16).toUpperCase().padStart(32, "0"))) {
+    value = (value + 1n) % modulus;
+  }
+  return { ...previous, hex: value.toString(16).toUpperCase().padStart(32, "0") };
+}
+
+function formatGuid(guid: NormalizedGuid): string {
+  const body = [
+    guid.hex.slice(0, 8),
+    guid.hex.slice(8, 12),
+    guid.hex.slice(12, 16),
+    guid.hex.slice(16, 20),
+    guid.hex.slice(20),
+  ].join("-");
+  const formatted = guid.lowercase ? body.toLowerCase() : body;
+  return guid.braces ? `{${formatted}}` : formatted;
 }
 
 interface ParsedFormula {

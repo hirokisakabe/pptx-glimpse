@@ -1520,27 +1520,28 @@ describe("EditorSession chart data commands", () => {
       series: [
         { name: "Edited 1", categories: ["A", "B", "C"], values: [3, 5, 8] },
         { name: "Edited 2", categories: ["A", "B", "C"], values: [2, 4, 6] },
+        { name: "Edited 3", categories: ["A", "B", "C"], values: [1, 2, 3] },
       ],
     });
     expectApplied(firstResult);
     expect(chartXml(session.document)).toContain("Edited 1");
     expect(chartXml(session.document)).toContain("Sheet1!$B$2:$B$4");
+    expect(chartXml(session.document)).toContain("Sheet1!$D$2:$D$4");
     expect(session.undoDepth).toBe(1);
 
-    expect(chartXml(expectHistory(session.undo()))).toContain("Original 1");
-    expect(chartXml(expectHistory(session.redo()))).toContain("Edited 1");
+    expect(chartXml(expectHistory(session.undo()))).not.toContain("Sheet1!$D$1");
+    expect(chartXml(expectHistory(session.redo()))).toContain("Edited 3");
 
     const commandResult = session.apply({
       kind: "updateChartData",
       handle: requireHandle(chart.handle),
-      series: [
-        { name: "Command 1", categories: ["X", "Y"], values: [10, 20] },
-        { name: "Command 2", categories: ["X", "Y"], values: [7, 12] },
-      ],
+      series: [{ name: "Command 1", categories: ["X", "Y"], values: [10, 20] }],
     });
     expectApplied(commandResult);
-    expect(chartXml(session.document)).toContain("Command 2");
+    expect(chartXml(session.document)).not.toContain("Sheet1!$C$1");
     expect(session.undoDepth).toBe(2);
+    expect(chartXml(expectHistory(session.undo()))).toContain("Edited 3");
+    expect(chartXml(expectHistory(session.redo()))).not.toContain("Sheet1!$C$1");
   });
 
   it("rejects invalid chart updates without changing document, selection, or history", () => {
@@ -1554,7 +1555,10 @@ describe("EditorSession chart data commands", () => {
     const result = session.apply({
       kind: "updateChartData",
       handle,
-      series: [{ name: "Only one", categories: ["A"], values: [1] }],
+      series: [
+        { name: "One", categories: ["A"], values: [1] },
+        { name: "Two", categories: ["B"], values: [2] },
+      ],
     });
 
     expect(result).toMatchObject({
@@ -1562,7 +1566,7 @@ describe("EditorSession chart data commands", () => {
       code: "invalid-command",
     });
     expect(result.ok ? undefined : result.message).toContain(
-      "changing the existing series count is not supported",
+      "every series must use identical category labels",
     );
     expect(session.document).toBe(before);
     expect(session.selection).toEqual({ shapeHandle: handle });

@@ -81,12 +81,16 @@ describe("native chart writer renderer integration", () => {
     if (chart?.handle === undefined) throw new Error("existing chart should have a handle");
     const before = await renderPptxSourceModelToSvg(existing);
     const edited = document.updateChartData(existing, chart.handle, {
-      series: [{ name: "Updated", categories: ["Apr", "May"], values: [8, 3] }],
+      series: [
+        { name: "Updated", categories: ["Apr", "May"], values: [8, 3] },
+        { name: "Added", categories: ["Apr", "May"], values: [5, 7] },
+      ],
     });
     const after = await renderPptxSourceModelToSvg(edited);
 
     expect(after.slides[0]?.svg).not.toBe(before.slides[0]?.svg);
     expect(after.slides[0]?.svg).toContain("Apr");
+    expect(after.slides[0]?.svg).toContain("#ed7d31");
     expect(after.slides[0]?.svg).not.toContain("Jan");
   });
 });
