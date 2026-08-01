@@ -378,10 +378,10 @@ describe("cloneSlideLayout", () => {
     expect(
       reread.slideLayouts.find((layout) => layout.partPath === clonedHandle.partPath)?.shapes,
     ).toHaveLength(sourceLayout.shapes.length + 1);
-    const layoutIds = session.source.edits?.flatMap((edit) =>
-      edit.kind === "cloneSlideLayout" ? [edit.newLayoutNumericId] : [],
-    );
-    expect(new Set(layoutIds).size).toBe(3);
+    const cloneEdits = session.source.edits?.filter((edit) => edit.kind === "cloneSlideLayout");
+    expect(new Set(cloneEdits?.map((edit) => edit.newLayoutPartPath)).size).toBe(3);
+    expect(new Set(cloneEdits?.map((edit) => edit.newRelationshipId)).size).toBe(3);
+    expect(new Set(cloneEdits?.map((edit) => edit.newLayoutNumericId)).size).toBe(3);
   });
 
   it("rejects invalid positions and layouts with pending raw-part edits", () => {
