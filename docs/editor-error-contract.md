@@ -33,7 +33,7 @@ must never import a higher layer's error class.
 | ------------------------------------ | -------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
 | Expected operation rejection         | Invalid command input or target, missing selection target, empty history stack   | Headless `{ ok: false, code, message, cause? }`; high-level `PptxEditorError` with the same fields |
 | Integration/runtime failure          | PPTX read, SVG render, PPTX write or round-trip validation failure               | High-level `PptxEditorError` with `read-failed`, `render-failed`, or `write-failed`                |
-| Warning                              | Replacing a shared media part                                                    | Successful result/response `warnings`; never thrown and never added to an error-code union         |
+| Warning                              | A future successful operation with non-fatal compatibility concerns              | Successful result/response `warnings`; never thrown and never added to an error-code union         |
 | Programmer error/invariant violation | Unknown command discriminant, impossible internal state, broken result invariant | Propagate unchanged; do not turn it into an expected result or integration code                    |
 
 An operation rejection is expected when the caller can reasonably branch on it and continue
@@ -114,18 +114,19 @@ creates no session. Write failure does not mutate editor state.
 
 ## Code and test matrix
 
-| Code                | Defined/created by                                                  | High-level destination      | Required evidence                                                                    |
-| ------------------- | ------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------ |
+| Code                | Defined/created by                                                  | High-level destination      | Required evidence                                                                                                        |
+| ------------------- | ------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | `invalid-command`   | `packages/editor/src/index.ts`: command boundary                    | Same-code `PptxEditorError` | Headless apply/applyAll rejection and atomicity, including group topology/selection; high-level field/cause preservation |
-| `invalid-selection` | `packages/editor/src/index.ts`: `selectShape()`                     | Same-code `PptxEditorError` | Selection atomicity; Node/browser same-code test                                     |
-| `empty-undo-stack`  | `packages/editor/src/index.ts`: `undo()`                            | Same-code `PptxEditorError` | Empty-history shape/message and unchanged state                                      |
-| `empty-redo-stack`  | `packages/editor/src/index.ts`: `redo()`                            | Same-code `PptxEditorError` | Empty-history shape/message and unchanged state                                      |
-| `read-failed`       | `packages/core/src/pptx-editor-session.ts`: `create()`              | Thrown directly             | Invalid input and retained cause                                                     |
-| `render-failed`     | `packages/core/src/pptx-editor-session.ts`: `renderCurrentSlides()` | Thrown directly             | Initial and post-operation renderer rejection with retained cause                    |
-| `write-failed`      | `packages/core/src/pptx-editor-session.ts`: `save()`                | Thrown directly             | Writer/round-trip validation rejection with retained cause                           |
+| `invalid-selection` | `packages/editor/src/index.ts`: `selectShape()`                     | Same-code `PptxEditorError` | Selection atomicity; Node/browser same-code test                                                                         |
+| `empty-undo-stack`  | `packages/editor/src/index.ts`: `undo()`                            | Same-code `PptxEditorError` | Empty-history shape/message and unchanged state                                                                          |
+| `empty-redo-stack`  | `packages/editor/src/index.ts`: `redo()`                            | Same-code `PptxEditorError` | Empty-history shape/message and unchanged state                                                                          |
+| `read-failed`       | `packages/core/src/pptx-editor-session.ts`: `create()`              | Thrown directly             | Invalid input and retained cause                                                                                         |
+| `render-failed`     | `packages/core/src/pptx-editor-session.ts`: `renderCurrentSlides()` | Thrown directly             | Initial and post-operation renderer rejection with retained cause                                                        |
+| `write-failed`      | `packages/core/src/pptx-editor-session.ts`: `save()`                | Thrown directly             | Writer/round-trip validation rejection with retained cause                                                               |
 
-Warning coverage must separately verify that `shared-media-part` remains on a successful
-headless result and high-level response.
+The exported `shared-media-part` warning shape remains source-compatible, but shared image
+replacement now uses copy-on-write and does not emit it. Coverage must verify isolation and the
+absence of that warning at both headless and high-level boundaries.
 
 ## Adding an operation or code
 

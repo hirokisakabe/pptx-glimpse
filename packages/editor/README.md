@@ -111,18 +111,8 @@ if (!result.ok) {
 The operation codes are `invalid-command`, `invalid-selection`, `empty-undo-stack`, and
 `empty-redo-stack`. Unexpected programmer errors and invariant violations still throw.
 
-Warnings describe successful operations and remain on the success result:
-
-```ts
-const result = session.apply(replaceImageCommand);
-if (result.ok) {
-  for (const warning of result.warnings ?? []) {
-    if (warning.code === "shared-media-part") {
-      console.warn(warning.message);
-    }
-  }
-}
-```
+Warnings describe successful operations and remain on the success result. Shared image replacement
+does not warn because the document layer isolates the selected picture with copy-on-write.
 
 ## Package boundary
 
@@ -145,8 +135,9 @@ supported APIs from the package root; deep source and `dist` paths are internal.
 - Elements without source handles, and edits the document layer cannot safely preserve, are
   rejected as `invalid-command`.
 - New table, chart, and SmartArt editing commands are not available.
-- Replacing a shared media part can change multiple image references and returns a
-  `shared-media-part` warning.
+- Replacing a shared media part uses copy-on-write, so only the selected picture changes. The
+  exported `shared-media-part` warning variant remains for source compatibility but is not emitted
+  by the current replacement operation.
 - Expected operation rejection uses the exported `EditorOperationErrorCode` and
   `EditorOperationFailure` contract.
 
