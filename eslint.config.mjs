@@ -35,6 +35,10 @@ const editorBoundaryRestrictedImportPattern = {
   message:
     "@pptx-glimpse/editor is a headless command layer above @pptx-glimpse/document and must not import renderer, core, CLI, or UI code.",
 };
+const testHelperRestrictedImportPattern = {
+  group: ["**/*.test-helpers.js"],
+  message: "Test helpers must not be imported from production package sources.",
+};
 
 export default tseslint.config(
   {
@@ -165,10 +169,7 @@ export default tseslint.config(
               message:
                 "unsafeFixtureAssertion is test-only; production code must use a boundary-specific helper.",
             },
-            {
-              group: ["**/*.test-helpers.js"],
-              message: "Test helpers must not be imported from production package sources.",
-            },
+            testHelperRestrictedImportPattern,
           ],
         },
       ],
@@ -273,6 +274,7 @@ export default tseslint.config(
               message:
                 "unsafeFixtureAssertion is test-only; production code must use a boundary-specific helper.",
             },
+            testHelperRestrictedImportPattern,
           ],
         },
       ],
@@ -328,6 +330,7 @@ export default tseslint.config(
               message:
                 "unsafeFixtureAssertion is test-only; production code must use a boundary-specific helper.",
             },
+            testHelperRestrictedImportPattern,
           ],
         },
       ],
