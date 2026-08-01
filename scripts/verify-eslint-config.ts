@@ -13,6 +13,16 @@ const representativeFiles = [
   "bench/conversion.bench.ts",
   "e2e/smoke.test.ts",
 ];
+const testHelperFiles = [
+  "packages/core/src/pptx-editor-session.test-helpers.ts",
+  "packages/document/src/writer/write-pptx.test-helpers.ts",
+  "packages/editor/src/index.test-helpers.ts",
+];
+const productionHelperImportFiles = [
+  "packages/core/src/index.ts",
+  "packages/document/src/index.ts",
+  "packages/editor/src/index.ts",
+];
 
 const commonRules = [
   "simple-import-sort/imports",
@@ -55,6 +65,25 @@ assertErrorRules(representativeFiles[0], packageConfig?.rules, [
   "no-restricted-imports",
 ]);
 
+for (const file of testHelperFiles) {
+  const config = await eslint.calculateConfigForFile(file);
+  assertErrorRules(file, config?.rules, ["import-x/no-extraneous-dependencies"]);
+  if (!file.startsWith("packages/core/")) {
+    assertErrorRules(file, config?.rules, ["no-restricted-imports"]);
+  }
+}
+
+for (const file of productionHelperImportFiles) {
+  const config = await eslint.calculateConfigForFile(file);
+  const restrictedImports = JSON.stringify(config?.rules["no-restricted-imports"]);
+  if (
+    !restrictedImports.includes('"**/*.test-helpers.js"') ||
+    !restrictedImports.includes("Test helpers must not be imported")
+  ) {
+    throw new Error(`Test helper imports are not restricted for ${file}`);
+  }
+}
+
 console.log(
-  `Verified the root ESLint config and policy rules for ${representativeFiles.length} lint targets.`,
+  `Verified the root ESLint config and policy rules for ${representativeFiles.length + testHelperFiles.length} lint targets.`,
 );

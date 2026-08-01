@@ -35,6 +35,10 @@ const editorBoundaryRestrictedImportPattern = {
   message:
     "@pptx-glimpse/editor is a headless command layer above @pptx-glimpse/document and must not import renderer, core, CLI, or UI code.",
 };
+const testHelperRestrictedImportPattern = {
+  group: ["**/*.test-helpers.js"],
+  message: "Test helpers must not be imported from production package sources.",
+};
 
 export default tseslint.config(
   {
@@ -151,6 +155,7 @@ export default tseslint.config(
     files: ["packages/*/src/**/*.ts"],
     ignores: [
       "packages/*/src/**/*.test.ts",
+      "packages/*/src/**/*.test-helpers.ts",
       "packages/*/src/**/*.e2e.test.ts",
     ],
     rules: {
@@ -164,6 +169,7 @@ export default tseslint.config(
               message:
                 "unsafeFixtureAssertion is test-only; production code must use a boundary-specific helper.",
             },
+            testHelperRestrictedImportPattern,
           ],
         },
       ],
@@ -183,6 +189,7 @@ export default tseslint.config(
     files: ["packages/core/src/**/*.ts"],
     ignores: [
       "packages/core/src/**/*.test.ts",
+      "packages/core/src/**/*.test-helpers.ts",
       "packages/core/src/**/*.e2e.test.ts",
     ],
     rules: {
@@ -199,6 +206,7 @@ export default tseslint.config(
   {
     files: [
       "packages/core/src/**/*.test.ts",
+      "packages/core/src/**/*.test-helpers.ts",
       "packages/core/src/**/*.e2e.test.ts",
     ],
     rules: {
@@ -243,6 +251,7 @@ export default tseslint.config(
     files: ["packages/document/src/**/*.ts"],
     ignores: [
       "packages/document/src/**/*.test.ts",
+      "packages/document/src/**/*.test-helpers.ts",
       "packages/document/src/**/*.e2e.test.ts",
     ],
     rules: {
@@ -265,6 +274,7 @@ export default tseslint.config(
               message:
                 "unsafeFixtureAssertion is test-only; production code must use a boundary-specific helper.",
             },
+            testHelperRestrictedImportPattern,
           ],
         },
       ],
@@ -273,6 +283,7 @@ export default tseslint.config(
   {
     files: [
       "packages/document/src/**/*.test.ts",
+      "packages/document/src/**/*.test-helpers.ts",
       "packages/document/src/**/*.e2e.test.ts",
     ],
     rules: {
@@ -296,6 +307,7 @@ export default tseslint.config(
     files: ["packages/editor/src/**/*.ts"],
     ignores: [
       "packages/editor/src/**/*.test.ts",
+      "packages/editor/src/**/*.test-helpers.ts",
       "packages/editor/src/**/*.e2e.test.ts",
     ],
     rules: {
@@ -318,6 +330,7 @@ export default tseslint.config(
               message:
                 "unsafeFixtureAssertion is test-only; production code must use a boundary-specific helper.",
             },
+            testHelperRestrictedImportPattern,
           ],
         },
       ],
@@ -326,6 +339,7 @@ export default tseslint.config(
   {
     files: [
       "packages/editor/src/**/*.test.ts",
+      "packages/editor/src/**/*.test-helpers.ts",
       "packages/editor/src/**/*.e2e.test.ts",
     ],
     rules: {
