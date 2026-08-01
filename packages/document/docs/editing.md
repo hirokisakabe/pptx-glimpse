@@ -35,6 +35,40 @@ paragraph text, shape transforms/fills/outlines, shape deletion, same-format ima
 existing Chart data, slide backgrounds, and slide topology. The authoring helpers can add new
 supported content to a slide loaded from an existing PPTX.
 
+## Picture crop
+
+`setPictureCrop` changes the DrawingML `a:srcRect` of an existing picture and
+`clearPictureCrop` removes it:
+
+```ts
+import {
+  asOoxmlPercent,
+  clearPictureCrop,
+  setPictureCrop,
+} from "@pptx-glimpse/document";
+
+const picture = source.slides[0]?.shapes.find((shape) => shape.kind === "image");
+if (picture?.handle === undefined) throw new Error("No editable picture found");
+
+const cropped = setPictureCrop(source, picture.handle, {
+  left: asOoxmlPercent(25000),
+  top: asOoxmlPercent(10000),
+});
+const uncropped = clearPictureCrop(cropped, picture.handle);
+```
+
+Insets use integer OOXML percentage units (`100000` = 100%). Omitted edges are zero. Each edge
+must be in `0..100000`, and `left + right` and `top + bottom` must each be less than `100000` so
+some source area remains visible. Invalid values are rejected; they are never clamped. An
+all-zero set is equivalent to clearing the crop.
+
+The existing-edit subset is a `p:pic` on a slide whose `p:blipFill` contains exactly one
+`a:stretch` and no `a:tile`. Tile fills, missing or ambiguous fill modes, layout/master pictures,
+and `mc:AlternateContent` targets are rejected. The writer patches only the targeted
+`a:srcRect`; sibling blip-fill attributes, effects, extension XML, shape properties, media bytes,
+and unrelated package parts are preserved. Setting the same effective insets or clearing an
+already absent crop returns the original source object without adding an edit record.
+
 ## Lossless group and ungroup
 
 `groupShapes(source, shapeHandles)` replaces two or more consecutive siblings with one native

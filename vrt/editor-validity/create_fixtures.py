@@ -24,6 +24,7 @@ from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import PP_ALIGN
 from pptx.oxml.xmlchemy import OxmlElement
 from pptx.util import Emu, Inches, Pt
+from PIL import Image
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "fixtures")
 
@@ -238,6 +239,47 @@ def create_editor_validity_image_fixture(filename, image_base64):
             image_path, Inches(2.2), Inches(1.4), Inches(4.8), Inches(2.7)
         )
         pic.name = "Replace Image Target"
+    finally:
+        os.unlink(image_path)
+
+    prs.save(os.path.join(OUTPUT_DIR, filename))
+    print(f"  Created: {filename}")
+
+
+def create_editor_validity_picture_crop_fixture(filename, *, expected):
+    """Fixture pair for existing stretch picture crop validity checks."""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    title = slide.shapes.add_textbox(Inches(0.4), Inches(0.25), Inches(9.2), Inches(0.5))
+    title.text_frame.text = "LibreOffice editor validity: picture crop"
+    title.text_frame.paragraphs[0].runs[0].font.size = Pt(18)
+
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        image = Image.new("RGB", (120, 80))
+        for y in range(80):
+            for x in range(120):
+                image.putpixel(
+                    (x, y),
+                    (
+                        240 if x < 60 else 30,
+                        220 if y < 40 else 40,
+                        80 if x < 60 else 220,
+                    ),
+                )
+        image.save(tmp, format="PNG")
+        image_path = tmp.name
+
+    try:
+        pic = slide.shapes.add_picture(
+            image_path, Inches(1.5), Inches(1.2), Inches(7.0), Inches(3.6)
+        )
+        pic.name = "Picture Crop Target"
+        if expected:
+            pic.crop_left = 0.25
+            pic.crop_top = 0.10
+            pic.crop_right = 0.05
+            pic.crop_bottom = 0.15
     finally:
         os.unlink(image_path)
 
@@ -515,6 +557,14 @@ def create_editor_validity_fixtures():
     create_editor_validity_image_fixture(
         "editor-validity-image-expected.pptx",
         "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAE0lEQVR4nGNkYPjPAANMcBZeDgAx0wEH1s7nlgAAAABJRU5ErkJggg==",
+    )
+    create_editor_validity_picture_crop_fixture(
+        "editor-validity-picture-crop-source.pptx",
+        expected=False,
+    )
+    create_editor_validity_picture_crop_fixture(
+        "editor-validity-picture-crop-expected.pptx",
+        expected=True,
     )
     create_editor_validity_chart_fixture(
         "editor-validity-chart-source.pptx",
