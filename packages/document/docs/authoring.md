@@ -227,8 +227,10 @@ references that layout; it does not rewrite existing or inherited shapes, and ex
 margin values take precedence.
 
 Additional layouts can be appended to any existing master with `addSlideLayout`, or through
-`PptxAuthoringSession.addSlideLayout`. The returned handle is immediately accepted by the existing
-drawing target API and by `addEmptySlideFromLayout` through its `partPath`. The input contract is:
+`PptxAuthoringSession.addSlideLayout`. The immutable function returns the updated source, where the
+appended layout is available from `source.slideLayouts`. The session method returns the new layout
+handle directly; that handle is immediately accepted by the existing drawing target API and by
+`addEmptySlideFromLayout` through its `partPath`. The input contract is:
 
 - `name` is required, trimmed, non-empty, and valid in an XML attribute.
 - `type` is one of the OOXML `ST_SlideLayoutType` values exposed as `SlideLayoutType`; it defaults
@@ -240,6 +242,8 @@ drawing target API and by `addEmptySlideFromLayout` through its `partPath`. The 
   so the defaults themselves are not recovered by rereading the package.
 
 ```ts
+import { asEmu, createPptx, createPptxAuthoringSession } from "@pptx-glimpse/document";
+
 const authoring = createPptxAuthoringSession(createPptx());
 const masterHandle = authoring.source.slideMasters[0]?.handle;
 if (masterHandle === undefined) throw new Error("Missing master");
