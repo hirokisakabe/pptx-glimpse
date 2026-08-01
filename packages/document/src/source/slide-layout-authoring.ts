@@ -697,18 +697,64 @@ function escapeXmlAttribute(value: string): string {
 
 function cloneLayoutXmlWithName(bytes: Uint8Array, name: string): Uint8Array {
   const xml = textDecoder.decode(bytes);
-  const startMatch = /<(?:[A-Za-z_][\w.-]*:)?cSld(?=[\s/>])/.exec(xml);
-  if (startMatch === null) {
+  const elementStart = findXmlElementStart(xml, "cSld");
+  if (elementStart === undefined) {
     throw new Error("cloneSlideLayout: source slide layout part does not contain p:cSld");
   }
-  const tagEnd = findXmlStartTagEnd(xml, startMatch.index + startMatch[0].length);
-  const startTag = xml.slice(startMatch.index, tagEnd + 1);
+  const tagEnd = findXmlStartTagEnd(xml, elementStart.nameEnd);
+  const startTag = xml.slice(elementStart.index, tagEnd + 1);
   const escapedName = escapeXmlAttribute(name);
   const namePattern = /(\sname\s*=\s*)(["'])([\s\S]*?)\2/;
   const renamed = namePattern.test(startTag)
     ? startTag.replace(namePattern, (_match, prefix: string) => `${prefix}"${escapedName}"`)
     : startTag.replace(/\s*\/?\>$/, (ending) => ` name="${escapedName}"${ending}`);
-  return textEncoder.encode(xml.slice(0, startMatch.index) + renamed + xml.slice(tagEnd + 1));
+  return textEncoder.encode(xml.slice(0, elementStart.index) + renamed + xml.slice(tagEnd + 1));
+}
+
+function findXmlElementStart(
+  xml: string,
+  localName: string,
+): { readonly index: number; readonly nameEnd: number } | undefined {
+  let index = 0;
+  while ((index = xml.indexOf("<", index)) >= 0) {
+    if (xml.startsWith("<!--", index)) {
+      index = skipXmlSection(xml, index + 4, "-->");
+      continue;
+    }
+    if (xml.startsWith("<![CDATA[", index)) {
+      index = skipXmlSection(xml, index + 9, "]]>");
+      continue;
+    }
+    if (xml.startsWith("<?", index)) {
+      index = skipXmlSection(xml, index + 2, "?>");
+      continue;
+    }
+    if (xml.startsWith("<!", index)) {
+      index = findXmlStartTagEnd(xml, index + 2) + 1;
+      continue;
+    }
+    if (xml.startsWith("</", index)) {
+      index += 2;
+      continue;
+    }
+    const nameMatch = /^<([A-Za-z_][\w.-]*(?::[A-Za-z_][\w.-]*)?)(?=[\s/>])/.exec(xml.slice(index));
+    if (nameMatch !== null) {
+      const qualifiedName = nameMatch[1];
+      if (qualifiedName?.split(":").at(-1) === localName) {
+        return { index, nameEnd: index + nameMatch[0].length };
+      }
+      index += nameMatch[0].length;
+      continue;
+    }
+    index += 1;
+  }
+  return undefined;
+}
+
+function skipXmlSection(xml: string, fromIndex: number, terminator: string): number {
+  const end = xml.indexOf(terminator, fromIndex);
+  if (end < 0) throw new Error("cloneSlideLayout: source slide layout XML is incomplete");
+  return end + terminator.length;
 }
 
 function findXmlStartTagEnd(xml: string, fromIndex: number): number {
@@ -759,8 +805,8 @@ function cloneLayoutModel(
 }
 
 function withShapePartPath(shape: SourceShapeNode, partPath: PartPath): SourceShapeNode {
-  if (shape.kind === "raw") return shape;
   const handle = shape.handle === undefined ? undefined : { ...shape.handle, partPath };
+  if (shape.kind === "raw") return { ...shape, ...(handle === undefined ? {} : { handle }) };
   if (shape.kind === "group") {
     return {
       ...shape,

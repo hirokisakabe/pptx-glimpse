@@ -315,6 +315,78 @@ describe("cloneSlideLayout", () => {
     ).toHaveLength(layout.shapes.length);
   });
 
+  it("renames the real cSld element when a comment contains a decoy start tag", () => {
+    const input = readFileSync(
+      new URL("../../../../shared-fixtures/real-basic-theme.pptx", import.meta.url),
+    );
+    const original = readPptx(input);
+    const layout = requireValue(original.slideLayouts[0]);
+    const decoder = new TextDecoder();
+    const encoder = new TextEncoder();
+    const decoy = '<!-- <p:cSld name="DECOY"> -->';
+    const source = {
+      ...original,
+      packageGraph: {
+        ...original.packageGraph,
+        rawParts: requireValue(original.packageGraph.rawParts).map((part) => {
+          if (part.partPath !== layout.partPath || part.kind !== "binary") return part;
+          return {
+            ...part,
+            bytes: encoder.encode(decoder.decode(part.bytes).replace("<p:cSld", `${decoy}<p:cSld`)),
+          };
+        }),
+      },
+    };
+
+    const edited = cloneSlideLayout(source, requireValue(layout.handle), { name: "Real Name" });
+    const cloned = requireValue(
+      edited.slideLayouts.find((candidate) => candidate.name === "Real Name"),
+    );
+    const clonedXml = strFromU8(requireValue(unzipSync(writePptx(edited))[cloned.partPath]));
+    expect(clonedXml).toContain(decoy);
+    expect(clonedXml).toContain('<p:cSld name="Real Name">');
+    expect(clonedXml).not.toContain('<p:cSld name="DECOY" name="Real Name">');
+  });
+
+  it("rebases raw shape handles so the cloned layout accepts shape ordering edits", () => {
+    const input = readFileSync(
+      new URL("../../../../shared-fixtures/real-basic-theme.pptx", import.meta.url),
+    );
+    const original = readPptx(input);
+    const layout = requireValue(original.slideLayouts[0]);
+    const group = requireValue(layout.shapes.find((shape) => shape.kind === "group"));
+    if (group.kind !== "group") throw new Error("test fixture group shape is missing");
+    const rawShape = {
+      kind: "raw" as const,
+      nodeId: group.nodeId,
+      raw: requireValue(group.rawSidecars?.[0]),
+      handle: requireValue(group.handle),
+    };
+    const source = {
+      ...original,
+      slideLayouts: original.slideLayouts.map((candidate) =>
+        candidate.partPath === layout.partPath
+          ? {
+              ...candidate,
+              shapes: candidate.shapes.map((shape) => (shape === group ? rawShape : shape)),
+            }
+          : candidate,
+      ),
+    };
+    const session = createPptxAuthoringSession(source);
+    const clonedHandle = session.cloneSlideLayout(requireValue(layout.handle), {
+      name: "Raw Clone",
+    });
+    const cloned = requireValue(
+      session.source.slideLayouts.find((candidate) => candidate.partPath === clonedHandle.partPath),
+    );
+    const clonedRaw = requireValue(cloned.shapes.find((shape) => shape.kind === "raw"));
+
+    expect(clonedRaw.handle?.partPath).toBe(cloned.partPath);
+    const handles = cloned.shapes.map((shape) => requireValue(shape.handle));
+    expect(() => session.target(clonedHandle).reorderShapes([...handles].reverse())).not.toThrow();
+  });
+
   it("shares relationship targets, allocates collisions, and returns an authoring handle", () => {
     let source = createPptx();
     const masterHandle = requireValue(source.slideMasters[0]?.handle);
