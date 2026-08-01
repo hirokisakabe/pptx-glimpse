@@ -32,6 +32,7 @@ import {
   moveSlide,
   readPptx,
   replaceImageBytes,
+  setBackground,
   setPictureCrop,
   setSlideBackground,
   setTableCellProperties,
@@ -1125,6 +1126,29 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
       libreOfficeImage,
       "editor-validity-from-scratch-slide-backgrounds.pptx",
       writePptx(source),
+    );
+  });
+
+  it("opens a PPTX after editing existing master and layout backgrounds", () => {
+    const existing = readPptx(writePptx(createPptx()));
+    const masterHandle = requireHandle(existing.slideMasters[0]?.handle);
+    const layoutHandle = requireHandle(existing.slideLayouts[0]?.handle);
+    let edited = setBackground(existing, masterHandle, {
+      kind: "gradient",
+      gradientType: "radial",
+      centerX: asOoxmlPercent(50000),
+      centerY: asOoxmlPercent(50000),
+      stops: [
+        { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "F8FAFC" } },
+        { position: asOoxmlPercent(100000), color: { kind: "srgb", hex: "CBD5E1" } },
+      ],
+    });
+    edited = setBackground(edited, layoutHandle, { kind: "image", bytes: BLUE_PNG });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-existing-master-layout-backgrounds.pptx",
+      writePptx(edited),
     );
   });
 });

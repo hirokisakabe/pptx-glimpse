@@ -13,7 +13,7 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
   const shapeOutlineKeys = new Set<string>();
   const pictureCropKeys = new Set<string>();
   const deletedShapeKeys = new Set<string>();
-  const slideBackgroundKeys = new Set<string>();
+  const backgroundKeys = new Set<string>();
   const textRunEdits: PptxSourceModelTextRunEdit[] = [];
   const textRunPropertiesEdits: PptxSourceModelTextRunPropertiesEdit[] = [];
 
@@ -140,15 +140,19 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
       case "moveSlide":
       case "deleteSlide":
         break;
-      case "setSlideBackground":
-        validateSlideBackgroundImageMetadata(edit);
-        if (slideBackgroundKeys.has(edit.slidePartPath)) {
+      case "setBackground":
+      case "setSlideBackground": {
+        validateBackgroundImageMetadata(edit);
+        const targetPartPath =
+          edit.kind === "setBackground" ? edit.targetPartPath : edit.slidePartPath;
+        if (backgroundKeys.has(targetPartPath)) {
           throw new Error(
-            `writePptx: conflicting background edits for slide '${edit.slidePartPath}'`,
+            `writePptx: conflicting background edits for drawing part '${targetPartPath}'`,
           );
         }
-        slideBackgroundKeys.add(edit.slidePartPath);
+        backgroundKeys.add(targetPartPath);
         break;
+      }
     }
   }
 
@@ -170,7 +174,7 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
   }
 }
 
-function validateSlideBackgroundImageMetadata(edit: {
+function validateBackgroundImageMetadata(edit: {
   readonly relationshipId?: unknown;
   readonly mediaPartPath?: unknown;
   readonly contentType?: unknown;
@@ -180,7 +184,7 @@ function validateSlideBackgroundImageMetadata(edit: {
   ).length;
   if (definedCount !== 0 && definedCount !== 3) {
     throw new Error(
-      "writePptx: slide background image relationship, media part, and content type must be provided together",
+      "writePptx: background image relationship, media part, and content type must be provided together",
     );
   }
 }

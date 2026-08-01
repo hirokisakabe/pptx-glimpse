@@ -4,9 +4,11 @@ import {
   addShape,
   asEmu,
   asOoxmlPercent,
+  asPartPath,
   asSourceNodeId,
   createPptx,
   readPptx,
+  setBackground,
   type SourceConnector,
   type SourceShape,
   writePptx,
@@ -573,7 +575,67 @@ describe("PptxEditorSession", () => {
     }
   });
 
-  it("falls back to all slides when applyAll changes inherited and slide-local content", async () => {
+  it("scopes and renders inherited master and layout background changes", async () => {
+    const created = createPptx();
+    const firstSlide = created.slides[0];
+    const firstLayout = created.slideLayouts[0];
+    const master = created.slideMasters[0];
+    if (
+      firstSlide === undefined ||
+      firstLayout?.handle === undefined ||
+      master?.handle === undefined
+    ) {
+      throw new Error("createPptx should create a slide, layout, and master");
+    }
+    const secondLayoutPartPath = asPartPath("ppt/slideLayouts/slideLayout2.xml");
+    const secondSlidePartPath = asPartPath("ppt/slides/slide2.xml");
+    const secondLayout = {
+      ...firstLayout,
+      partPath: secondLayoutPartPath,
+      handle: { partPath: secondLayoutPartPath },
+    };
+    const secondSlide = {
+      ...firstSlide,
+      partPath: secondSlidePartPath,
+      layoutPartPath: secondLayoutPartPath,
+      handle: { partPath: secondSlidePartPath },
+      background: {
+        kind: "fill" as const,
+        fill: {
+          kind: "solid" as const,
+          color: { kind: "srgb" as const, hex: "FFFFFF" },
+        },
+      },
+    };
+    const before = {
+      ...created,
+      slides: [firstSlide, secondSlide],
+      slideLayouts: [firstLayout, secondLayout],
+    };
+
+    const afterMaster = setBackground(before, master.handle, {
+      kind: "solid",
+      color: { kind: "srgb", hex: "112233" },
+    });
+    expect(affectedSlidePartPaths(before, afterMaster)).toEqual(new Set([firstSlide.partPath]));
+    const afterMasterImage = setBackground(before, master.handle, {
+      kind: "image",
+      bytes: RED_PNG,
+    });
+    expect(affectedSlidePartPaths(before, afterMasterImage)).toEqual(
+      new Set([firstSlide.partPath]),
+    );
+
+    const afterLayout = setBackground(before, firstLayout.handle, {
+      kind: "solid",
+      color: { kind: "srgb", hex: "445566" },
+    });
+    expect(affectedSlidePartPaths(before, afterLayout)).toEqual(new Set([firstSlide.partPath]));
+    const rendered = await renderPptxSourceModelToSvg(afterLayout, { skipSystemFonts: true });
+    expect(rendered.slides[0]?.svg).toContain('fill="#445566"');
+  });
+
+  it("scopes applyAll changes across inherited and slide-local content", async () => {
     const renderCalls: Array<readonly number[] | undefined> = [];
     configurePptxEditorSessionRenderer((source, options) => {
       renderCalls.push(options?.slides);
@@ -606,12 +668,12 @@ describe("PptxEditorSession", () => {
         },
       ]);
 
-      expect(renderCalls).toEqual([undefined, undefined]);
+      expect(renderCalls).toEqual([undefined, [1, 2]]);
       expect(editor.slides[0]?.svg).toContain(">Inher</");
       expect(editor.slides[1]?.svg).toContain("Second local edit");
 
       await editor.undo();
-      expect(renderCalls).toEqual([undefined, undefined, undefined]);
+      expect(renderCalls).toEqual([undefined, [1, 2], [1, 2]]);
       expect(editor.slides[0]?.svg).not.toContain(">Inher</");
       expect(editor.slides[1]?.svg).toContain("Second");
     } finally {

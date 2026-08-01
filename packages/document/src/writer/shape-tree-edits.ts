@@ -9,6 +9,7 @@ import type {
   PptxSourceModelDeleteShapeEdit,
   PptxSourceModelGroupShapesEdit,
   PptxSourceModelReorderShapesEdit,
+  PptxSourceModelSetBackgroundEdit,
   PptxSourceModelSetSlideBackgroundEdit,
   PptxSourceModelUngroupShapeEdit,
 } from "../source/index.js";
@@ -217,37 +218,47 @@ export function applyUngroupShapeEdit(root: XmlNode, edit: PptxSourceModelUngrou
   replaceContainerChildren(location.parentContainer, nextOrder);
 }
 
-export function applySetSlideBackgroundEdit(
+export function applySetBackgroundEdit(
   root: XmlNode,
-  edit: PptxSourceModelSetSlideBackgroundEdit,
+  edit: PptxSourceModelSetBackgroundEdit | PptxSourceModelSetSlideBackgroundEdit,
 ): void {
-  const slide = getChild(root, "sld");
+  const targetPartPath = edit.kind === "setBackground" ? edit.targetPartPath : edit.slidePartPath;
+  const drawingPart = getDrawingPartRoot(root);
   const cSldKey =
-    slide === undefined
+    drawingPart === undefined
       ? undefined
-      : Object.keys(slide).find((key) => !key.startsWith("@_") && localName(key) === "cSld");
-  const cSld = getChild(slide, "cSld");
-  if (slide === undefined || cSldKey === undefined || cSld === undefined) {
-    throw new Error(`writePptx: slide '${edit.slidePartPath}' has no p:cSld`);
+      : Object.keys(drawingPart).find((key) => !key.startsWith("@_") && localName(key) === "cSld");
+  const cSld = getChild(drawingPart, "cSld");
+  if (drawingPart === undefined || cSldKey === undefined || cSld === undefined) {
+    throw new Error(`writePptx: drawing part '${targetPartPath}' has no p:cSld`);
   }
   const spTreeKey = Object.keys(cSld).find(
     (key) => !key.startsWith("@_") && localName(key) === "spTree",
   );
   if (spTreeKey === undefined) {
-    throw new Error(`writePptx: slide '${edit.slidePartPath}' has no p:spTree`);
-  }
-  slide["@_xmlns:a"] ??= "http://schemas.openxmlformats.org/drawingml/2006/main";
-  if (edit.relationshipId !== undefined) {
-    slide["@_xmlns:r"] ??= "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
-  }
-  const parsedBackground = getChild(parseXmlForEditing(edit.xml), "bg");
-  if (parsedBackground === undefined) {
-    throw new Error("writePptx: background edit XML fragment does not contain a p:bg root element");
+    throw new Error(`writePptx: drawing part '${targetPartPath}' has no p:spTree`);
   }
   const existingBackgroundKey = Object.keys(cSld).find(
     (key) => !key.startsWith("@_") && localName(key) === "bg",
   );
   const existingBackground = getChild(cSld, "bg");
+  if (edit.xml === undefined) {
+    replaceNodeEntries(
+      cSld,
+      Object.entries(cSld).filter(([key]) => key.startsWith("@_") || localName(key) !== "bg"),
+    );
+    return;
+  }
+
+  drawingPart["@_xmlns:a"] ??= "http://schemas.openxmlformats.org/drawingml/2006/main";
+  if (edit.relationshipId !== undefined) {
+    drawingPart["@_xmlns:r"] ??=
+      "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+  }
+  const parsedBackground = getChild(parseXmlForEditing(edit.xml), "bg");
+  if (parsedBackground === undefined) {
+    throw new Error("writePptx: background edit XML fragment does not contain a p:bg root element");
+  }
   const backgroundKey = existingBackgroundKey ?? qualifiedSiblingName(cSldKey, "bg");
   const remappedBackground = remapElementPrefix(
     parsedBackground,

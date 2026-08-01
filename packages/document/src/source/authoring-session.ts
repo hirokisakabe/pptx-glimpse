@@ -27,8 +27,12 @@ import { addConnector, addShape, addSlideNumber, addTextBox } from "./shape-auth
 import { groupShapes } from "./shape-grouping.js";
 import { reorderShapes } from "./shape-ordering.js";
 import type { SourceGroup, SourceShapeNode } from "./shapes.js";
-import type { SetSlideBackgroundInput } from "./slide-background-authoring.js";
-import { setSlideBackground } from "./slide-background-authoring.js";
+import type { SetBackgroundInput, SetSlideBackgroundInput } from "./slide-background-authoring.js";
+import {
+  clearBackground,
+  setBackground,
+  setSlideBackground,
+} from "./slide-background-authoring.js";
 import type { AddSlideLayoutInput } from "./slide-layout-authoring.js";
 import { addSlideLayout } from "./slide-layout-authoring.js";
 import type { AddEmptySlideFromLayoutInput } from "./slide-topology.js";
@@ -58,6 +62,9 @@ export interface PptxAuthoringTarget {
    * the from-scratch contract.
    */
   groupShapes(shapeHandles: readonly SourceHandle[]): SourceHandle;
+  setBackground(input: SetBackgroundInput): void;
+  clearBackground(): void;
+  /** @deprecated Use `setBackground`. */
   setSlideBackground(input: SetSlideBackgroundInput): void;
   reorderShapes(orderedShapeHandles: readonly SourceHandle[]): void;
 }
@@ -120,6 +127,12 @@ export class PptxAuthoringSession {
         }
         this.#source = updated;
         return handle;
+      },
+      setBackground: (input) => {
+        this.#source = setBackground(this.#source, targetHandle, input);
+      },
+      clearBackground: () => {
+        this.#source = clearBackground(this.#source, targetHandle);
       },
       setSlideBackground: (input) => {
         this.#source = setSlideBackground(this.#source, targetHandle, input);

@@ -19,7 +19,7 @@ import {
   applyDeleteShapeEdit,
   applyGroupShapesEdit,
   applyReorderShapesEdit,
-  applySetSlideBackgroundEdit,
+  applySetBackgroundEdit,
   applyUngroupShapeEdit,
 } from "./shape-tree-edits.js";
 import { applyTableCellPropertiesEdit } from "./table-cell-property-edits.js";
@@ -126,8 +126,9 @@ function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
     case "ungroupShape":
       applyUngroupShapeEdit(root, edit);
       return;
+    case "setBackground":
     case "setSlideBackground":
-      applySetSlideBackgroundEdit(root, edit);
+      applySetBackgroundEdit(root, edit);
       return;
     case "addSlideLayout":
       applyAddSlideLayoutEdit(root, edit);

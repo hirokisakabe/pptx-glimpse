@@ -127,6 +127,16 @@ describe("PptxAuthoringSession", () => {
       kind: "fill",
       fill: { kind: "solid", color: { kind: "srgb", hex: "112233" } },
     });
+    session.target(layoutHandle).setBackground({
+      kind: "solid",
+      color: { kind: "srgb", hex: "445566" },
+    });
+    expect(session.source.slideLayouts[0]?.background).toMatchObject({
+      kind: "fill",
+      fill: { kind: "solid", color: { kind: "srgb", hex: "445566" } },
+    });
+    session.target(masterHandle).clearBackground();
+    expect(session.source.slideMasters[0]?.background).toBeUndefined();
   });
 
   it("groups authored drawing kinds and supports the same target abstraction for native groups", () => {

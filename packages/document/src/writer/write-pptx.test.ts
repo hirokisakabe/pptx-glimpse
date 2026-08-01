@@ -16,10 +16,12 @@ import {
   asPartPath,
   asPt,
   asSourceNodeId,
+  clearBackground,
   countImageReferencesToMedia,
   createComputedView,
   createPptx,
   readPptx,
+  setBackground,
   setSlideBackground,
   writePptx,
 } from "../index.js";
@@ -1671,8 +1673,8 @@ describe("writePptx - from-scratch builder", () => {
           ...source,
           edits: [
             {
-              kind: "setSlideBackground",
-              slidePartPath: source.slides[0].partPath,
+              kind: "setBackground",
+              targetPartPath: source.slides[0].partPath,
               relationshipId: "rId2",
               xml: "<p:bg/>",
             },
@@ -1680,6 +1682,93 @@ describe("writePptx - from-scratch builder", () => {
         },
       ]);
     }).toThrow(/relationship, media part, and content type must be provided together/);
+  });
+
+  it("sets and clears existing master and layout backgrounds through the common API", () => {
+    const base = readPptx(writePptx(createPptx()));
+    const masterHandle = base.slideMasters[0]?.handle;
+    const layoutHandle = base.slideLayouts[0]?.handle;
+    if (masterHandle === undefined || layoutHandle === undefined) {
+      throw new Error("createPptx should create master and layout handles");
+    }
+
+    const masterOutput = writePptx(
+      setBackground(base, masterHandle, {
+        kind: "gradient",
+        gradientType: "linear",
+        angle: asOoxmlAngle(5400000),
+        stops: [
+          { position: asOoxmlPercent(0), color: { kind: "srgb", hex: "112233" } },
+          { position: asOoxmlPercent(100000), color: { kind: "srgb", hex: "445566" } },
+        ],
+      }),
+    );
+    const masterReread = readPptx(masterOutput);
+    expect(masterReread.slideMasters[0]?.background).toMatchObject({
+      kind: "fill",
+      fill: { kind: "gradient", gradientType: "linear", angle: 5400000 },
+    });
+    expect(createComputedView(masterReread).slides[0]?.background?.sourceLayer).toBe("master");
+
+    const jpeg = new Uint8Array([0xff, 0xd8, 0xff, 0xdb, 1, 2, 3]);
+    const layoutOutput = writePptx(
+      setBackground(base, layoutHandle, { kind: "image", bytes: jpeg }),
+    );
+    const layoutArchive = unzipSync(layoutOutput);
+    const layoutReread = readPptx(layoutOutput);
+    expect(layoutReread.slideLayouts[0]?.background).toMatchObject({
+      kind: "fill",
+      fill: { kind: "image" },
+    });
+    expect(createComputedView(layoutReread).slides[0]?.background?.sourceLayer).toBe("layout");
+    expect(layoutArchive["ppt/media/image1.jpeg"]).toEqual(jpeg);
+
+    const clearedLayout = readPptx(
+      writePptx(clearBackground(layoutReread, requireHandle(layoutReread.slideLayouts[0]?.handle))),
+    );
+    expect(clearedLayout.slideLayouts[0]?.background).toBeUndefined();
+    expect(createComputedView(clearedLayout).slides[0]?.background).toBeUndefined();
+
+    const clearedOutput = writePptx(
+      clearBackground(masterReread, requireHandle(masterReread.slideMasters[0]?.handle)),
+    );
+    const clearedArchive = unzipSync(clearedOutput);
+    const clearedMasterXml = decoder.decode(clearedArchive["ppt/slideMasters/slideMaster1.xml"]);
+    const clearedReread = readPptx(clearedOutput);
+    expect(clearedMasterXml).not.toContain("<p:bg>");
+    expect(clearedReread.slideMasters[0]?.background).toBeUndefined();
+  });
+
+  it("adds PNG media to a master while preserving old media relationships and raw siblings", () => {
+    const initialArchive = unzipSync(writePptx(createPptx()));
+    const masterPartPath = "ppt/slideMasters/slideMaster1.xml";
+    const masterXml = decoder
+      .decode(initialArchive[masterPartPath])
+      .replace("</p:sldMaster>", '<p:extLst><p:ext uri="keep"/></p:extLst></p:sldMaster>');
+    const base = readPptx(
+      zipSync({ ...initialArchive, [masterPartPath]: encoder.encode(masterXml) }),
+    );
+    const withImage = writePptx(
+      setBackground(base, requireHandle(base.slideMasters[0]?.handle), {
+        kind: "image",
+        bytes: BLUE_PNG,
+      }),
+    );
+    const reread = readPptx(withImage);
+    const replaced = writePptx(
+      setBackground(reread, requireHandle(reread.slideMasters[0]?.handle), {
+        kind: "solid",
+        color: { kind: "srgb", hex: "ABCDEF" },
+      }),
+    );
+    const archive = unzipSync(replaced);
+    const writtenMasterXml = decoder.decode(archive[masterPartPath]);
+    const masterRels = decoder.decode(archive["ppt/slideMasters/_rels/slideMaster1.xml.rels"]);
+
+    expect(writtenMasterXml).toContain('<p:extLst><p:ext uri="keep"/></p:extLst>');
+    expect(writtenMasterXml).toContain('<a:srgbClr val="ABCDEF"/>');
+    expect(masterRels).toContain("../media/image1.png");
+    expect(archive["ppt/media/image1.png"]).toEqual(BLUE_PNG);
   });
 
   it("preserves a non-standard PresentationML prefix when authoring a slide background", () => {
