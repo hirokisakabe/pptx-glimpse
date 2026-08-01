@@ -12,7 +12,7 @@ export function SlideViewer({
   currentIndex,
   onNavigate,
 }: {
-  slides: Slide[];
+  slides: readonly Slide[];
   currentIndex: number;
   onNavigate: (index: number) => void;
 }) {
