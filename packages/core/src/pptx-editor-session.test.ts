@@ -736,6 +736,55 @@ describe("PptxEditorSession", () => {
     }
   });
 
+  it("exposes the same ordered master and layout catalog from Node and browser entries", async () => {
+    const input = await buildLayoutCatalogFixture();
+    const browserEntry = await import("./browser.js");
+    const editors = [
+      await createPptxEditorSession(input, { skipSystemFonts: true }),
+      await browserEntry.createPptxEditorSession(input, { skipSystemFonts: true }),
+    ];
+
+    const expected = [
+      {
+        handle: { partPath: "ppt/slideMasters/slideMaster2.xml" },
+        name: "Second Master",
+        layouts: [
+          {
+            handle: { partPath: "ppt/slideLayouts/slideLayout3.xml" },
+            name: "Hidden Layout",
+            type: "title",
+            hidden: true,
+            slideReferenceCount: 0,
+          },
+          {
+            handle: { partPath: "ppt/slideLayouts/slideLayout2.xml" },
+            name: "Popular Layout",
+            type: "twoObj",
+            hidden: false,
+            slideReferenceCount: 2,
+          },
+        ],
+      },
+      {
+        handle: { partPath: "ppt/slideMasters/slideMaster1.xml" },
+        name: "First Master",
+        layouts: [
+          {
+            handle: { partPath: "ppt/slideLayouts/slideLayout1.xml" },
+            name: "Visible by Default",
+            type: "blank",
+            hidden: false,
+            slideReferenceCount: 1,
+          },
+        ],
+      },
+    ];
+
+    for (const editor of editors) {
+      expect(editor.layoutCatalog).toEqual(expected);
+    }
+  });
+
   it("groups and ungroups with topology and selection restored by history", async () => {
     const editor = await createPptxEditorSession(buildGroupCommandFixture(), {
       skipSystemFonts: true,
@@ -840,6 +889,156 @@ function buildGroupCommandFixture(): Uint8Array {
     });
   }
   return writePptx(source);
+}
+
+async function buildLayoutCatalogFixture(): Promise<Uint8Array> {
+  const zip = new JSZip();
+  zip.file(
+    "[Content_Types].xml",
+    xml(
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>` +
+        [1, 2, 3]
+          .map(
+            (number) =>
+              `<Override PartName="/ppt/slides/slide${String(number)}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`,
+          )
+          .join("") +
+        [1, 2, 3]
+          .map(
+            (number) =>
+              `<Override PartName="/ppt/slideLayouts/slideLayout${String(number)}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>`,
+          )
+          .join("") +
+        [1, 2]
+          .map(
+            (number) =>
+              `<Override PartName="/ppt/slideMasters/slideMaster${String(number)}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>`,
+          )
+          .join("") +
+        `</Types>`,
+    ),
+  );
+  zip.file(
+    "_rels/.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>` +
+        `</Relationships>`,
+    ),
+  );
+  zip.file(
+    "ppt/presentation.xml",
+    xml(
+      `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rIdMaster2"/><p:sldMasterId id="2147483649" r:id="rIdMaster1"/></p:sldMasterIdLst>` +
+        `<p:sldIdLst><p:sldId id="256" r:id="rIdSlide1"/><p:sldId id="257" r:id="rIdSlide2"/><p:sldId id="258" r:id="rIdSlide3"/></p:sldIdLst>` +
+        `<p:sldSz cx="9144000" cy="5143500"/>` +
+        `</p:presentation>`,
+    ),
+  );
+  zip.file(
+    "ppt/_rels/presentation.xml.rels",
+    xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rIdMaster1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>` +
+        `<Relationship Id="rIdMaster2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster2.xml"/>` +
+        [1, 2, 3]
+          .map(
+            (number) =>
+              `<Relationship Id="rIdSlide${String(number)}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide${String(number)}.xml"/>`,
+          )
+          .join("") +
+        `</Relationships>`,
+    ),
+  );
+
+  zip.file("ppt/slideMasters/slideMaster1.xml", slideMasterXml("First Master", [[1, 1]]));
+  zip.file(
+    "ppt/slideMasters/slideMaster2.xml",
+    slideMasterXml("Second Master", [
+      [3, 3],
+      [2, 2],
+    ]),
+  );
+  zip.file("ppt/slideMasters/_rels/slideMaster1.xml.rels", masterLayoutRels([1]));
+  zip.file("ppt/slideMasters/_rels/slideMaster2.xml.rels", masterLayoutRels([2, 3]));
+
+  zip.file("ppt/slideLayouts/slideLayout1.xml", slideLayoutXml("Visible by Default", "blank"));
+  zip.file("ppt/slideLayouts/slideLayout2.xml", slideLayoutXml("Popular Layout", "twoObj", true));
+  zip.file("ppt/slideLayouts/slideLayout3.xml", slideLayoutXml("Hidden Layout", "title", false));
+  for (const [layoutNumber, masterNumber] of [
+    [1, 1],
+    [2, 2],
+    [3, 2],
+  ] as const) {
+    zip.file(
+      `ppt/slideLayouts/_rels/slideLayout${String(layoutNumber)}.xml.rels`,
+      xml(
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+          `<Relationship Id="rIdMaster" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="../slideMasters/slideMaster${String(masterNumber)}.xml"/>` +
+          `</Relationships>`,
+      ),
+    );
+  }
+
+  for (const [slideNumber, layoutNumber] of [
+    [1, 1],
+    [2, 2],
+    [3, 2],
+  ] as const) {
+    zip.file(
+      `ppt/slides/slide${String(slideNumber)}.xml`,
+      xml(
+        `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree/></p:cSld></p:sld>`,
+      ),
+    );
+    zip.file(
+      `ppt/slides/_rels/slide${String(slideNumber)}.xml.rels`,
+      xml(
+        `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+          `<Relationship Id="rIdLayout" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout${String(layoutNumber)}.xml"/>` +
+          `</Relationships>`,
+      ),
+    );
+  }
+
+  return zip.generateAsync({ type: "uint8array" });
+}
+
+function slideMasterXml(name: string, layouts: readonly (readonly [number, number])[]): Uint8Array {
+  return xml(
+    `<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+      `<p:cSld name="${name}"><p:spTree/></p:cSld>` +
+      `<p:sldLayoutIdLst>${layouts
+        .map(
+          ([id, relationshipNumber]) =>
+            `<p:sldLayoutId id="${String(2147483648 + id)}" r:id="rIdLayout${String(relationshipNumber)}"/>`,
+        )
+        .join("")}</p:sldLayoutIdLst>` +
+      `</p:sldMaster>`,
+  );
+}
+
+function masterLayoutRels(layoutNumbers: readonly number[]): Uint8Array {
+  return xml(
+    `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${layoutNumbers
+      .map(
+        (number) =>
+          `<Relationship Id="rIdLayout${String(number)}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout${String(number)}.xml"/>`,
+      )
+      .join("")}</Relationships>`,
+  );
+}
+
+function slideLayoutXml(name: string, type: string, show?: boolean): Uint8Array {
+  return xml(
+    `<p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" type="${type}"${show === undefined ? "" : ` show="${show ? "1" : "0"}"`}>` +
+      `<p:cSld name="${name}"><p:spTree/></p:cSld>` +
+      `</p:sldLayout>`,
+  );
 }
 
 async function capturePptxEditorError(promise: Promise<unknown>): Promise<PptxEditorError> {

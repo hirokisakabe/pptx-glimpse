@@ -38,6 +38,8 @@ export type {
   PptxEditorSelectionInfo,
   PptxEditorShapeBoundsPx,
   PptxEditorShapeInfo,
+  PptxEditorSlideLayoutCatalogEntry,
+  PptxEditorSlideMasterCatalogEntry,
   PptxEditorSlidesResponse,
   PptxEditorSlideSvg,
   PptxEditorTextBodyView,
