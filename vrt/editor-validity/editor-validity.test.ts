@@ -31,6 +31,7 @@ import {
   readPptx,
   replaceImageBytes,
   setSlideBackground,
+  setTableCellProperties,
   type SourceConnector,
   type SourceGroup,
   type SourceHandle,
@@ -38,6 +39,7 @@ import {
   type SourceParagraph,
   type SourceShape,
   type SourceShapeNode,
+  type SourceTable,
   type SourceTextBody,
   type SourceTextRun,
   ungroupShape,
@@ -106,6 +108,32 @@ const LO_EDITOR_VALIDITY_CASES = [
 
       if (!result.ok) throw new Error(result.message);
       return writePptx(result.document);
+    },
+  },
+  {
+    name: "table cell fill border and margin",
+    sourceFixture: "editor-validity-table-cell-properties-source.pptx",
+    expectedFixture: "editor-validity-table-cell-properties-expected.pptx",
+    createEditedPptx: (input: Uint8Array) => {
+      const source = readPptx(input);
+      const table = findFirstTable(source);
+      if (table.handle === undefined) throw new Error("table fixture has no editable handle");
+      const edited = setTableCellProperties(
+        source,
+        { tableHandle: table.handle, rowIndex: 0, cellIndex: 0 },
+        {
+          fill: { kind: "solid", color: { kind: "srgb", hex: "F4B183" } },
+          borders: {
+            left: {
+              width: asEmu(25400),
+              fill: { kind: "solid", color: { kind: "srgb", hex: "C00000" } },
+            },
+          },
+          marginLeft: asEmu(457200),
+          marginTop: asEmu(182880),
+        },
+      );
+      return writePptx(edited);
     },
   },
   {
@@ -1371,6 +1399,25 @@ function findTextRun(source: ReturnType<typeof readPptx>, text: string): SourceT
     }
   }
   throw new Error(`Text run not found: ${text}`);
+}
+
+function findFirstTable(source: ReturnType<typeof readPptx>): SourceTable {
+  for (const slide of source.slides) {
+    const table = findTable(slide.shapes);
+    if (table !== undefined) return table;
+  }
+  throw new Error("Table not found");
+}
+
+function findTable(shapes: readonly SourceShapeNode[]): SourceTable | undefined {
+  for (const shape of shapes) {
+    if (shape.kind === "table") return shape;
+    if (shape.kind === "group") {
+      const nested = findTable(shape.children);
+      if (nested !== undefined) return nested;
+    }
+  }
+  return undefined;
 }
 
 function textBodies(shape: SourceShapeNode): readonly SourceTextBody[] {

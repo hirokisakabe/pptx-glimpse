@@ -38,6 +38,12 @@ export type {
 } from "./picture-authoring.js";
 export { addPicture } from "./picture-authoring.js";
 export type {
+  EditableTableCellBorder,
+  EditableTableCellProperties,
+  EditableTableCellProperty,
+  TableCellAddress,
+} from "./pptx-source-model.js";
+export type {
   AddConnectorConnectionEndpointInput,
   AddConnectorInput,
   AddConnectorOutlineInput,
@@ -107,6 +113,7 @@ export type {
   AddTableRunPropertiesInput,
 } from "./table-authoring.js";
 export { addTable } from "./table-authoring.js";
+export { clearTableCellProperties, setTableCellProperties } from "./table-cell-editing.js";
 export {
   clearParagraphProperties,
   clearTextRunProperties,

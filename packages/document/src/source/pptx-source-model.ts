@@ -73,6 +73,7 @@ export type PptxSourceModelEdit =
   | PptxSourceModelShapeTransformEdit
   | PptxSourceModelShapeFillEdit
   | PptxSourceModelShapeOutlineEdit
+  | PptxSourceModelTableCellPropertiesEdit
   | PptxSourceModelAddShapeEdit
   | PptxSourceModelAddTextBoxEdit
   | PptxSourceModelAddConnectorEdit
@@ -176,6 +177,53 @@ export interface PptxSourceModelShapeOutlineEdit {
   readonly kind: "updateShapeOutline";
   readonly handle: SourceHandle;
   readonly outline: EditableShapeOutline;
+}
+
+/** @inline */
+export type EditableTableCellProperty =
+  | "fill"
+  | "borderTop"
+  | "borderBottom"
+  | "borderLeft"
+  | "borderRight"
+  | "marginLeft"
+  | "marginRight"
+  | "marginTop"
+  | "marginBottom";
+
+/** @inline */
+export interface EditableTableCellBorder {
+  readonly width?: Emu;
+  readonly fill?: EditableShapeFill;
+}
+
+/** @inline */
+export interface EditableTableCellProperties {
+  readonly fill?: EditableShapeFill;
+  readonly borders?: {
+    readonly top?: EditableTableCellBorder;
+    readonly bottom?: EditableTableCellBorder;
+    readonly left?: EditableTableCellBorder;
+    readonly right?: EditableTableCellBorder;
+  };
+  readonly marginLeft?: Emu;
+  readonly marginRight?: Emu;
+  readonly marginTop?: Emu;
+  readonly marginBottom?: Emu;
+}
+
+/** Zero-based physical cell address within one native Table. @inline */
+export interface TableCellAddress {
+  readonly tableHandle: SourceHandle;
+  readonly rowIndex: number;
+  readonly cellIndex: number;
+}
+
+export interface PptxSourceModelTableCellPropertiesEdit {
+  readonly kind: "updateTableCellProperties";
+  readonly address: TableCellAddress;
+  readonly set?: EditableTableCellProperties;
+  readonly clear?: readonly EditableTableCellProperty[];
 }
 
 export interface PptxSourceModelAddTextBoxEdit {
