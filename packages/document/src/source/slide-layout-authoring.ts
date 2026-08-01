@@ -169,21 +169,14 @@ export function addSlideLayout(
   if (master === undefined) {
     throw new Error("addSlideLayout: slide master handle was not found in PptxSourceModel source");
   }
-  const masterRelationships = requireMasterRelationships(source, master.partPath);
-  const newLayoutPartPath = nextNumberedPartPath(
-    source.packageGraph,
-    source.edits?.flatMap((edit) => editReservedPartPaths(edit)) ?? [],
-    SLIDE_LAYOUT_PART_PREFIX,
-    ".xml",
-  );
-  const newRelationshipId = nextRelationshipId(masterRelationships.relationships);
-  const idAllocation = layoutIdAllocation(
+  const insertion = prepareSlideLayoutInsertion(
     source,
-    master.partPath,
-    master.layoutPartPaths,
+    masterIndex,
+    master.layoutPartPaths.length,
+    source.slideLayouts.length,
     "addSlideLayout",
   );
-  const newLayoutNumericId = idAllocation.newLayoutNumericId;
+  const { newLayoutPartPath, newRelationshipId } = insertion;
   const layoutMasterRelationship: Relationship = {
     id: asRelationshipId("rId1"),
     type: SLIDE_MASTER_REL_TYPE,
@@ -245,12 +238,6 @@ export function addSlideLayout(
         ),
     });
   }
-  packageGraph = addPartRelationship(packageGraph, master.partPath, {
-    id: newRelationshipId,
-    type: SLIDE_LAYOUT_REL_TYPE,
-    target: relativeTarget(master.partPath, newLayoutPartPath),
-  });
-
   const background = sourceBackground(normalized.background, image?.relationshipId);
   const newLayout: SourceSlideLayout = {
     partPath: newLayoutPartPath,
@@ -277,21 +264,11 @@ export function addSlideLayout(
     masterPartPath: master.partPath,
     newLayoutPartPath,
     newRelationshipId,
-    newLayoutNumericId,
-    initialLayoutEntries: idAllocation.initialLayoutEntries,
+    newLayoutNumericId: insertion.newLayoutNumericId,
+    initialLayoutEntries: insertion.initialLayoutEntries,
   } satisfies PptxSourceModelAddSlideLayoutEdit;
 
-  return {
-    ...source,
-    slideLayouts: [...source.slideLayouts, newLayout],
-    slideMasters: source.slideMasters.map((candidate, index) =>
-      index === masterIndex
-        ? { ...candidate, layoutPartPaths: [...candidate.layoutPartPaths, newLayoutPartPath] }
-        : candidate,
-    ),
-    packageGraph,
-    edits: [...(source.edits ?? []), edit],
-  };
+  return commitSlideLayoutInsertion(source, insertion, packageGraph, newLayout, edit);
 }
 
 /** Clones one preserved layout within its existing master and returns an updated source. */
@@ -351,24 +328,14 @@ export function cloneSlideLayout(
     throw new Error("cloneSlideLayout: source slide layout does not reference its master");
   }
 
-  const masterRelationships = requireMasterRelationships(
+  const insertion = prepareSlideLayoutInsertion(
     source,
-    master.partPath,
+    masterIndex,
+    insertAt,
+    globalLayoutInsertIndex(source, master.layoutPartPaths, insertAt),
     "cloneSlideLayout",
   );
-  const newLayoutPartPath = nextNumberedPartPath(
-    source.packageGraph,
-    source.edits?.flatMap((edit) => editReservedPartPaths(edit)) ?? [],
-    SLIDE_LAYOUT_PART_PREFIX,
-    ".xml",
-  );
-  const newRelationshipId = nextRelationshipId(masterRelationships.relationships);
-  const idAllocation = layoutIdAllocation(
-    source,
-    master.partPath,
-    master.layoutPartPaths,
-    "cloneSlideLayout",
-  );
+  const { newLayoutPartPath, newRelationshipId } = insertion;
   const newLayoutRelationships: PartRelationships = {
     sourcePartPath: newLayoutPartPath,
     relationships: sourceRelationships.relationships.map((relationship) => {
@@ -381,20 +348,12 @@ export function cloneSlideLayout(
   const layoutContentType =
     source.packageGraph.parts.find((part) => part.partPath === sourceLayout.partPath)
       ?.contentType ?? SLIDE_LAYOUT_CONTENT_TYPE;
-  let packageGraph = addPackagePart(source.packageGraph, {
+  const packageGraph = addPackagePart(source.packageGraph, {
     partPath: newLayoutPartPath,
     contentType: layoutContentType,
     bytes: cloneLayoutXmlWithName(sourceRawLayout.bytes, normalized.name),
     relationships: newLayoutRelationships,
   });
-  packageGraph = addPartRelationship(packageGraph, master.partPath, {
-    id: newRelationshipId,
-    type: SLIDE_LAYOUT_REL_TYPE,
-    target: relativeTarget(master.partPath, newLayoutPartPath),
-  });
-
-  const newLayoutPartPaths = insertAtReadonly(master.layoutPartPaths, insertAt, newLayoutPartPath);
-  const globalInsertAt = globalLayoutInsertIndex(source, master.layoutPartPaths, insertAt);
   const newLayout = cloneLayoutModel(sourceLayout, newLayoutPartPath, normalized.name);
   const edit = {
     kind: "cloneSlideLayout",
@@ -402,16 +361,92 @@ export function cloneSlideLayout(
     sourceLayoutPartPath: sourceLayout.partPath,
     newLayoutPartPath,
     newRelationshipId,
-    newLayoutNumericId: idAllocation.newLayoutNumericId,
+    newLayoutNumericId: insertion.newLayoutNumericId,
     insertAt,
-    initialLayoutEntries: idAllocation.initialLayoutEntries,
+    initialLayoutEntries: insertion.initialLayoutEntries,
   } satisfies PptxSourceModelCloneSlideLayoutEdit;
 
+  return commitSlideLayoutInsertion(source, insertion, packageGraph, newLayout, edit);
+}
+
+type SlideLayoutInsertionOperationName = "addSlideLayout" | "cloneSlideLayout";
+type SlideLayoutInsertionEdit =
+  | PptxSourceModelAddSlideLayoutEdit
+  | PptxSourceModelCloneSlideLayoutEdit;
+
+interface PreparedSlideLayoutInsertion {
+  readonly masterIndex: number;
+  readonly masterPartPath: PartPath;
+  readonly masterInsertAt: number;
+  readonly sourceInsertAt: number;
+  readonly newLayoutPartPath: PartPath;
+  readonly newRelationshipId: RelationshipId;
+  readonly newLayoutNumericId: number;
+  readonly initialLayoutEntries: PptxSourceModelAddSlideLayoutEdit["initialLayoutEntries"];
+}
+
+function prepareSlideLayoutInsertion(
+  source: PptxSourceModel,
+  masterIndex: number,
+  masterInsertAt: number,
+  sourceInsertAt: number,
+  operationName: SlideLayoutInsertionOperationName,
+): PreparedSlideLayoutInsertion {
+  const master = source.slideMasters[masterIndex];
+  if (master === undefined) {
+    throw new Error(`${operationName}: slide master was not found`);
+  }
+  const masterRelationships = requireMasterRelationships(source, master.partPath, operationName);
+  const newLayoutPartPath = nextNumberedPartPath(
+    source.packageGraph,
+    source.edits?.flatMap((edit) => editReservedPartPaths(edit)) ?? [],
+    SLIDE_LAYOUT_PART_PREFIX,
+    ".xml",
+  );
+  const idAllocation = layoutIdAllocation(
+    source,
+    master.partPath,
+    master.layoutPartPaths,
+    operationName,
+  );
+  return {
+    masterIndex,
+    masterPartPath: master.partPath,
+    masterInsertAt,
+    sourceInsertAt,
+    newLayoutPartPath,
+    newRelationshipId: nextRelationshipId(masterRelationships.relationships),
+    newLayoutNumericId: idAllocation.newLayoutNumericId,
+    initialLayoutEntries: idAllocation.initialLayoutEntries,
+  };
+}
+
+function commitSlideLayoutInsertion(
+  source: PptxSourceModel,
+  insertion: PreparedSlideLayoutInsertion,
+  packageGraphWithLayout: PptxSourceModel["packageGraph"],
+  newLayout: SourceSlideLayout,
+  edit: SlideLayoutInsertionEdit,
+): PptxSourceModel {
+  const packageGraph = addPartRelationship(packageGraphWithLayout, insertion.masterPartPath, {
+    id: insertion.newRelationshipId,
+    type: SLIDE_LAYOUT_REL_TYPE,
+    target: relativeTarget(insertion.masterPartPath, insertion.newLayoutPartPath),
+  });
   return {
     ...source,
-    slideLayouts: insertAtReadonly(source.slideLayouts, globalInsertAt, newLayout),
+    slideLayouts: insertAtReadonly(source.slideLayouts, insertion.sourceInsertAt, newLayout),
     slideMasters: source.slideMasters.map((candidate, index) =>
-      index === masterIndex ? { ...candidate, layoutPartPaths: newLayoutPartPaths } : candidate,
+      index === insertion.masterIndex
+        ? {
+            ...candidate,
+            layoutPartPaths: insertAtReadonly(
+              candidate.layoutPartPaths,
+              insertion.masterInsertAt,
+              insertion.newLayoutPartPath,
+            ),
+          }
+        : candidate,
     ),
     packageGraph,
     edits: [...(source.edits ?? []), edit],
