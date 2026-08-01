@@ -2771,9 +2771,11 @@ describe("writePptx - no-edit round-trip", () => {
       throw new Error("sequential image targets were not parsed");
     }
 
-    const isolated = replaceImageBytes(source, target.handle, BLUE_PNG);
+    const targetHandle = { partPath: target.handle.partPath, nodeId: target.handle.nodeId };
+    const sharedHandle = { partPath: shared.handle.partPath, nodeId: shared.handle.nodeId };
+    const isolated = replaceImageBytes(source, targetHandle, BLUE_PNG);
     expect(countImageReferencesToMedia(isolated, asPartPath("ppt/media/image1.png"))).toBe(1);
-    const edited = replaceImageBytes(isolated, shared.handle, GREEN_PNG);
+    const edited = replaceImageBytes(isolated, sharedHandle, GREEN_PNG);
     const output = writePptx(edited);
 
     expect(edited.edits?.at(-1)).toMatchObject({

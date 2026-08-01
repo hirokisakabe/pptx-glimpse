@@ -330,6 +330,8 @@ export interface PptxSourceModelReplaceImageEdit {
   readonly mode?: "inPlace" | "copyOnWrite";
   /** Media part referenced before this edit. Defaults to `mediaPartPath` for legacy records. */
   readonly sourceMediaPartPath?: PartPath;
+  /** Relationship referenced by the target picture before this edit. */
+  readonly sourceRelationshipId?: RelationshipId;
   /** Media part that contains the replacement bytes after this edit. */
   readonly mediaPartPath: PartPath;
   readonly contentType: string;

@@ -36,6 +36,10 @@ export function replaceImageBytes(
 ): PptxSourceModel {
   const image = requireImageBySourceHandle(source, handle, "replaceImageBytes");
   const media = requireMediaForImage(source, image, "replaceImageBytes");
+  const sourceRelationshipId = image.blipRelationshipId;
+  if (sourceRelationshipId === undefined) {
+    throw new Error("replaceImageBytes: image shape has no embedded blip relationship");
+  }
   const detectedContentType = detectImageContentType(bytes);
   if (detectedContentType === undefined) {
     throw new Error("replaceImageBytes: unsupported or unknown replacement image format");
@@ -55,6 +59,7 @@ export function replaceImageBytes(
       bytes,
       detectedContentType,
       sharedReferenceCount,
+      sourceRelationshipId,
     );
   }
   const edit = {
@@ -62,6 +67,7 @@ export function replaceImageBytes(
     handle,
     mode: "inPlace",
     sourceMediaPartPath: media.partPath,
+    sourceRelationshipId,
     mediaPartPath: media.partPath,
     contentType: media.contentType,
     sharedReferenceCount,
@@ -86,6 +92,7 @@ function replaceSharedImageBytes(
   bytes: Uint8Array,
   contentType: string,
   sharedReferenceCount: number,
+  sourceRelationshipId: RelationshipId,
 ): PptxSourceModel {
   if (handle.nodeId === undefined) {
     throw new Error("replaceImageBytes: shared image replacement requires a picture node id");
@@ -118,6 +125,7 @@ function replaceSharedImageBytes(
     handle,
     mode: "copyOnWrite",
     sourceMediaPartPath: media.partPath,
+    sourceRelationshipId,
     mediaPartPath,
     contentType,
     sharedReferenceCount,
@@ -333,7 +341,7 @@ function countPendingRelationshipReplacements(
       edit.kind === "replaceImage" &&
       edit.mode === "copyOnWrite" &&
       edit.handle.partPath === ownerPartPath &&
-      edit.handle.relationshipId === relationshipId &&
+      (edit.sourceRelationshipId ?? edit.handle.relationshipId) === relationshipId &&
       edit.sourceMediaPartPath === mediaPartPath,
   ).length;
 }
