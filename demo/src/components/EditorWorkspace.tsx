@@ -2,13 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  createPptxEditorSession,
   isPptxEditorError,
   type PptxEditorShapeBoundsPx,
   type PptxEditorShapeInfo,
   type PptxEditorSlideSvg,
   type EditorCommand,
-  type FontBuffer,
+  type PptxEditorSession,
   type SourceHandle,
 } from "pptx-glimpse";
 
@@ -17,7 +16,7 @@ const MIN_SHAPE_SIZE = 8;
 const MAX_IMAGE_REPLACEMENT_BYTES = 5 * 1024 * 1024;
 const SLIDE_DRAG_THRESHOLD_PX = 4;
 
-type EditorSession = Awaited<ReturnType<typeof createPptxEditorSession>>;
+type EditorSession = PptxEditorSession;
 type ShapeTransformCommand = Extract<EditorCommand, { readonly kind: "setShapeTransform" }>;
 type TextRunProperties = Extract<
   EditorCommand,
@@ -29,10 +28,9 @@ type ClearTextRunProperties = Extract<
 >["properties"];
 
 interface EditorWorkspaceProps {
+  readonly editor: EditorSession;
   readonly fileName: string;
   readonly fontFileCount: number;
-  readonly pptxBytes: Uint8Array;
-  readonly fonts: readonly FontBuffer[];
   readonly onAddFonts: () => void;
   readonly onOpenPptx: () => void;
   readonly onOpenSample: () => void;
@@ -92,19 +90,19 @@ type PreferredSlideIndex = number | ((session: EditorSession) => number);
 type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
 export function EditorWorkspace({
+  editor,
   fileName,
   fontFileCount,
-  pptxBytes,
-  fonts,
   onAddFonts,
   onOpenPptx,
   onOpenSample,
 }: EditorWorkspaceProps) {
   const [downloadName, setDownloadName] = useState(() => fileStem(fileName));
-  const [editor, setEditor] = useState<EditorSession | null>(null);
-  const [slides, setSlides] = useState<PptxEditorSlideSvg[]>([]);
+  const [slides, setSlides] = useState<PptxEditorSlideSvg[]>(() => [...editor.slides]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [shapeOptions, setShapeOptions] = useState<PptxEditorShapeInfo[]>([]);
+  const [shapeOptions, setShapeOptions] = useState<PptxEditorShapeInfo[]>(() => [
+    ...editor.shapes(1).filter((shape) => shape.handle && shape.bounds),
+  ]);
   const [selectedShapeKey, setSelectedShapeKey] = useState<string | null>(null);
   const [draftBounds, setDraftBounds] = useState<PptxEditorShapeBoundsPx | null>(null);
   const [selectedRunIndex, setSelectedRunIndex] = useState(0);
@@ -112,15 +110,9 @@ export function EditorWorkspace({
   const [fontSize, setFontSize] = useState("24");
   const [typeface, setTypeface] = useState("");
   const [color, setColor] = useState("#2454a6");
-  const [history, setHistory] = useState({
-    canUndo: false,
-    canRedo: false,
-    undoDepth: 0,
-    redoDepth: 0,
-  });
-  const [message, setMessage] = useState("Opening editor...");
-  const [busy, setBusy] = useState(true);
-  const [loadError, setLoadError] = useState("");
+  const [history, setHistory] = useState(editor.history);
+  const [message, setMessage] = useState("");
+  const [busy, setBusy] = useState(false);
   const [operationError, setOperationError] = useState("");
   const [draggedSlideIndex, setDraggedSlideIndex] = useState<number | null>(null);
   const [slideDropTarget, setSlideDropTarget] = useState<SlideDropTarget | null>(null);
@@ -133,9 +125,9 @@ export function EditorWorkspace({
   const slideSortDragRef = useRef<SlideSortDragState | null>(null);
   const suppressSlideClickRef = useRef(false);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
-  const busyRef = useRef(true);
+  const busyRef = useRef(false);
   const dirtyRef = useRef(false);
-  const cleanUndoDepthRef = useRef(0);
+  const cleanUndoDepthRef = useRef(editor.history.undoDepth);
   const compositionRef = useRef(false);
   const commitAfterCompositionRef = useRef(false);
 
@@ -192,50 +184,10 @@ export function EditorWorkspace({
   );
 
   useEffect(() => {
-    let cancelled = false;
-
-    async function openEditor() {
-      busyRef.current = true;
-      setBusy(true);
-      setLoadError("");
-      setOperationError("");
-      try {
-        const session = await createPptxEditorSession(new Uint8Array(pptxBytes), {
-          fonts: [...fonts],
-          skipSystemFonts: true,
-          textOutput: "text",
-        });
-        if (cancelled) return;
-        setEditor(session);
-        setSlides([...session.slides]);
-        setShapeOptions([...session.shapes(1).filter((shape) => shape.handle && shape.bounds)]);
-        setHistory(session.history);
-        setCurrentIndex(0);
-        cleanUndoDepthRef.current = session.history.undoDepth;
-        dirtyRef.current = false;
-        setMessage("");
-      } catch (error) {
-        if (!cancelled) setLoadError(error instanceof Error ? error.message : String(error));
-      } finally {
-        if (!cancelled) {
-          busyRef.current = false;
-          setBusy(false);
-        }
-      }
-    }
-
-    void openEditor();
-    return () => {
-      cancelled = true;
-    };
-  }, [fonts, pptxBytes]);
-
-  useEffect(() => {
     setSelectedRunIndex(0);
   }, [selectedShapeKey]);
 
   useEffect(() => {
-    if (editor === null) return;
     syncFromEditor(editor, currentIndex);
   }, [currentIndex, editor, syncFromEditor]);
 
@@ -245,7 +197,6 @@ export function EditorWorkspace({
       success: string,
       preferredIndex: PreferredSlideIndex = currentIndex,
     ) => {
-      if (editor === null) return;
       const directTextCommit = directTextCommitPromiseRef.current;
       if (directTextCommit !== null && !(await directTextCommit)) return;
       if (busyRef.current) return;
@@ -463,7 +414,6 @@ export function EditorWorkspace({
       if (
         busyRef.current ||
         directTextEditorStateRef.current !== null ||
-        editor === null ||
         shape.handle === undefined ||
         shape.bounds === undefined ||
         shape.textBody === undefined
@@ -795,7 +745,7 @@ export function EditorWorkspace({
 
   const handleDownload = useCallback(async () => {
     if (!(await waitForDirectTextCommit())) return;
-    if (editor === null || busyRef.current) return;
+    if (busyRef.current) return;
     busyRef.current = true;
     setBusy(true);
     setOperationError("");
@@ -823,15 +773,7 @@ export function EditorWorkspace({
     }
   }, [downloadName, editor, fileName, waitForDirectTextCommit]);
 
-  if (loadError !== "") {
-    return (
-      <div className="error" data-testid="editor-error">
-        {loadError}
-      </div>
-    );
-  }
-
-  if (editor === null || currentSlide === undefined) {
+  if (currentSlide === undefined) {
     return (
       <div className="loading" data-testid="editor-status">
         <div className="loading-mark" aria-hidden="true" />

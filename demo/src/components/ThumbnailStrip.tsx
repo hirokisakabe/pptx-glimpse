@@ -10,7 +10,7 @@ export function ThumbnailStrip({
   currentIndex,
   onSelect,
 }: {
-  slides: Slide[];
+  slides: readonly Slide[];
   currentIndex: number;
   onSelect: (index: number) => void;
 }) {
