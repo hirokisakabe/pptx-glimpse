@@ -16,6 +16,7 @@ import {
   type AddTextBoxInput,
   asSourceNodeId,
   clearParagraphProperties,
+  clearPictureCrop,
   clearTextRunProperties,
   deleteShape,
   deleteSlide,
@@ -37,6 +38,7 @@ import {
   type PptxSourceModelEdit,
   type PptxSourceModelParagraphPropertiesEdit,
   type PptxSourceModelParagraphTextEdit,
+  type PptxSourceModelPictureCropEdit,
   type PptxSourceModelShapeFillEdit,
   type PptxSourceModelShapeOutlineEdit,
   type PptxSourceModelShapeTransformEdit,
@@ -46,6 +48,8 @@ import {
   replaceParagraphPlainText,
   replaceTextRunPlainText,
   setParagraphProperties,
+  setPictureCrop,
+  type SetPictureCropInput,
   setShapeFill,
   setShapeOutline,
   setTextRunProperties,
@@ -195,6 +199,18 @@ export interface ReplaceImageCommand {
   readonly bytes: Uint8Array;
 }
 
+/** Set crop insets on one stretch-filled picture. @inline */
+export interface SetPictureCropCommand extends SetPictureCropInput {
+  readonly kind: "setPictureCrop";
+  readonly handle: SourceHandle;
+}
+
+/** Remove the crop rectangle from one stretch-filled picture. @inline */
+export interface ClearPictureCropCommand {
+  readonly kind: "clearPictureCrop";
+  readonly handle: SourceHandle;
+}
+
 /** Update the series data of one chart. @inline */
 export interface UpdateChartDataCommand extends UpdateChartDataInput {
   readonly kind: "updateChartData";
@@ -248,6 +264,8 @@ export interface DeleteSlideCommand {
  * @inlineType GroupShapesCommand
  * @inlineType UngroupShapeCommand
  * @inlineType ReplaceImageCommand
+ * @inlineType SetPictureCropCommand
+ * @inlineType ClearPictureCropCommand
  * @inlineType UpdateChartDataCommand
  * @inlineType AddEmptySlideFromLayoutCommand
  * @inlineType DuplicateSlideCommand
@@ -282,6 +300,8 @@ export type EditorCommand =
   | GroupShapesCommand
   | UngroupShapeCommand
   | ReplaceImageCommand
+  | SetPictureCropCommand
+  | ClearPictureCropCommand
   | UpdateChartDataCommand
   | AddEmptySlideFromLayoutCommand
   | DuplicateSlideCommand
@@ -581,6 +601,32 @@ export class EditorSession {
     );
   }
 
+  setPictureCrop(image: SourceImage, crop: SetPictureCropInput): EditorApplyCommandResult {
+    return this.applyToSourceNode(
+      "setPictureCrop",
+      image,
+      isSourceImage,
+      (document, handle) => {
+        const shape = findShapeNodeBySourceHandle(document, handle);
+        return shape?.kind === "image" ? shape : undefined;
+      },
+      (handle) => ({ kind: "setPictureCrop", handle, ...crop }),
+    );
+  }
+
+  clearPictureCrop(image: SourceImage): EditorApplyCommandResult {
+    return this.applyToSourceNode(
+      "clearPictureCrop",
+      image,
+      isSourceImage,
+      (document, handle) => {
+        const shape = findShapeNodeBySourceHandle(document, handle);
+        return shape?.kind === "image" ? shape : undefined;
+      },
+      (handle) => ({ kind: "clearPictureCrop", handle }),
+    );
+  }
+
   updateChartData(chart: SourceChart, input: UpdateChartDataInput): EditorApplyCommandResult {
     return this.applyToSourceNode(
       "updateChartData",
@@ -800,6 +846,8 @@ const EDITOR_COMMAND_KINDS: ReadonlySet<string> = new Set([
   "groupShapes",
   "ungroupShape",
   "replaceImage",
+  "setPictureCrop",
+  "clearPictureCrop",
   "updateChartData",
   "addEmptySlideFromLayout",
   "duplicateSlide",
@@ -825,6 +873,8 @@ const EXPECTED_COMMAND_REJECTION_PREFIXES = [
   "groupShapes:",
   "ungroupShape:",
   "replaceImageBytes:",
+  "setPictureCrop:",
+  "clearPictureCrop:",
   "updateChartData:",
   "addEmptySlideFromLayout:",
   "duplicateSlide:",
@@ -860,6 +910,8 @@ function applyCommandToDocument(
     case "groupShapes":
     case "ungroupShape":
     case "replaceImage":
+    case "setPictureCrop":
+    case "clearPictureCrop":
     case "updateChartData":
     case "addEmptySlideFromLayout":
     case "duplicateSlide":
@@ -1012,6 +1064,10 @@ function executeCommand(document: PptxSourceModel, command: EditorCommand): Pptx
       return ungroupShapeCommand(document, command);
     case "replaceImage":
       return replaceImageBytes(document, command.handle, command.bytes);
+    case "setPictureCrop":
+      return setPictureCrop(document, command.handle, command);
+    case "clearPictureCrop":
+      return clearPictureCrop(document, command.handle);
     case "updateChartData":
       return updateChartDataCommand(document, command);
     case "addEmptySlideFromLayout":
@@ -1547,6 +1603,7 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
   const seenParagraphs = new Set<string>();
   const seenShapeTransforms = new Set<string>();
   const seenShapeFills = new Set<string>();
+  const seenPictureCrops = new Set<string>();
   const seenShapeOutlineProperties = new Map<string, Set<EditableShapeOutlineProperty>>();
   const seenChartData = new Set<string>();
   const normalizedShapeOutlineEdits = new Map<string, MutableShapeOutlineEdit>();
@@ -1616,6 +1673,14 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
         continue;
       }
       seenShapeFills.add(key);
+    }
+    if (edit.kind === "updatePictureCrop") {
+      const key = editHandleNodeKey(edit);
+      if (seenPictureCrops.has(key)) {
+        changed = true;
+        continue;
+      }
+      seenPictureCrops.add(key);
     }
     if (edit.kind === "updateShapeOutline") {
       const normalized = normalizeShapeOutlineEdit(
@@ -1694,6 +1759,7 @@ function editHandleNodeKey(
     | PptxSourceModelTextRunPropertiesEdit
     | PptxSourceModelShapeTransformEdit
     | PptxSourceModelShapeFillEdit
+    | PptxSourceModelPictureCropEdit
     | PptxSourceModelShapeOutlineEdit,
 ): string {
   return [

@@ -4,6 +4,7 @@ import {
   addChart,
   addShape,
   asEmu,
+  asOoxmlPercent,
   asPartPath,
   asPt,
   asRawSidecarId,
@@ -1508,6 +1509,70 @@ describe("EditorSession image replacement commands", () => {
     expect(session.document).toBe(before);
     expect(mediaBytes(session.document, "ppt/media/image1.png")).toEqual(RED_PNG);
     expect(session.undoDepth).toBe(0);
+  });
+});
+
+describe("EditorSession picture crop commands", () => {
+  it("sets, clears, and restores crop through commands and history", async () => {
+    const source = readPptx(await buildImageReplacementFixture());
+    const image = firstImage(source);
+    const imageHandle = requireHandle(image.handle);
+    const session = createEditorSession(source);
+
+    const setResult = session.setPictureCrop(image, {
+      left: asOoxmlPercent(15000),
+      bottom: asOoxmlPercent(5000),
+    });
+    const cropped = expectApplied(setResult);
+    expect(firstImage(cropped).crop).toEqual({ left: 15000, bottom: 5000 });
+    expect(firstImage(readPptx(writePptx(cropped))).crop).toEqual({
+      left: 15000,
+      bottom: 5000,
+    });
+
+    const clearResult = session.apply({ kind: "clearPictureCrop", handle: imageHandle });
+    expect(firstImage(expectApplied(clearResult)).crop).toBeUndefined();
+    expect(session.undoDepth).toBe(2);
+    expect(firstImage(expectHistory(session.undo())).crop).toEqual({
+      left: 15000,
+      bottom: 5000,
+    });
+    expect(firstImage(expectHistory(session.undo())).crop).toBeUndefined();
+    expect(firstImage(expectHistory(session.redo())).crop).toEqual({
+      left: 15000,
+      bottom: 5000,
+    });
+  });
+
+  it("normalizes repeated crop commands and rejects invalid input atomically", async () => {
+    const source = readPptx(await buildImageReplacementFixture());
+    const imageHandle = requireHandle(firstImage(source).handle);
+    const session = createEditorSession(source);
+    const result = session.applyAll([
+      { kind: "setPictureCrop", handle: imageHandle, left: asOoxmlPercent(10000) },
+      { kind: "setPictureCrop", handle: imageHandle, right: asOoxmlPercent(20000) },
+    ]);
+    const edited = expectApplied(result);
+    expect(firstImage(edited).crop).toEqual({ right: 20000 });
+    expect(edited.edits?.filter((edit) => edit.kind === "updatePictureCrop")).toEqual([
+      {
+        kind: "updatePictureCrop",
+        handle: imageHandle,
+        crop: { right: 20000 },
+      },
+    ]);
+
+    const invalidSession = createEditorSession(source);
+    const before = invalidSession.document;
+    const invalid = invalidSession.apply({
+      kind: "setPictureCrop",
+      handle: imageHandle,
+      left: asOoxmlPercent(60000),
+      right: asOoxmlPercent(40000),
+    });
+    expect(invalid).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(invalidSession.document).toBe(before);
+    expect(invalidSession.undoDepth).toBe(0);
   });
 });
 

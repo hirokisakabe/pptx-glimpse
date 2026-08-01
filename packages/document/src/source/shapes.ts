@@ -457,6 +457,9 @@ export interface SourceImageCrop {
   readonly bottom?: OoxmlPercent;
 }
 
+/** Authored picture `p:blipFill` mode when exactly one supported mode is present. */
+export type SourcePictureBlipFillMode = "stretch" | "tile";
+
 export interface SourceImageStretch {
   readonly left: number;
   readonly top: number;
@@ -473,6 +476,8 @@ export interface SourceImage {
   /** Relationship id of `a:blip@r:embed`. The media part is resolved by the computed view. */
   readonly blipRelationshipId?: RelationshipId;
   readonly crop?: SourceImageCrop;
+  /** Omitted when the fill mode is missing or structurally ambiguous. */
+  readonly blipFillMode?: SourcePictureBlipFillMode;
   readonly stretch?: SourceImageStretch;
   readonly tile?: SourceImageFillTile;
   readonly effects?: SourceEffectList;

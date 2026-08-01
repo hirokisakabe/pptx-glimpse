@@ -48,7 +48,7 @@ import type {
   SourceSlideMaster,
   SourceTheme,
 } from "./presentation.js";
-import type { SourceParagraphProperties } from "./shapes.js";
+import type { SourceImageCrop, SourceParagraphProperties } from "./shapes.js";
 import type { Emu, Pt } from "./units.js";
 
 export interface PptxSourceModel {
@@ -73,6 +73,7 @@ export type PptxSourceModelEdit =
   | PptxSourceModelShapeTransformEdit
   | PptxSourceModelShapeFillEdit
   | PptxSourceModelShapeOutlineEdit
+  | PptxSourceModelPictureCropEdit
   | PptxSourceModelTableCellPropertiesEdit
   | PptxSourceModelAddShapeEdit
   | PptxSourceModelAddTextBoxEdit
@@ -177,6 +178,13 @@ export interface PptxSourceModelShapeOutlineEdit {
   readonly kind: "updateShapeOutline";
   readonly handle: SourceHandle;
   readonly outline: EditableShapeOutline;
+}
+
+export interface PptxSourceModelPictureCropEdit {
+  readonly kind: "updatePictureCrop";
+  readonly handle: SourceHandle;
+  /** Omitted to remove the targeted `a:srcRect`. */
+  readonly crop?: SourceImageCrop;
 }
 
 /** @inline */

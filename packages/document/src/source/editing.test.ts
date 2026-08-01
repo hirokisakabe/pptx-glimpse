@@ -7,6 +7,7 @@ import {
   addShape,
   addTextBox,
   clearParagraphProperties,
+  clearPictureCrop,
   clearTextRunProperties,
   deleteShape,
   deleteSlide,
@@ -19,6 +20,7 @@ import {
   replaceParagraphPlainText,
   replaceTextRunPlainText,
   setParagraphProperties,
+  setPictureCrop,
   setShapeFill,
   setShapeOutline,
   setTextRunProperties,
@@ -1787,6 +1789,87 @@ describe("editing shape operations", () => {
 });
 
 describe("editing media and slide topology operations", () => {
+  it("sets and clears a stretch picture crop with semantic no-op detection", () => {
+    const source = buildSourceModel();
+    const imageHandle = requireHandle(imageByName(source, "Picture").handle);
+
+    const cropped = expectNonMutating(source, () =>
+      setPictureCrop(source, imageHandle, {
+        left: asOoxmlPercent(10000),
+        bottom: asOoxmlPercent(25000),
+      }),
+    );
+    expect(imageByName(cropped, "Picture").crop).toEqual({
+      left: 10000,
+      bottom: 25000,
+    });
+    expect(cropped.edits).toEqual([
+      {
+        kind: "updatePictureCrop",
+        handle: imageHandle,
+        crop: { left: 10000, bottom: 25000 },
+      },
+    ]);
+    expect(
+      setPictureCrop(cropped, imageHandle, {
+        left: asOoxmlPercent(10000),
+        top: asOoxmlPercent(0),
+        bottom: asOoxmlPercent(25000),
+      }),
+    ).toBe(cropped);
+
+    const cleared = clearPictureCrop(cropped, imageHandle);
+    expect(imageByName(cleared, "Picture").crop).toBeUndefined();
+    expect(cleared.edits).toEqual([{ kind: "updatePictureCrop", handle: imageHandle }]);
+    expect(clearPictureCrop(cleared, imageHandle)).toBe(cleared);
+    expect(setPictureCrop(source, imageHandle, {})).toBe(source);
+
+    const explicitZero = {
+      ...source,
+      slides: source.slides.map((slide) => ({
+        ...slide,
+        shapes: slide.shapes.map((shape) =>
+          shape.kind === "image" ? { ...shape, crop: { left: asOoxmlPercent(0) } } : shape,
+        ),
+      })),
+    };
+    expect(clearPictureCrop(explicitZero, imageHandle).edits).toEqual([
+      { kind: "updatePictureCrop", handle: imageHandle },
+    ]);
+  });
+
+  it("rejects invalid crop percentages, empty axes, and non-stretch picture fills", () => {
+    const source = buildSourceModel();
+    const image = imageByName(source, "Picture");
+    const imageHandle = requireHandle(image.handle);
+
+    expect(() => setPictureCrop(source, imageHandle, { left: asOoxmlPercent(-1) })).toThrow(
+      /left must be an integer OOXML percentage from 0 through 100000/,
+    );
+    expect(() =>
+      setPictureCrop(source, imageHandle, {
+        left: asOoxmlPercent(50000),
+        right: asOoxmlPercent(50000),
+      }),
+    ).toThrow(/left \+ right must be less than 100000/);
+    expect(() => setPictureCrop(source, imageHandle, { top: asOoxmlPercent(1.5) })).toThrow(
+      /top must be an integer OOXML percentage/,
+    );
+
+    const tiled = {
+      ...source,
+      slides: source.slides.map((slide) => ({
+        ...slide,
+        shapes: slide.shapes.map((shape) =>
+          shape === image ? { ...shape, blipFillMode: "tile" as const } : shape,
+        ),
+      })),
+    };
+    expect(() => clearPictureCrop(tiled, imageHandle)).toThrow(
+      /only picture blipFill with exactly one stretch is supported/,
+    );
+  });
+
   it("replaces image bytes after validating content type and records shared reference count", () => {
     const source = buildSourceModel();
     const imageHandle = requireHandle(imageByName(source, "Picture").handle);
@@ -2220,6 +2303,7 @@ function imageShape(partPath: ReturnType<typeof asPartPath>): SourceImage {
     nodeId: asSourceNodeId("20"),
     name: "Picture",
     blipRelationshipId: asRelationshipId("rIdImage"),
+    blipFillMode: "stretch",
     handle: {
       partPath,
       nodeId: asSourceNodeId("20"),

@@ -151,6 +151,16 @@ const EDIT_KIND_DESCRIPTORS: {
     insertedSlidePartPath: () => undefined,
     insertedShape: () => undefined,
   },
+  updatePictureCrop: {
+    reservedPartPaths: () => [],
+    dirtyPartPath: (edit) => edit.handle.partPath,
+    targetsShape: (edit, shapeHandle) => sourceHandlesEqual(edit.handle, shapeHandle),
+    invalidatingPartPaths: (edit) => [edit.handle.partPath],
+    reservedShapeId: () => undefined,
+    slideTopologyOperation: () => undefined,
+    insertedSlidePartPath: () => undefined,
+    insertedShape: () => undefined,
+  },
   updateTableCellProperties: {
     reservedPartPaths: () => [],
     dirtyPartPath: (edit) => edit.address.tableHandle.partPath,

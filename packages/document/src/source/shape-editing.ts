@@ -356,7 +356,7 @@ function assertPositiveFiniteEmu(value: unknown, operationName: string, fieldNam
   }
 }
 
-interface ShapeNodeMatch {
+export interface ShapeNodeMatch {
   readonly node: SourceShapeNode;
   readonly nested: boolean;
   readonly insideAlternateContent: boolean;
@@ -388,7 +388,7 @@ function findShapeNodesInTree(
   return matches;
 }
 
-function requireUniqueSlideShapeTarget(
+export function requireUniqueSlideShapeTarget(
   source: PptxSourceModel,
   handle: SourceHandle,
   operationName: string,
@@ -408,13 +408,16 @@ function duplicateNodeIdError(operationName: string, handle: SourceHandle): Erro
   );
 }
 
-function assertNotAlternateContentTarget(target: ShapeNodeMatch, operationName: string): void {
+export function assertNotAlternateContentTarget(
+  target: ShapeNodeMatch,
+  operationName: string,
+): void {
   if (target.insideAlternateContent) {
     throw new Error(`${operationName}: shapes inside AlternateContent are not supported`);
   }
 }
 
-function replaceSlideShapeNode(
+export function replaceSlideShapeNode(
   source: PptxSourceModel,
   handle: SourceHandle,
   replace: (shape: SourceShapeNode) => SourceShapeNode,

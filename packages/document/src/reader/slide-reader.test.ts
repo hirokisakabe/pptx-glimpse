@@ -155,6 +155,7 @@ describe("readPptx - typed slide reading (real fixtures)", () => {
     const image = slide2!.shapes.find((s): s is SourceImage => s.kind === "image");
     const imageSidecarNames = image?.rawSidecars?.map((sidecar) => sidecar.node.name) ?? [];
     expect(image?.stretch).toBeUndefined();
+    expect(image?.blipFillMode).toBe("stretch");
     expect(imageSidecarNames).toContain("a:alphaModFix");
   });
 
@@ -487,6 +488,7 @@ describe("readPptx - typed shape detail (synthetic)", () => {
 
     expect(shape.effects?.outerShadow?.alignment).toBe("b");
     expect(image.tile?.align).toBe("tl");
+    expect(image.blipFillMode).toBe("tile");
   });
 
   it("Read image shape effects and blip effects as typed source effects", () => {

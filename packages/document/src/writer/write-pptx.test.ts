@@ -30,6 +30,7 @@ import {
   addTable,
   addTextBox,
   clearParagraphProperties,
+  clearPictureCrop,
   clearTextRunProperties,
   deleteShape,
   deleteSlide,
@@ -42,6 +43,7 @@ import {
   replaceParagraphPlainText,
   replaceTextRunPlainText,
   setParagraphProperties,
+  setPictureCrop,
   setShapeFill,
   setShapeOutline,
   setTextRunProperties,
@@ -146,10 +148,10 @@ function buildMediaReplacementFixture(): Uint8Array {
         `</Relationships>`,
     ),
     "ppt/slides/slide1.xml": xml(
-      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:x="urn:test:unknown">` +
         `<p:cSld><p:spTree>` +
         `<p:pic><p:nvPicPr><p:cNvPr id="20" name="Replace Target"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
-        `<p:blipFill><a:blip r:embed="rIdImage1"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+        `<p:blipFill data-preserve="yes"><a:blip r:embed="rIdImage1"/><x:keep value="yes"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
         `<p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:pic>` +
         `</p:spTree></p:cSld>` +
         `</p:sld>`,
@@ -2688,6 +2690,40 @@ describe("writePptx - no-edit round-trip", () => {
       contentType: "image/png",
       bytes: GREEN_PNG,
     });
+  });
+
+  it("patches and clears only the targeted stretch picture srcRect, then rereads it", () => {
+    const input = buildMediaReplacementFixture();
+    const source = readPptx(input);
+    const image = source.slides[0]?.shapes.find((shape) => shape.kind === "image");
+    if (image?.handle === undefined) throw new Error("picture crop fixture was not parsed");
+    expect(image.blipFillMode).toBe("stretch");
+
+    const cropped = setPictureCrop(source, image.handle, {
+      left: asOoxmlPercent(12000),
+      top: asOoxmlPercent(3000),
+      right: asOoxmlPercent(8000),
+      bottom: asOoxmlPercent(4000),
+    });
+    const croppedOutput = writePptx(cropped);
+    const croppedXml = decoder.decode(getEntry(croppedOutput, "ppt/slides/slide1.xml"));
+    const reread = readPptx(croppedOutput);
+    const rereadImage = reread.slides[0]?.shapes.find((shape) => shape.kind === "image");
+
+    expect(croppedXml).toContain(`<a:srcRect l="12000" t="3000" r="8000" b="4000"/>`);
+    expect(croppedXml).toContain(`data-preserve="yes"`);
+    expect(croppedXml).toContain(`<x:keep value="yes"/>`);
+    expect(croppedXml).toContain(`<a:stretch><a:fillRect/></a:stretch>`);
+    expect(rereadImage?.crop).toEqual({ left: 12000, top: 3000, right: 8000, bottom: 4000 });
+
+    const clearedOutput = writePptx(clearPictureCrop(cropped, image.handle));
+    const clearedXml = decoder.decode(getEntry(clearedOutput, "ppt/slides/slide1.xml"));
+    const clearedImage = readPptx(clearedOutput).slides[0]?.shapes.find(
+      (shape) => shape.kind === "image",
+    );
+    expect(clearedXml).not.toContain("srcRect");
+    expect(clearedXml).toContain(`<x:keep value="yes"/>`);
+    expect(clearedImage?.crop).toBeUndefined();
   });
 
   it("Can write xml raw package material in serializable range", () => {

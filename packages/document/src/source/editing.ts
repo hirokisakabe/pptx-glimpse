@@ -37,6 +37,8 @@ export type {
   AddPictureInput,
 } from "./picture-authoring.js";
 export { addPicture } from "./picture-authoring.js";
+export type { SetPictureCropInput } from "./picture-crop-editing.js";
+export { clearPictureCrop, setPictureCrop } from "./picture-crop-editing.js";
 export type {
   EditableTableCellBorder,
   EditableTableCellProperties,

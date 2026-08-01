@@ -521,8 +521,18 @@ function parseImage(
   const blip = getChild(blipFill, "blip");
   const embed = getNamespacedAttr(blip, "embed");
   const crop = parseCrop(getChild(blipFill, "srcRect"));
-  const stretch = parseStretch(getChild(blipFill, "stretch"));
-  const tile = parseImageFillTile(getChild(blipFill, "tile"));
+  const stretchNodes = getChildArray(blipFill, "stretch");
+  const tileNodes = getChildArray(blipFill, "tile");
+  const stretchNode = stretchNodes[0];
+  const tileNode = tileNodes[0];
+  const stretch = parseStretch(stretchNode);
+  const tile = parseImageFillTile(tileNode);
+  const blipFillMode =
+    stretchNodes.length === 1 && tileNodes.length === 0
+      ? "stretch"
+      : tileNodes.length === 1 && stretchNodes.length === 0
+        ? "tile"
+        : undefined;
   const blipEffects = parseBlipEffects(blip);
 
   const spPr = getChild(pic, "spPr");
@@ -545,6 +555,7 @@ function parseImage(
     ...(transform !== undefined ? { transform } : {}),
     ...(embed !== undefined ? { blipRelationshipId: asRelationshipId(embed) } : {}),
     ...(crop !== undefined ? { crop } : {}),
+    ...(blipFillMode !== undefined ? { blipFillMode } : {}),
     ...(stretch !== undefined ? { stretch } : {}),
     ...(tile !== undefined ? { tile } : {}),
     ...(effects !== undefined ? { effects } : {}),
