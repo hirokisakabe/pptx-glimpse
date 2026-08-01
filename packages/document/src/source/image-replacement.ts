@@ -252,7 +252,15 @@ function requireMediaForImage(
   return media;
 }
 
-function countImageReferencesToMedia(source: PptxSourceModel, mediaPartPath: PartPath): number {
+/**
+ * Counts typed picture references and preserved OOXML uses of an internal image media part.
+ * Unknown or unavailable owner XML is treated conservatively so callers do not mutate a
+ * potentially shared part in place.
+ */
+export function countImageReferencesToMedia(
+  source: PptxSourceModel,
+  mediaPartPath: PartPath,
+): number {
   const parsedImageCounts = new Map<string, number>();
 
   const countParsedImages = (partPath: PartPath, shapes: readonly SourceShapeNode[]) => {
@@ -328,7 +336,8 @@ function countRelationshipAttributes(value: unknown, relationshipId: Relationshi
   if (!isUnknownRecord(value)) return 0;
   return Object.entries(value).reduce((count, [key, item]) => {
     const isRelationshipAttribute =
-      key.startsWith("@_") && (key.endsWith(":embed") || key.endsWith(":link"));
+      key.startsWith("@_") &&
+      (key.endsWith(":embed") || key.endsWith(":link") || key.endsWith(":id"));
     return (
       count +
       (isRelationshipAttribute && item === relationshipId ? 1 : 0) +

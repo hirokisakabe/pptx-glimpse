@@ -98,6 +98,7 @@ export {
   clearParagraphProperties,
   clearTableCellProperties,
   clearTextRunProperties,
+  countImageReferencesToMedia,
   deleteShape,
   deleteSlide,
   duplicateSlide,

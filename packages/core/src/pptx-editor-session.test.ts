@@ -774,6 +774,16 @@ describe("PptxEditorSession", () => {
 
     expect(image?.editableImageReplacement?.sharedReferenceCount).toBe(3);
   });
+
+  it("counts preserved image fills in image replacement metadata", async () => {
+    const editor = await createPptxEditorSession(
+      await buildImageFixture({ includeImageFill: true }),
+      { skipSystemFonts: true },
+    );
+    const image = editor.shapes(1).find((shape) => shape.kind === "image");
+
+    expect(image?.editableImageReplacement?.sharedReferenceCount).toBe(3);
+  });
 });
 
 function buildGroupCommandFixture(): Uint8Array {
@@ -909,6 +919,7 @@ async function buildShapeFixture(
 
 async function buildImageFixture(
   options: {
+    readonly includeImageFill?: boolean;
     readonly includeUnusedImageRelationship?: boolean;
     readonly includeSecondSlide?: boolean;
   } = {},
@@ -970,6 +981,11 @@ async function buildImageFixture(
         `<p:pic><p:nvPicPr><p:cNvPr id="21" name="Shared Picture B"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
         `<p:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
         `<p:spPr><a:xfrm><a:off x="1828800" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:pic>` +
+        (options.includeImageFill === true
+          ? `<p:sp><p:nvSpPr><p:cNvPr id="22" name="Shared Fill"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+            `<p:spPr><a:blipFill><a:blip r:embed="rIdImage"/><a:stretch><a:fillRect/></a:stretch></a:blipFill>` +
+            `<a:prstGeom prst="rect"/></p:spPr></p:sp>`
+          : "") +
         `</p:spTree></p:cSld>` +
         `</p:sld>`,
     ),
