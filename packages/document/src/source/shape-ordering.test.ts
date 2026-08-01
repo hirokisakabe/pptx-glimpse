@@ -169,6 +169,38 @@ describe("reorderShapes", () => {
     expect(rereadGroup.childTransform).toEqual(beforeChildTransform);
   });
 
+  it("keeps a native group's non-drawing child in its authored slot", () => {
+    const authored = createPptx();
+    const session = createPptxAuthoringSession(authored);
+    const root = session.target(requireValue(authored.slides[0]?.handle));
+    const first = addRect(root, 0);
+    const second = addRect(root, 2000);
+    root.groupShapes([first, second]);
+    const archive = unzipSync(writePptx(session.source));
+    const slidePath = "ppt/slides/slide1.xml";
+    const slideXml = new TextDecoder().decode(requireValue(archive[slidePath]));
+    archive[slidePath] = new TextEncoder().encode(
+      slideXml.replace(
+        /(<p:grpSp\b[^>]*>[\s\S]*?<p:sp>[\s\S]*?<\/p:sp>)(<p:sp>)/,
+        '$1<p:extLst><p:ext uri="group-marker"/></p:extLst>$2',
+      ),
+    );
+    const source = readPptx(zipSync(archive));
+    const group = requireGroup(source.slides[0]?.shapes[0]);
+    const orderedHandles = group.children.map((child) => requireValue(child.handle)).reverse();
+
+    const reordered = reorderShapes(source, requireValue(group.handle), orderedHandles);
+    const outputArchive = unzipSync(writePptx(reordered));
+    const outputXml = new TextDecoder().decode(requireValue(outputArchive[slidePath]));
+    const secondIndex = outputXml.indexOf(`id="${String(second.nodeId)}"`);
+    const markerIndex = outputXml.indexOf('uri="group-marker"');
+    const firstIndex = outputXml.indexOf(`id="${String(first.nodeId)}"`);
+
+    expect(secondIndex).toBeGreaterThan(-1);
+    expect(markerIndex).toBeGreaterThan(secondIndex);
+    expect(firstIndex).toBeGreaterThan(markerIndex);
+  });
+
   it("atomically rejects non-direct children, foreign parts, and AlternateContent for a group", () => {
     const source = createPptx();
     const session = createPptxAuthoringSession(source);
