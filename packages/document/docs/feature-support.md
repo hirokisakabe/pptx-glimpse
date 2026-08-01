@@ -69,8 +69,8 @@ table must not mark it `S`.
 [computed-types]: https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/src/computed/pptx-computed-view.ts
 [computed-view-tests]: https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/src/computed/create-computed-view.test.ts
 [computed-view-source]: https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/src/computed/create-computed-view.ts
-[core-editor-tests]: https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/core/src/pptx-editor-session.test.ts
-[editor-command-tests]: https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/editor/src/index.test.ts
+[core-editor-tests]: https://github.com/hirokisakabe/pptx-glimpse/tree/main/packages/core/src
+[editor-command-tests]: https://github.com/hirokisakabe/pptx-glimpse/tree/main/packages/editor/src
 [image-replacement]: https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/src/source/image-replacement.ts
 [picture-authoring]: https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/src/source/picture-authoring.ts
 [picture-crop-editing]: https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/src/source/picture-crop-editing.ts
@@ -87,4 +87,4 @@ table must not mark it `S`.
 [table-cell-property-edit-tests]: https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/src/writer/table-cell-property-editing.test.ts
 [table-text-edit-tests]: https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/src/writer/table-text-editing.test.ts
 [writer-source]: https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/src/writer/write-pptx.ts
-[writer-tests]: https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/src/writer/write-pptx.test.ts
+[writer-tests]: https://github.com/hirokisakabe/pptx-glimpse/tree/main/packages/document/src/writer
