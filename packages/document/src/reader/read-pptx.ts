@@ -2,10 +2,10 @@
  * `readPptx(input)` - initial slice of the PptxSourceModel source reader.
  *
  * Reads the PPTX ZIP package, package graph (content types, relationships, and media),
- * and presentation metadata (slide size and slide order), then returns them as a
- * PptxSourceModel source. For each slide in presentation order, it follows the
- * slide -> layout -> master -> theme chain and reads simple shapes, text, and images as
- * typed source nodes. Unedited or unsupported parts and child elements are retained as
+ * and presentation metadata (slide size, slide order, and master order), then returns them as a
+ * PptxSourceModel source. It follows both the presentation master / master layout id lists and
+ * each slide's slide -> layout -> master -> theme chain, merging reachable parts as typed source
+ * nodes. Unedited or unsupported parts and child elements are retained as
  * raw package material or raw sidecars and used as the basis for structural round-trip
  * preservation.
  *
@@ -150,9 +150,9 @@ interface SlideHierarchy {
 }
 
 /**
- * Follow layout -> master -> theme from each slide in presentation order, and reachable
- * Read part as a typed source node. layout / master / theme is deduplicated
- * and collected in discovery order.
+ * Reads the presentation's ordered masters and their ordered layouts, plus the
+ * layout -> master -> theme chain from each slide in presentation order. Parts are
+ * deduplicated while retaining the applicable authoring/discovery order.
  */
 function readSlideHierarchy(
   entries: Map<string, Uint8Array>,
