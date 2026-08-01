@@ -31,6 +31,7 @@ import {
   moveSlide,
   readPptx,
   replaceImageBytes,
+  setPictureCrop,
   setSlideBackground,
   setTableCellProperties,
   type SourceConnector,
@@ -228,6 +229,23 @@ const LO_EDITOR_VALIDITY_CASES = [
       const source = readPptx(input);
       const image = findFirstImage(source);
       return writePptx(replaceImageBytes(source, requireHandle(image.handle), BLUE_PNG));
+    },
+  },
+  {
+    name: "picture crop",
+    sourceFixture: "editor-validity-picture-crop-source.pptx",
+    expectedFixture: "editor-validity-picture-crop-expected.pptx",
+    createEditedPptx: (input: Uint8Array) => {
+      const source = readPptx(input);
+      const image = findFirstImage(source);
+      return writePptx(
+        setPictureCrop(source, requireHandle(image.handle), {
+          left: asOoxmlPercent(25000),
+          top: asOoxmlPercent(10000),
+          right: asOoxmlPercent(5000),
+          bottom: asOoxmlPercent(15000),
+        }),
+      );
     },
   },
   {
