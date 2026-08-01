@@ -151,6 +151,7 @@ export default tseslint.config(
     files: ["packages/*/src/**/*.ts"],
     ignores: [
       "packages/*/src/**/*.test.ts",
+      "packages/*/src/**/*.test-helpers.ts",
       "packages/*/src/**/*.e2e.test.ts",
     ],
     rules: {
@@ -183,6 +184,7 @@ export default tseslint.config(
     files: ["packages/core/src/**/*.ts"],
     ignores: [
       "packages/core/src/**/*.test.ts",
+      "packages/core/src/**/*.test-helpers.ts",
       "packages/core/src/**/*.e2e.test.ts",
     ],
     rules: {
@@ -199,6 +201,7 @@ export default tseslint.config(
   {
     files: [
       "packages/core/src/**/*.test.ts",
+      "packages/core/src/**/*.test-helpers.ts",
       "packages/core/src/**/*.e2e.test.ts",
     ],
     rules: {
@@ -243,6 +246,7 @@ export default tseslint.config(
     files: ["packages/document/src/**/*.ts"],
     ignores: [
       "packages/document/src/**/*.test.ts",
+      "packages/document/src/**/*.test-helpers.ts",
       "packages/document/src/**/*.e2e.test.ts",
     ],
     rules: {
@@ -273,6 +277,7 @@ export default tseslint.config(
   {
     files: [
       "packages/document/src/**/*.test.ts",
+      "packages/document/src/**/*.test-helpers.ts",
       "packages/document/src/**/*.e2e.test.ts",
     ],
     rules: {
@@ -296,6 +301,7 @@ export default tseslint.config(
     files: ["packages/editor/src/**/*.ts"],
     ignores: [
       "packages/editor/src/**/*.test.ts",
+      "packages/editor/src/**/*.test-helpers.ts",
       "packages/editor/src/**/*.e2e.test.ts",
     ],
     rules: {
@@ -326,6 +332,7 @@ export default tseslint.config(
   {
     files: [
       "packages/editor/src/**/*.test.ts",
+      "packages/editor/src/**/*.test-helpers.ts",
       "packages/editor/src/**/*.e2e.test.ts",
     ],
     rules: {

@@ -26,5 +26,12 @@
     }
   },
   "include": ["packages/*/src/**/*"],
-  "exclude": ["node_modules", "dist", "**/dist", "vrt", "packages/*/src/**/*.test.ts"]
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/dist",
+    "vrt",
+    "packages/*/src/**/*.test.ts",
+    "packages/*/src/**/*.test-helpers.ts"
+  ]
 }
