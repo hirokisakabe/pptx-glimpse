@@ -1,6 +1,7 @@
 import type { XmlNode } from "../reader/xml.js";
 import { editDirtyPartPath } from "../source/edit-descriptors.js";
 import type { PartPath, PptxSourceModel, PptxSourceModelEdit } from "../source/index.js";
+import { applyAddSlideLayoutEdit } from "./master-layout-edits.js";
 import {
   applyShapeFillEdit,
   applyShapeOutlineEdit,
@@ -122,6 +123,9 @@ function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
       return;
     case "setSlideBackground":
       applySetSlideBackgroundEdit(root, edit);
+      return;
+    case "addSlideLayout":
+      applyAddSlideLayoutEdit(root, edit);
       return;
     case "replaceImage":
     case "updateChartData":

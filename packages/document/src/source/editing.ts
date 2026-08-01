@@ -96,6 +96,13 @@ export {
   setShapeOutline,
   updateShapeTransform,
 } from "./shape-editing.js";
+export type {
+  AddSlideLayoutBackgroundInput,
+  AddSlideLayoutInput,
+  AddSlideLayoutMarginInput,
+  SlideLayoutType,
+} from "./slide-layout-authoring.js";
+export { addSlideLayout } from "./slide-layout-authoring.js";
 export type { AddEmptySlideFromLayoutInput } from "./slide-topology.js";
 export type { MoveSlideInput } from "./slide-topology.js";
 export {
