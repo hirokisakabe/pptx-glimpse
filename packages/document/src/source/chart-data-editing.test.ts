@@ -106,6 +106,11 @@ describe("updateChartData", () => {
       "<c:legend>",
       '<c:legend><c:legendEntry><c:idx val="7"/><c:delete val="1"/></c:legendEntry>',
     );
+    files["ppt/charts/chart1.xml"] = replaceText(
+      files["ppt/charts/chart1.xml"],
+      "</c:chart>",
+      '<c:extLst><c:ext uri="chart-guid"><c16:uniqueId xmlns:c16="http://schemas.microsoft.com/office/drawing/2014/chart" val="{00000000-0000-0000-0000-000000000003}"/></c:ext></c:extLst></c:chart>',
+    );
     const source = readPptx(zipFixture(files));
     const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
     if (chart?.handle === undefined) throw new Error("chart fixture should have a handle");
@@ -136,6 +141,7 @@ describe("updateChartData", () => {
     expect(chartXml.match(/val="\{00000000-0000-0000-0000-000000000001\}"/g)).toHaveLength(1);
     expect(chartXml.match(/val="\{00000000-0000-0000-0000-000000000002\}"/g)).toHaveLength(1);
     expect(chartXml.match(/val="\{00000000-0000-0000-0000-000000000003\}"/g)).toHaveLength(1);
+    expect(chartXml.match(/val="\{00000000-0000-0000-0000-000000000004\}"/g)).toHaveLength(1);
     expect(chartXml.match(/<c16:uniqueId[^>]*val="2"/g)).toHaveLength(2);
     expect(chartXml.match(/val="ED7D31"/g)).toHaveLength(4);
 
@@ -541,7 +547,7 @@ function addSeriesExtensionMarkers(bytes: Uint8Array): Uint8Array {
     decoder.decode(bytes).replaceAll("</c:ser>", () => {
       index += 1;
       const uniqueId = String(index).padStart(12, "0");
-      return `<c:extLst><c:ext uri="series-${index}"><c:unknown val="kept"><c16:uniqueId xmlns:c16="http://schemas.microsoft.com/office/drawing/2014/chart" val="${index}"/></c:unknown></c:ext><c:ext uri="{C3380CC4-5D6E-409C-BE32-E72D297353CC}"><c16:uniqueId xmlns:c16="http://schemas.microsoft.com/office/drawing/2014/chart" val="{00000000-0000-0000-0000-${uniqueId}}"/></c:ext></c:extLst></c:ser>`;
+      return `<c:extLst><c:ext uri="series-${index}"><c16:uniqueId xmlns:c16="http://schemas.microsoft.com/office/drawing/2014/chart" val="${index}"/><c:unknown val="kept"/></c:ext><c:ext uri="{C3380CC4-5D6E-409C-BE32-E72D297353CC}"><c16:uniqueId xmlns:c16="http://schemas.microsoft.com/office/drawing/2014/chart" val="{00000000-0000-0000-0000-${uniqueId}}"/></c:ext></c:extLst></c:ser>`;
     }),
   );
 }

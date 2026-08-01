@@ -495,15 +495,16 @@ function createAddedSeriesUniqueIdRewriter(
   existingSeries: readonly OrderedXmlNode[],
   template: OrderedXmlNode,
 ): (clone: OrderedXmlNode) => void {
+  const chartUniqueIds = inspectChartUniqueIds(chartSpace);
   const existingValues = existingSeries.flatMap((series) =>
-    seriesIdentityUniqueIdElements(series, chartSpace),
+    seriesIdentityUniqueIdElements(series, chartUniqueIds.namespaceUris),
   );
   const normalizedSeriesIds = existingValues.map(({ value }) => normalizeGuid(value));
   if (new Set(normalizedSeriesIds.map(({ hex }) => hex)).size !== normalizedSeriesIds.length) {
     throw new Error("updateChartData: chart series uniqueId values must be unique");
   }
-  const used = new Set(chartGuidUniqueIdValues(chartSpace).map(({ hex }) => hex));
-  const templateIds = seriesIdentityUniqueIdElements(template, chartSpace);
+  const used = new Set(chartUniqueIds.guids.map(({ hex }) => hex));
+  const templateIds = seriesIdentityUniqueIdElements(template, chartUniqueIds.namespaceUris);
   if (templateIds.length === 0) return () => undefined;
   if (templateIds.length !== 1) {
     throw new Error("updateChartData: chart series uniqueId layout is not supported");
@@ -527,7 +528,7 @@ interface SeriesUniqueIdElement {
 
 function seriesIdentityUniqueIdElements(
   series: OrderedXmlNode,
-  namespaceRoot?: OrderedXmlNode,
+  namespaceUris?: ReadonlyMap<OrderedXmlNode, string | undefined>,
 ): SeriesUniqueIdElement[] {
   const extensionLists = elementChildren(series).filter(
     (entry) => elementLocalName(entry) === "extLst",
@@ -551,8 +552,7 @@ function seriesIdentityUniqueIdElements(
     .filter(
       (entry) =>
         elementLocalName(entry) === "uniqueId" &&
-        (namespaceRoot === undefined ||
-          elementNamespaceUri(namespaceRoot, entry) === CHART_2014_NAMESPACE),
+        (namespaceUris === undefined || namespaceUris.get(entry) === CHART_2014_NAMESPACE),
     )
     .map((element) => {
       const value = attribute(element, "val");
@@ -563,27 +563,22 @@ function seriesIdentityUniqueIdElements(
     });
 }
 
-function chartGuidUniqueIdValues(chartSpace: OrderedXmlNode): NormalizedGuid[] {
-  const values: NormalizedGuid[] = [];
+function inspectChartUniqueIds(chartSpace: OrderedXmlNode): {
+  readonly namespaceUris: ReadonlyMap<OrderedXmlNode, string | undefined>;
+  readonly guids: readonly NormalizedGuid[];
+} {
+  const namespaceUris = new Map<OrderedXmlNode, string | undefined>();
+  const guids: NormalizedGuid[] = [];
   visitElements(chartSpace, {}, (entry, namespaces) => {
-    if (
-      elementLocalName(entry) !== "uniqueId" ||
-      namespaceUriForElement(entry, namespaces) !== CHART_2014_NAMESPACE
-    ) {
+    const namespaceUri = namespaceUriForElement(entry, namespaces);
+    namespaceUris.set(entry, namespaceUri);
+    if (elementLocalName(entry) !== "uniqueId" || namespaceUri !== CHART_2014_NAMESPACE) {
       return;
     }
     const value = attribute(entry, "val");
-    if (value !== undefined && isGuid(value)) values.push(normalizeGuid(value));
+    if (value !== undefined && isGuid(value)) guids.push(normalizeGuid(value));
   });
-  return values;
-}
-
-function elementNamespaceUri(root: OrderedXmlNode, target: OrderedXmlNode): string | undefined {
-  let result: string | undefined;
-  visitElements(root, {}, (entry, namespaces) => {
-    if (entry === target) result = namespaceUriForElement(entry, namespaces);
-  });
-  return result;
+  return { namespaceUris, guids };
 }
 
 function visitElements(
