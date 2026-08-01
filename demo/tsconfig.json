@@ -10,8 +10,10 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "isolatedModules": true,
+    "noUncheckedSideEffectImports": false,
     "noEmit": true,
     "incremental": true,
+    "types": ["node", "react", "react-dom"],
     "paths": {
       "@/*": ["./src/*"]
     },
