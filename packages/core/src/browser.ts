@@ -13,14 +13,16 @@ import {
   svgToPng,
 } from "@pptx-glimpse/renderer/png/browser";
 
-import { configurePptxEditorSessionRenderer } from "./pptx-editor-session.js";
+import { createPptxEditorSessionFactory } from "./pptx-editor-session.js";
 import {
   type ConvertOptions,
   convertPptxToSvg as convertPptxToSvgBase,
   renderPptxSourceModelToSvg as renderPptxSourceModelToSvgForEditor,
 } from "./svg-converter.js";
 
-configurePptxEditorSessionRenderer(renderPptxSourceModelToSvgForEditor);
+export const createPptxEditorSession = createPptxEditorSessionFactory(
+  renderPptxSourceModelToSvgForEditor,
+);
 
 export type { PngConversionReport, SlideImage } from "./converter.js";
 export type { UsedFonts } from "./font/font-collector.js";
@@ -45,12 +47,7 @@ export type {
   PptxEditorTextRunInfo,
   PptxEditorTextRunView,
 } from "./pptx-editor-session.js";
-export {
-  createPptxEditorSession,
-  isPptxEditorError,
-  PptxEditorError,
-  PptxEditorSession,
-} from "./pptx-editor-session.js";
+export { isPptxEditorError, PptxEditorError, PptxEditorSession } from "./pptx-editor-session.js";
 export type {
   ConversionDiagnostic,
   ConvertOptions,

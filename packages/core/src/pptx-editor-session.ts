@@ -297,20 +297,21 @@ type PptxEditorAffectedSlidesResolver = (
   after: PptxSourceModel,
 ) => ReadonlySet<string> | undefined;
 
-let defaultPptxEditorSvgRenderer: PptxEditorSvgRenderer = renderPptxSourceModelToSvg;
-let defaultAffectedSlidesResolver: PptxEditorAffectedSlidesResolver = affectedSlidePartPaths;
-
-/** @internal Configures the renderer selected by the active package conditional entry. */
-export function configurePptxEditorSessionRenderer(renderer: PptxEditorSvgRenderer): void {
-  defaultPptxEditorSvgRenderer = renderer;
+interface PptxEditorSessionDependencies {
+  readonly renderToSvg: PptxEditorSvgRenderer;
+  readonly resolveAffectedSlides: PptxEditorAffectedSlidesResolver;
 }
 
-/** @internal Configures affected-slide resolution for integration tests. */
-export function configurePptxEditorSessionAffectedSlidesResolver(
-  resolver: PptxEditorAffectedSlidesResolver,
-): void {
-  defaultAffectedSlidesResolver = resolver;
-}
+const DEFAULT_PPTX_EDITOR_SESSION_DEPENDENCIES: PptxEditorSessionDependencies = {
+  renderToSvg: renderPptxSourceModelToSvg,
+  resolveAffectedSlides: affectedSlidePartPaths,
+};
+
+let createPptxEditorSessionWithDependencies: (
+  input: Uint8Array,
+  renderOptions: PptxEditorRenderOptions,
+  dependencies: PptxEditorSessionDependencies,
+) => Promise<PptxEditorSession>;
 
 /**
  * Headless read/edit/render/write session for one PPTX presentation.
@@ -332,11 +333,29 @@ export class PptxEditorSession {
   readonly #renderToSvg: PptxEditorSvgRenderer;
   readonly #resolveAffectedSlides: PptxEditorAffectedSlidesResolver;
 
-  private constructor(source: PptxSourceModel, renderOptions: PptxEditorRenderOptions) {
+  static {
+    createPptxEditorSessionWithDependencies = async (input, renderOptions, dependencies) => {
+      let source: PptxSourceModel;
+      try {
+        source = readPptx(input);
+      } catch (cause) {
+        throw integrationError("read-failed", "Failed to read PPTX input", cause);
+      }
+      const editor = new PptxEditorSession(source, renderOptions, dependencies);
+      await editor.renderCurrentSlides();
+      return editor;
+    };
+  }
+
+  private constructor(
+    source: PptxSourceModel,
+    renderOptions: PptxEditorRenderOptions,
+    dependencies: PptxEditorSessionDependencies,
+  ) {
     this.#session = createEditorSession(source);
     this.#renderOptions = renderOptions;
-    this.#renderToSvg = defaultPptxEditorSvgRenderer;
-    this.#resolveAffectedSlides = defaultAffectedSlidesResolver;
+    this.#renderToSvg = dependencies.renderToSvg;
+    this.#resolveAffectedSlides = dependencies.resolveAffectedSlides;
   }
 
   /**
@@ -351,15 +370,11 @@ export class PptxEditorSession {
     input: Uint8Array,
     renderOptions: PptxEditorRenderOptions = {},
   ): Promise<PptxEditorSession> {
-    let source: PptxSourceModel;
-    try {
-      source = readPptx(input);
-    } catch (cause) {
-      throw integrationError("read-failed", "Failed to read PPTX input", cause);
-    }
-    const editor = new PptxEditorSession(source, renderOptions);
-    await editor.renderCurrentSlides();
-    return editor;
+    return createPptxEditorSessionWithDependencies(
+      input,
+      renderOptions,
+      DEFAULT_PPTX_EDITOR_SESSION_DEPENDENCIES,
+    );
   }
 
   /** Current immutable PPTX source model after all applied history entries. */
@@ -774,18 +789,17 @@ function buildLayoutCatalog(source: PptxSourceModel): readonly PptxEditorSlideMa
 }
 
 /**
- * Parse PPTX bytes and create a rendered high-level editor session.
+ * Creates an entry-specific editor-session factory with immutable internal dependencies.
  *
- * @param input PPTX binary data.
- * @param renderOptions Options reused for SVG rendering after edits.
- * @returns An initialized editor session.
- * @throws {@link PptxEditorError} with `read-failed` or `render-failed`.
+ * @internal
  */
-export function createPptxEditorSession(
-  input: Uint8Array,
-  renderOptions?: PptxEditorRenderOptions,
-): Promise<PptxEditorSession> {
-  return PptxEditorSession.create(input, renderOptions);
+export function createPptxEditorSessionFactory(
+  renderToSvg: PptxEditorSvgRenderer,
+  resolveAffectedSlides: PptxEditorAffectedSlidesResolver = affectedSlidePartPaths,
+): (input: Uint8Array, renderOptions?: PptxEditorRenderOptions) => Promise<PptxEditorSession> {
+  const dependencies: PptxEditorSessionDependencies = { renderToSvg, resolveAffectedSlides };
+  return (input, renderOptions = {}) =>
+    createPptxEditorSessionWithDependencies(input, renderOptions, dependencies);
 }
 
 /**

@@ -8,9 +8,11 @@
  */
 
 import { renderPptxSourceModelToSvg as renderPptxSourceModelToSvgForEditor } from "./converter.js";
-import { configurePptxEditorSessionRenderer } from "./pptx-editor-session.js";
+import { createPptxEditorSessionFactory } from "./pptx-editor-session.js";
 
-configurePptxEditorSessionRenderer(renderPptxSourceModelToSvgForEditor);
+export const createPptxEditorSession = createPptxEditorSessionFactory(
+  renderPptxSourceModelToSvgForEditor,
+);
 
 export type {
   ConversionDiagnostic,
@@ -47,12 +49,7 @@ export type {
   PptxEditorTextRunInfo,
   PptxEditorTextRunView,
 } from "./pptx-editor-session.js";
-export {
-  createPptxEditorSession,
-  isPptxEditorError,
-  PptxEditorError,
-  PptxEditorSession,
-} from "./pptx-editor-session.js";
+export { isPptxEditorError, PptxEditorError, PptxEditorSession } from "./pptx-editor-session.js";
 export type { SourceHandle } from "@pptx-glimpse/document";
 export type {
   EditorCommand,
