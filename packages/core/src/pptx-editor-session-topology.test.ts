@@ -11,7 +11,6 @@ import {
 import { describe, expect, it } from "vitest";
 
 import { renderPptxSourceModelToSvg } from "./converter.js";
-import { createPptxEditorSession } from "./index.js";
 import { affectedSlidePartPaths, createPptxEditorSessionFactory } from "./pptx-editor-session.js";
 import {
   buildLayoutCatalogFixture,
