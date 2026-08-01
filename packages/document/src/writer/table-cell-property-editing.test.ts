@@ -146,12 +146,11 @@ describe("writePptx - existing table cell property edits", () => {
   it("patches an existing empty border element without dropping sibling XML", () => {
     const files = unzipSync(buildFixture());
     const slidePath = "ppt/slides/slide1.xml";
-    files[slidePath] = encoder.encode(
-      decoder
-        .decode(files[slidePath])
-        .replace('<a:lnL w="12700">', '<a:lnL w="12700">')
-        .replace("</a:lnL>", "</a:lnL><a:lnR/>"),
-    );
+    const slideXmlWithEmptyBorder = decoder
+      .decode(files[slidePath])
+      .replace("</a:lnL>", "</a:lnL><a:lnR/>");
+    expect(slideXmlWithEmptyBorder).toContain("<a:lnR/>");
+    files[slidePath] = encoder.encode(slideXmlWithEmptyBorder);
     const source = readPptx(zipSync(files));
     const table = firstTable(source);
     const edited = setTableCellProperties(
@@ -196,8 +195,12 @@ describe("writePptx - existing table cell property edits", () => {
       },
     );
     const slideXml = decoder.decode(unzipSync(writePptx(edited))[slidePath]);
+    const leftIndex = slideXml.indexOf("<a:lnL");
+    const topIndex = slideXml.indexOf("<a:lnT");
 
-    expect(slideXml.indexOf("<a:lnL")).toBeLessThan(slideXml.indexOf("<a:lnT"));
+    expect(leftIndex).toBeGreaterThanOrEqual(0);
+    expect(topIndex).toBeGreaterThanOrEqual(0);
+    expect(leftIndex).toBeLessThan(topIndex);
   });
 
   it("preserves an alternate DrawingML namespace prefix for inserted properties", () => {
@@ -248,7 +251,7 @@ describe("writePptx - existing table cell property edits", () => {
         .decode(files[slidePath])
         .replace(
           /(<p:graphicFrame>.*<\/p:graphicFrame>)/,
-          '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice Requires="p14">$1</mc:Choice></mc:AlternateContent>',
+          '<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Fallback>$1</mc:Fallback></mc:AlternateContent>',
         ),
     );
     const source = readPptx(zipSync(files));

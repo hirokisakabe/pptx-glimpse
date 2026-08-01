@@ -71,7 +71,9 @@ describe("native table writer rendering", () => {
     const reread = readPptx(writePptx(edited));
     const report = await renderPptxSourceModelToSvg(reread, { skipSystemFonts: true });
     const svg = report.slides[0].svg;
+    const rereadTable = reread.slides[0].shapes.find((shape) => shape.kind === "table");
 
+    expect(rereadTable?.table.rows[0].cells[0].marginLeft).toBe(asEmu(457200));
     expect(svg).toContain("Edited cell");
     expect(svg).toContain("#f4b183");
     expect(svg).toContain("#c00000");
