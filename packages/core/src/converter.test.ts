@@ -40,6 +40,38 @@ const CONVERTER_TEST_SCOPE = [
 ] as const;
 
 describe("native chart writer renderer integration", () => {
+  it("renders createPptx theme colors and fonts after a write/read boundary", async () => {
+    let source = document.createPptx({
+      theme: {
+        colorScheme: { accent1: "123456" },
+        fontScheme: { major: { latin: "Theme Display" } },
+      },
+    });
+    const handle = source.slides[0]?.handle;
+    if (handle === undefined) throw new Error("createPptx should create a slide");
+    source = document.addShape(source, handle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: document.asEmu(100000),
+      offsetY: document.asEmu(100000),
+      width: document.asEmu(2000000),
+      height: document.asEmu(1000000),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "FFFFFF" } },
+      paragraphs: [{ runs: [{ text: "Themed text", properties: { fontFace: "+mj-lt" } }] }],
+    });
+
+    const archive = await JSZip.loadAsync(document.writePptx(source));
+    const slidePart = archive.file("ppt/slides/slide1.xml");
+    if (slidePart === null) throw new Error("written PPTX should contain slide1.xml");
+    const slideXml = (await slidePart.async("string")).replace(
+      `<a:srgbClr val="FFFFFF"/>`,
+      `<a:schemeClr val="accent1"/>`,
+    );
+    archive.file("ppt/slides/slide1.xml", slideXml);
+    const report = await convertPptxToSvg(await archive.generateAsync({ type: "uint8array" }));
+    expect(report.slides[0]?.svg).toContain('fill="#123456"');
+    expect(report.slides[0]?.svg).toContain("Theme Display");
+  });
+
   it("renders every chart type produced by the document builder", async () => {
     const source = document.createPptx();
     const handle = source.slides[0]?.handle;

@@ -261,10 +261,10 @@ function parseFontScheme(fontScheme: XmlNode | undefined): SourceThemeFontScheme
   const scheme: SourceThemeFontScheme = {
     ...(isNonEmpty(majorLatin) ? { majorLatin } : {}),
     ...(isNonEmpty(minorLatin) ? { minorLatin } : {}),
-    ...(isNonEmpty(majorEastAsian) ? { majorEastAsian } : {}),
-    ...(isNonEmpty(minorEastAsian) ? { minorEastAsian } : {}),
-    // Preserve explicit empty complex script fonts so scheme references can
-    // resolve distinctly from missing values.
+    // Preserve explicit empty East Asian and complex script fonts so authored
+    // application-selected typefaces survive a write/read boundary.
+    ...(majorEastAsian !== undefined ? { majorEastAsian } : {}),
+    ...(minorEastAsian !== undefined ? { minorEastAsian } : {}),
     ...(majorComplexScript !== undefined ? { majorComplexScript } : {}),
     ...(minorComplexScript !== undefined ? { minorComplexScript } : {}),
     ...(isNonEmpty(majorJapanese) ? { majorJapanese } : {}),
@@ -275,7 +275,8 @@ function parseFontScheme(fontScheme: XmlNode | undefined): SourceThemeFontScheme
 
 function resolveEastAsianFont(fontNode: XmlNode | undefined): string | undefined {
   const typeface = getAttr(getChild(fontNode, "ea"), "typeface");
-  return isNonEmpty(typeface) ? typeface : findScriptFont(fontNode, "Jpan");
+  if (isNonEmpty(typeface)) return typeface;
+  return findScriptFont(fontNode, "Jpan") ?? typeface;
 }
 
 function findScriptFont(fontNode: XmlNode | undefined, script: string): string | undefined {
