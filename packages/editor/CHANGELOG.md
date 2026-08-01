@@ -1,5 +1,27 @@
 # @pptx-glimpse/editor
 
+## 0.5.0
+
+### Minor Changes
+
+- a6bf2c7: 既存 picture の stretch fill に対して typed crop の設定・解除を追加し、対象の `a:srcRect` だけを保持的に更新できるようにする。
+- 8bc6e48: Support adding and removing series with `updateChartData` while keeping chart XML, caches, and the embedded worksheet synchronized.
+
+### Patch Changes
+
+- 16e912b: 共有 media part の画像置換を copy-on-write 化し、選択した picture だけを新しい media と relationship に切り替える。
+- Updated dependencies [bb52f57]
+- Updated dependencies [c228c62]
+- Updated dependencies [16e912b]
+- Updated dependencies [a6bf2c7]
+- Updated dependencies [e6d14b2]
+- Updated dependencies [6ea2c31]
+- Updated dependencies [bd2a2d2]
+- Updated dependencies [8bc6e48]
+- Updated dependencies [1a9b79c]
+- Updated dependencies [1c77833]
+  - @pptx-glimpse/document@0.15.0
+
 ## 0.4.0
 
 ### Minor Changes

@@ -1,5 +1,23 @@
 # @pptx-glimpse/document
 
+## 0.15.0
+
+### Minor Changes
+
+- bb52f57: Add immutable and authoring-session APIs for cloning an existing slide layout within its master while preserving raw XML and sharing related resources.
+- c228c62: Allow `createPptx` callers to configure theme color and major/minor font schemes.
+- a6bf2c7: 既存 picture の stretch fill に対して typed crop の設定・解除を追加し、対象の `a:srcRect` だけを保持的に更新できるようにする。
+- e6d14b2: Allow supported transform, fill, and outline edits on existing slide master and slide layout shapes.
+- 6ea2c31: 既存の slide master に追加の slide layout を authoring し、返された handle を drawing API と slide 作成に利用できる公開 API を追加します。
+- bd2a2d2: 既存 native Table cell の fill、四辺 border、margin を typed operation で更新・解除できるようにする。
+- 8bc6e48: Support adding and removing series with `updateChartData` while keeping chart XML, caches, and the embedded worksheet synchronized.
+- 1a9b79c: `@pptx-glimpse/document` に既存の slide、layout、master に共通の background 設定・解除 API を追加する。`pptx-glimpse` では継承 background の変更時に影響する slide だけを再描画する。
+- 1c77833: 公開 `reorderShapes` operation で native group の direct children を完全な z-order として並べ替えられるようにする。
+
+### Patch Changes
+
+- 16e912b: 共有 media part の画像置換を copy-on-write 化し、選択した picture だけを新しい media と relationship に切り替える。
+
 ## 0.14.0
 
 ### Minor Changes
