@@ -31,6 +31,7 @@
     "typescript": "^6.0.3"
   },
   "overrides": {
+    "sharp": "$sharp",
     "zod": "4.1.12"
   }
 }
