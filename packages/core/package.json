@@ -1,6 +1,6 @@
 {
   "name": "pptx-glimpse",
-  "version": "5.1.0",
+  "version": "5.2.0",
   "description": "High-level PPTX rendering and editing toolkit for SVG/PNG output in Node.js and the browser.",
   "type": "module",
   "main": "./dist/index.cjs",
