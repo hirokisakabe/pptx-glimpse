@@ -312,6 +312,63 @@ def create_editor_validity_table_text_fixture(filename, text):
     print(f"  Created: {filename}")
 
 
+def set_table_cell_border(cell, side, width, color):
+    """Set one inline DrawingML Table cell border."""
+    tc_pr = cell._tc.get_or_add_tcPr()
+    tag = f"a:ln{side}"
+    for child in list(tc_pr):
+        if child.tag.endswith(f"ln{side}"):
+            tc_pr.remove(child)
+    line = OxmlElement(tag)
+    line.set("w", str(width))
+    solid_fill = OxmlElement("a:solidFill")
+    srgb = OxmlElement("a:srgbClr")
+    srgb.set("val", color)
+    solid_fill.append(srgb)
+    line.append(solid_fill)
+    tc_pr.insert(0, line)
+
+
+def create_editor_validity_table_cell_properties_fixture(filename, *, expected):
+    """Fixture pair for existing Table cell fill/border/margin validity checks."""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    title = slide.shapes.add_textbox(Inches(0.4), Inches(0.25), Inches(9.2), Inches(0.5))
+    title.text_frame.text = "LibreOffice editor validity: Table cell properties"
+    title.text_frame.paragraphs[0].runs[0].font.size = Pt(18)
+
+    table = slide.shapes.add_table(
+        2,
+        2,
+        Inches(1.0),
+        Inches(1.3),
+        Inches(8.0),
+        Inches(2.4),
+    ).table
+    values = [["Edited property target", "Unedited sibling"], ["Preserved row", "Preserved cell"]]
+    for row_index, row in enumerate(table.rows):
+        for column_index, cell in enumerate(row.cells):
+            cell.text = values[row_index][column_index]
+            paragraph = cell.text_frame.paragraphs[0]
+            paragraph.alignment = PP_ALIGN.CENTER
+            run = paragraph.runs[0]
+            run.font.name = "Liberation Sans"
+            run.font.size = Pt(20)
+
+    target = table.cell(0, 0)
+    target.fill.solid()
+    target.fill.fore_color.rgb = RGBColor(0xF4, 0xB1, 0x83) if expected else RGBColor(0xD9, 0xEA, 0xF7)
+    target.margin_left = Emu(457200 if expected else 91440)
+    target.margin_right = Emu(91440)
+    target.margin_top = Emu(182880 if expected else 91440)
+    target.margin_bottom = Emu(91440)
+    set_table_cell_border(target, "L", 25400 if expected else 12700, "C00000" if expected else "4472C4")
+
+    prs.save(os.path.join(OUTPUT_DIR, filename))
+    print(f"  Created: {filename}")
+
+
 def create_editor_validity_group_fixture(filename, *, grouped):
     """Fixture pair for lossless existing group / ungroup topology edits."""
     prs = new_presentation()
@@ -439,6 +496,14 @@ def create_editor_validity_fixtures():
     create_editor_validity_table_text_fixture(
         "editor-validity-table-text-expected.pptx",
         "Edited LibreOffice table text",
+    )
+    create_editor_validity_table_cell_properties_fixture(
+        "editor-validity-table-cell-properties-source.pptx",
+        expected=False,
+    )
+    create_editor_validity_table_cell_properties_fixture(
+        "editor-validity-table-cell-properties-expected.pptx",
+        expected=True,
     )
     create_editor_validity_group_fixture(
         "editor-validity-group-source.pptx",
