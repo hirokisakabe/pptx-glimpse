@@ -1,6 +1,6 @@
 import { type ChildProcessWithoutNullStreams, execFile, spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -467,8 +467,21 @@ async function ensureDemoBuild(): Promise<void> {
       throw new Error("demo dependencies are not installed; run `cd demo && npm ci` first.");
     }
     await execFileAsync("npm", ["run", "build"], { cwd: demoRoot, maxBuffer: 20 * 1024 * 1024 });
+    await assertDemoBrowserBundle();
   })();
   await demoBuildPromise;
+}
+
+async function assertDemoBrowserBundle(): Promise<void> {
+  const chunksDirectory = resolve(demoRoot, ".next/static/chunks");
+  const chunkNames = (await readdir(chunksDirectory)).filter((name) => name.endsWith(".js"));
+  const nodeOnlyPattern =
+    /(?:node:(?:buffer|fs|module|os|path)|node-font-loader|packages\/core\/dist\/index)/;
+
+  for (const chunkName of chunkNames) {
+    const source = await readFile(resolve(chunksDirectory, chunkName), "utf8");
+    expect(source, `${chunkName} includes a Node-only dependency`).not.toMatch(nodeOnlyPattern);
+  }
 }
 
 async function findFreePort(): Promise<number> {
