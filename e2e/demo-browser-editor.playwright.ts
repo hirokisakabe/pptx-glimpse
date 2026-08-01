@@ -3,7 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
@@ -474,14 +474,28 @@ async function ensureDemoBuild(): Promise<void> {
 
 async function assertDemoBrowserBundle(): Promise<void> {
   const chunksDirectory = resolve(demoRoot, ".next/static/chunks");
-  const chunkNames = (await readdir(chunksDirectory)).filter((name) => name.endsWith(".js"));
+  const chunkPaths = await collectJavaScriptFiles(chunksDirectory);
+  expect(chunkPaths.length, "the demo build should emit browser chunks").toBeGreaterThan(0);
   const nodeOnlyPattern =
-    /(?:node:(?:buffer|fs|module|os|path)|node-font-loader|packages\/core\/dist\/index)/;
+    /(?:node:(?:buffer|fs|module|os|path)|node-font-loader|packages\/core\/dist\/index|(?:from|require\()\s*["'](?:fs(?:\/promises)?|module|os|path)["'])/;
 
-  for (const chunkName of chunkNames) {
-    const source = await readFile(resolve(chunksDirectory, chunkName), "utf8");
+  for (const chunkPath of chunkPaths) {
+    const source = await readFile(chunkPath, "utf8");
+    const chunkName = relative(chunksDirectory, chunkPath);
     expect(source, `${chunkName} includes a Node-only dependency`).not.toMatch(nodeOnlyPattern);
   }
+}
+
+async function collectJavaScriptFiles(directory: string): Promise<string[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const nestedFiles = await Promise.all(
+    entries.map(async (entry) => {
+      const entryPath = resolve(directory, entry.name);
+      if (entry.isDirectory()) return collectJavaScriptFiles(entryPath);
+      return entry.isFile() && entry.name.endsWith(".js") ? [entryPath] : [];
+    }),
+  );
+  return nestedFiles.flat();
 }
 
 async function findFreePort(): Promise<number> {
