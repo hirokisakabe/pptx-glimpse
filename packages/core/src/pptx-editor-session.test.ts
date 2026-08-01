@@ -3,6 +3,7 @@ import { Buffer } from "node:buffer";
 import {
   addShape,
   asEmu,
+  asOoxmlPercent,
   asSourceNodeId,
   createPptx,
   readPptx,
@@ -255,6 +256,39 @@ describe("PptxEditorSession", () => {
       }),
     ]);
     expect(mediaBytes(editor.document, "ppt/media/image1.png")).toEqual(BLUE_PNG);
+  });
+
+  it("applies picture crop, rerenders the target slide, and saves the srcRect", async () => {
+    const renderCalls: Array<readonly number[] | undefined> = [];
+    configurePptxEditorSessionRenderer((source, options) => {
+      renderCalls.push(options?.slides);
+      return renderPptxSourceModelToSvg(source, options);
+    });
+    try {
+      const editor = await createPptxEditorSession(await buildImageFixture(), {
+        skipSystemFonts: true,
+      });
+      const image = editor.shapes(1).find((shape) => shape.kind === "image");
+      if (image?.handle === undefined) throw new Error("image handle not found");
+      const beforeSvg = editor.slides[0]?.svg;
+
+      await editor.apply({
+        kind: "setPictureCrop",
+        handle: image.handle,
+        left: asOoxmlPercent(25000),
+        top: asOoxmlPercent(10000),
+      });
+
+      expect(renderCalls).toEqual([undefined, [1]]);
+      expect(editor.slides[0]?.svg).not.toBe(beforeSvg);
+      const saved = readPptx(editor.save().pptx);
+      expect(saved.slides[0]?.shapes.find((shape) => shape.kind === "image")?.crop).toEqual({
+        left: 25000,
+        top: 10000,
+      });
+    } finally {
+      configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
+    }
   });
 
   it("rerenders every slide that references replaced shared media", async () => {
