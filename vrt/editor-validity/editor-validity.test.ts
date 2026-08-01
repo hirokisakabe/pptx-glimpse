@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import JSZip from "jszip";
 import sharp from "sharp";
 
 import {
@@ -419,7 +420,7 @@ describeOrSkip("LibreOffice slide topology validity", { timeout: 120000 }, () =>
 });
 
 describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 120000 }, () => {
-  it("opens a from-scratch PPTX with a customized theme", () => {
+  it("opens a from-scratch PPTX with a customized theme", async () => {
     let source = createPptx({
       theme: {
         name: "LibreOffice Theme",
@@ -462,10 +463,22 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
       ],
     });
 
+    const archive = await JSZip.loadAsync(writePptx(source));
+    const slidePart = archive.file("ppt/slides/slide1.xml");
+    if (slidePart === null) throw new Error("written PPTX should contain slide1.xml");
+    const slideXml = (await slidePart.async("string")).replace(
+      `<a:srgbClr val="0067C5"/>`,
+      `<a:schemeClr val="accent1"/>`,
+    );
+    if (!slideXml.includes(`<a:schemeClr val="accent1"/>`)) {
+      throw new Error("custom-theme validity fixture should reference accent1");
+    }
+    archive.file("ppt/slides/slide1.xml", slideXml);
+
     renderSingleWithLibreOffice(
       libreOfficeImage,
       "editor-validity-from-scratch-custom-theme.pptx",
-      writePptx(source),
+      await archive.generateAsync({ type: "uint8array" }),
     );
   });
 

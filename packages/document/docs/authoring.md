@@ -77,10 +77,11 @@ const source = createPptx({
 });
 ```
 
-Shapes, text, and charts in the resulting package that use scheme colors or `+mj` / `+mn`
-theme-font tokens are resolved through these values by the normal write/read/computed/render
-pipeline. This API creates one theme for the generated master; editing themes in an existing
-presentation and authoring a format scheme remain outside its scope.
+Shapes, text, and charts in the resulting package that use scheme colors or script-qualified
+theme-font tokens such as `+mj-lt`, `+mn-ea`, and `+mj-cs` are resolved through these values by
+the normal write/read/computed/render pipeline. This API creates one theme for the generated
+master; editing themes in an existing presentation and authoring a format scheme remain outside
+its scope.
 
 ## Consecutive operations
 
