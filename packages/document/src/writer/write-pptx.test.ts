@@ -118,7 +118,7 @@ function buildRoundTripFixture(): Uint8Array {
   });
 }
 
-function buildMediaReplacementFixture(): Uint8Array {
+function buildMediaReplacementFixture(shared = false): Uint8Array {
   return zipSync({
     "[Content_Types].xml": xml(
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -151,6 +151,11 @@ function buildMediaReplacementFixture(): Uint8Array {
         `<p:pic><p:nvPicPr><p:cNvPr id="20" name="Replace Target"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
         `<p:blipFill><a:blip r:embed="rIdImage1"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
         `<p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:pic>` +
+        (shared
+          ? `<p:pic><p:nvPicPr><p:cNvPr id="21" name="Keep Shared"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
+            `<p:blipFill><a:blip r:embed="rIdImage1"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+            `<p:spPr><a:xfrm><a:off x="1828800" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:pic>`
+          : "") +
         `</p:spTree></p:cSld>` +
         `</p:sld>`,
     ),
@@ -2687,6 +2692,46 @@ describe("writePptx - no-edit round-trip", () => {
     ).toMatchObject({
       contentType: "image/png",
       bytes: GREEN_PNG,
+    });
+  });
+
+  it("copy-on-write replaces only one of multiple pictures sharing a media part", () => {
+    const input = buildMediaReplacementFixture(true);
+    const source = readPptx(input);
+    const target = source.slides[0]?.shapes.find(
+      (shape): shape is SourceImage => shape.kind === "image" && shape.name === "Replace Target",
+    );
+    if (target?.handle === undefined) throw new Error("shared image target was not parsed");
+
+    const edited = replaceImageBytes(source, target.handle, BLUE_PNG);
+    const output = writePptx(edited);
+    const reread = readPptx(output);
+    const targetAfter = reread.slides[0]?.shapes.find(
+      (shape): shape is SourceImage => shape.kind === "image" && shape.name === "Replace Target",
+    );
+    const sharedAfter = reread.slides[0]?.shapes.find(
+      (shape): shape is SourceImage => shape.kind === "image" && shape.name === "Keep Shared",
+    );
+
+    expect(edited.edits?.at(-1)).toMatchObject({
+      kind: "replaceImage",
+      mode: "copyOnWrite",
+      sourceMediaPartPath: "ppt/media/image1.png",
+      mediaPartPath: "ppt/media/image3.png",
+      replacementRelationshipId: "rId3",
+      sharedReferenceCount: 2,
+    });
+    expect(getEntry(output, "ppt/media/image1.png")).toEqual(RED_PNG);
+    expect(getEntry(output, "ppt/media/image3.png")).toEqual(BLUE_PNG);
+    expect(targetAfter?.blipRelationshipId).toBe("rId3");
+    expect(sharedAfter?.blipRelationshipId).toBe("rIdImage1");
+    expect(
+      reread.packageGraph.relationships
+        .find((group) => group.sourcePartPath === "ppt/slides/slide1.xml")
+        ?.relationships.find((relationship) => relationship.id === "rId3"),
+    ).toMatchObject({
+      type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+      target: "../media/image3.png",
     });
   });
 

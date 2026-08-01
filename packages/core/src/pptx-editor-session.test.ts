@@ -228,7 +228,7 @@ describe("PptxEditorSession", () => {
     }
   });
 
-  it("returns shared media warnings from image replacement commands", async () => {
+  it("isolates shared media replacements without warnings", async () => {
     const editor = await createPptxEditorSession(await buildImageFixture(), {
       skipSystemFonts: true,
     });
@@ -247,17 +247,12 @@ describe("PptxEditorSession", () => {
       bytes: BLUE_PNG,
     });
 
-    expect(result.warnings).toEqual([
-      expect.objectContaining({
-        code: "shared-media-part",
-        mediaPartPath: "ppt/media/image1.png",
-        referenceCount: 2,
-      }),
-    ]);
-    expect(mediaBytes(editor.document, "ppt/media/image1.png")).toEqual(BLUE_PNG);
+    expect(result.warnings).toBeUndefined();
+    expect(mediaBytes(editor.document, "ppt/media/image1.png")).toEqual(RED_PNG);
+    expect(mediaBytes(editor.document, "ppt/media/image2.png")).toEqual(BLUE_PNG);
   });
 
-  it("rerenders every slide that references replaced shared media", async () => {
+  it("rerenders only the picture owner after copy-on-write replacement", async () => {
     const renderCalls: Array<readonly number[] | undefined> = [];
     configurePptxEditorSessionRenderer((source, options) => {
       renderCalls.push(options?.slides);
@@ -273,7 +268,7 @@ describe("PptxEditorSession", () => {
 
       await editor.apply({ kind: "replaceImage", handle: image.handle, bytes: BLUE_PNG });
 
-      expect(renderCalls).toEqual([undefined, [1, 2]]);
+      expect(renderCalls).toEqual([undefined, [1]]);
     } finally {
       configurePptxEditorSessionRenderer(renderPptxSourceModelToSvg);
     }

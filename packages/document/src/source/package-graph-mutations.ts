@@ -11,6 +11,7 @@
 import { asPartPath, asRelationshipId, type PartPath, type RelationshipId } from "./handles.js";
 import type {
   ContentTypeOverride,
+  ContentTypes,
   MediaPart,
   PackageGraph,
   PartRelationships,
@@ -35,6 +36,8 @@ interface AddMediaPartRelationshipInput {
   readonly extension: string;
   readonly relationship: Relationship;
   readonly contentTypeDefaultConflictError: (existingContentType: string) => Error;
+  /** Register an override for the new media when its extension default has another type. */
+  readonly useOverrideOnContentTypeDefaultConflict?: boolean;
 }
 
 /** Adds one part (and optionally its `.rels` part) to all four PackageGraph lists. */
@@ -95,6 +98,7 @@ export function addMediaPartRelationship(
     (candidate) => candidate.sourcePartPath === input.ownerPartPath,
   );
   const hasRelationshipPart = graph.parts.some((part) => part.partPath === relationshipPart);
+  const contentTypeRegistration = mediaContentTypeRegistration(graph, input);
 
   return {
     ...graph,
@@ -107,14 +111,10 @@ export function addMediaPartRelationship(
     ],
     contentTypes: {
       ...graph.contentTypes,
-      defaults: withContentTypeDefault(
-        graph,
-        input.extension,
-        input.media.contentType,
-        input.contentTypeDefaultConflictError,
-      ),
+      defaults: contentTypeRegistration.defaults,
       overrides: [
         ...graph.contentTypes.overrides,
+        ...contentTypeRegistration.overrides,
         ...relationshipPartOverrides(graph, hasRelationshipPart ? [] : [relationshipPart]),
       ],
     },
@@ -132,6 +132,32 @@ export function addMediaPartRelationship(
           { sourcePartPath: input.ownerPartPath, relationships: [input.relationship] },
         ],
     media: [...graph.media, input.media],
+  };
+}
+
+function mediaContentTypeRegistration(
+  graph: PackageGraph,
+  input: AddMediaPartRelationshipInput,
+): Pick<ContentTypes, "defaults" | "overrides"> {
+  const existing = graph.contentTypes.defaults.find((entry) => entry.extension === input.extension);
+  if (
+    existing !== undefined &&
+    existing.contentType !== input.media.contentType &&
+    input.useOverrideOnContentTypeDefaultConflict === true
+  ) {
+    return {
+      defaults: graph.contentTypes.defaults,
+      overrides: [{ partName: input.media.partPath, contentType: input.media.contentType }],
+    };
+  }
+  return {
+    defaults: withContentTypeDefault(
+      graph,
+      input.extension,
+      input.media.contentType,
+      input.contentTypeDefaultConflictError,
+    ),
+    overrides: [],
   };
 }
 

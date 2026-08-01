@@ -1,21 +1,32 @@
+import { sourceHandlesEqual } from "./edit-descriptors.js";
 import {
   assertNeverShapeNode,
   copyBytes,
   IMAGE_REL_TYPE,
+  relativeTarget,
   requirePartRelationships,
 } from "./editing-shared.js";
 import { detectSupportedImageType, startsWithBytes } from "./image-type.js";
 import type {
+  MediaPart,
   PartPath,
   PptxSourceModel,
   PptxSourceModelReplaceImageEdit,
+  Relationship,
   RelationshipId,
   SourceHandle,
   SourceImage,
   SourceShapeNode,
 } from "./index.js";
+import {
+  addMediaPartRelationship,
+  nextNumberedPartPath,
+  nextRelationshipId,
+} from "./package-graph-mutations.js";
 import { resolveInternalRelationshipTarget } from "./package-paths.js";
 import { findShapeNodeBySourceHandle } from "./shape-editing.js";
+
+const IMAGE_MEDIA_PREFIX = "ppt/media/image";
 
 export function replaceImageBytes(
   source: PptxSourceModel,
@@ -35,9 +46,21 @@ export function replaceImageBytes(
   }
 
   const sharedReferenceCount = countImageReferencesToMedia(source, media.partPath);
+  if (sharedReferenceCount > 1) {
+    return replaceSharedImageBytes(
+      source,
+      handle,
+      media,
+      bytes,
+      detectedContentType,
+      sharedReferenceCount,
+    );
+  }
   const edit = {
     kind: "replaceImage",
     handle,
+    mode: "inPlace",
+    sourceMediaPartPath: media.partPath,
     mediaPartPath: media.partPath,
     contentType: media.contentType,
     sharedReferenceCount,
@@ -53,6 +76,131 @@ export function replaceImageBytes(
     },
     edits: [...(source.edits ?? []), edit],
   };
+}
+
+function replaceSharedImageBytes(
+  source: PptxSourceModel,
+  handle: SourceHandle,
+  media: MediaPart,
+  bytes: Uint8Array,
+  contentType: string,
+  sharedReferenceCount: number,
+): PptxSourceModel {
+  if (handle.nodeId === undefined) {
+    throw new Error("replaceImageBytes: shared image replacement requires a picture node id");
+  }
+  const ownerPartPath = handle.partPath;
+  const relationships = requirePartRelationships(source, ownerPartPath, "replaceImageBytes");
+  const replacementRelationshipId = nextRelationshipId(relationships.relationships);
+  const extension = imageExtension(contentType);
+  const reservedMediaPartPaths = (source.edits ?? []).flatMap((edit) =>
+    edit.kind === "replaceImage" && edit.mode === "copyOnWrite" ? [edit.mediaPartPath] : [],
+  );
+  const mediaPartPath = nextNumberedPartPath(
+    source.packageGraph,
+    reservedMediaPartPaths,
+    IMAGE_MEDIA_PREFIX,
+    `.${extension}`,
+  );
+  const replacementMedia: MediaPart = {
+    partPath: mediaPartPath,
+    contentType,
+    bytes: copyBytes(bytes),
+  };
+  const relationship: Relationship = {
+    id: replacementRelationshipId,
+    type: IMAGE_REL_TYPE,
+    target: relativeTarget(ownerPartPath, mediaPartPath),
+  };
+  const edit = {
+    kind: "replaceImage",
+    handle,
+    mode: "copyOnWrite",
+    sourceMediaPartPath: media.partPath,
+    mediaPartPath,
+    contentType,
+    sharedReferenceCount,
+    replacementRelationshipId,
+  } satisfies PptxSourceModelReplaceImageEdit;
+
+  return {
+    ...source,
+    ...replaceImageRelationship(source, handle, replacementRelationshipId),
+    packageGraph: addMediaPartRelationship(source.packageGraph, {
+      ownerPartPath,
+      media: replacementMedia,
+      extension,
+      relationship,
+      useOverrideOnContentTypeDefaultConflict: true,
+      contentTypeDefaultConflictError: (existingContentType) =>
+        new Error(
+          `replaceImageBytes: content type default for extension '${extension}' already maps to '${existingContentType}'`,
+        ),
+    }),
+    edits: [...(source.edits ?? []), edit],
+  };
+}
+
+function replaceImageRelationship(
+  source: PptxSourceModel,
+  handle: SourceHandle,
+  relationshipId: RelationshipId,
+): Pick<PptxSourceModel, "slides" | "slideLayouts" | "slideMasters"> {
+  const replaceShapes = (shapes: readonly SourceShapeNode[]): readonly SourceShapeNode[] => {
+    let changed = false;
+    const next = shapes.map((shape): SourceShapeNode => {
+      if (sourceHandlesEqual(shape.handle, handle)) {
+        if (shape.kind !== "image") return shape;
+        changed = true;
+        return {
+          ...shape,
+          blipRelationshipId: relationshipId,
+          ...(shape.handle === undefined ? {} : { handle: { ...shape.handle, relationshipId } }),
+        };
+      }
+      if (shape.kind !== "group") return shape;
+      const children = replaceShapes(shape.children);
+      if (children === shape.children) return shape;
+      changed = true;
+      return { ...shape, children };
+    });
+    return changed ? next : shapes;
+  };
+  const replaceTargets = <
+    T extends { readonly partPath: PartPath; readonly shapes: readonly SourceShapeNode[] },
+  >(
+    targets: readonly T[],
+  ): readonly T[] =>
+    targets.map((target) => {
+      if (target.partPath !== handle.partPath) return target;
+      const shapes = replaceShapes(target.shapes);
+      return shapes === target.shapes ? target : { ...target, shapes };
+    });
+
+  return {
+    slides: replaceTargets(source.slides),
+    slideLayouts: replaceTargets(source.slideLayouts),
+    slideMasters: replaceTargets(source.slideMasters),
+  };
+}
+
+function imageExtension(contentType: string): string {
+  switch (contentType) {
+    case "image/png":
+      return "png";
+    case "image/jpeg":
+      return "jpeg";
+    case "image/gif":
+      return "gif";
+    case "image/bmp":
+      return "bmp";
+    case "image/tiff":
+      return "tiff";
+    case "image/webp":
+      return "webp";
+    default:
+      throw new Error(`replaceImageBytes: unsupported image content type '${contentType}'`);
+  }
 }
 
 function requireImageBySourceHandle(

@@ -8,6 +8,7 @@ import JSZip from "jszip";
 import { afterEach, describe, expect, it } from "vitest";
 
 import {
+  createComputedView,
   type PptxSourceModel,
   readPptx,
   type SourceConnector,
@@ -438,7 +439,7 @@ describe("dev server editor API", () => {
     }
   });
 
-  it("applies image replacement commands with shared media warnings, undo, redo, and save", async () => {
+  it("applies copy-on-write image replacement commands with undo, redo, and save", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-dev-server-image-test-"));
     try {
       const sourcePath = join(dir, "fixture.pptx");
@@ -476,13 +477,7 @@ describe("dev server editor API", () => {
         },
       });
       expect(replaced.slides[0].svg).toContain(BLUE_PNG_BASE64);
-      expect(replaced.warnings).toEqual([
-        expect.objectContaining({
-          code: "shared-media-part",
-          mediaPartPath: "ppt/media/image1.png",
-          referenceCount: 2,
-        }),
-      ]);
+      expect(replaced.warnings).toBeUndefined();
 
       const undone = await postJson<SlidesResponse>(`${baseUrl}/api/editor/undo`, {});
       expect(undone.slides[0].svg).toContain(RED_PNG_BASE64);
@@ -490,9 +485,9 @@ describe("dev server editor API", () => {
       expect(redone.slides[0].svg).toContain(BLUE_PNG_BASE64);
 
       await postJson<SaveResponse>(`${baseUrl}/api/editor/save`, { path: savedPath });
-      expect(mediaBytes(readPptx(await readFile(savedPath)), "ppt/media/image1.png")).toEqual(
-        BLUE_PNG,
-      );
+      const saved = readPptx(await readFile(savedPath));
+      expect(mediaBytes(saved, "ppt/media/image1.png")).toEqual(RED_PNG);
+      expect(mediaBytes(saved, "ppt/media/image2.png")).toEqual(BLUE_PNG);
     } finally {
       await rm(dir, { recursive: true, force: true });
     }
@@ -554,12 +549,18 @@ function renderImagePreview(
   input: Uint8Array,
 ): Promise<Array<{ slideNumber: number; svg: string }>> {
   const source = readPptx(input);
+  const image = createComputedView(source).slides[0]?.elements.find(
+    (element) => element.kind === "image",
+  );
+  if (image?.kind !== "image" || image.media === undefined) {
+    throw new Error("renderImagePreview: image media was not resolved");
+  }
   return Promise.resolve([
     {
       slideNumber: 1,
-      svg: `<svg><image href="data:image/png;base64,${Buffer.from(
-        mediaBytes(source, "ppt/media/image1.png"),
-      ).toString("base64")}"/></svg>`,
+      svg: `<svg><image href="data:image/png;base64,${Buffer.from(image.media.bytes).toString(
+        "base64",
+      )}"/></svg>`,
     },
   ]);
 }

@@ -131,9 +131,7 @@ describe("EditorSession source-node convenience methods", () => {
     const imageSession = createEditorSession(imageSource);
     const imageResult = imageSession.replaceImage(firstImage(imageSource), BLUE_PNG);
     expectApplied(imageResult);
-    expect(imageResult.ok && imageResult.warnings?.[0]).toMatchObject({
-      code: "shared-media-part",
-    });
+    expect(imageResult.ok && imageResult.warnings).toBeUndefined();
 
     const slideSource = readPptx(await buildTwoSlideFixture());
     const slideSession = createEditorSession(slideSource);
@@ -1406,16 +1404,20 @@ describe("EditorSession image replacement commands", () => {
     const reread = readPptx(writePptx(edited));
 
     expect(mediaBytes(source, "ppt/media/image1.png")).toEqual(RED_PNG);
-    expect(mediaBytes(edited, "ppt/media/image1.png")).toEqual(BLUE_PNG);
-    expect(mediaBytes(reread, "ppt/media/image1.png")).toEqual(BLUE_PNG);
-    expect(result.ok && result.warnings?.[0]).toMatchObject({
-      code: "shared-media-part",
-      mediaPartPath: "ppt/media/image1.png",
-      referenceCount: 2,
-    });
+    expect(mediaBytes(edited, "ppt/media/image1.png")).toEqual(RED_PNG);
+    expect(mediaBytes(edited, "ppt/media/image2.png")).toEqual(BLUE_PNG);
+    expect(mediaBytes(reread, "ppt/media/image1.png")).toEqual(RED_PNG);
+    expect(mediaBytes(reread, "ppt/media/image2.png")).toEqual(BLUE_PNG);
+    expect(result.ok && result.warnings).toBeUndefined();
+    expect(firstImage(reread).blipRelationshipId).toBe("rId1");
+    expect(
+      reread.slides[0]?.shapes.find(
+        (shape) => shape.kind === "image" && shape.name === "Shared Picture B",
+      ),
+    ).toMatchObject({ blipRelationshipId: "rIdImage" });
   });
 
-  it("keeps shared-media warnings when a later batch command invalidates the image edit", async () => {
+  it("keeps the other shared picture unchanged when a later batch command deletes the target slide", async () => {
     const source = readPptx(await buildTwoSlideSharedImageFixture());
     const session = createEditorSession(source);
     const result = session.applyAll([
@@ -1433,14 +1435,8 @@ describe("EditorSession image replacement commands", () => {
 
     expect(edited.slides).toHaveLength(1);
     expect(edited.slides[0]?.partPath).toBe(asPartPath("ppt/slides/slide2.xml"));
-    expect(mediaBytes(edited, "ppt/media/image1.png")).toEqual(BLUE_PNG);
-    expect(result.ok && result.warnings).toEqual([
-      expect.objectContaining({
-        code: "shared-media-part",
-        mediaPartPath: "ppt/media/image1.png",
-        referenceCount: 2,
-      }),
-    ]);
+    expect(mediaBytes(edited, "ppt/media/image1.png")).toEqual(RED_PNG);
+    expect(result.ok && result.warnings).toBeUndefined();
   });
 
   it("deduplicates shared-media warnings for repeated replacements in one batch", async () => {
@@ -1453,13 +1449,8 @@ describe("EditorSession image replacement commands", () => {
     ]);
 
     expectApplied(result);
-    expect(result.ok && result.warnings).toEqual([
-      expect.objectContaining({
-        code: "shared-media-part",
-        mediaPartPath: "ppt/media/image1.png",
-        referenceCount: 2,
-      }),
-    ]);
+    expect(result.ok && result.warnings).toBeUndefined();
+    expect(mediaBytes(session.document, "ppt/media/image2.png")).toEqual(RED_PNG);
   });
 
   it("undoes and redoes image replacement by restoring media bytes", async () => {
@@ -1479,8 +1470,9 @@ describe("EditorSession image replacement commands", () => {
 
     expect(mediaBytes(undone, "ppt/media/image1.png")).toEqual(RED_PNG);
     expect(mediaBytes(readPptx(writePptx(undone)), "ppt/media/image1.png")).toEqual(RED_PNG);
-    expect(mediaBytes(redone, "ppt/media/image1.png")).toEqual(BLUE_PNG);
-    expect(mediaBytes(readPptx(writePptx(redone)), "ppt/media/image1.png")).toEqual(BLUE_PNG);
+    expect(mediaBytes(redone, "ppt/media/image1.png")).toEqual(RED_PNG);
+    expect(mediaBytes(redone, "ppt/media/image2.png")).toEqual(BLUE_PNG);
+    expect(mediaBytes(readPptx(writePptx(redone)), "ppt/media/image2.png")).toEqual(BLUE_PNG);
   });
 
   it("rejects invalid image replacement commands without changing document state", async () => {

@@ -300,10 +300,16 @@ const EDIT_KIND_DESCRIPTORS: {
     insertedShape: () => undefined,
   },
   replaceImage: {
-    reservedPartPaths: () => [],
-    dirtyPartPath: () => undefined,
+    // Copy-on-write paths remain reserved by the journal even if later cleanup removes
+    // the package entry. Undo drops the edit and reservation; redo restores its snapshot.
+    reservedPartPaths: (edit) => (edit.mode === "copyOnWrite" ? [edit.mediaPartPath] : []),
+    dirtyPartPath: (edit) => (edit.mode === "copyOnWrite" ? edit.handle.partPath : undefined),
     targetsShape: (edit, shapeHandle) => sourceHandlesEqual(edit.handle, shapeHandle),
-    invalidatingPartPaths: (edit) => [edit.handle.partPath],
+    invalidatingPartPaths: (edit) => [
+      edit.handle.partPath,
+      edit.sourceMediaPartPath,
+      ...(edit.mode === "copyOnWrite" ? [edit.mediaPartPath] : []),
+    ],
     reservedShapeId: () => undefined,
     slideTopologyOperation: () => undefined,
     insertedSlidePartPath: () => undefined,

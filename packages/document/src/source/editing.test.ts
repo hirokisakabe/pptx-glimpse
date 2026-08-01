@@ -1804,6 +1804,8 @@ describe("editing media and slide topology operations", () => {
       {
         kind: "replaceImage",
         handle: imageHandle,
+        mode: "inPlace",
+        sourceMediaPartPath: "ppt/media/image1.png",
         mediaPartPath: "ppt/media/image1.png",
         contentType: "image/png",
         sharedReferenceCount: 1,

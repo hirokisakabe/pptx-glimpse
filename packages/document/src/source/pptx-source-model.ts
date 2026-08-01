@@ -323,9 +323,16 @@ export interface PptxSourceModelDeleteShapeEdit {
 export interface PptxSourceModelReplaceImageEdit {
   readonly kind: "replaceImage";
   readonly handle: SourceHandle;
+  /** Single-reference parts are updated in place; shared parts use an isolated copy. */
+  readonly mode: "inPlace" | "copyOnWrite";
+  /** Media part referenced before this edit. */
+  readonly sourceMediaPartPath: PartPath;
+  /** Media part that contains the replacement bytes after this edit. */
   readonly mediaPartPath: PartPath;
   readonly contentType: string;
   readonly sharedReferenceCount: number;
+  /** New relationship assigned to the target picture for copy-on-write edits. */
+  readonly replacementRelationshipId?: RelationshipId;
 }
 
 export interface PptxSourceModelAddEmptySlideFromLayoutEdit {
