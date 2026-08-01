@@ -484,6 +484,41 @@ describe("public conversion orchestration", () => {
     expect(report.slides[0]?.svg).toContain("ed7d31");
   });
 
+  it("writes, rereads, and renders drawings inherited from an added slide layout", async () => {
+    const source = document.createPptx();
+    const masterHandle = source.slideMasters[0]?.handle;
+    if (masterHandle === undefined) throw new Error("from-scratch master handle is missing");
+    const session = document.createPptxAuthoringSession(source);
+    const layoutHandle = session.addSlideLayout(masterHandle, {
+      name: "Rendered Added Layout",
+      type: "titleOnly",
+      background: { kind: "solid", color: { kind: "srgb", hex: "F1F5F9" } },
+    });
+    session.target(layoutHandle).addShape({
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: document.asEmu(914400),
+      offsetY: document.asEmu(914400),
+      width: document.asEmu(2743200),
+      height: document.asEmu(914400),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "4472C4" } },
+    });
+    const slideHandle = session.addEmptySlideFromLayout({ layoutPartPath: layoutHandle.partPath });
+    session.target(slideHandle).addTextBox({
+      offsetX: document.asEmu(914400),
+      offsetY: document.asEmu(2286000),
+      width: document.asEmu(3657600),
+      height: document.asEmu(914400),
+      text: "Added layout render",
+    });
+
+    const reread = document.readPptx(document.writePptx(session.source));
+    const report = await renderPptxSourceModelToSvg(reread, { slides: [2] });
+
+    expect(reread.slides[1]?.layoutPartPath).toBe(layoutHandle.partPath);
+    expect(report.slides[0]?.svg).toContain("4472c4");
+    expect(report.slides[0]?.svg).toContain("Added layout render");
+  });
+
   it("keeps concurrent source-model renders isolated by font options", async () => {
     const source = document.readPptx(testPptx);
 
