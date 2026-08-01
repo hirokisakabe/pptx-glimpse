@@ -15,6 +15,21 @@ From the repository root, install the workspace dependencies:
 pnpm install
 ```
 
+## TypeScript compiler version
+
+The repository and demo use TypeScript 6. Keep them on the same compiler generation so root
+type-checking, declaration emit, and generated API references are evaluated consistently.
+
+TypeScript 7 adoption is currently blocked by the supported compiler ranges of TypeDoc 0.28 and
+typescript-eslint 8. Recheck both upstream peer dependencies before upgrading the compiler. The
+`stableTypeOrdering` option is only for diagnosing TypeScript 6/7 output differences and must not
+be committed as a permanent compiler option.
+
+tsup 8.5.1 injects the deprecated `baseUrl` option into declaration builds even when the project
+does not configure it. The workspace applies `patches/tsup.patch` until
+[tsup issue #1388](https://github.com/egoist/tsup/issues/1388) is resolved in a release; remove the
+patch when upgrading to a version that omits this fallback.
+
 ## Run the local editor preview
 
 Pass a PPTX file to the development server:

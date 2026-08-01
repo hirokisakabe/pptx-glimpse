@@ -254,6 +254,7 @@ def create_editor_validity_chart_fixture(filename, *, expected):
     if expected:
         chart_data.add_series("Edited revenue", (40, 55, 70))
         chart_data.add_series("Edited cost", (25, 30, 42))
+        chart_data.add_series("Edited profit", (15, 25, 28))
     else:
         chart_data.add_series("Revenue", (10, 20))
         chart_data.add_series("Cost", (7, 12))
@@ -268,6 +269,40 @@ def create_editor_validity_chart_fixture(filename, *, expected):
     ).chart
     chart.has_title = True
     chart.chart_title.text_frame.text = "LibreOffice editor validity: chart"
+    chart.has_legend = True
+    chart.value_axis.has_major_gridlines = True
+    chart.category_axis.has_title = True
+    chart.category_axis.axis_title.text_frame.text = "Month"
+    chart.value_axis.has_title = True
+    chart.value_axis.axis_title.text_frame.text = "Amount"
+
+    prs.save(os.path.join(OUTPUT_DIR, filename))
+    print(f"  Created: {filename}")
+
+
+def create_editor_validity_chart_removal_fixture(filename, *, expected):
+    """Fixture pair for existing chart series removal validity checks."""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    chart_data = CategoryChartData()
+    chart_data.categories = ["Apr", "May", "Jun"] if expected else ["Jan", "Feb"]
+    if expected:
+        chart_data.add_series("Edited revenue", (40, 55, 70))
+    else:
+        chart_data.add_series("Revenue", (10, 20))
+        chart_data.add_series("Cost", (7, 12))
+        chart_data.add_series("Profit", (3, 8))
+
+    chart = slide.shapes.add_chart(
+        XL_CHART_TYPE.COLUMN_CLUSTERED,
+        Inches(0.8),
+        Inches(0.7),
+        Inches(8.4),
+        Inches(4.5),
+        chart_data,
+    ).chart
+    chart.has_title = True
+    chart.chart_title.text_frame.text = "LibreOffice editor validity: chart removal"
     chart.has_legend = True
     chart.value_axis.has_major_gridlines = True
     chart.category_axis.has_title = True
@@ -487,6 +522,14 @@ def create_editor_validity_fixtures():
     )
     create_editor_validity_chart_fixture(
         "editor-validity-chart-expected.pptx",
+        expected=True,
+    )
+    create_editor_validity_chart_removal_fixture(
+        "editor-validity-chart-removal-source.pptx",
+        expected=False,
+    )
+    create_editor_validity_chart_removal_fixture(
+        "editor-validity-chart-removal-expected.pptx",
         expected=True,
     )
     create_editor_validity_table_text_fixture(

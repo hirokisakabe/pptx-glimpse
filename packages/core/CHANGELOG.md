@@ -1,5 +1,20 @@
 # pptx-glimpse
 
+## 5.1.0
+
+### Minor Changes
+
+- 42c5dd4: Expose from-scratch native group authoring and typed headless/integrated group and ungroup commands with selection-aware undo and redo.
+
+### Patch Changes
+
+- Updated dependencies [9973470]
+- Updated dependencies [42c5dd4]
+- Updated dependencies [c492b4d]
+- Updated dependencies [328de21]
+  - @pptx-glimpse/document@0.14.0
+  - @pptx-glimpse/editor@0.4.0
+
 ## 5.0.0
 
 ### Major Changes
