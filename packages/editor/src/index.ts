@@ -1030,7 +1030,7 @@ function groupShapesCommand(
   command: GroupShapesCommand,
 ): PptxSourceModel {
   for (const handle of command.shapeHandles) {
-    const shape = findShapeNodeBySourceHandle(document, handle);
+    const shape = findCommandShape(document, handle, "groupShapes");
     if (shape !== undefined && !isGroupableSourceShape(shape)) {
       throw new Error(`groupShapes: shape kind '${shape.kind}' is not supported`);
     }
@@ -1042,11 +1042,26 @@ function ungroupShapeCommand(
   document: PptxSourceModel,
   command: UngroupShapeCommand,
 ): PptxSourceModel {
-  const group = findShapeNodeBySourceHandle(document, command.groupHandle);
+  const group = findCommandShape(document, command.groupHandle, "ungroupShape");
   if (group?.kind === "group" && group.children.length === 0) {
     throw new Error("ungroupShape: group must contain at least one child");
   }
   return ungroupShape(document, command.groupHandle);
+}
+
+function findCommandShape(
+  document: PptxSourceModel,
+  handle: SourceHandle,
+  operation: "groupShapes" | "ungroupShape",
+): SourceShapeNode | undefined {
+  try {
+    return findShapeNodeBySourceHandle(document, handle);
+  } catch (cause) {
+    if (cause instanceof Error && cause.message.startsWith("findShapeNodeBySourceHandle:")) {
+      throw new Error(`${operation}: ${cause.message}`, { cause });
+    }
+    throw cause;
+  }
 }
 
 function selectionAfterCommand(

@@ -34,7 +34,10 @@ import { addEmptySlideFromLayout } from "./slide-topology.js";
 import type { AddTableInput } from "./table-authoring.js";
 import { addTable } from "./table-authoring.js";
 
-/** Consecutive authoring operations bound to one slide, layout, or master handle. */
+/**
+ * Consecutive authoring operations bound to one slide, layout, or master handle. A native group
+ * handle is supported only by `groupShapes`, which groups its consecutive direct children.
+ */
 export interface PptxAuthoringTarget {
   addTextBox(input: AddTextBoxInput): SourceHandle;
   addSlideNumber(input: AddSlideNumberInput): SourceHandle;

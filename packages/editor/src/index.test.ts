@@ -1200,6 +1200,36 @@ describe("EditorSession selection", () => {
     expect(session.undoDepth).toBe(undoDepth);
     expect(session.redoDepth).toBe(0);
   });
+
+  it("classifies ambiguous group command handles as atomic invalid-command failures", () => {
+    const source = createThreeShapeSource();
+    const first = source.slides[0]?.shapes[0];
+    const second = source.slides[0]?.shapes[1];
+    const third = source.slides[0]?.shapes[2];
+    if (
+      first?.handle?.nodeId === undefined ||
+      second?.handle === undefined ||
+      third?.handle === undefined
+    ) {
+      throw new Error("ambiguous group command fixture handles are missing");
+    }
+    Object.defineProperty(second.handle, "nodeId", { value: first.handle.nodeId });
+    const session = createEditorSession(source);
+    const before = session.document;
+
+    const result = session.apply({
+      kind: "groupShapes",
+      shapeHandles: [first.handle, third.handle],
+    });
+
+    expect(result).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain("duplicate node id");
+    expect(session.document).toBe(before);
+    expect(session.selection).toBeUndefined();
+    expect(session.undoDepth).toBe(0);
+    expect(session.redoDepth).toBe(0);
+  });
 });
 
 function createThreeShapeSource(): PptxSourceModel {
