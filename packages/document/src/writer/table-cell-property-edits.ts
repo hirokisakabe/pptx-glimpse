@@ -120,26 +120,38 @@ function applyBorderPatch(
   patch: EditableTableCellBorder,
 ): void {
   const local = { left: "lnL", right: "lnR", top: "lnT", bottom: "lnB" }[side];
-  let line = getChild(tcPr, local);
-  if (line === undefined) {
-    insertChildByOrder(tcPr, `a:${local}`, {}, (name) =>
-      [
-        "lnTlToBr",
-        "lnBlToTr",
-        "cell3D",
-        "noFill",
-        "solidFill",
-        "gradFill",
-        "blipFill",
-        "pattFill",
-        "grpFill",
-        "extLst",
-      ].includes(name),
-    );
-    line = getChild(tcPr, local) ?? {};
-  }
+  const line = ensureBorderLine(tcPr, local);
   if (patch.width !== undefined) line["@_w"] = String(patch.width);
   if (patch.fill !== undefined) replaceFillChild(line, patch.fill, true);
+}
+
+function ensureBorderLine(tcPr: XmlNode, local: string): XmlNode {
+  for (const [key, value] of Object.entries(tcPr)) {
+    if (key.startsWith("@_") || localName(key) !== local) continue;
+    if (isXmlNode(value)) return value;
+    if (Array.isArray(value) || value !== "") {
+      throw new Error(`writePptx: table cell has unsupported duplicate or malformed ${local} XML`);
+    }
+    const replacement: XmlNode = {};
+    tcPr[key] = replacement;
+    return replacement;
+  }
+  const line: XmlNode = {};
+  insertChildByOrder(tcPr, `a:${local}`, line, (name) =>
+    [
+      "lnTlToBr",
+      "lnBlToTr",
+      "cell3D",
+      "noFill",
+      "solidFill",
+      "gradFill",
+      "blipFill",
+      "pattFill",
+      "grpFill",
+      "extLst",
+    ].includes(name),
+  );
+  return line;
 }
 
 function replaceFillChild(parent: XmlNode, fill: EditableShapeFill, lineFill: boolean): void {

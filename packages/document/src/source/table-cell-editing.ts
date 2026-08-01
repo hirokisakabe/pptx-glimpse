@@ -136,8 +136,9 @@ function replaceTableCell(
 ): readonly SourceShapeNode[] {
   return nodes.map((node) => {
     if (node.kind === "group") {
+      if (!containsTable(node.children, address)) return node;
       const children = replaceTableCell(node.children, address, cell);
-      return children === node.children ? node : ({ ...node, children } satisfies SourceGroup);
+      return { ...node, children } satisfies SourceGroup;
     }
     if (node.kind !== "table" || !sourceHandlesEqual(node.handle, address.tableHandle)) return node;
     return {
@@ -157,6 +158,10 @@ function replaceTableCell(
       },
     } satisfies SourceTable;
   });
+}
+
+function containsTable(nodes: readonly SourceShapeNode[], address: TableCellAddress): boolean {
+  return findTables(nodes).some((table) => sourceHandlesEqual(table.handle, address.tableHandle));
 }
 
 function findTables(nodes: readonly SourceShapeNode[]): SourceTable[] {

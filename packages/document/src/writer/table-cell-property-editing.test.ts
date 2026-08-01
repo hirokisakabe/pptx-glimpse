@@ -135,6 +135,38 @@ describe("writePptx - existing table cell property edits", () => {
       color: { hex: "D9EAF7" },
     });
   });
+
+  it("patches an existing empty border element without dropping sibling XML", () => {
+    const files = unzipSync(buildFixture());
+    const slidePath = "ppt/slides/slide1.xml";
+    files[slidePath] = encoder.encode(
+      decoder
+        .decode(files[slidePath])
+        .replace('<a:lnL w="12700">', '<a:lnL w="12700">')
+        .replace("</a:lnL>", "</a:lnL><a:lnR/>"),
+    );
+    const source = readPptx(zipSync(files));
+    const table = firstTable(source);
+    const edited = setTableCellProperties(
+      source,
+      { tableHandle: requireHandle(table.handle), rowIndex: 0, cellIndex: 0 },
+      {
+        borders: {
+          right: {
+            fill: { kind: "solid", color: { kind: "srgb", hex: "70AD47" } },
+          },
+        },
+      },
+    );
+    const output = writePptx(edited);
+    const cell = firstTable(readPptx(output)).table.rows[0].cells[0];
+
+    expect(cell.borders?.right?.fill).toEqual({
+      kind: "solid",
+      color: { kind: "srgb", hex: "70AD47" },
+    });
+    expect(decoder.decode(unzipSync(output)[slidePath])).toContain('uri="preserve-cell-sidecar"');
+  });
 });
 
 function buildFixture(): Uint8Array {
