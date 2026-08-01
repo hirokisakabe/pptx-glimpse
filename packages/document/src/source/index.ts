@@ -105,6 +105,7 @@ export {
   clearPictureCrop,
   clearTableCellProperties,
   clearTextRunProperties,
+  countImageReferencesToMedia,
   deleteShape,
   deleteSlide,
   duplicateSlide,

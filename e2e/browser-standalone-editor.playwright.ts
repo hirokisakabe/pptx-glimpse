@@ -92,9 +92,7 @@ test("runs a browser-only editor move, resize, text, undo, redo, download, and r
   }
 });
 
-test("replaces a selected image in the browser-only editor with warning, reject, undo, and redo", async ({
-  page,
-}) => {
+test("replaces a selected image with copy-on-write, reject, undo, and redo", async ({ page }) => {
   const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-browser-editor-image-test-"));
   const editor = await startStandaloneEditor();
   try {
@@ -124,7 +122,7 @@ test("replaces a selected image in the browser-only editor with warning, reject,
     await expectImageHref(page, RED_PNG_BASE64);
 
     await page.getByTestId("image-replacement-input").setInputFiles(replacementPath);
-    await expect(page.getByTestId("message")).toContainText("shared media part affects 2 pictures");
+    await expect(page.getByTestId("message")).toHaveText("Image replaced");
     await expectImageHref(page, BLUE_PNG_BASE64);
 
     await page.getByRole("button", { name: "Undo" }).click();
@@ -135,9 +133,9 @@ test("replaces a selected image in the browser-only editor with warning, reject,
     const download = page.waitForEvent("download");
     await page.getByRole("button", { name: "Download" }).click();
     await (await download).saveAs(savedPath);
-    expect(mediaBytes(readPptx(await readFile(savedPath)), "ppt/media/image1.png")).toEqual(
-      BLUE_PNG,
-    );
+    const saved = readPptx(await readFile(savedPath));
+    expect(mediaBytes(saved, "ppt/media/image1.png")).toEqual(RED_PNG);
+    expect(mediaBytes(saved, "ppt/media/image2.png")).toEqual(BLUE_PNG);
   } finally {
     await editor.close();
     await rm(dir, { recursive: true, force: true });

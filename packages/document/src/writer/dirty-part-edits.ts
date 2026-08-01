@@ -1,6 +1,7 @@
 import type { XmlNode } from "../reader/xml.js";
 import { editDirtyPartPath } from "../source/edit-descriptors.js";
 import type { PartPath, PptxSourceModel, PptxSourceModelEdit } from "../source/index.js";
+import { applyReplaceImageEdit } from "./image-replacement-edits.js";
 import { applyAddSlideLayoutEdit } from "./master-layout-edits.js";
 import { applyPictureCropEdit } from "./picture-property-edits.js";
 import {
@@ -132,6 +133,8 @@ function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
       applyAddSlideLayoutEdit(root, edit);
       return;
     case "replaceImage":
+      applyReplaceImageEdit(root, edit);
+      return;
     case "updateChartData":
     case "addEmptySlideFromLayout":
     case "duplicateSlide":
