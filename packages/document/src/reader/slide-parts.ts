@@ -252,8 +252,8 @@ function parseFontScheme(fontScheme: XmlNode | undefined): SourceThemeFontScheme
   const minorFont = getChild(fontScheme, "minorFont");
   const majorLatin = getAttr(getChild(majorFont, "latin"), "typeface");
   const minorLatin = getAttr(getChild(minorFont, "latin"), "typeface");
-  const majorEastAsian = resolveEastAsianFont(majorFont);
-  const minorEastAsian = resolveEastAsianFont(minorFont);
+  const majorEastAsian = getAttr(getChild(majorFont, "ea"), "typeface");
+  const minorEastAsian = getAttr(getChild(minorFont, "ea"), "typeface");
   const majorComplexScript = getAttr(getChild(majorFont, "cs"), "typeface");
   const minorComplexScript = getAttr(getChild(minorFont, "cs"), "typeface");
   const majorJapanese = findScriptFont(majorFont, "Jpan");
@@ -271,12 +271,6 @@ function parseFontScheme(fontScheme: XmlNode | undefined): SourceThemeFontScheme
     ...(isNonEmpty(minorJapanese) ? { minorJapanese } : {}),
   };
   return Object.keys(scheme).length > 0 ? scheme : undefined;
-}
-
-function resolveEastAsianFont(fontNode: XmlNode | undefined): string | undefined {
-  const typeface = getAttr(getChild(fontNode, "ea"), "typeface");
-  if (isNonEmpty(typeface)) return typeface;
-  return findScriptFont(fontNode, "Jpan") ?? typeface;
 }
 
 function findScriptFont(fontNode: XmlNode | undefined, script: string): string | undefined {

@@ -206,6 +206,14 @@ const themeWithoutRegionalFonts = theme1
   .replace('\n        <a:cs typeface="Times New Roman"/>', "")
   .replace('\n        <a:cs typeface="Arial"/>', "");
 
+const themeWithEmptyRegionalFonts = theme1
+  .replaceAll(
+    '<a:ea typeface="MS PGothic"/>',
+    '<a:ea typeface=""/><a:font script="Jpan" typeface="Japanese Fallback"/>',
+  )
+  .replace('<a:cs typeface="Times New Roman"/>', '<a:cs typeface=""/>')
+  .replace('<a:cs typeface="Arial"/>', '<a:cs typeface=""/>');
+
 const contentTypesWithSecondSlide = contentTypes.replace(
   "</Types>",
   `  <Override PartName="/ppt/slides/slide2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
@@ -357,6 +365,25 @@ describe("collectUsedFonts", () => {
     expect(result.theme.minorFontCs).toBeNull();
     expect(result.fonts).toContain("Calibri Light");
     expect(result.fonts).toContain("Calibri");
+    expect(result.fonts).not.toContain("+mj-ea");
+    expect(result.fonts).not.toContain("+mn-ea");
+    expect(result.fonts).not.toContain("+mj-cs");
+    expect(result.fonts).not.toContain("+mn-cs");
+  });
+
+  it("uses Jpan when the direct East Asian typeface is explicitly empty", async () => {
+    const pptx = await createTestPptx({
+      slideXml: slideWithThemeAliases,
+      themeXml: themeWithEmptyRegionalFonts,
+    });
+    const result = collectUsedFonts(pptx);
+
+    expect(result.theme.majorFontEa).toBeNull();
+    expect(result.theme.minorFontEa).toBeNull();
+    expect(result.theme.majorFontCs).toBeNull();
+    expect(result.theme.minorFontCs).toBeNull();
+    expect(result.fonts).toContain("Japanese Fallback");
+    expect(result.fonts).not.toContain("");
     expect(result.fonts).not.toContain("+mj-ea");
     expect(result.fonts).not.toContain("+mn-ea");
     expect(result.fonts).not.toContain("+mj-cs");

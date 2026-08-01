@@ -105,10 +105,10 @@ export function collectUsedFonts(input: Uint8Array): UsedFonts {
     theme: {
       majorFont: defaultFontScheme.majorLatin,
       minorFont: defaultFontScheme.minorLatin,
-      majorFontEa: defaultFontScheme.majorEastAsian ?? null,
-      minorFontEa: defaultFontScheme.minorEastAsian ?? null,
-      majorFontCs: defaultFontScheme.majorComplexScript ?? null,
-      minorFontCs: defaultFontScheme.minorComplexScript ?? null,
+      majorFontEa: nonEmptyThemeFont(defaultFontScheme.majorEastAsian) ?? null,
+      minorFontEa: nonEmptyThemeFont(defaultFontScheme.minorEastAsian) ?? null,
+      majorFontCs: nonEmptyThemeFont(defaultFontScheme.majorComplexScript) ?? null,
+      minorFontCs: nonEmptyThemeFont(defaultFontScheme.minorComplexScript) ?? null,
     },
     fonts: [...fonts].sort(),
   };
@@ -217,14 +217,18 @@ function resolveThemeFontAlias(
     case "+mn-lt":
       return fontScheme.minorLatin;
     case "+mj-ea":
-      return fontScheme.majorEastAsian ?? fontScheme.majorJapanese;
+      return nonEmptyThemeFont(fontScheme.majorEastAsian) ?? fontScheme.majorJapanese;
     case "+mn-ea":
-      return fontScheme.minorEastAsian ?? fontScheme.minorJapanese;
+      return nonEmptyThemeFont(fontScheme.minorEastAsian) ?? fontScheme.minorJapanese;
     case "+mj-cs":
-      return fontScheme.majorComplexScript;
+      return nonEmptyThemeFont(fontScheme.majorComplexScript);
     case "+mn-cs":
-      return fontScheme.minorComplexScript;
+      return nonEmptyThemeFont(fontScheme.minorComplexScript);
     default:
       return font.startsWith("+mj-") || font.startsWith("+mn-") ? undefined : font;
   }
+}
+
+function nonEmptyThemeFont(font: string | undefined): string | undefined {
+  return font === "" ? undefined : font;
 }
