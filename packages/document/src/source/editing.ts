@@ -90,7 +90,6 @@ export {
   setShapeOutline,
   updateShapeTransform,
 } from "./shape-editing.js";
-export { groupShapes, ungroupShape } from "./shape-grouping.js";
 export type { AddEmptySlideFromLayoutInput } from "./slide-topology.js";
 export type { MoveSlideInput } from "./slide-topology.js";
 export {

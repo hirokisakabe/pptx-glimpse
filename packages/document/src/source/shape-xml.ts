@@ -13,7 +13,7 @@ import { XMLBuilder } from "fast-xml-parser";
 
 import { createSidecarIdFactory } from "../reader/raw-node.js";
 import { parseShapeTree } from "../reader/shape-tree.js";
-import { parseXml, parseXmlOrdered } from "../reader/xml.js";
+import { parseXml, parseXmlOrderedQualified } from "../reader/xml.js";
 import type { InnerShadowInput, OuterShadowInput, ShadowEffectsInput } from "./effect-authoring.js";
 import type { PartPath, RelationshipId } from "./handles.js";
 import type { ConnectorPresetGeometry } from "./pptx-source-model.js";
@@ -949,7 +949,7 @@ export function parseShapeNodeXml(
     parseXml(xml),
     partPath,
     createSidecarIdFactory(`${partPath}#added-shape-${orderingSlot}`),
-    parseXmlOrdered(xml),
+    parseXmlOrderedQualified(xml),
   );
   const node = nodes[0];
   if (node === undefined || nodes.length !== 1) {

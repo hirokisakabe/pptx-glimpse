@@ -39,6 +39,13 @@ const parser = new XMLParser({
 
 const orderedParser = new XMLParser({
   preserveOrder: true,
+  removeNSPrefix: true,
+  ignoreAttributes: true,
+  trimValues: false,
+});
+
+const qualifiedOrderedParser = new XMLParser({
+  preserveOrder: true,
   removeNSPrefix: false,
   ignoreAttributes: true,
   trimValues: false,
@@ -51,6 +58,11 @@ export function parseXml(xml: string): XmlNode {
 
 export function parseXmlOrdered(xml: string): XmlOrderedNode[] {
   return unsafeOoxmlBoundaryAssertion<XmlOrderedNode[]>(orderedParser.parse(xml));
+}
+
+/** Parse ordered XML while retaining qualified element names for shape-tree topology. */
+export function parseXmlOrderedQualified(xml: string): XmlOrderedNode[] {
+  return unsafeOoxmlBoundaryAssertion<XmlOrderedNode[]>(qualifiedOrderedParser.parse(xml));
 }
 
 export function navigateOrdered(
