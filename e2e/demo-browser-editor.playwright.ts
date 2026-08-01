@@ -106,6 +106,67 @@ test("navigates the documentation guides and public package references", async (
   }
 });
 
+test("opens a sample through the view-specific loading path", async ({ page }) => {
+  test.setTimeout(120_000);
+  if (demoServer === null) throw new Error("demo server was not started");
+  let sampleRequestCount = 0;
+  await page.route("**/samples/editor-demo.pptx", async (route) => {
+    sampleRequestCount += 1;
+    if (sampleRequestCount === 1) {
+      await route.fulfill({ status: 500, body: "initial sample unavailable" });
+      return;
+    }
+    await route.continue();
+  });
+
+  await page.goto(demoServer.url);
+  await expect(page.getByTestId("viewer-error")).toBeVisible();
+  await page.getByTestId("sample-editor-demo").click();
+
+  await expect(page.getByTestId("slide-container")).toBeVisible();
+  await expect(page.getByTestId("viewer-status")).toContainText("3 slides rendered");
+  await page.getByTestId("open-editor").click();
+  await expect(page.getByTestId("editor-workspace")).toBeVisible();
+});
+
+test("keeps the newest presentation when an older sample request finishes later", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  if (demoServer === null) throw new Error("demo server was not started");
+  let sampleRequestCount = 0;
+  let releaseDelayedRequest = () => {};
+  const delayedRequest = new Promise<void>((resolvePromise) => {
+    releaseDelayedRequest = resolvePromise;
+  });
+  await page.route("**/samples/editor-demo.pptx", async (route) => {
+    sampleRequestCount += 1;
+    if (sampleRequestCount > 1) await delayedRequest;
+    await route.continue();
+  });
+
+  await page.goto(demoServer.url);
+  await expect(page.getByTestId("editor-workspace")).toBeVisible();
+  await page.getByRole("button", { name: "Open sample" }).click();
+  await expect(page.getByTestId("replacement-loading")).toBeVisible();
+
+  await page
+    .getByTestId("pptx-input")
+    .setInputFiles(resolve(repoRoot, "shared-fixtures/real-product-page.pptx"));
+  const fileNameInput = page.getByRole("textbox", { name: "Presentation file name" });
+  await expect(fileNameInput).toHaveValue("real-product-page");
+
+  const delayedResponse = page.waitForResponse(
+    (response) => response.url().endsWith("/samples/editor-demo.pptx") && response.ok(),
+  );
+  releaseDelayedRequest();
+  await delayedResponse;
+  await page.waitForTimeout(1_000);
+
+  await expect(fileNameInput).toHaveValue("real-product-page");
+  await expect(page.getByTestId("replacement-loading")).toHaveCount(0);
+});
+
 test("opens the sample editor first and replaces it with an uploaded PPTX", async ({ page }) => {
   test.setTimeout(120_000);
   if (demoServer === null) throw new Error("demo server was not started");
@@ -148,6 +209,7 @@ test("opens the sample editor first and replaces it with an uploaded PPTX", asyn
   });
   await expect(page.locator(".replacement-error")).toBeVisible();
   await expect(fileNameInput).toHaveValue("real-product-page");
+  await expect(page.getByRole("button", { name: "Undo" })).toBeEnabled();
 
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Open sample" }).click();
