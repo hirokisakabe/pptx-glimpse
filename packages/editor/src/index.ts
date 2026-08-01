@@ -14,6 +14,7 @@ import {
   type AddEmptySlideFromLayoutInput,
   addTextBox,
   type AddTextBoxInput,
+  asSourceNodeId,
   clearParagraphProperties,
   clearTextRunProperties,
   deleteShape,
@@ -29,6 +30,7 @@ import {
   findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
+  groupShapes,
   moveSlide,
   type MoveSlideInput,
   type PptxSourceModel,
@@ -48,13 +50,18 @@ import {
   setShapeOutline,
   setTextRunProperties,
   type SourceChart,
+  type SourceConnector,
+  type SourceGroup,
   type SourceHandle,
   type SourceImage,
   type SourceParagraph,
+  type SourceShape,
   type SourceShapeNode,
   type SourceSlide,
+  type SourceTable,
   type SourceTextRun,
   type SourceTransform,
+  ungroupShape,
   updateChartData,
   type UpdateChartDataInput,
   updateShapeTransform,
@@ -160,6 +167,27 @@ export interface DeleteShapeCommand {
   readonly handle: SourceHandle;
 }
 
+/** Group two or more consecutive sibling drawings into one native DrawingML group. @inline */
+export interface GroupShapesCommand {
+  readonly kind: "groupShapes";
+  readonly shapeHandles: readonly SourceHandle[];
+}
+
+/** Expand one losslessly ungroupable native DrawingML group. @inline */
+export interface UngroupShapeCommand {
+  readonly kind: "ungroupShape";
+  readonly groupHandle: SourceHandle;
+}
+
+/** Source drawing kinds supported by the typed group convenience method. */
+export type GroupableSourceShape =
+  | SourceShape
+  | SourceConnector
+  | SourceImage
+  | SourceTable
+  | SourceChart
+  | SourceGroup;
+
 /** Replace the media bytes referenced by one image shape. @inline */
 export interface ReplaceImageCommand {
   readonly kind: "replaceImage";
@@ -217,6 +245,8 @@ export interface DeleteSlideCommand {
  * @inlineType AddTextBoxCommand
  * @inlineType AddConnectorCommand
  * @inlineType DeleteShapeCommand
+ * @inlineType GroupShapesCommand
+ * @inlineType UngroupShapeCommand
  * @inlineType ReplaceImageCommand
  * @inlineType UpdateChartDataCommand
  * @inlineType AddEmptySlideFromLayoutCommand
@@ -249,6 +279,8 @@ export type EditorCommand =
   | AddTextBoxCommand
   | AddConnectorCommand
   | DeleteShapeCommand
+  | GroupShapesCommand
+  | UngroupShapeCommand
   | ReplaceImageCommand
   | UpdateChartDataCommand
   | AddEmptySlideFromLayoutCommand
@@ -307,6 +339,8 @@ export type EditorSelectShapeResult =
 interface HistoryEntry {
   readonly before: PptxSourceModel;
   readonly after: PptxSourceModel;
+  readonly beforeSelection?: EditorSelection;
+  readonly afterSelection?: EditorSelection;
 }
 
 export class EditorSession {
@@ -501,6 +535,33 @@ export class EditorSession {
     }));
   }
 
+  groupShapes(shapes: readonly GroupableSourceShape[]): EditorApplyCommandResult {
+    const handles: SourceHandle[] = [];
+    for (const shape of shapes) {
+      if (!isSourceShapeNode(shape) || shape.handle === undefined) {
+        return invalidSourceNodeFailure("groupShapes", "every source shape requires a handle");
+      }
+      if (findShapeNodeBySourceHandle(this.#document, shape.handle) === undefined) {
+        return invalidSourceNodeFailure(
+          "groupShapes",
+          "source node handle was not found in the current EditorSession document",
+        );
+      }
+      handles.push(shape.handle);
+    }
+    return this.apply({ kind: "groupShapes", shapeHandles: handles });
+  }
+
+  ungroupShape(group: SourceShapeNode): EditorApplyCommandResult {
+    if (group.kind !== "group") {
+      return invalidSourceNodeFailure("ungroupShape", "source node is not a group shape");
+    }
+    return this.applyToShapeNode("ungroupShape", group, (groupHandle) => ({
+      kind: "ungroupShape",
+      groupHandle,
+    }));
+  }
+
   replaceImage(image: SourceImage, bytes: Uint8Array): EditorApplyCommandResult {
     return this.applyToSourceNode(
       "replaceImage",
@@ -559,13 +620,16 @@ export class EditorSession {
 
   applyAll(commands: readonly EditorCommand[]): EditorApplyCommandResult {
     const before = this.#document;
+    const beforeSelection = this.#selection;
     if (commands.length === 0) return { ok: true, document: before };
 
     let after = before;
+    let afterSelection = beforeSelection;
     const warnings: EditorCommandWarning[] = [];
     for (const command of commands) {
       const result = applyCommandToDocument(after, command);
       if (!result.ok) return result;
+      afterSelection = selectionAfterCommand(after, result.document, command, afterSelection);
       after = result.document;
       warnings.push(...collectCommandWarnings(after, [command]));
     }
@@ -584,8 +648,19 @@ export class EditorSession {
       };
     }
     this.#document = after;
-    this.reconcileSelectionAfterDocumentChange();
-    this.#undoStack.push({ before, after });
+    this.#selection = reconcileSelection(after, afterSelection);
+    const selectionChangedByTopologyCommand = commands.some(
+      (command) => command.kind === "groupShapes" || command.kind === "ungroupShape",
+    );
+    const historyBeforeSelection = selectionChangedByTopologyCommand
+      ? beforeSelection
+      : this.#selection;
+    this.#undoStack.push({
+      before,
+      after,
+      ...(historyBeforeSelection !== undefined ? { beforeSelection: historyBeforeSelection } : {}),
+      ...(this.#selection !== undefined ? { afterSelection: this.#selection } : {}),
+    });
     this.#redoStack.length = 0;
 
     return {
@@ -606,7 +681,7 @@ export class EditorSession {
     }
 
     this.#document = entry.before;
-    this.reconcileSelectionAfterDocumentChange();
+    this.#selection = entry.beforeSelection;
     this.#redoStack.push(entry);
 
     return { ok: true, document: entry.before };
@@ -623,17 +698,10 @@ export class EditorSession {
     }
 
     this.#document = entry.after;
-    this.reconcileSelectionAfterDocumentChange();
+    this.#selection = entry.afterSelection;
     this.#undoStack.push(entry);
 
     return { ok: true, document: entry.after };
-  }
-
-  private reconcileSelectionAfterDocumentChange(): void {
-    if (this.#selection === undefined) return;
-    if (findShapeNodeBySourceHandle(this.#document, this.#selection.shapeHandle) === undefined) {
-      this.#selection = undefined;
-    }
   }
 
   private applyToShapeNode(
@@ -714,6 +782,8 @@ const EDITOR_COMMAND_KINDS: ReadonlySet<string> = new Set([
   "addTextBox",
   "addConnector",
   "deleteShape",
+  "groupShapes",
+  "ungroupShape",
   "replaceImage",
   "updateChartData",
   "addEmptySlideFromLayout",
@@ -737,6 +807,8 @@ const EXPECTED_COMMAND_REJECTION_PREFIXES = [
   "addTextBox:",
   "addConnector:",
   "deleteShape:",
+  "groupShapes:",
+  "ungroupShape:",
   "replaceImageBytes:",
   "updateChartData:",
   "addEmptySlideFromLayout:",
@@ -770,6 +842,8 @@ function applyCommandToDocument(
     case "addTextBox":
     case "addConnector":
     case "deleteShape":
+    case "groupShapes":
+    case "ungroupShape":
     case "replaceImage":
     case "updateChartData":
     case "addEmptySlideFromLayout":
@@ -900,6 +974,10 @@ function executeCommand(document: PptxSourceModel, command: EditorCommand): Pptx
       return addConnectorCommand(document, command);
     case "deleteShape":
       return deleteShape(document, command.handle);
+    case "groupShapes":
+      return groupShapes(document, command.shapeHandles);
+    case "ungroupShape":
+      return ungroupShape(document, command.groupHandle);
     case "replaceImage":
       return replaceImageBytes(document, command.handle, command.bytes);
     case "updateChartData":
@@ -913,6 +991,47 @@ function executeCommand(document: PptxSourceModel, command: EditorCommand): Pptx
     case "deleteSlide":
       return deleteSlide(document, command.handle);
   }
+}
+
+function selectionAfterCommand(
+  before: PptxSourceModel,
+  after: PptxSourceModel,
+  command: EditorCommand,
+  current: EditorSelection | undefined,
+): EditorSelection | undefined {
+  if (command.kind === "groupShapes") {
+    const edit = after.edits?.at(-1);
+    if (edit?.kind !== "groupShapes") {
+      throw new Error("EditorSession: groupShapes command did not produce a group edit");
+    }
+    const group = findShapeNodeBySourceHandle(after, {
+      partPath: edit.targetPartPath,
+      nodeId: asSourceNodeId(edit.groupId),
+    });
+    if (group?.kind !== "group" || group.handle === undefined) {
+      throw new Error("EditorSession: groupShapes command did not produce a selectable group");
+    }
+    return { shapeHandle: group.handle };
+  }
+  if (command.kind === "ungroupShape") {
+    const group = findShapeNodeBySourceHandle(before, command.groupHandle);
+    if (group?.kind !== "group") {
+      throw new Error("EditorSession: ungroupShape command target disappeared before selection");
+    }
+    const firstChildHandle = group.children[0]?.handle;
+    return firstChildHandle === undefined ? undefined : { shapeHandle: firstChildHandle };
+  }
+  return reconcileSelection(after, current);
+}
+
+function reconcileSelection(
+  document: PptxSourceModel,
+  selection: EditorSelection | undefined,
+): EditorSelection | undefined {
+  if (selection === undefined) return undefined;
+  return findShapeNodeBySourceHandle(document, selection.shapeHandle) === undefined
+    ? undefined
+    : selection;
 }
 
 function updateChartDataCommand(
