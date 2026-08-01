@@ -7,8 +7,10 @@ import type {
   PptxSourceModelAddTableEdit,
   PptxSourceModelAddTextBoxEdit,
   PptxSourceModelDeleteShapeEdit,
+  PptxSourceModelGroupShapesEdit,
   PptxSourceModelReorderShapesEdit,
   PptxSourceModelSetSlideBackgroundEdit,
+  PptxSourceModelUngroupShapeEdit,
 } from "../source/index.js";
 import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import {
@@ -21,10 +23,14 @@ import {
   qualifiedSiblingName,
   remapElementPrefix,
 } from "./dirty-part-xml-helpers.js";
-import { deleteShapeXml, locateShapeTreeNode, parseShapeLocator } from "./xml-locators.js";
+import {
+  deleteShapeXml,
+  locateShapeTreeNode,
+  locateShapeTreeNodeLocation,
+  parseShapeLocator,
+} from "./xml-locators.js";
 import { replaceNodeEntries } from "./xml-node-utils.js";
-import { parseXmlForEditing } from "./xml-serialization.js";
-import { setXmlChildOrder } from "./xml-serialization.js";
+import { getXmlChildOrder, parseXmlForEditing, setXmlChildOrder } from "./xml-serialization.js";
 
 export function applyAddTextBoxEdit(root: XmlNode, edit: PptxSourceModelAddTextBoxEdit): void {
   applyAddSpEdit(root, edit);
@@ -137,6 +143,69 @@ export function applyReorderShapesEdit(
   );
 }
 
+export function applyGroupShapesEdit(root: XmlNode, edit: PptxSourceModelGroupShapesEdit): void {
+  const spTree = getShapeTree(root, edit.targetPartPath);
+  assertShapeIdAvailable(spTree, edit.groupId);
+  const parent = groupParentContainer(spTree, edit.parentGroupId, "group");
+  const order = getXmlChildOrder(parent);
+  const selectedIds = new Set(edit.shapeIds);
+  if (selectedIds.size !== edit.shapeIds.length) {
+    throw new Error("writePptx: grouped shape ids contain a duplicate shape");
+  }
+  const selectedEntries = order.filter((entry) => {
+    const nodeId = shapeTreeEntryNodeId(entry.value);
+    return nodeId !== undefined && selectedIds.has(nodeId);
+  });
+  if (
+    selectedEntries.length !== edit.shapeIds.length ||
+    selectedEntries.some(
+      (entry, index) => shapeTreeEntryNodeId(entry.value) !== edit.shapeIds[index],
+    )
+  ) {
+    throw new Error("writePptx: grouped shapes were not found as ordered siblings");
+  }
+  const drawingEntries = order.filter((entry) => shapeTreeEntryNodeId(entry.value) !== undefined);
+  const firstDrawingIndex = drawingEntries.findIndex((entry) => entry === selectedEntries[0]);
+  if (
+    firstDrawingIndex < 0 ||
+    selectedEntries.some((entry, index) => drawingEntries[firstDrawingIndex + index] !== entry)
+  ) {
+    throw new Error("writePptx: grouped shapes are not consecutive siblings");
+  }
+
+  const group = createGroupXml(edit);
+  for (const entry of selectedEntries) {
+    appendShapeTreeNodeAtEnd(group, entry.key, unsafeOoxmlBoundaryAssertion<XmlNode>(entry.value));
+  }
+  const firstOrderIndex = order.findIndex((entry) => entry === selectedEntries[0]);
+  const selectedEntrySet = new Set(selectedEntries);
+  const groupKey = qualifiedSiblingName(selectedEntries[0]?.key ?? "p:sp", "grpSp");
+  const nextOrder = order.flatMap((entry, index) => {
+    if (index === firstOrderIndex) return [{ key: groupKey, value: group }];
+    return selectedEntrySet.has(entry) ? [] : [entry];
+  });
+  replaceContainerChildren(parent, nextOrder);
+}
+
+export function applyUngroupShapeEdit(root: XmlNode, edit: PptxSourceModelUngroupShapeEdit): void {
+  const spTree = getShapeTree(root, edit.targetPartPath);
+  const location = locateShapeTreeNodeLocation(spTree, { nodeId: edit.groupId });
+  if (location === undefined || location.nodeKind !== "grpSp") {
+    throw new Error(`writePptx: ungroup target '${edit.groupId}' is not a group shape`);
+  }
+  assertIdentityGroupXml(location.node, edit.groupId);
+  const children = getXmlChildOrder(location.node).filter(isShapeTreeEntry);
+  const parentOrder = getXmlChildOrder(location.parentContainer);
+  const groupIndex = parentOrder.findIndex((entry) => entry.value === location.node);
+  if (groupIndex < 0) {
+    throw new Error(`writePptx: ungroup target '${edit.groupId}' has no parent slot`);
+  }
+  const nextOrder = parentOrder.flatMap((entry, index) =>
+    index === groupIndex ? children : entry.value === location.node ? [] : [entry],
+  );
+  replaceContainerChildren(location.parentContainer, nextOrder);
+}
+
 export function applySetSlideBackgroundEdit(
   root: XmlNode,
   edit: PptxSourceModelSetSlideBackgroundEdit,
@@ -208,6 +277,104 @@ function assertShapeIdAvailable(spTree: XmlNode, shapeId: string): void {
   if (locateShapeTreeNode(spTree, { nodeId: shapeId }) !== undefined) {
     throw new Error(`writePptx: shape id '${shapeId}' already exists in source XML`);
   }
+}
+
+function groupParentContainer(
+  spTree: XmlNode,
+  parentGroupId: string | undefined,
+  operation: string,
+): XmlNode {
+  if (parentGroupId === undefined) return spTree;
+  const location = locateShapeTreeNodeLocation(spTree, { nodeId: parentGroupId });
+  if (location === undefined || location.nodeKind !== "grpSp") {
+    throw new Error(`writePptx: ${operation} parent '${parentGroupId}' is not a group shape`);
+  }
+  return location.node;
+}
+
+function createGroupXml(edit: PptxSourceModelGroupShapesEdit): XmlNode {
+  const xml =
+    `<p:grpSp xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" ` +
+    `xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">` +
+    `<p:nvGrpSpPr><p:cNvPr id="${edit.groupId}" name="${escapeXmlAttribute(edit.groupName)}"/>` +
+    `<p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
+    `<p:grpSpPr><a:xfrm><a:off x="${edit.offsetX}" y="${edit.offsetY}"/>` +
+    `<a:ext cx="${edit.width}" cy="${edit.height}"/>` +
+    `<a:chOff x="${edit.offsetX}" y="${edit.offsetY}"/>` +
+    `<a:chExt cx="${edit.width}" cy="${edit.height}"/></a:xfrm></p:grpSpPr></p:grpSp>`;
+  const group = getChild(parseXmlForEditing(xml), "grpSp");
+  if (group === undefined) throw new Error("writePptx: failed to create group XML");
+  return group;
+}
+
+function assertIdentityGroupXml(group: XmlNode, groupId: string): void {
+  const groupProperties = getChild(group, "grpSpPr");
+  const xfrm = getChild(groupProperties, "xfrm");
+  const off = getChild(xfrm, "off");
+  const ext = getChild(xfrm, "ext");
+  const childOff = getChild(xfrm, "chOff");
+  const childExt = getChild(xfrm, "chExt");
+  const offX = getAttr(off, "x");
+  const offY = getAttr(off, "y");
+  const extentWidth = getAttr(ext, "cx");
+  const extentHeight = getAttr(ext, "cy");
+  const identity =
+    xfrm !== undefined &&
+    offX !== undefined &&
+    offY !== undefined &&
+    extentWidth !== undefined &&
+    extentHeight !== undefined &&
+    Number(getAttr(xfrm, "rot") ?? 0) === 0 &&
+    !isTrueXmlAttribute(getAttr(xfrm, "flipH")) &&
+    !isTrueXmlAttribute(getAttr(xfrm, "flipV")) &&
+    offX === getAttr(childOff, "x") &&
+    offY === getAttr(childOff, "y") &&
+    extentWidth === getAttr(childExt, "cx") &&
+    extentHeight === getAttr(childExt, "cy");
+  const unsupportedProperties = getXmlChildOrder(groupProperties ?? {}).some(
+    (entry) => localName(entry.key) !== "xfrm",
+  );
+  const unsupportedGroupChildren = getXmlChildOrder(group).some((entry) => {
+    const name = localName(entry.key);
+    return name !== "nvGrpSpPr" && name !== "grpSpPr" && !isShapeTreeEntry(entry);
+  });
+  if (!identity || unsupportedProperties || unsupportedGroupChildren) {
+    throw new Error(`writePptx: group '${groupId}' cannot be losslessly expanded`);
+  }
+}
+
+function isShapeTreeEntry(entry: { readonly key: string; readonly value: unknown }): boolean {
+  return ["sp", "pic", "cxnSp", "graphicFrame", "grpSp"].includes(localName(entry.key));
+}
+
+function replaceContainerChildren(
+  container: XmlNode,
+  order: readonly { readonly key: string; readonly value: unknown }[],
+): void {
+  const grouped = new Map<string, unknown[]>();
+  for (const entry of order) {
+    const values = grouped.get(entry.key) ?? [];
+    values.push(entry.value);
+    grouped.set(entry.key, values);
+  }
+  const entries: [string, unknown][] = Object.entries(container).filter(([key]) =>
+    key.startsWith("@_"),
+  );
+  for (const [key, values] of grouped) entries.push([key, values]);
+  replaceNodeEntries(container, entries);
+  setXmlChildOrder(container, order);
+}
+
+function isTrueXmlAttribute(value: string | undefined): boolean {
+  return value === "1" || value === "true";
+}
+
+function escapeXmlAttribute(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }
 
 function shapeTreeNodeId(node: XmlNode): string | undefined {

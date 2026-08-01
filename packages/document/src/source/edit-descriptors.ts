@@ -251,6 +251,31 @@ const EDIT_KIND_DESCRIPTORS: {
     insertedSlidePartPath: () => undefined,
     insertedShape: () => undefined,
   },
+  groupShapes: {
+    reservedPartPaths: (edit) => [edit.targetPartPath],
+    dirtyPartPath: (edit) => edit.targetPartPath,
+    targetsShape: (edit, shapeHandle) =>
+      edit.targetPartPath === shapeHandle.partPath && edit.groupId === String(shapeHandle.nodeId),
+    invalidatingPartPaths: (edit) => [edit.targetPartPath],
+    reservedShapeId: (edit, slidePartPath) =>
+      edit.targetPartPath === slidePartPath ? edit.groupId : undefined,
+    slideTopologyOperation: () => undefined,
+    insertedSlidePartPath: () => undefined,
+    insertedShape: (edit) => ({ slidePartPath: edit.targetPartPath, shapeId: edit.groupId }),
+  },
+  ungroupShape: {
+    reservedPartPaths: (edit) => [edit.targetPartPath],
+    dirtyPartPath: (edit) => edit.targetPartPath,
+    targetsShape: (edit, shapeHandle) =>
+      edit.targetPartPath === shapeHandle.partPath && edit.groupId === String(shapeHandle.nodeId),
+    invalidatingPartPaths: (edit) => [edit.targetPartPath],
+    // An id freed by ungrouping remains unavailable for the rest of the edit session.
+    reservedShapeId: (edit, slidePartPath) =>
+      edit.targetPartPath === slidePartPath ? edit.groupId : undefined,
+    slideTopologyOperation: () => undefined,
+    insertedSlidePartPath: () => undefined,
+    insertedShape: () => undefined,
+  },
   deleteShape: {
     reservedPartPaths: () => [],
     dirtyPartPath: (edit) => edit.handle.partPath,
