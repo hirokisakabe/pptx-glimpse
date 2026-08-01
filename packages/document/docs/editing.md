@@ -117,7 +117,48 @@ handle (or a child run handle) to `replaceParagraphPlainText`, `replaceTextRunPl
 `setTextRunProperties`, `clearTextRunProperties`, `setParagraphProperties`, or
 `clearParagraphProperties`. `replaceParagraphPlainText` replaces all runs with one run and carries
 forward only the first run's properties. Table structure, merges, fills, borders, margins, and
-table style are preserved but are not editable through these text operations.
+table style are preserved by these text operations.
+
+## Table cell fill, border, and margin
+
+`setTableCellProperties` and `clearTableCellProperties` address a physical cell with the native
+Table's `SourceHandle` plus zero-based `rowIndex` and `cellIndex` values:
+
+```ts
+import { asEmu, clearTableCellProperties, setTableCellProperties } from "@pptx-glimpse/document";
+
+const table = source.slides[0]?.shapes.find((shape) => shape.kind === "table");
+if (table?.handle === undefined) throw new Error("No editable Table found");
+
+const address = { tableHandle: table.handle, rowIndex: 0, cellIndex: 1 };
+const formatted = setTableCellProperties(source, address, {
+  fill: { kind: "solid", color: { kind: "srgb", hex: "D9EAF7" } },
+  borders: {
+    bottom: {
+      width: asEmu(12700),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "4472C4" } },
+    },
+  },
+  marginLeft: asEmu(91440),
+});
+const inheritedFill = clearTableCellProperties(formatted, address, ["fill"]);
+```
+
+The supported fill subset is explicit `none` or solid sRGB. Each of the four physical border
+sides supports a positive EMU width and explicit `none` or solid sRGB fill. Margins accept
+non-negative integer EMU values. Setting an omitted field preserves it. Clearing `fill`, one of
+`borderTop` / `borderBottom` / `borderLeft` / `borderRight`, or one of the four margin properties
+removes only that inline `a:tcPr` value so the Table style/default can apply. This differs from
+setting `{ kind: "none" }`, which writes an explicit `a:noFill` override.
+
+The address is physical OOXML row/cell position, including merge-continuation cells; the operation
+does not resolve a visual grid coordinate or modify merge topology. A missing/handleless Table,
+out-of-range address, unsupported fill style, or invalid width/margin is rejected before a new
+model or edit record is created. A value-identical set or clearing an already absent property
+returns the original source object. Dirty writing patches only the addressed `a:tcPr`, preserving
+cell text, merges, sibling cells, unknown cell XML, and unrelated package parts. Row/column
+topology, merge/unmerge, diagonal borders, dash/join/cap/arrow line styles, and Table style
+definition editing remain unsupported.
 
 ## Typed edits and raw preservation
 

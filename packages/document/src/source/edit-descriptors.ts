@@ -151,6 +151,16 @@ const EDIT_KIND_DESCRIPTORS: {
     insertedSlidePartPath: () => undefined,
     insertedShape: () => undefined,
   },
+  updateTableCellProperties: {
+    reservedPartPaths: () => [],
+    dirtyPartPath: (edit) => edit.address.tableHandle.partPath,
+    targetsShape: (edit, shapeHandle) => sourceHandlesEqual(edit.address.tableHandle, shapeHandle),
+    invalidatingPartPaths: (edit) => [edit.address.tableHandle.partPath],
+    reservedShapeId: () => undefined,
+    slideTopologyOperation: () => undefined,
+    insertedSlidePartPath: () => undefined,
+    insertedShape: () => undefined,
+  },
   addTextBox: {
     reservedPartPaths: (edit) => [edit.slidePartPath],
     dirtyPartPath: (edit) => edit.slidePartPath,

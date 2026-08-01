@@ -20,6 +20,7 @@ import {
   applySetSlideBackgroundEdit,
   applyUngroupShapeEdit,
 } from "./shape-tree-edits.js";
+import { applyTableCellPropertiesEdit } from "./table-cell-property-edits.js";
 import {
   applyParagraphPropertiesEdit,
   applyParagraphTextEdit,
@@ -86,6 +87,9 @@ function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
       return;
     case "updateShapeOutline":
       applyShapeOutlineEdit(root, edit);
+      return;
+    case "updateTableCellProperties":
+      applyTableCellPropertiesEdit(root, edit);
       return;
     case "addTextBox":
       applyAddTextBoxEdit(root, edit);
