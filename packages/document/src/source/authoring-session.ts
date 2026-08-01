@@ -29,6 +29,8 @@ import { reorderShapes } from "./shape-ordering.js";
 import type { SourceGroup, SourceShapeNode } from "./shapes.js";
 import type { SetSlideBackgroundInput } from "./slide-background-authoring.js";
 import { setSlideBackground } from "./slide-background-authoring.js";
+import type { AddSlideLayoutInput } from "./slide-layout-authoring.js";
+import { addSlideLayout } from "./slide-layout-authoring.js";
 import type { AddEmptySlideFromLayoutInput } from "./slide-topology.js";
 import { addEmptySlideFromLayout } from "./slide-topology.js";
 import type { AddTableInput } from "./table-authoring.js";
@@ -161,6 +163,23 @@ export class PptxAuthoringSession {
     if (handle === undefined) {
       throw new Error(
         "PptxAuthoringSession.addEmptySlideFromLayout: operation did not produce a slide handle",
+      );
+    }
+    this.#source = updated;
+    return handle;
+  }
+
+  /** Adds an empty layout below one existing master and returns its authoring target handle. */
+  addSlideLayout(masterHandle: SourceHandle, input: AddSlideLayoutInput): SourceHandle {
+    const updated = addSlideLayout(this.#source, masterHandle, input);
+    const edit = updated.edits?.at(-1);
+    const handle =
+      edit?.kind === "addSlideLayout"
+        ? updated.slideLayouts.find((layout) => layout.partPath === edit.newLayoutPartPath)?.handle
+        : undefined;
+    if (handle === undefined) {
+      throw new Error(
+        "PptxAuthoringSession.addSlideLayout: operation did not produce a layout handle",
       );
     }
     this.#source = updated;

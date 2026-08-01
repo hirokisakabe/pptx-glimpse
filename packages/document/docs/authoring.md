@@ -226,6 +226,59 @@ is materialized when a text-bearing shape is subsequently authored directly on a
 references that layout; it does not rewrite existing or inherited shapes, and explicit per-shape
 margin values take precedence.
 
+Additional layouts can be appended to any existing master with `addSlideLayout`, or through
+`PptxAuthoringSession.addSlideLayout`. The immutable function returns the updated source, where the
+appended layout is available from `source.slideLayouts`. The session method returns the new layout
+handle directly; that handle is immediately accepted by the existing drawing target API and by
+`addEmptySlideFromLayout` through its `partPath`. The input contract is:
+
+- `name` is required, trimmed, non-empty, and valid in an XML attribute.
+- `type` is one of the OOXML `ST_SlideLayoutType` values exposed as `SlideLayoutType`; it defaults
+  to `"blank"`. See the [official Open XML SDK enumeration](https://learn.microsoft.com/en-us/dotnet/api/documentformat.openxml.presentation.slidelayoutvalues?view=openxml-3.0.1).
+- `show` is boolean and defaults to `true`.
+- `background` accepts a 6-digit sRGB solid fill or PNG/JPEG bytes.
+- every `margin` side is a finite, non-negative EMU value. Margins are authoring defaults that are
+  materialized into subsequently authored slide text; OOXML has no layout-level margin metadata,
+  so the defaults themselves are not recovered by rereading the package.
+
+```ts
+import { asEmu, createPptx, createPptxAuthoringSession } from "@pptx-glimpse/document";
+
+const authoring = createPptxAuthoringSession(createPptx());
+const masterHandle = authoring.source.slideMasters[0]?.handle;
+if (masterHandle === undefined) throw new Error("Missing master");
+
+const productLayoutHandle = authoring.addSlideLayout(masterHandle, {
+  name: "Product",
+  type: "titleOnly",
+  background: { kind: "solid", color: { kind: "srgb", hex: "F8FAFC" } },
+  margin: {
+    left: asEmu(120000),
+    right: asEmu(120000),
+    top: asEmu(80000),
+    bottom: asEmu(80000),
+  },
+});
+authoring.target(productLayoutHandle).addShape({
+  geometry: { kind: "preset", preset: "rect" },
+  offsetX: asEmu(0),
+  offsetY: asEmu(5000000),
+  width: asEmu(9144000),
+  height: asEmu(143500),
+  fill: { kind: "solid", color: { kind: "srgb", hex: "4472C4" } },
+});
+const productSlideHandle = authoring.addEmptySlideFromLayout({
+  layoutPartPath: productLayoutHandle.partPath,
+});
+authoring.target(productSlideHandle).addTextBox({
+  offsetX: asEmu(300000),
+  offsetY: asEmu(900000),
+  width: asEmu(3000000),
+  height: asEmu(500000),
+  text: "Uses the product layout",
+});
+```
+
 ```ts
 import { writeFile } from "node:fs/promises";
 
