@@ -76,6 +76,11 @@ The session exposes rendered SVG slides, editable shape information, command app
 selection, undo/redo history, and PPTX serialization. It is headless and does not provide a
 complete editor UI.
 
+Native group topology is available through typed `groupShapes` / `ungroupShape` commands and the
+matching `PptxEditorSession` methods. A successful group selects the new group; a successful
+ungroup selects its first child in document order. Undo and redo restore topology, ids, z-order,
+and the corresponding selection.
+
 Browser applications pass PPTX and font bytes as `Uint8Array` data:
 
 ```ts

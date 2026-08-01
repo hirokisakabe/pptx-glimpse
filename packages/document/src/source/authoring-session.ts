@@ -8,7 +8,11 @@
 
 import type { AddChartInput } from "./chart-authoring.js";
 import { addChart } from "./chart-authoring.js";
-import { editInsertedShape, editInsertedSlidePartPath } from "./edit-descriptors.js";
+import {
+  editInsertedShape,
+  editInsertedSlidePartPath,
+  sourceHandlesEqual,
+} from "./edit-descriptors.js";
 import type { SourceHandle } from "./handles.js";
 import type { AddPictureInput } from "./picture-authoring.js";
 import { addPicture } from "./picture-authoring.js";
@@ -20,7 +24,9 @@ import type {
   AddTextBoxInput,
 } from "./shape-authoring.js";
 import { addConnector, addShape, addSlideNumber, addTextBox } from "./shape-authoring.js";
+import { groupShapes } from "./shape-grouping.js";
 import { reorderShapes } from "./shape-ordering.js";
+import type { SourceGroup, SourceShapeNode } from "./shapes.js";
 import type { SetSlideBackgroundInput } from "./slide-background-authoring.js";
 import { setSlideBackground } from "./slide-background-authoring.js";
 import type { AddEmptySlideFromLayoutInput } from "./slide-topology.js";
@@ -28,7 +34,10 @@ import { addEmptySlideFromLayout } from "./slide-topology.js";
 import type { AddTableInput } from "./table-authoring.js";
 import { addTable } from "./table-authoring.js";
 
-/** Consecutive authoring operations bound to one slide, layout, or master handle. */
+/**
+ * Consecutive authoring operations bound to one slide, layout, or master handle. A native group
+ * handle is supported only by `groupShapes`, which groups its consecutive direct children.
+ */
 export interface PptxAuthoringTarget {
   addTextBox(input: AddTextBoxInput): SourceHandle;
   addSlideNumber(input: AddSlideNumberInput): SourceHandle;
@@ -37,6 +46,16 @@ export interface PptxAuthoringTarget {
   addPicture(input: AddPictureInput): SourceHandle;
   addTable(input: AddTableInput): SourceHandle;
   addChart(input: AddChartInput): SourceHandle;
+  /**
+   * Group consecutive direct children and return the new native group handle.
+   *
+   * Supported from-scratch children are handles returned by `addShape`, `addPicture`,
+   * `addConnector`, `addTable`, `addChart`, or an earlier `groupShapes` call. The target may be
+   * a slide/layout/master or an authored native group; every supplied handle must be its direct
+   * child. SmartArt, raw preserved nodes, and consumer-specific composite inputs are not part of
+   * the from-scratch contract.
+   */
+  groupShapes(shapeHandles: readonly SourceHandle[]): SourceHandle;
   setSlideBackground(input: SetSlideBackgroundInput): void;
   reorderShapes(orderedShapeHandles: readonly SourceHandle[]): void;
 }
@@ -69,7 +88,10 @@ export class PptxAuthoringSession {
     return this.#source;
   }
 
-  /** Creates an authoring scope bound to a slide, layout, or master handle. */
+  /**
+   * Creates an authoring scope bound to a slide, layout, or master handle. A native group handle
+   * is also accepted for the `groupShapes` direct-child operation.
+   */
   target(targetHandle: SourceHandle): PptxAuthoringTarget {
     return {
       addTextBox: (input) => this.#addDrawing("addTextBox", targetHandle, input, addTextBox),
@@ -80,6 +102,23 @@ export class PptxAuthoringSession {
       addPicture: (input) => this.#addDrawing("addPicture", targetHandle, input, addPicture),
       addTable: (input) => this.#addDrawing("addTable", targetHandle, input, addTable),
       addChart: (input) => this.#addDrawing("addChart", targetHandle, input, addChart),
+      groupShapes: (shapeHandles) => {
+        this.#assertDirectChildren(targetHandle, shapeHandles);
+        const updated = groupShapes(this.#source, shapeHandles);
+        const edit = updated.edits?.at(-1);
+        const inserted = edit === undefined ? undefined : editInsertedShape(edit);
+        const handle =
+          inserted === undefined
+            ? undefined
+            : findShapeHandle(updated, inserted.slidePartPath, inserted.shapeId);
+        if (handle === undefined) {
+          throw new Error(
+            "PptxAuthoringSession.groupShapes: operation did not produce a group handle",
+          );
+        }
+        this.#source = updated;
+        return handle;
+      },
       setSlideBackground: (input) => {
         this.#source = setSlideBackground(this.#source, targetHandle, input);
       },
@@ -87,6 +126,30 @@ export class PptxAuthoringSession {
         this.#source = reorderShapes(this.#source, targetHandle, orderedShapeHandles);
       },
     };
+  }
+
+  #assertDirectChildren(targetHandle: SourceHandle, shapeHandles: readonly SourceHandle[]): void {
+    const root = [
+      ...this.#source.slides,
+      ...this.#source.slideLayouts,
+      ...this.#source.slideMasters,
+    ].find((candidate) => sourceHandlesEqual(candidate.handle, targetHandle));
+    const group = root === undefined ? findGroupByHandle(this.#source, targetHandle) : undefined;
+    const children = root?.shapes ?? group?.children;
+    if (children === undefined) {
+      throw new Error(
+        "PptxAuthoringSession.groupShapes: target must be a slide, layout, master, or native group",
+      );
+    }
+    if (
+      shapeHandles.some(
+        (handle) => !children.some((child) => sourceHandlesEqual(child.handle, handle)),
+      )
+    ) {
+      throw new Error(
+        "PptxAuthoringSession.groupShapes: every shape must be a direct child of the target",
+      );
+    }
   }
 
   /** Adds a slide and returns its stable source handle directly. */
@@ -127,6 +190,45 @@ export class PptxAuthoringSession {
     this.#source = updated;
     return handle;
   }
+}
+
+function findShapeHandle(
+  source: PptxSourceModel,
+  partPath: string,
+  shapeId: string,
+): SourceHandle | undefined {
+  const visit = (nodes: readonly SourceShapeNode[]): SourceHandle | undefined => {
+    for (const node of nodes) {
+      if (node.handle?.partPath === partPath && String(node.nodeId) === shapeId) return node.handle;
+      if (node.kind === "group") {
+        const nested = visit(node.children);
+        if (nested !== undefined) return nested;
+      }
+    }
+    return undefined;
+  };
+  for (const target of [...source.slides, ...source.slideLayouts, ...source.slideMasters]) {
+    const handle = visit(target.shapes);
+    if (handle !== undefined) return handle;
+  }
+  return undefined;
+}
+
+function findGroupByHandle(source: PptxSourceModel, handle: SourceHandle): SourceGroup | undefined {
+  const visit = (nodes: readonly SourceShapeNode[]): SourceGroup | undefined => {
+    for (const node of nodes) {
+      if (node.kind !== "group") continue;
+      if (sourceHandlesEqual(node.handle, handle)) return node;
+      const nested = visit(node.children);
+      if (nested !== undefined) return nested;
+    }
+    return undefined;
+  };
+  for (const target of [...source.slides, ...source.slideLayouts, ...source.slideMasters]) {
+    const group = visit(target.shapes);
+    if (group !== undefined) return group;
+  }
+  return undefined;
 }
 
 /** Creates a mutable authoring session around any PptxSourceModel. */

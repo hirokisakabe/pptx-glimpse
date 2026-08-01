@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 
 import {
   addChart,
+  addShape,
   asEmu,
   asPartPath,
   asPt,
@@ -1069,7 +1070,182 @@ describe("EditorSession selection", () => {
     expect(findShapeNodeBySourceHandle(session.document, handle)).toBeUndefined();
     expect(session.selection).toBeUndefined();
   });
+
+  it("selects group and first ungrouped child while undo and redo restore selection", () => {
+    const source = createThreeShapeSource();
+    const handles = source.slides[0]?.shapes.map((shape) => requireHandle(shape.handle)) ?? [];
+    const session = createEditorSession(source);
+    expect(session.selectShape(handles[1])).toMatchObject({ ok: true });
+
+    expectApplied(session.apply({ kind: "groupShapes", shapeHandles: handles.slice(0, 2) }));
+    const group = session.document.slides[0]?.shapes[0];
+    expect(group?.kind).toBe("group");
+    if (group?.kind !== "group" || group.handle === undefined) {
+      throw new Error("group command did not create a selectable group");
+    }
+    expect(group.children.map((child) => child.nodeId)).toEqual(
+      handles.slice(0, 2).map((handle) => handle.nodeId),
+    );
+    expect(session.selection).toEqual({ shapeHandle: group.handle });
+
+    expectHistory(session.undo());
+    expect(session.document).toBe(source);
+    expect(session.selection).toEqual({ shapeHandle: handles[1] });
+    expectHistory(session.redo());
+    expect(session.selection).toEqual({ shapeHandle: group.handle });
+
+    expectApplied(session.apply({ kind: "ungroupShape", groupHandle: group.handle }));
+    expect(session.document.slides[0]?.shapes.map((shape) => shape.nodeId)).toEqual(
+      handles.map((handle) => handle.nodeId),
+    );
+    expect(session.selection).toEqual({ shapeHandle: handles[0] });
+    expectHistory(session.undo());
+    expect(session.selection).toEqual({ shapeHandle: group.handle });
+    expectHistory(session.redo());
+    expect(session.selection).toEqual({ shapeHandle: handles[0] });
+  });
+
+  it("rejects invalid grouping without changing document, selection, or history", () => {
+    const source = createThreeShapeSource();
+    const handles = source.slides[0]?.shapes.map((shape) => requireHandle(shape.handle)) ?? [];
+    const session = createEditorSession(source);
+    expect(session.selectShape(handles[1])).toMatchObject({ ok: true });
+    expectApplied(
+      session.apply({
+        kind: "moveShape",
+        handle: handles[1],
+        offsetX: asEmu(2500),
+        offsetY: asEmu(0),
+      }),
+    );
+    expectHistory(session.undo());
+    const before = session.document;
+    const selection = session.selection;
+
+    const rejected = session.apply({
+      kind: "groupShapes",
+      shapeHandles: [handles[0], handles[2]],
+    });
+    const rejectedUngroup = session.apply({
+      kind: "ungroupShape",
+      groupHandle: handles[0],
+    });
+
+    expect(rejected).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(rejectedUngroup).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(session.document).toBe(before);
+    expect(session.selection).toBe(selection);
+    expect(session.undoDepth).toBe(0);
+    expect(session.redoDepth).toBe(1);
+  });
+
+  it("keeps a later selection across ordinary command undo and redo", () => {
+    const source = createThreeShapeSource();
+    const handles = source.slides[0]?.shapes.map((shape) => requireHandle(shape.handle)) ?? [];
+    const session = createEditorSession(source);
+    expect(session.selectShape(handles[0])).toMatchObject({ ok: true });
+    expectApplied(
+      session.apply({
+        kind: "moveShape",
+        handle: handles[0],
+        offsetX: asEmu(500),
+        offsetY: asEmu(500),
+      }),
+    );
+    expect(session.selectShape(handles[2])).toMatchObject({ ok: true });
+
+    expectHistory(session.undo());
+    expect(session.selection).toEqual({ shapeHandle: handles[2] });
+    expectHistory(session.redo());
+    expect(session.selection).toEqual({ shapeHandle: handles[2] });
+  });
+
+  it("rejects unsupported group child kinds and empty ungroup targets atomically", () => {
+    const unsupportedSource = createThreeShapeSource();
+    const unsupportedHandles =
+      unsupportedSource.slides[0]?.shapes.map((shape) => requireHandle(shape.handle)) ?? [];
+    Object.defineProperty(unsupportedSource.slides[0]?.shapes[0], "kind", {
+      value: "smartArt",
+    });
+    const unsupportedSession = createEditorSession(unsupportedSource);
+    const unsupportedBefore = unsupportedSession.document;
+    expect(
+      unsupportedSession.apply({
+        kind: "groupShapes",
+        shapeHandles: unsupportedHandles.slice(0, 2),
+      }),
+    ).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(unsupportedSession.document).toBe(unsupportedBefore);
+    expect(unsupportedSession.undoDepth).toBe(0);
+
+    const source = createThreeShapeSource();
+    const handles = source.slides[0]?.shapes.map((shape) => requireHandle(shape.handle)) ?? [];
+    const session = createEditorSession(source);
+    expectApplied(session.apply({ kind: "groupShapes", shapeHandles: handles.slice(0, 2) }));
+    const group = session.document.slides[0]?.shapes[0];
+    if (group?.kind !== "group" || group.handle === undefined) {
+      throw new Error("empty group rejection fixture is missing");
+    }
+    Object.defineProperty(group, "children", { value: [] });
+    const before = session.document;
+    const selection = session.selection;
+    const undoDepth = session.undoDepth;
+
+    expect(session.apply({ kind: "ungroupShape", groupHandle: group.handle })).toMatchObject({
+      ok: false,
+      code: "invalid-command",
+    });
+    expect(session.document).toBe(before);
+    expect(session.selection).toBe(selection);
+    expect(session.undoDepth).toBe(undoDepth);
+    expect(session.redoDepth).toBe(0);
+  });
+
+  it("classifies ambiguous group command handles as atomic invalid-command failures", () => {
+    const source = createThreeShapeSource();
+    const first = source.slides[0]?.shapes[0];
+    const second = source.slides[0]?.shapes[1];
+    const third = source.slides[0]?.shapes[2];
+    if (
+      first?.handle?.nodeId === undefined ||
+      second?.handle === undefined ||
+      third?.handle === undefined
+    ) {
+      throw new Error("ambiguous group command fixture handles are missing");
+    }
+    Object.defineProperty(second.handle, "nodeId", { value: first.handle.nodeId });
+    const session = createEditorSession(source);
+    const before = session.document;
+
+    const result = session.apply({
+      kind: "groupShapes",
+      shapeHandles: [first.handle, third.handle],
+    });
+
+    expect(result).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.message).toContain("duplicate node id");
+    expect(session.document).toBe(before);
+    expect(session.selection).toBeUndefined();
+    expect(session.undoDepth).toBe(0);
+    expect(session.redoDepth).toBe(0);
+  });
 });
+
+function createThreeShapeSource(): PptxSourceModel {
+  let source = createPptx();
+  const slideHandle = requireHandle(source.slides[0]?.handle);
+  for (const offsetX of [0, 2000, 4000]) {
+    source = addShape(source, slideHandle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(offsetX),
+      offsetY: asEmu(0),
+      width: asEmu(1000),
+      height: asEmu(1000),
+    });
+  }
+  return source;
+}
 
 describe("EditorSession shape add/delete commands", () => {
   it("adds a text box and lets existing text/xfrm commands edit it before save", async () => {

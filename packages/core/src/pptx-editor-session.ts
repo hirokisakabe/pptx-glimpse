@@ -582,6 +582,38 @@ export class PptxEditorSession {
   }
 
   /**
+   * Group consecutive sibling drawings and select the new native group.
+   *
+   * @param shapeHandles Stable handles in any order; document order determines group child order.
+   * @returns Updated editor state with the new group selected.
+   * @throws {@link PptxEditorError} with `invalid-command` or `render-failed`.
+   */
+  async groupShapes(shapeHandles: readonly SourceHandle[]): Promise<PptxEditorSlidesResponse> {
+    const before = this.#session.document;
+    const result = unwrapEditorOperation(
+      this.#session.apply({ kind: "groupShapes", shapeHandles }),
+    );
+    await this.#renderChangedSlides(before);
+    return this.response(result.warnings);
+  }
+
+  /**
+   * Expand one losslessly ungroupable native group and select its first child in document order.
+   *
+   * @param groupHandle Stable handle of the native group.
+   * @returns Updated editor state with the first expanded child selected.
+   * @throws {@link PptxEditorError} with `invalid-command` or `render-failed`.
+   */
+  async ungroupShape(groupHandle: SourceHandle): Promise<PptxEditorSlidesResponse> {
+    const before = this.#session.document;
+    const result = unwrapEditorOperation(
+      this.#session.apply({ kind: "ungroupShape", groupHandle }),
+    );
+    await this.#renderChangedSlides(before);
+    return this.response(result.warnings);
+  }
+
+  /**
    * Delete the currently selected shape.
    *
    * @returns Updated editor state.

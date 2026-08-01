@@ -73,7 +73,12 @@ The released command set includes:
 - Text: `replaceTextRunPlainText`, `replaceParagraphPlainText`, `setTextRunProperties`,
   `clearTextRunProperties`, `setParagraphProperties`, and `clearParagraphProperties`.
 - Shapes: `moveShape`, `resizeShape`, `setShapeTransform`, `setShapeFill`, `setShapeOutline`,
-  `addTextBox`, `addConnector`, and `deleteShape`.
+  `addTextBox`, `addConnector`, `deleteShape`, `groupShapes`, and `ungroupShape`. Grouping accepts
+  two or more consecutive siblings with the same direct parent; the typed source-node convenience
+  method covers shape, picture, connector, Table/Chart graphic frames, and native group nodes.
+  Ungrouping is limited to non-empty groups whose identity child mapping, appearance, unknown XML,
+  and connector references can be expanded losslessly; see the document package's
+  [group constraints](../document/docs/editing.md#lossless-group-and-ungroup).
 - Media: `replaceImage`.
 - Charts: `updateChartData` for names, shared category labels, and numeric values of a supported
   existing category Chart with an internal editable workbook.
@@ -81,7 +86,9 @@ The released command set includes:
 
 Use `undo()`, `redo()`, `canUndo`, `canRedo`, `undoDepth`, and `redoDepth` to integrate history.
 `selectShape(handle)` and `deselectShape()` manage a single shape selection. Selection is reconciled
-after commands and history changes, and is cleared if its shape no longer exists.
+after commands and history changes, and is cleared if its shape no longer exists. Grouping selects
+the new group. Ungrouping selects the first expanded child in document order. Undo/redo restore the
+selection snapshot paired with each group topology transition.
 
 ## Operation failures and warnings
 

@@ -66,6 +66,9 @@ export type {
   EditorCommandWarning,
   EditorOperationErrorCode,
   EditorOperationFailure,
+  GroupableSourceShape,
+  GroupShapesCommand,
+  UngroupShapeCommand,
 } from "@pptx-glimpse/editor";
 export type { FontMapping } from "@pptx-glimpse/renderer";
 export type { FontBuffer, OpentypeSetup } from "@pptx-glimpse/renderer";

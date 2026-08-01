@@ -1,11 +1,14 @@
 import { Buffer } from "node:buffer";
 
 import {
+  addShape,
   asEmu,
   asSourceNodeId,
+  createPptx,
   readPptx,
   type SourceConnector,
   type SourceShape,
+  writePptx,
 } from "@pptx-glimpse/document";
 import JSZip from "jszip";
 import { describe, expect, it, vi } from "vitest";
@@ -698,6 +701,62 @@ describe("PptxEditorSession", () => {
     }
   });
 
+  it("groups and ungroups with topology and selection restored by history", async () => {
+    const editor = await createPptxEditorSession(buildGroupCommandFixture(), {
+      skipSystemFonts: true,
+    });
+    const [first, second] = editor.shapes(1).map((shape) => shape.handle);
+    if (first === undefined || second === undefined) {
+      throw new Error("group command fixture handles are missing");
+    }
+    editor.selectShape(second);
+
+    const grouped = await editor.groupShapes([first, second]);
+    const group = editor.shapes(1)[0];
+    if (group?.kind !== "group" || group.handle === undefined) {
+      throw new Error("high-level group command did not create a group");
+    }
+    expect(grouped.selection).toEqual({ shapeHandle: group.handle });
+    expect(grouped.history.undoDepth).toBe(1);
+    expect(grouped.slides[0]?.svg).toContain('aria-label="Group 4"');
+
+    expect((await editor.undo()).selection).toEqual({ shapeHandle: second });
+    expect(editor.shapes(1).map((shape) => shape.kind)).toEqual(["shape", "shape", "shape"]);
+    expect((await editor.redo()).selection).toEqual({ shapeHandle: group.handle });
+
+    const ungrouped = await editor.ungroupShape(group.handle);
+    expect(ungrouped.selection).toEqual({ shapeHandle: first });
+    expect(editor.shapes(1).map((shape) => shape.kind)).toEqual(["shape", "shape", "shape"]);
+    expect((await editor.undo()).selection).toEqual({ shapeHandle: group.handle });
+    expect((await editor.redo()).selection).toEqual({ shapeHandle: first });
+  });
+
+  it("exposes the same integrated group command behavior from Node and browser entries", async () => {
+    const browserEntry = await import("./browser.js");
+    const input = buildGroupCommandFixture();
+    const editors = [
+      await createPptxEditorSession(input, { skipSystemFonts: true }),
+      await browserEntry.createPptxEditorSession(input, { skipSystemFonts: true }),
+    ];
+
+    for (const editor of editors) {
+      const handles = editor
+        .shapes(1)
+        .slice(0, 2)
+        .map((shape) => shape.handle);
+      if (handles[0] === undefined || handles[1] === undefined) {
+        throw new Error("group command fixture handles are missing");
+      }
+      const result = await editor.apply({ kind: "groupShapes", shapeHandles: handles });
+      const group = editor.shapes(1)[0];
+      if (group?.kind !== "group" || group.handle === undefined) {
+        throw new Error("integrated group command did not create a selectable group");
+      }
+      expect(result.selection).toEqual({ shapeHandle: group.handle });
+      expect(editor.document.slides[0]?.shapes[0]?.kind).toBe("group");
+    }
+  });
+
   it("recognizes a structurally valid editor error from another realm", () => {
     const foreignError = {
       name: "PptxEditorError",
@@ -721,6 +780,22 @@ describe("PptxEditorSession", () => {
     expect(image?.editableImageReplacement?.sharedReferenceCount).toBe(3);
   });
 });
+
+function buildGroupCommandFixture(): Uint8Array {
+  let source = createPptx();
+  const slideHandle = source.slides[0]?.handle;
+  if (slideHandle === undefined) throw new Error("group command slide handle is missing");
+  for (const offsetX of [914400, 2743200, 4572000]) {
+    source = addShape(source, slideHandle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(offsetX),
+      offsetY: asEmu(914400),
+      width: asEmu(1371600),
+      height: asEmu(914400),
+    });
+  }
+  return writePptx(source);
+}
 
 async function capturePptxEditorError(promise: Promise<unknown>): Promise<PptxEditorError> {
   try {
