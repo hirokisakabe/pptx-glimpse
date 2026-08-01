@@ -70,6 +70,36 @@ const authored = session.source;
 The session delegates to the same immutable public authoring functions; it is not a separate
 mutable document representation.
 
+### Native groups
+
+Call `target.groupShapes(handles)` after creating two or more consecutive sibling drawings. It
+uses the generic drawing operations rather than a group-specific composite input and returns the
+new native `p:grpSp` handle:
+
+```ts
+const shape = target.addShape({
+  geometry: { kind: "preset", preset: "rect" },
+  offsetX: asEmu(0),
+  offsetY: asEmu(0),
+  width: asEmu(914400),
+  height: asEmu(914400),
+});
+const picture = target.addPicture({
+  bytes: pngBytes,
+  offsetX: asEmu(1143000),
+  offsetY: asEmu(0),
+  width: asEmu(914400),
+  height: asEmu(914400),
+});
+const group = target.groupShapes([shape, picture]);
+```
+
+Supported from-scratch children are generic shapes/text boxes, PNG/JPEG pictures, connectors,
+native tables and supported native charts (`p:graphicFrame`), plus previously authored native
+groups. The target may be the slide/layout/master or a native group, and every grouped handle must
+be a consecutive direct child of that target. SmartArt, raw preserved nodes, consumer node ids,
+consumer layout primitives, and connector rerouting are outside this API.
+
 `reorderShapes` requires every top-level drawing in the target exactly once. Because the reorder
 operation is applied after earlier additions, a connector can be placed behind its connection
 targets without weakening endpoint validation. Non-drawing shape-tree children remain in place;

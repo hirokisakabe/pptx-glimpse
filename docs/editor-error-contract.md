@@ -95,6 +95,12 @@ Headless expected rejection is atomic:
 - `selection` remains unchanged;
 - undo and redo stacks retain their contents and depths.
 
+`groupShapes` and `ungroupShape` commit topology and selection as one history transition. A
+successful group selects the new group. A successful ungroup keeps the single-selection model and
+selects the first expanded child in document order. Undo and redo restore the corresponding
+before/after topology, ids, z-order, and selection snapshot. If either command is rejected, none of
+those values changes.
+
 `applyAll()` builds a candidate document and commits it only after every command and
 cross-command validation succeeds. Failed selection and empty undo/redo checks inspect state
 before mutation.
@@ -110,7 +116,7 @@ creates no session. Write failure does not mutate editor state.
 
 | Code                | Defined/created by                                                  | High-level destination      | Required evidence                                                                    |
 | ------------------- | ------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------ |
-| `invalid-command`   | `packages/editor/src/index.ts`: command boundary                    | Same-code `PptxEditorError` | Headless apply/applyAll rejection and atomicity; high-level field/cause preservation |
+| `invalid-command`   | `packages/editor/src/index.ts`: command boundary                    | Same-code `PptxEditorError` | Headless apply/applyAll rejection and atomicity, including group topology/selection; high-level field/cause preservation |
 | `invalid-selection` | `packages/editor/src/index.ts`: `selectShape()`                     | Same-code `PptxEditorError` | Selection atomicity; Node/browser same-code test                                     |
 | `empty-undo-stack`  | `packages/editor/src/index.ts`: `undo()`                            | Same-code `PptxEditorError` | Empty-history shape/message and unchanged state                                      |
 | `empty-redo-stack`  | `packages/editor/src/index.ts`: `redo()`                            | Same-code `PptxEditorError` | Empty-history shape/message and unchanged state                                      |
