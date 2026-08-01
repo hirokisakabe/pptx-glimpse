@@ -231,6 +231,35 @@ describe("addSlideLayout", () => {
     ]);
   });
 
+  it("writes the first inserted entry into an existing empty layout id list", () => {
+    const original = createPptx();
+    const master = requireValue(original.slideMasters[0]);
+    const layout = requireValue(original.slideLayouts[0]);
+    const decoder = new TextDecoder();
+    const encoder = new TextEncoder();
+    const source = {
+      ...original,
+      packageGraph: {
+        ...original.packageGraph,
+        rawParts: requireValue(original.packageGraph.rawParts).map((part) => {
+          if (part.partPath !== master.partPath || part.kind !== "binary") return part;
+          const xml = decoder
+            .decode(part.bytes)
+            .replace(/<p:sldLayoutIdLst>[\s\S]*?<\/p:sldLayoutIdLst>/, "<p:sldLayoutIdLst/>");
+          return { ...part, bytes: encoder.encode(xml) };
+        }),
+      },
+    };
+
+    const edited = cloneSlideLayout(source, requireValue(layout.handle), { name: "First Entry" });
+    const cloneEdit = requireValue(edited.edits?.at(-1));
+    if (cloneEdit.kind !== "cloneSlideLayout") throw new Error("clone edit was not recorded");
+    const masterXml = strFromU8(requireValue(unzipSync(writePptx(edited))[master.partPath]));
+    expect(masterXml).toContain(
+      `<p:sldLayoutId id="${cloneEdit.newLayoutNumericId}" r:id="${cloneEdit.newRelationshipId}"`,
+    );
+  });
+
   it("supports the immutable function flow when adding a slide from the new layout", () => {
     const source = createPptx();
     const masterHandle = requireValue(source.slideMasters[0]?.handle);
@@ -397,6 +426,19 @@ describe("cloneSlideLayout", () => {
     const sourceLayout = requireValue(source.slideLayouts.at(-1));
     const sourceLayoutHandle = requireValue(sourceLayout.handle);
     const mediaBefore = source.packageGraph.media;
+    const existingPartPaths = new Set(source.packageGraph.parts.map((part) => part.partPath));
+    const master = requireValue(source.slideMasters[0]);
+    const existingMasterRelationshipIds = new Set(
+      requireValue(
+        source.packageGraph.relationships.find(
+          (relationships) => relationships.sourcePartPath === master.partPath,
+        ),
+      ).relationships.map((relationship) => relationship.id),
+    );
+    const masterXmlBefore = strFromU8(requireValue(unzipSync(writePptx(source))[master.partPath]));
+    const existingNumericIds = new Set(
+      [...masterXmlBefore.matchAll(/<p:sldLayoutId id="(\d+)"/g)].map((match) => Number(match[1])),
+    );
 
     source = cloneSlideLayout(source, sourceLayoutHandle, {
       name: "Image Clone One",
@@ -454,15 +496,34 @@ describe("cloneSlideLayout", () => {
     expect(new Set(cloneEdits?.map((edit) => edit.newLayoutPartPath)).size).toBe(3);
     expect(new Set(cloneEdits?.map((edit) => edit.newRelationshipId)).size).toBe(3);
     expect(new Set(cloneEdits?.map((edit) => edit.newLayoutNumericId)).size).toBe(3);
+    for (const edit of requireValue(cloneEdits)) {
+      expect(existingPartPaths.has(edit.newLayoutPartPath)).toBe(false);
+      expect(existingMasterRelationshipIds.has(edit.newRelationshipId)).toBe(false);
+      expect(existingNumericIds.has(edit.newLayoutNumericId)).toBe(false);
+    }
+  });
+
+  it("inserts immediately after the source layout when insertAt is omitted", () => {
+    const original = createPptx();
+    const layout = requireValue(original.slideLayouts[0]);
+    const edited = cloneSlideLayout(original, requireValue(layout.handle), {
+      name: "Default Position",
+    });
+    const cloned = requireValue(
+      edited.slideLayouts.find((candidate) => candidate.name === "Default Position"),
+    );
+    expect(edited.slideMasters[0]?.layoutPartPaths).toEqual([layout.partPath, cloned.partPath]);
   });
 
   it("rejects invalid positions and layouts with pending raw-part edits", () => {
     const original = createPptx();
     const layout = requireValue(original.slideLayouts[0]);
     const layoutHandle = requireValue(layout.handle);
-    expect(() =>
-      cloneSlideLayout(original, layoutHandle, { name: "Out of range", insertAt: 2 }),
-    ).toThrow("insertAt must be an integer insertion index");
+    for (const insertAt of [2, -1, 0.5, Number.NaN]) {
+      expect(() =>
+        cloneSlideLayout(original, layoutHandle, { name: "Invalid position", insertAt }),
+      ).toThrow("insertAt must be an integer insertion index");
+    }
 
     const dirty = createPptxAuthoringSession(original);
     dirty.target(layoutHandle).addShape({

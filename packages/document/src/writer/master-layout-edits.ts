@@ -23,9 +23,8 @@ export function applyAddSlideLayoutEdit(
   if (master === undefined) {
     throw new Error("writePptx: slide master part does not contain p:sldMaster root");
   }
-  const existingLayoutIdList = getChild(master, "sldLayoutIdLst");
-  const layoutIdList = existingLayoutIdList ?? createLayoutIdList(master);
-  if (existingLayoutIdList === undefined) {
+  const { layoutIdList, wasMissing } = resolveLayoutIdList(master);
+  if (wasMissing) {
     appendLayoutIds(layoutIdList, edit.initialLayoutEntries);
   }
   insertLayoutId(layoutIdList, edit, getChildArray(layoutIdList, "sldLayoutId").length);
@@ -39,9 +38,8 @@ export function applyCloneSlideLayoutEdit(
   if (master === undefined) {
     throw new Error("writePptx: slide master part does not contain p:sldMaster root");
   }
-  const existingLayoutIdList = getChild(master, "sldLayoutIdLst");
-  const layoutIdList = existingLayoutIdList ?? createLayoutIdList(master);
-  if (existingLayoutIdList === undefined) {
+  const { layoutIdList, wasMissing } = resolveLayoutIdList(master);
+  if (wasMissing) {
     appendLayoutIds(layoutIdList, edit.initialLayoutEntries);
   }
   insertLayoutId(layoutIdList, edit, edit.insertAt);
@@ -77,12 +75,31 @@ function insertLayoutId(
     },
     ...items.slice(insertAt),
   ];
+  const entries = Object.entries(layoutIdList);
+  const existingIndex = entries.findIndex(([key]) => key === itemKey);
+  if (existingIndex >= 0) entries[existingIndex] = [itemKey, inserted];
+  else entries.push([itemKey, inserted]);
+  replaceNodeEntries(layoutIdList, entries);
+}
+
+function resolveLayoutIdList(master: XmlNode): {
+  readonly layoutIdList: XmlNode;
+  readonly wasMissing: boolean;
+} {
+  const existing = getChild(master, "sldLayoutIdLst");
+  if (existing === undefined) return { layoutIdList: createLayoutIdList(master), wasMissing: true };
+  if (typeof existing === "object" && existing !== null) {
+    return { layoutIdList: existing, wasMissing: false };
+  }
+
+  const created: XmlNode = {};
   replaceNodeEntries(
-    layoutIdList,
-    Object.entries(layoutIdList).map(([key, value]) =>
-      key === itemKey ? [key, inserted] : [key, value],
+    master,
+    Object.entries(master).map(([key, value]) =>
+      localName(key) === "sldLayoutIdLst" ? [key, created] : [key, value],
     ),
   );
+  return { layoutIdList: created, wasMissing: false };
 }
 
 function appendLayoutIds(

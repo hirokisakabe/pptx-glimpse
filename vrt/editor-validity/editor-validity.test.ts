@@ -1035,11 +1035,12 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
       height: asEmu(914400),
       text: "Cloned existing layout",
     });
+    const outputSource = moveSlide(session.source, slideHandle, { toIndex: 0 });
 
     renderSingleWithLibreOffice(
       libreOfficeImage,
       "editor-validity-cloned-layout.pptx",
-      writePptx(session.source),
+      writePptx(outputSource),
     );
   });
 

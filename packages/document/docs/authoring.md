@@ -283,20 +283,23 @@ An existing layout can be cloned within its current master with `cloneSlideLayou
 `PptxAuthoringSession.cloneSlideLayout`. The required `name` becomes the clone's author-visible
 name. `insertAt` is a zero-based insertion position in that master's layout catalog; when omitted,
 the clone is inserted immediately after its source. The session method returns the clone handle,
-which can immediately be passed to `target` or used to create a slide.
+which can immediately be passed to `target`; its `partPath` can also be used to create a slide.
 
 The clone copies the layout XML part and its complete relationship set. Internal relationship
 targets such as images, charts, and embedded workbooks continue to reference the same package
 resources; those resources are not deep-cloned. External relationships are copied unchanged. The
 new layout part path, master relationship ID, and `p:sldLayoutId` numeric ID are allocated without
-collisions. Unknown layout XML and heterogeneous child order are preserved byte-for-byte except
-for the requested `p:cSld@name`. Cloning a layout with pending edits to its XML part is rejected;
+collisions. Unknown layout XML and heterogeneous child order are retained without parsing and
+reordering them; only the requested `p:cSld@name` is changed. Cloning a layout with pending edits
+to its XML part is rejected;
 write and reread it before cloning when the edited form must be the source template.
 
 ```ts
+import { readFile } from "node:fs/promises";
+
 import { asEmu, createPptxAuthoringSession, readPptx } from "@pptx-glimpse/document";
 
-const authoring = createPptxAuthoringSession(readPptx(templateBytes));
+const authoring = createPptxAuthoringSession(readPptx(await readFile("template.pptx")));
 const sourceLayout = authoring.source.slideLayouts[0];
 if (sourceLayout?.handle === undefined) throw new Error("Missing source layout");
 
@@ -311,6 +314,7 @@ authoring.target(cloneHandle).addShape({
   width: asEmu(9144000),
   height: asEmu(143500),
 });
+const slideHandle = authoring.addEmptySlideFromLayout({ layoutPartPath: cloneHandle.partPath });
 ```
 
 ```ts
