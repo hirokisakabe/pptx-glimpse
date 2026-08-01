@@ -66,6 +66,96 @@ function buildSyntheticPptx(): Uint8Array {
   return zipSync(files);
 }
 
+function buildMasterLayoutOrderPptx(options: {
+  readonly includeIdLists: boolean;
+  readonly includeUnresolvedIds?: boolean;
+  readonly includeInvalidIds?: boolean;
+}): Uint8Array {
+  const masterIdList = options.includeIdLists
+    ? `<p:sldMasterIdLst>` +
+      `<p:sldMasterId id="2147483648" r:id="rIdMaster2"/>` +
+      `<p:sldMasterId id="2147483649" r:id="rIdMissingMaster"/>`.repeat(
+        options.includeUnresolvedIds ? 1 : 0,
+      ) +
+      `<p:sldMasterId id="2147483650" r:id="rIdInvalidMaster"/><p:sldMasterId id="2147483651"/>`.repeat(
+        options.includeInvalidIds ? 1 : 0,
+      ) +
+      `<p:sldMasterId id="2147483652" r:id="rIdMaster1"/>` +
+      `</p:sldMasterIdLst>`
+    : "";
+  const layoutIdList = options.includeIdLists
+    ? `<p:sldLayoutIdLst>` +
+      `<p:sldLayoutId id="2147483649" r:id="rIdLayout2"/>` +
+      `<p:sldLayoutId id="2147483650" r:id="rIdMissingLayout"/>`.repeat(
+        options.includeUnresolvedIds ? 1 : 0,
+      ) +
+      `<p:sldLayoutId id="2147483651" r:id="rIdExternalLayout"/>`.repeat(
+        options.includeInvalidIds ? 1 : 0,
+      ) +
+      `<p:sldLayoutId id="2147483652" r:id="rIdLayout1"/>` +
+      `</p:sldLayoutIdLst>`
+    : "";
+
+  return zipSync({
+    "[Content_Types].xml": xml(
+      `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
+        `<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>` +
+        `<Default Extension="xml" ContentType="application/xml"/>` +
+        `<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>` +
+        `<Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>` +
+        `<Override PartName="/ppt/slideMasters/slideMaster2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>` +
+        `<Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>` +
+        `<Override PartName="/ppt/slideLayouts/slideLayout2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/>` +
+        `</Types>`,
+    ),
+    "_rels/.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        `<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>` +
+        `</Relationships>`,
+    ),
+    "ppt/presentation.xml": xml(
+      `<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        masterIdList +
+        `</p:presentation>`,
+    ),
+    "ppt/_rels/presentation.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        // Relationship order intentionally differs from p:sldMasterIdLst order.
+        `<Relationship Id="rIdMaster1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster1.xml"/>` +
+        `<Relationship Id="rIdMaster2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideMaster" Target="slideMasters/slideMaster2.xml"/>` +
+        `<Relationship Id="rIdInvalidMaster" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/not-a-master.xml"/>`.repeat(
+          options.includeInvalidIds ? 1 : 0,
+        ) +
+        `</Relationships>`,
+    ),
+    "ppt/slideMasters/slideMaster1.xml": xml(
+      `<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
+        `<p:cSld><p:spTree/></p:cSld>` +
+        layoutIdList +
+        `</p:sldMaster>`,
+    ),
+    "ppt/slideMasters/_rels/slideMaster1.xml.rels": xml(
+      `<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">` +
+        // Relationship order intentionally differs from p:sldLayoutIdLst order.
+        `<Relationship Id="rIdLayout1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>` +
+        `<Relationship Id="rIdLayout2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="../slideLayouts/slideLayout2.xml"/>` +
+        `<Relationship Id="rIdExternalLayout" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slideLayout" Target="https://example.com/layout.xml" TargetMode="External"/>`.repeat(
+          options.includeInvalidIds ? 1 : 0,
+        ) +
+        `</Relationships>`,
+    ),
+    "ppt/slideMasters/slideMaster2.xml": xml(
+      `<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree/></p:cSld></p:sldMaster>`,
+    ),
+    "ppt/slideLayouts/slideLayout1.xml": xml(
+      `<p:sldLayout xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree/></p:cSld></p:sldLayout>`,
+    ),
+    "ppt/slideLayouts/slideLayout2.xml": xml(
+      `<p:sldLayout show="0" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"><p:cSld><p:spTree/></p:cSld></p:sldLayout>`,
+    ),
+  });
+}
+
 describe("readPptx source model parsing", () => {
   const source = readPptx(buildSyntheticPptx());
 
@@ -232,6 +322,79 @@ describe("readPptx source model parsing", () => {
     expect(result.diagnostics).toContainEqual(
       expect.objectContaining({ code: "slide-relationship-invalid" }),
     );
+  });
+});
+
+describe("readPptx master and layout authoring order", () => {
+  it("uses master and layout id-list order instead of relationship order", () => {
+    const source = readPptx(buildMasterLayoutOrderPptx({ includeIdLists: true }));
+
+    expect(source.presentation.slideMasterPartPaths).toEqual([
+      "ppt/slideMasters/slideMaster2.xml",
+      "ppt/slideMasters/slideMaster1.xml",
+    ]);
+    expect(source.slideMasters.map((master) => master.partPath)).toEqual(
+      source.presentation.slideMasterPartPaths,
+    );
+    expect(
+      source.slideMasters.find((master) => master.partPath === "ppt/slideMasters/slideMaster1.xml")
+        ?.layoutPartPaths,
+    ).toEqual(["ppt/slideLayouts/slideLayout2.xml", "ppt/slideLayouts/slideLayout1.xml"]);
+    expect(
+      source.slideLayouts.find((layout) => layout.partPath === "ppt/slideLayouts/slideLayout2.xml")
+        ?.show,
+    ).toBe(false);
+  });
+
+  it("reports unresolved relationships from master and layout id lists", () => {
+    const source = readPptx(
+      buildMasterLayoutOrderPptx({ includeIdLists: true, includeUnresolvedIds: true }),
+    );
+
+    expect(
+      source.diagnostics.find(
+        (diagnostic) => diagnostic.code === "slide-master-relationship-unresolved",
+      )?.handle?.relationshipId,
+    ).toBe("rIdMissingMaster");
+    expect(
+      source.diagnostics.find(
+        (diagnostic) => diagnostic.code === "slide-layout-relationship-unresolved",
+      )?.handle?.relationshipId,
+    ).toBe("rIdMissingLayout");
+  });
+
+  it("reports and excludes invalid or incomplete id-list relationships", () => {
+    const source = readPptx(
+      buildMasterLayoutOrderPptx({ includeIdLists: true, includeInvalidIds: true }),
+    );
+
+    expect(source.presentation.slideMasterPartPaths).not.toContain("ppt/slides/not-a-master.xml");
+    expect(source.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: "slide-master-relationship-invalid" }),
+        expect.objectContaining({ code: "slide-layout-relationship-invalid" }),
+      ]),
+    );
+    expect(
+      source.diagnostics.some(
+        (diagnostic) =>
+          diagnostic.code === "slide-master-relationship-unresolved" &&
+          diagnostic.handle?.relationshipId === undefined,
+      ),
+    ).toBe(true);
+  });
+
+  it("falls back to relationship order when id lists are absent", () => {
+    const source = readPptx(buildMasterLayoutOrderPptx({ includeIdLists: false }));
+
+    expect(source.presentation.slideMasterPartPaths).toEqual([
+      "ppt/slideMasters/slideMaster1.xml",
+      "ppt/slideMasters/slideMaster2.xml",
+    ]);
+    expect(source.slideMasters[0]?.layoutPartPaths).toEqual([
+      "ppt/slideLayouts/slideLayout1.xml",
+      "ppt/slideLayouts/slideLayout2.xml",
+    ]);
   });
 });
 

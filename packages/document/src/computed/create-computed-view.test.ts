@@ -940,6 +940,7 @@ function buildSource(): PptxSourceModel {
     presentation: {
       partPath: asPartPath("ppt/presentation.xml"),
       slideSize: { width: asEmu(9144000), height: asEmu(5143500) },
+      slideMasterPartPaths: [asPartPath("ppt/slideMasters/master1.xml")],
       slidePartPaths: [asPartPath("ppt/slides/slide2.xml"), asPartPath("ppt/slides/slide1.xml")],
     },
     slides: [

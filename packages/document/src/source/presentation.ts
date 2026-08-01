@@ -153,6 +153,8 @@ export interface SourcePresentation {
   readonly partPath: PartPath;
   readonly slideSize?: SlideSize;
   readonly defaultTextStyle?: SourceTextStyle;
+  /** Slide master part paths reflecting `p:sldMasterIdLst` order. */
+  readonly slideMasterPartPaths: readonly PartPath[];
   /** Slide part paths reflecting `p:sldIdLst` order. */
   readonly slidePartPaths: readonly PartPath[];
   readonly handle?: SourceHandle;
