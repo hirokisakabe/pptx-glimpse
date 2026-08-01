@@ -16,6 +16,7 @@ import {
   asPartPath,
   asPt,
   asSourceNodeId,
+  countImageReferencesToMedia,
   createComputedView,
   createPptx,
   readPptx,
@@ -118,7 +119,10 @@ function buildRoundTripFixture(): Uint8Array {
   });
 }
 
-function buildMediaReplacementFixture(shared: boolean | "fill" | "vml" = false): Uint8Array {
+function buildMediaReplacementFixture(
+  shared: boolean | "fill" | "vml" = false,
+  imageRelationshipPrefix = "r",
+): Uint8Array {
   return zipSync({
     "[Content_Types].xml": xml(
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -146,14 +150,14 @@ function buildMediaReplacementFixture(shared: boolean | "fill" | "vml" = false):
         `</Relationships>`,
     ),
     "ppt/slides/slide1.xml": xml(
-      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:v="urn:schemas-microsoft-com:vml">` +
+      `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"${imageRelationshipPrefix === "r" ? "" : ` xmlns:${imageRelationshipPrefix}="http://schemas.openxmlformats.org/officeDocument/2006/relationships"`} xmlns:v="urn:schemas-microsoft-com:vml">` +
         `<p:cSld><p:spTree>` +
         `<p:pic><p:nvPicPr><p:cNvPr id="20" name="Replace Target"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
-        `<p:blipFill><a:blip r:embed="rIdImage1"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+        `<p:blipFill><a:blip ${imageRelationshipPrefix}:embed="rIdImage1"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
         `<p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:pic>` +
         (shared === true
           ? `<p:pic><p:nvPicPr><p:cNvPr id="21" name="Keep Shared"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
-            `<p:blipFill><a:blip r:embed="rIdImage1"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
+            `<p:blipFill><a:blip ${imageRelationshipPrefix}:embed="rIdImage1"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
             `<p:spPr><a:xfrm><a:off x="1828800" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:pic>`
           : shared === "fill"
             ? `<p:sp><p:nvSpPr><p:cNvPr id="21" name="Keep Image Fill"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
@@ -2739,6 +2743,47 @@ describe("writePptx - no-edit round-trip", () => {
       type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
       target: "../media/image3.png",
     });
+  });
+
+  it("preserves the input relationship namespace prefix", () => {
+    const source = readPptx(buildMediaReplacementFixture(true, "rel"));
+    const target = source.slides[0]?.shapes.find(
+      (shape): shape is SourceImage => shape.kind === "image" && shape.name === "Replace Target",
+    );
+    if (target?.handle === undefined) throw new Error("prefixed image target was not parsed");
+
+    const output = writePptx(replaceImageBytes(source, target.handle, BLUE_PNG));
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+
+    expect(slideXml).toContain(`<a:blip rel:embed="rId3"/>`);
+    expect(slideXml).not.toContain(`<a:blip r:embed="rId3"/>`);
+  });
+
+  it("updates the final reference in place after another shared picture is isolated", () => {
+    const source = readPptx(buildMediaReplacementFixture(true));
+    const target = source.slides[0]?.shapes.find(
+      (shape): shape is SourceImage => shape.kind === "image" && shape.name === "Replace Target",
+    );
+    const shared = source.slides[0]?.shapes.find(
+      (shape): shape is SourceImage => shape.kind === "image" && shape.name === "Keep Shared",
+    );
+    if (target?.handle === undefined || shared?.handle === undefined) {
+      throw new Error("sequential image targets were not parsed");
+    }
+
+    const isolated = replaceImageBytes(source, target.handle, BLUE_PNG);
+    expect(countImageReferencesToMedia(isolated, asPartPath("ppt/media/image1.png"))).toBe(1);
+    const edited = replaceImageBytes(isolated, shared.handle, GREEN_PNG);
+    const output = writePptx(edited);
+
+    expect(edited.edits?.at(-1)).toMatchObject({
+      kind: "replaceImage",
+      mode: "inPlace",
+      mediaPartPath: "ppt/media/image1.png",
+      sharedReferenceCount: 1,
+    });
+    expect(getEntry(output, "ppt/media/image1.png")).toEqual(GREEN_PNG);
+    expect(getEntry(output, "ppt/media/image3.png")).toEqual(BLUE_PNG);
   });
 
   it("copy-on-write preserves a non-picture image fill that reuses the picture relationship", () => {

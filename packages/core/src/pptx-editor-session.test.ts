@@ -250,6 +250,12 @@ describe("PptxEditorSession", () => {
     expect(result.warnings).toBeUndefined();
     expect(mediaBytes(editor.document, "ppt/media/image1.png")).toEqual(RED_PNG);
     expect(mediaBytes(editor.document, "ppt/media/image2.png")).toEqual(BLUE_PNG);
+    expect(
+      editor.shapes(1).find((shape) => shape.name === "Shared Picture A")?.editableImageReplacement,
+    ).toMatchObject({ mediaPartPath: "ppt/media/image2.png", sharedReferenceCount: 1 });
+    expect(
+      editor.shapes(1).find((shape) => shape.name === "Shared Picture B")?.editableImageReplacement,
+    ).toMatchObject({ mediaPartPath: "ppt/media/image1.png", sharedReferenceCount: 1 });
   });
 
   it("rerenders only the picture owner after copy-on-write replacement", async () => {

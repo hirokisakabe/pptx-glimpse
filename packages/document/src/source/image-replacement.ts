@@ -303,12 +303,39 @@ export function countImageReferencesToMedia(
         relationships.sourcePartPath,
         relationship.id,
       );
+      const pendingReplacementCount = countPendingRelationshipReplacements(
+        source,
+        relationships.sourcePartPath,
+        relationship.id,
+        mediaPartPath,
+      );
       // If preserved XML is unavailable, a parsed target cannot prove exclusive use.
-      const conservativeCount = preservedXmlCount ?? (parsedCount > 0 ? 2 : 1);
+      const conservativeCount =
+        preservedXmlCount === undefined
+          ? parsedCount > 0
+            ? 2
+            : 1
+          : Math.max(0, preservedXmlCount - pendingReplacementCount);
       count += Math.max(1, parsedCount, conservativeCount);
     }
   }
   return count;
+}
+
+function countPendingRelationshipReplacements(
+  source: PptxSourceModel,
+  ownerPartPath: PartPath,
+  relationshipId: RelationshipId,
+  mediaPartPath: PartPath,
+): number {
+  return (source.edits ?? []).filter(
+    (edit) =>
+      edit.kind === "replaceImage" &&
+      edit.mode === "copyOnWrite" &&
+      edit.handle.partPath === ownerPartPath &&
+      edit.handle.relationshipId === relationshipId &&
+      edit.sourceMediaPartPath === mediaPartPath,
+  ).length;
 }
 
 const textDecoder = new TextDecoder();

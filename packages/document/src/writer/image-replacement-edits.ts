@@ -17,5 +17,13 @@ export function applyReplaceImageEdit(root: XmlNode, edit: PptxSourceModelReplac
       `writePptx: image replacement handle '${locator.nodeId}' no longer matches p:pic XML with a:blip`,
     );
   }
-  blip["@_r:embed"] = edit.replacementRelationshipId;
+  const embedAttribute = Object.keys(blip).find(
+    (key) => key.startsWith("@_") && key.endsWith(":embed"),
+  );
+  if (embedAttribute === undefined) {
+    throw new Error(
+      `writePptx: image replacement handle '${locator.nodeId}' has no namespaced embed attribute`,
+    );
+  }
+  blip[embedAttribute] = edit.replacementRelationshipId;
 }
