@@ -87,6 +87,33 @@ export interface PptxEditorSelectionInfo {
 }
 
 /**
+ * One slide layout in the authoring order of its parent master.
+ *
+ * `handle` identifies the layout root by its OOXML part path. `hidden` is `true` only when
+ * `p:sldLayout@show` is explicitly false; an omitted attribute is visible. The reference count
+ * includes slides whose direct layout relationship resolves to this layout.
+ */
+export interface PptxEditorSlideLayoutCatalogEntry {
+  readonly handle: SourceHandle;
+  readonly name?: string;
+  readonly type?: string;
+  readonly hidden: boolean;
+  readonly slideReferenceCount: number;
+}
+
+/**
+ * One slide master and its layouts in presentation authoring order.
+ *
+ * `handle` identifies the master root by its OOXML part path. `layouts` follows the master's
+ * `p:sldLayoutIdLst` order.
+ */
+export interface PptxEditorSlideMasterCatalogEntry {
+  readonly handle: SourceHandle;
+  readonly name?: string;
+  readonly layouts: readonly PptxEditorSlideLayoutCatalogEntry[];
+}
+
+/**
  * Legacy plain-text run view with a required editable source handle.
  */
 export interface PptxEditorTextRunInfo {
@@ -355,6 +382,17 @@ export class PptxEditorSession {
   /** Currently selected shape, or `undefined` when no shape is selected. */
   get selection(): PptxEditorSelectionInfo | undefined {
     return this.#session.selection;
+  }
+
+  /**
+   * Slide masters and their layouts in PowerPoint authoring order.
+   *
+   * The outer array follows `p:sldMasterIdLst`; each nested array follows the corresponding
+   * `p:sldLayoutIdLst`. Only resolved catalog entries are returned. Inspect
+   * {@link document}.diagnostics for unresolved relationships.
+   */
+  get layoutCatalog(): readonly PptxEditorSlideMasterCatalogEntry[] {
+    return buildLayoutCatalog(this.#session.document);
   }
 
   /**
@@ -690,6 +728,46 @@ export class PptxEditorSession {
     if (addedShape?.handle === undefined) return;
     this.#session.selectShape(addedShape.handle);
   }
+}
+
+function buildLayoutCatalog(source: PptxSourceModel): readonly PptxEditorSlideMasterCatalogEntry[] {
+  const mastersByPartPath = new Map(
+    source.slideMasters.map((master) => [master.partPath, master] as const),
+  );
+  const layoutsByPartPath = new Map(
+    source.slideLayouts.map((layout) => [layout.partPath, layout] as const),
+  );
+  const slideReferencesByLayoutPartPath = new Map<PartPath, number>();
+  for (const slide of source.slides) {
+    slideReferencesByLayoutPartPath.set(
+      slide.layoutPartPath,
+      (slideReferencesByLayoutPartPath.get(slide.layoutPartPath) ?? 0) + 1,
+    );
+  }
+
+  return source.presentation.slideMasterPartPaths.flatMap((masterPartPath) => {
+    const master = mastersByPartPath.get(masterPartPath);
+    if (master === undefined) return [];
+    return [
+      {
+        handle: master.handle ?? { partPath: master.partPath },
+        ...(master.name !== undefined ? { name: master.name } : {}),
+        layouts: master.layoutPartPaths.flatMap((layoutPartPath) => {
+          const layout = layoutsByPartPath.get(layoutPartPath);
+          if (layout === undefined) return [];
+          return [
+            {
+              handle: layout.handle ?? { partPath: layout.partPath },
+              ...(layout.name !== undefined ? { name: layout.name } : {}),
+              ...(layout.type !== undefined ? { type: layout.type } : {}),
+              hidden: layout.show === false,
+              slideReferenceCount: slideReferencesByLayoutPartPath.get(layout.partPath) ?? 0,
+            },
+          ];
+        }),
+      },
+    ];
+  });
 }
 
 /**

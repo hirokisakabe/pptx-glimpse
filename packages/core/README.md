@@ -76,6 +76,20 @@ The session exposes rendered SVG slides, editable shape information, command app
 selection, undo/redo history, and PPTX serialization. It is headless and does not provide a
 complete editor UI.
 
+`editor.layoutCatalog` exposes slide masters in presentation authoring order and nests each
+master's layouts in its authoring order. Master and layout `handle` values identify the OOXML root
+part and can be retained as stable UI identities. Layout entries also expose `name`, `type`,
+`hidden`, and `slideReferenceCount`; omitted `p:sldLayout@show` is treated as visible, and the
+reference count includes slides directly assigned to that layout.
+
+```ts
+for (const master of editor.layoutCatalog) {
+  for (const layout of master.layouts) {
+    console.log(layout.name, layout.hidden, layout.slideReferenceCount, layout.handle);
+  }
+}
+```
+
 Native group topology is available through typed `groupShapes` / `ungroupShape` commands and the
 matching `PptxEditorSession` methods. A successful group selects the new group; a successful
 ungroup selects its first child in document order. Undo and redo restore topology, ids, z-order,
