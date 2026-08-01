@@ -8,7 +8,11 @@
 
 import type { AddChartInput } from "./chart-authoring.js";
 import { addChart } from "./chart-authoring.js";
-import { editInsertedShape, editInsertedSlidePartPath } from "./edit-descriptors.js";
+import {
+  editInsertedShape,
+  editInsertedSlidePartPath,
+  sourceHandlesEqual,
+} from "./edit-descriptors.js";
 import type { SourceHandle } from "./handles.js";
 import type { AddPictureInput } from "./picture-authoring.js";
 import { addPicture } from "./picture-authoring.js";
@@ -81,7 +85,10 @@ export class PptxAuthoringSession {
     return this.#source;
   }
 
-  /** Creates an authoring scope bound to a slide, layout, or master handle. */
+  /**
+   * Creates an authoring scope bound to a slide, layout, or master handle. A native group handle
+   * is also accepted for the `groupShapes` direct-child operation.
+   */
   target(targetHandle: SourceHandle): PptxAuthoringTarget {
     return {
       addTextBox: (input) => this.#addDrawing("addTextBox", targetHandle, input, addTextBox),
@@ -219,16 +226,6 @@ function findGroupByHandle(source: PptxSourceModel, handle: SourceHandle): Sourc
     if (group !== undefined) return group;
   }
   return undefined;
-}
-
-function sourceHandlesEqual(left: SourceHandle | undefined, right: SourceHandle): boolean {
-  return (
-    left !== undefined &&
-    left.partPath === right.partPath &&
-    left.nodeId === right.nodeId &&
-    left.relationshipId === right.relationshipId &&
-    left.orderingSlot === right.orderingSlot
-  );
 }
 
 /** Creates a mutable authoring session around any PptxSourceModel. */

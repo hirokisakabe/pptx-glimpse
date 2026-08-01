@@ -469,8 +469,13 @@ describe("public conversion orchestration", () => {
     const reread = document.readPptx(document.writePptx(session.source));
     const report = await renderPptxSourceModelToSvg(reread);
 
-    expect(reread.slides[0]?.shapes[0]?.kind).toBe("group");
-    expect(report.slides[0]?.svg).toContain("<g");
+    expect(reread.slides[0]?.shapes).toHaveLength(1);
+    const group = reread.slides[0]?.shapes[0];
+    expect(group?.kind).toBe("group");
+    if (group?.kind !== "group") throw new Error("reread authored group is missing");
+    expect(group.children).toHaveLength(2);
+    expect(group.children.map((child) => child.kind)).toEqual(["shape", "shape"]);
+    expect(report.slides[0]?.svg).toContain('aria-label="Group 3"');
     expect(report.slides[0]?.svg).toContain("4472c4");
     expect(report.slides[0]?.svg).toContain("ed7d31");
   });

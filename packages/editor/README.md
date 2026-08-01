@@ -74,8 +74,11 @@ The released command set includes:
   `clearTextRunProperties`, `setParagraphProperties`, and `clearParagraphProperties`.
 - Shapes: `moveShape`, `resizeShape`, `setShapeTransform`, `setShapeFill`, `setShapeOutline`,
   `addTextBox`, `addConnector`, `deleteShape`, `groupShapes`, and `ungroupShape`. Grouping accepts
-  consecutive siblings; the typed source-node convenience method covers shape, picture,
-  connector, Table/Chart graphic frames, and native group nodes.
+  two or more consecutive siblings with the same direct parent; the typed source-node convenience
+  method covers shape, picture, connector, Table/Chart graphic frames, and native group nodes.
+  Ungrouping is limited to non-empty groups whose identity child mapping, appearance, unknown XML,
+  and connector references can be expanded losslessly; see the document package's
+  [group constraints](../document/docs/editing.md#lossless-group-and-ungroup).
 - Media: `replaceImage`.
 - Charts: `updateChartData` for names, shared category labels, and numeric values of a supported
   existing category Chart with an internal editable workbook.

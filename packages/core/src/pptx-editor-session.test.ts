@@ -718,7 +718,7 @@ describe("PptxEditorSession", () => {
     }
     expect(grouped.selection).toEqual({ shapeHandle: group.handle });
     expect(grouped.history.undoDepth).toBe(1);
-    expect(grouped.slides[0]?.svg).toContain("<g");
+    expect(grouped.slides[0]?.svg).toContain('aria-label="Group 4"');
 
     expect((await editor.undo()).selection).toEqual({ shapeHandle: second });
     expect(editor.shapes(1).map((shape) => shape.kind)).toEqual(["shape", "shape", "shape"]);
@@ -748,7 +748,11 @@ describe("PptxEditorSession", () => {
         throw new Error("group command fixture handles are missing");
       }
       const result = await editor.apply({ kind: "groupShapes", shapeHandles: handles });
-      expect(result.selection?.shapeHandle).toEqual(editor.shapes(1)[0]?.handle);
+      const group = editor.shapes(1)[0];
+      if (group?.kind !== "group" || group.handle === undefined) {
+        throw new Error("integrated group command did not create a selectable group");
+      }
+      expect(result.selection).toEqual({ shapeHandle: group.handle });
       expect(editor.document.slides[0]?.shapes[0]?.kind).toBe("group");
     }
   });

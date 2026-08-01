@@ -180,8 +180,16 @@ describe("PptxAuthoringSession", () => {
       "chart",
     ]);
 
-    const innerGroupHandle = session.target(outerGroupHandle).groupShapes(handles.slice(0, 2));
-    const reread = readPptx(writePptx(session.source));
+    const rereadAuthored = readPptx(writePptx(session.source));
+    const nativeOuter = rereadAuthored.slides[0]?.shapes[0];
+    if (nativeOuter?.kind !== "group" || nativeOuter.handle === undefined) {
+      throw new Error("reread authored group is missing");
+    }
+    const nativeSession = createPptxAuthoringSession(rereadAuthored);
+    const innerGroupHandle = nativeSession
+      .target(identityHandle(nativeOuter.handle))
+      .groupShapes(nativeOuter.children.slice(0, 2).map((child) => identityHandle(child.handle)));
+    const reread = readPptx(writePptx(nativeSession.source));
     const rereadOuter = reread.slides[0]?.shapes[0];
     expect(rereadOuter?.kind).toBe("group");
     if (rereadOuter?.kind !== "group") throw new Error("reread outer group is missing");
@@ -248,4 +256,12 @@ function addSlideNumber(target: Target) {
 function requireHandle<T>(handle: T | undefined): T {
   if (handle === undefined) throw new Error("test fixture handle is missing");
   return handle;
+}
+
+function identityHandle(handle: import("./handles.js").SourceHandle | undefined) {
+  const resolved = requireHandle(handle);
+  return {
+    partPath: resolved.partPath,
+    ...(resolved.nodeId !== undefined ? { nodeId: resolved.nodeId } : {}),
+  };
 }

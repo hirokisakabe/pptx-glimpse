@@ -1138,6 +1138,68 @@ describe("EditorSession selection", () => {
     expect(session.undoDepth).toBe(0);
     expect(session.redoDepth).toBe(1);
   });
+
+  it("keeps a later selection across ordinary command undo and redo", () => {
+    const source = createThreeShapeSource();
+    const handles = source.slides[0]?.shapes.map((shape) => requireHandle(shape.handle)) ?? [];
+    const session = createEditorSession(source);
+    expect(session.selectShape(handles[0])).toMatchObject({ ok: true });
+    expectApplied(
+      session.apply({
+        kind: "moveShape",
+        handle: handles[0],
+        offsetX: asEmu(500),
+        offsetY: asEmu(500),
+      }),
+    );
+    expect(session.selectShape(handles[2])).toMatchObject({ ok: true });
+
+    expectHistory(session.undo());
+    expect(session.selection).toEqual({ shapeHandle: handles[2] });
+    expectHistory(session.redo());
+    expect(session.selection).toEqual({ shapeHandle: handles[2] });
+  });
+
+  it("rejects unsupported group child kinds and empty ungroup targets atomically", () => {
+    const unsupportedSource = createThreeShapeSource();
+    const unsupportedHandles =
+      unsupportedSource.slides[0]?.shapes.map((shape) => requireHandle(shape.handle)) ?? [];
+    Object.defineProperty(unsupportedSource.slides[0]?.shapes[0], "kind", {
+      value: "smartArt",
+    });
+    const unsupportedSession = createEditorSession(unsupportedSource);
+    const unsupportedBefore = unsupportedSession.document;
+    expect(
+      unsupportedSession.apply({
+        kind: "groupShapes",
+        shapeHandles: unsupportedHandles.slice(0, 2),
+      }),
+    ).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(unsupportedSession.document).toBe(unsupportedBefore);
+    expect(unsupportedSession.undoDepth).toBe(0);
+
+    const source = createThreeShapeSource();
+    const handles = source.slides[0]?.shapes.map((shape) => requireHandle(shape.handle)) ?? [];
+    const session = createEditorSession(source);
+    expectApplied(session.apply({ kind: "groupShapes", shapeHandles: handles.slice(0, 2) }));
+    const group = session.document.slides[0]?.shapes[0];
+    if (group?.kind !== "group" || group.handle === undefined) {
+      throw new Error("empty group rejection fixture is missing");
+    }
+    Object.defineProperty(group, "children", { value: [] });
+    const before = session.document;
+    const selection = session.selection;
+    const undoDepth = session.undoDepth;
+
+    expect(session.apply({ kind: "ungroupShape", groupHandle: group.handle })).toMatchObject({
+      ok: false,
+      code: "invalid-command",
+    });
+    expect(session.document).toBe(before);
+    expect(session.selection).toBe(selection);
+    expect(session.undoDepth).toBe(undoDepth);
+    expect(session.redoDepth).toBe(0);
+  });
 });
 
 function createThreeShapeSource(): PptxSourceModel {

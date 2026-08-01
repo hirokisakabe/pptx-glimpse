@@ -339,8 +339,10 @@ export type EditorSelectShapeResult =
 interface HistoryEntry {
   readonly before: PptxSourceModel;
   readonly after: PptxSourceModel;
-  readonly beforeSelection?: EditorSelection;
-  readonly afterSelection?: EditorSelection;
+  readonly selectionTransition?: {
+    readonly before?: EditorSelection;
+    readonly after?: EditorSelection;
+  };
 }
 
 export class EditorSession {
@@ -538,14 +540,18 @@ export class EditorSession {
   groupShapes(shapes: readonly GroupableSourceShape[]): EditorApplyCommandResult {
     const handles: SourceHandle[] = [];
     for (const shape of shapes) {
-      if (!isSourceShapeNode(shape) || shape.handle === undefined) {
+      if (!isGroupableSourceShape(shape) || shape.handle === undefined) {
         return invalidSourceNodeFailure("groupShapes", "every source shape requires a handle");
       }
-      if (findShapeNodeBySourceHandle(this.#document, shape.handle) === undefined) {
+      const current = findShapeNodeBySourceHandle(this.#document, shape.handle);
+      if (current === undefined) {
         return invalidSourceNodeFailure(
           "groupShapes",
           "source node handle was not found in the current EditorSession document",
         );
+      }
+      if (!isGroupableSourceShape(current)) {
+        return invalidSourceNodeFailure("groupShapes", "source node kind is not groupable");
       }
       handles.push(shape.handle);
     }
@@ -652,14 +658,17 @@ export class EditorSession {
     const selectionChangedByTopologyCommand = commands.some(
       (command) => command.kind === "groupShapes" || command.kind === "ungroupShape",
     );
-    const historyBeforeSelection = selectionChangedByTopologyCommand
-      ? beforeSelection
-      : this.#selection;
     this.#undoStack.push({
       before,
       after,
-      ...(historyBeforeSelection !== undefined ? { beforeSelection: historyBeforeSelection } : {}),
-      ...(this.#selection !== undefined ? { afterSelection: this.#selection } : {}),
+      ...(selectionChangedByTopologyCommand
+        ? {
+            selectionTransition: {
+              ...(beforeSelection !== undefined ? { before: beforeSelection } : {}),
+              ...(this.#selection !== undefined ? { after: this.#selection } : {}),
+            },
+          }
+        : {}),
     });
     this.#redoStack.length = 0;
 
@@ -681,7 +690,10 @@ export class EditorSession {
     }
 
     this.#document = entry.before;
-    this.#selection = entry.beforeSelection;
+    this.#selection =
+      entry.selectionTransition === undefined
+        ? reconcileSelection(entry.before, this.#selection)
+        : entry.selectionTransition.before;
     this.#redoStack.push(entry);
 
     return { ok: true, document: entry.before };
@@ -698,7 +710,10 @@ export class EditorSession {
     }
 
     this.#document = entry.after;
-    this.#selection = entry.afterSelection;
+    this.#selection =
+      entry.selectionTransition === undefined
+        ? reconcileSelection(entry.after, this.#selection)
+        : entry.selectionTransition.after;
     this.#undoStack.push(entry);
 
     return { ok: true, document: entry.after };
@@ -913,6 +928,23 @@ function isSourceShapeNode(value: unknown): value is SourceShapeNode {
   );
 }
 
+const GROUPABLE_SOURCE_SHAPE_KINDS: ReadonlySet<string> = new Set([
+  "shape",
+  "connector",
+  "group",
+  "image",
+  "table",
+  "chart",
+]);
+
+function isGroupableSourceShape(value: unknown): value is GroupableSourceShape {
+  return (
+    isObject(value) &&
+    typeof value.kind === "string" &&
+    GROUPABLE_SOURCE_SHAPE_KINDS.has(value.kind)
+  );
+}
+
 function isSourceImage(value: unknown): value is SourceImage {
   return isObject(value) && value.kind === "image";
 }
@@ -975,9 +1007,9 @@ function executeCommand(document: PptxSourceModel, command: EditorCommand): Pptx
     case "deleteShape":
       return deleteShape(document, command.handle);
     case "groupShapes":
-      return groupShapes(document, command.shapeHandles);
+      return groupShapesCommand(document, command);
     case "ungroupShape":
-      return ungroupShape(document, command.groupHandle);
+      return ungroupShapeCommand(document, command);
     case "replaceImage":
       return replaceImageBytes(document, command.handle, command.bytes);
     case "updateChartData":
@@ -991,6 +1023,30 @@ function executeCommand(document: PptxSourceModel, command: EditorCommand): Pptx
     case "deleteSlide":
       return deleteSlide(document, command.handle);
   }
+}
+
+function groupShapesCommand(
+  document: PptxSourceModel,
+  command: GroupShapesCommand,
+): PptxSourceModel {
+  for (const handle of command.shapeHandles) {
+    const shape = findShapeNodeBySourceHandle(document, handle);
+    if (shape !== undefined && !isGroupableSourceShape(shape)) {
+      throw new Error(`groupShapes: shape kind '${shape.kind}' is not supported`);
+    }
+  }
+  return groupShapes(document, command.shapeHandles);
+}
+
+function ungroupShapeCommand(
+  document: PptxSourceModel,
+  command: UngroupShapeCommand,
+): PptxSourceModel {
+  const group = findShapeNodeBySourceHandle(document, command.groupHandle);
+  if (group?.kind === "group" && group.children.length === 0) {
+    throw new Error("ungroupShape: group must contain at least one child");
+  }
+  return ungroupShape(document, command.groupHandle);
 }
 
 function selectionAfterCommand(
