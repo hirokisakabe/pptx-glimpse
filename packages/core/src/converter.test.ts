@@ -442,6 +442,39 @@ describe("public conversion orchestration", () => {
     expect(adapterSpy).toHaveBeenCalledTimes(2);
   });
 
+  it("writes, rereads, and renders a native group authored from generic drawings", async () => {
+    const source = document.createPptx();
+    const slideHandle = source.slides[0]?.handle;
+    if (slideHandle === undefined) throw new Error("from-scratch slide handle is missing");
+    const session = document.createPptxAuthoringSession(source);
+    const target = session.target(slideHandle);
+    const first = target.addShape({
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: document.asEmu(914400),
+      offsetY: document.asEmu(914400),
+      width: document.asEmu(1828800),
+      height: document.asEmu(914400),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "4472C4" } },
+    });
+    const second = target.addShape({
+      geometry: { kind: "preset", preset: "ellipse" },
+      offsetX: document.asEmu(3200400),
+      offsetY: document.asEmu(914400),
+      width: document.asEmu(1371600),
+      height: document.asEmu(914400),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "ED7D31" } },
+    });
+    target.groupShapes([first, second]);
+
+    const reread = document.readPptx(document.writePptx(session.source));
+    const report = await renderPptxSourceModelToSvg(reread);
+
+    expect(reread.slides[0]?.shapes[0]?.kind).toBe("group");
+    expect(report.slides[0]?.svg).toContain("<g");
+    expect(report.slides[0]?.svg).toContain("4472c4");
+    expect(report.slides[0]?.svg).toContain("ed7d31");
+  });
+
   it("keeps concurrent source-model renders isolated by font options", async () => {
     const source = document.readPptx(testPptx);
 

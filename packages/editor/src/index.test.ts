@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 
 import {
   addChart,
+  addShape,
   asEmu,
   asPartPath,
   asPt,
@@ -1069,7 +1070,90 @@ describe("EditorSession selection", () => {
     expect(findShapeNodeBySourceHandle(session.document, handle)).toBeUndefined();
     expect(session.selection).toBeUndefined();
   });
+
+  it("selects group and first ungrouped child while undo and redo restore selection", () => {
+    const source = createThreeShapeSource();
+    const handles = source.slides[0]?.shapes.map((shape) => requireHandle(shape.handle)) ?? [];
+    const session = createEditorSession(source);
+    expect(session.selectShape(handles[1])).toMatchObject({ ok: true });
+
+    expectApplied(session.apply({ kind: "groupShapes", shapeHandles: handles.slice(0, 2) }));
+    const group = session.document.slides[0]?.shapes[0];
+    expect(group?.kind).toBe("group");
+    if (group?.kind !== "group" || group.handle === undefined) {
+      throw new Error("group command did not create a selectable group");
+    }
+    expect(group.children.map((child) => child.nodeId)).toEqual(
+      handles.slice(0, 2).map((handle) => handle.nodeId),
+    );
+    expect(session.selection).toEqual({ shapeHandle: group.handle });
+
+    expectHistory(session.undo());
+    expect(session.document).toBe(source);
+    expect(session.selection).toEqual({ shapeHandle: handles[1] });
+    expectHistory(session.redo());
+    expect(session.selection).toEqual({ shapeHandle: group.handle });
+
+    expectApplied(session.apply({ kind: "ungroupShape", groupHandle: group.handle }));
+    expect(session.document.slides[0]?.shapes.map((shape) => shape.nodeId)).toEqual(
+      handles.map((handle) => handle.nodeId),
+    );
+    expect(session.selection).toEqual({ shapeHandle: handles[0] });
+    expectHistory(session.undo());
+    expect(session.selection).toEqual({ shapeHandle: group.handle });
+    expectHistory(session.redo());
+    expect(session.selection).toEqual({ shapeHandle: handles[0] });
+  });
+
+  it("rejects invalid grouping without changing document, selection, or history", () => {
+    const source = createThreeShapeSource();
+    const handles = source.slides[0]?.shapes.map((shape) => requireHandle(shape.handle)) ?? [];
+    const session = createEditorSession(source);
+    expect(session.selectShape(handles[1])).toMatchObject({ ok: true });
+    expectApplied(
+      session.apply({
+        kind: "moveShape",
+        handle: handles[1],
+        offsetX: asEmu(2500),
+        offsetY: asEmu(0),
+      }),
+    );
+    expectHistory(session.undo());
+    const before = session.document;
+    const selection = session.selection;
+
+    const rejected = session.apply({
+      kind: "groupShapes",
+      shapeHandles: [handles[0], handles[2]],
+    });
+    const rejectedUngroup = session.apply({
+      kind: "ungroupShape",
+      groupHandle: handles[0],
+    });
+
+    expect(rejected).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(rejectedUngroup).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(session.document).toBe(before);
+    expect(session.selection).toBe(selection);
+    expect(session.undoDepth).toBe(0);
+    expect(session.redoDepth).toBe(1);
+  });
 });
+
+function createThreeShapeSource(): PptxSourceModel {
+  let source = createPptx();
+  const slideHandle = requireHandle(source.slides[0]?.handle);
+  for (const offsetX of [0, 2000, 4000]) {
+    source = addShape(source, slideHandle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(offsetX),
+      offsetY: asEmu(0),
+      width: asEmu(1000),
+      height: asEmu(1000),
+    });
+  }
+  return source;
+}
 
 describe("EditorSession shape add/delete commands", () => {
   it("adds a text box and lets existing text/xfrm commands edit it before save", async () => {

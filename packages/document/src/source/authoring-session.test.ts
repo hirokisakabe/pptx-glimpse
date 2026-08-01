@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createPptx } from "../builder/create-pptx.js";
-import { createPptxAuthoringSession } from "../index.js";
+import { createPptxAuthoringSession, readPptx, writePptx } from "../index.js";
 import { asPartPath } from "./handles.js";
 import { asEmu } from "./units.js";
 
@@ -127,6 +127,71 @@ describe("PptxAuthoringSession", () => {
       kind: "fill",
       fill: { kind: "solid", color: { kind: "srgb", hex: "112233" } },
     });
+  });
+
+  it("groups authored drawing kinds and supports the same target abstraction for native groups", () => {
+    const source = createPptx();
+    const session = createPptxAuthoringSession(source);
+    const target = session.target(requireHandle(source.slides[0]?.handle));
+    const handles = [
+      addRect(target),
+      target.addPicture({
+        bytes: PNG_BYTES,
+        offsetX: asEmu(1200),
+        offsetY: asEmu(0),
+        width: asEmu(1000),
+        height: asEmu(1000),
+      }),
+      target.addConnector({
+        preset: "straightConnector1",
+        offsetX: asEmu(2300),
+        offsetY: asEmu(500),
+        width: asEmu(1000),
+        height: asEmu(1),
+      }),
+      target.addTable({
+        offsetX: asEmu(3400),
+        offsetY: asEmu(0),
+        width: asEmu(1000),
+        height: asEmu(1000),
+        columnWidths: [asEmu(1000)],
+        rows: [{ height: asEmu(1000), cells: [{ text: "Cell" }] }],
+      }),
+      target.addChart({
+        chartType: "bar",
+        offsetX: asEmu(4500),
+        offsetY: asEmu(0),
+        width: asEmu(1000),
+        height: asEmu(1000),
+        series: [{ categories: ["A"], values: [1] }],
+      }),
+    ];
+
+    const outerGroupHandle = target.groupShapes(handles);
+    const outerGroup = session.source.slides[0]?.shapes[0];
+    expect(outerGroup?.kind).toBe("group");
+    if (outerGroup?.kind !== "group") throw new Error("authored group is missing");
+    expect(outerGroup.handle).toEqual(outerGroupHandle);
+    expect(outerGroup.children.map((child) => child.kind)).toEqual([
+      "shape",
+      "image",
+      "connector",
+      "table",
+      "chart",
+    ]);
+
+    const innerGroupHandle = session.target(outerGroupHandle).groupShapes(handles.slice(0, 2));
+    const reread = readPptx(writePptx(session.source));
+    const rereadOuter = reread.slides[0]?.shapes[0];
+    expect(rereadOuter?.kind).toBe("group");
+    if (rereadOuter?.kind !== "group") throw new Error("reread outer group is missing");
+    expect(rereadOuter.children[0]?.kind).toBe("group");
+    expect(rereadOuter.children[0]?.nodeId).toBe(innerGroupHandle.nodeId);
+    expect(rereadOuter.children.slice(1).map((child) => child.kind)).toEqual([
+      "connector",
+      "table",
+      "chart",
+    ]);
   });
 
   it("preserves primitive errors and the last successful source when a target is invalid", () => {

@@ -22,6 +22,7 @@ import {
   asOoxmlPercent,
   asPt,
   createPptx,
+  createPptxAuthoringSession,
   deleteShape,
   deleteSlide,
   duplicateSlide,
@@ -493,6 +494,37 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
       libreOfficeImage,
       "editor-validity-from-scratch-text-box.pptx",
       writePptx(edited),
+    );
+  });
+
+  it("opens a from-scratch PPTX grouped through the headless editor command", () => {
+    const authoring = createPptxAuthoringSession(createPptx());
+    const slideHandle = requireHandle(authoring.source.slides[0]?.handle);
+    const target = authoring.target(slideHandle);
+    const first = target.addShape({
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(914400),
+      offsetY: asEmu(1371600),
+      width: asEmu(2286000),
+      height: asEmu(1371600),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "4472C4" } },
+    });
+    const second = target.addShape({
+      geometry: { kind: "preset", preset: "ellipse" },
+      offsetX: asEmu(3657600),
+      offsetY: asEmu(1371600),
+      width: asEmu(1828800),
+      height: asEmu(1371600),
+      fill: { kind: "solid", color: { kind: "srgb", hex: "ED7D31" } },
+    });
+    const editor = createEditorSession(authoring.source);
+    const result = editor.apply({ kind: "groupShapes", shapeHandles: [first, second] });
+    if (!result.ok) throw new Error(result.message);
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-from-scratch-group-command.pptx",
+      writePptx(editor.document),
     );
   });
 
