@@ -2,6 +2,7 @@ import { type ChildProcessWithoutNullStreams, execFile, spawn } from "node:child
 import { existsSync } from "node:fs";
 import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
+import { builtinModules } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -476,8 +477,13 @@ async function assertDemoBrowserBundle(): Promise<void> {
   const chunksDirectory = resolve(demoRoot, ".next/static/chunks");
   const chunkPaths = await collectJavaScriptFiles(chunksDirectory);
   expect(chunkPaths.length, "the demo build should emit browser chunks").toBeGreaterThan(0);
-  const nodeOnlyPattern =
-    /(?:node:(?:buffer|fs|module|os|path)|node-font-loader|packages\/core\/dist\/index|(?:from|require\()\s*["'](?:fs(?:\/promises)?|module|os|path)["'])/;
+  const builtinSpecifierPattern = builtinModules
+    .map((specifier) => specifier.replace(/^node:/, ""))
+    .map((specifier) => specifier.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
+    .join("|");
+  const nodeOnlyPattern = new RegExp(
+    `(?:node:(?:${builtinSpecifierPattern})|(?:from|import|import\\s*\\(|require\\s*\\()\\s*["'](?:${builtinSpecifierPattern})["']|node-font-loader|packages/core/dist/index)`,
+  );
 
   for (const chunkPath of chunkPaths) {
     const source = await readFile(chunkPath, "utf8");
