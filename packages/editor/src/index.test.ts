@@ -1439,7 +1439,7 @@ describe("EditorSession image replacement commands", () => {
     expect(result.ok && result.warnings).toBeUndefined();
   });
 
-  it("deduplicates shared-media warnings for repeated replacements in one batch", async () => {
+  it("reuses the copy-on-write media for repeated replacements in one batch", async () => {
     const source = readPptx(await buildImageReplacementFixture());
     const session = createEditorSession(source);
     const imageHandle = requireHandle(firstImage(source).handle);

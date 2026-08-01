@@ -118,7 +118,7 @@ function buildRoundTripFixture(): Uint8Array {
   });
 }
 
-function buildMediaReplacementFixture(shared = false): Uint8Array {
+function buildMediaReplacementFixture(shared: boolean | "fill" = false): Uint8Array {
   return zipSync({
     "[Content_Types].xml": xml(
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -151,11 +151,15 @@ function buildMediaReplacementFixture(shared = false): Uint8Array {
         `<p:pic><p:nvPicPr><p:cNvPr id="20" name="Replace Target"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
         `<p:blipFill><a:blip r:embed="rIdImage1"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
         `<p:spPr><a:xfrm><a:off x="914400" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:pic>` +
-        (shared
+        (shared === true
           ? `<p:pic><p:nvPicPr><p:cNvPr id="21" name="Keep Shared"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr>` +
             `<p:blipFill><a:blip r:embed="rIdImage1"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>` +
             `<p:spPr><a:xfrm><a:off x="1828800" y="914400"/><a:ext cx="914400" cy="914400"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:pic>`
-          : "") +
+          : shared === "fill"
+            ? `<p:sp><p:nvSpPr><p:cNvPr id="21" name="Keep Image Fill"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+              `<p:spPr><a:blipFill><a:blip r:embed="rIdImage1"/><a:stretch><a:fillRect/></a:stretch></a:blipFill>` +
+              `<a:prstGeom prst="rect"/></p:spPr></p:sp>`
+            : "") +
         `</p:spTree></p:cSld>` +
         `</p:sld>`,
     ),
@@ -2733,6 +2737,28 @@ describe("writePptx - no-edit round-trip", () => {
       type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
       target: "../media/image3.png",
     });
+  });
+
+  it("copy-on-write preserves a non-picture image fill that reuses the picture relationship", () => {
+    const source = readPptx(buildMediaReplacementFixture("fill"));
+    const target = source.slides[0]?.shapes.find(
+      (shape): shape is SourceImage => shape.kind === "image" && shape.name === "Replace Target",
+    );
+    if (target?.handle === undefined) throw new Error("image fill target was not parsed");
+
+    const edited = replaceImageBytes(source, target.handle, BLUE_PNG);
+    const output = writePptx(edited);
+    const slideXml = decoder.decode(getEntry(output, "ppt/slides/slide1.xml"));
+
+    expect(edited.edits?.at(-1)).toMatchObject({
+      kind: "replaceImage",
+      mode: "copyOnWrite",
+      sharedReferenceCount: 2,
+    });
+    expect(getEntry(output, "ppt/media/image1.png")).toEqual(RED_PNG);
+    expect(getEntry(output, "ppt/media/image3.png")).toEqual(BLUE_PNG);
+    expect(slideXml).toContain(`<a:blip r:embed="rId3"/>`);
+    expect(slideXml).toContain(`<a:blip r:embed="rIdImage1"/>`);
   });
 
   it("Can write xml raw package material in serializable range", () => {

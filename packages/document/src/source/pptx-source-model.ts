@@ -323,10 +323,13 @@ export interface PptxSourceModelDeleteShapeEdit {
 export interface PptxSourceModelReplaceImageEdit {
   readonly kind: "replaceImage";
   readonly handle: SourceHandle;
-  /** Single-reference parts are updated in place; shared parts use an isolated copy. */
-  readonly mode: "inPlace" | "copyOnWrite";
-  /** Media part referenced before this edit. */
-  readonly sourceMediaPartPath: PartPath;
+  /**
+   * Single-reference parts are updated in place; shared parts use an isolated copy.
+   * Omitted legacy edit records are interpreted as in-place replacements.
+   */
+  readonly mode?: "inPlace" | "copyOnWrite";
+  /** Media part referenced before this edit. Defaults to `mediaPartPath` for legacy records. */
+  readonly sourceMediaPartPath?: PartPath;
   /** Media part that contains the replacement bytes after this edit. */
   readonly mediaPartPath: PartPath;
   readonly contentType: string;

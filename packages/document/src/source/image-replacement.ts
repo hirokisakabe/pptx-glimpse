@@ -1,3 +1,4 @@
+import { parseXml } from "../reader/xml.js";
 import { sourceHandlesEqual } from "./edit-descriptors.js";
 import {
   assertNeverShapeNode,
@@ -252,8 +253,7 @@ function requireMediaForImage(
 }
 
 function countImageReferencesToMedia(source: PptxSourceModel, mediaPartPath: PartPath): number {
-  const parsedImageRelationshipKeys = new Set<string>();
-  let count = 0;
+  const parsedImageCounts = new Map<string, number>();
 
   const countParsedImages = (partPath: PartPath, shapes: readonly SourceShapeNode[]) => {
     for (const image of findImagesInTree(shapes)) {
@@ -267,8 +267,8 @@ function countImageReferencesToMedia(source: PptxSourceModel, mediaPartPath: Par
       );
       if (relationship === undefined) continue;
       if (resolveInternalRelationshipTarget(partPath, relationship) === mediaPartPath) {
-        count += 1;
-        parsedImageRelationshipKeys.add(imageRelationshipKey(partPath, relationship.id));
+        const key = imageRelationshipKey(partPath, relationship.id);
+        parsedImageCounts.set(key, (parsedImageCounts.get(key) ?? 0) + 1);
       }
     }
   };
@@ -277,25 +277,72 @@ function countImageReferencesToMedia(source: PptxSourceModel, mediaPartPath: Par
   for (const layout of source.slideLayouts) countParsedImages(layout.partPath, layout.shapes);
   for (const master of source.slideMasters) countParsedImages(master.partPath, master.shapes);
 
+  let count = 0;
   for (const relationships of source.packageGraph.relationships) {
     for (const relationship of relationships.relationships) {
       if (relationship.type !== IMAGE_REL_TYPE) continue;
       if (
-        parsedImageRelationshipKeys.has(
-          imageRelationshipKey(relationships.sourcePartPath, relationship.id),
-        )
-      ) {
-        continue;
-      }
-      if (
-        resolveInternalRelationshipTarget(relationships.sourcePartPath, relationship) ===
+        resolveInternalRelationshipTarget(relationships.sourcePartPath, relationship) !==
         mediaPartPath
-      ) {
-        count += 1;
-      }
+      )
+        continue;
+      const parsedCount =
+        parsedImageCounts.get(
+          imageRelationshipKey(relationships.sourcePartPath, relationship.id),
+        ) ?? 0;
+      const preservedXmlCount = countPreservedRelationshipUses(
+        source,
+        relationships.sourcePartPath,
+        relationship.id,
+      );
+      // If preserved XML is unavailable, a parsed target cannot prove exclusive use.
+      const conservativeCount = preservedXmlCount ?? (parsedCount > 0 ? 2 : 1);
+      count += Math.max(1, parsedCount, conservativeCount);
     }
   }
   return count;
+}
+
+const textDecoder = new TextDecoder();
+
+function countPreservedRelationshipUses(
+  source: PptxSourceModel,
+  partPath: PartPath,
+  relationshipId: RelationshipId,
+): number | undefined {
+  const rawPart = source.packageGraph.rawParts?.find((part) => part.partPath === partPath);
+  if (rawPart?.kind !== "binary") return undefined;
+  try {
+    return countRelationshipAttributes(parseXml(textDecoder.decode(rawPart.bytes)), relationshipId);
+  } catch {
+    return undefined;
+  }
+}
+
+function countRelationshipAttributes(value: unknown, relationshipId: RelationshipId): number {
+  if (isUnknownArray(value)) {
+    let count = 0;
+    for (const item of value) count += countRelationshipAttributes(item, relationshipId);
+    return count;
+  }
+  if (!isUnknownRecord(value)) return 0;
+  return Object.entries(value).reduce((count, [key, item]) => {
+    const isRelationshipAttribute =
+      key.startsWith("@_") && (key.endsWith(":embed") || key.endsWith(":link"));
+    return (
+      count +
+      (isRelationshipAttribute && item === relationshipId ? 1 : 0) +
+      countRelationshipAttributes(item, relationshipId)
+    );
+  }, 0);
+}
+
+function isUnknownArray(value: unknown): value is unknown[] {
+  return Array.isArray(value);
+}
+
+function isUnknownRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
 }
 
 function imageRelationshipKey(partPath: PartPath, relationshipId: RelationshipId): string {

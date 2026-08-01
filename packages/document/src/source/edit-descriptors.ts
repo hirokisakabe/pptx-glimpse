@@ -307,7 +307,7 @@ const EDIT_KIND_DESCRIPTORS: {
     targetsShape: (edit, shapeHandle) => sourceHandlesEqual(edit.handle, shapeHandle),
     invalidatingPartPaths: (edit) => [
       edit.handle.partPath,
-      edit.sourceMediaPartPath,
+      edit.sourceMediaPartPath ?? edit.mediaPartPath,
       ...(edit.mode === "copyOnWrite" ? [edit.mediaPartPath] : []),
     ],
     reservedShapeId: () => undefined,
