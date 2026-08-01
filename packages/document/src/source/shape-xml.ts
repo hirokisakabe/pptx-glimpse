@@ -51,12 +51,12 @@ interface TextBoxGradientFillBaseInput {
   readonly stops: readonly TextBoxGradientStopInput[];
 }
 
-export interface TextBoxLinearGradientFillInput extends TextBoxGradientFillBaseInput {
+interface TextBoxLinearGradientFillInput extends TextBoxGradientFillBaseInput {
   readonly gradientType: "linear";
   readonly angle?: OoxmlAngle;
 }
 
-export interface TextBoxRadialGradientFillInput extends TextBoxGradientFillBaseInput {
+interface TextBoxRadialGradientFillInput extends TextBoxGradientFillBaseInput {
   readonly gradientType: "radial";
   readonly centerX: OoxmlPercent;
   readonly centerY: OoxmlPercent;
