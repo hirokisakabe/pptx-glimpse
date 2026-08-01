@@ -1,5 +1,14 @@
 # @pptx-glimpse/document
 
+## 0.14.0
+
+### Minor Changes
+
+- 9973470: Add lossless group and ungroup operations for consecutive existing sibling shapes while preserving child ids, handles, z-order, transforms, and internal connector references.
+- 42c5dd4: Expose from-scratch native group authoring and typed headless/integrated group and ungroup commands with selection-aware undo and redo.
+- c492b4d: Support stable nested group shape handles and recursive transform, fill, and outline editing.
+- 328de21: Expose slide master and layout authoring order through the typed source model.
+
 ## 0.13.0
 
 ### Minor Changes
