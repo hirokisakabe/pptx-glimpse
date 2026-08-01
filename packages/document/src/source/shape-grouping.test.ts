@@ -104,6 +104,21 @@ describe("groupShapes and ungroupShape", () => {
     if (connector?.kind !== "connector") throw new Error("connector was not reread");
     expect(connector.connection?.start?.shapeId).toBe(endpointIds[0]);
     expect(connector.connection?.end?.shapeId).toBe(endpointIds[1]);
+
+    const ungrouped = ungroupShape(
+      grouped,
+      requireValue(requireGroup(grouped.slides[0]?.shapes[0]).handle),
+    );
+    const rereadUngrouped = readPptx(writePptx(ungrouped));
+    const ungroupedConnector = rereadUngrouped.slides[0]?.shapes.find(
+      (shape) => shape.kind === "connector",
+    );
+    expect(ungroupedConnector?.kind).toBe("connector");
+    if (ungroupedConnector?.kind !== "connector") {
+      throw new Error("ungrouped connector was not reread");
+    }
+    expect(ungroupedConnector.connection?.start?.shapeId).toBe(endpointIds[0]);
+    expect(ungroupedConnector.connection?.end?.shapeId).toBe(endpointIds[1]);
   });
 
   it("rejects non-contiguous siblings and selection-crossing connectors atomically", () => {
