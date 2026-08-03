@@ -49,6 +49,7 @@ import {
   type SourceTextRun,
   ungroupShape,
   updateChartData,
+  updateScatterChartData,
   writePptx,
 } from "../../packages/document/src/index.js";
 import { createEditorSession } from "../../packages/editor/src/index.js";
@@ -298,6 +299,24 @@ const LO_EDITOR_VALIDITY_CASES = [
               categories: ["Apr", "May", "Jun"],
               values: [40, 55, 70],
             },
+          ],
+        }),
+      );
+    },
+  },
+  {
+    name: "scatter chart XY data update",
+    sourceFixture: "editor-validity-scatter-chart-source.pptx",
+    expectedFixture: "editor-validity-scatter-chart-expected.pptx",
+    createEditedPptx: (input: Uint8Array) => {
+      const source = readPptx(input);
+      const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+      if (chart?.handle === undefined) throw new Error("scatter fixture has no editable chart");
+      return writePptx(
+        updateScatterChartData(source, chart.handle, {
+          series: [
+            { name: "Edited revenue", xValues: [1, 2, 3], yValues: [40, 55, 70] },
+            { name: "Edited cost", xValues: [10, 20], yValues: [25, 42] },
           ],
         }),
       );

@@ -9,6 +9,7 @@ import {
   readPptx,
   replaceTextRunPlainText,
   updateChartData,
+  updateScatterChartData,
   writePptx,
 } from "@pptx-glimpse/document";
 
@@ -156,6 +157,37 @@ The operation rejects linked/external data, missing or unresolved relationships,
 workbooks shared by multiple Charts, workbook formulas in the data range, and other data layouts
 before changing the model. It patches only the target worksheet data and preserves other embedded
 workbook parts such as styles, themes, and document properties.
+
+`updateScatterChartData(source, chartHandle, input)` is the separate typed operation for an
+existing scatter Chart. Its input uses paired finite `xValues` / `yValues` rather than category
+labels, so category and XY data models cannot be mixed accidentally:
+
+```ts
+const editedScatter = updateScatterChartData(source, scatterChart.handle, {
+  series: [
+    { name: "Observed", xValues: [1, 2, 3], yValues: [2.5, 4, 3.5] },
+    { name: "Forecast", xValues: [10, 20], yValues: [5, 8] },
+  ],
+});
+```
+
+The supported embedded worksheet uses the standard XY layout: each series has a two-column table
+with X values in column A, Y values in column B, its name in the column-B header cell, and one
+empty row before the next series table. Series may have different non-empty point counts, but each
+series must supply the same number of X and Y values. Chart `tx`, `xVal`, and `yVal` formulas,
+number caches, point counts, and worksheet cells are updated together.
+
+Retained, appended, and removed series use the same positional identity policy as
+`updateChartData`: retained series keep formatting, unknown XML, `idx`, and `order`; appended
+series clone the last original series and receive fresh `idx` / `order` and Microsoft
+`c16:uniqueId` values; removal truncates trailing series and rejects explicit legend entries.
+Scatter style, title, legend, both value axes, series formatting, chart-level unknown XML, and
+unrelated workbook/package parts remain unchanged.
+
+The operation rejects category, bubble, combo, and other chart types, non-standard XY formulas or
+worksheet cells, formula cells, external/shared workbooks, and workbooks with multiple worksheets.
+Validation and new chart/workbook bytes complete before the immutable source model and editor
+history are changed.
 
 The text operations use the same `SourceParagraph` / `SourceTextRun` contract for ordinary shape
 text and existing Table cell text. To edit a Table, locate a node through

@@ -8,6 +8,7 @@ import {
   createPptx,
   readPptx,
   updateChartData,
+  updateScatterChartData,
   writePptx,
 } from "../index.js";
 
@@ -359,6 +360,20 @@ describe("updateChartData", () => {
     const formulaSource = readPptx(zipFixture(formulaFiles));
     expectEditFailure(formulaSource, "formulas in the chart data range are not supported");
 
+    for (const [search, replacement, context] of [
+      ['<row r="1">', '<row r="1"><extLst/>', "row"],
+      [
+        '<c r="A1" t="inlineStr"><is><t>Category</t></is></c>',
+        '<c r="A1" t="inlineStr"><is><t>Category</t></is><extLst/></c>',
+        "cell",
+      ],
+    ] as const) {
+      expectEditFailure(
+        readPptx(replaceEmbeddedWorksheetText(input, search, replacement)),
+        `worksheet ${context} child XML is not supported`,
+      );
+    }
+
     const formattedOutsideRangeFiles = unzipSync(input);
     const formattedWorkbook = unzipSync(
       formattedOutsideRangeFiles["ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx"],
@@ -451,6 +466,267 @@ describe("updateChartData", () => {
   });
 });
 
+describe("updateScatterChartData", () => {
+  it("updates XY formulas, caches, workbook tables, and series topology", () => {
+    const input = buildExistingScatterChart();
+    const source = readPptx(input);
+    const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    if (chart?.handle === undefined) throw new Error("scatter fixture should have a handle");
+
+    const edited = updateScatterChartData(source, chart.handle, {
+      series: [
+        { name: "Edited revenue", xValues: [1, 2, 3], yValues: [40, 55, 70] },
+        { name: "Edited cost", xValues: [10, 20], yValues: [25, 42] },
+        { name: "Edited profit", xValues: [100], yValues: [28] },
+      ],
+    });
+
+    expect(edited).not.toBe(source);
+    expect(source.edits).toBeUndefined();
+    expect(edited.edits?.at(-1)).toMatchObject({
+      kind: "updateScatterChartData",
+      handle: chart.handle,
+      chartPartPath: "ppt/charts/chart1.xml",
+      workbookPartPath: "ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx",
+    });
+    const computedChart = createComputedView(edited).slides[0]?.elements.find(
+      (element) => element.kind === "chart",
+    );
+    expect(computedChart?.kind === "chart" ? computedChart.chartData : undefined).toMatchObject({
+      chartType: "scatter",
+      title: "Preserved title",
+      series: [
+        { name: "Edited revenue", xValues: [1, 2, 3], values: [40, 55, 70] },
+        { name: "Edited cost", xValues: [10, 20], values: [25, 42] },
+        { name: "Edited profit", xValues: [100], values: [28] },
+      ],
+    });
+
+    const before = unzipSync(input);
+    const beforeWorkbook = unzipSync(before["ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx"]);
+    const output = unzipSync(writePptx(edited));
+    const chartXml = decoder.decode(output["ppt/charts/chart1.xml"]);
+    expect(chartXml).toContain("<c:scatterChart>");
+    expect(chartXml).toContain("<c:title>");
+    expect(chartXml).toContain("<c:legend>");
+    expect(chartXml).toContain('<c:ext uri="preserve-me">');
+    expect(chartXml.match(/<c:valAx>/g)).toHaveLength(2);
+    expect(chartXml).not.toContain("<c:catAx>");
+    expect(chartXml).toContain("Preserved category axis");
+    expect(chartXml).toContain("Preserved value axis");
+    expect(chartXml.match(/<c:ser>/g)).toHaveLength(3);
+    expect(chartXml).toContain('<c:idx val="0"/><c:order val="0"/>');
+    expect(chartXml).toContain('<c:idx val="1"/><c:order val="1"/>');
+    expect(chartXml).toContain('<c:idx val="2"/><c:order val="2"/>');
+    expect(chartXml).toContain("Sheet1!$B$1");
+    expect(chartXml).toContain("Sheet1!$A$2:$A$4");
+    expect(chartXml).toContain("Sheet1!$B$2:$B$4");
+    expect(chartXml).toContain("Sheet1!$B$6");
+    expect(chartXml).toContain("Sheet1!$A$7:$A$8");
+    expect(chartXml).toContain("Sheet1!$B$10");
+    expect(chartXml).toContain("Sheet1!$A$11:$A$11");
+    expect(chartXml.match(/<c:ptCount val="3"\/>/g)).toHaveLength(2);
+    expect(chartXml.match(/<c:ptCount val="2"\/>/g)).toHaveLength(2);
+    expect(chartXml.match(/uri="series-2"/g)).toHaveLength(2);
+    expect(output["ppt/slides/slide1.xml"]).toEqual(before["ppt/slides/slide1.xml"]);
+    expect(output["ppt/theme/theme1.xml"]).toEqual(before["ppt/theme/theme1.xml"]);
+
+    const workbook = unzipSync(output["ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx"]);
+    const worksheet = decoder.decode(workbook["xl/worksheets/sheet1.xml"]);
+    expect(worksheet).toContain('dimension ref="A1:B11"');
+    expect(worksheet).toContain('<c r="B1" t="inlineStr"><is><t>Edited revenue</t></is></c>');
+    expect(worksheet).toContain('<c r="A4"><v>3</v></c><c r="B4"><v>70</v></c>');
+    expect(worksheet).toContain('<c r="B6" t="inlineStr"><is><t>Edited cost</t></is></c>');
+    expect(worksheet).toContain('<c r="B10" t="inlineStr"><is><t>Edited profit</t></is></c>');
+    expect(worksheet).not.toContain('<row r="5"');
+    expect(worksheet).not.toContain('<row r="9"');
+    expect(workbook["xl/styles.xml"]).toEqual(beforeWorkbook["xl/styles.xml"]);
+
+    const reread = createComputedView(readPptx(writePptx(edited))).slides[0]?.elements.find(
+      (element) => element.kind === "chart",
+    );
+    expect(reread?.kind === "chart" ? reread.chartData?.series[2] : undefined).toMatchObject({
+      name: "Edited profit",
+      xValues: [100],
+      values: [28],
+    });
+  });
+
+  it("removes trailing series and rejects unsupported or invalid inputs atomically", () => {
+    const source = readPptx(buildExistingScatterChart());
+    const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    if (chart?.handle === undefined) throw new Error("scatter fixture should have a handle");
+    const removed = updateScatterChartData(source, chart.handle, {
+      series: [{ name: "Only", xValues: [1, 2], yValues: [8, 13] }],
+    });
+    const removedFiles = unzipSync(writePptx(removed));
+    expect(decoder.decode(removedFiles["ppt/charts/chart1.xml"]).match(/<c:ser>/g)).toHaveLength(1);
+    expect(decoder.decode(removedFiles["ppt/charts/chart1.xml"])).not.toContain('uri="series-2"');
+    expect(
+      decoder.decode(
+        unzipSync(removedFiles["ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx"])[
+          "xl/worksheets/sheet1.xml"
+        ],
+      ),
+    ).toContain('dimension ref="A1:B3"');
+
+    expect(() =>
+      updateScatterChartData(source, chart.handle, {
+        series: [{ name: "Mismatch", xValues: [1, 2], yValues: [3] }],
+      }),
+    ).toThrow("matching non-empty X and Y value counts");
+    expect(() =>
+      updateScatterChartData(source, chart.handle, {
+        series: [{ name: "Non-finite", xValues: [1], yValues: [Number.NaN] }],
+      }),
+    ).toThrow("X and Y values must be finite numbers");
+    expect(source.edits).toBeUndefined();
+
+    const categorySource = readPptx(buildExistingChart());
+    const categoryChart = categorySource.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    if (categoryChart?.handle === undefined)
+      throw new Error("category fixture should have a handle");
+    expect(() =>
+      updateScatterChartData(categorySource, categoryChart.handle, {
+        series: [{ name: "Wrong operation", xValues: [1], yValues: [2] }],
+      }),
+    ).toThrow("updateScatterChartData: chart type or combination is not supported");
+    expect(() =>
+      updateChartData(source, chart.handle, {
+        series: [{ name: "Wrong operation", categories: ["A"], values: [2] }],
+      }),
+    ).toThrow("updateChartData: chart type or combination is not supported");
+  });
+
+  it("rejects non-standard worksheet layouts and formula cells atomically", () => {
+    const nonStandardFiles = unzipSync(buildExistingScatterChart());
+    nonStandardFiles["ppt/charts/chart1.xml"] = replaceText(
+      nonStandardFiles["ppt/charts/chart1.xml"],
+      "Sheet1!$B$5",
+      "Sheet1!$B$4",
+    );
+    expectScatterEditFailure(readPptx(zipFixture(nonStandardFiles)), "unsupported data layout");
+
+    const formulaFiles = unzipSync(buildExistingScatterChart());
+    const workbookPath = "ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx";
+    const workbook = unzipSync(formulaFiles[workbookPath]);
+    workbook["xl/worksheets/sheet1.xml"] = replaceText(
+      workbook["xl/worksheets/sheet1.xml"],
+      "<v>10</v>",
+      "<f>5+5</f><v>10</v>",
+    );
+    formulaFiles[workbookPath] = zipFixture(workbook);
+    expectScatterEditFailure(
+      readPptx(zipFixture(formulaFiles)),
+      "formulas in the chart data range are not supported",
+    );
+
+    for (const [search, replacement, context] of [
+      ['<row r="1">', '<row r="1"><extLst/>', "row"],
+      [
+        '<c r="B1" t="inlineStr"><is><t>Revenue</t></is></c>',
+        '<c r="B1" t="inlineStr"><is><t>Revenue</t></is><extLst/></c>',
+        "cell",
+      ],
+    ] as const) {
+      expectScatterEditFailure(
+        readPptx(replaceEmbeddedWorksheetText(buildExistingScatterChart(), search, replacement)),
+        `worksheet ${context} child XML is not supported`,
+      );
+    }
+
+    const externalFiles = unzipSync(buildExistingScatterChart());
+    externalFiles["ppt/charts/_rels/chart1.xml.rels"] = replaceText(
+      externalFiles["ppt/charts/_rels/chart1.xml.rels"],
+      'Target="../embeddings/Microsoft_Excel_Worksheet1.xlsx"',
+      'Target="https://example.com/data.xlsx" TargetMode="External"',
+    );
+    expectScatterEditFailure(
+      readPptx(zipFixture(externalFiles)),
+      "external workbook data is not supported",
+    );
+    expectScatterEditFailure(
+      readPptx(buildSharedScatterWorkbookChart()),
+      "embedded workbook is shared by another package part",
+    );
+
+    const multipleWorksheetFiles = unzipSync(buildExistingScatterChart());
+    const multipleWorksheetWorkbook = unzipSync(multipleWorksheetFiles[workbookPath]);
+    multipleWorksheetWorkbook["xl/workbook.xml"] = replaceText(
+      multipleWorksheetWorkbook["xl/workbook.xml"],
+      "</sheets>",
+      '<sheet name="Other" sheetId="2" r:id="rId99"/></sheets>',
+    );
+    multipleWorksheetFiles[workbookPath] = zipFixture(multipleWorksheetWorkbook);
+    expectScatterEditFailure(
+      readPptx(zipFixture(multipleWorksheetFiles)),
+      "embedded workbook must contain one matching worksheet",
+    );
+
+    for (const unsupportedGroup of ["bubbleChart", "barChart"]) {
+      const unsupportedFiles = unzipSync(buildExistingScatterChart());
+      unsupportedFiles["ppt/charts/chart1.xml"] = replaceAllText(
+        unsupportedFiles["ppt/charts/chart1.xml"],
+        "scatterChart",
+        unsupportedGroup,
+      );
+      expectScatterEditFailure(
+        readPptx(zipFixture(unsupportedFiles)),
+        "chart type or combination is not supported",
+      );
+    }
+
+    const comboFiles = unzipSync(buildExistingScatterChart());
+    comboFiles["ppt/charts/chart1.xml"] = replaceText(
+      comboFiles["ppt/charts/chart1.xml"],
+      "</c:scatterChart>",
+      "</c:scatterChart><c:barChart/>",
+    );
+    expectScatterEditFailure(
+      readPptx(zipFixture(comboFiles)),
+      "chart type or combination is not supported",
+    );
+  });
+});
+
+function buildExistingScatterChart(): Uint8Array {
+  const files = unzipSync(buildExistingChart());
+  const chartPath = "ppt/charts/chart1.xml";
+  files[chartPath] = replaceMatchingText(
+    files[chartPath],
+    /<c:barChart>.*?<\/c:barChart>/,
+    `<c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>
+      ${scatterSeriesXml(0, "Revenue", 1, [1, 2], [10, 20], "4472C4")}
+      ${scatterSeriesXml(1, "Cost", 5, [3, 4], [7, 12], "ED7D31")}
+      <c:axId val="100002"/><c:axId val="100003"/></c:scatterChart>`,
+  );
+  files[chartPath] = replaceCategoryAxisWithValueAxis(files[chartPath]);
+  files[chartPath] = addSeriesExtensionMarkers(files[chartPath]);
+  const workbookPath = "ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx";
+  const workbook = unzipSync(files[workbookPath]);
+  workbook["xl/worksheets/sheet1.xml"] = new TextEncoder().encode(
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:B7"/><sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/><sheetData><row r="1"><c r="B1" t="inlineStr"><is><t>Revenue</t></is></c></row><row r="2"><c r="A2"><v>1</v></c><c r="B2"><v>10</v></c></row><row r="3"><c r="A3"><v>2</v></c><c r="B3"><v>20</v></c></row><row r="5"><c r="B5" t="inlineStr"><is><t>Cost</t></is></c></row><row r="6"><c r="A6"><v>3</v></c><c r="B6"><v>7</v></c></row><row r="7"><c r="A7"><v>4</v></c><c r="B7"><v>12</v></c></row></sheetData></worksheet>`,
+  );
+  files[workbookPath] = zipFixture(workbook);
+  return zipFixture(files);
+}
+
+function scatterSeriesXml(
+  index: number,
+  name: string,
+  headerRow: number,
+  xValues: readonly number[],
+  yValues: readonly number[],
+  color: string,
+): string {
+  const lastRow = headerRow + xValues.length;
+  const points = (values: readonly number[]) =>
+    values
+      .map((value, pointIndex) => `<c:pt idx="${pointIndex}"><c:v>${value}</c:v></c:pt>`)
+      .join("");
+  return `<c:ser><c:idx val="${index}"/><c:order val="${index}"/><c:tx><c:strRef><c:f>Sheet1!$B$${headerRow}</c:f><c:strCache><c:ptCount val="1"/><c:pt idx="0"><c:v>${name}</c:v></c:pt></c:strCache></c:strRef></c:tx><c:spPr><a:solidFill><a:srgbClr val="${color}"/></a:solidFill></c:spPr><c:xVal><c:numRef><c:f>Sheet1!$A$${headerRow + 1}:$A$${lastRow}</c:f><c:numCache><c:formatCode>General</c:formatCode><c:ptCount val="${xValues.length}"/>${points(xValues)}</c:numCache></c:numRef></c:xVal><c:yVal><c:numRef><c:f>Sheet1!$B$${headerRow + 1}:$B$${lastRow}</c:f><c:numCache><c:formatCode>General</c:formatCode><c:ptCount val="${yValues.length}"/>${points(yValues)}</c:numCache></c:numRef></c:yVal></c:ser>`;
+}
+
 function buildExistingChart(): Uint8Array {
   let source = createPptx();
   const slideHandle = source.slides[0]?.handle;
@@ -515,6 +791,20 @@ function buildSharedWorkbookChart(): Uint8Array {
   return zipFixture(files);
 }
 
+function buildSharedScatterWorkbookChart(): Uint8Array {
+  const files = unzipSync(buildSharedWorkbookChart());
+  files["ppt/charts/chart1.xml"] = replaceMatchingText(
+    files["ppt/charts/chart1.xml"],
+    /<c:barChart>.*?<\/c:barChart>/,
+    `<c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>
+      ${scatterSeriesXml(0, "One", 1, [1], [1], "4472C4")}
+      ${scatterSeriesXml(1, "Two", 4, [2], [2], "ED7D31")}
+      <c:axId val="100002"/><c:axId val="100003"/></c:scatterChart>`,
+  );
+  files["ppt/charts/chart1.xml"] = replaceCategoryAxisWithValueAxis(files["ppt/charts/chart1.xml"]);
+  return zipFixture(files);
+}
+
 function expectEditFailure(source: ReturnType<typeof readPptx>, message: string): void {
   const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
   if (chart?.handle === undefined) throw new Error("chart fixture should have a handle");
@@ -523,6 +813,20 @@ function expectEditFailure(source: ReturnType<typeof readPptx>, message: string)
       series: [
         { name: "Edited 1", categories: ["A"], values: [1] },
         { name: "Edited 2", categories: ["A"], values: [2] },
+      ],
+    }),
+  ).toThrow(message);
+  expect(source.edits).toBeUndefined();
+}
+
+function expectScatterEditFailure(source: ReturnType<typeof readPptx>, message: string): void {
+  const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+  if (chart?.handle === undefined) throw new Error("scatter fixture should have a handle");
+  expect(() =>
+    updateScatterChartData(source, chart.handle, {
+      series: [
+        { name: "Edited 1", xValues: [1], yValues: [2] },
+        { name: "Edited 2", xValues: [3], yValues: [4] },
       ],
     }),
   ).toThrow(message);
@@ -539,6 +843,40 @@ function replaceAllText(bytes: Uint8Array, search: string, replacement: string):
   const value = decoder.decode(bytes);
   if (!value.includes(search)) throw new Error(`fixture text not found: ${search}`);
   return new TextEncoder().encode(value.replaceAll(search, replacement));
+}
+
+function replaceMatchingText(bytes: Uint8Array, search: RegExp, replacement: string): Uint8Array {
+  const value = decoder.decode(bytes);
+  if (!search.test(value)) throw new Error(`fixture pattern not found: ${String(search)}`);
+  return new TextEncoder().encode(value.replace(search, replacement));
+}
+
+function replaceCategoryAxisWithValueAxis(bytes: Uint8Array): Uint8Array {
+  const value = decoder.decode(bytes);
+  const categoryAxis = /<c:catAx>.*?<\/c:catAx>/.exec(value)?.[0];
+  if (categoryAxis === undefined) throw new Error("fixture category axis not found");
+  const valueAxis = categoryAxis
+    .replace("<c:catAx>", "<c:valAx>")
+    .replace("</c:catAx>", '<c:crossBetween val="midCat"/></c:valAx>')
+    .replace(/<c:(?:auto|lblAlgn|lblOffset|noMultiLvlLbl)\b[^>]*\/>/g, "");
+  return new TextEncoder().encode(value.replace(categoryAxis, valueAxis));
+}
+
+function replaceEmbeddedWorksheetText(
+  pptxBytes: Uint8Array,
+  search: string,
+  replacement: string,
+): Uint8Array {
+  const files = unzipSync(pptxBytes);
+  const workbookPath = "ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx";
+  const workbook = unzipSync(files[workbookPath]);
+  workbook["xl/worksheets/sheet1.xml"] = replaceText(
+    workbook["xl/worksheets/sheet1.xml"],
+    search,
+    replacement,
+  );
+  files[workbookPath] = zipFixture(workbook);
+  return zipFixture(files);
 }
 
 function addSeriesExtensionMarkers(bytes: Uint8Array): Uint8Array {

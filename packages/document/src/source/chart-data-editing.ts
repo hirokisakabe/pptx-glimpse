@@ -1,13 +1,21 @@
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
 import { unzipSync, zipSync } from "fflate";
 
-import { getAttr, getChild, getChildArray, getNamespacedAttr, parseXml } from "../reader/xml.js";
+import {
+  getAttr,
+  getChild,
+  getChildArray,
+  getNamespacedAttr,
+  localName,
+  parseXml,
+} from "../reader/xml.js";
 import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import { copyBytes, requireRawBinaryPart } from "./editing-shared.js";
 import type {
   PartPath,
   PptxSourceModel,
   PptxSourceModelUpdateChartDataEdit,
+  PptxSourceModelUpdateScatterChartDataEdit,
   Relationship,
   SourceChart,
   SourceHandle,
@@ -23,6 +31,16 @@ export interface UpdateChartSeriesDataInput {
 
 export interface UpdateChartDataInput {
   readonly series: readonly UpdateChartSeriesDataInput[];
+}
+
+export interface UpdateScatterChartSeriesDataInput {
+  readonly name: string;
+  readonly xValues: readonly number[];
+  readonly yValues: readonly number[];
+}
+
+export interface UpdateScatterChartDataInput {
+  readonly series: readonly UpdateScatterChartSeriesDataInput[];
 }
 
 type OrderedXmlNode = Record<string, unknown>;
@@ -133,6 +151,127 @@ export function updateChartData(
     },
     edits: [...(source.edits ?? []), edit],
   };
+}
+
+/**
+ * Replaces the data bound to an existing scatter chart while preserving all non-data chart XML.
+ *
+ * Each series occupies its own two-column table in the embedded worksheet, with X values in
+ * column A, Y values in column B, the series name in the first column-B cell, and one empty row
+ * between tables. Retained series preserve their XML; appended series clone the last existing
+ * series as their formatting template.
+ */
+export function updateScatterChartData(
+  source: PptxSourceModel,
+  handle: SourceHandle,
+  input: UpdateScatterChartDataInput,
+): PptxSourceModel {
+  assertScatterUpdateInput(input);
+  try {
+    const chart = requireChart(source, handle);
+    const chartPartPath = requireChartPartPath(source, chart);
+    const chartRawPart = requireRawBinaryPart(source, chartPartPath, "updateScatterChartData");
+    const chartRelationships = requireRelationshipGroup(source, chartPartPath);
+    const chartXml = decoder.decode(chartRawPart.bytes);
+    const orderedRoot = parseOrderedXml(chartXml);
+    const binding = inspectAndUpdateScatterChartXml(orderedRoot, input);
+    const workbookPartPath = requireWorkbookPartPath(
+      source,
+      chartRelationships.relationships,
+      binding.externalDataRelationshipId,
+      chartPartPath,
+    );
+    const workbookRawPart = requireRawBinaryPart(
+      source,
+      workbookPartPath,
+      "updateScatterChartData",
+    );
+    assertWorkbookIsNotShared(source, chartPartPath, workbookPartPath);
+    const workbook = inspectSupportedEmbeddedScatterWorkbook(
+      workbookRawPart.bytes,
+      binding.sheetName,
+      binding.existingPointCounts,
+    );
+
+    const updatedChartBytes = encoder.encode(orderedBuilder.build(orderedRoot));
+    const updatedWorkbookBytes = updateEmbeddedScatterWorkbook(workbook, input);
+    const edit = {
+      kind: "updateScatterChartData",
+      handle,
+      chartPartPath,
+      workbookPartPath,
+    } satisfies PptxSourceModelUpdateScatterChartDataEdit;
+
+    return {
+      ...source,
+      packageGraph: {
+        ...source.packageGraph,
+        rawParts: source.packageGraph.rawParts?.map((part) => {
+          if (part.partPath === chartPartPath) {
+            if (part.kind !== "binary") {
+              throw new Error(
+                "updateScatterChartData: chart part is not backed by binary material",
+              );
+            }
+            return { ...part, bytes: copyBytes(updatedChartBytes) };
+          }
+          if (part.partPath === workbookPartPath) {
+            if (part.kind !== "binary") {
+              throw new Error(
+                "updateScatterChartData: workbook part is not backed by binary material",
+              );
+            }
+            return { ...part, bytes: copyBytes(updatedWorkbookBytes) };
+          }
+          return part;
+        }),
+      },
+      edits: [...(source.edits ?? []), edit],
+    };
+  } catch (cause) {
+    throw remapChartDataError(cause, "updateScatterChartData");
+  }
+}
+
+function assertScatterUpdateInput(input: UpdateScatterChartDataInput): void {
+  if (input.series.length === 0) {
+    throw new Error("updateScatterChartData: series must not be empty");
+  }
+  let nextHeaderRow = 1;
+  for (const [seriesIndex, series] of input.series.entries()) {
+    if (typeof series.name !== "string") {
+      throw new Error(`updateScatterChartData: series[${seriesIndex}].name must be a string`);
+    }
+    assertScatterXmlText(series.name, `series[${seriesIndex}].name`);
+    if (series.xValues.length === 0 || series.xValues.length !== series.yValues.length) {
+      throw new Error(
+        "updateScatterChartData: every series must have matching non-empty X and Y value counts",
+      );
+    }
+    if (!series.xValues.every(Number.isFinite) || !series.yValues.every(Number.isFinite)) {
+      throw new Error("updateScatterChartData: X and Y values must be finite numbers");
+    }
+    const lastDataRow = nextHeaderRow + series.xValues.length;
+    if (lastDataRow > XLSX_MAX_DATA_POINTS + 1) {
+      throw new Error(
+        `updateScatterChartData: worksheet rows must not exceed ${XLSX_MAX_DATA_POINTS + 1}`,
+      );
+    }
+    nextHeaderRow = lastDataRow + 2;
+  }
+}
+
+function assertScatterXmlText(value: string, field: string): void {
+  try {
+    assertXmlText(value, field);
+  } catch (cause) {
+    throw remapChartDataError(cause, "updateScatterChartData");
+  }
+}
+
+function remapChartDataError(cause: unknown, operation: string): unknown {
+  if (!(cause instanceof Error) || !cause.message.startsWith("updateChartData:")) return cause;
+  return new Error(`${operation}:${cause.message.slice("updateChartData:".length)}`, { cause });
 }
 
 function assertUpdateInput(input: UpdateChartDataInput): void {
@@ -403,6 +542,106 @@ function inspectAndUpdateChartXml(
     existingSeriesCount: existingSeries.length,
     pointCount,
   };
+}
+
+function inspectAndUpdateScatterChartXml(
+  root: OrderedXmlNode[],
+  input: UpdateScatterChartDataInput,
+): {
+  readonly externalDataRelationshipId: string;
+  readonly sheetName: string;
+  readonly existingPointCounts: readonly number[];
+} {
+  const chartSpace = requireSingleElement(root, "chartSpace", "chart XML has no chartSpace root");
+  const chart = requireSingleChild(chartSpace, "chart");
+  const plotArea = requireSingleChild(chart, "plotArea");
+  const chartGroups = elementChildren(plotArea).filter((entry) =>
+    elementLocalName(entry)?.endsWith("Chart"),
+  );
+  if (chartGroups.length !== 1 || elementLocalName(chartGroups[0]) !== "scatterChart") {
+    throw new Error("updateChartData: chart type or combination is not supported");
+  }
+  const existingSeries = elementChildren(chartGroups[0]).filter(
+    (entry) => elementLocalName(entry) === "ser",
+  );
+
+  let sheetName: string | undefined;
+  const sheetTokens: string[] = [];
+  const existingPointCounts: number[] = [];
+  let expectedHeaderRow = 1;
+  for (const seriesEntry of existingSeries) {
+    const txRef = requireSingleChild(requireSingleChild(seriesEntry, "tx"), "strRef");
+    const xValueRef = requireSingleChild(requireSingleChild(seriesEntry, "xVal"), "numRef");
+    const yValueRef = requireSingleChild(requireSingleChild(seriesEntry, "yVal"), "numRef");
+    const txFormula = parseSingleCellFormula(requireFormula(txRef), 2, expectedHeaderRow);
+    const xValueFormula = parseRangeFormula(requireFormula(xValueRef), 1, expectedHeaderRow + 1);
+    const yValueFormula = parseRangeFormula(requireFormula(yValueRef), 2, expectedHeaderRow + 1);
+    if (
+      xValueFormula.endColumn !== 1 ||
+      yValueFormula.endColumn !== 2 ||
+      xValueFormula.endRow !== yValueFormula.endRow ||
+      txFormula.sheetName !== xValueFormula.sheetName ||
+      txFormula.sheetName !== yValueFormula.sheetName
+    ) {
+      throw new Error("updateChartData: chart formulas use an unsupported data layout");
+    }
+    if (sheetName !== undefined && sheetName !== txFormula.sheetName) {
+      throw new Error("updateChartData: chart series refer to multiple worksheets");
+    }
+    const pointCount = xValueFormula.endRow - expectedHeaderRow;
+    if (pointCount <= 0) {
+      throw new Error("updateChartData: chart formulas use an unsupported data layout");
+    }
+    sheetName = txFormula.sheetName;
+    sheetTokens.push(txFormula.sheetToken);
+    existingPointCounts.push(pointCount);
+    expectedHeaderRow = xValueFormula.endRow + 2;
+  }
+
+  if (sheetName === undefined || existingPointCounts.length === 0) {
+    throw new Error("updateChartData: chart has no series");
+  }
+  if (input.series.length < existingSeries.length && hasExplicitLegendEntries(chart)) {
+    throw new Error(
+      "updateChartData: removing series with explicit legend entries is not supported",
+    );
+  }
+
+  const series = resizeChartSeries(chartSpace, chartGroups[0], existingSeries, input.series.length);
+  const addedSeriesIdentities =
+    input.series.length > existingSeries.length
+      ? nextAddedSeriesIdentities(existingSeries, input.series.length - existingSeries.length)
+      : [];
+  let headerRow = 1;
+  for (const [index, seriesEntry] of series.entries()) {
+    const sheetToken = sheetTokens[index] ?? sheetTokens.at(-1);
+    if (sheetToken === undefined) throw new Error("updateChartData: chart has no series");
+    const addedIdentity = addedSeriesIdentities[index - existingSeries.length];
+    if (addedIdentity !== undefined) {
+      setAttribute(requireSingleChild(seriesEntry, "idx"), "val", String(addedIdentity.index));
+      setAttribute(requireSingleChild(seriesEntry, "order"), "val", String(addedIdentity.order));
+    }
+    const inputSeries = input.series[index];
+    const lastDataRow = headerRow + inputSeries.xValues.length;
+    const txRef = requireSingleChild(requireSingleChild(seriesEntry, "tx"), "strRef");
+    const xValueRef = requireSingleChild(requireSingleChild(seriesEntry, "xVal"), "numRef");
+    const yValueRef = requireSingleChild(requireSingleChild(seriesEntry, "yVal"), "numRef");
+
+    setFormula(txRef, `${sheetToken}!$B$${headerRow}`);
+    setStringCache(requireSingleChild(txRef, "strCache"), [inputSeries.name]);
+    setFormula(xValueRef, `${sheetToken}!$A$${headerRow + 1}:$A$${lastDataRow}`);
+    setNumberCache(requireSingleChild(xValueRef, "numCache"), inputSeries.xValues);
+    setFormula(yValueRef, `${sheetToken}!$B$${headerRow + 1}:$B$${lastDataRow}`);
+    setNumberCache(requireSingleChild(yValueRef, "numCache"), inputSeries.yValues);
+    headerRow = lastDataRow + 2;
+  }
+
+  const externalData = requireSingleChild(chartSpace, "externalData");
+  const externalDataRelationshipId = namespacedAttribute(externalData, "id");
+  if (externalDataRelationshipId === undefined) {
+    throw new Error("updateChartData: chart externalData has no relationship id");
+  }
+  return { externalDataRelationshipId, sheetName, existingPointCounts };
 }
 
 interface SeriesIdentity {
@@ -755,6 +994,26 @@ function inspectSupportedEmbeddedWorkbook(
   seriesCount: number,
   pointCount: number,
 ): EditableEmbeddedWorkbook {
+  return inspectEmbeddedWorkbook(bytes, sheetName, (worksheetBytes) =>
+    assertSupportedWorksheetLayout(worksheetBytes, seriesCount, pointCount),
+  );
+}
+
+function inspectSupportedEmbeddedScatterWorkbook(
+  bytes: Uint8Array,
+  sheetName: string,
+  pointCounts: readonly number[],
+): EditableEmbeddedWorkbook {
+  return inspectEmbeddedWorkbook(bytes, sheetName, (worksheetBytes) =>
+    assertSupportedScatterWorksheetLayout(worksheetBytes, pointCounts),
+  );
+}
+
+function inspectEmbeddedWorkbook(
+  bytes: Uint8Array,
+  sheetName: string,
+  assertWorksheetLayout: (bytes: Uint8Array) => void,
+): EditableEmbeddedWorkbook {
   let files: Record<string, Uint8Array>;
   try {
     files = unzipSync(bytes);
@@ -801,7 +1060,7 @@ function inspectSupportedEmbeddedWorkbook(
   if (worksheetPath === undefined || worksheetBytes === undefined) {
     throw new Error("updateChartData: embedded worksheet relationship cannot be resolved");
   }
-  assertSupportedWorksheetLayout(worksheetBytes, seriesCount, pointCount);
+  assertWorksheetLayout(worksheetBytes);
   return { files, worksheetPath };
 }
 
@@ -843,6 +1102,7 @@ function assertSupportedWorksheetLayout(
     rowNumbers.add(rowNumber);
   }
   const cells = rows.flatMap((row) => getChildArray(row, "c"));
+  assertSupportedWorksheetRowAndCellChildren(rows);
   const allowed = new Set<string>(["A1"]);
   for (let row = 1; row <= pointCount + 1; row += 1) {
     for (let column = 1; column <= seriesCount + 1; column += 1) {
@@ -859,6 +1119,110 @@ function assertSupportedWorksheetLayout(
       throw new Error("updateChartData: formulas in the chart data range are not supported");
     }
     actual.add(reference);
+  }
+}
+
+function assertSupportedScatterWorksheetLayout(
+  bytes: Uint8Array,
+  pointCounts: readonly number[],
+): void {
+  const worksheet = getChild(parseXml(decoder.decode(bytes)), "worksheet");
+  assertWorksheetHasNoUnsupportedElements(worksheet);
+  const allowed = new Set<string>();
+  const allowedRows = new Set<string>();
+  let headerRow = 1;
+  for (const pointCount of pointCounts) {
+    allowedRows.add(String(headerRow));
+    allowed.add(`B${headerRow}`);
+    for (let row = headerRow + 1; row <= headerRow + pointCount; row += 1) {
+      allowedRows.add(String(row));
+      allowed.add(`A${row}`);
+      allowed.add(`B${row}`);
+    }
+    headerRow += pointCount + 2;
+  }
+  assertWorksheetRowsAndCells(worksheet, allowed, allowedRows, headerRow - 2);
+}
+
+function assertWorksheetHasNoUnsupportedElements(
+  worksheet: Record<string, unknown> | undefined,
+): void {
+  for (const unsupportedElement of [
+    "autoFilter",
+    "conditionalFormatting",
+    "dataValidations",
+    "drawing",
+    "hyperlinks",
+    "legacyDrawing",
+    "mergeCells",
+    "oleObjects",
+    "tableParts",
+  ]) {
+    if (getChild(worksheet, unsupportedElement) !== undefined) {
+      throw new Error(
+        `updateChartData: worksheet ${unsupportedElement} data layout is not supported`,
+      );
+    }
+  }
+}
+
+function assertWorksheetRowsAndCells(
+  worksheet: Record<string, unknown> | undefined,
+  allowed: ReadonlySet<string>,
+  allowedRows: ReadonlySet<string>,
+  maximumRow: number,
+): void {
+  const rows = getChildArray(getChild(worksheet, "sheetData"), "row");
+  const rowNumbers = new Set<string>();
+  for (const row of rows) {
+    const rowNumber = getAttr(row, "r");
+    if (
+      rowNumber === undefined ||
+      rowNumbers.has(rowNumber) ||
+      !allowedRows.has(rowNumber) ||
+      !/^[1-9]\d*$/.test(rowNumber) ||
+      Number(rowNumber) > maximumRow
+    ) {
+      throw new Error("updateChartData: embedded worksheet uses an unsupported data layout");
+    }
+    rowNumbers.add(rowNumber);
+  }
+  assertSupportedWorksheetRowAndCellChildren(rows);
+  const actual = new Set<string>();
+  for (const cell of rows.flatMap((row) => getChildArray(row, "c"))) {
+    const reference = getAttr(cell, "r");
+    if (reference === undefined || actual.has(reference) || !allowed.has(reference)) {
+      throw new Error("updateChartData: embedded worksheet uses an unsupported data layout");
+    }
+    if (getChild(cell, "f") !== undefined) {
+      throw new Error("updateChartData: formulas in the chart data range are not supported");
+    }
+    actual.add(reference);
+  }
+}
+
+function assertSupportedWorksheetRowAndCellChildren(
+  rows: readonly Record<string, unknown>[],
+): void {
+  for (const row of rows) {
+    assertOnlySupportedWorksheetChildren(row, new Set(["c"]), "row");
+    for (const cell of getChildArray(row, "c")) {
+      if (getChild(cell, "f") !== undefined) continue;
+      assertOnlySupportedWorksheetChildren(cell, new Set(["is", "v"]), "cell");
+    }
+  }
+}
+
+function assertOnlySupportedWorksheetChildren(
+  node: Record<string, unknown>,
+  allowed: ReadonlySet<string>,
+  context: "row" | "cell",
+): void {
+  const hasUnsupportedChild = Object.keys(node).some(
+    (key) => !key.startsWith("@_") && key !== "#text" && !allowed.has(localName(key)),
+  );
+  if (hasUnsupportedChild) {
+    throw new Error(`updateChartData: embedded worksheet ${context} child XML is not supported`);
   }
 }
 
@@ -884,6 +1248,88 @@ function updateEmbeddedWorkbook(
     ...workbook.files,
     [workbook.worksheetPath]: encoder.encode(orderedBuilder.build(worksheetRoot)),
   });
+}
+
+function updateEmbeddedScatterWorkbook(
+  workbook: EditableEmbeddedWorkbook,
+  input: UpdateScatterChartDataInput,
+): Uint8Array {
+  const worksheetRoot = parseOrderedXml(decoder.decode(workbook.files[workbook.worksheetPath]));
+  const worksheet = requireSingleElement(
+    worksheetRoot,
+    "worksheet",
+    "embedded workbook has no worksheet root",
+  );
+  const lastRow = scatterLastDataRow(input.series.map((series) => series.xValues.length));
+  setAttribute(requireSingleChild(worksheet, "dimension"), "ref", `A1:B${lastRow}`);
+  const sheetData = requireSingleChild(worksheet, "sheetData");
+  setElementChildren(sheetData, buildScatterWorksheetRows(input, sheetData));
+  return zipSync({
+    ...workbook.files,
+    [workbook.worksheetPath]: encoder.encode(orderedBuilder.build(worksheetRoot)),
+  });
+}
+
+function buildScatterWorksheetRows(
+  input: UpdateScatterChartDataInput,
+  existingSheetData: OrderedXmlNode,
+): OrderedXmlNode[] {
+  const existingRows = new Map(
+    elementChildren(existingSheetData)
+      .filter((entry) => elementLocalName(entry) === "row")
+      .map((entry) => [attribute(entry, "r"), entry]),
+  );
+  const prefix = elementPrefix(existingSheetData);
+  const rows: OrderedXmlNode[] = [];
+  let headerRow = 1;
+  for (const series of input.series) {
+    const headerRowNumber = String(headerRow);
+    const existingHeaderRow = existingRows.get(headerRowNumber);
+    rows.push(
+      createElement(
+        `${prefix}row`,
+        [
+          worksheetStringCell(
+            `B${headerRowNumber}`,
+            series.name,
+            existingCell(existingHeaderRow, `B${headerRowNumber}`),
+            prefix,
+          ),
+        ],
+        preservedAttributes(existingHeaderRow, headerRowNumber),
+      ),
+    );
+    for (const [pointIndex, xValue] of series.xValues.entries()) {
+      const rowNumber = String(headerRow + pointIndex + 1);
+      const existingRow = existingRows.get(rowNumber);
+      rows.push(
+        createElement(
+          `${prefix}row`,
+          [
+            worksheetNumberCell(
+              `A${rowNumber}`,
+              xValue,
+              existingCell(existingRow, `A${rowNumber}`),
+              prefix,
+            ),
+            worksheetNumberCell(
+              `B${rowNumber}`,
+              series.yValues[pointIndex],
+              existingCell(existingRow, `B${rowNumber}`),
+              prefix,
+            ),
+          ],
+          preservedAttributes(existingRow, rowNumber),
+        ),
+      );
+    }
+    headerRow += series.xValues.length + 2;
+  }
+  return rows;
+}
+
+function scatterLastDataRow(pointCounts: readonly number[]): number {
+  return pointCounts.reduce((row, pointCount) => row + pointCount + 2, -1);
 }
 
 function buildWorksheetRows(

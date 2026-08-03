@@ -68,6 +68,8 @@ import {
   ungroupShape,
   updateChartData,
   type UpdateChartDataInput,
+  updateScatterChartData,
+  type UpdateScatterChartDataInput,
   updateShapeTransform,
 } from "@pptx-glimpse/document";
 
@@ -217,6 +219,12 @@ export interface UpdateChartDataCommand extends UpdateChartDataInput {
   readonly handle: SourceHandle;
 }
 
+/** Update the XY series data of one scatter chart. @inline */
+export interface UpdateScatterChartDataCommand extends UpdateScatterChartDataInput {
+  readonly kind: "updateScatterChartData";
+  readonly handle: SourceHandle;
+}
+
 /** Add an empty slide based on an existing layout. @inline */
 export interface AddEmptySlideFromLayoutCommand extends AddEmptySlideFromLayoutInput {
   readonly kind: "addEmptySlideFromLayout";
@@ -267,6 +275,7 @@ export interface DeleteSlideCommand {
  * @inlineType SetPictureCropCommand
  * @inlineType ClearPictureCropCommand
  * @inlineType UpdateChartDataCommand
+ * @inlineType UpdateScatterChartDataCommand
  * @inlineType AddEmptySlideFromLayoutCommand
  * @inlineType DuplicateSlideCommand
  * @inlineType MoveSlideCommand
@@ -303,6 +312,7 @@ export type EditorCommand =
   | SetPictureCropCommand
   | ClearPictureCropCommand
   | UpdateChartDataCommand
+  | UpdateScatterChartDataCommand
   | AddEmptySlideFromLayoutCommand
   | DuplicateSlideCommand
   | MoveSlideCommand
@@ -640,6 +650,22 @@ export class EditorSession {
     );
   }
 
+  updateScatterChartData(
+    chart: SourceChart,
+    input: UpdateScatterChartDataInput,
+  ): EditorApplyCommandResult {
+    return this.applyToSourceNode(
+      "updateScatterChartData",
+      chart,
+      isSourceChart,
+      (document, handle) => {
+        const shape = findShapeNodeBySourceHandle(document, handle);
+        return shape?.kind === "chart" ? shape : undefined;
+      },
+      (handle) => ({ kind: "updateScatterChartData", handle, ...input }),
+    );
+  }
+
   addEmptySlideFromLayout(input: AddEmptySlideFromLayoutInput): EditorApplyCommandResult {
     return this.apply({ kind: "addEmptySlideFromLayout", ...input });
   }
@@ -849,6 +875,7 @@ const EDITOR_COMMAND_KINDS: ReadonlySet<string> = new Set([
   "setPictureCrop",
   "clearPictureCrop",
   "updateChartData",
+  "updateScatterChartData",
   "addEmptySlideFromLayout",
   "duplicateSlide",
   "moveSlide",
@@ -876,6 +903,7 @@ const EXPECTED_COMMAND_REJECTION_PREFIXES = [
   "setPictureCrop:",
   "clearPictureCrop:",
   "updateChartData:",
+  "updateScatterChartData:",
   "addEmptySlideFromLayout:",
   "duplicateSlide:",
   "moveSlide:",
@@ -913,6 +941,7 @@ function applyCommandToDocument(
     case "setPictureCrop":
     case "clearPictureCrop":
     case "updateChartData":
+    case "updateScatterChartData":
     case "addEmptySlideFromLayout":
     case "duplicateSlide":
     case "moveSlide":
@@ -1070,6 +1099,8 @@ function executeCommand(document: PptxSourceModel, command: EditorCommand): Pptx
       return clearPictureCrop(document, command.handle);
     case "updateChartData":
       return updateChartDataCommand(document, command);
+    case "updateScatterChartData":
+      return updateScatterChartDataCommand(document, command);
     case "addEmptySlideFromLayout":
       return addEmptySlideFromLayout(document, command);
     case "duplicateSlide":
@@ -1180,6 +1211,27 @@ function updateChartDataCommand(
     }
   }
   return updateChartData(document, command.handle, command);
+}
+
+function updateScatterChartDataCommand(
+  document: PptxSourceModel,
+  command: UpdateScatterChartDataCommand,
+): PptxSourceModel {
+  if (!Array.isArray(command.series) || command.series.length === 0) {
+    throw new Error("updateScatterChartData: series must be a non-empty array");
+  }
+  for (const [index, series] of command.series.entries()) {
+    if (!isObject(series)) {
+      throw new Error(`updateScatterChartData: series[${index}] must be an object`);
+    }
+    if (typeof series.name !== "string") {
+      throw new Error(`updateScatterChartData: series[${index}].name must be a string`);
+    }
+    if (!Array.isArray(series.xValues) || !Array.isArray(series.yValues)) {
+      throw new Error(`updateScatterChartData: series[${index}] X and Y values must be arrays`);
+    }
+  }
+  return updateScatterChartData(document, command.handle, command);
 }
 
 function replaceTextRunPlainTextCommand(
@@ -1709,7 +1761,8 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
         normalizedReversed.push(normalized.edit);
         continue;
       }
-      case "updateChartData": {
+      case "updateChartData":
+      case "updateScatterChartData": {
         const key = sourceHandleKey(edit.handle);
         if (seenChartData.has(key)) {
           changed = true;

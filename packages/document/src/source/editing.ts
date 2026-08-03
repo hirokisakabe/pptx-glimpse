@@ -28,8 +28,13 @@ export type {
   NativeRadarStyle,
 } from "./chart-authoring.js";
 export { addChart } from "./chart-authoring.js";
-export type { UpdateChartDataInput, UpdateChartSeriesDataInput } from "./chart-data-editing.js";
-export { updateChartData } from "./chart-data-editing.js";
+export type {
+  UpdateChartDataInput,
+  UpdateChartSeriesDataInput,
+  UpdateScatterChartDataInput,
+  UpdateScatterChartSeriesDataInput,
+} from "./chart-data-editing.js";
+export { updateChartData, updateScatterChartData } from "./chart-data-editing.js";
 export { countImageReferencesToMedia, replaceImageBytes } from "./image-replacement.js";
 export type {
   AddPictureCropInput,
