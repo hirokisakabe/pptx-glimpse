@@ -541,6 +541,43 @@ export function buildChartEditSource(): PptxSourceModel {
   return readPptx(writePptx(source));
 }
 
+export async function buildScatterChartEditSource(): Promise<PptxSourceModel> {
+  const pptx = await JSZip.loadAsync(writePptx(buildChartEditSource()));
+  const chartFile = pptx.file("ppt/charts/chart1.xml");
+  const workbookFile = pptx.file("ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx");
+  if (chartFile === null || workbookFile === null) throw new Error("chart fixture parts not found");
+  const chart = await chartFile.async("string");
+  const scatterSeries = (
+    index: number,
+    name: string,
+    headerRow: number,
+    x: number[],
+    y: number[],
+  ) => {
+    const lastRow = headerRow + x.length;
+    const points = (values: number[]) =>
+      values.map((value, point) => `<c:pt idx="${point}"><c:v>${value}</c:v></c:pt>`).join("");
+    return `<c:ser><c:idx val="${index}"/><c:order val="${index}"/><c:tx><c:strRef><c:f>Sheet1!$B$${headerRow}</c:f><c:strCache><c:ptCount val="1"/><c:pt idx="0"><c:v>${name}</c:v></c:pt></c:strCache></c:strRef></c:tx><c:xVal><c:numRef><c:f>Sheet1!$A$${headerRow + 1}:$A$${lastRow}</c:f><c:numCache><c:formatCode>General</c:formatCode><c:ptCount val="${x.length}"/>${points(x)}</c:numCache></c:numRef></c:xVal><c:yVal><c:numRef><c:f>Sheet1!$B$${headerRow + 1}:$B$${lastRow}</c:f><c:numCache><c:formatCode>General</c:formatCode><c:ptCount val="${y.length}"/>${points(y)}</c:numCache></c:numRef></c:yVal></c:ser>`;
+  };
+  pptx.file(
+    "ppt/charts/chart1.xml",
+    chart.replace(
+      /<c:barChart>.*?<\/c:barChart>/,
+      `<c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>${scatterSeries(0, "Original 1", 1, [1, 2], [1, 2])}${scatterSeries(1, "Original 2", 5, [3, 4], [3, 4])}<c:axId val="100002"/><c:axId val="100003"/></c:scatterChart>`,
+    ),
+  );
+  const workbook = await JSZip.loadAsync(await workbookFile.async("uint8array"));
+  workbook.file(
+    "xl/worksheets/sheet1.xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:B7"/><sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/><sheetData><row r="1"><c r="B1" t="inlineStr"><is><t>Original 1</t></is></c></row><row r="2"><c r="A2"><v>1</v></c><c r="B2"><v>1</v></c></row><row r="3"><c r="A3"><v>2</v></c><c r="B3"><v>2</v></c></row><row r="5"><c r="B5" t="inlineStr"><is><t>Original 2</t></is></c></row><row r="6"><c r="A6"><v>3</v></c><c r="B6"><v>3</v></c></row><row r="7"><c r="A7"><v>4</v></c><c r="B7"><v>4</v></c></row></sheetData></worksheet>`,
+  );
+  pptx.file(
+    "ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx",
+    await workbook.generateAsync({ type: "uint8array" }),
+  );
+  return readPptx(await pptx.generateAsync({ type: "uint8array" }));
+}
+
 export function chartXml(source: PptxSourceModel): string {
   const chartPart = source.packageGraph.rawParts?.find(
     (part) => part.partPath === "ppt/charts/chart1.xml",

@@ -92,6 +92,8 @@ export type {
   TableCellAddress,
   UpdateChartDataInput,
   UpdateChartSeriesDataInput,
+  UpdateScatterChartDataInput,
+  UpdateScatterChartSeriesDataInput,
   UpdateShapeTransformInput,
 } from "./editing.js";
 export {
@@ -128,6 +130,7 @@ export {
   setTableCellProperties,
   setTextRunProperties,
   updateChartData,
+  updateScatterChartData,
   updateShapeTransform,
 } from "./editing.js";
 export type {

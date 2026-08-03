@@ -17,7 +17,7 @@ import os
 import tempfile
 
 from pptx import Presentation
-from pptx.chart.data import CategoryChartData
+from pptx.chart.data import CategoryChartData, XyChartData
 from pptx.dml.color import RGBColor
 from pptx.enum.chart import XL_CHART_TYPE
 from pptx.enum.shapes import MSO_SHAPE
@@ -356,6 +356,48 @@ def create_editor_validity_chart_removal_fixture(filename, *, expected):
     print(f"  Created: {filename}")
 
 
+def create_editor_validity_scatter_chart_fixture(filename, *, expected):
+    """Fixture pair for existing scatter chart XY data update validity checks."""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    chart_data = XyChartData()
+    series_values = (
+        [
+            ("Edited revenue", [(1.0, 40.0), (2.0, 55.0), (3.0, 70.0)]),
+            ("Edited cost", [(10.0, 25.0), (20.0, 42.0)]),
+        ]
+        if expected
+        else [
+            ("Revenue", [(1.0, 10.0), (2.0, 20.0)]),
+            ("Cost", [(3.0, 7.0), (4.0, 12.0)]),
+        ]
+    )
+    for name, points in series_values:
+        series = chart_data.add_series(name)
+        for x_value, y_value in points:
+            series.add_data_point(x_value, y_value)
+
+    chart = slide.shapes.add_chart(
+        XL_CHART_TYPE.XY_SCATTER,
+        Inches(0.8),
+        Inches(0.7),
+        Inches(8.4),
+        Inches(4.5),
+        chart_data,
+    ).chart
+    chart.has_title = True
+    chart.chart_title.text_frame.text = "LibreOffice editor validity: scatter chart"
+    chart.has_legend = True
+    chart.value_axis.has_major_gridlines = True
+    chart.category_axis.has_title = True
+    chart.category_axis.axis_title.text_frame.text = "X"
+    chart.value_axis.has_title = True
+    chart.value_axis.axis_title.text_frame.text = "Y"
+
+    prs.save(os.path.join(OUTPUT_DIR, filename))
+    print(f"  Created: {filename}")
+
+
 def create_editor_validity_table_text_fixture(filename, text):
     """Fixture pair for existing Table cell text replacement validity checks."""
     prs = new_presentation()
@@ -580,6 +622,14 @@ def create_editor_validity_fixtures():
     )
     create_editor_validity_chart_removal_fixture(
         "editor-validity-chart-removal-expected.pptx",
+        expected=True,
+    )
+    create_editor_validity_scatter_chart_fixture(
+        "editor-validity-scatter-chart-source.pptx",
+        expected=False,
+    )
+    create_editor_validity_scatter_chart_fixture(
+        "editor-validity-scatter-chart-expected.pptx",
         expected=True,
     )
     create_editor_validity_table_text_fixture(

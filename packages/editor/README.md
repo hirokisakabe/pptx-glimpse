@@ -48,8 +48,8 @@ await writeFile("edited.pptx", writePptx(session.document));
 For ordinary edits, pass source nodes directly to the corresponding `EditorSession` convenience
 method. Text-run and paragraph methods replace plain text or set/clear properties. Shape methods
 move, resize, transform, style, or delete a `SourceShapeNode`; `replaceImage()`,
-`setPictureCrop()`, and `clearPictureCrop()` accept a `SourceImage`; `updateChartData()` accepts a
-`SourceChart`; slide topology methods accept a
+`setPictureCrop()`, and `clearPictureCrop()` accept a `SourceImage`; `updateChartData()` and
+`updateScatterChartData()` accept a `SourceChart`; slide topology methods accept a
 `SourceSlide`. `addTextBox()` and `addConnector()` also accept the target `SourceSlide`, so
 application code does not need to extract source handles.
 Nodes captured before earlier edits remain usable because the session resolves their stable handle
@@ -84,7 +84,9 @@ The released command set includes:
   percentages (`100000` = 100%), rejects invalid or fully consumed axes without clamping, and is
   limited to pictures with exactly one stretch fill and no tile fill.
 - Charts: `updateChartData` for series addition/removal, names, shared category labels, and numeric
-  values of a supported existing category Chart with an internal editable workbook.
+  values of a supported existing category Chart; `updateScatterChartData` separately updates
+  series topology, names, and paired finite X/Y values for a standard two-column scatter Chart.
+  Both require an internal, unshared editable workbook.
 - Slides: `addEmptySlideFromLayout`, `duplicateSlide`, `moveSlide`, and `deleteSlide`.
 
 Use `undo()`, `redo()`, `canUndo`, `canRedo`, `undoDepth`, and `redoDepth` to integrate history.

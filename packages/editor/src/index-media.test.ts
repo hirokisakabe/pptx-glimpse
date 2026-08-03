@@ -6,6 +6,7 @@ import {
   BLUE_PNG,
   buildChartEditSource,
   buildImageReplacementFixture,
+  buildScatterChartEditSource,
   buildTwoSlideSharedImageFixture,
   chartXml,
   expectApplied,
@@ -272,6 +273,64 @@ describe("EditorSession chart data commands", () => {
     });
     expect(result.ok ? undefined : result.message).toContain(
       "every series must use identical category labels",
+    );
+    expect(session.document).toBe(before);
+    expect(session.selection).toEqual({ shapeHandle: handle });
+    expect(session.undoDepth).toBe(0);
+    expect(session.redoDepth).toBe(0);
+  });
+});
+
+describe("EditorSession scatter chart data commands", () => {
+  it("applies the convenience API and command with undo/redo history", async () => {
+    const source = await buildScatterChartEditSource();
+    const chart = firstChart(source);
+    const session = createEditorSession(source);
+    const firstResult = session.updateScatterChartData(chart, {
+      series: [
+        { name: "Edited 1", xValues: [1, 2, 3], yValues: [3, 5, 8] },
+        { name: "Edited 2", xValues: [10, 20], yValues: [2, 4] },
+        { name: "Edited 3", xValues: [100], yValues: [6] },
+      ],
+    });
+    expectApplied(firstResult);
+    expect(chartXml(session.document)).toContain("Edited 1");
+    expect(chartXml(session.document)).toContain("Sheet1!$A$2:$A$4");
+    expect(chartXml(session.document)).toContain("Sheet1!$B$10");
+    expect(session.undoDepth).toBe(1);
+
+    expect(chartXml(expectHistory(session.undo()))).not.toContain("Sheet1!$B$10");
+    expect(chartXml(expectHistory(session.redo()))).toContain("Edited 3");
+
+    const commandResult = session.apply({
+      kind: "updateScatterChartData",
+      handle: requireHandle(chart.handle),
+      series: [{ name: "Command 1", xValues: [5, 10], yValues: [10, 20] }],
+    });
+    expectApplied(commandResult);
+    expect(chartXml(session.document)).not.toContain("Sheet1!$B$6");
+    expect(session.undoDepth).toBe(2);
+    expect(chartXml(expectHistory(session.undo()))).toContain("Edited 3");
+    expect(chartXml(expectHistory(session.redo()))).not.toContain("Sheet1!$B$6");
+  });
+
+  it("rejects invalid XY updates without changing document, selection, or history", async () => {
+    const source = await buildScatterChartEditSource();
+    const chart = firstChart(source);
+    const session = createEditorSession(source);
+    const handle = requireHandle(chart.handle);
+    expect(session.selectShape(handle)).toMatchObject({ ok: true });
+    const before = session.document;
+
+    const result = session.apply({
+      kind: "updateScatterChartData",
+      handle,
+      series: [{ name: "Invalid", xValues: [1, 2], yValues: [3] }],
+    });
+
+    expect(result).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(result.ok ? undefined : result.message).toContain(
+      "every series must have matching non-empty X and Y value counts",
     );
     expect(session.document).toBe(before);
     expect(session.selection).toEqual({ shapeHandle: handle });

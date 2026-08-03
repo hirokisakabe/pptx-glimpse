@@ -305,6 +305,8 @@ export type {
   TableCellAddress,
   UpdateChartDataInput,
   UpdateChartSeriesDataInput,
+  UpdateScatterChartDataInput,
+  UpdateScatterChartSeriesDataInput,
   UpdateShapeTransformInput,
 } from "./source/index.js";
 export {
@@ -349,6 +351,7 @@ export {
   setTextRunProperties,
   ungroupShape,
   updateChartData,
+  updateScatterChartData,
   updateShapeTransform,
 } from "./source/index.js";
 export {
