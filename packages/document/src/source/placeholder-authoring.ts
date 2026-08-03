@@ -196,6 +196,9 @@ function assertPlaceholderInput(
   ]) {
     if (value !== undefined) assertXmlText(value);
   }
+  if (input.geometry?.kind === "preset") {
+    for (const name of Object.keys(input.geometry.adjustValues ?? {})) assertXmlText(name);
+  }
 
   // Reuse the existing public shape validators without retaining their immutable result.
   try {

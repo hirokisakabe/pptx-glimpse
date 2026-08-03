@@ -290,6 +290,18 @@ describe("native placeholder authoring", () => {
         promptText: "invalid\ufffe",
       }),
     ).toThrow("invalid XML character");
+    expect(() =>
+      addPlaceholder(source, masterHandle, {
+        type: "title",
+        index: 0,
+        transform: transform(),
+        geometry: {
+          kind: "preset",
+          preset: "roundRect",
+          adjustValues: { "adj\u0001": 50000 },
+        },
+      }),
+    ).toThrow("invalid XML character");
   });
 
   it("diagnoses master category ambiguity even when no slide shell references the layout", () => {
