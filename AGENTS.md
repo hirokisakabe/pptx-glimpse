@@ -46,6 +46,22 @@ foundation; `@pptx-glimpse/editor` builds on it; public `pptx-glimpse` orchestra
 editor, and rendering behavior; the demo/UI consumes public packages. Lower layers must not
 depend on higher layers.
 
+### External consumer boundary
+
+pptx-glimpse packages must not depend on external consumers or adopt consumer-specific
+concepts as repository responsibilities. Do not add consumer-specific types, adapters, node
+IDs, fixture generators, validation branches, or runtime/development dependencies to
+document, editor, core, renderer, or other workspace packages. In particular,
+`@pptx-glimpse/document` remains the lower-level PPTX foundation and must not depend on core,
+renderer, editor UI, or any external consumer.
+
+External consumers may be referenced only as usage examples, background context, or input to
+compatibility checks against pptx-glimpse's public APIs and generic PPTX/OOXML contracts.
+Consumer-specific conversion and end-to-end compatibility tests belong in the consumer's own
+repository. Keep fixtures and repository-level tests based on public pptx-glimpse APIs and
+generic, source-attributed PPTX inputs rather than consumer packages, source formats, or
+semantics.
+
 Read [`docs/editor-error-contract.md`](docs/editor-error-contract.md) before adding or changing
 editor operations, operation failure codes, high-level editor error wrapping, warning transport,
 or read/render/write catches in `PptxEditorSession`.
