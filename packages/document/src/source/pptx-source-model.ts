@@ -81,6 +81,7 @@ export type PptxSourceModelEdit =
   | PptxSourceModelAddPictureEdit
   | PptxSourceModelAddChartEdit
   | PptxSourceModelUpdateChartDataEdit
+  | PptxSourceModelUpdateScatterChartDataEdit
   | PptxSourceModelAddTableEdit
   | PptxSourceModelReorderShapesEdit
   | PptxSourceModelGroupShapesEdit
@@ -290,6 +291,13 @@ export interface PptxSourceModelAddChartEdit {
 
 export interface PptxSourceModelUpdateChartDataEdit {
   readonly kind: "updateChartData";
+  readonly handle: SourceHandle;
+  readonly chartPartPath: PartPath;
+  readonly workbookPartPath: PartPath;
+}
+
+export interface PptxSourceModelUpdateScatterChartDataEdit {
+  readonly kind: "updateScatterChartData";
   readonly handle: SourceHandle;
   readonly chartPartPath: PartPath;
   readonly workbookPartPath: PartPath;

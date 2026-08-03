@@ -191,6 +191,7 @@ export type {
   PptxSourceModelTextRunPropertiesEdit,
   PptxSourceModelUngroupShapeEdit,
   PptxSourceModelUpdateChartDataEdit,
+  PptxSourceModelUpdateScatterChartDataEdit,
 } from "./pptx-source-model.js";
 export type {
   SlideSize,

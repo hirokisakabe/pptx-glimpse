@@ -1,13 +1,21 @@
 import { XMLBuilder, XMLParser } from "fast-xml-parser";
 import { unzipSync, zipSync } from "fflate";
 
-import { getAttr, getChild, getChildArray, getNamespacedAttr, parseXml } from "../reader/xml.js";
+import {
+  getAttr,
+  getChild,
+  getChildArray,
+  getNamespacedAttr,
+  localName,
+  parseXml,
+} from "../reader/xml.js";
 import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import { copyBytes, requireRawBinaryPart } from "./editing-shared.js";
 import type {
   PartPath,
   PptxSourceModel,
   PptxSourceModelUpdateChartDataEdit,
+  PptxSourceModelUpdateScatterChartDataEdit,
   Relationship,
   SourceChart,
   SourceHandle,
@@ -188,11 +196,11 @@ export function updateScatterChartData(
     const updatedChartBytes = encoder.encode(orderedBuilder.build(orderedRoot));
     const updatedWorkbookBytes = updateEmbeddedScatterWorkbook(workbook, input);
     const edit = {
-      kind: "updateChartData",
+      kind: "updateScatterChartData",
       handle,
       chartPartPath,
       workbookPartPath,
-    } satisfies PptxSourceModelUpdateChartDataEdit;
+    } satisfies PptxSourceModelUpdateScatterChartDataEdit;
 
     return {
       ...source,
@@ -1094,6 +1102,7 @@ function assertSupportedWorksheetLayout(
     rowNumbers.add(rowNumber);
   }
   const cells = rows.flatMap((row) => getChildArray(row, "c"));
+  assertSupportedWorksheetRowAndCellChildren(rows);
   const allowed = new Set<string>(["A1"]);
   for (let row = 1; row <= pointCount + 1; row += 1) {
     for (let column = 1; column <= seriesCount + 1; column += 1) {
@@ -1178,6 +1187,7 @@ function assertWorksheetRowsAndCells(
     }
     rowNumbers.add(rowNumber);
   }
+  assertSupportedWorksheetRowAndCellChildren(rows);
   const actual = new Set<string>();
   for (const cell of rows.flatMap((row) => getChildArray(row, "c"))) {
     const reference = getAttr(cell, "r");
@@ -1188,6 +1198,31 @@ function assertWorksheetRowsAndCells(
       throw new Error("updateChartData: formulas in the chart data range are not supported");
     }
     actual.add(reference);
+  }
+}
+
+function assertSupportedWorksheetRowAndCellChildren(
+  rows: readonly Record<string, unknown>[],
+): void {
+  for (const row of rows) {
+    assertOnlySupportedWorksheetChildren(row, new Set(["c"]), "row");
+    for (const cell of getChildArray(row, "c")) {
+      if (getChild(cell, "f") !== undefined) continue;
+      assertOnlySupportedWorksheetChildren(cell, new Set(["is", "v"]), "cell");
+    }
+  }
+}
+
+function assertOnlySupportedWorksheetChildren(
+  node: Record<string, unknown>,
+  allowed: ReadonlySet<string>,
+  context: "row" | "cell",
+): void {
+  const hasUnsupportedChild = Object.keys(node).some(
+    (key) => !key.startsWith("@_") && key !== "#text" && !allowed.has(localName(key)),
+  );
+  if (hasUnsupportedChild) {
+    throw new Error(`updateChartData: embedded worksheet ${context} child XML is not supported`);
   }
 }
 

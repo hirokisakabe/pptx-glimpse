@@ -205,6 +205,7 @@ export type {
   PptxSourceModelTextRunPropertiesEdit,
   PptxSourceModelUngroupShapeEdit,
   PptxSourceModelUpdateChartDataEdit,
+  PptxSourceModelUpdateScatterChartDataEdit,
   Pt,
   RawOoxmlNode,
   RawPackagePart,

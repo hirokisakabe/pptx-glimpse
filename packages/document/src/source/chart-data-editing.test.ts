@@ -360,6 +360,20 @@ describe("updateChartData", () => {
     const formulaSource = readPptx(zipFixture(formulaFiles));
     expectEditFailure(formulaSource, "formulas in the chart data range are not supported");
 
+    for (const [search, replacement, context] of [
+      ['<row r="1">', '<row r="1"><extLst/>', "row"],
+      [
+        '<c r="A1" t="inlineStr"><is><t>Category</t></is></c>',
+        '<c r="A1" t="inlineStr"><is><t>Category</t></is><extLst/></c>',
+        "cell",
+      ],
+    ] as const) {
+      expectEditFailure(
+        readPptx(replaceEmbeddedWorksheetText(input, search, replacement)),
+        `worksheet ${context} child XML is not supported`,
+      );
+    }
+
     const formattedOutsideRangeFiles = unzipSync(input);
     const formattedWorkbook = unzipSync(
       formattedOutsideRangeFiles["ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx"],
@@ -470,7 +484,7 @@ describe("updateScatterChartData", () => {
     expect(edited).not.toBe(source);
     expect(source.edits).toBeUndefined();
     expect(edited.edits?.at(-1)).toMatchObject({
-      kind: "updateChartData",
+      kind: "updateScatterChartData",
       handle: chart.handle,
       chartPartPath: "ppt/charts/chart1.xml",
       workbookPartPath: "ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx",
@@ -496,6 +510,10 @@ describe("updateScatterChartData", () => {
     expect(chartXml).toContain("<c:title>");
     expect(chartXml).toContain("<c:legend>");
     expect(chartXml).toContain('<c:ext uri="preserve-me">');
+    expect(chartXml.match(/<c:valAx>/g)).toHaveLength(2);
+    expect(chartXml).not.toContain("<c:catAx>");
+    expect(chartXml).toContain("Preserved category axis");
+    expect(chartXml).toContain("Preserved value axis");
     expect(chartXml.match(/<c:ser>/g)).toHaveLength(3);
     expect(chartXml).toContain('<c:idx val="0"/><c:order val="0"/>');
     expect(chartXml).toContain('<c:idx val="1"/><c:order val="1"/>');
@@ -603,6 +621,20 @@ describe("updateScatterChartData", () => {
       "formulas in the chart data range are not supported",
     );
 
+    for (const [search, replacement, context] of [
+      ['<row r="1">', '<row r="1"><extLst/>', "row"],
+      [
+        '<c r="B1" t="inlineStr"><is><t>Revenue</t></is></c>',
+        '<c r="B1" t="inlineStr"><is><t>Revenue</t></is><extLst/></c>',
+        "cell",
+      ],
+    ] as const) {
+      expectScatterEditFailure(
+        readPptx(replaceEmbeddedWorksheetText(buildExistingScatterChart(), search, replacement)),
+        `worksheet ${context} child XML is not supported`,
+      );
+    }
+
     const externalFiles = unzipSync(buildExistingScatterChart());
     externalFiles["ppt/charts/_rels/chart1.xml.rels"] = replaceText(
       externalFiles["ppt/charts/_rels/chart1.xml.rels"],
@@ -668,6 +700,7 @@ function buildExistingScatterChart(): Uint8Array {
       ${scatterSeriesXml(1, "Cost", 5, [3, 4], [7, 12], "ED7D31")}
       <c:axId val="100002"/><c:axId val="100003"/></c:scatterChart>`,
   );
+  files[chartPath] = replaceCategoryAxisWithValueAxis(files[chartPath]);
   files[chartPath] = addSeriesExtensionMarkers(files[chartPath]);
   const workbookPath = "ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx";
   const workbook = unzipSync(files[workbookPath]);
@@ -768,6 +801,7 @@ function buildSharedScatterWorkbookChart(): Uint8Array {
       ${scatterSeriesXml(1, "Two", 4, [2], [2], "ED7D31")}
       <c:axId val="100002"/><c:axId val="100003"/></c:scatterChart>`,
   );
+  files["ppt/charts/chart1.xml"] = replaceCategoryAxisWithValueAxis(files["ppt/charts/chart1.xml"]);
   return zipFixture(files);
 }
 
@@ -815,6 +849,34 @@ function replaceMatchingText(bytes: Uint8Array, search: RegExp, replacement: str
   const value = decoder.decode(bytes);
   if (!search.test(value)) throw new Error(`fixture pattern not found: ${String(search)}`);
   return new TextEncoder().encode(value.replace(search, replacement));
+}
+
+function replaceCategoryAxisWithValueAxis(bytes: Uint8Array): Uint8Array {
+  const value = decoder.decode(bytes);
+  const categoryAxis = /<c:catAx>.*?<\/c:catAx>/.exec(value)?.[0];
+  if (categoryAxis === undefined) throw new Error("fixture category axis not found");
+  const valueAxis = categoryAxis
+    .replace("<c:catAx>", "<c:valAx>")
+    .replace("</c:catAx>", '<c:crossBetween val="midCat"/></c:valAx>')
+    .replace(/<c:(?:auto|lblAlgn|lblOffset|noMultiLvlLbl)\b[^>]*\/>/g, "");
+  return new TextEncoder().encode(value.replace(categoryAxis, valueAxis));
+}
+
+function replaceEmbeddedWorksheetText(
+  pptxBytes: Uint8Array,
+  search: string,
+  replacement: string,
+): Uint8Array {
+  const files = unzipSync(pptxBytes);
+  const workbookPath = "ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx";
+  const workbook = unzipSync(files[workbookPath]);
+  workbook["xl/worksheets/sheet1.xml"] = replaceText(
+    workbook["xl/worksheets/sheet1.xml"],
+    search,
+    replacement,
+  );
+  files[workbookPath] = zipFixture(workbook);
+  return zipFixture(files);
 }
 
 function addSeriesExtensionMarkers(bytes: Uint8Array): Uint8Array {

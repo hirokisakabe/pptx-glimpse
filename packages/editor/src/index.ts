@@ -1761,7 +1761,8 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
         normalizedReversed.push(normalized.edit);
         continue;
       }
-      case "updateChartData": {
+      case "updateChartData":
+      case "updateScatterChartData": {
         const key = sourceHandleKey(edit.handle);
         if (seenChartData.has(key)) {
           changed = true;

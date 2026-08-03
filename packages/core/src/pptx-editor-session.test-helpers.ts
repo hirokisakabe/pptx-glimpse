@@ -76,9 +76,11 @@ export async function buildScatterChartFixture(): Promise<Uint8Array> {
   };
   pptx.file(
     "ppt/charts/chart1.xml",
-    chart.replace(
-      /<c:barChart>.*?<\/c:barChart>/,
-      `<c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>${scatterSeries(0, "Original 1", 1, [1, 2], [1, 2])}${scatterSeries(1, "Original 2", 5, [3, 4], [3, 4])}<c:axId val="100002"/><c:axId val="100003"/></c:scatterChart>`,
+    replaceCategoryAxisWithValueAxis(
+      chart.replace(
+        /<c:barChart>.*?<\/c:barChart>/,
+        `<c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>${scatterSeries(0, "Original 1", 1, [1, 2], [1, 2])}${scatterSeries(1, "Original 2", 5, [3, 4], [3, 4])}<c:axId val="100002"/><c:axId val="100003"/></c:scatterChart>`,
+      ),
     ),
   );
   const workbook = await JSZip.loadAsync(await workbookFile.async("uint8array"));
@@ -91,6 +93,16 @@ export async function buildScatterChartFixture(): Promise<Uint8Array> {
     await workbook.generateAsync({ type: "uint8array" }),
   );
   return pptx.generateAsync({ type: "uint8array" });
+}
+
+function replaceCategoryAxisWithValueAxis(chartXml: string): string {
+  const categoryAxis = /<c:catAx>.*?<\/c:catAx>/.exec(chartXml)?.[0];
+  if (categoryAxis === undefined) throw new Error("fixture category axis not found");
+  const valueAxis = categoryAxis
+    .replace("<c:catAx>", "<c:valAx>")
+    .replace("</c:catAx>", '<c:crossBetween val="midCat"/></c:valAx>')
+    .replace(/<c:(?:auto|lblAlgn|lblOffset|noMultiLvlLbl)\b[^>]*\/>/g, "");
+  return chartXml.replace(categoryAxis, valueAxis);
 }
 
 export async function buildLayoutCatalogFixture(): Promise<Uint8Array> {

@@ -284,6 +284,8 @@ describe("EditorSession chart data commands", () => {
 describe("EditorSession scatter chart data commands", () => {
   it("applies the convenience API and command with undo/redo history", async () => {
     const source = await buildScatterChartEditSource();
+    expect(chartXml(source).match(/<c:valAx>/g)).toHaveLength(2);
+    expect(chartXml(source)).not.toContain("<c:catAx>");
     const chart = firstChart(source);
     const session = createEditorSession(source);
     const firstResult = session.updateScatterChartData(chart, {
@@ -297,6 +299,8 @@ describe("EditorSession scatter chart data commands", () => {
     expect(chartXml(session.document)).toContain("Edited 1");
     expect(chartXml(session.document)).toContain("Sheet1!$A$2:$A$4");
     expect(chartXml(session.document)).toContain("Sheet1!$B$10");
+    expect(chartXml(session.document).match(/<c:valAx>/g)).toHaveLength(2);
+    expect(session.document.edits?.at(-1)?.kind).toBe("updateScatterChartData");
     expect(session.undoDepth).toBe(1);
 
     expect(chartXml(expectHistory(session.undo()))).not.toContain("Sheet1!$B$10");

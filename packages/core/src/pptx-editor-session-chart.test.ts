@@ -25,7 +25,15 @@ describe("PptxEditorSession - scatter chart data", () => {
     expect(applied.history).toMatchObject({ canUndo: true, undoDepth: 1, redoDepth: 0 });
     expect(applied.slides[0]?.svg).not.toBe(beforeSvg);
     const saved = editor.save();
-    const chartData = createComputedView(readPptx(saved.pptx)).slides[0]?.elements.find(
+    const savedDocument = readPptx(saved.pptx);
+    const savedChartPart = savedDocument.packageGraph.rawParts?.find(
+      (part) => part.partPath === "ppt/charts/chart1.xml",
+    );
+    if (savedChartPart?.kind !== "binary") throw new Error("saved scatter chart XML is missing");
+    const savedChartXml = new TextDecoder().decode(savedChartPart.bytes);
+    expect(savedChartXml.match(/<c:valAx>/g)).toHaveLength(2);
+    expect(savedChartXml).not.toContain("<c:catAx>");
+    const chartData = createComputedView(savedDocument).slides[0]?.elements.find(
       (element) => element.kind === "chart",
     );
     expect(chartData?.kind === "chart" ? chartData.chartData?.series : undefined).toMatchObject([

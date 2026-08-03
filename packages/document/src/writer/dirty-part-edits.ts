@@ -140,6 +140,7 @@ function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
       applyReplaceImageEdit(root, edit);
       return;
     case "updateChartData":
+    case "updateScatterChartData":
     case "addEmptySlideFromLayout":
     case "duplicateSlide":
     case "moveSlide":
