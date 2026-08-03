@@ -62,6 +62,7 @@ import {
   getChildArray,
   getChildText,
   getNamespacedAttr,
+  hasChild,
   localName,
   type XmlNode,
   type XmlOrderedNode,
@@ -282,7 +283,7 @@ function parseShape(
   const cNvPr = getChild(nvSpPr, "cNvPr");
   const nodeId = sourceNodeId(cNvPr);
   const name = getAttr(cNvPr, "name");
-  const placeholder = parsePlaceholder(getChild(getChild(nvSpPr, "nvPr"), "ph"));
+  const placeholder = parsePlaceholderChild(getChild(nvSpPr, "nvPr"));
 
   const spPr = getChild(sp, "spPr");
   const transform = parseTransform(spPr);
@@ -513,9 +514,11 @@ function parseImage(
   nextId: () => RawSidecarId,
   orderingSlot: number,
 ): SourceImage {
-  const cNvPr = getChild(getChild(pic, "nvPicPr"), "cNvPr");
+  const nvPicPr = getChild(pic, "nvPicPr");
+  const cNvPr = getChild(nvPicPr, "cNvPr");
   const nodeId = sourceNodeId(cNvPr);
   const name = getAttr(cNvPr, "name");
+  const placeholder = parsePlaceholderChild(getChild(nvPicPr, "nvPr"));
 
   const blipFill = getChild(pic, "blipFill");
   const blip = getChild(blipFill, "blip");
@@ -560,6 +563,7 @@ function parseImage(
     ...(tile !== undefined ? { tile } : {}),
     ...(effects !== undefined ? { effects } : {}),
     ...(blipEffects !== undefined ? { blipEffects } : {}),
+    ...(placeholder !== undefined ? { placeholder } : {}),
     handle: {
       partPath,
       ...(nodeId !== undefined ? { nodeId } : {}),
@@ -750,6 +754,7 @@ function parseChartGraphicFrame(
   const nodeId = sourceNodeId(cNvPr);
   const name = getAttr(cNvPr, "name");
   const transform = parseTransform(graphicFrame);
+  const placeholder = parsePlaceholderChild(getChild(nvGraphicFramePr, "nvPr"));
   const rawSidecars = [
     ...collectUnknownSidecars(graphicFrame, KNOWN_GRAPHIC_FRAME_CHILDREN, nextId),
     ...collectUnknownSidecars(graphic, KNOWN_GRAPHIC_CHILDREN, nextId),
@@ -762,6 +767,7 @@ function parseChartGraphicFrame(
     ...(name !== undefined ? { name } : {}),
     ...(transform !== undefined ? { transform } : {}),
     chartRelationshipId: asRelationshipId(rId),
+    ...(placeholder !== undefined ? { placeholder } : {}),
     handle: {
       partPath,
       ...(nodeId !== undefined ? { nodeId } : {}),
@@ -789,6 +795,7 @@ function parseSmartArtGraphicFrame(
   const nodeId = sourceNodeId(cNvPr);
   const name = getAttr(cNvPr, "name");
   const transform = parseTransform(graphicFrame);
+  const placeholder = parsePlaceholderChild(getChild(nvGraphicFramePr, "nvPr"));
   const rawSidecars = [
     ...collectUnknownSidecars(graphicFrame, KNOWN_GRAPHIC_FRAME_CHILDREN, nextId),
     ...collectUnknownSidecars(graphic, KNOWN_GRAPHIC_CHILDREN, nextId),
@@ -801,6 +808,7 @@ function parseSmartArtGraphicFrame(
     ...(name !== undefined ? { name } : {}),
     ...(transform !== undefined ? { transform } : {}),
     dataRelationshipId: asRelationshipId(dmRId),
+    ...(placeholder !== undefined ? { placeholder } : {}),
     handle: {
       partPath,
       ...(nodeId !== undefined ? { nodeId } : {}),
@@ -831,6 +839,7 @@ function parseTable(
   const graphic = getChild(graphicFrame, "graphic");
   const graphicData = getChild(graphic, "graphicData");
   const transform = parseTransform(graphicFrame);
+  const placeholder = parsePlaceholderChild(getChild(nvGraphicFramePr, "nvPr"));
 
   const rows = parseTableRows(tbl, partPath, nextId, nodeId, orderingSlot, orderedTableChildren);
   const rawSidecars = [
@@ -850,6 +859,7 @@ function parseTable(
       rows,
       ...(tableStyleId !== undefined ? { tableStyleId } : {}),
     },
+    ...(placeholder !== undefined ? { placeholder } : {}),
     handle: { partPath, ...(nodeId !== undefined ? { nodeId } : {}), orderingSlot },
     ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
   };
@@ -959,23 +969,35 @@ function parseRawShapeNode(
   nextId: () => RawSidecarId,
   orderingSlot: number,
 ): SourceRawShapeNode {
-  const nodeId = sourceNodeId(getChild(getChild(node, "nvSpPr"), "cNvPr"));
+  const nonVisual =
+    getChild(node, "nvSpPr") ?? getChild(node, "nvPicPr") ?? getChild(node, "nvGraphicFramePr");
+  const nodeId = sourceNodeId(getChild(nonVisual, "cNvPr"));
+  const placeholder = parsePlaceholderChild(getChild(nonVisual, "nvPr"));
   return {
     kind: "raw",
     ...(nodeId !== undefined ? { nodeId } : {}),
     raw: makeSidecar(key, node, nextId),
+    ...(placeholder !== undefined ? { placeholder } : {}),
     handle: { partPath, ...(nodeId !== undefined ? { nodeId } : {}), orderingSlot },
   };
 }
 
-function parsePlaceholder(ph: XmlNode | undefined): SourcePlaceholder | undefined {
-  if (!ph) return undefined;
+function parsePlaceholderChild(
+  nonVisualProperties: XmlNode | undefined,
+): SourcePlaceholder | undefined {
+  if (!hasChild(nonVisualProperties, "ph")) return undefined;
+  const ph = getChild(nonVisualProperties, "ph") ?? {};
   const type = getAttr(ph, "type");
   const index = numericAttr(ph, "idx");
-  if (type === undefined && index === undefined) return undefined;
+  const orientation = getAttr(ph, "orient");
+  const size = getAttr(ph, "sz");
+  const customPrompt = getAttr(ph, "hasCustomPrompt");
   return {
     ...(type !== undefined ? { type } : {}),
     ...(index !== undefined ? { index } : {}),
+    ...(orientation !== undefined ? { orientation } : {}),
+    ...(size !== undefined ? { size } : {}),
+    ...(customPrompt !== undefined ? { hasCustomPrompt: isTrue(customPrompt) } : {}),
   };
 }
 

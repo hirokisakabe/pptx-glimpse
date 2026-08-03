@@ -39,6 +39,8 @@ export type {
 export { addPicture } from "./picture-authoring.js";
 export type { SetPictureCropInput } from "./picture-crop-editing.js";
 export { clearPictureCrop, setPictureCrop } from "./picture-crop-editing.js";
+export type { AddPlaceholderInput, PlaceholderType } from "./placeholder-authoring.js";
+export { addPlaceholder } from "./placeholder-authoring.js";
 export type {
   EditableTableCellBorder,
   EditableTableCellProperties,

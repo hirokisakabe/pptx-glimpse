@@ -42,6 +42,8 @@ import {
   removePartRelationship,
 } from "./package-graph-mutations.js";
 import { resolveInternalRelationshipTarget } from "./package-paths.js";
+import { buildPlaceholderXml, parseShapeNodeXml } from "./shape-xml.js";
+import type { SourcePlaceholder } from "./shapes.js";
 
 export interface AddEmptySlideFromLayoutInput {
   readonly layoutPartPath: PartPath;
@@ -76,10 +78,11 @@ export function addEmptySlideFromLayout(
   );
   const newPresentationRelationshipId = nextRelationshipId(presentationRels.relationships);
   const newSlideNumericId = nextSlideNumericId(source, "addEmptySlideFromLayout");
+  const materialized = materializeLayoutPlaceholders(layout.shapes, newSlidePartPath);
   const newSlide: SourceSlide = {
     partPath: newSlidePartPath,
     layoutPartPath: layout.partPath,
-    shapes: [],
+    shapes: materialized.shapes,
     handle: { partPath: newSlidePartPath },
   };
   const newSlideRelationships: PartRelationships = {
@@ -96,7 +99,9 @@ export function addEmptySlideFromLayout(
     addPackagePart(source.packageGraph, {
       partPath: newSlidePartPath,
       contentType: SLIDE_CONTENT_TYPE,
-      bytes: new TextEncoder().encode(EMPTY_SLIDE_XML),
+      bytes: new TextEncoder().encode(
+        EMPTY_SLIDE_XML.replace("</p:spTree>", `${materialized.xmlFragments.join("")}</p:spTree>`),
+      ),
       relationships: newSlideRelationships,
     }),
     source.presentation.partPath,
@@ -122,6 +127,62 @@ export function addEmptySlideFromLayout(
       },
     ],
   };
+}
+
+const SPECIAL_PLACEHOLDER_TYPES = new Set(["dt", "ftr", "sldNum", "hdr"]);
+
+function materializeLayoutPlaceholders(
+  layoutShapes: readonly SourceShapeNode[],
+  slidePartPath: PartPath,
+): { readonly shapes: readonly SourceShapeNode[]; readonly xmlFragments: readonly string[] } {
+  const candidates = layoutShapes.flatMap((shape) => {
+    const placeholder = sourceNodePlaceholder(shape);
+    if (placeholder === undefined || SPECIAL_PLACEHOLDER_TYPES.has(placeholder.type ?? "obj")) {
+      return [];
+    }
+    return [{ shape, placeholder }];
+  });
+  const indexes = new Set<number>();
+  for (const { placeholder } of candidates) {
+    const index = placeholder.index ?? 0;
+    if (indexes.has(index)) {
+      throw new Error(
+        `addEmptySlideFromLayout: layout has ambiguous effective placeholder index '${index}'`,
+      );
+    }
+    indexes.add(index);
+  }
+
+  const xmlFragments = candidates.map(({ shape, placeholder }, index) =>
+    buildPlaceholderXml({
+      shapeId: String(index + 2),
+      name: sourceNodeName(shape) ?? `${placeholder.type ?? "obj"} Placeholder ${index + 2}`,
+      placeholder,
+    }),
+  );
+  return {
+    xmlFragments,
+    shapes: xmlFragments.map((xml, index) => parseShapeNodeXml(xml, slidePartPath, index)),
+  };
+}
+
+function sourceNodePlaceholder(shape: SourceShapeNode): SourcePlaceholder | undefined {
+  switch (shape.kind) {
+    case "shape":
+    case "image":
+    case "table":
+    case "chart":
+    case "smartArt":
+    case "raw":
+      return shape.placeholder;
+    case "connector":
+    case "group":
+      return undefined;
+  }
+}
+
+function sourceNodeName(shape: SourceShapeNode): string | undefined {
+  return shape.kind === "raw" ? undefined : shape.name;
 }
 
 export function duplicateSlide(

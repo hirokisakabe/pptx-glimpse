@@ -22,6 +22,7 @@ export type {
   ComputedImageElement,
   ComputedOutline,
   ComputedParagraph,
+  ComputedPlaceholder,
   ComputedPlaceholderMatch,
   ComputedRawElement,
   ComputedRelationship,

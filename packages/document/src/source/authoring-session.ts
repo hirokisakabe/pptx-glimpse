@@ -16,6 +16,8 @@ import {
 import type { SourceHandle } from "./handles.js";
 import type { AddPictureInput } from "./picture-authoring.js";
 import { addPicture } from "./picture-authoring.js";
+import type { AddPlaceholderInput } from "./placeholder-authoring.js";
+import { addPlaceholder } from "./placeholder-authoring.js";
 import type { PptxSourceModel } from "./pptx-source-model.js";
 import type {
   AddConnectorInput,
@@ -52,6 +54,7 @@ export interface PptxAuthoringTarget {
   addPicture(input: AddPictureInput): SourceHandle;
   addTable(input: AddTableInput): SourceHandle;
   addChart(input: AddChartInput): SourceHandle;
+  addPlaceholder(input: AddPlaceholderInput): SourceHandle;
   /**
    * Group consecutive direct children and return the new native group handle.
    *
@@ -77,7 +80,8 @@ type DrawingOperationInput =
   | AddConnectorInput
   | AddPictureInput
   | AddTableInput
-  | AddChartInput;
+  | AddChartInput
+  | AddPlaceholderInput;
 
 type DrawingOperation<Input extends DrawingOperationInput> = (
   source: PptxSourceModel,
@@ -112,6 +116,8 @@ export class PptxAuthoringSession {
       addPicture: (input) => this.#addDrawing("addPicture", targetHandle, input, addPicture),
       addTable: (input) => this.#addDrawing("addTable", targetHandle, input, addTable),
       addChart: (input) => this.#addDrawing("addChart", targetHandle, input, addChart),
+      addPlaceholder: (input) =>
+        this.#addDrawing("addPlaceholder", targetHandle, input, addPlaceholder),
       groupShapes: (shapeHandles) => {
         this.#assertDirectChildren(targetHandle, shapeHandles);
         const updated = groupShapes(this.#source, shapeHandles);

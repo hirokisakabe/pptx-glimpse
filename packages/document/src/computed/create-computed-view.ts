@@ -38,7 +38,12 @@ import type {
 import { asEmu } from "../source/index.js";
 import { parseComputedChartData } from "./chart-data.js";
 import { buildComputedColorScheme, buildEffectiveColorMap, resolveColor } from "./color.js";
-import { findPlaceholderMatch } from "./placeholders.js";
+import {
+  effectivePlaceholderIndex,
+  effectivePlaceholderType,
+  findPlaceholderMatch,
+  sourceNodePlaceholder,
+} from "./placeholders.js";
 import type {
   ComputedBackground,
   ComputedBlipEffects,
@@ -55,6 +60,8 @@ import type {
   ComputedImageElement,
   ComputedOutline,
   ComputedParagraph,
+  ComputedPlaceholder,
+  ComputedPlaceholderMatch,
   ComputedRelationship,
   ComputedRunProperties,
   ComputedShapeElement,
@@ -272,7 +279,7 @@ function computeTemplateElements(
   partPath: PartPath,
 ): ComputedElement[] {
   return elements
-    .filter((element) => !(element.kind === "shape" && element.placeholder !== undefined))
+    .filter((element) => sourceNodePlaceholder(element) === undefined)
     .map((element) => computeElement(context, element, layer, partPath));
 }
 
@@ -308,7 +315,13 @@ function computeElement(
     case "smartArt":
       return computeSmartArtElement(context, element, layer, partPath);
     case "raw":
-      return { kind: "raw", sourceLayer: layer, sourcePartPath: partPath, sourceNode: element };
+      return {
+        kind: "raw",
+        sourceLayer: layer,
+        sourcePartPath: partPath,
+        sourceNode: element,
+        ...computedPlaceholderProperty(element),
+      };
   }
 }
 
@@ -376,13 +389,11 @@ function computeShapeElement(
         )
       : undefined;
   const placeholderType =
-    shape.placeholder !== undefined ? (shape.placeholder.type ?? "body") : undefined;
-  const transform = firstDefined(
-    shape.transform,
-    match?.layout?.transform,
-    match?.master?.transform,
-  );
-  const geometry = firstDefined(shape.geometry, match?.layout?.geometry, match?.master?.geometry);
+    shape.placeholder !== undefined ? (shape.placeholder.type ?? "obj") : undefined;
+  const layoutShape = match?.layout;
+  const masterShape = match?.master;
+  const transform = firstDefined(shape.transform, layoutShape?.transform, masterShape?.transform);
+  const geometry = firstDefined(shape.geometry, layoutShape?.geometry, masterShape?.geometry);
   const effects =
     shape.effects !== undefined
       ? computeEffectList(context, shape.effects)
@@ -395,6 +406,7 @@ function computeShapeElement(
     sourceLayer: layer,
     sourcePartPath: partPath,
     sourceNode: shape,
+    ...computedPlaceholderProperty(shape),
     ...(transform !== undefined ? { transform } : {}),
     ...(geometry !== undefined ? { geometry } : {}),
     ...(shape.fill !== undefined
@@ -409,7 +421,7 @@ function computeShapeElement(
           textBody: computeTextBody(
             context,
             shape.textBody,
-            [match?.layout?.textBody, match?.master?.textBody],
+            [layoutShape?.textBody, masterShape?.textBody],
             placeholderType,
           ),
         }
@@ -424,6 +436,7 @@ function computeImageElement(
   layer: ComputedElementLayer,
   partPath: PartPath,
 ): ComputedImageElement {
+  const match = slidePlaceholderMatch(context, image, layer);
   const relationship = resolveComputedRelationships(context.source, partPath).find(
     (rel) => rel.id === image.blipRelationshipId && rel.type === IMAGE_REL_TYPE,
   );
@@ -437,11 +450,13 @@ function computeImageElement(
     sourceLayer: layer,
     sourcePartPath: partPath,
     sourceNode: image,
-    ...(image.transform !== undefined ? { transform: image.transform } : {}),
+    ...computedPlaceholderProperty(image),
+    ...computedPlaceholderTransform(image.transform, match),
     ...(relationship !== undefined ? { relationship } : {}),
     ...(relationship?.media !== undefined ? { media: relationship.media } : {}),
     ...(effects !== undefined ? { effects } : {}),
     ...(blipEffects !== undefined ? { blipEffects } : {}),
+    ...(match !== undefined ? { placeholderMatch: match } : {}),
   };
 }
 
@@ -451,16 +466,19 @@ function computeTableElement(
   layer: ComputedElementLayer,
   partPath: PartPath,
 ): ComputedTableElement {
+  const match = slidePlaceholderMatch(context, table, layer);
   return {
     kind: "table",
     sourceLayer: layer,
     sourcePartPath: partPath,
     sourceNode: table,
-    ...(table.transform !== undefined ? { transform: table.transform } : {}),
+    ...computedPlaceholderProperty(table),
+    ...computedPlaceholderTransform(table.transform, match),
     table: {
       columns: table.table.columns.map((column) => ({ ...column })),
       rows: table.table.rows.map((row) => computeTableRow(context, table, row, partPath)),
     },
+    ...(match !== undefined ? { placeholderMatch: match } : {}),
   };
 }
 
@@ -470,6 +488,7 @@ function computeChartElement(
   layer: ComputedElementLayer,
   partPath: PartPath,
 ): ComputedChartElement {
+  const match = slidePlaceholderMatch(context, chart, layer);
   const relationship = context.relationships.find(
     (rel) => rel.id === chart.chartRelationshipId && CHART_REL_TYPES.has(rel.type),
   );
@@ -483,10 +502,12 @@ function computeChartElement(
     sourceLayer: layer,
     sourcePartPath: partPath,
     sourceNode: chart,
-    ...(chart.transform !== undefined ? { transform: chart.transform } : {}),
+    ...computedPlaceholderProperty(chart),
+    ...computedPlaceholderTransform(chart.transform, match),
     ...(relationship !== undefined ? { relationship } : {}),
     ...(chartXml !== undefined ? { chartXml } : {}),
     ...(chartData !== undefined ? { chartData } : {}),
+    ...(match !== undefined ? { placeholderMatch: match } : {}),
   };
 }
 
@@ -496,6 +517,7 @@ function computeSmartArtElement(
   layer: ComputedElementLayer,
   partPath: PartPath,
 ): ComputedSmartArtElement {
+  const match = slidePlaceholderMatch(context, smartArt, layer);
   const dataRelationship = context.relationships.find(
     (rel) => rel.id === smartArt.dataRelationshipId && DIAGRAM_DATA_REL_TYPES.has(rel.type),
   );
@@ -523,7 +545,8 @@ function computeSmartArtElement(
     sourceLayer: layer,
     sourcePartPath: partPath,
     sourceNode: smartArt,
-    ...(smartArt.transform !== undefined ? { transform: smartArt.transform } : {}),
+    ...computedPlaceholderProperty(smartArt),
+    ...computedPlaceholderTransform(smartArt.transform, match),
     ...(dataRelationship !== undefined ? { dataRelationship } : {}),
     ...(drawingRelationship !== undefined ? { drawingRelationship } : {}),
     ...(drawingPartPath !== undefined ? { drawingPartPath } : {}),
@@ -531,7 +554,69 @@ function computeSmartArtElement(
     drawingRelationships,
     media: context.source.packageGraph.media,
     ...(diagramDrawing !== undefined ? { diagramDrawing } : {}),
+    ...(match !== undefined ? { placeholderMatch: match } : {}),
   };
+}
+
+function slidePlaceholderMatch(
+  context: ComputeContext,
+  shape: SourceShapeNode,
+  layer: ComputedElementLayer,
+): ComputedPlaceholderMatch | undefined {
+  return layer === "slide"
+    ? findPlaceholderMatch(
+        {
+          layoutShapes: context.layout?.shapes ?? [],
+          masterShapes: context.master?.shapes ?? [],
+        },
+        shape,
+      )
+    : undefined;
+}
+
+function computedPlaceholderTransform(
+  local: SourceTransform | undefined,
+  match: ComputedPlaceholderMatch | undefined,
+): { readonly transform?: SourceTransform } {
+  const transform = firstDefined(
+    local,
+    sourceNodeTransform(match?.layoutNode),
+    sourceNodeTransform(match?.masterNode),
+  );
+  return transform === undefined ? {} : { transform };
+}
+
+function sourceNodeTransform(shape: SourceShapeNode | undefined): SourceTransform | undefined {
+  if (shape === undefined) return undefined;
+  switch (shape.kind) {
+    case "shape":
+    case "connector":
+    case "group":
+    case "image":
+    case "table":
+    case "chart":
+    case "smartArt":
+      return shape.transform;
+    case "raw":
+      return undefined;
+  }
+}
+
+function computedPlaceholderProperty(shape: SourceShapeNode): {
+  readonly placeholder?: ComputedPlaceholder;
+} {
+  const placeholder = sourceNodePlaceholder(shape);
+  return placeholder === undefined
+    ? {}
+    : {
+        placeholder: {
+          type: effectivePlaceholderType(placeholder),
+          index: effectivePlaceholderIndex(placeholder),
+          orientation: placeholder.orientation ?? "horz",
+          size: placeholder.size ?? "full",
+          hasCustomPrompt: placeholder.hasCustomPrompt ?? false,
+        },
+      };
 }
 
 function computeDiagramDrawing(

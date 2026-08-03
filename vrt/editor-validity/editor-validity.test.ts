@@ -13,6 +13,7 @@ import {
   addConnector,
   addEmptySlideFromLayout,
   addPicture,
+  addPlaceholder,
   addShape,
   addSlideLayout,
   addSlideNumber,
@@ -1073,6 +1074,37 @@ describeFromScratchOrSkip("LibreOffice from-scratch PPTX validity", { timeout: 1
     renderSingleWithLibreOffice(
       libreOfficeImage,
       "editor-validity-from-scratch-additional-layout.pptx",
+      writePptx(source),
+    );
+  });
+
+  it("opens a from-scratch PPTX with native placeholder definitions and slide shells", () => {
+    let source = createPptx();
+    const masterHandle = requireHandle(source.slideMasters[0]?.handle);
+    const layoutHandle = requireHandle(source.slideLayouts[0]?.handle);
+    source = addPlaceholder(source, masterHandle, {
+      type: "title",
+      index: 0,
+      transform: {
+        offsetX: asEmu(685800),
+        offsetY: asEmu(457200),
+        width: asEmu(7772400),
+        height: asEmu(914400),
+      },
+      geometry: { kind: "preset", preset: "rect" },
+      promptText: "Master title prompt",
+      promptProperties: { fontFace: "Liberation Sans", fontSize: asPt(28), bold: true },
+    });
+    source = addPlaceholder(source, layoutHandle, {
+      type: "ctrTitle",
+      index: 0,
+      promptText: "Click to add title",
+    });
+    source = addEmptySlideFromLayout(source, { layoutPartPath: layoutHandle.partPath });
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-from-scratch-native-placeholders.pptx",
       writePptx(source),
     );
   });
