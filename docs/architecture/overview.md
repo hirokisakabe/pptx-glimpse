@@ -145,6 +145,18 @@ demo/UI semantics; and core must not import MCP. Shared behavior should stay in 
 layer that owns the concept, or be passed across an adapter, rather than introducing a
 reverse import.
 
+### External consumer boundary
+
+Workspace packages must not depend on external consumers or adopt consumer-specific types,
+adapters, node IDs, fixture generators, validation branches, source formats, semantics, or
+runtime/development dependencies. In particular, `@pptx-glimpse/document` remains a generic
+PPTX/OOXML foundation and must not know about higher-level authoring systems.
+
+External consumers may appear in usage examples, background context, or compatibility checks
+against public pptx-glimpse APIs and generic, source-attributed PPTX inputs. Consumer-specific
+conversion and end-to-end compatibility tests belong in the consumer repository rather than
+in pptx-glimpse.
+
 ## Publication and build boundaries
 
 The repository root is private and only orchestrates the pnpm workspace. Four packages are
