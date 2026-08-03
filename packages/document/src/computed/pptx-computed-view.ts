@@ -117,6 +117,15 @@ interface ComputedElementBase {
   readonly sourceLayer: ComputedElementLayer;
   readonly sourcePartPath: PartPath;
   readonly sourceNode: SourceShapeNode;
+  readonly placeholder?: ComputedPlaceholder;
+}
+
+export interface ComputedPlaceholder {
+  readonly type: string;
+  readonly index: number;
+  readonly orientation: string;
+  readonly size: string;
+  readonly hasCustomPrompt: boolean;
 }
 
 export interface ComputedShapeElement extends ComputedElementBase {
@@ -139,6 +148,7 @@ export interface ComputedImageElement extends ComputedElementBase {
   readonly media?: MediaPart;
   readonly effects?: ComputedEffectList;
   readonly blipEffects?: ComputedBlipEffects;
+  readonly placeholderMatch?: ComputedPlaceholderMatch;
 }
 
 export interface ComputedConnectorElement extends ComputedElementBase {
@@ -170,6 +180,7 @@ export interface ComputedTableElement extends ComputedElementBase {
   readonly sourceNode: SourceTable;
   readonly transform?: SourceTransform;
   readonly table: ComputedTableData;
+  readonly placeholderMatch?: ComputedPlaceholderMatch;
 }
 
 export interface ComputedChartElement extends ComputedElementBase {
@@ -179,6 +190,7 @@ export interface ComputedChartElement extends ComputedElementBase {
   readonly relationship?: ComputedRelationship;
   readonly chartXml?: string;
   readonly chartData?: ComputedChartData;
+  readonly placeholderMatch?: ComputedPlaceholderMatch;
 }
 
 export type ComputedChartType =
@@ -231,6 +243,7 @@ export interface ComputedSmartArtElement extends ComputedElementBase {
   readonly drawingRelationships: readonly ComputedRelationship[];
   readonly media: readonly MediaPart[];
   readonly diagramDrawing?: ComputedDiagramDrawing;
+  readonly placeholderMatch?: ComputedPlaceholderMatch;
 }
 
 export interface ComputedDiagramDrawing {
@@ -281,11 +294,18 @@ export type ComputedCellBorders = {
 export interface ComputedRawElement extends ComputedElementBase {
   readonly kind: "raw";
   readonly sourceNode: SourceRawShapeNode;
+  readonly placeholderMatch?: ComputedPlaceholderMatch;
 }
 
 export interface ComputedPlaceholderMatch {
+  /** Compatible `p:sp` projection retained for existing shape consumers. */
   readonly layout?: SourceShape;
+  /** Compatible `p:sp` projection retained for existing shape consumers. */
   readonly master?: SourceShape;
+  /** Exact placeholder-capable layout source node, including picture/graphic-frame nodes. */
+  readonly layoutNode: SourceShapeNode;
+  /** Exact placeholder-capable master source node when the type category has one unique match. */
+  readonly masterNode?: SourceShapeNode;
 }
 
 export type ComputedBackground =

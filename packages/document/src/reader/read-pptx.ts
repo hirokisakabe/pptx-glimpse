@@ -31,7 +31,9 @@ import type {
   RawPackagePart,
   Relationship,
   SlideSize,
+  SourcePlaceholder,
   SourcePresentation,
+  SourceShapeNode,
   SourceSlide,
   SourceSlideLayout,
   SourceSlideMaster,
@@ -125,6 +127,7 @@ export function readPptx(input: ReadPptxInput): PptxSourceModel {
   );
 
   const hierarchy = readSlideHierarchy(entries, relationships, presentation, diagnostics);
+  appendPlaceholderDiagnostics(hierarchy, diagnostics);
 
   return {
     packageGraph: {
@@ -142,6 +145,120 @@ export function readPptx(input: ReadPptxInput): PptxSourceModel {
     diagnostics,
   };
 }
+
+function appendPlaceholderDiagnostics(hierarchy: SlideHierarchy, diagnostics: Diagnostic[]): void {
+  for (const target of [
+    ...hierarchy.slides,
+    ...hierarchy.slideLayouts,
+    ...hierarchy.slideMasters,
+  ]) {
+    const byIndex = new Map<number, number>();
+    for (const shape of target.shapes) {
+      const placeholder = sourceNodePlaceholder(shape);
+      if (placeholder === undefined) continue;
+      const index = placeholder.index ?? 0;
+      byIndex.set(index, (byIndex.get(index) ?? 0) + 1);
+    }
+    for (const [index, count] of byIndex) {
+      if (count < 2) continue;
+      diagnostics.push({
+        severity: "warning",
+        code: "placeholder-index-duplicate",
+        message: `drawing part '${target.partPath}' has duplicate effective placeholder index '${index}'`,
+        handle: { partPath: target.partPath },
+      });
+    }
+  }
+
+  for (const layout of hierarchy.slideLayouts) {
+    const master = hierarchy.slideMasters.find(
+      (candidate) => candidate.partPath === layout.masterPartPath,
+    );
+    if (master === undefined) continue;
+    for (const shape of layout.shapes) {
+      const layoutPlaceholder = sourceNodePlaceholder(shape);
+      if (layoutPlaceholder === undefined) continue;
+      const masterMatches = master.shapes.filter((candidate) => {
+        const masterPlaceholder = sourceNodePlaceholder(candidate);
+        return (
+          masterPlaceholder !== undefined &&
+          masterTypeMatchesLayout(masterPlaceholder.type ?? "obj", layoutPlaceholder.type ?? "obj")
+        );
+      });
+      if (masterMatches.length > 1) {
+        diagnostics.push({
+          severity: "warning",
+          code: "placeholder-master-match-ambiguous",
+          message: `layout placeholder type '${layoutPlaceholder.type ?? "obj"}' has ambiguous master matches`,
+          ...(shape.handle !== undefined ? { handle: shape.handle } : {}),
+        });
+      }
+    }
+  }
+
+  for (const slide of hierarchy.slides) {
+    const layout = hierarchy.slideLayouts.find(
+      (candidate) => candidate.partPath === slide.layoutPartPath,
+    );
+    if (layout === undefined) continue;
+    for (const shape of slide.shapes) {
+      const placeholder = sourceNodePlaceholder(shape);
+      if (placeholder === undefined) continue;
+      const index = placeholder.index ?? 0;
+      const layoutMatches = layout.shapes.filter((candidate) => {
+        const candidatePlaceholder = sourceNodePlaceholder(candidate);
+        return candidatePlaceholder !== undefined && (candidatePlaceholder.index ?? 0) === index;
+      });
+      if (layoutMatches.length !== 1) {
+        diagnostics.push({
+          severity: "warning",
+          code:
+            layoutMatches.length === 0
+              ? "placeholder-layout-match-missing"
+              : "placeholder-layout-match-ambiguous",
+          message: `slide placeholder effective index '${index}' has ${layoutMatches.length} layout matches`,
+          ...(shape.handle !== undefined ? { handle: shape.handle } : {}),
+        });
+        continue;
+      }
+    }
+  }
+}
+
+function sourceNodePlaceholder(shape: SourceShapeNode): SourcePlaceholder | undefined {
+  switch (shape.kind) {
+    case "shape":
+    case "image":
+    case "table":
+    case "chart":
+    case "smartArt":
+    case "raw":
+      return shape.placeholder;
+    case "connector":
+    case "group":
+      return undefined;
+  }
+}
+
+function masterTypeMatchesLayout(masterType: string, layoutType: string): boolean {
+  if (layoutType === "title" || layoutType === "ctrTitle") return masterType === "title";
+  if (BODY_PLACEHOLDER_TYPES.has(layoutType)) {
+    return masterType === "body";
+  }
+  return masterType === layoutType;
+}
+
+const BODY_PLACEHOLDER_TYPES: ReadonlySet<string> = new Set([
+  "body",
+  "subTitle",
+  "obj",
+  "chart",
+  "clipArt",
+  "dgm",
+  "media",
+  "pic",
+  "tbl",
+]);
 
 interface SlideHierarchy {
   readonly slides: readonly SourceSlide[];

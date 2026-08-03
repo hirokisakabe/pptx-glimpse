@@ -230,6 +230,9 @@ export type SourceLineJoin = "miter" | "round" | "bevel";
 export interface SourcePlaceholder {
   readonly type?: string;
   readonly index?: number;
+  readonly orientation?: string;
+  readonly size?: string;
+  readonly hasCustomPrompt?: boolean;
 }
 
 /** Minimal subset of run properties (`a:rPr`) of text run (`a:r`). */
@@ -482,6 +485,7 @@ export interface SourceImage {
   readonly tile?: SourceImageFillTile;
   readonly effects?: SourceEffectList;
   readonly blipEffects?: SourceBlipEffects;
+  readonly placeholder?: SourcePlaceholder;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
 }
@@ -492,6 +496,7 @@ export interface SourceTable {
   readonly name?: string;
   readonly transform?: SourceTransform;
   readonly table: SourceTableData;
+  readonly placeholder?: SourcePlaceholder;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
 }
@@ -540,6 +545,7 @@ export interface SourceChart {
   readonly transform?: SourceTransform;
   /** Relationship id of `c:chart@r:id`. The chart part is resolved by the computed view. */
   readonly chartRelationshipId?: RelationshipId;
+  readonly placeholder?: SourcePlaceholder;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
 }
@@ -551,6 +557,7 @@ export interface SourceSmartArt {
   readonly transform?: SourceTransform;
   /** Relationship id of `dgm:relIds@r:dm`. Diagram data/drawing parts are resolved by the computed view. */
   readonly dataRelationshipId?: RelationshipId;
+  readonly placeholder?: SourcePlaceholder;
   readonly handle?: SourceHandle;
   readonly rawSidecars?: readonly RawSidecar[];
 }
@@ -563,6 +570,8 @@ export interface SourceRawShapeNode {
   readonly kind: "raw";
   readonly nodeId?: SourceNodeId;
   readonly raw: RawSidecar;
+  /** Placeholder identity retained for unsupported placeholder-capable drawing nodes. */
+  readonly placeholder?: SourcePlaceholder;
   readonly handle?: SourceHandle;
 }
 

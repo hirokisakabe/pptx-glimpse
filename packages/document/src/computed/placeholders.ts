@@ -1,4 +1,4 @@
-import type { SourceShape, SourceShapeNode } from "../source/index.js";
+import type { SourcePlaceholder, SourceShapeNode } from "../source/index.js";
 import type { ComputedPlaceholderMatch } from "./pptx-computed-view.js";
 
 interface PlaceholderMatchContext {
@@ -6,66 +6,88 @@ interface PlaceholderMatchContext {
   readonly masterShapes: readonly SourceShapeNode[];
 }
 
+/** Effective schema default for `p:ph@type`. */
+export function effectivePlaceholderType(placeholder: SourcePlaceholder): string {
+  return placeholder.type ?? "obj";
+}
+
+/** Effective schema default for `p:ph@idx`. */
+export function effectivePlaceholderIndex(placeholder: SourcePlaceholder): number {
+  return placeholder.index ?? 0;
+}
+
 export function findPlaceholderMatch(
   context: PlaceholderMatchContext,
-  shape: SourceShape,
+  shape: SourceShapeNode,
 ): ComputedPlaceholderMatch | undefined {
-  if (shape.placeholder === undefined) return undefined;
-  const type = shape.placeholder.type ?? "body";
-  const index = shape.placeholder.index;
-  const layout = findMatchingPlaceholder(type, index, context.layoutShapes);
-  const master = findMatchingPlaceholder(type, index, context.masterShapes);
-  if (layout === undefined && master === undefined) return undefined;
+  const placeholder = sourceNodePlaceholder(shape);
+  if (placeholder === undefined) return undefined;
+
+  const layoutCandidates = placeholderNodes(context.layoutShapes).filter(
+    (candidate) =>
+      effectivePlaceholderIndex(candidate.placeholder) === effectivePlaceholderIndex(placeholder),
+  );
+  if (layoutCandidates.length !== 1) return undefined;
+
+  const layout = layoutCandidates[0];
+  const masterCandidates = placeholderNodes(context.masterShapes).filter((candidate) =>
+    masterTypeMatchesLayout(
+      effectivePlaceholderType(candidate.placeholder),
+      effectivePlaceholderType(layout.placeholder),
+    ),
+  );
+  const master = masterCandidates.length === 1 ? masterCandidates[0] : undefined;
   return {
-    ...(layout !== undefined ? { layout } : {}),
-    ...(master !== undefined ? { master } : {}),
+    layoutNode: layout,
+    ...(layout.kind === "shape" ? { layout } : {}),
+    ...(master !== undefined ? { masterNode: master } : {}),
+    ...(master?.kind === "shape" ? { master } : {}),
   };
 }
 
-function findMatchingPlaceholder(
-  type: string,
-  index: number | undefined,
+function placeholderNodes(
   shapes: readonly SourceShapeNode[],
-): SourceShape | undefined {
-  const placeholders = shapes.filter(
-    (shape): shape is SourceShape => shape.kind === "shape" && shape.placeholder !== undefined,
-  );
-
-  if (index !== undefined) {
-    const byIndexWithTransform = placeholders.find(
-      (shape) => shape.placeholder?.index === index && shape.transform !== undefined,
-    );
-    if (byIndexWithTransform !== undefined) return byIndexWithTransform;
-    const byIndex = placeholders.find((shape) => shape.placeholder?.index === index);
-    if (byIndex !== undefined) return byIndex;
-  }
-
-  const byTypeWithTransform = placeholders.find(
-    (shape) => (shape.placeholder?.type ?? "body") === type && shape.transform !== undefined,
-  );
-  if (byTypeWithTransform !== undefined) return byTypeWithTransform;
-
-  const fallbackType = getPlaceholderFallbackType(type);
-  if (fallbackType !== undefined) {
-    const byFallbackWithTransform = placeholders.find(
-      (shape) =>
-        (shape.placeholder?.type ?? "body") === fallbackType && shape.transform !== undefined,
-    );
-    if (byFallbackWithTransform !== undefined) return byFallbackWithTransform;
-  }
-
-  const byType = placeholders.find((shape) => (shape.placeholder?.type ?? "body") === type);
-  if (byType !== undefined) return byType;
-
-  if (fallbackType !== undefined) {
-    return placeholders.find((shape) => (shape.placeholder?.type ?? "body") === fallbackType);
-  }
-
-  return undefined;
+): (SourceShapeNode & { readonly placeholder: SourcePlaceholder })[] {
+  return shapes.filter(hasSourceNodePlaceholder);
 }
 
-function getPlaceholderFallbackType(type: string): string | undefined {
-  if (type === "ctrTitle") return "title";
-  if (type === "subTitle") return "body";
-  return undefined;
+function hasSourceNodePlaceholder(
+  shape: SourceShapeNode,
+): shape is SourceShapeNode & { readonly placeholder: SourcePlaceholder } {
+  return sourceNodePlaceholder(shape) !== undefined;
 }
+
+export function sourceNodePlaceholder(shape: SourceShapeNode): SourcePlaceholder | undefined {
+  switch (shape.kind) {
+    case "shape":
+    case "image":
+    case "table":
+    case "chart":
+    case "smartArt":
+    case "raw":
+      return shape.placeholder;
+    case "connector":
+    case "group":
+      return undefined;
+  }
+}
+
+function masterTypeMatchesLayout(masterType: string, layoutType: string): boolean {
+  if (layoutType === "title" || layoutType === "ctrTitle") return masterType === "title";
+  if (BODY_PLACEHOLDER_TYPES.has(layoutType)) {
+    return masterType === "body";
+  }
+  return masterType === layoutType;
+}
+
+const BODY_PLACEHOLDER_TYPES: ReadonlySet<string> = new Set([
+  "body",
+  "subTitle",
+  "obj",
+  "chart",
+  "clipArt",
+  "dgm",
+  "media",
+  "pic",
+  "tbl",
+]);

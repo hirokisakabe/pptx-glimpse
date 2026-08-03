@@ -260,6 +260,28 @@ interface ShapeXmlParams {
   readonly hyperlinkIds?: ReadonlyMap<string, RelationshipId>;
 }
 
+export interface PlaceholderXmlParams {
+  readonly shapeId: string;
+  readonly name: string;
+  readonly placeholder: {
+    readonly type?: string;
+    readonly index?: number;
+    readonly orientation?: string;
+    readonly size?: string;
+    readonly hasCustomPrompt?: boolean;
+  };
+  readonly transform?: {
+    readonly offsetX: Emu;
+    readonly offsetY: Emu;
+    readonly width: Emu;
+    readonly height: Emu;
+  };
+  readonly geometry?: ShapeGeometryInput;
+  readonly promptText?: string;
+  readonly promptProperties?: TextBoxRunPropertiesInput;
+  readonly body?: TextBoxBodyPropertiesInput;
+}
+
 interface ConnectorXmlParams {
   readonly shapeId: string;
   readonly name: string;
@@ -439,6 +461,67 @@ export function buildShapeXml(params: ShapeXmlParams): string {
             },
           }
         : {}),
+    },
+  });
+}
+
+/** Builds a native PresentationML text placeholder or an empty slide-local shell. */
+export function buildPlaceholderXml(params: PlaceholderXmlParams): string {
+  const promptRun =
+    params.promptText === undefined
+      ? undefined
+      : {
+          ...(params.promptProperties !== undefined
+            ? { "a:rPr": createTextRunPropertiesXml(params.promptProperties) }
+            : {}),
+          "a:t": textElementValue(params.promptText),
+        };
+  return xmlBuilder.build({
+    "p:sp": {
+      "p:nvSpPr": {
+        "p:cNvPr": { "@_id": params.shapeId, "@_name": params.name },
+        "p:cNvSpPr": {},
+        "p:nvPr": {
+          "p:ph": {
+            ...(params.placeholder.type !== undefined ? { "@_type": params.placeholder.type } : {}),
+            ...(params.placeholder.index !== undefined
+              ? { "@_idx": String(params.placeholder.index) }
+              : {}),
+            ...(params.placeholder.orientation !== undefined
+              ? { "@_orient": params.placeholder.orientation }
+              : {}),
+            ...(params.placeholder.size !== undefined ? { "@_sz": params.placeholder.size } : {}),
+            ...(params.placeholder.hasCustomPrompt !== undefined
+              ? { "@_hasCustomPrompt": params.placeholder.hasCustomPrompt ? "1" : "0" }
+              : {}),
+          },
+        },
+      },
+      "p:spPr": {
+        ...(params.transform !== undefined
+          ? {
+              "a:xfrm": {
+                "a:off": {
+                  "@_x": String(params.transform.offsetX),
+                  "@_y": String(params.transform.offsetY),
+                },
+                "a:ext": {
+                  "@_cx": String(params.transform.width),
+                  "@_cy": String(params.transform.height),
+                },
+              },
+            }
+          : {}),
+        ...(params.geometry !== undefined ? createShapeGeometryXml(params.geometry) : {}),
+      },
+      "p:txBody": {
+        "a:bodyPr": params.body === undefined ? {} : createTextBodyPropertiesXml(params.body),
+        "a:lstStyle": {},
+        "a:p": {
+          ...(promptRun !== undefined ? { "a:r": promptRun } : {}),
+          "a:endParaRPr": {},
+        },
+      },
     },
   });
 }
