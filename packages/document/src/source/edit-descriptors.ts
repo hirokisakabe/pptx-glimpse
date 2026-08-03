@@ -275,6 +275,20 @@ const EDIT_KIND_DESCRIPTORS: {
     insertedSlidePartPath: () => undefined,
     insertedShape: () => undefined,
   },
+  updateBubbleChartData: {
+    reservedPartPaths: (edit) => [edit.chartPartPath, edit.workbookPartPath],
+    dirtyPartPath: () => undefined,
+    targetsShape: (edit, shapeHandle) => sourceHandlesEqual(edit.handle, shapeHandle),
+    invalidatingPartPaths: (edit) => [
+      edit.handle.partPath,
+      edit.chartPartPath,
+      edit.workbookPartPath,
+    ],
+    reservedShapeId: () => undefined,
+    slideTopologyOperation: () => undefined,
+    insertedSlidePartPath: () => undefined,
+    insertedShape: () => undefined,
+  },
   reorderShapes: {
     reservedPartPaths: (edit) => [edit.targetPartPath],
     dirtyPartPath: (edit) => edit.targetPartPath,

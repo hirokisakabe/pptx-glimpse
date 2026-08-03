@@ -29,12 +29,18 @@ export type {
 } from "./chart-authoring.js";
 export { addChart } from "./chart-authoring.js";
 export type {
+  UpdateBubbleChartDataInput,
+  UpdateBubbleChartSeriesDataInput,
   UpdateChartDataInput,
   UpdateChartSeriesDataInput,
   UpdateScatterChartDataInput,
   UpdateScatterChartSeriesDataInput,
 } from "./chart-data-editing.js";
-export { updateChartData, updateScatterChartData } from "./chart-data-editing.js";
+export {
+  updateBubbleChartData,
+  updateChartData,
+  updateScatterChartData,
+} from "./chart-data-editing.js";
 export { countImageReferencesToMedia, replaceImageBytes } from "./image-replacement.js";
 export type {
   AddPictureCropInput,

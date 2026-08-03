@@ -48,6 +48,7 @@ import {
   type SourceTextBody,
   type SourceTextRun,
   ungroupShape,
+  updateBubbleChartData,
   updateChartData,
   updateScatterChartData,
   writePptx,
@@ -317,6 +318,34 @@ const LO_EDITOR_VALIDITY_CASES = [
           series: [
             { name: "Edited revenue", xValues: [1, 2, 3], yValues: [40, 55, 70] },
             { name: "Edited cost", xValues: [10, 20], yValues: [25, 42] },
+          ],
+        }),
+      );
+    },
+  },
+  {
+    name: "bubble chart XYZ data update",
+    sourceFixture: "editor-validity-bubble-chart-source.pptx",
+    expectedFixture: "editor-validity-bubble-chart-expected.pptx",
+    createEditedPptx: (input: Uint8Array) => {
+      const source = readPptx(input);
+      const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+      if (chart?.handle === undefined) throw new Error("bubble fixture has no editable chart");
+      return writePptx(
+        updateBubbleChartData(source, chart.handle, {
+          series: [
+            {
+              name: "Edited revenue",
+              xValues: [1, 2, 3],
+              yValues: [40, 55, 70],
+              bubbleSizes: [5, 8, 13],
+            },
+            {
+              name: "Edited cost",
+              xValues: [10, 20],
+              yValues: [25, 42],
+              bubbleSizes: [21, 34],
+            },
           ],
         }),
       );

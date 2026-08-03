@@ -580,6 +580,43 @@ export async function buildScatterChartEditSource(): Promise<PptxSourceModel> {
   return readPptx(await pptx.generateAsync({ type: "uint8array" }));
 }
 
+export async function buildBubbleChartEditSource(): Promise<PptxSourceModel> {
+  const pptx = await JSZip.loadAsync(writePptx(await buildScatterChartEditSource()));
+  const chartFile = pptx.file("ppt/charts/chart1.xml");
+  const workbookFile = pptx.file("ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx");
+  if (chartFile === null || workbookFile === null)
+    throw new Error("bubble fixture parts not found");
+  let chart = (await chartFile.async("string"))
+    .replace(
+      '<c:scatterChart><c:scatterStyle val="lineMarker"/><c:varyColors val="0"/>',
+      '<c:bubbleChart><c:varyColors val="0"/>',
+    )
+    .replace("</c:scatterChart>", '<c:bubbleScale val="100"/></c:bubbleChart>');
+  for (const [range, values] of [
+    ["2:$C$3", [4, 8]],
+    ["6:$C$7", [6, 9]],
+  ] as const) {
+    const points = values
+      .map((value, point) => `<c:pt idx="${point}"><c:v>${value}</c:v></c:pt>`)
+      .join("");
+    chart = chart.replace(
+      "</c:yVal></c:ser>",
+      `</c:yVal><c:bubbleSize><c:numRef><c:f>Sheet1!$C$${range}</c:f><c:numCache><c:formatCode>General</c:formatCode><c:ptCount val="${values.length}"/>${points}</c:numCache></c:numRef></c:bubbleSize></c:ser>`,
+    );
+  }
+  pptx.file("ppt/charts/chart1.xml", chart);
+  const workbook = await JSZip.loadAsync(await workbookFile.async("uint8array"));
+  workbook.file(
+    "xl/worksheets/sheet1.xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:C7"/><sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/><sheetData><row r="1"><c r="B1" t="inlineStr"><is><t>Original 1</t></is></c><c r="C1" t="inlineStr"><is><t>Size</t></is></c></row><row r="2"><c r="A2"><v>1</v></c><c r="B2"><v>1</v></c><c r="C2"><v>4</v></c></row><row r="3"><c r="A3"><v>2</v></c><c r="B3"><v>2</v></c><c r="C3"><v>8</v></c></row><row r="5"><c r="B5" t="inlineStr"><is><t>Original 2</t></is></c><c r="C5" t="inlineStr"><is><t>Size</t></is></c></row><row r="6"><c r="A6"><v>3</v></c><c r="B6"><v>3</v></c><c r="C6"><v>6</v></c></row><row r="7"><c r="A7"><v>4</v></c><c r="B7"><v>4</v></c><c r="C7"><v>9</v></c></row></sheetData></worksheet>`,
+  );
+  pptx.file(
+    "ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx",
+    await workbook.generateAsync({ type: "uint8array" }),
+  );
+  return readPptx(await pptx.generateAsync({ type: "uint8array" }));
+}
+
 function replaceCategoryAxisWithValueAxis(chartXml: string): string {
   const categoryAxis = /<c:catAx>.*?<\/c:catAx>/.exec(chartXml)?.[0];
   if (categoryAxis === undefined) throw new Error("fixture category axis not found");

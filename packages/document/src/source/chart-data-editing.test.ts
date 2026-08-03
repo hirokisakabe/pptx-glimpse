@@ -7,6 +7,7 @@ import {
   createComputedView,
   createPptx,
   readPptx,
+  updateBubbleChartData,
   updateChartData,
   updateScatterChartData,
   writePptx,
@@ -466,6 +467,187 @@ describe("updateChartData", () => {
   });
 });
 
+describe("updateBubbleChartData", () => {
+  it("updates XYZ formulas, caches, workbook tables, and series topology", () => {
+    const input = buildExistingBubbleChart();
+    const source = readPptx(input);
+    const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    if (chart?.handle === undefined) throw new Error("bubble fixture should have a handle");
+
+    const edited = updateBubbleChartData(source, chart.handle, {
+      series: [
+        {
+          name: "Edited revenue",
+          xValues: [1, 2, 3],
+          yValues: [40, 55, 70],
+          bubbleSizes: [5, 8, 13],
+        },
+        { name: "Edited cost", xValues: [10], yValues: [25], bubbleSizes: [21] },
+        { name: "Edited profit", xValues: [100], yValues: [28], bubbleSizes: [34] },
+      ],
+    });
+
+    expect(source.edits).toBeUndefined();
+    expect(edited.edits?.at(-1)).toMatchObject({
+      kind: "updateBubbleChartData",
+      handle: chart.handle,
+      chartPartPath: "ppt/charts/chart1.xml",
+      workbookPartPath: "ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx",
+    });
+    const computedChart = createComputedView(edited).slides[0]?.elements.find(
+      (element) => element.kind === "chart",
+    );
+    expect(computedChart?.kind === "chart" ? computedChart.chartData : undefined).toMatchObject({
+      chartType: "bubble",
+      title: "Preserved title",
+      series: [
+        {
+          name: "Edited revenue",
+          xValues: [1, 2, 3],
+          values: [40, 55, 70],
+          bubbleSizes: [5, 8, 13],
+        },
+        { name: "Edited cost", xValues: [10], values: [25], bubbleSizes: [21] },
+        { name: "Edited profit", xValues: [100], values: [28], bubbleSizes: [34] },
+      ],
+    });
+
+    const before = unzipSync(input);
+    const output = unzipSync(writePptx(edited));
+    const chartXml = decoder.decode(output["ppt/charts/chart1.xml"]);
+    expect(chartXml).toContain("<c:bubbleChart>");
+    expect(chartXml).toContain("<c:title>");
+    expect(chartXml).toContain("<c:legend>");
+    expect(chartXml).toContain('<c:ext uri="preserve-me">');
+    expect(chartXml.match(/<c:ser>/g)).toHaveLength(3);
+    expect(chartXml).toContain('<c:idx val="2"/><c:order val="2"/>');
+    expect(chartXml).toContain("Sheet1!$C$2:$C$4");
+    expect(chartXml).toContain("Sheet1!$C$7:$C$7");
+    expect(chartXml).toContain("Sheet1!$C$10:$C$10");
+    expect(chartXml.match(/<c:ptCount val="3"\/>/g)).toHaveLength(3);
+    expect(output["ppt/slides/slide1.xml"]).toEqual(before["ppt/slides/slide1.xml"]);
+    expect(output["ppt/theme/theme1.xml"]).toEqual(before["ppt/theme/theme1.xml"]);
+
+    const workbook = unzipSync(output["ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx"]);
+    const worksheet = decoder.decode(workbook["xl/worksheets/sheet1.xml"]);
+    expect(worksheet).toContain('dimension ref="A1:C10"');
+    expect(worksheet).toContain('<c r="C1" t="inlineStr"><is><t>Size</t></is></c>');
+    expect(worksheet).toContain('<c r="C4"><v>13</v></c>');
+    expect(worksheet).toContain('<c r="C6" t="inlineStr"><is><t>Size</t></is></c>');
+    expect(worksheet).not.toContain('<row r="5"');
+  });
+
+  it("rejects invalid input, non-standard layout, and other chart types atomically", () => {
+    const source = readPptx(buildExistingBubbleChart());
+    const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    if (chart?.handle === undefined) throw new Error("bubble fixture should have a handle");
+    expect(() =>
+      updateBubbleChartData(source, chart.handle, {
+        series: [{ name: "Mismatch", xValues: [1, 2], yValues: [3, 4], bubbleSizes: [5] }],
+      }),
+    ).toThrow("matching non-empty X, Y, and bubble size counts");
+    expect(() =>
+      updateBubbleChartData(source, chart.handle, {
+        series: [{ name: "Invalid", xValues: [1], yValues: [2], bubbleSizes: [Infinity] }],
+      }),
+    ).toThrow("X, Y, and bubble size values must be finite numbers");
+
+    const malformed = unzipSync(buildExistingBubbleChart());
+    malformed["ppt/charts/chart1.xml"] = replaceText(
+      malformed["ppt/charts/chart1.xml"],
+      "Sheet1!$C$6:$C$7",
+      "Sheet1!$D$6:$D$7",
+    );
+    expectBubbleEditFailure(readPptx(zipFixture(malformed)), "unsupported data layout");
+
+    const wrongHeader = unzipSync(buildExistingBubbleChart());
+    const wrongHeaderWorkbook = unzipSync(
+      wrongHeader["ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx"],
+    );
+    wrongHeaderWorkbook["xl/worksheets/sheet1.xml"] = replaceText(
+      wrongHeaderWorkbook["xl/worksheets/sheet1.xml"],
+      "<t>Size</t>",
+      "<t>Radius</t>",
+    );
+    wrongHeader["ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx"] = zipFixture(wrongHeaderWorkbook);
+    expectBubbleEditFailure(readPptx(zipFixture(wrongHeader)), "bubble size header must be 'Size'");
+
+    const scatterSource = readPptx(buildExistingScatterChart());
+    const scatter = scatterSource.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    if (scatter?.handle === undefined) throw new Error("scatter fixture should have a handle");
+    expect(() =>
+      updateBubbleChartData(scatterSource, scatter.handle, {
+        series: [{ name: "Wrong", xValues: [1], yValues: [2], bubbleSizes: [3] }],
+      }),
+    ).toThrow("updateBubbleChartData: chart type or combination is not supported");
+
+    const categorySource = readPptx(buildExistingChart());
+    const category = categorySource.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    if (category?.handle === undefined) throw new Error("category fixture should have a handle");
+    expect(() =>
+      updateBubbleChartData(categorySource, category.handle, {
+        series: [{ name: "Wrong", xValues: [1], yValues: [2], bubbleSizes: [3] }],
+      }),
+    ).toThrow("updateBubbleChartData: chart type or combination is not supported");
+
+    const combo = unzipSync(buildExistingBubbleChart());
+    combo["ppt/charts/chart1.xml"] = replaceText(
+      combo["ppt/charts/chart1.xml"],
+      "</c:bubbleChart>",
+      "</c:bubbleChart><c:scatterChart/>",
+    );
+    expectBubbleEditFailure(
+      readPptx(zipFixture(combo)),
+      "chart type or combination is not supported",
+    );
+    expect(source.edits).toBeUndefined();
+  });
+
+  it("rejects formula cells and external, shared, or multi-sheet workbooks atomically", () => {
+    const workbookPath = "ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx";
+    const formulaFiles = unzipSync(buildExistingBubbleChart());
+    const formulaWorkbook = unzipSync(formulaFiles[workbookPath]);
+    formulaWorkbook["xl/worksheets/sheet1.xml"] = replaceText(
+      formulaWorkbook["xl/worksheets/sheet1.xml"],
+      "<v>4</v>",
+      "<f>2+2</f><v>4</v>",
+    );
+    formulaFiles[workbookPath] = zipFixture(formulaWorkbook);
+    expectBubbleEditFailure(
+      readPptx(zipFixture(formulaFiles)),
+      "formulas in the chart data range are not supported",
+    );
+
+    const external = unzipSync(buildExistingBubbleChart());
+    external["ppt/charts/_rels/chart1.xml.rels"] = replaceText(
+      external["ppt/charts/_rels/chart1.xml.rels"],
+      'Target="../embeddings/Microsoft_Excel_Worksheet1.xlsx"',
+      'Target="https://example.com/data.xlsx" TargetMode="External"',
+    );
+    expectBubbleEditFailure(
+      readPptx(zipFixture(external)),
+      "external workbook data is not supported",
+    );
+    expectBubbleEditFailure(
+      readPptx(buildSharedBubbleWorkbookChart()),
+      "embedded workbook is shared by another package part",
+    );
+
+    const multiple = unzipSync(buildExistingBubbleChart());
+    const multipleWorkbook = unzipSync(multiple[workbookPath]);
+    multipleWorkbook["xl/workbook.xml"] = replaceText(
+      multipleWorkbook["xl/workbook.xml"],
+      "</sheets>",
+      '<sheet name="Other" sheetId="2" r:id="rId99"/></sheets>',
+    );
+    multiple[workbookPath] = zipFixture(multipleWorkbook);
+    expectBubbleEditFailure(
+      readPptx(zipFixture(multiple)),
+      "embedded workbook must contain one matching worksheet",
+    );
+  });
+});
+
 describe("updateScatterChartData", () => {
   it("updates XY formulas, caches, workbook tables, and series topology", () => {
     const input = buildExistingScatterChart();
@@ -711,6 +893,43 @@ function buildExistingScatterChart(): Uint8Array {
   return zipFixture(files);
 }
 
+function buildExistingBubbleChart(): Uint8Array {
+  const files = unzipSync(buildExistingChart());
+  const chartPath = "ppt/charts/chart1.xml";
+  files[chartPath] = replaceMatchingText(
+    files[chartPath],
+    /<c:barChart>.*?<\/c:barChart>/,
+    `<c:bubbleChart><c:varyColors val="0"/>
+      ${bubbleSeriesXml(0, "Revenue", 1, [1, 2], [10, 20], [4, 8], "4472C4")}
+      ${bubbleSeriesXml(1, "Cost", 5, [3, 4], [7, 12], [6, 9], "ED7D31")}
+      <c:bubbleScale val="100"/><c:showNegBubbles val="0"/><c:axId val="100002"/><c:axId val="100003"/></c:bubbleChart>`,
+  );
+  files[chartPath] = replaceCategoryAxisWithValueAxis(files[chartPath]);
+  files[chartPath] = addSeriesExtensionMarkers(files[chartPath]);
+  const workbookPath = "ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx";
+  const workbook = unzipSync(files[workbookPath]);
+  workbook["xl/worksheets/sheet1.xml"] = new TextEncoder().encode(
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:C7"/><sheetViews><sheetView workbookViewId="0"/></sheetViews><sheetFormatPr defaultRowHeight="15"/><sheetData><row r="1"><c r="B1" t="inlineStr"><is><t>Revenue</t></is></c><c r="C1" t="inlineStr"><is><t>Size</t></is></c></row><row r="2"><c r="A2"><v>1</v></c><c r="B2"><v>10</v></c><c r="C2"><v>4</v></c></row><row r="3"><c r="A3"><v>2</v></c><c r="B3"><v>20</v></c><c r="C3"><v>8</v></c></row><row r="5"><c r="B5" t="inlineStr"><is><t>Cost</t></is></c><c r="C5" t="inlineStr"><is><t>Size</t></is></c></row><row r="6"><c r="A6"><v>3</v></c><c r="B6"><v>7</v></c><c r="C6"><v>6</v></c></row><row r="7"><c r="A7"><v>4</v></c><c r="B7"><v>12</v></c><c r="C7"><v>9</v></c></row></sheetData></worksheet>`,
+  );
+  files[workbookPath] = zipFixture(workbook);
+  return zipFixture(files);
+}
+
+function bubbleSeriesXml(
+  index: number,
+  name: string,
+  headerRow: number,
+  xValues: readonly number[],
+  yValues: readonly number[],
+  bubbleSizes: readonly number[],
+  color: string,
+): string {
+  return `${scatterSeriesXml(index, name, headerRow, xValues, yValues, color).replace(
+    "</c:ser>",
+    `<c:bubbleSize><c:numRef><c:f>Sheet1!$C$${headerRow + 1}:$C$${headerRow + xValues.length}</c:f><c:numCache><c:formatCode>General</c:formatCode><c:ptCount val="${bubbleSizes.length}"/>${bubbleSizes.map((value, pointIndex) => `<c:pt idx="${pointIndex}"><c:v>${value}</c:v></c:pt>`).join("")}</c:numCache></c:numRef></c:bubbleSize></c:ser>`,
+  )}`;
+}
+
 function scatterSeriesXml(
   index: number,
   name: string,
@@ -805,6 +1024,21 @@ function buildSharedScatterWorkbookChart(): Uint8Array {
   return zipFixture(files);
 }
 
+function buildSharedBubbleWorkbookChart(): Uint8Array {
+  const files = unzipSync(buildSharedWorkbookChart());
+  const chartPath = "ppt/charts/chart1.xml";
+  files[chartPath] = replaceMatchingText(
+    files[chartPath],
+    /<c:barChart>.*?<\/c:barChart>/,
+    `<c:bubbleChart><c:varyColors val="0"/>
+      ${bubbleSeriesXml(0, "One", 1, [1], [1], [2], "4472C4")}
+      ${bubbleSeriesXml(1, "Two", 4, [2], [2], [3], "ED7D31")}
+      <c:axId val="100002"/><c:axId val="100003"/></c:bubbleChart>`,
+  );
+  files[chartPath] = replaceCategoryAxisWithValueAxis(files[chartPath]);
+  return zipFixture(files);
+}
+
 function expectEditFailure(source: ReturnType<typeof readPptx>, message: string): void {
   const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
   if (chart?.handle === undefined) throw new Error("chart fixture should have a handle");
@@ -827,6 +1061,20 @@ function expectScatterEditFailure(source: ReturnType<typeof readPptx>, message: 
       series: [
         { name: "Edited 1", xValues: [1], yValues: [2] },
         { name: "Edited 2", xValues: [3], yValues: [4] },
+      ],
+    }),
+  ).toThrow(message);
+  expect(source.edits).toBeUndefined();
+}
+
+function expectBubbleEditFailure(source: ReturnType<typeof readPptx>, message: string): void {
+  const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+  if (chart?.handle === undefined) throw new Error("bubble fixture should have a handle");
+  expect(() =>
+    updateBubbleChartData(source, chart.handle, {
+      series: [
+        { name: "Edited 1", xValues: [1], yValues: [2], bubbleSizes: [3] },
+        { name: "Edited 2", xValues: [4], yValues: [5], bubbleSizes: [6] },
       ],
     }),
   ).toThrow(message);
