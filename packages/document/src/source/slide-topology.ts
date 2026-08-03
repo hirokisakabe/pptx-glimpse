@@ -135,15 +135,12 @@ function materializeLayoutPlaceholders(
   layoutShapes: readonly SourceShapeNode[],
   slidePartPath: PartPath,
 ): { readonly shapes: readonly SourceShapeNode[]; readonly xmlFragments: readonly string[] } {
-  const candidates = layoutShapes.flatMap((shape) => {
+  const placeholders = layoutShapes.flatMap((shape) => {
     const placeholder = sourceNodePlaceholder(shape);
-    if (placeholder === undefined || SPECIAL_PLACEHOLDER_TYPES.has(placeholder.type ?? "obj")) {
-      return [];
-    }
-    return [{ shape, placeholder }];
+    return placeholder === undefined ? [] : [{ shape, placeholder }];
   });
   const indexes = new Set<number>();
-  for (const { placeholder } of candidates) {
+  for (const { placeholder } of placeholders) {
     const index = placeholder.index ?? 0;
     if (indexes.has(index)) {
       throw new Error(
@@ -152,6 +149,9 @@ function materializeLayoutPlaceholders(
     }
     indexes.add(index);
   }
+  const candidates = placeholders.filter(
+    ({ placeholder }) => !SPECIAL_PLACEHOLDER_TYPES.has(placeholder.type ?? "obj"),
+  );
 
   const xmlFragments = candidates.map(({ shape, placeholder }, index) =>
     buildPlaceholderXml({

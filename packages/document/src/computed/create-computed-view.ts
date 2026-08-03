@@ -314,14 +314,17 @@ function computeElement(
       return computeChartElement(context, element, layer, partPath);
     case "smartArt":
       return computeSmartArtElement(context, element, layer, partPath);
-    case "raw":
+    case "raw": {
+      const match = slidePlaceholderMatch(context, element, layer);
       return {
         kind: "raw",
         sourceLayer: layer,
         sourcePartPath: partPath,
         sourceNode: element,
         ...computedPlaceholderProperty(element),
+        ...(match !== undefined ? { placeholderMatch: match } : {}),
       };
+    }
   }
 }
 
@@ -392,7 +395,11 @@ function computeShapeElement(
     shape.placeholder !== undefined ? (shape.placeholder.type ?? "obj") : undefined;
   const layoutShape = match?.layout;
   const masterShape = match?.master;
-  const transform = firstDefined(shape.transform, layoutShape?.transform, masterShape?.transform);
+  const transform = firstDefined(
+    shape.transform,
+    sourceNodeTransform(match?.layoutNode),
+    sourceNodeTransform(match?.masterNode),
+  );
   const geometry = firstDefined(shape.geometry, layoutShape?.geometry, masterShape?.geometry);
   const effects =
     shape.effects !== undefined
@@ -1029,9 +1036,11 @@ function computeTextBody(
     placeholderType,
     includeInheritedStyleChain,
   );
-  // Keep placeholder bodyPr inheritance disabled until the document path
-  // intentionally owns that behavior.
-  const properties = mergeTextBodyProperties(undefined, textBody.properties);
+  let inheritedProperties: SourceTextBody["properties"] | undefined;
+  for (const inheritedBody of [...inheritedBodies].reverse()) {
+    inheritedProperties = mergeTextBodyProperties(inheritedProperties, inheritedBody?.properties);
+  }
+  const properties = mergeTextBodyProperties(inheritedProperties, textBody.properties);
   return {
     ...(properties !== undefined ? { properties } : {}),
     paragraphs: textBody.paragraphs.map((paragraph) =>

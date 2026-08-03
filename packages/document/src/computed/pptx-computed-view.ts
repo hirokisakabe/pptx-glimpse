@@ -294,6 +294,7 @@ export type ComputedCellBorders = {
 export interface ComputedRawElement extends ComputedElementBase {
   readonly kind: "raw";
   readonly sourceNode: SourceRawShapeNode;
+  readonly placeholderMatch?: ComputedPlaceholderMatch;
 }
 
 export interface ComputedPlaceholderMatch {

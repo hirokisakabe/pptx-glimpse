@@ -74,8 +74,20 @@ export function sourceNodePlaceholder(shape: SourceShapeNode): SourcePlaceholder
 
 function masterTypeMatchesLayout(masterType: string, layoutType: string): boolean {
   if (layoutType === "title" || layoutType === "ctrTitle") return masterType === "title";
-  if (layoutType === "body" || layoutType === "subTitle" || layoutType === "obj") {
+  if (BODY_PLACEHOLDER_TYPES.has(layoutType)) {
     return masterType === "body";
   }
   return masterType === layoutType;
 }
+
+const BODY_PLACEHOLDER_TYPES: ReadonlySet<string> = new Set([
+  "body",
+  "subTitle",
+  "obj",
+  "chart",
+  "clipArt",
+  "dgm",
+  "media",
+  "pic",
+  "tbl",
+]);

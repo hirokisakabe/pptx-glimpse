@@ -63,9 +63,15 @@ export function addPlaceholder(
     throw new Error(`addPlaceholder: effective index '${input.index}' is already in use`);
   }
 
-  if (target.kind === "layout" && input.transform === undefined) {
+  if (target.kind === "layout") {
     const masterMatches = compatibleMasterPlaceholders(source, target, input.type);
-    if (masterMatches.length !== 1 || sourceNodeTransform(masterMatches[0]) === undefined) {
+    if (masterMatches.length > 1) {
+      throw new Error("addPlaceholder: compatible master placeholder category is ambiguous");
+    }
+    if (
+      input.transform === undefined &&
+      (masterMatches.length !== 1 || sourceNodeTransform(masterMatches[0]) === undefined)
+    ) {
       throw new Error(
         "addPlaceholder: layout transform may be omitted only with one compatible master placeholder transform",
       );
@@ -87,7 +93,14 @@ export function addPlaceholder(
       ...(input.promptText !== undefined ? { hasCustomPrompt: true } : {}),
     },
     ...(input.transform !== undefined ? { transform: input.transform } : {}),
-    ...(input.geometry !== undefined ? { geometry: input.geometry } : {}),
+    ...(input.geometry !== undefined
+      ? {
+          geometry:
+            input.geometry.kind === "preset"
+              ? { ...input.geometry, preset: input.geometry.preset.trim() }
+              : input.geometry,
+        }
+      : {}),
     ...(input.promptText !== undefined ? { promptText: input.promptText } : {}),
     ...(input.promptProperties !== undefined ? { promptProperties: input.promptProperties } : {}),
     ...(input.body !== undefined ? { body: input.body } : {}),
@@ -175,10 +188,13 @@ function assertPlaceholderInput(
   if (input.promptProperties !== undefined && input.promptText === undefined) {
     throw new Error("addPlaceholder: promptProperties require promptText");
   }
-  for (const value of [input.name, input.promptText]) {
-    if (value !== undefined && /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/u.test(value)) {
-      throw new Error("addPlaceholder: text contains an invalid XML character");
-    }
+  for (const value of [
+    input.name,
+    input.promptText,
+    input.geometry?.kind === "preset" ? input.geometry.preset : undefined,
+    input.promptProperties?.fontFace,
+  ]) {
+    if (value !== undefined) assertXmlText(value);
   }
 
   // Reuse the existing public shape validators without retaining their immutable result.
@@ -202,6 +218,22 @@ function assertPlaceholderInput(
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     throw new Error(message.replace(/^addShape:/u, "addPlaceholder:"));
+  }
+}
+
+function assertXmlText(value: string): void {
+  for (let index = 0; index < value.length; index += 1) {
+    const codePoint = value.codePointAt(index);
+    if (codePoint === undefined) continue;
+    if (codePoint > 0xffff) index += 1;
+    const valid =
+      codePoint === 0x9 ||
+      codePoint === 0xa ||
+      codePoint === 0xd ||
+      (codePoint >= 0x20 && codePoint <= 0xd7ff) ||
+      (codePoint >= 0xe000 && codePoint <= 0xfffd) ||
+      (codePoint >= 0x10000 && codePoint <= 0x10ffff);
+    if (!valid) throw new Error("addPlaceholder: text contains an invalid XML character");
   }
 }
 

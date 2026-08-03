@@ -336,8 +336,9 @@ authoring.target(productSlideHandle).addTextBox({
 `addPlaceholder(source, targetHandle, input)` and
 `authoring.target(targetHandle).addPlaceholder(input)` create native `p:sp/p:ph` definitions.
 The initial subset is intentionally limited to `title` and `body` on masters, and `title`,
-`ctrTitle`, `body`, and `subTitle` on layouts. Callers provide an unsigned `index`; duplicate
-effective indexes within a drawing part are rejected. Master placeholders require a transform.
+`ctrTitle`, `body`, and `subTitle` on layouts. Callers provide an unsigned 32-bit `index`
+(`0..0xffffffff`); duplicate effective indexes within a drawing part are rejected. Master
+placeholders require a transform.
 A layout transform may be omitted only when exactly one compatible master placeholder supplies
 it (`title`/`ctrTitle` → master `title`, `body`/`subTitle` → master `body`).
 
@@ -363,9 +364,11 @@ authoring.target(productLayoutHandle).addPlaceholder({
 
 `addEmptySlideFromLayout` materializes every non-special layout placeholder as an empty
 slide-local `p:sp` shell in document order. The shell retains the source-local `p:ph` identity
-attributes, but does not copy prompt runs, transform, geometry, or text style. Those values remain
-inherited through the computed view. `dt`, `ftr`, `sldNum`, and `hdr` placeholders, direct slide
-placeholder authoring, and layout-change reconciliation are outside this initial subset.
+attributes, but does not copy prompt runs, transform, geometry, or text style. Prompt runs remain
+only on the layout/master definitions and are not inherited as slide text. Transform, geometry,
+and supported list/text styles are resolved through the computed view. `dt`, `ftr`, `sldNum`, and
+`hdr` placeholders, direct slide placeholder authoring, and layout-change reconciliation are
+outside this initial subset.
 
 ### Editing existing backgrounds
 
