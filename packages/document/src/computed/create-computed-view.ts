@@ -618,7 +618,7 @@ function computeChartElement(
   partPath: PartPath,
 ): ComputedChartElement {
   const match = slidePlaceholderMatch(context, chart, layer);
-  const relationship = context.relationships.find(
+  const relationship = resolveComputedRelationships(context.source, partPath).find(
     (rel) => rel.id === chart.chartRelationshipId && CHART_REL_TYPES.has(rel.type),
   );
   const chartXml =
@@ -647,7 +647,7 @@ function computeSmartArtElement(
   partPath: PartPath,
 ): ComputedSmartArtElement {
   const match = slidePlaceholderMatch(context, smartArt, layer);
-  const dataRelationship = context.relationships.find(
+  const dataRelationship = resolveComputedRelationships(context.source, partPath).find(
     (rel) => rel.id === smartArt.dataRelationshipId && DIAGRAM_DATA_REL_TYPES.has(rel.type),
   );
   const dataRelationships =
