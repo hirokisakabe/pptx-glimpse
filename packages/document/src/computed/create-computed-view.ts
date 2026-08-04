@@ -12,6 +12,7 @@ import {
 import type {
   PartPath,
   PptxSourceModel,
+  SourceBackground,
   SourceBlipEffects,
   SourceCellBorders,
   SourceEffectList,
@@ -71,6 +72,7 @@ import type {
   ComputedTableElement,
   ComputedTableRow,
   ComputedTextBody,
+  ComputedTemplateTarget,
   CreateComputedViewOptions,
   PptxComputedView,
 } from "./pptx-computed-view.js";
@@ -135,6 +137,106 @@ export function createComputedView(
       ? { slideSize: { ...source.presentation.slideSize } }
       : {}),
     slides,
+  };
+}
+
+/**
+ * Projects one master or layout as a transient computed render target.
+ *
+ * The projection reads only template parts. A layout target resolves its background against the
+ * master, includes visible master non-placeholder shapes, and resolves layout placeholders against
+ * compatible master definitions. Presentation slides and their user-authored content are never
+ * consulted.
+ */
+export function createComputedTemplateView(
+  source: PptxSourceModel,
+  target: ComputedTemplateTarget,
+): PptxComputedView {
+  const computed =
+    target.kind === "slideMaster"
+      ? computeMasterTemplate(source, target.partPath)
+      : computeLayoutTemplate(source, target.partPath);
+  return {
+    ...(source.presentation.slideSize !== undefined
+      ? { slideSize: { ...source.presentation.slideSize } }
+      : {}),
+    slides: computed !== undefined ? [computed] : [],
+  };
+}
+
+function computeMasterTemplate(
+  source: PptxSourceModel,
+  partPath: PartPath,
+): ComputedSlide | undefined {
+  const master = source.slideMasters.find((candidate) => candidate.partPath === partPath);
+  if (master === undefined) return undefined;
+  const theme =
+    master.themePartPath !== undefined
+      ? source.themes.find((candidate) => candidate.partPath === master.themePartPath)
+      : undefined;
+  const colorMap = buildEffectiveColorMap(master.colorMap, undefined, undefined);
+  const relationships = resolveComputedRelationships(source, master.partPath);
+  const context: ComputeContext = { source, master, theme, colorMap, relationships };
+  return {
+    slideNumber: 1,
+    partPath: master.partPath,
+    masterPartPath: master.partPath,
+    ...(theme?.partPath !== undefined ? { themePartPath: theme.partPath } : {}),
+    ...(source.presentation.slideSize !== undefined
+      ? { slideSize: { ...source.presentation.slideSize } }
+      : {}),
+    relationships,
+    colorMap,
+    colorScheme: buildComputedColorScheme(context),
+    ...(computeTemplateBackground(context, undefined, master) ?? {}),
+    showMasterShapes: true,
+    layoutShowMasterShapes: true,
+    elements: master.shapes.map((element) =>
+      computeElement(context, element, "master", master.partPath),
+    ),
+  };
+}
+
+function computeLayoutTemplate(
+  source: PptxSourceModel,
+  partPath: PartPath,
+): ComputedSlide | undefined {
+  const layout = source.slideLayouts.find((candidate) => candidate.partPath === partPath);
+  if (layout === undefined) return undefined;
+  const master = source.slideMasters.find(
+    (candidate) => candidate.partPath === layout.masterPartPath,
+  );
+  const theme =
+    master?.themePartPath !== undefined
+      ? source.themes.find((candidate) => candidate.partPath === master.themePartPath)
+      : undefined;
+  const colorMap = buildEffectiveColorMap(master?.colorMap, layout.colorMapOverride, undefined);
+  const relationships = resolveComputedRelationships(source, layout.partPath);
+  const context: ComputeContext = { source, layout, master, theme, colorMap, relationships };
+  const showMasterShapes = layout.showMasterShapes ?? true;
+  return {
+    slideNumber: 1,
+    partPath: layout.partPath,
+    layoutPartPath: layout.partPath,
+    ...(master !== undefined ? { masterPartPath: master.partPath } : {}),
+    ...(theme?.partPath !== undefined ? { themePartPath: theme.partPath } : {}),
+    ...(source.presentation.slideSize !== undefined
+      ? { slideSize: { ...source.presentation.slideSize } }
+      : {}),
+    relationships,
+    colorMap,
+    colorScheme: buildComputedColorScheme(context),
+    ...(computeTemplateBackground(context, layout, master) ?? {}),
+    showMasterShapes,
+    layoutShowMasterShapes: showMasterShapes,
+    elements: [
+      ...(showMasterShapes && master !== undefined
+        ? computeTemplateElements(context, master.shapes, "master", master.partPath)
+        : []),
+      ...layout.shapes.map((element) =>
+        computeElement(context, element, "layout", layout.partPath),
+      ),
+    ],
   };
 }
 
@@ -244,6 +346,17 @@ function computeBackground(
           : undefined;
   if (picked === undefined) return undefined;
 
+  return computePickedBackground(context, picked);
+}
+
+function computePickedBackground(
+  context: ComputeContext,
+  picked: {
+    readonly sourceLayer: ComputedElementLayer;
+    readonly partPath: PartPath;
+    readonly background: SourceBackground;
+  },
+): { readonly background: ComputedBackground } {
   const { background, sourceLayer } = picked;
   switch (background.kind) {
     case "fill":
@@ -270,6 +383,24 @@ function computeBackground(
     case "raw":
       return { background: { kind: "raw", source: background, sourceLayer } };
   }
+}
+
+function computeTemplateBackground(
+  context: ComputeContext,
+  layout: SourceSlideLayout | undefined,
+  master: SourceSlideMaster | undefined,
+): { readonly background: ComputedBackground } | undefined {
+  const picked =
+    layout?.background !== undefined
+      ? { sourceLayer: "layout" as const, partPath: layout.partPath, background: layout.background }
+      : master?.background !== undefined
+        ? {
+            sourceLayer: "master" as const,
+            partPath: master.partPath,
+            background: master.background,
+          }
+        : undefined;
+  return picked === undefined ? undefined : computePickedBackground(context, picked);
 }
 
 function computeTemplateElements(
@@ -381,16 +512,7 @@ function computeShapeElement(
   layer: ComputedElementLayer,
   partPath: PartPath,
 ): ComputedShapeElement {
-  const match =
-    layer === "slide"
-      ? findPlaceholderMatch(
-          {
-            layoutShapes: context.layout?.shapes ?? [],
-            masterShapes: context.master?.shapes ?? [],
-          },
-          shape,
-        )
-      : undefined;
+  const match = templatePlaceholderMatch(context, shape, layer);
   const placeholderType =
     shape.placeholder !== undefined ? (shape.placeholder.type ?? "obj") : undefined;
   const layoutShape = match?.layout;
@@ -570,15 +692,22 @@ function slidePlaceholderMatch(
   shape: SourceShapeNode,
   layer: ComputedElementLayer,
 ): ComputedPlaceholderMatch | undefined {
-  return layer === "slide"
-    ? findPlaceholderMatch(
-        {
-          layoutShapes: context.layout?.shapes ?? [],
-          masterShapes: context.master?.shapes ?? [],
-        },
-        shape,
-      )
-    : undefined;
+  return templatePlaceholderMatch(context, shape, layer);
+}
+
+function templatePlaceholderMatch(
+  context: ComputeContext,
+  shape: SourceShapeNode,
+  layer: ComputedElementLayer,
+): ComputedPlaceholderMatch | undefined {
+  if (layer === "master") return undefined;
+  return findPlaceholderMatch(
+    {
+      layoutShapes: layer === "layout" ? [shape] : (context.layout?.shapes ?? []),
+      masterShapes: context.master?.shapes ?? [],
+    },
+    shape,
+  );
 }
 
 function computedPlaceholderTransform(

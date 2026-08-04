@@ -65,6 +65,11 @@ export interface CreateComputedViewOptions {
   readonly applyMasterVisibility?: boolean;
 }
 
+/** One template part projected as a non-mutating computed render target. */
+export type ComputedTemplateTarget =
+  | { readonly kind: "slideMaster"; readonly partPath: PartPath }
+  | { readonly kind: "slideLayout"; readonly partPath: PartPath };
+
 export interface PptxComputedView {
   readonly slideSize?: ComputedSlideSize;
   readonly slides: readonly ComputedSlide[];

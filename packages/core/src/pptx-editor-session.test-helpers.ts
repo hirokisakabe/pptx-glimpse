@@ -5,6 +5,7 @@ import {
   addShape,
   asEmu,
   createPptx,
+  createPptxAuthoringSession,
   readPptx,
   type SourceConnector,
   type SourceShape,
@@ -40,6 +41,81 @@ export function buildGroupCommandFixture(): Uint8Array {
     });
   }
   return writePptx(source);
+}
+
+export async function buildTemplatePreviewFixture(): Promise<Uint8Array> {
+  const source = createPptx({
+    slideMaster: {
+      background: { kind: "solid", color: { kind: "srgb", hex: "AA1122" } },
+    },
+  });
+  const masterHandle = source.slideMasters[0]?.handle;
+  const layoutHandle = source.slideLayouts[0]?.handle;
+  const slideHandle = source.slides[0]?.handle;
+  if (masterHandle === undefined || layoutHandle === undefined || slideHandle === undefined) {
+    throw new Error("template preview fixture handles are missing");
+  }
+  const session = createPptxAuthoringSession(source);
+  session.target(masterHandle).addShape({
+    name: "Master normal shape",
+    geometry: { kind: "preset", preset: "rect" },
+    fill: { kind: "solid", color: { kind: "srgb", hex: "223344" } },
+    offsetX: asEmu(200000),
+    offsetY: asEmu(200000),
+    width: asEmu(1800000),
+    height: asEmu(500000),
+    text: "MASTER NORMAL",
+  });
+  session.target(masterHandle).addPlaceholder({
+    type: "title",
+    index: 7,
+    name: "Master inherited title",
+    transform: {
+      offsetX: asEmu(900000),
+      offsetY: asEmu(900000),
+      width: asEmu(5000000),
+      height: asEmu(1000000),
+    },
+    promptText: "MASTER PROMPT",
+  });
+  session.target(layoutHandle).setBackground({
+    kind: "solid",
+    color: { kind: "srgb", hex: "1155AA" },
+  });
+  session.target(layoutHandle).addShape({
+    name: "Layout normal shape",
+    geometry: { kind: "preset", preset: "roundRect" },
+    fill: { kind: "solid", color: { kind: "srgb", hex: "445566" } },
+    offsetX: asEmu(300000),
+    offsetY: asEmu(4200000),
+    width: asEmu(2200000),
+    height: asEmu(500000),
+    text: "LAYOUT NORMAL",
+  });
+  session.target(layoutHandle).addPlaceholder({
+    type: "ctrTitle",
+    index: 7,
+    name: "Layout inherited title",
+    promptText: "LAYOUT PROMPT",
+  });
+  session.target(slideHandle).addTextBox({
+    offsetX: asEmu(1000000),
+    offsetY: asEmu(2500000),
+    width: asEmu(5000000),
+    height: asEmu(800000),
+    text: "REAL SLIDE USER CONTENT",
+  });
+
+  const zip = await JSZip.loadAsync(writePptx(session.source));
+  const layoutPath = layoutHandle.partPath;
+  const layoutFile = zip.file(layoutPath);
+  if (layoutFile === null) throw new Error("template preview layout part is missing");
+  const layoutXml = await layoutFile.async("string");
+  zip.file(
+    layoutPath,
+    layoutXml.replace("</p:spTree>", '<p:contentPart r:id="rIdUnsupported"/></p:spTree>'),
+  );
+  return zip.generateAsync({ type: "uint8array" });
 }
 
 export async function buildScatterChartFixture(): Promise<Uint8Array> {

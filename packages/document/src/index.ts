@@ -63,10 +63,11 @@ export type {
   ComputedTableRow,
   ComputedTextBody,
   ComputedTextRun,
+  ComputedTemplateTarget,
   CreateComputedViewOptions,
   PptxComputedView,
 } from "./computed/index.js";
-export { createComputedView } from "./computed/index.js";
+export { createComputedTemplateView, createComputedView } from "./computed/index.js";
 export type { ReadPptxInput } from "./reader/index.js";
 export { readPptx } from "./reader/index.js";
 export type {
