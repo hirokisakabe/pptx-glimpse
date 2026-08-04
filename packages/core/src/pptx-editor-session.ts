@@ -687,7 +687,12 @@ export class PptxEditorSession {
     themeHandle: SourceHandle,
     input: UpdateThemeSchemeInput,
   ): Promise<PptxEditorSlidesResponse> {
-    return this.apply({ kind: "updateThemeScheme", handle: themeHandle, ...input });
+    return this.apply({
+      kind: "updateThemeScheme",
+      handle: themeHandle,
+      colorScheme: input.colorScheme,
+      fontScheme: input.fontScheme,
+    });
   }
 
   /**

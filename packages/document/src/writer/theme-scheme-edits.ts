@@ -1,6 +1,8 @@
-import { getChild, localName, type XmlNode } from "../reader/xml.js";
+import { localName, type XmlNode } from "../reader/xml.js";
 import type { PptxSourceModelUpdateThemeSchemeEdit } from "../source/index.js";
 import {
+  drawingMlChildren,
+  requireUniqueDrawingMlChild,
   THEME_COLOR_SLOTS,
   validateEditableThemeStructure,
 } from "../source/theme-scheme-editing.js";
@@ -21,63 +23,83 @@ export function applyUpdateThemeSchemeEdit(
   edit: PptxSourceModelUpdateThemeSchemeEdit,
 ): void {
   validateEditableThemeStructure(root, edit, "writePptx");
-  const themeElements = getChild(getChild(root, "theme"), "themeElements");
-  if (themeElements === undefined) {
-    throw new Error("writePptx: theme elements are missing after validation");
-  }
+  const theme = requireUniqueDrawingMlChild(root, {}, "theme", "writePptx");
+  const themeElements = requireUniqueDrawingMlChild(
+    theme.node,
+    theme.namespaces,
+    "themeElements",
+    "writePptx",
+  );
 
   if (edit.colorScheme !== undefined) {
-    const colorScheme = getChild(themeElements, "clrScheme");
-    if (colorScheme === undefined) {
-      throw new Error("writePptx: color scheme is missing after validation");
-    }
+    const colorScheme = requireUniqueDrawingMlChild(
+      themeElements.node,
+      themeElements.namespaces,
+      "clrScheme",
+      "writePptx",
+    );
     for (const slot of THEME_COLOR_SLOTS) {
       const hex = edit.colorScheme[slot];
       if (hex === undefined) continue;
-      const slotNode = getChild(colorScheme, slot);
-      if (slotNode === undefined) {
-        throw new Error(`writePptx: theme color slot '${slot}' is missing after validation`);
-      }
-      const entries = Object.entries(slotNode);
-      const colorIndex = entries.findIndex(
-        ([key]) => !key.startsWith("@_") && COLOR_CHOICE_NAMES.has(localName(key)),
+      const slotNode = requireUniqueDrawingMlChild(
+        colorScheme.node,
+        colorScheme.namespaces,
+        slot,
+        "writePptx",
       );
-      const oldKey = entries[colorIndex]?.[0];
-      if (colorIndex < 0 || oldKey === undefined) {
+      const colorChoices = drawingMlChildren(slotNode.node, slotNode.namespaces).filter((child) =>
+        COLOR_CHOICE_NAMES.has(localName(child.key)),
+      );
+      const colorChoice = colorChoices[0];
+      if (colorChoice === undefined) {
         throw new Error(`writePptx: theme color slot '${slot}' is missing after validation`);
       }
+      const entries = Object.entries(slotNode.node);
+      const colorIndex = entries.findIndex(
+        ([key, value]) => key === colorChoice.key && value === colorChoice.value,
+      );
+      if (colorIndex < 0) {
+        throw new Error(`writePptx: theme color slot '${slot}' is missing after validation`);
+      }
+      const oldKey = colorChoice.key;
       const colon = oldKey.indexOf(":");
       const srgbKey = colon === -1 ? "srgbClr" : `${oldKey.slice(0, colon)}:srgbClr`;
-      const oldValue = entries[colorIndex]?.[1];
+      const oldValue = colorChoice.value;
       const newValue = { "@_val": hex };
-      const ordered = getXmlChildOrder(slotNode).map((entry) =>
+      const ordered = getXmlChildOrder(slotNode.node).map((entry) =>
         entry.key === oldKey && entry.value === oldValue
           ? { key: srgbKey, value: newValue }
           : entry,
       );
       entries[colorIndex] = [srgbKey, newValue];
-      replaceNodeEntries(slotNode, entries);
-      setXmlChildOrder(slotNode, ordered);
+      replaceNodeEntries(slotNode.node, entries);
+      setXmlChildOrder(slotNode.node, ordered);
     }
   }
 
   if (edit.fontScheme !== undefined) {
-    const fontScheme = getChild(themeElements, "fontScheme");
-    if (fontScheme === undefined) {
-      throw new Error("writePptx: font scheme is missing after validation");
-    }
+    const fontScheme = requireUniqueDrawingMlChild(
+      themeElements.node,
+      themeElements.namespaces,
+      "fontScheme",
+      "writePptx",
+    );
     for (const [kind, fields] of Object.entries(edit.fontScheme)) {
       if (fields === undefined) continue;
-      const fontSet = getChild(fontScheme, `${kind}Font`);
-      if (fontSet === undefined) {
-        throw new Error(`writePptx: ${kind} font set is missing after validation`);
-      }
+      const fontSet = requireUniqueDrawingMlChild(
+        fontScheme.node,
+        fontScheme.namespaces,
+        `${kind}Font`,
+        "writePptx",
+      );
       for (const [field, typeface] of Object.entries(fields)) {
-        const font = getChild(fontSet, fontElementName(field));
-        if (font === undefined) {
-          throw new Error(`writePptx: ${kind} ${field} font is missing after validation`);
-        }
-        font["@_typeface"] = typeface;
+        const font = requireUniqueDrawingMlChild(
+          fontSet.node,
+          fontSet.namespaces,
+          fontElementName(field),
+          "writePptx",
+        );
+        font.node["@_typeface"] = typeface;
       }
     }
   }

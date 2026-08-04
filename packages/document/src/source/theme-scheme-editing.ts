@@ -65,6 +65,7 @@ const COLOR_CHOICE_NAMES: ReadonlySet<string> = new Set([
   "schemeClr",
   "prstClr",
 ]);
+const DRAWINGML_NAMESPACE = "http://schemas.openxmlformats.org/drawingml/2006/main";
 
 const textDecoder = new TextDecoder();
 
@@ -126,14 +127,29 @@ export function validateEditableThemeStructure(
   patch: Omit<PptxSourceModelUpdateThemeSchemeEdit, "kind" | "themePartPath">,
   operationName = "updateThemeScheme",
 ): void {
-  const theme = requireUniqueChild(root, "theme", operationName);
-  const themeElements = requireUniqueChild(theme, "themeElements", operationName);
+  const theme = requireUniqueDrawingMlChild(root, {}, "theme", operationName);
+  const themeElements = requireUniqueDrawingMlChild(
+    theme.node,
+    theme.namespaces,
+    "themeElements",
+    operationName,
+  );
   if (patch.colorScheme !== undefined) {
-    const colorScheme = requireUniqueChild(themeElements, "clrScheme", operationName);
+    const colorScheme = requireUniqueDrawingMlChild(
+      themeElements.node,
+      themeElements.namespaces,
+      "clrScheme",
+      operationName,
+    );
     for (const slot of Object.keys(patch.colorScheme)) {
-      const slotNode = requireUniqueChild(colorScheme, slot, operationName);
-      const colorChoices = childEntries(slotNode).filter(([key]) =>
-        COLOR_CHOICE_NAMES.has(localName(key)),
+      const slotNode = requireUniqueDrawingMlChild(
+        colorScheme.node,
+        colorScheme.namespaces,
+        slot,
+        operationName,
+      );
+      const colorChoices = drawingMlChildren(slotNode.node, slotNode.namespaces).filter((child) =>
+        COLOR_CHOICE_NAMES.has(localName(child.key)),
       );
       if (colorChoices.length !== 1) {
         throw new Error(
@@ -143,12 +159,27 @@ export function validateEditableThemeStructure(
     }
   }
   if (patch.fontScheme !== undefined) {
-    const fontScheme = requireUniqueChild(themeElements, "fontScheme", operationName);
+    const fontScheme = requireUniqueDrawingMlChild(
+      themeElements.node,
+      themeElements.namespaces,
+      "fontScheme",
+      operationName,
+    );
     for (const [kind, fields] of Object.entries(patch.fontScheme)) {
       if (fields === undefined) continue;
-      const fontSet = requireUniqueChild(fontScheme, `${kind}Font`, operationName);
+      const fontSet = requireUniqueDrawingMlChild(
+        fontScheme.node,
+        fontScheme.namespaces,
+        `${kind}Font`,
+        operationName,
+      );
       for (const field of Object.keys(fields)) {
-        requireUniqueChild(fontSet, fontElementName(field), operationName);
+        requireUniqueDrawingMlChild(
+          fontSet.node,
+          fontSet.namespaces,
+          fontElementName(field),
+          operationName,
+        );
       }
     }
   }
@@ -278,21 +309,77 @@ function assertValidXmlAttribute(value: string, field: string): void {
   }
 }
 
-function requireUniqueChild(parent: XmlNode, name: string, operationName: string): XmlNode {
-  const matches = childEntries(parent).filter(([key]) => localName(key) === name);
-  const nodes = matches.flatMap(([, value]) =>
-    Array.isArray(value) ? value.filter(isRecord) : isRecord(value) ? [value] : [],
+export interface DrawingMlChild {
+  readonly key: string;
+  readonly value: unknown;
+  readonly namespaces: Readonly<Record<string, string>>;
+}
+
+export interface DrawingMlNodeChild extends DrawingMlChild {
+  readonly node: XmlNode;
+}
+
+/** Return actual DrawingML child elements, flattening same-qualified-name parser arrays. */
+export function drawingMlChildren(
+  parent: XmlNode,
+  inheritedNamespaces: Readonly<Record<string, string>>,
+): readonly DrawingMlChild[] {
+  return childEntries(parent).flatMap(([key, groupedValue]) => {
+    const values = xmlElementValues(groupedValue);
+    return values.flatMap((value) => {
+      const namespaces = namespacesInScope(inheritedNamespaces, value);
+      if (namespaceUri(key, namespaces) !== DRAWINGML_NAMESPACE) return [];
+      const child: DrawingMlChild = { key, value, namespaces };
+      return [child];
+    });
+  });
+}
+
+/** Require exactly one DrawingML child with the requested local name. */
+export function requireUniqueDrawingMlChild(
+  parent: XmlNode,
+  inheritedNamespaces: Readonly<Record<string, string>>,
+  name: string,
+  operationName: string,
+): DrawingMlNodeChild {
+  const matches = drawingMlChildren(parent, inheritedNamespaces).filter(
+    (child) => localName(child.key) === name,
   );
-  if (matches.length !== 1 || nodes.length !== 1) {
+  const match = matches[0];
+  if (matches.length !== 1 || match === undefined || !isRecord(match.value)) {
     throw new Error(`${operationName}: theme must contain exactly one a:${name} element`);
   }
-  const node = nodes[0];
-  if (node === undefined) throw new Error(`${operationName}: a:${name} element is missing`);
-  return node;
+  return { ...match, node: match.value };
 }
 
 function childEntries(node: XmlNode): [string, unknown][] {
   return Object.entries(node).filter(([key]) => !key.startsWith("@_") && key !== "#text");
+}
+
+function xmlElementValues(value: unknown): readonly unknown[] {
+  return Array.isArray(value) ? value.map((item: unknown) => item) : [value];
+}
+
+function namespacesInScope(
+  inheritedNamespaces: Readonly<Record<string, string>>,
+  value: unknown,
+): Readonly<Record<string, string>> {
+  if (!isRecord(value)) return inheritedNamespaces;
+  const namespaces = { ...inheritedNamespaces };
+  for (const [key, declaration] of Object.entries(value)) {
+    if (typeof declaration !== "string") continue;
+    if (key === "@_xmlns") namespaces[""] = declaration;
+    else if (key.startsWith("@_xmlns:")) namespaces[key.slice("@_xmlns:".length)] = declaration;
+  }
+  return namespaces;
+}
+
+function namespaceUri(
+  qualifiedName: string,
+  namespaces: Readonly<Record<string, string>>,
+): string | undefined {
+  const colon = qualifiedName.indexOf(":");
+  return namespaces[colon < 0 ? "" : qualifiedName.slice(0, colon)];
 }
 
 function fontElementName(field: string): string {

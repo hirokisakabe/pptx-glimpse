@@ -269,6 +269,34 @@ describe("PptxEditorSession - rendering", () => {
     expect((await editor.redo()).history).toMatchObject({ undoDepth: 1, redoDepth: 0 });
     expect(renderCalls.at(-1)).toEqual([1]);
   });
+
+  it("keeps the convenience method's command kind and handle for untyped input", async () => {
+    const createTestEditorSession = createPptxEditorSessionFactory((source, options) =>
+      renderPptxSourceModelToSvg(source, options),
+    );
+    const editor = await createTestEditorSession(buildThemeRenderFixture(), {
+      skipSystemFonts: true,
+    });
+    const handle = editor.document.themes[0]?.handle;
+    if (handle === undefined) throw new Error("theme handle not found");
+    const untypedInput = {
+      colorScheme: { accent1: "123456" },
+      kind: "deleteSlide",
+      handle: { partPath: "ppt/theme/missing.xml" },
+    };
+
+    await expect(editor.updateThemeScheme(handle, untypedInput)).resolves.toMatchObject({
+      history: { undoDepth: 1 },
+    });
+    expect(editor.document.themes[0]?.colorScheme?.colors.accent1).toEqual({
+      kind: "srgb",
+      hex: "123456",
+    });
+    expect(editor.document.edits?.at(-1)).toMatchObject({
+      kind: "updateThemeScheme",
+      themePartPath: handle.partPath,
+    });
+  });
 });
 
 function buildThemeRenderFixture(): Uint8Array {

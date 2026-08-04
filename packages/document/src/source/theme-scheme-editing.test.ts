@@ -227,6 +227,28 @@ describe("updateThemeScheme", () => {
       /must contain exactly one supported color/,
     );
 
+    const duplicateColorFiles = unzipSync(existingThemeFixture());
+    const duplicateColorTheme = decoder
+      .decode(requireEntry(duplicateColorFiles, themePath))
+      .replace(
+        '<a:accent1><a:srgbClr val="4472C4"/></a:accent1>',
+        '<a:accent1><a:srgbClr val="4472C4"/><a:srgbClr val="112233"/></a:accent1>',
+      );
+    const duplicateColor = readPptx(
+      zipSync({ ...duplicateColorFiles, [themePath]: encoder.encode(duplicateColorTheme) }),
+    );
+    const duplicateThemes = duplicateColor.themes;
+    const duplicateEdits = duplicateColor.edits;
+    const duplicatePackageGraph = duplicateColor.packageGraph;
+    expect(() =>
+      updateThemeScheme(duplicateColor, requireThemeHandle(duplicateColor), {
+        colorScheme: { accent1: "123456" },
+      }),
+    ).toThrow(/must contain exactly one supported color/);
+    expect(duplicateColor.themes).toBe(duplicateThemes);
+    expect(duplicateColor.edits).toBe(duplicateEdits);
+    expect(duplicateColor.packageGraph).toBe(duplicatePackageGraph);
+
     const missingFontFiles = unzipSync(existingThemeFixture());
     const missingFontTheme = decoder
       .decode(requireEntry(missingFontFiles, themePath))
@@ -242,6 +264,81 @@ describe("updateThemeScheme", () => {
         }),
       /exactly one a:latin element/,
     );
+  });
+
+  it("matches DrawingML by namespace URI and preserves foreign same-local-name children", () => {
+    const files = unzipSync(existingThemeFixture());
+    const namespacedTheme = decoder
+      .decode(requireEntry(files, themePath))
+      .replace(
+        "</a:themeElements>",
+        '</a:themeElements><x:themeElements marker="foreign-theme-elements"/>',
+      )
+      .replace("</a:clrScheme>", '</a:clrScheme><x:clrScheme marker="foreign-color-scheme"/>')
+      .replace("</a:fontScheme>", '</a:fontScheme><x:fontScheme marker="foreign-font-scheme"/>')
+      .replace(
+        '<a:accent1><a:srgbClr val="4472C4"/></a:accent1>',
+        '<a:accent1><a:srgbClr val="4472C4"/><x:srgbClr val="FOREIGN"/></a:accent1><x:accent1 marker="foreign-slot"/>',
+      )
+      .replace(
+        '<a:latin typeface="Original Display"/>',
+        '<a:latin typeface="Original Display"/><x:latin typeface="Foreign Display"/>',
+      );
+    const source = readPptx(zipSync({ ...files, [themePath]: encoder.encode(namespacedTheme) }));
+    const output = writePptx(
+      updateThemeScheme(source, requireThemeHandle(source), {
+        colorScheme: { accent1: "123456" },
+        fontScheme: { major: { latin: "Brand Display" } },
+      }),
+    );
+    const outputTheme = decoder.decode(requireEntry(unzipSync(output), themePath));
+
+    expect(outputTheme).toContain('<x:themeElements marker="foreign-theme-elements"/>');
+    expect(outputTheme).toContain('<x:clrScheme marker="foreign-color-scheme"/>');
+    expect(outputTheme).toContain('<x:fontScheme marker="foreign-font-scheme"/>');
+    expect(outputTheme).toContain('<x:accent1 marker="foreign-slot"/>');
+    expect(outputTheme).toContain('<x:srgbClr val="FOREIGN"/>');
+    expect(outputTheme).toContain('<x:latin typeface="Foreign Display"/>');
+    expect(outputTheme).toContain('<a:latin typeface="Brand Display"/>');
+    expect(outputTheme).toContain(
+      '<a:accent1><a:srgbClr val="123456"/><x:srgbClr val="FOREIGN"/></a:accent1>',
+    );
+  });
+
+  it("accepts an in-scope DrawingML prefix alias but rejects two DrawingML siblings", () => {
+    const aliasFiles = unzipSync(existingThemeFixture());
+    const aliasTheme = decoder
+      .decode(requireEntry(aliasFiles, themePath))
+      .replaceAll("a:", "d:")
+      .replace("xmlns:a=", "xmlns:d=");
+    const aliasSource = readPptx(
+      zipSync({ ...aliasFiles, [themePath]: encoder.encode(aliasTheme) }),
+    );
+    const aliasOutput = writePptx(
+      updateThemeScheme(aliasSource, requireThemeHandle(aliasSource), {
+        colorScheme: { accent1: "123456" },
+      }),
+    );
+    expect(decoder.decode(requireEntry(unzipSync(aliasOutput), themePath))).toContain(
+      '<d:accent1><d:srgbClr val="123456"/></d:accent1>',
+    );
+
+    const ambiguousTheme = aliasTheme.replace(
+      "<d:themeElements>",
+      "<d:themeElements/><d:themeElements>",
+    );
+    const ambiguous = readPptx(
+      zipSync({ ...aliasFiles, [themePath]: encoder.encode(ambiguousTheme) }),
+    );
+    const themes = ambiguous.themes;
+    const edits = ambiguous.edits;
+    expect(() =>
+      updateThemeScheme(ambiguous, requireThemeHandle(ambiguous), {
+        colorScheme: { accent1: "123456" },
+      }),
+    ).toThrow(/exactly one a:themeElements element/);
+    expect(ambiguous.themes).toBe(themes);
+    expect(ambiguous.edits).toBe(edits);
   });
 });
 

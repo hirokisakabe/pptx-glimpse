@@ -730,7 +730,12 @@ export class EditorSession {
 
   /** Update field-level color/font values for one existing theme handle. */
   updateThemeScheme(handle: SourceHandle, input: UpdateThemeSchemeInput): EditorApplyCommandResult {
-    return this.apply({ kind: "updateThemeScheme", handle, ...input });
+    return this.apply({
+      kind: "updateThemeScheme",
+      handle,
+      colorScheme: input.colorScheme,
+      fontScheme: input.fontScheme,
+    });
   }
 
   apply(command: EditorCommand): EditorApplyCommandResult {

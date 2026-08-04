@@ -51,6 +51,27 @@ describe("EditorSession theme scheme commands", () => {
     expect(session.undoDepth).toBe(0);
     expect(session.redoDepth).toBe(0);
   });
+
+  it("does not let untyped convenience input override the command kind or supplied handle", () => {
+    const source = readPptx(writePptx(createPptx()));
+    const session = createEditorSession(source);
+    const handle = requireThemeHandle(source.themes[0]?.handle);
+    const untypedInput = {
+      colorScheme: { accent1: "123456" },
+      kind: "deleteSlide",
+      handle: { partPath: "ppt/theme/missing.xml" },
+    };
+
+    expect(session.updateThemeScheme(handle, untypedInput)).toMatchObject({ ok: true });
+    expect(session.document.themes[0]?.colorScheme?.colors.accent1).toEqual({
+      kind: "srgb",
+      hex: "123456",
+    });
+    expect(session.document.edits?.at(-1)).toMatchObject({
+      kind: "updateThemeScheme",
+      themePartPath: handle.partPath,
+    });
+  });
 });
 
 function requireThemeHandle(handle: SourceHandle | undefined): SourceHandle {
