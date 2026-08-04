@@ -967,12 +967,9 @@ function templatePreviewDiagnosticApplies(
   if (diagnostic.source !== "document" || diagnostic.sourcePartPath === undefined) return true;
   const target = computed.slides[0];
   if (target === undefined) return false;
-  return [
-    target.partPath,
-    target.layoutPartPath,
-    target.masterPartPath,
-    target.themePartPath,
-  ].some((partPath) => partPath === diagnostic.sourcePartPath);
+  return [target.partPath, target.layoutPartPath, target.masterPartPath, target.themePartPath].some(
+    (partPath) => partPath === diagnostic.sourcePartPath,
+  );
 }
 
 /**
