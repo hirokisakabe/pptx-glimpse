@@ -142,6 +142,7 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
       case "duplicateSlide":
       case "moveSlide":
       case "deleteSlide":
+      case "updateThemeScheme":
         break;
       case "setBackground":
       case "setSlideBackground": {

@@ -27,6 +27,7 @@ import {
   type SourceTextBody,
   type SourceTextBodyProperties,
   type SourceTextRun,
+  type UpdateThemeSchemeInput,
   writePptx,
 } from "@pptx-glimpse/document";
 import {
@@ -681,6 +682,14 @@ export class PptxEditorSession {
     return this.response(result.warnings);
   }
 
+  /** Update selected color/font fields on one existing theme and rerender its master slides. */
+  async updateThemeScheme(
+    themeHandle: SourceHandle,
+    input: UpdateThemeSchemeInput,
+  ): Promise<PptxEditorSlidesResponse> {
+    return this.apply({ kind: "updateThemeScheme", handle: themeHandle, ...input });
+  }
+
   /**
    * Delete the currently selected shape.
    *
@@ -826,6 +835,8 @@ export function affectedSlidePartPaths(
   after: PptxSourceModel,
 ): ReadonlySet<string> | undefined {
   if (before === after) return new Set();
+  const changedThemePartPaths = findChangedThemePartPaths(before, after);
+  if (changedThemePartPaths === undefined) return undefined;
   if (nonDrawingRenderingInputsChanged(before, after)) return undefined;
 
   const inheritedDrawingChanges = changedInheritedDrawingPartPaths(before, after);
@@ -846,6 +857,12 @@ export function affectedSlidePartPaths(
       layout !== undefined &&
       inheritedDrawingChanges.masterPartPaths.has(layout.masterPartPath)
     ) {
+      affected.add(slide.partPath);
+    }
+    const master = after.slideMasters.find(
+      (candidate) => candidate.partPath === layout?.masterPartPath,
+    );
+    if (master?.themePartPath !== undefined && changedThemePartPaths.has(master.themePartPath)) {
       affected.add(slide.partPath);
     }
   }
@@ -907,6 +924,7 @@ export function affectedSlidePartPaths(
   if (changedMediaPartPaths.size > 0 && !mediaChangeWasScoped) return undefined;
   if (affected.size > 0 || topologyChanged) return affected;
   if (changedMediaPartPaths.size > 0 && mediaChangeWasScoped) return affected;
+  if (changedThemePartPaths.size > 0) return affected;
   return undefined;
 }
 
@@ -915,7 +933,6 @@ function nonDrawingRenderingInputsChanged(
   after: PptxSourceModel,
 ): boolean {
   return (
-    !sameReferences(before.themes, after.themes) ||
     before.diagnostics !== after.diagnostics ||
     before.presentation.partPath !== after.presentation.partPath ||
     before.presentation.slideSize !== after.presentation.slideSize ||
@@ -923,6 +940,21 @@ function nonDrawingRenderingInputsChanged(
     before.presentation.handle !== after.presentation.handle ||
     before.presentation.rawSidecars !== after.presentation.rawSidecars
   );
+}
+
+function findChangedThemePartPaths(
+  before: PptxSourceModel,
+  after: PptxSourceModel,
+): ReadonlySet<string> | undefined {
+  if (before.themes.length !== after.themes.length) return undefined;
+  const beforeByPartPath = new Map(before.themes.map((theme) => [theme.partPath, theme]));
+  const changed = new Set<string>();
+  for (const theme of after.themes) {
+    const previous = beforeByPartPath.get(theme.partPath);
+    if (previous === undefined) return undefined;
+    if (previous !== theme) changed.add(theme.partPath);
+  }
+  return changed;
 }
 
 function changedHierarchyPartPaths<T>(
@@ -993,13 +1025,6 @@ function sameReferencesExceptShapesAndBackground(before: object, after: object):
     if (Reflect.get(before, key) !== Reflect.get(after, key)) return false;
   }
   return true;
-}
-
-function sameReferences<T>(before: readonly T[], after: readonly T[]): boolean {
-  return (
-    before === after ||
-    (before.length === after.length && before.every((value, index) => value === after[index]))
-  );
 }
 
 function findChangedMediaPartPaths(

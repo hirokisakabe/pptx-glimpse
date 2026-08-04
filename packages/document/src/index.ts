@@ -208,6 +208,7 @@ export type {
   PptxSourceModelUpdateBubbleChartDataEdit,
   PptxSourceModelUpdateChartDataEdit,
   PptxSourceModelUpdateScatterChartDataEdit,
+  PptxSourceModelUpdateThemeSchemeEdit,
   Pt,
   RawOoxmlNode,
   RawPackagePart,
@@ -314,6 +315,10 @@ export type {
   UpdateScatterChartDataInput,
   UpdateScatterChartSeriesDataInput,
   UpdateShapeTransformInput,
+  UpdateThemeColorSchemeInput,
+  UpdateThemeFontSchemeInput,
+  UpdateThemeFontSetInput,
+  UpdateThemeSchemeInput,
 } from "./source/index.js";
 export {
   addChart,
@@ -360,6 +365,7 @@ export {
   updateChartData,
   updateScatterChartData,
   updateShapeTransform,
+  updateThemeScheme,
 } from "./source/index.js";
 export {
   asEmu,

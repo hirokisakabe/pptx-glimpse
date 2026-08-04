@@ -1,4 +1,5 @@
-import { asEmu, readPptx } from "@pptx-glimpse/document";
+import { addShape, asEmu, createPptx, readPptx, writePptx } from "@pptx-glimpse/document";
+import { unzipSync, zipSync } from "fflate";
 import { describe, expect, it, vi } from "vitest";
 
 import { renderPptxSourceModelToSvg } from "./converter.js";
@@ -234,4 +235,60 @@ describe("PptxEditorSession - rendering", () => {
     expect(editor.slides[0]?.svg).toContain("First batch edited");
     expect(editor.slides[1]?.svg).toContain("Second batch edited");
   });
+
+  it("edits an existing theme through the public session and restores it through history", async () => {
+    const renderCalls: Array<readonly number[] | undefined> = [];
+    const createTestEditorSession = createPptxEditorSessionFactory((source, options) => {
+      renderCalls.push(options?.slides);
+      return renderPptxSourceModelToSvg(source, options);
+    });
+    const editor = await createTestEditorSession(buildThemeRenderFixture(), {
+      skipSystemFonts: true,
+    });
+    const handle = editor.document.themes[0]?.handle;
+    if (handle === undefined) throw new Error("theme handle not found");
+
+    const response = await editor.updateThemeScheme(handle, {
+      colorScheme: { accent1: "123456" },
+      fontScheme: { major: { latin: "Brand Display" } },
+    });
+    expect(renderCalls).toEqual([undefined, [1]]);
+    expect(response.history).toMatchObject({ canUndo: true, undoDepth: 1 });
+    expect(response.slides[0]?.svg).toContain('fill="#123456"');
+    expect(editor.document.themes[0]).toMatchObject({
+      colorScheme: { colors: { accent1: { kind: "srgb", hex: "123456" } } },
+      fontScheme: { majorLatin: "Brand Display" },
+    });
+    expect(readPptx(editor.save().pptx).themes[0]).toMatchObject({
+      colorScheme: { colors: { accent1: { kind: "srgb", hex: "123456" } } },
+      fontScheme: { majorLatin: "Brand Display" },
+    });
+
+    expect((await editor.undo()).history).toMatchObject({ undoDepth: 0, redoDepth: 1 });
+    expect(renderCalls.at(-1)).toEqual([1]);
+    expect((await editor.redo()).history).toMatchObject({ undoDepth: 1, redoDepth: 0 });
+    expect(renderCalls.at(-1)).toEqual([1]);
+  });
 });
+
+function buildThemeRenderFixture(): Uint8Array {
+  let source = createPptx();
+  const slideHandle = source.slides[0]?.handle;
+  if (slideHandle === undefined) throw new Error("fixture slide handle not found");
+  source = addShape(source, slideHandle, {
+    geometry: { kind: "preset", preset: "rect" },
+    offsetX: asEmu(100000),
+    offsetY: asEmu(100000),
+    width: asEmu(1000000),
+    height: asEmu(500000),
+    fill: { kind: "solid", color: { kind: "srgb", hex: "FFFFFF" } },
+  });
+  const files = unzipSync(writePptx(source));
+  const slidePath = "ppt/slides/slide1.xml";
+  const slide = files[slidePath];
+  if (slide === undefined) throw new Error("fixture slide part not found");
+  const xml = new TextDecoder()
+    .decode(slide)
+    .replace('<a:srgbClr val="FFFFFF"/>', '<a:schemeClr val="accent1"/>');
+  return zipSync({ ...files, [slidePath]: new TextEncoder().encode(xml) });
+}
