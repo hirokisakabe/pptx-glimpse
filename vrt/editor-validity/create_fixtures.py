@@ -716,6 +716,7 @@ def replace_zip_part_text(path, part_path, old, new):
                 output.writestr(item, data)
         if not replaced:
             raise RuntimeError(f"theme fixture part not found: {part_path}")
+        os.chmod(temporary_path, 0o644)
         os.replace(temporary_path, path)
     finally:
         if os.path.exists(temporary_path):
