@@ -138,6 +138,14 @@ describe("updateChartData", () => {
           values: [35, 48, 63],
         },
       ],
+      plotGroups: [
+        { chartType: "bar", valueAxisId: "100003" },
+        { chartType: "line", valueAxisId: "200003" },
+      ],
+      valueAxes: [
+        { id: "100003", position: "l" },
+        { id: "200003", position: "r" },
+      ],
     });
 
     const output = unzipSync(writePptx(edited));
@@ -247,6 +255,38 @@ describe("updateChartData", () => {
       ).toThrow("chart type or combination is not supported");
       expect(unsupported.edits).toBeUndefined();
     }
+  });
+
+  it("rejects a horizontal bar and line combo atomically", () => {
+    const files = unzipSync(buildExistingComboChart());
+    files["ppt/charts/chart1.xml"] = replaceText(
+      files["ppt/charts/chart1.xml"],
+      '<c:barDir val="col"/>',
+      '<c:barDir val="bar"/>',
+    );
+    const source = readPptx(zipFixture(files));
+    const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    if (chart?.handle === undefined) throw new Error("combo fixture should have a handle");
+
+    expect(() =>
+      updateChartData(source, chart.handle, {
+        series: [
+          {
+            source: { chartType: "bar", index: 0 },
+            name: "Bar",
+            categories: ["A"],
+            values: [1],
+          },
+          {
+            source: { chartType: "line", index: 7 },
+            name: "Line",
+            categories: ["A"],
+            values: [2],
+          },
+        ],
+      }),
+    ).toThrow("combo charts require barDir=col");
+    expect(source.edits).toBeUndefined();
   });
 
   it("adds series by cloning the last series formatting and synchronizes the workbook", () => {

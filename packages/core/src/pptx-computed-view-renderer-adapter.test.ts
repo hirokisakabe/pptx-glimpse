@@ -802,6 +802,24 @@ describe("adaptComputedViewToRendererModel", () => {
                     source: { chartType: "line", index: 7 },
                   },
                 ],
+                plotGroups: [
+                  {
+                    chartType: "line",
+                    seriesIndexes: [1],
+                    axisIds: ["100002", "200003"],
+                    valueAxisId: "200003",
+                  },
+                  {
+                    chartType: "bar",
+                    seriesIndexes: [0],
+                    axisIds: ["100002", "100003"],
+                    valueAxisId: "100003",
+                  },
+                ],
+                valueAxes: [
+                  { id: "100003", position: "l" },
+                  { id: "200003", position: "r" },
+                ],
                 legend: null,
               },
             },
@@ -815,7 +833,50 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(chart?.type === "chart" ? chart.chart : undefined).toMatchObject({
       chartType: "combo",
       series: [{ chartType: "bar" }, { chartType: "line" }],
+      plotGroups: [
+        { chartType: "line", seriesIndexes: [1], valueAxisId: "200003" },
+        { chartType: "bar", seriesIndexes: [0], valueAxisId: "100003" },
+      ],
+      valueAxes: [
+        { id: "100003", position: "l" },
+        { id: "200003", position: "r" },
+      ],
     });
+  });
+
+  it("Skip horizontal category combos with an adapter diagnostic", () => {
+    const computed = buildComputedViewWithChartData();
+    const chartElement = computed.slides[0]?.elements[0];
+    if (chartElement?.kind !== "chart") throw new Error("chart fixture is missing");
+    const horizontalCombo: PptxComputedView = {
+      ...computed,
+      slides: [
+        {
+          ...computed.slides[0],
+          elements: [
+            {
+              ...chartElement,
+              chartData: {
+                chartType: "combo",
+                title: null,
+                categories: ["A"],
+                barDirection: "bar",
+                series: [],
+                legend: null,
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = adaptComputedViewToRendererModel(horizontalCombo);
+    expect(result.slides[0].elements).toHaveLength(0);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "pptx-computed-view-adapter.unsupported-horizontal-combo-skipped",
+      }),
+    );
   });
 
   it("Return SmartArt fallback diagram drawing skip diagnostic", () => {

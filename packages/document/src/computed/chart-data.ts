@@ -5,7 +5,9 @@ import {
   getChildArray,
   getChildText,
   localName,
+  navigateOrdered,
   parseXml,
+  parseXmlOrdered,
   type XmlNode,
 } from "../reader/xml.js";
 import type { SourceColor, SourceTheme } from "../source/index.js";
@@ -13,8 +15,10 @@ import { resolveColor } from "./color.js";
 import type {
   ComputedChartData,
   ComputedChartLegend,
+  ComputedChartPlotGroup,
   ComputedChartSeries,
   ComputedChartType,
+  ComputedChartValueAxis,
   ComputedColor,
 } from "./pptx-computed-view.js";
 
@@ -51,6 +55,11 @@ export function parseComputedChartData(
   colorContext: ChartColorContext,
 ): ComputedChartData | undefined {
   const parsed = parseXml(chartXml);
+  const orderedPlotArea = navigateOrdered(parseXmlOrdered(chartXml), [
+    "chartSpace",
+    "chart",
+    "plotArea",
+  ]);
   const chartSpace = getChild(parsed, "chartSpace");
   if (chartSpace === undefined) return undefined;
 
@@ -61,7 +70,7 @@ export function parseComputedChartData(
   if (plotArea === undefined) return undefined;
 
   const title = parseChartTitle(getChild(chart, "title"));
-  const parsedChart = parseChartTypeAndData(plotArea, colorContext);
+  const parsedChart = parseChartTypeAndData(plotArea, orderedPlotArea, colorContext);
   if (parsedChart.chartType === undefined) return undefined;
 
   return {
@@ -69,6 +78,8 @@ export function parseComputedChartData(
     title,
     series: parsedChart.series,
     categories: parsedChart.categories,
+    ...(parsedChart.plotGroups !== undefined ? { plotGroups: parsedChart.plotGroups } : {}),
+    ...(parsedChart.valueAxes !== undefined ? { valueAxes: parsedChart.valueAxes } : {}),
     ...(parsedChart.barDirection !== undefined ? { barDirection: parsedChart.barDirection } : {}),
     ...(parsedChart.holeSize !== undefined ? { holeSize: parsedChart.holeSize } : {}),
     ...(parsedChart.radarStyle !== undefined ? { radarStyle: parsedChart.radarStyle } : {}),
@@ -83,11 +94,14 @@ export function parseComputedChartData(
 
 function parseChartTypeAndData(
   plotArea: XmlNode,
+  orderedPlotArea: readonly XmlNode[] | undefined,
   colorContext: ChartColorContext,
 ): {
   readonly chartType?: ComputedChartType;
   readonly series: ComputedChartSeries[];
   readonly categories: string[];
+  readonly plotGroups?: readonly ComputedChartPlotGroup[];
+  readonly valueAxes?: readonly ComputedChartValueAxis[];
   readonly barDirection?: "col" | "bar";
   readonly holeSize?: number;
   readonly radarStyle?: "standard" | "marker" | "filled";
@@ -95,7 +109,7 @@ function parseChartTypeAndData(
   readonly secondPieSize?: number;
   readonly splitPos?: number;
 } {
-  const chartGroups = chartGroupsInDocumentOrder(plotArea);
+  const chartGroups = chartGroupsInDocumentOrder(plotArea, orderedPlotArea);
   const categoryComboGroups = chartGroups.filter(
     (
       group,
@@ -118,10 +132,30 @@ function parseChartTypeAndData(
       return parsed;
     });
     const barGroup = parsedGroups.find((group) => group.chartType === "bar");
+    const valueAxes = parseValueAxes(plotArea);
+    const valueAxisIds = new Set(valueAxes.map((axis) => axis.id));
+    let seriesOffset = 0;
+    const plotGroups = categoryComboGroups.map((group, index) => {
+      const parsedGroup = parsedGroups[index];
+      const seriesIndexes = parsedGroup.series.map((_, seriesIndex) => seriesOffset + seriesIndex);
+      seriesOffset += parsedGroup.series.length;
+      const axisIds = getChildArray(group.node, "axId")
+        .map((axis) => getAttr(axis, "val"))
+        .filter((id): id is string => id !== undefined);
+      const valueAxisId = axisIds.find((id) => valueAxisIds.has(id));
+      return {
+        chartType: group.chartType,
+        seriesIndexes,
+        axisIds,
+        ...(valueAxisId !== undefined ? { valueAxisId } : {}),
+      } satisfies ComputedChartPlotGroup;
+    });
     return {
       chartType: "combo",
       series: parsedGroups.flatMap((group) => group.series),
       categories: parsedGroups.find((group) => group.categories.length > 0)?.categories ?? [],
+      plotGroups,
+      valueAxes,
       ...(barGroup?.barDirection !== undefined ? { barDirection: barGroup.barDirection } : {}),
     };
   }
@@ -135,18 +169,49 @@ function parseChartTypeAndData(
   return { series: [], categories: [] };
 }
 
-function chartGroupsInDocumentOrder(plotArea: XmlNode): readonly {
+function chartGroupsInDocumentOrder(
+  plotArea: XmlNode,
+  orderedPlotArea: readonly XmlNode[] | undefined,
+): readonly {
   readonly chartType: XmlChartType;
   readonly node: XmlNode;
   readonly xmlTag: string;
 }[] {
   const chartTypeByTag = new Map(CHART_TYPE_MAP);
-  return Object.keys(plotArea).flatMap((key) => {
+  const nodesByTag = new Map(
+    CHART_TYPE_MAP.map(([tag]) => [tag, getChildArray(plotArea, tag)] as const),
+  );
+  const nextIndexByTag = new Map<string, number>();
+  const orderedTags = (orderedPlotArea ?? []).flatMap((entry) => {
+    const key = Object.keys(entry).find((candidate) => candidate !== ":@");
+    if (key === undefined) return [];
     const tag = localName(key);
-    const chartType = chartTypeByTag.get(tag);
-    if (chartType === undefined) return [];
-    return getChildArray(plotArea, tag).map((node) => ({ chartType, node, xmlTag: tag }));
+    return chartTypeByTag.has(tag) ? [tag] : [];
   });
+  const fallbackTags = Object.keys(plotArea).flatMap((key) => {
+    const tag = localName(key);
+    return chartTypeByTag.has(tag) ? getChildArray(plotArea, tag).map(() => tag) : [];
+  });
+  return (orderedTags.length > 0 ? orderedTags : fallbackTags).flatMap((tag) => {
+    const chartType = chartTypeByTag.get(tag);
+    const index = nextIndexByTag.get(tag) ?? 0;
+    const node = nodesByTag.get(tag)?.[index];
+    nextIndexByTag.set(tag, index + 1);
+    return chartType === undefined || node === undefined ? [] : [{ chartType, node, xmlTag: tag }];
+  });
+}
+
+function parseValueAxes(plotArea: XmlNode): ComputedChartValueAxis[] {
+  return getChildArray(plotArea, "valAx").flatMap((axis) => {
+    const id = getAttr(getChild(axis, "axId"), "val");
+    if (id === undefined) return [];
+    const position = parseAxisPosition(getAttr(getChild(axis, "axPos"), "val"));
+    return [{ id, ...(position !== undefined ? { position } : {}) }];
+  });
+}
+
+function parseAxisPosition(value: string | undefined): ComputedChartValueAxis["position"] {
+  return value === "l" || value === "r" || value === "t" || value === "b" ? value : undefined;
 }
 
 function parseChartGroup(

@@ -694,10 +694,19 @@ function inspectAndUpdateChartXml(
 function isSupportedCategoryCombo(chartGroups: readonly OrderedXmlNode[]): boolean {
   if (chartGroups.length !== 2) return false;
   const names = chartGroups.map(elementLocalName);
-  return (
+  const hasSupportedGroups =
     names.filter((name) => name === "barChart").length === 1 &&
-    names.filter((name) => name === "lineChart").length === 1
-  );
+    names.filter((name) => name === "lineChart").length === 1;
+  if (!hasSupportedGroups) return false;
+  const barGroup = chartGroups.find((group) => elementLocalName(group) === "barChart");
+  const barDirection =
+    barGroup === undefined
+      ? undefined
+      : elementChildren(barGroup).find((child) => elementLocalName(child) === "barDir");
+  if (barDirection === undefined || attribute(barDirection, "val") !== "col") {
+    throw new Error("updateChartData: combo charts require barDir=col");
+  }
+  return true;
 }
 
 function matchComboSeriesInputs(

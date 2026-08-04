@@ -46,6 +46,21 @@ describe("renderChart", () => {
           },
         ],
         categories: ["A", "B"],
+        plotGroups: [
+          {
+            chartType: "bar",
+            seriesIndexes: [0],
+            axisIds: ["cat", "value"],
+            valueAxisId: "value",
+          },
+          {
+            chartType: "line",
+            seriesIndexes: [1],
+            axisIds: ["cat", "value"],
+            valueAxisId: "value",
+          },
+        ],
+        valueAxes: [{ id: "value", position: "l" }],
         legend: { position: "r" },
       });
 
@@ -55,6 +70,122 @@ describe("renderChart", () => {
       expect(result.content).toContain('stroke="#ED7D31"');
       expect(result.content).toContain("Columns");
       expect(result.content).toContain("Trend");
+    });
+
+    it("uses one shared scale and renders axes and categories once for a shared value axis", () => {
+      const element = createChartElement({
+        chartType: "combo",
+        barDirection: "col",
+        series: [
+          {
+            name: "Columns",
+            values: [100, 80],
+            color: { hex: "#4472C4", alpha: 1 },
+            chartType: "bar",
+          },
+          {
+            name: "Trend",
+            values: [10, 20],
+            color: { hex: "#ED7D31", alpha: 1 },
+            chartType: "line",
+          },
+        ],
+        categories: ["A", "B"],
+        plotGroups: [
+          {
+            chartType: "bar",
+            seriesIndexes: [0],
+            axisIds: ["cat", "shared"],
+            valueAxisId: "shared",
+          },
+          {
+            chartType: "line",
+            seriesIndexes: [1],
+            axisIds: ["cat", "shared"],
+            valueAxisId: "shared",
+          },
+        ],
+        valueAxes: [{ id: "shared", position: "l" }],
+      });
+
+      const result = renderChart(element);
+      expect(result.content.match(/>A<\/text>/g)).toHaveLength(1);
+      expect(result.content.match(/>B<\/text>/g)).toHaveLength(1);
+      expect(result.content).not.toContain('text-anchor="start"');
+      expect(result.content).toContain(">100</text>");
+      expect(result.content).toContain('points="152.5,234.2 357.5,210.4"');
+    });
+
+    it("uses a right-side secondary scale and paints plot groups in document order", () => {
+      const element = createChartElement({
+        chartType: "combo",
+        barDirection: "col",
+        series: [
+          {
+            name: "Trend",
+            values: [500, 1000],
+            color: { hex: "#ED7D31", alpha: 1 },
+            chartType: "line",
+          },
+          {
+            name: "Columns",
+            values: [5, 10],
+            color: { hex: "#4472C4", alpha: 1 },
+            chartType: "bar",
+          },
+        ],
+        categories: ["A", "B"],
+        plotGroups: [
+          {
+            chartType: "line",
+            seriesIndexes: [0],
+            axisIds: ["cat", "secondary"],
+            valueAxisId: "secondary",
+          },
+          {
+            chartType: "bar",
+            seriesIndexes: [1],
+            axisIds: ["cat", "primary"],
+            valueAxisId: "primary",
+          },
+        ],
+        valueAxes: [
+          { id: "primary", position: "l" },
+          { id: "secondary", position: "r" },
+        ],
+      });
+
+      const result = renderChart(element);
+      expect(result.content).toMatch(/text-anchor="start"[^>]*>1000<\/text>/);
+      expect(result.content.indexOf('stroke="#ED7D31"')).toBeLessThan(
+        result.content.indexOf('fill="#4472C4"'),
+      );
+    });
+
+    it("does not render a horizontal bar and line combo", () => {
+      const element = createChartElement({
+        chartType: "combo",
+        barDirection: "bar",
+        series: [
+          {
+            name: "Columns",
+            values: [10],
+            color: { hex: "#4472C4", alpha: 1 },
+            chartType: "bar",
+          },
+          {
+            name: "Trend",
+            values: [20],
+            color: { hex: "#ED7D31", alpha: 1 },
+            chartType: "line",
+          },
+        ],
+        categories: ["A"],
+      });
+
+      const result = renderChart(element);
+      expect(result.content).not.toContain('fill="#4472C4"');
+      expect(result.content).not.toContain('stroke="#ED7D31"');
     });
   });
 

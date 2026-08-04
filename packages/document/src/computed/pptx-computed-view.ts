@@ -212,6 +212,10 @@ export interface ComputedChartData {
   readonly title: string | null;
   readonly series: readonly ComputedChartSeries[];
   readonly categories: readonly string[];
+  /** Ordered OOXML plot groups for a supported category combo chart. */
+  readonly plotGroups?: readonly ComputedChartPlotGroup[];
+  /** Value axes referenced by combo plot groups, keyed through `axId`. */
+  readonly valueAxes?: readonly ComputedChartValueAxis[];
   readonly barDirection?: "col" | "bar";
   readonly holeSize?: number;
   readonly radarStyle?: "standard" | "marker" | "filled";
@@ -219,6 +223,22 @@ export interface ComputedChartData {
   readonly secondPieSize?: number;
   readonly splitPos?: number;
   readonly legend: ComputedChartLegend | null;
+}
+
+export interface ComputedChartPlotGroup {
+  readonly chartType: "bar" | "line";
+  /** Positions in `ComputedChartData.series`, retained in OOXML plot-group order. */
+  readonly seriesIndexes: readonly number[];
+  /** Ordered `c:axId` references authored on the plot group. */
+  readonly axisIds: readonly string[];
+  /** The referenced `c:valAx/c:axId`, when it can be resolved. */
+  readonly valueAxisId?: string;
+}
+
+export interface ComputedChartValueAxis {
+  /** Unsigned `c:valAx/c:axId@val`. */
+  readonly id: string;
+  readonly position?: "l" | "r" | "t" | "b";
 }
 
 export interface ComputedChartSeries {

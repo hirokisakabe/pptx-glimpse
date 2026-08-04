@@ -26,6 +26,10 @@ export interface ChartData {
   title: string | null;
   series: ChartSeries[];
   categories: string[];
+  /** Ordered OOXML plot groups for category combo charts. */
+  plotGroups?: ChartPlotGroup[];
+  /** Value axes referenced by combo plot groups. */
+  valueAxes?: ChartValueAxis[];
   barDirection?: "col" | "bar";
   holeSize?: number;
   radarStyle?: "standard" | "marker" | "filled";
@@ -33,6 +37,18 @@ export interface ChartData {
   secondPieSize?: number;
   splitPos?: number;
   legend: ChartLegend | null;
+}
+
+export interface ChartPlotGroup {
+  chartType: "bar" | "line";
+  seriesIndexes: number[];
+  axisIds: string[];
+  valueAxisId?: string;
+}
+
+export interface ChartValueAxis {
+  id: string;
+  position?: "l" | "r" | "t" | "b";
 }
 
 export interface ChartSeries {

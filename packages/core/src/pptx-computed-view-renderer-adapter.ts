@@ -97,6 +97,7 @@ export interface RendererAdapterDiagnostic {
     | "pptx-computed-view-adapter.unsupported-image-mime-type"
     | "pptx-computed-view-adapter.unsupported-rectangle-alignment"
     | "pptx-computed-view-adapter.unresolved-chart-skipped"
+    | "pptx-computed-view-adapter.unsupported-horizontal-combo-skipped"
     | "pptx-computed-view-adapter.unresolved-smartart-skipped"
     | "pptx-computed-view-adapter.unresolved-image-skipped";
   readonly message: string;
@@ -307,6 +308,16 @@ function adaptChart(
     );
     return undefined;
   }
+  if (chart.chartData.chartType === "combo" && chart.chartData.barDirection === "bar") {
+    pushAdapterWarning(
+      diagnostics,
+      "pptx-computed-view-adapter.unsupported-horizontal-combo-skipped",
+      "Horizontal bar and line combo charts are not supported by the renderer.",
+      slide,
+      chart.sourcePartPath,
+    );
+    return undefined;
+  }
 
   return {
     type: "chart",
@@ -328,6 +339,19 @@ function adaptChartData(chartData: ComputedChartData): ChartData {
       ...(series.source !== undefined ? { chartType: series.source.chartType } : {}),
     })),
     categories: [...chartData.categories],
+    ...(chartData.plotGroups !== undefined
+      ? {
+          plotGroups: chartData.plotGroups.map((group) => ({
+            chartType: group.chartType,
+            seriesIndexes: [...group.seriesIndexes],
+            axisIds: [...group.axisIds],
+            ...(group.valueAxisId !== undefined ? { valueAxisId: group.valueAxisId } : {}),
+          })),
+        }
+      : {}),
+    ...(chartData.valueAxes !== undefined
+      ? { valueAxes: chartData.valueAxes.map((axis) => ({ ...axis })) }
+      : {}),
     ...(chartData.barDirection !== undefined ? { barDirection: chartData.barDirection } : {}),
     ...(chartData.holeSize !== undefined ? { holeSize: chartData.holeSize } : {}),
     ...(chartData.radarStyle !== undefined ? { radarStyle: chartData.radarStyle } : {}),
