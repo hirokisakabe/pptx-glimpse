@@ -23,6 +23,7 @@ from pptx.enum.chart import XL_CHART_TYPE
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import PP_ALIGN
 from pptx.oxml.xmlchemy import OxmlElement
+from pptx.oxml.ns import qn
 from pptx.util import Emu, Inches, Pt
 from PIL import Image
 
@@ -356,6 +357,56 @@ def create_editor_validity_chart_removal_fixture(filename, *, expected):
     print(f"  Created: {filename}")
 
 
+def create_editor_validity_category_combo_chart_fixture(filename, *, expected):
+    """Fixture pair for fixed-topology bar + line category combo updates."""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    chart_data = CategoryChartData()
+    chart_data.categories = ["Apr", "May", "Jun"] if expected else ["Jan", "Feb"]
+    if expected:
+        chart_data.add_series("Edited columns", (40, 55, 70))
+        chart_data.add_series("Edited trend", (35, 48, 63))
+    else:
+        chart_data.add_series("Columns", (10, 20))
+        chart_data.add_series("Trend", (7, 12))
+
+    chart = slide.shapes.add_chart(
+        XL_CHART_TYPE.COLUMN_CLUSTERED,
+        Inches(0.8),
+        Inches(0.7),
+        Inches(8.4),
+        Inches(4.5),
+        chart_data,
+    ).chart
+    chart.has_title = True
+    chart.chart_title.text_frame.text = "LibreOffice editor validity: category combo chart"
+    chart.has_legend = True
+
+    plot_area = chart._element.find(qn("c:chart")).find(qn("c:plotArea"))
+    bar_chart = plot_area.find(qn("c:barChart"))
+    series = bar_chart.findall(qn("c:ser"))
+    if len(series) != 2:
+        raise RuntimeError("combo fixture requires two category series")
+    line_series = series[1]
+    bar_chart.remove(line_series)
+    line_chart = OxmlElement("c:lineChart")
+    grouping = OxmlElement("c:grouping")
+    grouping.set("val", "standard")
+    line_chart.append(grouping)
+    vary_colors = OxmlElement("c:varyColors")
+    vary_colors.set("val", "0")
+    line_chart.append(vary_colors)
+    line_chart.append(line_series)
+    for axis_id in bar_chart.findall(qn("c:axId")):
+        copied_axis_id = OxmlElement("c:axId")
+        copied_axis_id.set("val", axis_id.get("val"))
+        line_chart.append(copied_axis_id)
+    plot_area.insert(plot_area.index(bar_chart) + 1, line_chart)
+
+    prs.save(os.path.join(OUTPUT_DIR, filename))
+    print(f"  Created: {filename}")
+
+
 def create_editor_validity_scatter_chart_fixture(filename, *, expected):
     """Fixture pair for existing scatter chart XY data update validity checks."""
     prs = new_presentation()
@@ -661,6 +712,14 @@ def create_editor_validity_fixtures():
     create_editor_validity_chart_removal_fixture(
         "editor-validity-chart-removal-source.pptx",
         expected=False,
+    )
+    create_editor_validity_category_combo_chart_fixture(
+        "editor-validity-category-combo-chart-source.pptx",
+        expected=False,
+    )
+    create_editor_validity_category_combo_chart_fixture(
+        "editor-validity-category-combo-chart-expected.pptx",
+        expected=True,
     )
     create_editor_validity_chart_removal_fixture(
         "editor-validity-chart-removal-expected.pptx",

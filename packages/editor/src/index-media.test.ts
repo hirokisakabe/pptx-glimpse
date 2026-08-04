@@ -5,6 +5,7 @@ import { createEditorSession } from "./index.js";
 import {
   BLUE_PNG,
   buildBubbleChartEditSource,
+  buildCategoryComboChartEditSource,
   buildChartEditSource,
   buildImageReplacementFixture,
   buildScatterChartEditSource,
@@ -219,6 +220,53 @@ describe("EditorSession picture crop commands", () => {
 });
 
 describe("EditorSession chart data commands", () => {
+  it("updates a category combo and restores it through undo and redo", async () => {
+    const source = await buildCategoryComboChartEditSource();
+    const chart = firstChart(source);
+    const session = createEditorSession(source);
+    const applied = session.apply({
+      kind: "updateChartData",
+      handle: requireHandle(chart.handle),
+      series: [
+        {
+          source: { chartType: "bar", index: 0 },
+          name: "Edited columns",
+          categories: ["X", "Y", "Z"],
+          values: [3, 5, 8],
+        },
+        {
+          source: { chartType: "line", index: 7 },
+          name: "Edited trend",
+          categories: ["X", "Y", "Z"],
+          values: [2, 4, 7],
+        },
+      ],
+    });
+    expectApplied(applied);
+    expect(chartXml(session.document)).toContain("Edited columns");
+    expect(chartXml(session.document)).toContain("Edited trend");
+    expect(chartXml(expectHistory(session.undo()))).toContain("Original 1");
+    expect(chartXml(expectHistory(session.redo()))).toContain("Edited trend");
+
+    const before = session.document;
+    const undoDepth = session.undoDepth;
+    const rejected = session.apply({
+      kind: "updateChartData",
+      handle: requireHandle(chart.handle),
+      series: [
+        {
+          source: { chartType: "bar", index: 0 },
+          name: "Only",
+          categories: ["A"],
+          values: [1],
+        },
+      ],
+    });
+    expect(rejected).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(session.document).toBe(before);
+    expect(session.undoDepth).toBe(undoDepth);
+  });
+
   it("applies the convenience API and command with undo/redo history", () => {
     const source = buildChartEditSource();
     const chart = firstChart(source);

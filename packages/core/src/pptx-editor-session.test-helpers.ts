@@ -95,6 +95,42 @@ export async function buildScatterChartFixture(): Promise<Uint8Array> {
   return pptx.generateAsync({ type: "uint8array" });
 }
 
+export async function buildCategoryComboChartFixture(): Promise<Uint8Array> {
+  let source = createPptx();
+  const slideHandle = source.slides[0]?.handle;
+  if (slideHandle === undefined) throw new Error("combo fixture slide handle is missing");
+  source = addChart(source, slideHandle, {
+    chartType: "bar",
+    offsetX: asEmu(500000),
+    offsetY: asEmu(500000),
+    width: asEmu(5000000),
+    height: asEmu(3000000),
+    series: [
+      { name: "Original 1", categories: ["A", "B"], values: [1, 2] },
+      { name: "Original 2", categories: ["A", "B"], values: [3, 4] },
+    ],
+  });
+  const pptx = await JSZip.loadAsync(writePptx(source));
+  const chartFile = pptx.file("ppt/charts/chart1.xml");
+  if (chartFile === null) throw new Error("combo fixture chart part is missing");
+  let chart = await chartFile.async("string");
+  const barChart = /<c:barChart>.*?<\/c:barChart>/.exec(chart)?.[0];
+  const series = barChart?.match(/<c:ser>.*?<\/c:ser>/g);
+  if (barChart === undefined || series?.length !== 2) {
+    throw new Error("combo fixture requires two category series");
+  }
+  const lineSeries = series[1].replace(
+    '<c:idx val="1"/><c:order val="1"/>',
+    '<c:idx val="7"/><c:order val="9"/>',
+  );
+  chart = chart.replace(
+    barChart,
+    `${barChart.replace(series[1], "")}<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${lineSeries}<c:axId val="100002"/><c:axId val="100003"/></c:lineChart>`,
+  );
+  pptx.file("ppt/charts/chart1.xml", chart);
+  return pptx.generateAsync({ type: "uint8array" });
+}
+
 export async function buildBubbleChartFixture(): Promise<Uint8Array> {
   const pptx = await JSZip.loadAsync(await buildScatterChartFixture());
   const chartFile = pptx.file("ppt/charts/chart1.xml");
