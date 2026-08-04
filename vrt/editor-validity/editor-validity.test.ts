@@ -51,6 +51,7 @@ import {
   updateBubbleChartData,
   updateChartData,
   updateScatterChartData,
+  updateThemeScheme,
   writePptx,
 } from "../../packages/document/src/index.js";
 import { createEditorSession } from "../../packages/editor/src/index.js";
@@ -83,6 +84,25 @@ const BLUE_PNG = new Uint8Array(
 );
 
 const LO_EDITOR_VALIDITY_CASES = [
+  {
+    name: "existing theme color and font schemes",
+    sourceFixture: "editor-validity-theme-source.pptx",
+    expectedFixture: "editor-validity-theme-expected.pptx",
+    createEditedPptx: (input: Uint8Array) => {
+      const source = readPptx(input);
+      const handle = source.themes[0]?.handle;
+      if (handle === undefined) throw new Error("theme fixture has no editable theme handle");
+      return writePptx(
+        updateThemeScheme(source, handle, {
+          colorScheme: { accent1: "C00000" },
+          fontScheme: {
+            major: { latin: "Carlito" },
+            minor: { latin: "Caladea" },
+          },
+        }),
+      );
+    },
+  },
   {
     name: "text replacement",
     sourceFixture: "editor-validity-text-source.pptx",

@@ -98,6 +98,10 @@ export type {
   UpdateScatterChartDataInput,
   UpdateScatterChartSeriesDataInput,
   UpdateShapeTransformInput,
+  UpdateThemeColorSchemeInput,
+  UpdateThemeFontSchemeInput,
+  UpdateThemeFontSetInput,
+  UpdateThemeSchemeInput,
 } from "./editing.js";
 export {
   addChart,
@@ -136,6 +140,7 @@ export {
   updateChartData,
   updateScatterChartData,
   updateShapeTransform,
+  updateThemeScheme,
 } from "./editing.js";
 export type {
   PartPath,
@@ -197,6 +202,7 @@ export type {
   PptxSourceModelUpdateBubbleChartDataEdit,
   PptxSourceModelUpdateChartDataEdit,
   PptxSourceModelUpdateScatterChartDataEdit,
+  PptxSourceModelUpdateThemeSchemeEdit,
 } from "./pptx-source-model.js";
 export type {
   SlideSize,

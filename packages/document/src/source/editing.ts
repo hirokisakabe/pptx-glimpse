@@ -148,3 +148,10 @@ export {
   setParagraphProperties,
   setTextRunProperties,
 } from "./text-editing.js";
+export type {
+  UpdateThemeColorSchemeInput,
+  UpdateThemeFontSchemeInput,
+  UpdateThemeFontSetInput,
+  UpdateThemeSchemeInput,
+} from "./theme-scheme-editing.js";
+export { updateThemeScheme } from "./theme-scheme-editing.js";

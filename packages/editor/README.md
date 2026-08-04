@@ -89,6 +89,8 @@ The released command set includes:
   These operations require an internal, unshared editable workbook. `updateBubbleChartData` separately updates
   names and finite X/Y/bubble-size values in standard three-column bubble tables.
 - Slides: `addEmptySlideFromLayout`, `duplicateSlide`, `moveSlide`, and `deleteSlide`.
+- Themes: `updateThemeScheme` changes selected existing color slots and major/minor Latin, East
+  Asian, or complex-script typefaces through a stable theme handle.
 
 Use `undo()`, `redo()`, `canUndo`, `canRedo`, `undoDepth`, and `redoDepth` to integrate history.
 `selectShape(handle)` and `deselectShape()` manage a single shape selection. Selection is reconciled

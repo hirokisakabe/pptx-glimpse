@@ -73,6 +73,8 @@ import {
   updateScatterChartData,
   type UpdateScatterChartDataInput,
   updateShapeTransform,
+  updateThemeScheme,
+  type UpdateThemeSchemeInput,
 } from "@pptx-glimpse/document";
 
 /** Replace the text of one source run. @inline */
@@ -256,6 +258,12 @@ export interface DeleteSlideCommand {
   readonly handle: SourceHandle;
 }
 
+/** Update selected color/font fields on one existing theme. @inline */
+export interface UpdateThemeSchemeCommand extends UpdateThemeSchemeInput {
+  readonly kind: "updateThemeScheme";
+  readonly handle: SourceHandle;
+}
+
 /**
  * All commands accepted by the high-level `apply` and `applyAll` APIs.
  *
@@ -289,6 +297,7 @@ export interface DeleteSlideCommand {
  * @inlineType DuplicateSlideCommand
  * @inlineType MoveSlideCommand
  * @inlineType DeleteSlideCommand
+ * @inlineType UpdateThemeSchemeCommand
  * @inlineType EditableTextRunProperties
  * @inlineType EditableTextRunProperty
  * @inlineType EditableParagraphProperties
@@ -326,7 +335,8 @@ export type EditorCommand =
   | AddEmptySlideFromLayoutCommand
   | DuplicateSlideCommand
   | MoveSlideCommand
-  | DeleteSlideCommand;
+  | DeleteSlideCommand
+  | UpdateThemeSchemeCommand;
 
 export type EditorOperationErrorCode =
   | "invalid-command"
@@ -718,6 +728,16 @@ export class EditorSession {
     }));
   }
 
+  /** Update field-level color/font values for one existing theme handle. */
+  updateThemeScheme(handle: SourceHandle, input: UpdateThemeSchemeInput): EditorApplyCommandResult {
+    return this.apply({
+      kind: "updateThemeScheme",
+      handle,
+      colorScheme: input.colorScheme,
+      fontScheme: input.fontScheme,
+    });
+  }
+
   apply(command: EditorCommand): EditorApplyCommandResult {
     return this.applyAll([command]);
   }
@@ -907,6 +927,7 @@ const EDITOR_COMMAND_KINDS: ReadonlySet<string> = new Set([
   "duplicateSlide",
   "moveSlide",
   "deleteSlide",
+  "updateThemeScheme",
 ]);
 
 const EXPECTED_COMMAND_REJECTION_PREFIXES = [
@@ -936,6 +957,7 @@ const EXPECTED_COMMAND_REJECTION_PREFIXES = [
   "duplicateSlide:",
   "moveSlide:",
   "deleteSlide:",
+  "updateThemeScheme:",
   "updateTextRunProperties:",
   "updateParagraphProperties:",
   "updateShapeTransform:",
@@ -975,6 +997,7 @@ function applyCommandToDocument(
     case "duplicateSlide":
     case "moveSlide":
     case "deleteSlide":
+    case "updateThemeScheme":
       return attemptCommand(() => executeCommand(document, command));
   }
 }
@@ -1140,7 +1163,19 @@ function executeCommand(document: PptxSourceModel, command: EditorCommand): Pptx
       return moveSlide(document, command.handle, command);
     case "deleteSlide":
       return deleteSlide(document, command.handle);
+    case "updateThemeScheme":
+      return updateThemeSchemeCommand(document, command);
   }
+}
+
+function updateThemeSchemeCommand(
+  document: PptxSourceModel,
+  command: UpdateThemeSchemeCommand,
+): PptxSourceModel {
+  return updateThemeScheme(document, command.handle, {
+    ...(command.colorScheme !== undefined ? { colorScheme: command.colorScheme } : {}),
+    ...(command.fontScheme !== undefined ? { fontScheme: command.fontScheme } : {}),
+  });
 }
 
 function groupShapesCommand(
@@ -1851,6 +1886,7 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
       case "setSlideBackground":
       case "ungroupShape":
       case "updateTableCellProperties":
+      case "updateThemeScheme":
         normalizedReversed.push(edit);
     }
   }

@@ -3,6 +3,7 @@ import {
   addShape,
   addSlideLayout,
   asEmu,
+  asPartPath,
   createPptx,
   readPptx,
   setBackground,
@@ -125,6 +126,90 @@ describe("PptxEditorSession - topology", () => {
     expect(renderCalls).toEqual([undefined, undefined]);
     expect(editor.slides[0]?.svg).toContain("First");
     expect(editor.slides[1]?.svg).toContain("Fallback edited");
+  });
+
+  it("scopes a shared theme edit to slides under masters that reference that theme", () => {
+    const base = createPptx();
+    const themeA = base.themes[0];
+    const themeBPath = asPartPath("ppt/theme/theme2.xml");
+    const themeB = { ...themeA, partPath: themeBPath, handle: { partPath: themeBPath } };
+    const masterA = base.slideMasters[0];
+    const layoutA = base.slideLayouts[0];
+    const slideA = base.slides[0];
+    const masterBPath = asPartPath("ppt/slideMasters/slideMaster2.xml");
+    const masterCPath = asPartPath("ppt/slideMasters/slideMaster3.xml");
+    const layoutBPath = asPartPath("ppt/slideLayouts/slideLayout2.xml");
+    const layoutCPath = asPartPath("ppt/slideLayouts/slideLayout3.xml");
+    const slideBPath = asPartPath("ppt/slides/slide2.xml");
+    const slideCPath = asPartPath("ppt/slides/slide3.xml");
+    const masterB = {
+      ...masterA,
+      partPath: masterBPath,
+      themePartPath: themeBPath,
+      layoutPartPaths: [layoutBPath],
+      handle: { partPath: masterBPath },
+    };
+    const masterC = {
+      ...masterA,
+      partPath: masterCPath,
+      layoutPartPaths: [layoutCPath],
+      handle: { partPath: masterCPath },
+    };
+    const layoutB = {
+      ...layoutA,
+      partPath: layoutBPath,
+      masterPartPath: masterBPath,
+      handle: { partPath: layoutBPath },
+    };
+    const layoutC = {
+      ...layoutA,
+      partPath: layoutCPath,
+      masterPartPath: masterCPath,
+      handle: { partPath: layoutCPath },
+    };
+    const slideB = {
+      ...slideA,
+      partPath: slideBPath,
+      layoutPartPath: layoutBPath,
+      handle: { partPath: slideBPath },
+    };
+    const slideC = {
+      ...slideA,
+      partPath: slideCPath,
+      layoutPartPath: layoutCPath,
+      handle: { partPath: slideCPath },
+    };
+    const before = {
+      ...base,
+      presentation: {
+        ...base.presentation,
+        slideMasterPartPaths: [masterA.partPath, masterBPath, masterCPath],
+      },
+      themes: [themeA, themeB],
+      slideMasters: [masterA, masterB, masterC],
+      slideLayouts: [layoutA, layoutB, layoutC],
+      slides: [slideA, slideB, slideC],
+    };
+    const after = {
+      ...before,
+      themes: [
+        {
+          ...themeA,
+          colorScheme: {
+            ...themeA.colorScheme!,
+            colors: {
+              ...themeA.colorScheme!.colors,
+              accent1: { kind: "srgb" as const, hex: "123456" },
+            },
+          },
+        },
+        themeB,
+      ],
+    };
+
+    expect(affectedSlidePartPaths(before, after)).toEqual(
+      new Set([slideA.partPath, slideC.partPath]),
+    );
   });
 
   it("scopes and renders inherited master and layout background changes", async () => {

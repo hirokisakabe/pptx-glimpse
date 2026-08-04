@@ -81,7 +81,7 @@ export type {
   PptxEditorTextRunView,
 } from "./pptx-editor-session.js";
 export { isPptxEditorError, PptxEditorError } from "./pptx-editor-session.js";
-export type { SourceHandle } from "@pptx-glimpse/document";
+export type { SourceHandle, UpdateThemeSchemeInput } from "@pptx-glimpse/document";
 export type {
   EditorCommand,
   EditorCommandWarning,
@@ -90,6 +90,7 @@ export type {
   GroupableSourceShape,
   GroupShapesCommand,
   UngroupShapeCommand,
+  UpdateThemeSchemeCommand,
 } from "@pptx-glimpse/editor";
 export type { FontMapping } from "@pptx-glimpse/renderer";
 export type { FontBuffer, OpentypeSetup } from "@pptx-glimpse/renderer";

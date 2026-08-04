@@ -95,6 +95,11 @@ matching `PptxEditorSession` methods. A successful group selects the new group; 
 ungroup selects its first child in document order. Undo and redo restore topology, ids, z-order,
 and the corresponding selection.
 
+Existing theme schemes can be patched through `editor.updateThemeScheme(themeHandle, input)` or
+the matching command. Omitted color/font fields and the format scheme are preserved. When masters
+share that theme, the session rerenders slides under those masters only; unrelated themes remain
+outside the invalidation set.
+
 Browser applications pass PPTX and font bytes as `Uint8Array` data:
 
 ```ts

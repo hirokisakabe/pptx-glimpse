@@ -29,6 +29,7 @@ import {
   applyTextRunEdit,
   applyTextRunPropertiesEdit,
 } from "./text-paragraph-edits.js";
+import { applyUpdateThemeSchemeEdit } from "./theme-scheme-edits.js";
 import {
   buildXmlPreservingChildOrder,
   encodeXml,
@@ -138,6 +139,9 @@ function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
       return;
     case "replaceImage":
       applyReplaceImageEdit(root, edit);
+      return;
+    case "updateThemeScheme":
+      applyUpdateThemeSchemeEdit(root, edit);
       return;
     case "updateChartData":
     case "updateScatterChartData":

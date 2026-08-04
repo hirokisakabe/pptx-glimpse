@@ -95,6 +95,7 @@ export type PptxSourceModelEdit =
   | PptxSourceModelDuplicateSlideEdit
   | PptxSourceModelMoveSlideEdit
   | PptxSourceModelDeleteSlideEdit
+  | PptxSourceModelUpdateThemeSchemeEdit
   | PptxSourceModelSetBackgroundEdit
   | PptxSourceModelSetSlideBackgroundEdit;
 
@@ -429,6 +430,35 @@ export interface PptxSourceModelDeleteSlideEdit {
   readonly kind: "deleteSlide";
   readonly slidePartPath: PartPath;
   readonly relationshipId: RelationshipId;
+}
+
+export type ThemeColorSlot =
+  | "dk1"
+  | "lt1"
+  | "dk2"
+  | "lt2"
+  | "accent1"
+  | "accent2"
+  | "accent3"
+  | "accent4"
+  | "accent5"
+  | "accent6"
+  | "hlink"
+  | "folHlink";
+
+export type ThemeFontSetKind = "major" | "minor";
+
+export interface ThemeFontSetPatch {
+  readonly latin?: string;
+  readonly eastAsian?: string;
+  readonly complexScript?: string;
+}
+
+export interface PptxSourceModelUpdateThemeSchemeEdit {
+  readonly kind: "updateThemeScheme";
+  readonly themePartPath: PartPath;
+  readonly colorScheme?: Readonly<Partial<Record<ThemeColorSlot, string>>>;
+  readonly fontScheme?: Readonly<Partial<Record<ThemeFontSetKind, ThemeFontSetPatch>>>;
 }
 
 export type PptxSourceModelSetBackgroundEdit = {
