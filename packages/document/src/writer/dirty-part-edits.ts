@@ -141,6 +141,7 @@ function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
       return;
     case "updateChartData":
     case "updateScatterChartData":
+    case "updateBubbleChartData":
     case "addEmptySlideFromLayout":
     case "duplicateSlide":
     case "moveSlide":

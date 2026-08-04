@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createEditorSession } from "./index.js";
 import {
   BLUE_PNG,
+  buildBubbleChartEditSource,
   buildChartEditSource,
   buildImageReplacementFixture,
   buildScatterChartEditSource,
@@ -340,5 +341,41 @@ describe("EditorSession scatter chart data commands", () => {
     expect(session.selection).toEqual({ shapeHandle: handle });
     expect(session.undoDepth).toBe(0);
     expect(session.redoDepth).toBe(0);
+  });
+});
+
+describe("EditorSession bubble chart data commands", () => {
+  it("supports convenience, command, undo, and redo while rejecting invalid XYZ atomically", async () => {
+    const source = await buildBubbleChartEditSource();
+    const chart = firstChart(source);
+    const session = createEditorSession(source);
+    const applied = session.updateBubbleChartData(chart, {
+      series: [
+        { name: "Edited 1", xValues: [1, 2], yValues: [3, 5], bubbleSizes: [8, 13] },
+        { name: "Edited 2", xValues: [10], yValues: [20], bubbleSizes: [21] },
+      ],
+    });
+    expectApplied(applied);
+    expect(chartXml(session.document)).toContain("Sheet1!$C$2:$C$3");
+    expect(session.document.edits?.at(-1)?.kind).toBe("updateBubbleChartData");
+    expect(chartXml(expectHistory(session.undo()))).toContain("Original 1");
+    expect(chartXml(expectHistory(session.redo()))).toContain("Edited 1");
+
+    const command = session.apply({
+      kind: "updateBubbleChartData",
+      handle: requireHandle(chart.handle),
+      series: [{ name: "Command", xValues: [5], yValues: [10], bubbleSizes: [15] }],
+    });
+    expectApplied(command);
+    const before = session.document;
+    const undoDepth = session.undoDepth;
+    const invalid = session.apply({
+      kind: "updateBubbleChartData",
+      handle: requireHandle(chart.handle),
+      series: [{ name: "Invalid", xValues: [1], yValues: [2], bubbleSizes: [] }],
+    });
+    expect(invalid).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(session.document).toBe(before);
+    expect(session.undoDepth).toBe(undoDepth);
   });
 });

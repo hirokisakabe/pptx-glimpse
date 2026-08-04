@@ -66,6 +66,8 @@ import {
   type SourceTextRun,
   type SourceTransform,
   ungroupShape,
+  updateBubbleChartData,
+  type UpdateBubbleChartDataInput,
   updateChartData,
   type UpdateChartDataInput,
   updateScatterChartData,
@@ -225,6 +227,12 @@ export interface UpdateScatterChartDataCommand extends UpdateScatterChartDataInp
   readonly handle: SourceHandle;
 }
 
+/** Update the XYZ series data of one bubble chart. @inline */
+export interface UpdateBubbleChartDataCommand extends UpdateBubbleChartDataInput {
+  readonly kind: "updateBubbleChartData";
+  readonly handle: SourceHandle;
+}
+
 /** Add an empty slide based on an existing layout. @inline */
 export interface AddEmptySlideFromLayoutCommand extends AddEmptySlideFromLayoutInput {
   readonly kind: "addEmptySlideFromLayout";
@@ -276,6 +284,7 @@ export interface DeleteSlideCommand {
  * @inlineType ClearPictureCropCommand
  * @inlineType UpdateChartDataCommand
  * @inlineType UpdateScatterChartDataCommand
+ * @inlineType UpdateBubbleChartDataCommand
  * @inlineType AddEmptySlideFromLayoutCommand
  * @inlineType DuplicateSlideCommand
  * @inlineType MoveSlideCommand
@@ -313,6 +322,7 @@ export type EditorCommand =
   | ClearPictureCropCommand
   | UpdateChartDataCommand
   | UpdateScatterChartDataCommand
+  | UpdateBubbleChartDataCommand
   | AddEmptySlideFromLayoutCommand
   | DuplicateSlideCommand
   | MoveSlideCommand
@@ -666,6 +676,22 @@ export class EditorSession {
     );
   }
 
+  updateBubbleChartData(
+    chart: SourceChart,
+    input: UpdateBubbleChartDataInput,
+  ): EditorApplyCommandResult {
+    return this.applyToSourceNode(
+      "updateBubbleChartData",
+      chart,
+      isSourceChart,
+      (document, handle) => {
+        const shape = findShapeNodeBySourceHandle(document, handle);
+        return shape?.kind === "chart" ? shape : undefined;
+      },
+      (handle) => ({ kind: "updateBubbleChartData", handle, ...input }),
+    );
+  }
+
   addEmptySlideFromLayout(input: AddEmptySlideFromLayoutInput): EditorApplyCommandResult {
     return this.apply({ kind: "addEmptySlideFromLayout", ...input });
   }
@@ -876,6 +902,7 @@ const EDITOR_COMMAND_KINDS: ReadonlySet<string> = new Set([
   "clearPictureCrop",
   "updateChartData",
   "updateScatterChartData",
+  "updateBubbleChartData",
   "addEmptySlideFromLayout",
   "duplicateSlide",
   "moveSlide",
@@ -904,6 +931,7 @@ const EXPECTED_COMMAND_REJECTION_PREFIXES = [
   "clearPictureCrop:",
   "updateChartData:",
   "updateScatterChartData:",
+  "updateBubbleChartData:",
   "addEmptySlideFromLayout:",
   "duplicateSlide:",
   "moveSlide:",
@@ -942,6 +970,7 @@ function applyCommandToDocument(
     case "clearPictureCrop":
     case "updateChartData":
     case "updateScatterChartData":
+    case "updateBubbleChartData":
     case "addEmptySlideFromLayout":
     case "duplicateSlide":
     case "moveSlide":
@@ -1101,6 +1130,8 @@ function executeCommand(document: PptxSourceModel, command: EditorCommand): Pptx
       return updateChartDataCommand(document, command);
     case "updateScatterChartData":
       return updateScatterChartDataCommand(document, command);
+    case "updateBubbleChartData":
+      return updateBubbleChartDataCommand(document, command);
     case "addEmptySlideFromLayout":
       return addEmptySlideFromLayout(document, command);
     case "duplicateSlide":
@@ -1232,6 +1263,33 @@ function updateScatterChartDataCommand(
     }
   }
   return updateScatterChartData(document, command.handle, command);
+}
+
+function updateBubbleChartDataCommand(
+  document: PptxSourceModel,
+  command: UpdateBubbleChartDataCommand,
+): PptxSourceModel {
+  if (!Array.isArray(command.series) || command.series.length === 0) {
+    throw new Error("updateBubbleChartData: series must be a non-empty array");
+  }
+  for (const [index, series] of command.series.entries()) {
+    if (!isObject(series)) {
+      throw new Error(`updateBubbleChartData: series[${index}] must be an object`);
+    }
+    if (typeof series.name !== "string") {
+      throw new Error(`updateBubbleChartData: series[${index}].name must be a string`);
+    }
+    if (
+      !Array.isArray(series.xValues) ||
+      !Array.isArray(series.yValues) ||
+      !Array.isArray(series.bubbleSizes)
+    ) {
+      throw new Error(
+        `updateBubbleChartData: series[${index}] X, Y, and bubble size values must be arrays`,
+      );
+    }
+  }
+  return updateBubbleChartData(document, command.handle, command);
 }
 
 function replaceTextRunPlainTextCommand(
@@ -1762,7 +1820,8 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
         continue;
       }
       case "updateChartData":
-      case "updateScatterChartData": {
+      case "updateScatterChartData":
+      case "updateBubbleChartData": {
         const key = sourceHandleKey(edit.handle);
         if (seenChartData.has(key)) {
           changed = true;

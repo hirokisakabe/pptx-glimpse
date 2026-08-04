@@ -189,6 +189,23 @@ worksheet cells, formula cells, external/shared workbooks, and workbooks with mu
 Validation and new chart/workbook bytes complete before the immutable source model and editor
 history are changed.
 
+`updateBubbleChartData(source, chartHandle, input)` extends the same topology and preservation
+contract to an existing bubble Chart. Each series supplies equal, non-empty arrays of finite
+`xValues`, `yValues`, and `bubbleSizes`:
+
+```ts
+const editedBubble = updateBubbleChartData(source, bubbleChart.handle, {
+  series: [{ name: "Observed", xValues: [1, 2], yValues: [3, 5], bubbleSizes: [8, 13] }],
+});
+```
+
+The supported standard bubble worksheet layout places X in column A, Y and the series name in
+column B, and bubble size under a `Size` header in column C. Series tables are separated by one
+empty row. The operation synchronizes `tx`, `xVal`, `yVal`, and `bubbleSize` formulas, caches,
+point counts, `idx` / `order`, and worksheet cells. It rejects scatter/category/combo Charts,
+non-standard formulas or cells, formula cells, external/shared workbooks, and multiple worksheets
+before changing the source model or editor history.
+
 The text operations use the same `SourceParagraph` / `SourceTextRun` contract for ordinary shape
 text and existing Table cell text. To edit a Table, locate a node through
 `table.table.rows[rowIndex].cells[cellIndex].textBody?.paragraphs[paragraphIndex]`, then pass its

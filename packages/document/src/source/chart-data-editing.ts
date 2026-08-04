@@ -5,6 +5,7 @@ import {
   getAttr,
   getChild,
   getChildArray,
+  getChildText,
   getNamespacedAttr,
   localName,
   parseXml,
@@ -14,6 +15,7 @@ import { copyBytes, requireRawBinaryPart } from "./editing-shared.js";
 import type {
   PartPath,
   PptxSourceModel,
+  PptxSourceModelUpdateBubbleChartDataEdit,
   PptxSourceModelUpdateChartDataEdit,
   PptxSourceModelUpdateScatterChartDataEdit,
   Relationship,
@@ -41,6 +43,14 @@ export interface UpdateScatterChartSeriesDataInput {
 
 export interface UpdateScatterChartDataInput {
   readonly series: readonly UpdateScatterChartSeriesDataInput[];
+}
+
+export interface UpdateBubbleChartSeriesDataInput extends UpdateScatterChartSeriesDataInput {
+  readonly bubbleSizes: readonly number[];
+}
+
+export interface UpdateBubbleChartDataInput {
+  readonly series: readonly UpdateBubbleChartSeriesDataInput[];
 }
 
 type OrderedXmlNode = Record<string, unknown>;
@@ -233,6 +243,76 @@ export function updateScatterChartData(
   }
 }
 
+/**
+ * Replaces the data bound to an existing bubble chart while preserving all non-data chart XML.
+ *
+ * Each series occupies a standard three-column table: X in column A, Y/name in column B, bubble
+ * size in column C with a `Size` header, and one empty row between series tables.
+ */
+export function updateBubbleChartData(
+  source: PptxSourceModel,
+  handle: SourceHandle,
+  input: UpdateBubbleChartDataInput,
+): PptxSourceModel {
+  assertBubbleUpdateInput(input);
+  try {
+    const chart = requireChart(source, handle);
+    const chartPartPath = requireChartPartPath(source, chart);
+    const chartRawPart = requireRawBinaryPart(source, chartPartPath, "updateBubbleChartData");
+    const chartRelationships = requireRelationshipGroup(source, chartPartPath);
+    const orderedRoot = parseOrderedXml(decoder.decode(chartRawPart.bytes));
+    const binding = inspectAndUpdateBubbleChartXml(orderedRoot, input);
+    const workbookPartPath = requireWorkbookPartPath(
+      source,
+      chartRelationships.relationships,
+      binding.externalDataRelationshipId,
+      chartPartPath,
+    );
+    const workbookRawPart = requireRawBinaryPart(source, workbookPartPath, "updateBubbleChartData");
+    assertWorkbookIsNotShared(source, chartPartPath, workbookPartPath);
+    const workbook = inspectSupportedEmbeddedBubbleWorkbook(
+      workbookRawPart.bytes,
+      binding.sheetName,
+      binding.existingPointCounts,
+    );
+    const updatedChartBytes = encoder.encode(orderedBuilder.build(orderedRoot));
+    const updatedWorkbookBytes = updateEmbeddedBubbleWorkbook(workbook, input);
+    const edit = {
+      kind: "updateBubbleChartData",
+      handle,
+      chartPartPath,
+      workbookPartPath,
+    } satisfies PptxSourceModelUpdateBubbleChartDataEdit;
+
+    return {
+      ...source,
+      packageGraph: {
+        ...source.packageGraph,
+        rawParts: source.packageGraph.rawParts?.map((part) => {
+          if (part.partPath === chartPartPath) {
+            if (part.kind !== "binary") {
+              throw new Error("updateBubbleChartData: chart part is not backed by binary material");
+            }
+            return { ...part, bytes: copyBytes(updatedChartBytes) };
+          }
+          if (part.partPath === workbookPartPath) {
+            if (part.kind !== "binary") {
+              throw new Error(
+                "updateBubbleChartData: workbook part is not backed by binary material",
+              );
+            }
+            return { ...part, bytes: copyBytes(updatedWorkbookBytes) };
+          }
+          return part;
+        }),
+      },
+      edits: [...(source.edits ?? []), edit],
+    };
+  } catch (cause) {
+    throw remapChartDataError(cause, "updateBubbleChartData");
+  }
+}
+
 function assertScatterUpdateInput(input: UpdateScatterChartDataInput): void {
   if (input.series.length === 0) {
     throw new Error("updateScatterChartData: series must not be empty");
@@ -255,6 +335,46 @@ function assertScatterUpdateInput(input: UpdateScatterChartDataInput): void {
     if (lastDataRow > XLSX_MAX_DATA_POINTS + 1) {
       throw new Error(
         `updateScatterChartData: worksheet rows must not exceed ${XLSX_MAX_DATA_POINTS + 1}`,
+      );
+    }
+    nextHeaderRow = lastDataRow + 2;
+  }
+}
+
+function assertBubbleUpdateInput(input: UpdateBubbleChartDataInput): void {
+  if (input.series.length === 0) {
+    throw new Error("updateBubbleChartData: series must not be empty");
+  }
+  let nextHeaderRow = 1;
+  for (const [seriesIndex, series] of input.series.entries()) {
+    if (typeof series.name !== "string") {
+      throw new Error(`updateBubbleChartData: series[${seriesIndex}].name must be a string`);
+    }
+    try {
+      assertXmlText(series.name, `series[${seriesIndex}].name`);
+    } catch (cause) {
+      throw remapChartDataError(cause, "updateBubbleChartData");
+    }
+    if (
+      series.xValues.length === 0 ||
+      series.xValues.length !== series.yValues.length ||
+      series.xValues.length !== series.bubbleSizes.length
+    ) {
+      throw new Error(
+        "updateBubbleChartData: every series must have matching non-empty X, Y, and bubble size counts",
+      );
+    }
+    if (
+      !series.xValues.every(Number.isFinite) ||
+      !series.yValues.every(Number.isFinite) ||
+      !series.bubbleSizes.every(Number.isFinite)
+    ) {
+      throw new Error("updateBubbleChartData: X, Y, and bubble size values must be finite numbers");
+    }
+    const lastDataRow = nextHeaderRow + series.xValues.length;
+    if (lastDataRow > XLSX_MAX_DATA_POINTS + 1) {
+      throw new Error(
+        `updateBubbleChartData: worksheet rows must not exceed ${XLSX_MAX_DATA_POINTS + 1}`,
       );
     }
     nextHeaderRow = lastDataRow + 2;
@@ -644,6 +764,114 @@ function inspectAndUpdateScatterChartXml(
   return { externalDataRelationshipId, sheetName, existingPointCounts };
 }
 
+function inspectAndUpdateBubbleChartXml(
+  root: OrderedXmlNode[],
+  input: UpdateBubbleChartDataInput,
+): {
+  readonly externalDataRelationshipId: string;
+  readonly sheetName: string;
+  readonly existingPointCounts: readonly number[];
+} {
+  const chartSpace = requireSingleElement(root, "chartSpace", "chart XML has no chartSpace root");
+  const chart = requireSingleChild(chartSpace, "chart");
+  const plotArea = requireSingleChild(chart, "plotArea");
+  const chartGroups = elementChildren(plotArea).filter((entry) =>
+    elementLocalName(entry)?.endsWith("Chart"),
+  );
+  if (chartGroups.length !== 1 || elementLocalName(chartGroups[0]) !== "bubbleChart") {
+    throw new Error("updateChartData: chart type or combination is not supported");
+  }
+  const existingSeries = elementChildren(chartGroups[0]).filter(
+    (entry) => elementLocalName(entry) === "ser",
+  );
+
+  let sheetName: string | undefined;
+  const sheetTokens: string[] = [];
+  const existingPointCounts: number[] = [];
+  let expectedHeaderRow = 1;
+  for (const seriesEntry of existingSeries) {
+    const txRef = requireSingleChild(requireSingleChild(seriesEntry, "tx"), "strRef");
+    const xValueRef = requireSingleChild(requireSingleChild(seriesEntry, "xVal"), "numRef");
+    const yValueRef = requireSingleChild(requireSingleChild(seriesEntry, "yVal"), "numRef");
+    const sizeRef = requireSingleChild(requireSingleChild(seriesEntry, "bubbleSize"), "numRef");
+    const txFormula = parseSingleCellFormula(requireFormula(txRef), 2, expectedHeaderRow);
+    const xValueFormula = parseRangeFormula(requireFormula(xValueRef), 1, expectedHeaderRow + 1);
+    const yValueFormula = parseRangeFormula(requireFormula(yValueRef), 2, expectedHeaderRow + 1);
+    const sizeFormula = parseRangeFormula(requireFormula(sizeRef), 3, expectedHeaderRow + 1);
+    if (
+      xValueFormula.endColumn !== 1 ||
+      yValueFormula.endColumn !== 2 ||
+      sizeFormula.endColumn !== 3 ||
+      xValueFormula.endRow !== yValueFormula.endRow ||
+      xValueFormula.endRow !== sizeFormula.endRow ||
+      txFormula.sheetName !== xValueFormula.sheetName ||
+      txFormula.sheetName !== yValueFormula.sheetName ||
+      txFormula.sheetName !== sizeFormula.sheetName
+    ) {
+      throw new Error("updateChartData: chart formulas use an unsupported data layout");
+    }
+    if (sheetName !== undefined && sheetName !== txFormula.sheetName) {
+      throw new Error("updateChartData: chart series refer to multiple worksheets");
+    }
+    const pointCount = xValueFormula.endRow - expectedHeaderRow;
+    if (pointCount <= 0) {
+      throw new Error("updateChartData: chart formulas use an unsupported data layout");
+    }
+    sheetName = txFormula.sheetName;
+    sheetTokens.push(txFormula.sheetToken);
+    existingPointCounts.push(pointCount);
+    expectedHeaderRow = xValueFormula.endRow + 2;
+  }
+
+  if (sheetName === undefined || existingPointCounts.length === 0) {
+    throw new Error("updateChartData: chart has no series");
+  }
+  if (input.series.length < existingSeries.length && hasExplicitLegendEntries(chart)) {
+    throw new Error(
+      "updateChartData: removing series with explicit legend entries is not supported",
+    );
+  }
+
+  const series = resizeChartSeries(chartSpace, chartGroups[0], existingSeries, input.series.length);
+  const addedSeriesIdentities =
+    input.series.length > existingSeries.length
+      ? nextAddedSeriesIdentities(existingSeries, input.series.length - existingSeries.length)
+      : [];
+  let headerRow = 1;
+  for (const [index, seriesEntry] of series.entries()) {
+    const sheetToken = sheetTokens[index] ?? sheetTokens.at(-1);
+    if (sheetToken === undefined) throw new Error("updateChartData: chart has no series");
+    const addedIdentity = addedSeriesIdentities[index - existingSeries.length];
+    if (addedIdentity !== undefined) {
+      setAttribute(requireSingleChild(seriesEntry, "idx"), "val", String(addedIdentity.index));
+      setAttribute(requireSingleChild(seriesEntry, "order"), "val", String(addedIdentity.order));
+    }
+    const inputSeries = input.series[index];
+    const lastDataRow = headerRow + inputSeries.xValues.length;
+    const txRef = requireSingleChild(requireSingleChild(seriesEntry, "tx"), "strRef");
+    const xValueRef = requireSingleChild(requireSingleChild(seriesEntry, "xVal"), "numRef");
+    const yValueRef = requireSingleChild(requireSingleChild(seriesEntry, "yVal"), "numRef");
+    const sizeRef = requireSingleChild(requireSingleChild(seriesEntry, "bubbleSize"), "numRef");
+
+    setFormula(txRef, `${sheetToken}!$B$${headerRow}`);
+    setStringCache(requireSingleChild(txRef, "strCache"), [inputSeries.name]);
+    setFormula(xValueRef, `${sheetToken}!$A$${headerRow + 1}:$A$${lastDataRow}`);
+    setNumberCache(requireSingleChild(xValueRef, "numCache"), inputSeries.xValues);
+    setFormula(yValueRef, `${sheetToken}!$B$${headerRow + 1}:$B$${lastDataRow}`);
+    setNumberCache(requireSingleChild(yValueRef, "numCache"), inputSeries.yValues);
+    setFormula(sizeRef, `${sheetToken}!$C$${headerRow + 1}:$C$${lastDataRow}`);
+    setNumberCache(requireSingleChild(sizeRef, "numCache"), inputSeries.bubbleSizes);
+    headerRow = lastDataRow + 2;
+  }
+
+  const externalData = requireSingleChild(chartSpace, "externalData");
+  const externalDataRelationshipId = namespacedAttribute(externalData, "id");
+  if (externalDataRelationshipId === undefined) {
+    throw new Error("updateChartData: chart externalData has no relationship id");
+  }
+  return { externalDataRelationshipId, sheetName, existingPointCounts };
+}
+
 interface SeriesIdentity {
   readonly index: number;
   readonly order: number;
@@ -1009,10 +1237,24 @@ function inspectSupportedEmbeddedScatterWorkbook(
   );
 }
 
+function inspectSupportedEmbeddedBubbleWorkbook(
+  bytes: Uint8Array,
+  sheetName: string,
+  pointCounts: readonly number[],
+): EditableEmbeddedWorkbook {
+  return inspectEmbeddedWorkbook(bytes, sheetName, (worksheetBytes, files) =>
+    assertSupportedBubbleWorksheetLayout(
+      worksheetBytes,
+      pointCounts,
+      files["xl/sharedStrings.xml"],
+    ),
+  );
+}
+
 function inspectEmbeddedWorkbook(
   bytes: Uint8Array,
   sheetName: string,
-  assertWorksheetLayout: (bytes: Uint8Array) => void,
+  assertWorksheetLayout: (bytes: Uint8Array, files: Readonly<Record<string, Uint8Array>>) => void,
 ): EditableEmbeddedWorkbook {
   let files: Record<string, Uint8Array>;
   try {
@@ -1060,7 +1302,7 @@ function inspectEmbeddedWorkbook(
   if (worksheetPath === undefined || worksheetBytes === undefined) {
     throw new Error("updateChartData: embedded worksheet relationship cannot be resolved");
   }
-  assertWorksheetLayout(worksheetBytes);
+  assertWorksheetLayout(worksheetBytes, files);
   return { files, worksheetPath };
 }
 
@@ -1142,6 +1384,54 @@ function assertSupportedScatterWorksheetLayout(
     headerRow += pointCount + 2;
   }
   assertWorksheetRowsAndCells(worksheet, allowed, allowedRows, headerRow - 2);
+}
+
+function assertSupportedBubbleWorksheetLayout(
+  bytes: Uint8Array,
+  pointCounts: readonly number[],
+  sharedStringsBytes: Uint8Array | undefined,
+): void {
+  const worksheet = getChild(parseXml(decoder.decode(bytes)), "worksheet");
+  assertWorksheetHasNoUnsupportedElements(worksheet);
+  const allowed = new Set<string>();
+  const allowedRows = new Set<string>();
+  let headerRow = 1;
+  for (const pointCount of pointCounts) {
+    allowedRows.add(String(headerRow));
+    allowed.add(`B${headerRow}`);
+    allowed.add(`C${headerRow}`);
+    for (let row = headerRow + 1; row <= headerRow + pointCount; row += 1) {
+      allowedRows.add(String(row));
+      allowed.add(`A${row}`);
+      allowed.add(`B${row}`);
+      allowed.add(`C${row}`);
+    }
+    headerRow += pointCount + 2;
+  }
+  assertWorksheetRowsAndCells(worksheet, allowed, allowedRows, headerRow - 2);
+  const cells = getChildArray(getChild(worksheet, "sheetData"), "row").flatMap((row) =>
+    getChildArray(row, "c"),
+  );
+  let expectedHeaderRow = 1;
+  for (const pointCount of pointCounts) {
+    const sizeHeader = cells.find((cell) => getAttr(cell, "r") === `C${expectedHeaderRow}`);
+    if (workbookStringCellValue(sizeHeader, sharedStringsBytes) !== "Size") {
+      throw new Error("updateChartData: bubble size header must be 'Size'");
+    }
+    expectedHeaderRow += pointCount + 2;
+  }
+}
+
+function workbookStringCellValue(
+  cell: Record<string, unknown> | undefined,
+  sharedStringsBytes: Uint8Array | undefined,
+): string | undefined {
+  if (getAttr(cell, "t") === "inlineStr") return getChildText(getChild(cell, "is"), "t");
+  if (getAttr(cell, "t") !== "s" || sharedStringsBytes === undefined) return undefined;
+  const indexText = getChildText(cell, "v");
+  if (indexText === undefined || !/^\d+$/.test(indexText)) return undefined;
+  const sharedStrings = getChild(parseXml(decoder.decode(sharedStringsBytes)), "sst");
+  return getChildText(getChildArray(sharedStrings, "si")[Number(indexText)], "t");
 }
 
 function assertWorksheetHasNoUnsupportedElements(
@@ -1270,6 +1560,26 @@ function updateEmbeddedScatterWorkbook(
   });
 }
 
+function updateEmbeddedBubbleWorkbook(
+  workbook: EditableEmbeddedWorkbook,
+  input: UpdateBubbleChartDataInput,
+): Uint8Array {
+  const worksheetRoot = parseOrderedXml(decoder.decode(workbook.files[workbook.worksheetPath]));
+  const worksheet = requireSingleElement(
+    worksheetRoot,
+    "worksheet",
+    "embedded workbook has no worksheet root",
+  );
+  const lastRow = scatterLastDataRow(input.series.map((series) => series.xValues.length));
+  setAttribute(requireSingleChild(worksheet, "dimension"), "ref", `A1:C${lastRow}`);
+  const sheetData = requireSingleChild(worksheet, "sheetData");
+  setElementChildren(sheetData, buildBubbleWorksheetRows(input, sheetData));
+  return zipSync({
+    ...workbook.files,
+    [workbook.worksheetPath]: encoder.encode(orderedBuilder.build(worksheetRoot)),
+  });
+}
+
 function buildScatterWorksheetRows(
   input: UpdateScatterChartDataInput,
   existingSheetData: OrderedXmlNode,
@@ -1316,6 +1626,76 @@ function buildScatterWorksheetRows(
               `B${rowNumber}`,
               series.yValues[pointIndex],
               existingCell(existingRow, `B${rowNumber}`),
+              prefix,
+            ),
+          ],
+          preservedAttributes(existingRow, rowNumber),
+        ),
+      );
+    }
+    headerRow += series.xValues.length + 2;
+  }
+  return rows;
+}
+
+function buildBubbleWorksheetRows(
+  input: UpdateBubbleChartDataInput,
+  existingSheetData: OrderedXmlNode,
+): OrderedXmlNode[] {
+  const existingRows = new Map(
+    elementChildren(existingSheetData)
+      .filter((entry) => elementLocalName(entry) === "row")
+      .map((entry) => [attribute(entry, "r"), entry]),
+  );
+  const prefix = elementPrefix(existingSheetData);
+  const rows: OrderedXmlNode[] = [];
+  let headerRow = 1;
+  for (const series of input.series) {
+    const headerRowNumber = String(headerRow);
+    const existingHeaderRow = existingRows.get(headerRowNumber);
+    rows.push(
+      createElement(
+        `${prefix}row`,
+        [
+          worksheetStringCell(
+            `B${headerRowNumber}`,
+            series.name,
+            existingCell(existingHeaderRow, `B${headerRowNumber}`),
+            prefix,
+          ),
+          worksheetStringCell(
+            `C${headerRowNumber}`,
+            "Size",
+            existingCell(existingHeaderRow, `C${headerRowNumber}`),
+            prefix,
+          ),
+        ],
+        preservedAttributes(existingHeaderRow, headerRowNumber),
+      ),
+    );
+    for (const [pointIndex, xValue] of series.xValues.entries()) {
+      const rowNumber = String(headerRow + pointIndex + 1);
+      const existingRow = existingRows.get(rowNumber);
+      rows.push(
+        createElement(
+          `${prefix}row`,
+          [
+            worksheetNumberCell(
+              `A${rowNumber}`,
+              xValue,
+              existingCell(existingRow, `A${rowNumber}`),
+              prefix,
+            ),
+            worksheetNumberCell(
+              `B${rowNumber}`,
+              series.yValues[pointIndex],
+              existingCell(existingRow, `B${rowNumber}`),
+              prefix,
+            ),
+            worksheetNumberCell(
+              `C${rowNumber}`,
+              series.bubbleSizes[pointIndex],
+              existingCell(existingRow, `C${rowNumber}`),
               prefix,
             ),
           ],
