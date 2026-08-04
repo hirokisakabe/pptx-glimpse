@@ -541,6 +541,34 @@ export function buildChartEditSource(): PptxSourceModel {
   return readPptx(writePptx(source));
 }
 
+export async function buildCategoryComboChartEditSource(
+  options: {
+    readonly lineGrouping?: string;
+    readonly lineAxisIds?: readonly (string | undefined)[];
+  } = {},
+): Promise<PptxSourceModel> {
+  const pptx = await JSZip.loadAsync(writePptx(buildChartEditSource()));
+  const chartFile = pptx.file("ppt/charts/chart1.xml");
+  if (chartFile === null) throw new Error("combo chart fixture part not found");
+  let chart = await chartFile.async("string");
+  const barChart = /<c:barChart>.*?<\/c:barChart>/.exec(chart)?.[0];
+  const series = barChart?.match(/<c:ser>.*?<\/c:ser>/g);
+  if (barChart === undefined || series?.length !== 2) {
+    throw new Error("combo chart fixture requires two category series");
+  }
+  const lineSeries = series[1].replace(
+    '<c:idx val="1"/><c:order val="1"/>',
+    '<c:idx val="7"/><c:order val="9"/>',
+  );
+  const lineAxisIds = (options.lineAxisIds ?? ["100002", "100003"])
+    .map((id) => (id === undefined ? "<c:axId/>" : `<c:axId val="${id}"/>`))
+    .join("");
+  const lineChart = `<c:lineChart><c:grouping val="${options.lineGrouping ?? "standard"}"/><c:varyColors val="0"/>${lineSeries}${lineAxisIds}</c:lineChart>`;
+  chart = chart.replace(barChart, `${barChart.replace(series[1], "")}${lineChart}`);
+  pptx.file("ppt/charts/chart1.xml", chart);
+  return readPptx(await pptx.generateAsync({ type: "uint8array" }));
+}
+
 export async function buildScatterChartEditSource(): Promise<PptxSourceModel> {
   const pptx = await JSZip.loadAsync(writePptx(buildChartEditSource()));
   const chartFile = pptx.file("ppt/charts/chart1.xml");

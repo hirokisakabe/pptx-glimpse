@@ -27,6 +27,274 @@ function createChartElement(overrides: Partial<ChartElement["chart"]>): ChartEle
 }
 
 describe("renderChart", () => {
+  describe("category combo chart", () => {
+    it("renders both bar and line plot-group series", () => {
+      const element = createChartElement({
+        chartType: "combo",
+        series: [
+          {
+            name: "Columns",
+            values: [10, 20],
+            color: { hex: "#4472C4", alpha: 1 },
+            chartType: "bar",
+          },
+          {
+            name: "Trend",
+            values: [15, 25],
+            color: { hex: "#ED7D31", alpha: 1 },
+            chartType: "line",
+          },
+        ],
+        categories: ["A", "B"],
+        plotGroups: [
+          {
+            chartType: "bar",
+            seriesIndexes: [0],
+            axisIds: ["cat", "value"],
+            valueAxisId: "value",
+          },
+          {
+            chartType: "line",
+            seriesIndexes: [1],
+            axisIds: ["cat", "value"],
+            valueAxisId: "value",
+          },
+        ],
+        valueAxes: [{ id: "value", position: "l" }],
+        legend: { position: "r" },
+      });
+
+      const result = renderChart(element);
+      expect(result.content.match(/<rect[^>]*fill="#4472C4"[^>]*\/>/g)).toHaveLength(3);
+      expect(result.content).toContain("<polyline");
+      expect(result.content).toContain('stroke="#ED7D31"');
+      expect(result.content).toContain("Columns");
+      expect(result.content).toContain("Trend");
+    });
+
+    it("uses one shared scale and renders axes and categories once for a shared value axis", () => {
+      const element = createChartElement({
+        chartType: "combo",
+        barDirection: "col",
+        series: [
+          {
+            name: "Columns",
+            values: [100, 80],
+            color: { hex: "#4472C4", alpha: 1 },
+            chartType: "bar",
+          },
+          {
+            name: "Trend",
+            values: [10, 20],
+            color: { hex: "#ED7D31", alpha: 1 },
+            chartType: "line",
+          },
+        ],
+        categories: ["A", "B"],
+        plotGroups: [
+          {
+            chartType: "bar",
+            seriesIndexes: [0],
+            axisIds: ["cat", "shared"],
+            valueAxisId: "shared",
+          },
+          {
+            chartType: "line",
+            seriesIndexes: [1],
+            axisIds: ["cat", "shared"],
+            valueAxisId: "shared",
+          },
+        ],
+        valueAxes: [{ id: "shared", position: "l" }],
+      });
+
+      const result = renderChart(element);
+      expect(result.content.match(/>A<\/text>/g)).toHaveLength(1);
+      expect(result.content.match(/>B<\/text>/g)).toHaveLength(1);
+      expect(result.content).not.toContain('text-anchor="start"');
+      expect(result.content).toContain(">100</text>");
+      expect(result.content).toContain('points="152.5,234.2 357.5,210.4"');
+      expect(result.content).toContain(
+        '<line x1="50" y1="258" x2="460" y2="258" stroke="#D9D9D9" stroke-width="1"/>',
+      );
+    });
+
+    it("uses a right-side secondary scale and paints plot groups in document order", () => {
+      const element = createChartElement({
+        chartType: "combo",
+        barDirection: "col",
+        series: [
+          {
+            name: "Trend",
+            values: [500, 1000],
+            color: { hex: "#ED7D31", alpha: 1 },
+            chartType: "line",
+          },
+          {
+            name: "Columns",
+            values: [5, 10],
+            color: { hex: "#4472C4", alpha: 1 },
+            chartType: "bar",
+          },
+        ],
+        categories: ["A", "B"],
+        plotGroups: [
+          {
+            chartType: "line",
+            seriesIndexes: [0],
+            axisIds: ["cat", "secondary"],
+            valueAxisId: "secondary",
+          },
+          {
+            chartType: "bar",
+            seriesIndexes: [1],
+            axisIds: ["cat", "primary"],
+            valueAxisId: "primary",
+          },
+        ],
+        valueAxes: [
+          { id: "primary", position: "l" },
+          { id: "secondary", position: "r" },
+        ],
+      });
+
+      const result = renderChart(element);
+      expect(result.content).toMatch(/text-anchor="start"[^>]*>1000<\/text>/);
+      expect(result.content.indexOf('stroke="#ED7D31"')).toBeLessThan(
+        result.content.indexOf('fill="#4472C4"'),
+      );
+    });
+
+    it("renders a zero-only shared axis instead of dropping the combo", () => {
+      const element = createChartElement({
+        chartType: "combo",
+        series: [
+          { name: "Columns", values: [0], color: { hex: "#4472C4", alpha: 1 } },
+          { name: "Trend", values: [0], color: { hex: "#ED7D31", alpha: 1 } },
+        ],
+        categories: ["A"],
+        plotGroups: [
+          {
+            chartType: "bar",
+            seriesIndexes: [0],
+            axisIds: ["cat", "shared"],
+            valueAxisId: "shared",
+          },
+          {
+            chartType: "line",
+            seriesIndexes: [1],
+            axisIds: ["cat", "shared"],
+            valueAxisId: "shared",
+          },
+        ],
+        valueAxes: [{ id: "shared", position: "l" }],
+      });
+
+      const result = renderChart(element);
+      expect(result.content).toContain('fill="#4472C4"');
+      expect(result.content).toContain('stroke="#ED7D31"');
+      expect(result.content).toContain(">1</text>");
+    });
+
+    it("uses zero-inclusive negative domains on primary and secondary axes", () => {
+      const element = createChartElement({
+        chartType: "combo",
+        series: [
+          { name: "Columns", values: [-5, -10], color: { hex: "#4472C4", alpha: 1 } },
+          { name: "Trend", values: [-50, -100], color: { hex: "#ED7D31", alpha: 1 } },
+        ],
+        categories: ["A", "B"],
+        plotGroups: [
+          {
+            chartType: "bar",
+            seriesIndexes: [0],
+            axisIds: ["cat", "primary"],
+            valueAxisId: "primary",
+          },
+          {
+            chartType: "line",
+            seriesIndexes: [1],
+            axisIds: ["cat", "secondary"],
+            valueAxisId: "secondary",
+          },
+        ],
+        valueAxes: [
+          { id: "primary", position: "l" },
+          { id: "secondary", position: "r" },
+        ],
+      });
+
+      const result = renderChart(element);
+      expect(result.content).toContain(">-10</text>");
+      expect(result.content).toMatch(/text-anchor="start"[^>]*>-100<\/text>/);
+      expect(result.content).toContain('stroke="#ED7D31"');
+      expect(result.content).toMatch(/<rect[^>]*height="[1-9][^"]*"[^>]*fill="#4472C4"/);
+      expect(result.content).toContain(
+        '<line x1="50" y1="20" x2="460" y2="20" stroke="#D9D9D9" stroke-width="1"/>',
+      );
+    });
+
+    it("draws the category baseline at primary-axis zero for a mixed-sign domain", () => {
+      const element = createChartElement({
+        chartType: "combo",
+        series: [
+          { name: "Trend", values: [100, 200], color: { hex: "#ED7D31", alpha: 1 } },
+          { name: "Columns", values: [-10, 10], color: { hex: "#4472C4", alpha: 1 } },
+        ],
+        categories: ["A", "B"],
+        plotGroups: [
+          {
+            chartType: "line",
+            seriesIndexes: [0],
+            axisIds: ["cat", "secondary"],
+            valueAxisId: "secondary",
+          },
+          {
+            chartType: "bar",
+            seriesIndexes: [1],
+            axisIds: ["cat", "primary"],
+            valueAxisId: "primary",
+          },
+        ],
+        valueAxes: [
+          { id: "primary", position: "l" },
+          { id: "secondary", position: "r" },
+        ],
+      });
+
+      const result = renderChart(element);
+      expect(result.content).toContain(
+        '<line x1="50" y1="139" x2="460" y2="139" stroke="#D9D9D9" stroke-width="1"/>',
+      );
+    });
+
+    it("does not render a horizontal bar and line combo", () => {
+      const element = createChartElement({
+        chartType: "combo",
+        barDirection: "bar",
+        series: [
+          {
+            name: "Columns",
+            values: [10],
+            color: { hex: "#4472C4", alpha: 1 },
+            chartType: "bar",
+          },
+          {
+            name: "Trend",
+            values: [20],
+            color: { hex: "#ED7D31", alpha: 1 },
+            chartType: "line",
+          },
+        ],
+        categories: ["A"],
+      });
+
+      const result = renderChart(element);
+      expect(result.content).not.toContain('fill="#4472C4"');
+      expect(result.content).not.toContain('stroke="#ED7D31"');
+    });
+  });
+
   describe("bar chart", () => {
     it("renders rect elements for bars", () => {
       const element = createChartElement({

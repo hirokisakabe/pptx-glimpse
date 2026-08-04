@@ -772,6 +772,167 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it("keeps category combo plot-group types on renderer series", () => {
+    const computed = buildComputedViewWithChartData();
+    const chartElement = computed.slides[0]?.elements[0];
+    if (chartElement?.kind !== "chart") throw new Error("chart fixture is missing");
+    const combo: PptxComputedView = {
+      ...computed,
+      slides: [
+        {
+          ...computed.slides[0],
+          elements: [
+            {
+              ...chartElement,
+              chartData: {
+                chartType: "combo",
+                title: "Combo",
+                categories: ["A", "B"],
+                series: [
+                  {
+                    name: "Columns",
+                    values: [4, 8],
+                    color: { hex: "#336699", alpha: 1 },
+                    source: { chartType: "bar", index: 0 },
+                  },
+                  {
+                    name: "Trend",
+                    values: [5, 9],
+                    color: { hex: "#993333", alpha: 1 },
+                    source: { chartType: "line", index: 7 },
+                  },
+                ],
+                plotGroups: [
+                  {
+                    chartType: "line",
+                    grouping: "standard",
+                    seriesIndexes: [1],
+                    axisReferenceCount: 2,
+                    axisIds: ["100002", "200003"],
+                    categoryAxisIds: ["100002"],
+                    valueAxisIds: ["200003"],
+                    valueAxisId: "200003",
+                  },
+                  {
+                    chartType: "bar",
+                    grouping: "clustered",
+                    seriesIndexes: [0],
+                    axisReferenceCount: 2,
+                    axisIds: ["100002", "100003"],
+                    categoryAxisIds: ["100002"],
+                    valueAxisIds: ["100003"],
+                    valueAxisId: "100003",
+                  },
+                ],
+                valueAxes: [
+                  { id: "100003", position: "l" },
+                  { id: "200003", position: "r" },
+                ],
+                legend: null,
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = adaptComputedViewToRendererModel(combo);
+    const chart = result.slides[0].elements.find((element) => element.type === "chart");
+    expect(chart?.type === "chart" ? chart.chart : undefined).toMatchObject({
+      chartType: "combo",
+      series: [{ chartType: "bar" }, { chartType: "line" }],
+      plotGroups: [
+        { chartType: "line", seriesIndexes: [1], valueAxisId: "200003" },
+        { chartType: "bar", seriesIndexes: [0], valueAxisId: "100003" },
+      ],
+      valueAxes: [
+        { id: "100003", position: "l" },
+        { id: "200003", position: "r" },
+      ],
+    });
+  });
+
+  it("Skip horizontal category combos with an adapter diagnostic", () => {
+    const computed = buildComputedViewWithChartData();
+    const chartElement = computed.slides[0]?.elements[0];
+    if (chartElement?.kind !== "chart") throw new Error("chart fixture is missing");
+    const horizontalCombo: PptxComputedView = {
+      ...computed,
+      slides: [
+        {
+          ...computed.slides[0],
+          elements: [
+            {
+              ...chartElement,
+              chartData: {
+                chartType: "combo",
+                title: null,
+                categories: ["A"],
+                barDirection: "bar",
+                series: [],
+                legend: null,
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = adaptComputedViewToRendererModel(horizontalCombo);
+    expect(result.slides[0].elements).toHaveLength(0);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "pptx-computed-view-adapter.unsupported-horizontal-combo-skipped",
+      }),
+    );
+  });
+
+  it("skips stacked combo grouping with an adapter diagnostic", () => {
+    const result = adaptComputedViewToRendererModel(
+      createComputedView(buildSourceWithChartAndSmartArt({ chartXml: comboChartXml("stacked") })),
+    );
+
+    expect(result.slides[0].elements.some((element) => element.type === "chart")).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "pptx-computed-view-adapter.unsupported-combo-grouping-skipped",
+      }),
+    );
+  });
+
+  it("skips incomplete combo axis topology with an adapter diagnostic", () => {
+    const result = adaptComputedViewToRendererModel(
+      createComputedView(
+        buildSourceWithChartAndSmartArt({ chartXml: comboChartXml("standard", []) }),
+      ),
+    );
+
+    expect(result.slides[0].elements.some((element) => element.type === "chart")).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "pptx-computed-view-adapter.unsupported-combo-axis-topology-skipped",
+      }),
+    );
+  });
+
+  it.each([
+    ["an extra unresolved axis ID", ["category", "secondary", "unknown"]],
+    ["an axId without val", ["category", undefined]],
+  ] as const)("skips combo topology with %s and reports an adapter diagnostic", (_, axisIds) => {
+    const result = adaptComputedViewToRendererModel(
+      createComputedView(
+        buildSourceWithChartAndSmartArt({ chartXml: comboChartXml("standard", axisIds) }),
+      ),
+    );
+
+    expect(result.slides[0].elements.some((element) => element.type === "chart")).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "pptx-computed-view-adapter.unsupported-combo-axis-topology-skipped",
+      }),
+    );
+  });
+
   it("Return SmartArt fallback diagram drawing skip diagnostic", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
@@ -1037,7 +1198,7 @@ function buildSource(options: BuildSourceOptions = {}): PptxSourceModel {
 }
 
 function buildSourceWithChartAndSmartArt(
-  options: { readonly smartArtDrawingXml?: string } = {},
+  options: { readonly smartArtDrawingXml?: string; readonly chartXml?: string } = {},
 ): PptxSourceModel {
   const source = buildSource({
     extraSlideShapes: [
@@ -1105,12 +1266,32 @@ function buildSourceWithChartAndSmartArt(
         },
       ],
       rawParts: [
-        rawXmlPart("ppt/charts/chart1.xml", chartXml()),
+        rawXmlPart("ppt/charts/chart1.xml", options.chartXml ?? chartXml()),
         rawXmlPart("ppt/diagrams/data1.xml", `<dgm:dataModel/>`),
         rawXmlPart("ppt/diagrams/drawing1.xml", options.smartArtDrawingXml ?? smartArtDrawingXml()),
       ],
     },
   };
+}
+
+function comboChartXml(
+  lineGrouping: string,
+  lineAxisIds: readonly (string | undefined)[] = ["category", "secondary"],
+): string {
+  const series = (name: string, value: number) => `<c:ser><c:idx val="0"/><c:order val="0"/>
+    <c:tx><c:v>${name}</c:v></c:tx>
+    <c:cat><c:strLit><c:pt idx="0"><c:v>A</c:v></c:pt></c:strLit></c:cat>
+    <c:val><c:numLit><c:pt idx="0"><c:v>${value}</c:v></c:pt></c:numLit></c:val>
+  </c:ser>`;
+  const axes = (ids: readonly (string | undefined)[]) =>
+    ids.map((id) => (id === undefined ? "<c:axId/>" : `<c:axId val="${id}"/>`)).join("");
+  return `<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart><c:plotArea>
+    <c:barChart><c:barDir val="col"/><c:grouping val="clustered"/>${series("Columns", 4)}${axes(["category", "primary"])}</c:barChart>
+    <c:lineChart><c:grouping val="${lineGrouping}"/>${series("Trend", 5)}${axes(lineAxisIds)}</c:lineChart>
+    <c:catAx><c:axId val="category"/></c:catAx>
+    <c:valAx><c:axId val="primary"/><c:axPos val="l"/></c:valAx>
+    <c:valAx><c:axId val="secondary"/><c:axPos val="r"/></c:valAx>
+  </c:plotArea></c:chart></c:chartSpace>`;
 }
 
 function chartXml(): string {

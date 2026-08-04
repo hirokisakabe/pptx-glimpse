@@ -95,6 +95,257 @@ describe("updateChartData", () => {
     ]);
   });
 
+  it("updates a fixed-topology bar and line category combo by typed source identity", () => {
+    const input = buildExistingComboChart();
+    const source = readPptx(input);
+    const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    if (chart?.handle === undefined) throw new Error("combo fixture should have a handle");
+    const before = unzipSync(input);
+    const beforeWorkbook = unzipSync(before["ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx"]);
+
+    const edited = updateChartData(source, chart.handle, {
+      series: [
+        {
+          source: { chartType: "line", index: 7 },
+          name: "Edited trend",
+          categories: ["Apr", "May", "Jun"],
+          values: [35, 48, 63],
+        },
+        {
+          source: { chartType: "bar", index: 0 },
+          name: "Edited revenue",
+          categories: ["Apr", "May", "Jun"],
+          values: [40, 55, 70],
+        },
+      ],
+    });
+
+    const computed = createComputedView(edited).slides[0]?.elements.find(
+      (element) => element.kind === "chart",
+    );
+    expect(computed?.kind === "chart" ? computed.chartData : undefined).toMatchObject({
+      chartType: "combo",
+      categories: ["Apr", "May", "Jun"],
+      series: [
+        {
+          source: { chartType: "bar", index: 0 },
+          name: "Edited revenue",
+          values: [40, 55, 70],
+        },
+        {
+          source: { chartType: "line", index: 7 },
+          name: "Edited trend",
+          values: [35, 48, 63],
+        },
+      ],
+      plotGroups: [
+        { chartType: "bar", valueAxisId: "100003" },
+        { chartType: "line", valueAxisId: "200003" },
+      ],
+      valueAxes: [
+        { id: "100003", position: "l" },
+        { id: "200003", position: "r" },
+      ],
+    });
+
+    const output = unzipSync(writePptx(edited));
+    const chartXml = decoder.decode(output["ppt/charts/chart1.xml"]);
+    expect(chartXml.indexOf("<c:barChart>")).toBeLessThan(chartXml.indexOf("<c:lineChart>"));
+    expect(chartXml.match(/<c:ser>/g)).toHaveLength(2);
+    expect(chartXml).toContain('<c:idx val="0"/><c:order val="0"/>');
+    expect(chartXml).toContain('<c:idx val="7"/><c:order val="9"/>');
+    expect(chartXml).toContain("Sheet1!$B$1");
+    expect(chartXml).toContain("Sheet1!$C$1");
+    expect(chartXml).toContain("Sheet1!$A$2:$A$4");
+    expect(chartXml).toContain("Sheet1!$B$2:$B$4");
+    expect(chartXml).toContain("Sheet1!$C$2:$C$4");
+    expect(chartXml.match(/<c:ptCount val="3"\/>/g)).toHaveLength(4);
+    expect(chartXml).toContain('<c:axId val="100002"/><c:axId val="100003"/>');
+    expect(chartXml).toContain('<c:axId val="100002"/><c:axId val="200003"/>');
+    expect(chartXml).toContain('<c:crossAx val="100002"/>');
+    expect(chartXml).toContain('<c:crossAx val="100003"/>');
+    expect(chartXml.match(/<c:catAx>/g)).toHaveLength(1);
+    expect(chartXml.match(/<c:valAx>/g)).toHaveLength(2);
+    expect(chartXml).toContain('<c:axPos val="r"/>');
+    expect(chartXml).toContain('<c:crosses val="max"/>');
+    expect(chartXml).toContain("Preserved title");
+    expect(chartXml).toContain("<c:legend>");
+    expect(chartXml).toContain('uri="combo-group-preserve"');
+    expect(chartXml).toContain('uri="preserve-me"');
+    expect(chartXml).toContain('val="ED7D31"');
+    expect(output["ppt/slides/slide1.xml"]).toEqual(before["ppt/slides/slide1.xml"]);
+    expect(output["ppt/theme/theme1.xml"]).toEqual(before["ppt/theme/theme1.xml"]);
+
+    const workbook = unzipSync(output["ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx"]);
+    const worksheet = decoder.decode(workbook["xl/worksheets/sheet1.xml"]);
+    expect(worksheet).toContain('dimension ref="A1:C4"');
+    expect(worksheet).toContain("<t>Edited revenue</t>");
+    expect(worksheet).toContain("<t>Edited trend</t>");
+    expect(worksheet).toContain('<c r="B4"><v>70</v></c>');
+    expect(worksheet).toContain('<c r="C4"><v>63</v></c>');
+    expect(workbook["xl/styles.xml"]).toEqual(beforeWorkbook["xl/styles.xml"]);
+    expect(workbook["xl/combo-preserve.xml"]).toEqual(beforeWorkbook["xl/combo-preserve.xml"]);
+
+    const reread = createComputedView(readPptx(writePptx(edited))).slides[0]?.elements.find(
+      (element) => element.kind === "chart",
+    );
+    expect(reread?.kind === "chart" ? reread.chartData?.series : undefined).toMatchObject([
+      { name: "Edited revenue", source: { chartType: "bar", index: 0 } },
+      { name: "Edited trend", source: { chartType: "line", index: 7 } },
+    ]);
+  });
+
+  it("rejects combo topology and identity changes atomically", () => {
+    const source = readPptx(buildExistingComboChart());
+    const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    if (chart?.handle === undefined) throw new Error("combo fixture should have a handle");
+    const validSeries = [
+      {
+        source: { chartType: "bar" as const, index: 0 },
+        name: "Bar",
+        categories: ["A"],
+        values: [1],
+      },
+      {
+        source: { chartType: "line" as const, index: 7 },
+        name: "Line",
+        categories: ["A"],
+        values: [2],
+      },
+    ];
+    const failures = [
+      { series: validSeries.slice(0, 1), message: "series count must remain unchanged" },
+      {
+        series: [validSeries[0], { ...validSeries[1], source: validSeries[0].source }],
+        message: "identity is duplicated",
+      },
+      {
+        series: [
+          validSeries[0],
+          { ...validSeries[1], source: { chartType: "line" as const, index: 8 } },
+        ],
+        message: "identity does not match",
+      },
+      {
+        series: [validSeries[0], { ...validSeries[1], source: undefined }],
+        message: "identity is missing or invalid",
+      },
+    ];
+    for (const failure of failures) {
+      expect(() => updateChartData(source, chart.handle, { series: failure.series })).toThrow(
+        failure.message,
+      );
+      expect(source.edits).toBeUndefined();
+    }
+
+    for (const replacement of ["</c:lineChart><c:areaChart/>", "</c:lineChart><c:scatterChart/>"]) {
+      const files = unzipSync(buildExistingComboChart());
+      files["ppt/charts/chart1.xml"] = replaceText(
+        files["ppt/charts/chart1.xml"],
+        "</c:lineChart>",
+        replacement,
+      );
+      const unsupported = readPptx(zipFixture(files));
+      const unsupportedChart = unsupported.slides[0]?.shapes.find(
+        (shape) => shape.kind === "chart",
+      );
+      if (unsupportedChart?.handle === undefined) throw new Error("chart handle is missing");
+      expect(() =>
+        updateChartData(unsupported, unsupportedChart.handle, { series: validSeries }),
+      ).toThrow("chart type or combination is not supported");
+      expect(unsupported.edits).toBeUndefined();
+    }
+  });
+
+  it("rejects a horizontal bar and line combo atomically", () => {
+    const files = unzipSync(buildExistingComboChart());
+    files["ppt/charts/chart1.xml"] = replaceText(
+      files["ppt/charts/chart1.xml"],
+      '<c:barDir val="col"/>',
+      '<c:barDir val="bar"/>',
+    );
+    const source = readPptx(zipFixture(files));
+    const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    if (chart?.handle === undefined) throw new Error("combo fixture should have a handle");
+
+    expect(() =>
+      updateChartData(source, chart.handle, {
+        series: [
+          {
+            source: { chartType: "bar", index: 0 },
+            name: "Bar",
+            categories: ["A"],
+            values: [1],
+          },
+          {
+            source: { chartType: "line", index: 7 },
+            name: "Line",
+            categories: ["A"],
+            values: [2],
+          },
+        ],
+      }),
+    ).toThrow("combo charts require barDir=col");
+    expect(source.edits).toBeUndefined();
+  });
+
+  it("rejects stacked and percent-stacked combo grouping atomically", () => {
+    for (const [search, replacement] of [
+      ['<c:grouping val="clustered"/>', '<c:grouping val="stacked"/>'],
+      ['<c:grouping val="standard"/>', '<c:grouping val="percentStacked"/>'],
+    ]) {
+      const files = unzipSync(buildExistingComboChart());
+      files["ppt/charts/chart1.xml"] = replaceText(
+        files["ppt/charts/chart1.xml"],
+        search,
+        replacement,
+      );
+      expectEditFailure(readPptx(zipFixture(files)), "combo chart grouping is not supported");
+    }
+  });
+
+  it("rejects incomplete or ambiguous combo axis topology atomically", () => {
+    const mutations = [
+      (xml: string) => xml.replace(/<c:lineChart>(.*?)<c:ser>.*?<\/c:ser>/, "<c:lineChart>$1"),
+      (xml: string) => xml.replace('<c:axId val="200003"/>', '<c:axId val="999999"/>'),
+      (xml: string) =>
+        xml.replace(
+          '<c:axId val="100002"/><c:axId val="200003"/>',
+          '<c:axId val="100003"/><c:axId val="200003"/>',
+        ),
+      (xml: string) =>
+        xml
+          .replace(
+            '<c:axId val="100002"/><c:axId val="200003"/>',
+            '<c:axId val="300002"/><c:axId val="200003"/>',
+          )
+          .replace("</c:plotArea>", '<c:catAx><c:axId val="300002"/></c:catAx></c:plotArea>'),
+      (xml: string) => xml.replaceAll("c:catAx", "c:dateAx"),
+      (xml: string) =>
+        xml.replace(
+          '<c:axId val="100002"/><c:axId val="200003"/>',
+          '<c:axId val="100002"/><c:axId val="200003"/><c:axId val="999999"/>',
+        ),
+      (xml: string) =>
+        xml.replace(
+          '<c:axId val="100002"/><c:axId val="200003"/>',
+          '<c:axId val="100002"/><c:axId/>',
+        ),
+    ];
+    for (const mutate of mutations) {
+      const files = unzipSync(buildExistingComboChart());
+      files["ppt/charts/chart1.xml"] = new TextEncoder().encode(
+        mutate(decoder.decode(files["ppt/charts/chart1.xml"])),
+      );
+      expectEditFailure(
+        readPptx(zipFixture(files)),
+        mutate === mutations[0]
+          ? "combo plot groups must each contain series"
+          : "combo chart axis topology is not supported",
+      );
+    }
+  });
+
   it("adds series by cloning the last series formatting and synchronizes the workbook", () => {
     const files = unzipSync(buildExistingChart());
     files["ppt/charts/chart1.xml"] = addSeriesExtensionMarkers(files["ppt/charts/chart1.xml"]);
@@ -981,6 +1232,33 @@ function buildExistingChart(): Uint8Array {
     "</c:chartSpace>",
     '<c:extLst><c:ext uri="preserve-me"><c:unknown val="kept"/></c:ext></c:extLst></c:chartSpace>',
   );
+  return zipFixture(files);
+}
+
+function buildExistingComboChart(): Uint8Array {
+  const files = unzipSync(buildExistingChart());
+  const chartPath = "ppt/charts/chart1.xml";
+  let chartXml = decoder.decode(files[chartPath]);
+  const barChart = /<c:barChart>.*?<\/c:barChart>/.exec(chartXml)?.[0];
+  const series = barChart?.match(/<c:ser>.*?<\/c:ser>/g);
+  if (barChart === undefined || series?.length !== 2) {
+    throw new Error("category chart fixture does not contain two series");
+  }
+  const lineSeries = series[1]
+    .replace('<c:idx val="1"/><c:order val="1"/>', '<c:idx val="7"/><c:order val="9"/>')
+    .replace("</c:ser>", '<c:extLst><c:ext uri="line-series-preserve"/></c:extLst></c:ser>');
+  const barOnly = barChart.replace(series[1], "");
+  const lineChart = `<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${lineSeries}<c:axId val="100002"/><c:axId val="200003"/><c:extLst><c:ext uri="combo-group-preserve"/></c:extLst></c:lineChart>`;
+  chartXml = chartXml.replace(barChart, `${barOnly}${lineChart}`);
+  chartXml = chartXml.replace(
+    "</c:plotArea>",
+    '<c:valAx><c:axId val="200003"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="r"/><c:numFmt formatCode="General" sourceLinked="1"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:crossAx val="100002"/><c:crosses val="max"/><c:crossBetween val="between"/></c:valAx></c:plotArea>',
+  );
+  files[chartPath] = new TextEncoder().encode(chartXml);
+  const workbookPath = "ppt/embeddings/Microsoft_Excel_Worksheet1.xlsx";
+  const workbook = unzipSync(files[workbookPath]);
+  workbook["xl/combo-preserve.xml"] = new TextEncoder().encode("<preserved/>");
+  files[workbookPath] = zipFixture(workbook);
   return zipFixture(files);
 }
 

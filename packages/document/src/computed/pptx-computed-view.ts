@@ -194,6 +194,7 @@ export interface ComputedChartElement extends ComputedElementBase {
 }
 
 export type ComputedChartType =
+  | "combo"
   | "bar"
   | "line"
   | "pie"
@@ -211,6 +212,10 @@ export interface ComputedChartData {
   readonly title: string | null;
   readonly series: readonly ComputedChartSeries[];
   readonly categories: readonly string[];
+  /** Ordered OOXML plot groups for a supported category combo chart. */
+  readonly plotGroups?: readonly ComputedChartPlotGroup[];
+  /** Value axes referenced by combo plot groups, keyed through `axId`. */
+  readonly valueAxes?: readonly ComputedChartValueAxis[];
   readonly barDirection?: "col" | "bar";
   readonly holeSize?: number;
   readonly radarStyle?: "standard" | "marker" | "filled";
@@ -220,12 +225,44 @@ export interface ComputedChartData {
   readonly legend: ComputedChartLegend | null;
 }
 
+export interface ComputedChartPlotGroup {
+  readonly chartType: "bar" | "line";
+  /** Authored `c:grouping@val`, when present. */
+  readonly grouping?: string;
+  /** Positions in `ComputedChartData.series`, retained in OOXML plot-group order. */
+  readonly seriesIndexes: readonly number[];
+  /** Number of authored `c:axId` elements, including entries without `val`. */
+  readonly axisReferenceCount?: number;
+  /** Ordered `c:axId` references authored on the plot group. */
+  readonly axisIds: readonly string[];
+  /** Group references that resolve to exactly one supported `c:catAx` definition. */
+  readonly categoryAxisIds?: readonly string[];
+  /** Group references that resolve to exactly one `c:valAx` definition. */
+  readonly valueAxisIds?: readonly string[];
+  /** The referenced `c:valAx/c:axId`, when it can be resolved. */
+  readonly valueAxisId?: string;
+}
+
+export interface ComputedChartValueAxis {
+  /** Unsigned `c:valAx/c:axId@val`. */
+  readonly id: string;
+  readonly position?: "l" | "r" | "t" | "b";
+}
+
 export interface ComputedChartSeries {
   readonly name: string | null;
   readonly values: readonly number[];
   readonly xValues?: readonly number[];
   readonly bubbleSizes?: readonly number[];
   readonly color: ComputedColor;
+  /** Existing OOXML identity, available for editable bar/line category series. */
+  readonly source?: ComputedCategoryChartSeriesSource;
+}
+
+export interface ComputedCategoryChartSeriesSource {
+  readonly chartType: "bar" | "line";
+  /** Unsigned `c:ser/c:idx@val`, scoped by `chartType`. */
+  readonly index: number;
 }
 
 export interface ComputedChartLegend {

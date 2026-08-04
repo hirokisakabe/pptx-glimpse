@@ -306,6 +306,34 @@ const LO_EDITOR_VALIDITY_CASES = [
     },
   },
   {
+    name: "category combo chart fixed-topology data update",
+    sourceFixture: "editor-validity-category-combo-chart-source.pptx",
+    expectedFixture: "editor-validity-category-combo-chart-expected.pptx",
+    createEditedPptx: (input: Uint8Array) => {
+      const source = readPptx(input);
+      const chart = source.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+      if (chart?.handle === undefined) throw new Error("combo fixture has no editable chart");
+      return writePptx(
+        updateChartData(source, chart.handle, {
+          series: [
+            {
+              source: { chartType: "bar", index: 0 },
+              name: "Edited columns",
+              categories: ["Apr", "May", "Jun"],
+              values: [40, 55, 70],
+            },
+            {
+              source: { chartType: "line", index: 1 },
+              name: "Edited trend",
+              categories: ["Apr", "May", "Jun"],
+              values: [35, 48, 63],
+            },
+          ],
+        }),
+      );
+    },
+  },
+  {
     name: "scatter chart XY data update",
     sourceFixture: "editor-validity-scatter-chart-source.pptx",
     expectedFixture: "editor-validity-scatter-chart-expected.pptx",

@@ -8,6 +8,7 @@ export interface ChartElement {
 }
 
 export type ChartType =
+  | "combo"
   | "bar"
   | "line"
   | "pie"
@@ -25,6 +26,10 @@ export interface ChartData {
   title: string | null;
   series: ChartSeries[];
   categories: string[];
+  /** Ordered OOXML plot groups for category combo charts. */
+  plotGroups?: ChartPlotGroup[];
+  /** Value axes referenced by combo plot groups. */
+  valueAxes?: ChartValueAxis[];
   barDirection?: "col" | "bar";
   holeSize?: number;
   radarStyle?: "standard" | "marker" | "filled";
@@ -34,12 +39,29 @@ export interface ChartData {
   legend: ChartLegend | null;
 }
 
+export interface ChartPlotGroup {
+  chartType: "bar" | "line";
+  grouping?: string;
+  seriesIndexes: number[];
+  axisIds: string[];
+  categoryAxisIds?: string[];
+  valueAxisIds?: string[];
+  valueAxisId?: string;
+}
+
+export interface ChartValueAxis {
+  id: string;
+  position?: "l" | "r" | "t" | "b";
+}
+
 export interface ChartSeries {
   name: string | null;
   values: number[];
   xValues?: number[];
   bubbleSizes?: number[];
   color: ResolvedColor;
+  /** Plot type for a series in a category combo chart. */
+  chartType?: "bar" | "line";
 }
 
 export interface ChartLegend {

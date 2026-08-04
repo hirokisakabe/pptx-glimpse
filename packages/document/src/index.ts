@@ -27,6 +27,7 @@ export { createPptx } from "./builder/index.js";
 export type {
   ComputedBackground,
   ComputedBlipEffects,
+  ComputedCategoryChartSeriesSource,
   ComputedCellBorders,
   ComputedChartData,
   ComputedChartElement,
@@ -307,6 +308,7 @@ export type {
   TableCellAddress,
   UpdateBubbleChartDataInput,
   UpdateBubbleChartSeriesDataInput,
+  UpdateCategoryChartSeriesSource,
   UpdateChartDataInput,
   UpdateChartSeriesDataInput,
   UpdateScatterChartDataInput,

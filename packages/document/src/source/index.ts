@@ -92,6 +92,7 @@ export type {
   TableCellAddress,
   UpdateBubbleChartDataInput,
   UpdateBubbleChartSeriesDataInput,
+  UpdateCategoryChartSeriesSource,
   UpdateChartDataInput,
   UpdateChartSeriesDataInput,
   UpdateScatterChartDataInput,

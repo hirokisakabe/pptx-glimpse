@@ -84,6 +84,37 @@ function chartXml(
 </c:chartSpace>`;
 }
 
+function categoryComboChartXml(secondaryValueAxis: boolean): string {
+  const categories = ["Q1", "Q2", "Q3", "Q4"];
+  const lineAxisId = secondaryValueAxis ? "200003" : "100003";
+  const series = (index: number, name: string, values: readonly number[]) => `<c:ser>
+    <c:idx val="${index}"/><c:order val="${index}"/>
+    <c:tx><c:v>${name}</c:v></c:tx>
+    <c:cat><c:strLit>${categories.map((category, point) => `<c:pt idx="${point}"><c:v>${category}</c:v></c:pt>`).join("")}</c:strLit></c:cat>
+    <c:val><c:numLit>${values.map((value, point) => `<c:pt idx="${point}"><c:v>${value}</c:v></c:pt>`).join("")}</c:numLit></c:val>
+  </c:ser>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<c:chartSpace xmlns:c="${NS.c}" xmlns:a="${NS.a}">
+  <c:chart>
+    <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Ordered Combo with ${secondaryValueAxis ? "Secondary" : "Shared"} Axis</a:t></a:r></a:p></c:rich></c:tx></c:title>
+    <c:plotArea>
+      <c:lineChart>
+        <c:grouping val="standard"/>${series(7, "Rate", [250, 600, 900, 1200])}
+        <c:axId val="100002"/><c:axId val="${lineAxisId}"/>
+      </c:lineChart>
+      <c:barChart>
+        <c:barDir val="col"/><c:grouping val="clustered"/>${series(0, "Units", [4, 8, 6, 10])}
+        <c:axId val="100002"/><c:axId val="100003"/>
+      </c:barChart>
+      <c:catAx><c:axId val="100002"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:axPos val="b"/><c:crossAx val="100003"/></c:catAx>
+      <c:valAx><c:axId val="100003"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:axPos val="l"/><c:crossAx val="100002"/></c:valAx>
+      ${secondaryValueAxis ? '<c:valAx><c:axId val="200003"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:axPos val="r"/><c:crossAx val="100002"/><c:crosses val="max"/></c:valAx>' : ""}
+    </c:plotArea>
+    <c:legend><c:legendPos val="b"/></c:legend>
+  </c:chart>
+</c:chartSpace>`;
+}
+
 function graphicFrameXml(
   id: number,
   name: string,
@@ -422,6 +453,38 @@ async function createChartsFixture(): Promise<void> {
     rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart11.xml" }]),
   });
 
+  // Slide 12: category combo, line first on a materially different secondary scale
+  charts.set("ppt/charts/chart12.xml", categoryComboChartXml(true));
+  const gf12 = graphicFrameXml(
+    2,
+    "Category Combo Chart",
+    margin,
+    margin,
+    SLIDE_W - margin * 2,
+    SLIDE_H - margin * 2,
+    "rId2",
+  );
+  slides.push({
+    xml: wrapSlideXml(gf12),
+    rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart12.xml" }]),
+  });
+
+  // Slide 13: the same materially different ranges sharing one value axis
+  charts.set("ppt/charts/chart13.xml", categoryComboChartXml(false));
+  const gf13 = graphicFrameXml(
+    2,
+    "Shared Axis Category Combo Chart",
+    margin,
+    margin,
+    SLIDE_W - margin * 2,
+    SLIDE_H - margin * 2,
+    "rId2",
+  );
+  slides.push({
+    xml: wrapSlideXml(gf13),
+    rels: slideRelsXml([{ id: "rId2", type: REL_TYPES.chart, target: "../charts/chart13.xml" }]),
+  });
+
   const buffer = await buildPptx({
     slides,
     charts,
@@ -437,6 +500,8 @@ async function createChartsFixture(): Promise<void> {
       `<Override PartName="/ppt/charts/chart9.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
       `<Override PartName="/ppt/charts/chart10.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
       `<Override PartName="/ppt/charts/chart11.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
+      `<Override PartName="/ppt/charts/chart12.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
+      `<Override PartName="/ppt/charts/chart13.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`,
     ],
   });
   savePptx(buffer, "charts.pptx");

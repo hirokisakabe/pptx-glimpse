@@ -31,6 +31,7 @@ export { addChart } from "./chart-authoring.js";
 export type {
   UpdateBubbleChartDataInput,
   UpdateBubbleChartSeriesDataInput,
+  UpdateCategoryChartSeriesSource,
   UpdateChartDataInput,
   UpdateChartSeriesDataInput,
   UpdateScatterChartDataInput,

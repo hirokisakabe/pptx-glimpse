@@ -53,6 +53,9 @@ export function renderChart(
 
   if (plotW > 0 && plotH > 0) {
     switch (chart.chartType) {
+      case "combo":
+        parts.push(renderCategoryComboChart(chart, plotX, plotY, plotW, plotH, context));
+        break;
       case "bar":
         parts.push(renderBarChart(chart, plotX, plotY, plotW, plotH, context));
         break;
@@ -95,6 +98,160 @@ export function renderChart(
 
   parts.push("</g>");
   return { content: parts.join(""), defs: [] };
+}
+
+function renderCategoryComboChart(
+  chart: ChartData,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  context: RendererContext,
+): string {
+  if (chart.barDirection === "bar") {
+    debugChart(context, "chart.combo", "horizontal bar and line combos are not supported");
+    return "";
+  }
+  const plotGroups = chart.plotGroups ?? inferredComboPlotGroups(chart.series);
+  if (
+    plotGroups.length !== 2 ||
+    !plotGroups.some((group) => group.chartType === "bar") ||
+    !plotGroups.some((group) => group.chartType === "line")
+  ) {
+    debugChart(context, "chart.combo", "bar or line plot group is empty");
+    return "";
+  }
+  const groups = plotGroups.map((group) => ({
+    ...group,
+    series: group.seriesIndexes.flatMap((index) => {
+      const series = chart.series[index];
+      return series === undefined ? [] : [series];
+    }),
+    scaleKey: group.valueAxisId ?? "__primary__",
+  }));
+  if (groups.some((group) => group.series.length === 0)) {
+    debugChart(context, "chart.combo", "bar or line plot group is empty");
+    return "";
+  }
+  const catCount =
+    chart.categories.length ||
+    Math.max(...groups.flatMap((group) => group.series.map((s) => s.values.length)));
+  if (catCount === 0) {
+    debugChart(context, "chart.combo", "category count is 0");
+    return "";
+  }
+
+  const domainByAxis = new Map<string, { min: number; max: number }>();
+  for (const group of groups) {
+    const current = domainByAxis.get(group.scaleKey);
+    const groupDomain = getZeroInclusiveValueDomain(group.series);
+    domainByAxis.set(group.scaleKey, {
+      min: Math.min(current?.min ?? 0, groupDomain.min),
+      max: Math.max(current?.max ?? 0, groupDomain.max),
+    });
+  }
+  const scaleByAxis = new Map<string, { ticks: number[]; min: number; max: number }>();
+  for (const [axisId, domain] of domainByAxis) {
+    const normalizedDomain =
+      domain.min === domain.max ? { min: domain.min, max: domain.max + 1 } : domain;
+    const ticks = computeNiceTicks(normalizedDomain.min, normalizedDomain.max);
+    scaleByAxis.set(axisId, {
+      ticks,
+      min: ticks[0] ?? normalizedDomain.min,
+      max: ticks.at(-1) ?? normalizedDomain.max,
+    });
+  }
+
+  const axisById = new Map((chart.valueAxes ?? []).map((axis) => [axis.id, axis]));
+  const primaryGroup =
+    groups.find((group) => axisById.get(group.valueAxisId ?? "")?.position === "l") ??
+    groups.find((group) => axisById.get(group.valueAxisId ?? "")?.position !== "r") ??
+    groups[0];
+  const primaryScale = scaleByAxis.get(primaryGroup.scaleKey);
+  const categoryAxisY =
+    primaryScale === undefined
+      ? y + h
+      : y + h - ((0 - primaryScale.min) / (primaryScale.max - primaryScale.min)) * h;
+  const parts: string[] = [
+    `<line x1="${round(x)}" y1="${round(categoryAxisY)}" x2="${round(x + w)}" y2="${round(categoryAxisY)}" stroke="#D9D9D9" stroke-width="1"/>`,
+    `<line x1="${round(x)}" y1="${round(y)}" x2="${round(x)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
+  ];
+  const renderedAxes = new Set<string>();
+  for (const group of groups) {
+    if (renderedAxes.has(group.scaleKey)) continue;
+    renderedAxes.add(group.scaleKey);
+    const scale = scaleByAxis.get(group.scaleKey);
+    if (scale === undefined) continue;
+    const axisPosition =
+      group.valueAxisId === undefined ? undefined : axisById.get(group.valueAxisId)?.position;
+    const rightSide = axisPosition === "r" || (axisPosition === undefined && renderedAxes.size > 1);
+    if (rightSide) {
+      parts.push(
+        `<line x1="${round(x + w)}" y1="${round(y)}" x2="${round(x + w)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
+        renderRightValueAxisLabels(scale.ticks, scale.min, scale.max, x + w, y, h),
+      );
+    } else {
+      parts.push(renderValueAxisLabels(scale.ticks, scale.min, scale.max, x, y, h));
+    }
+  }
+
+  const groupWidth = w / catCount;
+  for (let categoryIndex = 0; categoryIndex < catCount; categoryIndex++) {
+    const labelX = x + categoryIndex * groupWidth + groupWidth / 2;
+    parts.push(
+      `<text x="${round(labelX)}" y="${round(y + h + 15)}" text-anchor="middle" font-size="10" fill="#595959">${escapeXml(chart.categories[categoryIndex] ?? "")}</text>`,
+    );
+  }
+
+  for (const group of groups) {
+    const scale = scaleByAxis.get(group.scaleKey);
+    if (scale === undefined) continue;
+    if (group.chartType === "bar") {
+      const barWidth = (groupWidth * 0.7) / group.series.length;
+      const groupPadding = groupWidth * 0.15;
+      const range = scale.max - scale.min;
+      const zeroY = y + h - ((0 - scale.min) / range) * h;
+      for (let seriesIndex = 0; seriesIndex < group.series.length; seriesIndex++) {
+        const series = group.series[seriesIndex];
+        for (let categoryIndex = 0; categoryIndex < series.values.length; categoryIndex++) {
+          const valueY = y + h - ((series.values[categoryIndex] - scale.min) / range) * h;
+          parts.push(
+            `<rect x="${round(x + categoryIndex * groupWidth + groupPadding + seriesIndex * barWidth)}" y="${round(Math.min(zeroY, valueY))}" width="${round(barWidth)}" height="${round(Math.abs(zeroY - valueY))}" ${fillAttr(series.color)}/>`,
+          );
+        }
+      }
+      continue;
+    }
+    for (const series of group.series) {
+      const points = series.values.map((value, categoryIndex) => {
+        const px = round(x + categoryIndex * groupWidth + groupWidth / 2);
+        const py = round(y + h - ((value - scale.min) / (scale.max - scale.min)) * h);
+        return `${px},${py}`;
+      });
+      parts.push(
+        `<polyline points="${points.join(" ")}" fill="none" stroke="${series.color.hex}" stroke-width="2"${series.color.alpha < 1 ? ` stroke-opacity="${series.color.alpha}"` : ""}/>`,
+      );
+      for (const point of points) {
+        const [px, py] = point.split(",");
+        parts.push(`<circle cx="${px}" cy="${py}" r="3" ${fillAttr(series.color)}/>`);
+      }
+    }
+  }
+  return parts.join("");
+}
+
+function inferredComboPlotGroups(
+  series: readonly ChartSeries[],
+): NonNullable<ChartData["plotGroups"]> {
+  const order: ("bar" | "line")[] = [];
+  for (const item of series) {
+    if (item.chartType !== undefined && !order.includes(item.chartType)) order.push(item.chartType);
+  }
+  return order.map((chartType) => ({
+    chartType,
+    seriesIndexes: series.flatMap((item, index) => (item.chartType === chartType ? [index] : [])),
+    axisIds: [],
+  }));
 }
 
 function renderChartTitle(title: string, chartWidth: number): string {
@@ -1159,6 +1316,30 @@ function renderValueAxisLabels(
   return parts.join("");
 }
 
+function renderRightValueAxisLabels(
+  ticks: number[],
+  scaleMin: number,
+  scaleMax: number,
+  x: number,
+  y: number,
+  h: number,
+): string {
+  const parts: string[] = [];
+  const range = scaleMax - scaleMin;
+  if (range === 0) return "";
+
+  for (const tick of ticks) {
+    const ratio = (tick - scaleMin) / range;
+    if (ratio < -0.001 || ratio > 1.001) continue;
+    const tickY = y + h - ratio * h;
+    parts.push(
+      `<text x="${round(x + 5)}" y="${round(tickY + 4)}" text-anchor="start" font-size="10" fill="#595959">${escapeXml(formatTickValue(tick))}</text>`,
+      `<line x1="${round(x)}" y1="${round(tickY)}" x2="${round(x + 3)}" y2="${round(tickY)}" stroke="#D9D9D9" stroke-width="1"/>`,
+    );
+  }
+  return parts.join("");
+}
+
 function formatTickValue(value: number): string {
   if (Math.abs(value) >= 1e9) return `${round(value / 1e9)}B`;
   if (Math.abs(value) >= 1e6) return `${round(value / 1e6)}M`;
@@ -1175,6 +1356,18 @@ function getMaxValue(series: ChartSeries[]): number {
     }
   }
   return max;
+}
+
+function getZeroInclusiveValueDomain(series: ChartSeries[]): { min: number; max: number } {
+  let min = 0;
+  let max = 0;
+  for (const item of series) {
+    for (const value of item.values) {
+      min = Math.min(min, value);
+      max = Math.max(max, value);
+    }
+  }
+  return { min, max };
 }
 
 function fillAttr(color: ResolvedColor): string {

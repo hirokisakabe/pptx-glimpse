@@ -183,6 +183,48 @@ describe("createComputedView", () => {
     });
   });
 
+  it("Preserve category combo plot-group order and value-axis relationships", () => {
+    const source = buildSourceWithChartAndSmartArt({ chartXml: categoryComboChartDataXml() });
+    const slide = getSlide(createComputedView(source).slides, 0);
+    const chart = slide.elements.find((element) => element.kind === "chart");
+
+    expect(chart?.kind).toBe("chart");
+    if (chart?.kind !== "chart") throw new Error("chart element not found");
+    expect(chart.chartData).toMatchObject({
+      chartType: "combo",
+      barDirection: "col",
+      series: [
+        { name: "Trend", source: { chartType: "line", index: 7 } },
+        { name: "Columns", source: { chartType: "bar", index: 0 } },
+      ],
+      plotGroups: [
+        {
+          chartType: "line",
+          grouping: "standard",
+          seriesIndexes: [0],
+          axisReferenceCount: 2,
+          axisIds: ["100002", "200003"],
+          categoryAxisIds: ["100002"],
+          valueAxisIds: ["200003"],
+          valueAxisId: "200003",
+        },
+        {
+          chartType: "bar",
+          seriesIndexes: [1],
+          axisReferenceCount: 2,
+          axisIds: ["100002", "100003"],
+          categoryAxisIds: ["100002"],
+          valueAxisIds: ["100003"],
+          valueAxisId: "100003",
+        },
+      ],
+      valueAxes: [
+        { id: "100003", position: "l" },
+        { id: "200003", position: "r" },
+      ],
+    });
+  });
+
   it("Resolve theme color resolution and background fallback", () => {
     const computed = createComputedView(buildSource());
     const slide = getSlide(computed.slides, 0);
@@ -1226,6 +1268,24 @@ function chartLiteralDataXml(): string {
       </c:ser>
     </c:bubbleChart></c:plotArea>
   </c:chart>
+</c:chartSpace>`;
+}
+
+function categoryComboChartDataXml(): string {
+  const series = (index: number, name: string, value: number) => `<c:ser>
+    <c:idx val="${index}"/><c:order val="${index}"/>
+    <c:tx><c:v>${name}</c:v></c:tx>
+    <c:cat><c:strLit><c:pt idx="0"><c:v>A</c:v></c:pt></c:strLit></c:cat>
+    <c:val><c:numLit><c:pt idx="0"><c:v>${value}</c:v></c:pt></c:numLit></c:val>
+  </c:ser>`;
+  return `<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
+  <c:chart><c:plotArea>
+    <c:lineChart><c:grouping val="standard"/>${series(7, "Trend", 900)}<c:axId val="100002"/><c:axId val="200003"/></c:lineChart>
+    <c:barChart><c:barDir val="col"/><c:grouping val="clustered"/>${series(0, "Columns", 9)}<c:axId val="100002"/><c:axId val="100003"/></c:barChart>
+    <c:catAx><c:axId val="100002"/><c:axPos val="b"/></c:catAx>
+    <c:valAx><c:axId val="100003"/><c:axPos val="l"/></c:valAx>
+    <c:valAx><c:axId val="200003"/><c:axPos val="r"/></c:valAx>
+  </c:plotArea></c:chart>
 </c:chartSpace>`;
 }
 
