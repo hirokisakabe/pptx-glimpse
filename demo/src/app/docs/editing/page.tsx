@@ -11,6 +11,7 @@ export const metadata: Metadata = {
 const toc = [
   { href: "#create-session", label: "Create a session" },
   { href: "#inspect", label: "Inspect editable shapes" },
+  { href: "#template-preview", label: "Preview masters and layouts" },
   { href: "#apply", label: "Apply a command" },
   { href: "#history", label: "Selection and history" },
   { href: "#save", label: "Save the presentation" },
@@ -54,6 +55,35 @@ const run = shapes
   .flatMap((paragraph) => paragraph.runs)
   .find((candidate) => candidate.handle !== undefined);`}</code>
         </pre>
+      </section>
+
+      <section id="template-preview">
+        <h2>Preview masters and layouts</h2>
+        <p>
+          <code>layoutCatalog</code> stays a metadata-only ordered view. Pass a master or layout
+          handle to <code>previewLayoutCatalogTarget</code> when a UI needs one SVG thumbnail.
+          Previewing does not change the document, selection, undo/redo history, rendered slides, or
+          saved PPTX bytes.
+        </p>
+        <pre>
+          <code>{`const layout = editor.layoutCatalog[0]?.layouts[0];
+if (layout) {
+  const result = await editor.previewLayoutCatalogTarget(layout.handle);
+  if (result.ok) {
+    thumbnail.innerHTML = result.svg;
+    console.log(result.diagnostics);
+  } else {
+    // preview-handle-not-found | preview-handle-ambiguous
+    showThumbnailFallback(result.code);
+  }
+}`}</code>
+        </pre>
+        <p>
+          Layout previews resolve template backgrounds, normal master/layout shapes, and compatible
+          placeholder inheritance without including real slide user content. Unsupported elements
+          produce diagnostics. Cache, scheduling, cancellation, PNG conversion, and fallback UI are
+          application responsibilities.
+        </p>
       </section>
 
       <section id="apply">

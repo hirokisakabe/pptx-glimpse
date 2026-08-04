@@ -22,7 +22,8 @@ PPTX binary (Uint8Array)
 The reader turns the ZIP/OOXML package into `PptxSourceModel`, the canonical source
 representation used by reading, editing, writing, and round-trip preservation. The
 non-mutating computed view resolves effective values across slide, layout, master, theme,
-and relationship layers while retaining source provenance. Core then adapts those
+and relationship layers while retaining source provenance. It can also project one master or
+layout as a transient render target without materializing a source slide. Core then adapts those
 document semantics to the display-oriented renderer model. The renderer produces SVG;
 PNG conversion rasterizes that SVG as an optional final step.
 
@@ -35,6 +36,17 @@ PptxSourceModel -> document editing operations -> document writer -> PPTX binary
         |
         +-> editor commands, selection, validation, and history
 ```
+
+The integrated editor exposes master/layout preview as an explicit one-target call over its
+metadata-only ordered catalog. Core resolves the catalog handle, renders the transient computed
+target through the same adapter, and returns SVG plus diagnostics. Cache, scheduling, PNG
+rasterization, and UI fallback remain consumer responsibilities.
+
+Master/layout preview is a new render target and does not change existing presentation-slide
+conversion output, so introducing the API does not require updating established snapshot or
+LibreOffice VRT baselines. Its boundary is covered by computed-view, public integration, and
+browser-entry tests; add a dedicated template-preview VRT fixture only when visual-fidelity work
+intentionally establishes a baseline for this target.
 
 Node.js AI clients can enter through the optional MCP integration without creating another
 rendering path:

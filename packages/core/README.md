@@ -90,6 +90,31 @@ for (const master of editor.layoutCatalog) {
 }
 ```
 
+Render one catalog entry on demand with `previewLayoutCatalogTarget`. The catalog remains
+metadata-only; preview SVG, diagnostics, caching, scheduling, and UI fallback are separate concerns.
+The call does not add a temporary slide or change the document, selection, history, current slide
+SVGs, or serialized PPTX.
+
+```ts
+const layout = editor.layoutCatalog[0]?.layouts[0];
+if (layout) {
+  const preview = await editor.previewLayoutCatalogTarget(layout.handle);
+  if (preview.ok) {
+    showThumbnail(preview.svg);
+    reportDiagnostics(preview.diagnostics);
+  } else if (preview.code === "preview-handle-not-found") {
+    showFallbackThumbnail();
+  }
+}
+```
+
+Layout previews resolve the layout/master background, normal template shapes, and compatible
+placeholder inheritance without reading real slide user content. Missing and ambiguous handles
+return `preview-handle-not-found` and `preview-handle-ambiguous`; unsupported elements are skipped
+with stable diagnostics. Renderer/runtime failures still throw `PptxEditorError` with
+`render-failed`. PNG preview, cache policy, cancellation, priority scheduling, and thumbnail UI are
+not part of this API.
+
 Native group topology is available through typed `groupShapes` / `ungroupShape` commands and the
 matching `PptxEditorSession` methods. A successful group selects the new group; a successful
 ungroup selects its first child in document order. Undo and redo restore topology, ids, z-order,
