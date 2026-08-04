@@ -194,6 +194,7 @@ export interface ComputedChartElement extends ComputedElementBase {
 }
 
 export type ComputedChartType =
+  | "combo"
   | "bar"
   | "line"
   | "pie"
@@ -226,6 +227,14 @@ export interface ComputedChartSeries {
   readonly xValues?: readonly number[];
   readonly bubbleSizes?: readonly number[];
   readonly color: ComputedColor;
+  /** Existing OOXML identity, available for editable bar/line category series. */
+  readonly source?: ComputedCategoryChartSeriesSource;
+}
+
+export interface ComputedCategoryChartSeriesSource {
+  readonly chartType: "bar" | "line";
+  /** Unsigned `c:ser/c:idx@val`, scoped by `chartType`. */
+  readonly index: number;
 }
 
 export interface ComputedChartLegend {

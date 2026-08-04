@@ -325,6 +325,7 @@ function adaptChartData(chartData: ComputedChartData): ChartData {
       ...(series.xValues !== undefined ? { xValues: [...series.xValues] } : {}),
       ...(series.bubbleSizes !== undefined ? { bubbleSizes: [...series.bubbleSizes] } : {}),
       color: adaptColor(series.color),
+      ...(series.source !== undefined ? { chartType: series.source.chartType } : {}),
     })),
     categories: [...chartData.categories],
     ...(chartData.barDirection !== undefined ? { barDirection: chartData.barDirection } : {}),

@@ -27,6 +27,37 @@ function createChartElement(overrides: Partial<ChartElement["chart"]>): ChartEle
 }
 
 describe("renderChart", () => {
+  describe("category combo chart", () => {
+    it("renders both bar and line plot-group series", () => {
+      const element = createChartElement({
+        chartType: "combo",
+        series: [
+          {
+            name: "Columns",
+            values: [10, 20],
+            color: { hex: "#4472C4", alpha: 1 },
+            chartType: "bar",
+          },
+          {
+            name: "Trend",
+            values: [15, 25],
+            color: { hex: "#ED7D31", alpha: 1 },
+            chartType: "line",
+          },
+        ],
+        categories: ["A", "B"],
+        legend: { position: "r" },
+      });
+
+      const result = renderChart(element);
+      expect(result.content.match(/<rect[^>]*fill="#4472C4"[^>]*\/>/g)).toHaveLength(3);
+      expect(result.content).toContain("<polyline");
+      expect(result.content).toContain('stroke="#ED7D31"');
+      expect(result.content).toContain("Columns");
+      expect(result.content).toContain("Trend");
+    });
+  });
+
   describe("bar chart", () => {
     it("renders rect elements for bars", () => {
       const element = createChartElement({

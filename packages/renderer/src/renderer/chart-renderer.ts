@@ -53,6 +53,9 @@ export function renderChart(
 
   if (plotW > 0 && plotH > 0) {
     switch (chart.chartType) {
+      case "combo":
+        parts.push(renderCategoryComboChart(chart, plotX, plotY, plotW, plotH, context));
+        break;
       case "bar":
         parts.push(renderBarChart(chart, plotX, plotY, plotW, plotH, context));
         break;
@@ -95,6 +98,26 @@ export function renderChart(
 
   parts.push("</g>");
   return { content: parts.join(""), defs: [] };
+}
+
+function renderCategoryComboChart(
+  chart: ChartData,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  context: RendererContext,
+): string {
+  const barSeries = chart.series.filter((series) => series.chartType === "bar");
+  const lineSeries = chart.series.filter((series) => series.chartType === "line");
+  if (barSeries.length === 0 || lineSeries.length === 0) {
+    debugChart(context, "chart.combo", "bar or line plot group is empty");
+    return "";
+  }
+  return (
+    renderBarChart({ ...chart, chartType: "bar", series: barSeries }, x, y, w, h, context) +
+    renderLineChart({ ...chart, chartType: "line", series: lineSeries }, x, y, w, h, context)
+  );
 }
 
 function renderChartTitle(title: string, chartWidth: number): string {

@@ -8,6 +8,7 @@ export interface ChartElement {
 }
 
 export type ChartType =
+  | "combo"
   | "bar"
   | "line"
   | "pie"
@@ -40,6 +41,8 @@ export interface ChartSeries {
   xValues?: number[];
   bubbleSizes?: number[];
   color: ResolvedColor;
+  /** Plot type for a series in a category combo chart. */
+  chartType?: "bar" | "line";
 }
 
 export interface ChartLegend {

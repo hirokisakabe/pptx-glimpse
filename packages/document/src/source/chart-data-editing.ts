@@ -29,6 +29,15 @@ export interface UpdateChartSeriesDataInput {
   readonly name: string;
   readonly categories: readonly string[];
   readonly values: readonly number[];
+  /** Required for fixed-topology combo charts; identifies the existing OOXML series. */
+  readonly source?: UpdateCategoryChartSeriesSource;
+}
+
+/** Stable identity of an existing series in a supported category combo chart. */
+export interface UpdateCategoryChartSeriesSource {
+  readonly chartType: "bar" | "line";
+  /** Existing unsigned `c:ser/c:idx@val`, scoped by `chartType`. */
+  readonly index: number;
 }
 
 export interface UpdateChartDataInput {
@@ -131,7 +140,7 @@ export function updateChartData(
   );
 
   const updatedChartBytes = encoder.encode(orderedBuilder.build(orderedRoot));
-  const updatedWorkbookBytes = updateEmbeddedWorkbook(workbook, input);
+  const updatedWorkbookBytes = updateEmbeddedWorkbook(workbook, { series: binding.series });
   const edit = {
     kind: "updateChartData",
     handle,
@@ -557,6 +566,7 @@ function inspectAndUpdateChartXml(
   readonly sheetName: string;
   readonly existingSeriesCount: number;
   readonly pointCount: number;
+  readonly series: readonly UpdateChartSeriesDataInput[];
 } {
   const chartSpace = requireSingleElement(root, "chartSpace", "chart XML has no chartSpace root");
   const chart = requireSingleChild(chartSpace, "chart");
@@ -566,16 +576,23 @@ function inspectAndUpdateChartXml(
   );
   const chartGroupName =
     chartGroups[0] === undefined ? undefined : elementLocalName(chartGroups[0]);
-  if (
-    chartGroups.length !== 1 ||
-    chartGroupName === undefined ||
-    !SUPPORTED_CHART_ELEMENTS.has(chartGroupName)
-  ) {
+  const isSingleCategoryChart =
+    chartGroups.length === 1 &&
+    chartGroupName !== undefined &&
+    SUPPORTED_CHART_ELEMENTS.has(chartGroupName);
+  const isSupportedCombo = isSupportedCategoryCombo(chartGroups);
+  if (!isSingleCategoryChart && !isSupportedCombo) {
     throw new Error("updateChartData: chart type or combination is not supported");
   }
-  const existingSeries = elementChildren(chartGroups[0]).filter(
-    (entry) => elementLocalName(entry) === "ser",
-  );
+  const groupedSeries = chartGroups.map((group) => ({
+    chartType: elementLocalName(group),
+    group,
+    series: elementChildren(group).filter((entry) => elementLocalName(entry) === "ser"),
+  }));
+  const existingSeries = groupedSeries.flatMap((group) => group.series);
+  const comboInputs = isSupportedCombo
+    ? matchComboSeriesInputs(groupedSeries, input.series)
+    : input.series;
 
   let sheetName: string | undefined;
   const sheetTokens: string[] = [];
@@ -614,13 +631,19 @@ function inspectAndUpdateChartXml(
   if (sheetName === undefined || pointCount === undefined) {
     throw new Error("updateChartData: chart has no series");
   }
-  if (input.series.length < existingSeries.length && hasExplicitLegendEntries(chart)) {
+  if (
+    !isSupportedCombo &&
+    input.series.length < existingSeries.length &&
+    hasExplicitLegendEntries(chart)
+  ) {
     throw new Error(
       "updateChartData: removing series with explicit legend entries is not supported",
     );
   }
 
-  const series = resizeChartSeries(chartSpace, chartGroups[0], existingSeries, input.series.length);
+  const series = isSupportedCombo
+    ? existingSeries
+    : resizeChartSeries(chartSpace, chartGroups[0], existingSeries, input.series.length);
   const addedSeriesIdentities =
     input.series.length > existingSeries.length
       ? nextAddedSeriesIdentities(existingSeries, input.series.length - existingSeries.length)
@@ -633,6 +656,9 @@ function inspectAndUpdateChartXml(
       setAttribute(requireSingleChild(seriesEntry, "idx"), "val", String(addedIdentity.index));
       setAttribute(requireSingleChild(seriesEntry, "order"), "val", String(addedIdentity.order));
     }
+    const inputSeries = comboInputs[index];
+    if (inputSeries === undefined)
+      throw new Error("updateChartData: combo series identity is missing");
     const tx = requireSingleChild(seriesEntry, "tx");
     const txRef = requireSingleChild(tx, "strRef");
     const category = requireSingleChild(seriesEntry, "cat");
@@ -641,14 +667,14 @@ function inspectAndUpdateChartXml(
     const valueRef = requireSingleChild(value, "numRef");
 
     setFormula(txRef, `${sheetToken}!$${spreadsheetColumn(index + 2)}$1`);
-    setStringCache(requireSingleChild(txRef, "strCache"), [input.series[index].name]);
-    setFormula(categoryRef, `${sheetToken}!$A$2:$A$${input.series[index].categories.length + 1}`);
-    setStringCache(requireSingleChild(categoryRef, "strCache"), input.series[index].categories);
+    setStringCache(requireSingleChild(txRef, "strCache"), [inputSeries.name]);
+    setFormula(categoryRef, `${sheetToken}!$A$2:$A$${inputSeries.categories.length + 1}`);
+    setStringCache(requireSingleChild(categoryRef, "strCache"), inputSeries.categories);
     setFormula(
       valueRef,
-      `${sheetToken}!$${spreadsheetColumn(index + 2)}$2:$${spreadsheetColumn(index + 2)}$${input.series[index].values.length + 1}`,
+      `${sheetToken}!$${spreadsheetColumn(index + 2)}$2:$${spreadsheetColumn(index + 2)}$${inputSeries.values.length + 1}`,
     );
-    setNumberCache(requireSingleChild(valueRef, "numCache"), input.series[index].values);
+    setNumberCache(requireSingleChild(valueRef, "numCache"), inputSeries.values);
   }
 
   const externalData = requireSingleChild(chartSpace, "externalData");
@@ -661,7 +687,75 @@ function inspectAndUpdateChartXml(
     sheetName,
     existingSeriesCount: existingSeries.length,
     pointCount,
+    series: comboInputs,
   };
+}
+
+function isSupportedCategoryCombo(chartGroups: readonly OrderedXmlNode[]): boolean {
+  if (chartGroups.length !== 2) return false;
+  const names = chartGroups.map(elementLocalName);
+  return (
+    names.filter((name) => name === "barChart").length === 1 &&
+    names.filter((name) => name === "lineChart").length === 1
+  );
+}
+
+function matchComboSeriesInputs(
+  groupedSeries: readonly {
+    readonly chartType: string | undefined;
+    readonly series: readonly OrderedXmlNode[];
+  }[],
+  inputs: readonly UpdateChartSeriesDataInput[],
+): readonly UpdateChartSeriesDataInput[] {
+  const identities = groupedSeries.flatMap(({ chartType, series }) => {
+    if (chartType !== "barChart" && chartType !== "lineChart") {
+      throw new Error("updateChartData: chart type or combination is not supported");
+    }
+    const sourceChartType = chartType === "barChart" ? "bar" : "line";
+    return series.map((entry) => {
+      seriesIdentityValue(entry, "order");
+      return {
+        chartType: sourceChartType,
+        index: seriesIdentityValue(entry, "idx"),
+      } satisfies UpdateCategoryChartSeriesSource;
+    });
+  });
+  if (identities.length === 0) throw new Error("updateChartData: chart has no series");
+  const sourceIdentityKeys = identities.map(
+    (identity) => `${identity.chartType}:${identity.index}`,
+  );
+  if (new Set(sourceIdentityKeys).size !== sourceIdentityKeys.length) {
+    throw new Error("updateChartData: combo source series identity is duplicated");
+  }
+  if (inputs.length !== identities.length) {
+    throw new Error("updateChartData: combo chart series count must remain unchanged");
+  }
+  const byIdentity = new Map<string, UpdateChartSeriesDataInput>();
+  for (const input of inputs) {
+    const source = input.source;
+    if (
+      source === undefined ||
+      !Number.isSafeInteger(source.index) ||
+      source.index < 0 ||
+      source.index > 0xffff_ffff
+    ) {
+      throw new Error("updateChartData: combo series identity is missing or invalid");
+    }
+    const key = `${source.chartType}:${source.index}`;
+    if (byIdentity.has(key))
+      throw new Error("updateChartData: combo series identity is duplicated");
+    byIdentity.set(key, input);
+  }
+  const matched = identities.map((identity) =>
+    byIdentity.get(`${identity.chartType}:${identity.index}`),
+  );
+  if (matched.some((input) => input === undefined) || byIdentity.size !== identities.length) {
+    throw new Error("updateChartData: combo series identity does not match the source topology");
+  }
+  return matched.map((input) => {
+    if (input === undefined) throw new Error("updateChartData: combo series identity is missing");
+    return input;
+  });
 }
 
 function inspectAndUpdateScatterChartXml(

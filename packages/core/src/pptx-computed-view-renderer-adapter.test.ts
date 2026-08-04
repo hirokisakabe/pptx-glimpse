@@ -772,6 +772,52 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it("keeps category combo plot-group types on renderer series", () => {
+    const computed = buildComputedViewWithChartData();
+    const chartElement = computed.slides[0]?.elements[0];
+    if (chartElement?.kind !== "chart") throw new Error("chart fixture is missing");
+    const combo: PptxComputedView = {
+      ...computed,
+      slides: [
+        {
+          ...computed.slides[0],
+          elements: [
+            {
+              ...chartElement,
+              chartData: {
+                chartType: "combo",
+                title: "Combo",
+                categories: ["A", "B"],
+                series: [
+                  {
+                    name: "Columns",
+                    values: [4, 8],
+                    color: { hex: "#336699", alpha: 1 },
+                    source: { chartType: "bar", index: 0 },
+                  },
+                  {
+                    name: "Trend",
+                    values: [5, 9],
+                    color: { hex: "#993333", alpha: 1 },
+                    source: { chartType: "line", index: 7 },
+                  },
+                ],
+                legend: null,
+              },
+            },
+          ],
+        },
+      ],
+    };
+
+    const result = adaptComputedViewToRendererModel(combo);
+    const chart = result.slides[0].elements.find((element) => element.type === "chart");
+    expect(chart?.type === "chart" ? chart.chart : undefined).toMatchObject({
+      chartType: "combo",
+      series: [{ chartType: "bar" }, { chartType: "line" }],
+    });
+  });
+
   it("Return SmartArt fallback diagram drawing skip diagnostic", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(

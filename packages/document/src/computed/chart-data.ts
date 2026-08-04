@@ -4,6 +4,7 @@ import {
   getChild,
   getChildArray,
   getChildText,
+  localName,
   parseXml,
   type XmlNode,
 } from "../reader/xml.js";
@@ -24,7 +25,9 @@ interface ChartColorContext {
 
 const ACCENT_KEYS = ["accent1", "accent2", "accent3", "accent4", "accent5", "accent6"] as const;
 
-const CHART_TYPE_MAP: [string, ComputedChartType][] = [
+type XmlChartType = Exclude<ComputedChartType, "combo">;
+
+const CHART_TYPE_MAP: [string, XmlChartType][] = [
   ["barChart", "bar"],
   ["bar3DChart", "bar"],
   ["lineChart", "line"],
@@ -92,62 +95,121 @@ function parseChartTypeAndData(
   readonly secondPieSize?: number;
   readonly splitPos?: number;
 } {
+  const chartGroups = chartGroupsInDocumentOrder(plotArea);
+  const categoryComboGroups = chartGroups.filter(
+    (
+      group,
+    ): group is {
+      readonly chartType: "bar" | "line";
+      readonly node: XmlNode;
+      readonly xmlTag: "barChart" | "lineChart";
+    } => group.xmlTag === "barChart" || group.xmlTag === "lineChart",
+  );
+  if (
+    categoryComboGroups.length === 2 &&
+    categoryComboGroups.some((group) => group.chartType === "bar") &&
+    categoryComboGroups.some((group) => group.chartType === "line") &&
+    chartGroups.length === 2
+  ) {
+    let colorOffset = 0;
+    const parsedGroups = categoryComboGroups.map((group) => {
+      const parsed = parseChartGroup(group.node, group.chartType, colorContext, colorOffset);
+      colorOffset += parsed.series.length;
+      return parsed;
+    });
+    const barGroup = parsedGroups.find((group) => group.chartType === "bar");
+    return {
+      chartType: "combo",
+      series: parsedGroups.flatMap((group) => group.series),
+      categories: parsedGroups.find((group) => group.categories.length > 0)?.categories ?? [],
+      ...(barGroup?.barDirection !== undefined ? { barDirection: barGroup.barDirection } : {}),
+    };
+  }
+
   for (const [xmlTag, chartType] of CHART_TYPE_MAP) {
     const chartNode = getChild(plotArea, xmlTag);
     if (chartNode === undefined) continue;
-
-    const serList = getChildArray(chartNode, "ser");
-    const series = serList.map((ser, index) => parseSeries(ser, chartType, index, colorContext));
-    const categories = extractCategories(serList);
-    const barDirection =
-      chartType === "bar"
-        ? parseBarDirection(getAttr(getChild(chartNode, "barDir"), "val"))
-        : undefined;
-
-    const holeSize =
-      chartType === "doughnut"
-        ? parseNumberAttribute(getChild(chartNode, "holeSize"), "val", 50)
-        : undefined;
-
-    const radarStyle =
-      chartType === "radar"
-        ? parseRadarStyle(getAttr(getChild(chartNode, "radarStyle"), "val"))
-        : undefined;
-
-    const ofPieType =
-      chartType === "ofPie"
-        ? parseOfPieType(getAttr(getChild(chartNode, "ofPieType"), "val"))
-        : undefined;
-
-    const secondPieSize =
-      chartType === "ofPie"
-        ? parseNumberAttribute(getChild(chartNode, "secondPieSize"), "val", 75)
-        : undefined;
-
-    const splitPos =
-      chartType === "ofPie"
-        ? parseNumberAttribute(getChild(chartNode, "splitPos"), "val", 2)
-        : undefined;
-
-    return {
-      chartType,
-      series,
-      categories,
-      ...(barDirection !== undefined ? { barDirection } : {}),
-      ...(holeSize !== undefined ? { holeSize } : {}),
-      ...(radarStyle !== undefined ? { radarStyle } : {}),
-      ...(ofPieType !== undefined ? { ofPieType } : {}),
-      ...(secondPieSize !== undefined ? { secondPieSize } : {}),
-      ...(splitPos !== undefined ? { splitPos } : {}),
-    };
+    return parseChartGroup(chartNode, chartType, colorContext, 0);
   }
 
   return { series: [], categories: [] };
 }
 
+function chartGroupsInDocumentOrder(plotArea: XmlNode): readonly {
+  readonly chartType: XmlChartType;
+  readonly node: XmlNode;
+  readonly xmlTag: string;
+}[] {
+  const chartTypeByTag = new Map(CHART_TYPE_MAP);
+  return Object.keys(plotArea).flatMap((key) => {
+    const tag = localName(key);
+    const chartType = chartTypeByTag.get(tag);
+    if (chartType === undefined) return [];
+    return getChildArray(plotArea, tag).map((node) => ({ chartType, node, xmlTag: tag }));
+  });
+}
+
+function parseChartGroup(
+  chartNode: XmlNode,
+  chartType: XmlChartType,
+  colorContext: ChartColorContext,
+  colorOffset: number,
+): {
+  readonly chartType: XmlChartType;
+  readonly series: ComputedChartSeries[];
+  readonly categories: string[];
+  readonly barDirection?: "col" | "bar";
+  readonly holeSize?: number;
+  readonly radarStyle?: "standard" | "marker" | "filled";
+  readonly ofPieType?: "pie" | "bar";
+  readonly secondPieSize?: number;
+  readonly splitPos?: number;
+} {
+  const serList = getChildArray(chartNode, "ser");
+  const series = serList.map((ser, index) =>
+    parseSeries(ser, chartType, colorOffset + index, colorContext),
+  );
+  const categories = extractCategories(serList);
+  const barDirection =
+    chartType === "bar"
+      ? parseBarDirection(getAttr(getChild(chartNode, "barDir"), "val"))
+      : undefined;
+  const holeSize =
+    chartType === "doughnut"
+      ? parseNumberAttribute(getChild(chartNode, "holeSize"), "val", 50)
+      : undefined;
+  const radarStyle =
+    chartType === "radar"
+      ? parseRadarStyle(getAttr(getChild(chartNode, "radarStyle"), "val"))
+      : undefined;
+  const ofPieType =
+    chartType === "ofPie"
+      ? parseOfPieType(getAttr(getChild(chartNode, "ofPieType"), "val"))
+      : undefined;
+  const secondPieSize =
+    chartType === "ofPie"
+      ? parseNumberAttribute(getChild(chartNode, "secondPieSize"), "val", 75)
+      : undefined;
+  const splitPos =
+    chartType === "ofPie"
+      ? parseNumberAttribute(getChild(chartNode, "splitPos"), "val", 2)
+      : undefined;
+  return {
+    chartType,
+    series,
+    categories,
+    ...(barDirection !== undefined ? { barDirection } : {}),
+    ...(holeSize !== undefined ? { holeSize } : {}),
+    ...(radarStyle !== undefined ? { radarStyle } : {}),
+    ...(ofPieType !== undefined ? { ofPieType } : {}),
+    ...(secondPieSize !== undefined ? { secondPieSize } : {}),
+    ...(splitPos !== undefined ? { splitPos } : {}),
+  };
+}
+
 function parseSeries(
   ser: XmlNode,
-  chartType: ComputedChartType,
+  chartType: XmlChartType,
   seriesIndex: number,
   colorContext: ChartColorContext,
 ): ComputedChartSeries {
@@ -158,6 +220,7 @@ function parseSeries(
   const bubbleSizes =
     chartType === "bubble" ? parseNumericData(getChild(ser, "bubbleSize")) : undefined;
   const color = resolveSeriesColor(getChild(ser, "spPr"), seriesIndex, colorContext);
+  const source = categorySeriesSource(ser, chartType);
 
   return {
     name,
@@ -165,7 +228,20 @@ function parseSeries(
     ...(xValues !== undefined ? { xValues } : {}),
     ...(bubbleSizes !== undefined ? { bubbleSizes } : {}),
     color,
+    ...(source !== undefined ? { source } : {}),
   };
+}
+
+function categorySeriesSource(
+  ser: XmlNode,
+  chartType: XmlChartType,
+): ComputedChartSeries["source"] | undefined {
+  if (chartType !== "bar" && chartType !== "line") return undefined;
+  const value = getAttr(getChild(ser, "idx"), "val");
+  if (value === undefined || !/^\d+$/.test(value)) return undefined;
+  const index = Number(value);
+  if (!Number.isSafeInteger(index) || index > 0xffff_ffff) return undefined;
+  return { chartType, index };
 }
 
 function parseSeriesName(tx: XmlNode | undefined): string | null {

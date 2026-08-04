@@ -2,6 +2,7 @@ export { createComputedView } from "./create-computed-view.js";
 export type {
   ComputedBackground,
   ComputedBlipEffects,
+  ComputedCategoryChartSeriesSource,
   ComputedCellBorders,
   ComputedChartData,
   ComputedChartElement,
