@@ -737,13 +737,20 @@ function validateSupportedComboDetails(
   const valueAxisCounts = orderedAxisDefinitionCounts(plotArea, "valAx");
   const categoryAxisIds: string[] = [];
   for (const { group } of groups) {
-    const axisIds = elementChildren(group)
-      .filter((child) => elementLocalName(child) === "axId")
+    const axisReferences = elementChildren(group).filter(
+      (child) => elementLocalName(child) === "axId",
+    );
+    const axisIds = axisReferences
       .map((axis) => attribute(axis, "val"))
       .filter((id): id is string => id !== undefined);
     const resolvedCategoryIds = axisIds.filter((id) => categoryAxisCounts.get(id) === 1);
     const resolvedValueIds = axisIds.filter((id) => valueAxisCounts.get(id) === 1);
-    if (axisIds.length !== 2 || resolvedCategoryIds.length !== 1 || resolvedValueIds.length !== 1) {
+    if (
+      axisReferences.length !== 2 ||
+      axisIds.length !== 2 ||
+      resolvedCategoryIds.length !== 1 ||
+      resolvedValueIds.length !== 1
+    ) {
       throw new Error("updateChartData: combo chart axis topology is not supported");
     }
     categoryAxisIds.push(resolvedCategoryIds[0]);

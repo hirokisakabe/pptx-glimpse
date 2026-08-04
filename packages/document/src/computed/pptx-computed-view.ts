@@ -231,6 +231,8 @@ export interface ComputedChartPlotGroup {
   readonly grouping?: string;
   /** Positions in `ComputedChartData.series`, retained in OOXML plot-group order. */
   readonly seriesIndexes: readonly number[];
+  /** Number of authored `c:axId` elements, including entries without `val`. */
+  readonly axisReferenceCount?: number;
   /** Ordered `c:axId` references authored on the plot group. */
   readonly axisIds: readonly string[];
   /** Group references that resolve to exactly one supported `c:catAx` definition. */

@@ -162,11 +162,20 @@ function renderCategoryComboChart(
     });
   }
 
+  const axisById = new Map((chart.valueAxes ?? []).map((axis) => [axis.id, axis]));
+  const primaryGroup =
+    groups.find((group) => axisById.get(group.valueAxisId ?? "")?.position === "l") ??
+    groups.find((group) => axisById.get(group.valueAxisId ?? "")?.position !== "r") ??
+    groups[0];
+  const primaryScale = scaleByAxis.get(primaryGroup.scaleKey);
+  const categoryAxisY =
+    primaryScale === undefined
+      ? y + h
+      : y + h - ((0 - primaryScale.min) / (primaryScale.max - primaryScale.min)) * h;
   const parts: string[] = [
-    `<line x1="${round(x)}" y1="${round(y + h)}" x2="${round(x + w)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
+    `<line x1="${round(x)}" y1="${round(categoryAxisY)}" x2="${round(x + w)}" y2="${round(categoryAxisY)}" stroke="#D9D9D9" stroke-width="1"/>`,
     `<line x1="${round(x)}" y1="${round(y)}" x2="${round(x)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
   ];
-  const axisById = new Map((chart.valueAxes ?? []).map((axis) => [axis.id, axis]));
   const renderedAxes = new Set<string>();
   for (const group of groups) {
     if (renderedAxes.has(group.scaleKey)) continue;

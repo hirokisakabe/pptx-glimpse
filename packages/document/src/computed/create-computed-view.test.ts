@@ -202,6 +202,7 @@ describe("createComputedView", () => {
           chartType: "line",
           grouping: "standard",
           seriesIndexes: [0],
+          axisReferenceCount: 2,
           axisIds: ["100002", "200003"],
           categoryAxisIds: ["100002"],
           valueAxisIds: ["200003"],
@@ -210,6 +211,7 @@ describe("createComputedView", () => {
         {
           chartType: "bar",
           seriesIndexes: [1],
+          axisReferenceCount: 2,
           axisIds: ["100002", "100003"],
           categoryAxisIds: ["100002"],
           valueAxisIds: ["100003"],

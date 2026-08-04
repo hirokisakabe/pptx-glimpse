@@ -140,7 +140,8 @@ function parseChartTypeAndData(
       const parsedGroup = parsedGroups[index];
       const seriesIndexes = parsedGroup.series.map((_, seriesIndex) => seriesOffset + seriesIndex);
       seriesOffset += parsedGroup.series.length;
-      const axisIds = getChildArray(group.node, "axId")
+      const axisReferences = getChildArray(group.node, "axId");
+      const axisIds = axisReferences
         .map((axis) => getAttr(axis, "val"))
         .filter((id): id is string => id !== undefined);
       const categoryAxisIds = axisIds.filter((id) => categoryAxisCounts.get(id) === 1);
@@ -151,6 +152,7 @@ function parseChartTypeAndData(
         chartType: group.chartType,
         ...(grouping !== undefined ? { grouping } : {}),
         seriesIndexes,
+        axisReferenceCount: axisReferences.length,
         axisIds,
         categoryAxisIds,
         valueAxisIds,

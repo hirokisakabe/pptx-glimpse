@@ -114,6 +114,9 @@ describe("renderChart", () => {
       expect(result.content).not.toContain('text-anchor="start"');
       expect(result.content).toContain(">100</text>");
       expect(result.content).toContain('points="152.5,234.2 357.5,210.4"');
+      expect(result.content).toContain(
+        '<line x1="50" y1="258" x2="460" y2="258" stroke="#D9D9D9" stroke-width="1"/>',
+      );
     });
 
     it("uses a right-side secondary scale and paints plot groups in document order", () => {
@@ -226,6 +229,43 @@ describe("renderChart", () => {
       expect(result.content).toMatch(/text-anchor="start"[^>]*>-100<\/text>/);
       expect(result.content).toContain('stroke="#ED7D31"');
       expect(result.content).toMatch(/<rect[^>]*height="[1-9][^"]*"[^>]*fill="#4472C4"/);
+      expect(result.content).toContain(
+        '<line x1="50" y1="20" x2="460" y2="20" stroke="#D9D9D9" stroke-width="1"/>',
+      );
+    });
+
+    it("draws the category baseline at primary-axis zero for a mixed-sign domain", () => {
+      const element = createChartElement({
+        chartType: "combo",
+        series: [
+          { name: "Trend", values: [100, 200], color: { hex: "#ED7D31", alpha: 1 } },
+          { name: "Columns", values: [-10, 10], color: { hex: "#4472C4", alpha: 1 } },
+        ],
+        categories: ["A", "B"],
+        plotGroups: [
+          {
+            chartType: "line",
+            seriesIndexes: [0],
+            axisIds: ["cat", "secondary"],
+            valueAxisId: "secondary",
+          },
+          {
+            chartType: "bar",
+            seriesIndexes: [1],
+            axisIds: ["cat", "primary"],
+            valueAxisId: "primary",
+          },
+        ],
+        valueAxes: [
+          { id: "primary", position: "l" },
+          { id: "secondary", position: "r" },
+        ],
+      });
+
+      const result = renderChart(element);
+      expect(result.content).toContain(
+        '<line x1="50" y1="139" x2="460" y2="139" stroke="#D9D9D9" stroke-width="1"/>',
+      );
     });
 
     it("does not render a horizontal bar and line combo", () => {

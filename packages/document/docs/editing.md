@@ -157,8 +157,9 @@ The same operation supports one fixed-topology category combo subset: exactly on
 column-oriented `barChart` plot group (`barDir=col`) and one nonempty `lineChart` plot group sharing
 the standard category worksheet layout. Grouping must be non-stacked (`clustered` or `standard` for
 the bar group and `standard` for the line group); `stacked`, `percentStacked`, and unknown grouping
-semantics are rejected. Each group must reference exactly one value axis, and both groups must
-reference the same single `catAx`. Discover each existing series identity from computed
+semantics are rejected. Each group must author exactly two populated `axId` elements that resolve
+to exactly one value axis and the same single `catAx`; extra unresolved IDs and `axId` elements
+without `val` are rejected. Discover each existing series identity from computed
 `chartData.series[].source`, then include that descriptor in the update input:
 
 ```ts
@@ -185,9 +186,9 @@ bound to chart XML document order. Series count, identity set, plot-group member
 changed identities are rejected before source/editor history changes.
 
 The computed view also retains `plotGroups` in chart XML order, each group's authored `grouping`,
-ordered `axisIds`, uniquely resolved category/value-axis IDs, and `valueAxisId`, plus the referenced
-`valueAxes`. The rendering adapter skips unsupported grouping or incomplete/ambiguous axis topology
-with an explicit diagnostic. For supported topology, the renderer uses one zero-inclusive scale for
+`axisReferenceCount`, ordered populated `axisIds`, uniquely resolved category/value-axis IDs, and
+`valueAxisId`, plus the referenced `valueAxes`. The rendering adapter skips unsupported grouping or
+inexact/incomplete/ambiguous axis topology with an explicit diagnostic. For supported topology, the renderer uses one zero-inclusive scale for
 groups that share a value-axis ID and an independent right-side scale for a secondary value axis;
 zero-only and all-negative series remain renderable. A horizontal bar plus line combination is not
 geometrically compatible with this category-combo renderer, so it is likewise exposed as
@@ -197,7 +198,8 @@ The operation rejects linked/external data, missing or unresolved relationships,
 by multiple Charts, workbook formulas in the data range, and other data layouts before changing the
 model. Unsupported combo shapes include three or more plot groups, scatter/bubble mixtures,
 horizontal bars, stacked grouping, empty groups, missing/ambiguous/different category axes,
-missing/ambiguous value axes, and anything other than one bar plus one line group. It patches only
+missing/ambiguous value axes, extra or unpopulated axis references, and anything other than one bar
+plus one line group. It patches only
 the target worksheet data and preserves other embedded workbook parts such as styles, themes, and
 document properties.
 

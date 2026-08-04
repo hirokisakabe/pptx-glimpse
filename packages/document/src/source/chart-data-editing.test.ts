@@ -321,6 +321,16 @@ describe("updateChartData", () => {
           )
           .replace("</c:plotArea>", '<c:catAx><c:axId val="300002"/></c:catAx></c:plotArea>'),
       (xml: string) => xml.replaceAll("c:catAx", "c:dateAx"),
+      (xml: string) =>
+        xml.replace(
+          '<c:axId val="100002"/><c:axId val="200003"/>',
+          '<c:axId val="100002"/><c:axId val="200003"/><c:axId val="999999"/>',
+        ),
+      (xml: string) =>
+        xml.replace(
+          '<c:axId val="100002"/><c:axId val="200003"/>',
+          '<c:axId val="100002"/><c:axId/>',
+        ),
     ];
     for (const mutate of mutations) {
       const files = unzipSync(buildExistingComboChart());

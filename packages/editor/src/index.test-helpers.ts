@@ -544,7 +544,7 @@ export function buildChartEditSource(): PptxSourceModel {
 export async function buildCategoryComboChartEditSource(
   options: {
     readonly lineGrouping?: string;
-    readonly lineAxisIds?: readonly string[];
+    readonly lineAxisIds?: readonly (string | undefined)[];
   } = {},
 ): Promise<PptxSourceModel> {
   const pptx = await JSZip.loadAsync(writePptx(buildChartEditSource()));
@@ -561,7 +561,7 @@ export async function buildCategoryComboChartEditSource(
     '<c:idx val="7"/><c:order val="9"/>',
   );
   const lineAxisIds = (options.lineAxisIds ?? ["100002", "100003"])
-    .map((id) => `<c:axId val="${id}"/>`)
+    .map((id) => (id === undefined ? "<c:axId/>" : `<c:axId val="${id}"/>`))
     .join("");
   const lineChart = `<c:lineChart><c:grouping val="${options.lineGrouping ?? "standard"}"/><c:varyColors val="0"/>${lineSeries}${lineAxisIds}</c:lineChart>`;
   chart = chart.replace(barChart, `${barChart.replace(series[1], "")}${lineChart}`);

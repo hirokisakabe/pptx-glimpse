@@ -422,7 +422,13 @@ function hasSupportedComboAxisTopology(chartData: ComputedChartData): boolean {
     return false;
   }
   if (
-    groups.some((group) => group.categoryAxisIds?.length !== 1 || group.valueAxisIds?.length !== 1)
+    groups.some(
+      (group) =>
+        group.axisReferenceCount !== 2 ||
+        group.axisIds.length !== 2 ||
+        group.categoryAxisIds?.length !== 1 ||
+        group.valueAxisIds?.length !== 1,
+    )
   ) {
     return false;
   }

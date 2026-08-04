@@ -807,6 +807,7 @@ describe("adaptComputedViewToRendererModel", () => {
                     chartType: "line",
                     grouping: "standard",
                     seriesIndexes: [1],
+                    axisReferenceCount: 2,
                     axisIds: ["100002", "200003"],
                     categoryAxisIds: ["100002"],
                     valueAxisIds: ["200003"],
@@ -816,6 +817,7 @@ describe("adaptComputedViewToRendererModel", () => {
                     chartType: "bar",
                     grouping: "clustered",
                     seriesIndexes: [0],
+                    axisReferenceCount: 2,
                     axisIds: ["100002", "100003"],
                     categoryAxisIds: ["100002"],
                     valueAxisIds: ["100003"],
@@ -902,6 +904,24 @@ describe("adaptComputedViewToRendererModel", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
         buildSourceWithChartAndSmartArt({ chartXml: comboChartXml("standard", []) }),
+      ),
+    );
+
+    expect(result.slides[0].elements.some((element) => element.type === "chart")).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "pptx-computed-view-adapter.unsupported-combo-axis-topology-skipped",
+      }),
+    );
+  });
+
+  it.each([
+    ["an extra unresolved axis ID", ["category", "secondary", "unknown"]],
+    ["an axId without val", ["category", undefined]],
+  ] as const)("skips combo topology with %s and reports an adapter diagnostic", (_, axisIds) => {
+    const result = adaptComputedViewToRendererModel(
+      createComputedView(
+        buildSourceWithChartAndSmartArt({ chartXml: comboChartXml("standard", axisIds) }),
       ),
     );
 
@@ -1256,14 +1276,15 @@ function buildSourceWithChartAndSmartArt(
 
 function comboChartXml(
   lineGrouping: string,
-  lineAxisIds: readonly string[] = ["category", "secondary"],
+  lineAxisIds: readonly (string | undefined)[] = ["category", "secondary"],
 ): string {
   const series = (name: string, value: number) => `<c:ser><c:idx val="0"/><c:order val="0"/>
     <c:tx><c:v>${name}</c:v></c:tx>
     <c:cat><c:strLit><c:pt idx="0"><c:v>A</c:v></c:pt></c:strLit></c:cat>
     <c:val><c:numLit><c:pt idx="0"><c:v>${value}</c:v></c:pt></c:numLit></c:val>
   </c:ser>`;
-  const axes = (ids: readonly string[]) => ids.map((id) => `<c:axId val="${id}"/>`).join("");
+  const axes = (ids: readonly (string | undefined)[]) =>
+    ids.map((id) => (id === undefined ? "<c:axId/>" : `<c:axId val="${id}"/>`)).join("");
   return `<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart><c:plotArea>
     <c:barChart><c:barDir val="col"/><c:grouping val="clustered"/>${series("Columns", 4)}${axes(["category", "primary"])}</c:barChart>
     <c:lineChart><c:grouping val="${lineGrouping}"/>${series("Trend", 5)}${axes(lineAxisIds)}</c:lineChart>
