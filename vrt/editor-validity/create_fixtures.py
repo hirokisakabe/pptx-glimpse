@@ -15,10 +15,12 @@ Usage:
 import base64
 import os
 import tempfile
+import zipfile
 
 from pptx import Presentation
 from pptx.chart.data import BubbleChartData, CategoryChartData, XyChartData
 from pptx.dml.color import RGBColor
+from pptx.enum.dml import MSO_THEME_COLOR
 from pptx.enum.chart import XL_CHART_TYPE
 from pptx.enum.shapes import MSO_SHAPE
 from pptx.enum.text import PP_ALIGN
@@ -645,11 +647,72 @@ def create_editor_validity_group_fixture(filename, *, grouped):
     print(f"  Created: {filename}")
 
 
+def create_editor_validity_theme_fixture(filename, *, expected):
+    """Fixture pair for an existing theme color-scheme edit."""
+    prs = new_presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[6])
+    shape = slide.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, Inches(1.2), Inches(1.2), Inches(7.6), Inches(2.6)
+    )
+    shape.name = "Theme Accent Target"
+    shape.fill.solid()
+    shape.fill.fore_color.theme_color = MSO_THEME_COLOR.ACCENT_1
+    shape.line.color.theme_color = MSO_THEME_COLOR.DARK_1
+    shape.text_frame.text = "Existing theme color scheme"
+    shape.text_frame.paragraphs[0].runs[0].font.size = Pt(28)
+
+    path = os.path.join(OUTPUT_DIR, filename)
+    prs.save(path)
+    if expected:
+        replace_zip_part_text(
+            path,
+            "ppt/theme/theme1.xml",
+            'val="4F81BD"',
+            'val="C00000"',
+        )
+    print(f"  Created: {filename}")
+
+
+def replace_zip_part_text(path, part_path, old, new):
+    """Replace one UTF-8 fragment in a ZIP part without creating duplicate entries."""
+    with zipfile.ZipFile(path, "r") as source:
+        entries = [(item, source.read(item.filename)) for item in source.infolist()]
+    replaced = False
+    with tempfile.NamedTemporaryFile(
+        suffix=".pptx", dir=os.path.dirname(path), delete=False
+    ) as tmp:
+        temporary_path = tmp.name
+    try:
+        with zipfile.ZipFile(temporary_path, "w") as output:
+            for item, data in entries:
+                if item.filename == part_path:
+                    text = data.decode("utf-8")
+                    if old not in text:
+                        raise RuntimeError(f"theme fixture fragment not found: {old}")
+                    data = text.replace(old, new, 1).encode("utf-8")
+                    replaced = True
+                output.writestr(item, data)
+        if not replaced:
+            raise RuntimeError(f"theme fixture part not found: {part_path}")
+        os.replace(temporary_path, path)
+    finally:
+        if os.path.exists(temporary_path):
+            os.unlink(temporary_path)
+
+
 def create_editor_validity_fixtures():
     """PPTX source / expected pairs consumed by editor-validity.test.ts."""
     create_editor_validity_text_fixture(
         "editor-validity-text-source.pptx",
         "Original LibreOffice text",
+    )
+    create_editor_validity_theme_fixture(
+        "editor-validity-theme-source.pptx",
+        expected=False,
+    )
+    create_editor_validity_theme_fixture(
+        "editor-validity-theme-expected.pptx",
+        expected=True,
     )
     create_editor_validity_text_fixture(
         "editor-validity-text-expected.pptx",

@@ -36,6 +36,46 @@ paragraph text, shape transforms/fills/outlines, shape deletion, same-format ima
 existing Chart data, slide backgrounds, and slide topology. The authoring helpers can add new
 supported content to a slide loaded from an existing PPTX.
 
+## Existing theme color and font schemes
+
+`updateThemeScheme` applies a non-empty field-level patch to exactly one existing theme handle.
+Color values use the same six-digit RGB strings as `createPptx`: `dk1`, `lt1`, `dk2`, `lt2`,
+`accent1` through `accent6`, `hlink`, and `folHlink`. Major and minor font sets independently
+accept `latin`, `eastAsian`, and `complexScript`; Latin must be non-empty, while the other two may
+be the empty OOXML typeface.
+
+```ts
+import { updateThemeScheme, writePptx } from "@pptx-glimpse/document";
+
+const theme = source.themes[0];
+if (theme?.handle === undefined) throw new Error("No editable theme found");
+
+const branded = updateThemeScheme(source, theme.handle, {
+  colorScheme: {
+    accent1: "0067C5",
+    accent2: "F59E0B",
+  },
+  fontScheme: {
+    major: { latin: "Brand Display" },
+    minor: { latin: "Brand Text", eastAsian: "Noto Sans CJK JP" },
+  },
+});
+
+const output = writePptx(branded);
+```
+
+Every omitted color/font field remains unchanged. The dirty writer patches only requested
+`a:clrScheme` color choices and `a:majorFont` / `a:minorFont` typeface attributes, retaining the
+theme part path, master relationships, `a:fmtScheme`, script fallback entries, child order, and
+unrelated or unknown XML. Theme creation/deletion/duplication, format-scheme edits, relationship
+rewiring, and multi-theme batch operations are not supported.
+
+The operation rejects a missing or ambiguous handle, invalid/empty patches, invalid colors or
+typefaces, missing raw package material, and missing/duplicate/unsupported target structures
+before returning a changed source model. In the editor packages, the matching
+`updateThemeScheme` command creates one undo entry. Core rerenders slides under every master that
+references the edited shared theme and does not invalidate masters that reference other themes.
+
 ### Image replacement copy-on-write contract
 
 `replaceImageBytes` keeps the replacement media content type equal to the source media content
