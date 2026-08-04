@@ -1,4 +1,5 @@
 import { asPartPath } from "@pptx-glimpse/document";
+import JSZip from "jszip";
 import { describe, expect, it } from "vitest";
 
 import { renderPptxSourceModelToSvg } from "./converter.js";
@@ -130,6 +131,39 @@ describe("PptxEditorSession - master/layout preview", () => {
     expect(editor.history).toEqual(historyBefore);
   });
 
+  it.each([
+    ["missing", "part-missing"],
+    ["unreadable", "part-root-unexpected"],
+  ] as const)(
+    "keeps %s referenced-theme diagnostics and excludes unrelated slide diagnostics",
+    async (themeState, expectedCode) => {
+      const editor = await createPptxEditorSession(
+        await buildThemeDiagnosticPreviewFixture(themeState),
+        { skipSystemFonts: true },
+      );
+      const layoutHandle = editor.layoutCatalog[0]?.layouts[0]?.handle;
+      if (layoutHandle === undefined) throw new Error("layout missing");
+
+      const preview = await editor.previewLayoutCatalogTarget(layoutHandle);
+
+      expect(preview.ok).toBe(true);
+      if (!preview.ok) throw new Error(preview.message);
+      expect(preview.diagnostics).toContainEqual(
+        expect.objectContaining({
+          source: "document",
+          code: expectedCode,
+          sourcePartPath: "ppt/theme/theme1.xml",
+        }),
+      );
+      expect(preview.diagnostics).not.toContainEqual(
+        expect.objectContaining({
+          source: "document",
+          sourcePartPath: "ppt/slides/slide1.xml",
+        }),
+      );
+    },
+  );
+
   it("exposes identical Node and browser values for the same catalog handle", async () => {
     const input = await buildTemplatePreviewFixture();
     const browserEntry = await import("./browser.js");
@@ -150,3 +184,16 @@ describe("PptxEditorSession - master/layout preview", () => {
     ).toEqual(await nodeEditor.previewLayoutCatalogTarget({ partPath: asPartPath("missing") }));
   });
 });
+
+async function buildThemeDiagnosticPreviewFixture(
+  themeState: "missing" | "unreadable",
+): Promise<Uint8Array> {
+  const zip = await JSZip.loadAsync(await buildTemplatePreviewFixture());
+  if (themeState === "missing") {
+    zip.remove("ppt/theme/theme1.xml");
+  } else {
+    zip.file("ppt/theme/theme1.xml", "<unexpected-theme-root/>");
+  }
+  zip.remove("ppt/slides/slide1.xml");
+  return zip.generateAsync({ type: "uint8array" });
+}

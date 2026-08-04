@@ -519,7 +519,9 @@ export class PptxEditorSession {
       handle: target.handle,
       svg: rendered.svg,
       diagnostics: report.diagnostics
-        .filter((diagnostic) => templatePreviewDiagnosticApplies(diagnostic, computed))
+        .filter((diagnostic) =>
+          templatePreviewDiagnosticApplies(diagnostic, this.#session.document, target),
+        )
         .map(withoutSyntheticSlideNumber),
     };
   }
@@ -962,14 +964,30 @@ function withoutSyntheticSlideNumber(diagnostic: ConversionDiagnostic): Conversi
 
 function templatePreviewDiagnosticApplies(
   diagnostic: ConversionDiagnostic,
-  computed: PptxComputedView,
+  source: PptxSourceModel,
+  target: TemplatePreviewTarget,
 ): boolean {
   if (diagnostic.source !== "document" || diagnostic.sourcePartPath === undefined) return true;
-  const target = computed.slides[0];
-  if (target === undefined) return false;
-  return [target.partPath, target.layoutPartPath, target.masterPartPath, target.themePartPath].some(
-    (partPath) => partPath === diagnostic.sourcePartPath,
-  );
+  return templatePreviewDependencyPartPaths(source, target).has(diagnostic.sourcePartPath);
+}
+
+function templatePreviewDependencyPartPaths(
+  source: PptxSourceModel,
+  target: TemplatePreviewTarget,
+): ReadonlySet<string> {
+  const partPaths = new Set<string>([target.handle.partPath]);
+  let master: SourceSlideMaster | undefined;
+  if (target.kind === "master") {
+    master = source.slideMasters.find((candidate) => candidate.partPath === target.handle.partPath);
+  } else {
+    const layout = source.slideLayouts.find(
+      (candidate) => candidate.partPath === target.handle.partPath,
+    );
+    if (layout !== undefined) partPaths.add(layout.masterPartPath);
+    master = source.slideMasters.find((candidate) => candidate.partPath === layout?.masterPartPath);
+  }
+  if (master?.themePartPath !== undefined) partPaths.add(master.themePartPath);
+  return partPaths;
 }
 
 /**
