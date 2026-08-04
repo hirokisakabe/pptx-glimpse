@@ -11,9 +11,9 @@ import {
   asEmu,
   countImageReferencesToMedia,
   createComputedTemplateView,
-  type PptxComputedView,
   type MediaPart,
   type PartPath,
+  type PptxComputedView,
   type PptxSourceModel,
   readPptx,
   type Relationship,
@@ -955,7 +955,8 @@ function formatSourceHandle(handle: SourceHandle): string {
 }
 
 function withoutSyntheticSlideNumber(diagnostic: ConversionDiagnostic): ConversionDiagnostic {
-  const { slideNumber: _, ...previewDiagnostic } = diagnostic;
+  const { slideNumber, ...previewDiagnostic } = diagnostic;
+  void slideNumber;
   return previewDiagnostic;
 }
 

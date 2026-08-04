@@ -1,8 +1,8 @@
 import { asPartPath } from "@pptx-glimpse/document";
 import { describe, expect, it } from "vitest";
 
-import { createPptxEditorSession } from "./index.js";
 import { renderPptxSourceModelToSvg } from "./converter.js";
+import { createPptxEditorSession } from "./index.js";
 import { createPptxEditorSessionFactory } from "./pptx-editor-session.js";
 import { buildTemplatePreviewFixture } from "./pptx-editor-session.test-helpers.js";
 

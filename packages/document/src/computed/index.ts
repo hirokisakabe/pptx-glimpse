@@ -36,9 +36,9 @@ export type {
   ComputedTableData,
   ComputedTableElement,
   ComputedTableRow,
+  ComputedTemplateTarget,
   ComputedTextBody,
   ComputedTextRun,
-  ComputedTemplateTarget,
   CreateComputedViewOptions,
   PptxComputedView,
 } from "./pptx-computed-view.js";

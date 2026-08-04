@@ -79,15 +79,15 @@ export type {
   PptxEditorSlideMasterCatalogEntry,
   PptxEditorSlidesResponse,
   PptxEditorSlideSvg,
-  PptxEditorTextBodyView,
-  PptxEditorTextParagraphView,
-  PptxEditorTextRunInfo,
-  PptxEditorTextRunView,
   PptxEditorTemplatePreviewErrorCode,
   PptxEditorTemplatePreviewFailure,
   PptxEditorTemplatePreviewResult,
   PptxEditorTemplatePreviewSuccess,
   PptxEditorTemplatePreviewTargetKind,
+  PptxEditorTextBodyView,
+  PptxEditorTextParagraphView,
+  PptxEditorTextRunInfo,
+  PptxEditorTextRunView,
 } from "./pptx-editor-session.js";
 export { isPptxEditorError, PptxEditorError } from "./pptx-editor-session.js";
 export type { SourceHandle, UpdateThemeSchemeInput } from "@pptx-glimpse/document";

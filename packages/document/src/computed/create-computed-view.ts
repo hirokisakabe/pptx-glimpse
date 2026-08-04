@@ -71,8 +71,8 @@ import type {
   ComputedTableCell,
   ComputedTableElement,
   ComputedTableRow,
-  ComputedTextBody,
   ComputedTemplateTarget,
+  ComputedTextBody,
   CreateComputedViewOptions,
   PptxComputedView,
 } from "./pptx-computed-view.js";

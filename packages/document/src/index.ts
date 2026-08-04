@@ -61,9 +61,9 @@ export type {
   ComputedTableData,
   ComputedTableElement,
   ComputedTableRow,
+  ComputedTemplateTarget,
   ComputedTextBody,
   ComputedTextRun,
-  ComputedTemplateTarget,
   CreateComputedViewOptions,
   PptxComputedView,
 } from "./computed/index.js";
