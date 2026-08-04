@@ -75,7 +75,9 @@ describe("PptxEditorSession - master/layout preview", () => {
     expect(editor.selection).toEqual(selectionBefore);
     expect(editor.history).toEqual(historyBefore);
     expect(editor.slides).toBe(slidesBefore);
-    expect(editor.save().pptx).toEqual(serializedBefore);
+    expect(await unzipFileContents(editor.save().pptx)).toEqual(
+      await unzipFileContents(serializedBefore),
+    );
     if (preview.ok) expect(preview.svg).not.toContain("EDITED USER");
   });
 
@@ -196,4 +198,16 @@ async function buildThemeDiagnosticPreviewFixture(
   }
   zip.remove("ppt/slides/slide1.xml");
   return zip.generateAsync({ type: "uint8array" });
+}
+
+async function unzipFileContents(pptx: Uint8Array): Promise<Record<string, Uint8Array>> {
+  const zip = await JSZip.loadAsync(pptx);
+  const files = Object.entries(zip.files)
+    .filter(([, file]) => !file.dir)
+    .sort(([leftPath], [rightPath]) => leftPath.localeCompare(rightPath));
+  return Object.fromEntries(
+    await Promise.all(
+      files.map(async ([path, file]) => [path, await file.async("uint8array")] as const),
+    ),
+  );
 }
