@@ -227,10 +227,16 @@ export interface ComputedChartData {
 
 export interface ComputedChartPlotGroup {
   readonly chartType: "bar" | "line";
+  /** Authored `c:grouping@val`, when present. */
+  readonly grouping?: string;
   /** Positions in `ComputedChartData.series`, retained in OOXML plot-group order. */
   readonly seriesIndexes: readonly number[];
   /** Ordered `c:axId` references authored on the plot group. */
   readonly axisIds: readonly string[];
+  /** Group references that resolve to exactly one supported `c:catAx` definition. */
+  readonly categoryAxisIds?: readonly string[];
+  /** Group references that resolve to exactly one `c:valAx` definition. */
+  readonly valueAxisIds?: readonly string[];
   /** The referenced `c:valAx/c:axId`, when it can be resolved. */
   readonly valueAxisId?: string;
 }

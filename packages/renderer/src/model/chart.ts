@@ -41,8 +41,11 @@ export interface ChartData {
 
 export interface ChartPlotGroup {
   chartType: "bar" | "line";
+  grouping?: string;
   seriesIndexes: number[];
   axisIds: string[];
+  categoryAxisIds?: string[];
+  valueAxisIds?: string[];
   valueAxisId?: string;
 }
 

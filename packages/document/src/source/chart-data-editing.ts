@@ -589,6 +589,7 @@ function inspectAndUpdateChartXml(
     group,
     series: elementChildren(group).filter((entry) => elementLocalName(entry) === "ser"),
   }));
+  if (isSupportedCombo) validateSupportedComboDetails(plotArea, groupedSeries);
   const existingSeries = groupedSeries.flatMap((group) => group.series);
   const comboInputs = isSupportedCombo
     ? matchComboSeriesInputs(groupedSeries, input.series)
@@ -707,6 +708,64 @@ function isSupportedCategoryCombo(chartGroups: readonly OrderedXmlNode[]): boole
     throw new Error("updateChartData: combo charts require barDir=col");
   }
   return true;
+}
+
+function validateSupportedComboDetails(
+  plotArea: OrderedXmlNode,
+  groups: readonly {
+    readonly chartType: string | undefined;
+    readonly group: OrderedXmlNode;
+    readonly series: readonly OrderedXmlNode[];
+  }[],
+): void {
+  if (groups.some((group) => group.series.length === 0)) {
+    throw new Error("updateChartData: combo plot groups must each contain series");
+  }
+  for (const { chartType, group } of groups) {
+    const grouping = elementChildren(group).find((child) => elementLocalName(child) === "grouping");
+    const value = grouping === undefined ? undefined : attribute(grouping, "val");
+    const supported =
+      chartType === "barChart"
+        ? value === undefined || value === "clustered" || value === "standard"
+        : value === undefined || value === "standard";
+    if (!supported) {
+      throw new Error("updateChartData: combo chart grouping is not supported");
+    }
+  }
+
+  const categoryAxisCounts = orderedAxisDefinitionCounts(plotArea, "catAx");
+  const valueAxisCounts = orderedAxisDefinitionCounts(plotArea, "valAx");
+  const categoryAxisIds: string[] = [];
+  for (const { group } of groups) {
+    const axisIds = elementChildren(group)
+      .filter((child) => elementLocalName(child) === "axId")
+      .map((axis) => attribute(axis, "val"))
+      .filter((id): id is string => id !== undefined);
+    const resolvedCategoryIds = axisIds.filter((id) => categoryAxisCounts.get(id) === 1);
+    const resolvedValueIds = axisIds.filter((id) => valueAxisCounts.get(id) === 1);
+    if (axisIds.length !== 2 || resolvedCategoryIds.length !== 1 || resolvedValueIds.length !== 1) {
+      throw new Error("updateChartData: combo chart axis topology is not supported");
+    }
+    categoryAxisIds.push(resolvedCategoryIds[0]);
+  }
+  if (categoryAxisIds[0] !== categoryAxisIds[1]) {
+    throw new Error("updateChartData: combo chart axis topology is not supported");
+  }
+}
+
+function orderedAxisDefinitionCounts(
+  plotArea: OrderedXmlNode,
+  axisName: "catAx" | "valAx",
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const axis of elementChildren(plotArea).filter(
+    (child) => elementLocalName(child) === axisName,
+  )) {
+    const axisId = elementChildren(axis).find((child) => elementLocalName(child) === "axId");
+    const id = axisId === undefined ? undefined : attribute(axisId, "val");
+    if (id !== undefined) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
 }
 
 function matchComboSeriesInputs(

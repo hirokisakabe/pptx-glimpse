@@ -153,9 +153,12 @@ and chart-level XML stay intact. Because explicit legend entries have chart-type
 semantics, removal rejects Charts that contain them instead of leaving a stale reference. The
 worksheet range and cells expand or shrink to the resulting series count.
 
-The same operation supports one fixed-topology category combo subset: exactly one column-oriented
-`barChart` plot group (`barDir=col`) and one `lineChart` plot group sharing the standard category
-worksheet layout. Discover each existing series identity from computed
+The same operation supports one fixed-topology category combo subset: exactly one nonempty,
+column-oriented `barChart` plot group (`barDir=col`) and one nonempty `lineChart` plot group sharing
+the standard category worksheet layout. Grouping must be non-stacked (`clustered` or `standard` for
+the bar group and `standard` for the line group); `stacked`, `percentStacked`, and unknown grouping
+semantics are rejected. Each group must reference exactly one value axis, and both groups must
+reference the same single `catAx`. Discover each existing series identity from computed
 `chartData.series[].source`, then include that descriptor in the update input:
 
 ```ts
@@ -181,18 +184,22 @@ bound to chart XML document order. Series count, identity set, plot-group member
 `idx` / `order`, axes, title, legend, formatting, and unknown XML are fixed. Duplicate, missing, or
 changed identities are rejected before source/editor history changes.
 
-The computed view also retains `plotGroups` in chart XML order, each group's ordered `axisIds` and
-resolved `valueAxisId`, plus the referenced `valueAxes`. The renderer uses one scale for groups that
-share a value-axis ID and an independent right-side scale for a secondary value axis. A horizontal
-bar plus line combination is not geometrically compatible with this category-combo renderer, so it
-is exposed as unsupported by the rendering adapter and rejected by editing preflight.
+The computed view also retains `plotGroups` in chart XML order, each group's authored `grouping`,
+ordered `axisIds`, uniquely resolved category/value-axis IDs, and `valueAxisId`, plus the referenced
+`valueAxes`. The rendering adapter skips unsupported grouping or incomplete/ambiguous axis topology
+with an explicit diagnostic. For supported topology, the renderer uses one zero-inclusive scale for
+groups that share a value-axis ID and an independent right-side scale for a secondary value axis;
+zero-only and all-negative series remain renderable. A horizontal bar plus line combination is not
+geometrically compatible with this category-combo renderer, so it is likewise exposed as
+unsupported by the rendering adapter and rejected by editing preflight.
 
 The operation rejects linked/external data, missing or unresolved relationships, workbooks shared
 by multiple Charts, workbook formulas in the data range, and other data layouts before changing the
 model. Unsupported combo shapes include three or more plot groups, scatter/bubble mixtures,
-horizontal bars, and anything other than one bar plus one line group. It patches only the target
-worksheet data and preserves other embedded workbook parts such as styles, themes, and document
-properties.
+horizontal bars, stacked grouping, empty groups, missing/ambiguous/different category axes,
+missing/ambiguous value axes, and anything other than one bar plus one line group. It patches only
+the target worksheet data and preserves other embedded workbook parts such as styles, themes, and
+document properties.
 
 `updateScatterChartData(source, chartHandle, input)` is the separate typed operation for an
 existing scatter Chart. Its input uses paired finite `xValues` / `yValues` rather than category

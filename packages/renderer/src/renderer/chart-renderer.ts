@@ -141,16 +141,25 @@ function renderCategoryComboChart(
     return "";
   }
 
-  const scaleByAxis = new Map<string, { ticks: number[]; max: number }>();
+  const domainByAxis = new Map<string, { min: number; max: number }>();
   for (const group of groups) {
-    const currentMax = scaleByAxis.get(group.scaleKey)?.max ?? 0;
-    const max = Math.max(currentMax, getMaxValue(group.series));
-    const ticks = computeNiceTicks(0, max);
-    scaleByAxis.set(group.scaleKey, { ticks, max: ticks.at(-1) ?? 0 });
+    const current = domainByAxis.get(group.scaleKey);
+    const groupDomain = getZeroInclusiveValueDomain(group.series);
+    domainByAxis.set(group.scaleKey, {
+      min: Math.min(current?.min ?? 0, groupDomain.min),
+      max: Math.max(current?.max ?? 0, groupDomain.max),
+    });
   }
-  if ([...scaleByAxis.values()].some((scale) => scale.max === 0)) {
-    debugChart(context, "chart.combo", "value-axis max is 0");
-    return "";
+  const scaleByAxis = new Map<string, { ticks: number[]; min: number; max: number }>();
+  for (const [axisId, domain] of domainByAxis) {
+    const normalizedDomain =
+      domain.min === domain.max ? { min: domain.min, max: domain.max + 1 } : domain;
+    const ticks = computeNiceTicks(normalizedDomain.min, normalizedDomain.max);
+    scaleByAxis.set(axisId, {
+      ticks,
+      min: ticks[0] ?? normalizedDomain.min,
+      max: ticks.at(-1) ?? normalizedDomain.max,
+    });
   }
 
   const parts: string[] = [
@@ -170,10 +179,10 @@ function renderCategoryComboChart(
     if (rightSide) {
       parts.push(
         `<line x1="${round(x + w)}" y1="${round(y)}" x2="${round(x + w)}" y2="${round(y + h)}" stroke="#D9D9D9" stroke-width="1"/>`,
-        renderRightValueAxisLabels(scale.ticks, 0, scale.max, x + w, y, h),
+        renderRightValueAxisLabels(scale.ticks, scale.min, scale.max, x + w, y, h),
       );
     } else {
-      parts.push(renderValueAxisLabels(scale.ticks, 0, scale.max, x, y, h));
+      parts.push(renderValueAxisLabels(scale.ticks, scale.min, scale.max, x, y, h));
     }
   }
 
@@ -191,12 +200,14 @@ function renderCategoryComboChart(
     if (group.chartType === "bar") {
       const barWidth = (groupWidth * 0.7) / group.series.length;
       const groupPadding = groupWidth * 0.15;
+      const range = scale.max - scale.min;
+      const zeroY = y + h - ((0 - scale.min) / range) * h;
       for (let seriesIndex = 0; seriesIndex < group.series.length; seriesIndex++) {
         const series = group.series[seriesIndex];
         for (let categoryIndex = 0; categoryIndex < series.values.length; categoryIndex++) {
-          const barHeight = (series.values[categoryIndex] / scale.max) * h;
+          const valueY = y + h - ((series.values[categoryIndex] - scale.min) / range) * h;
           parts.push(
-            `<rect x="${round(x + categoryIndex * groupWidth + groupPadding + seriesIndex * barWidth)}" y="${round(y + h - barHeight)}" width="${round(barWidth)}" height="${round(barHeight)}" ${fillAttr(series.color)}/>`,
+            `<rect x="${round(x + categoryIndex * groupWidth + groupPadding + seriesIndex * barWidth)}" y="${round(Math.min(zeroY, valueY))}" width="${round(barWidth)}" height="${round(Math.abs(zeroY - valueY))}" ${fillAttr(series.color)}/>`,
           );
         }
       }
@@ -205,7 +216,7 @@ function renderCategoryComboChart(
     for (const series of group.series) {
       const points = series.values.map((value, categoryIndex) => {
         const px = round(x + categoryIndex * groupWidth + groupWidth / 2);
-        const py = round(y + h - (value / scale.max) * h);
+        const py = round(y + h - ((value - scale.min) / (scale.max - scale.min)) * h);
         return `${px},${py}`;
       });
       parts.push(
@@ -1336,6 +1347,18 @@ function getMaxValue(series: ChartSeries[]): number {
     }
   }
   return max;
+}
+
+function getZeroInclusiveValueDomain(series: ChartSeries[]): { min: number; max: number } {
+  let min = 0;
+  let max = 0;
+  for (const item of series) {
+    for (const value of item.values) {
+      min = Math.min(min, value);
+      max = Math.max(max, value);
+    }
+  }
+  return { min, max };
 }
 
 function fillAttr(color: ResolvedColor): string {

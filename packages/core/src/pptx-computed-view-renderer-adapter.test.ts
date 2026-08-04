@@ -805,14 +805,20 @@ describe("adaptComputedViewToRendererModel", () => {
                 plotGroups: [
                   {
                     chartType: "line",
+                    grouping: "standard",
                     seriesIndexes: [1],
                     axisIds: ["100002", "200003"],
+                    categoryAxisIds: ["100002"],
+                    valueAxisIds: ["200003"],
                     valueAxisId: "200003",
                   },
                   {
                     chartType: "bar",
+                    grouping: "clustered",
                     seriesIndexes: [0],
                     axisIds: ["100002", "100003"],
+                    categoryAxisIds: ["100002"],
+                    valueAxisIds: ["100003"],
                     valueAxisId: "100003",
                   },
                 ],
@@ -875,6 +881,34 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toContainEqual(
       expect.objectContaining({
         code: "pptx-computed-view-adapter.unsupported-horizontal-combo-skipped",
+      }),
+    );
+  });
+
+  it("skips stacked combo grouping with an adapter diagnostic", () => {
+    const result = adaptComputedViewToRendererModel(
+      createComputedView(buildSourceWithChartAndSmartArt({ chartXml: comboChartXml("stacked") })),
+    );
+
+    expect(result.slides[0].elements.some((element) => element.type === "chart")).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "pptx-computed-view-adapter.unsupported-combo-grouping-skipped",
+      }),
+    );
+  });
+
+  it("skips incomplete combo axis topology with an adapter diagnostic", () => {
+    const result = adaptComputedViewToRendererModel(
+      createComputedView(
+        buildSourceWithChartAndSmartArt({ chartXml: comboChartXml("standard", []) }),
+      ),
+    );
+
+    expect(result.slides[0].elements.some((element) => element.type === "chart")).toBe(false);
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: "pptx-computed-view-adapter.unsupported-combo-axis-topology-skipped",
       }),
     );
   });
@@ -1144,7 +1178,7 @@ function buildSource(options: BuildSourceOptions = {}): PptxSourceModel {
 }
 
 function buildSourceWithChartAndSmartArt(
-  options: { readonly smartArtDrawingXml?: string } = {},
+  options: { readonly smartArtDrawingXml?: string; readonly chartXml?: string } = {},
 ): PptxSourceModel {
   const source = buildSource({
     extraSlideShapes: [
@@ -1212,12 +1246,31 @@ function buildSourceWithChartAndSmartArt(
         },
       ],
       rawParts: [
-        rawXmlPart("ppt/charts/chart1.xml", chartXml()),
+        rawXmlPart("ppt/charts/chart1.xml", options.chartXml ?? chartXml()),
         rawXmlPart("ppt/diagrams/data1.xml", `<dgm:dataModel/>`),
         rawXmlPart("ppt/diagrams/drawing1.xml", options.smartArtDrawingXml ?? smartArtDrawingXml()),
       ],
     },
   };
+}
+
+function comboChartXml(
+  lineGrouping: string,
+  lineAxisIds: readonly string[] = ["category", "secondary"],
+): string {
+  const series = (name: string, value: number) => `<c:ser><c:idx val="0"/><c:order val="0"/>
+    <c:tx><c:v>${name}</c:v></c:tx>
+    <c:cat><c:strLit><c:pt idx="0"><c:v>A</c:v></c:pt></c:strLit></c:cat>
+    <c:val><c:numLit><c:pt idx="0"><c:v>${value}</c:v></c:pt></c:numLit></c:val>
+  </c:ser>`;
+  const axes = (ids: readonly string[]) => ids.map((id) => `<c:axId val="${id}"/>`).join("");
+  return `<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart><c:plotArea>
+    <c:barChart><c:barDir val="col"/><c:grouping val="clustered"/>${series("Columns", 4)}${axes(["category", "primary"])}</c:barChart>
+    <c:lineChart><c:grouping val="${lineGrouping}"/>${series("Trend", 5)}${axes(lineAxisIds)}</c:lineChart>
+    <c:catAx><c:axId val="category"/></c:catAx>
+    <c:valAx><c:axId val="primary"/><c:axPos val="l"/></c:valAx>
+    <c:valAx><c:axId val="secondary"/><c:axPos val="r"/></c:valAx>
+  </c:plotArea></c:chart></c:chartSpace>`;
 }
 
 function chartXml(): string {

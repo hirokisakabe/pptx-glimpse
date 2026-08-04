@@ -267,6 +267,44 @@ describe("EditorSession chart data commands", () => {
     expect(session.undoDepth).toBe(undoDepth);
   });
 
+  it("rejects unsupported combo grouping and axis topology without changing editor state", async () => {
+    const sources = [
+      await buildCategoryComboChartEditSource({ lineGrouping: "stacked" }),
+      await buildCategoryComboChartEditSource({ lineAxisIds: ["100003"] }),
+    ];
+    for (const source of sources) {
+      const chart = firstChart(source);
+      const handle = requireHandle(chart.handle);
+      const session = createEditorSession(source);
+      session.selectShape(handle);
+      const before = session.document;
+      const result = session.apply({
+        kind: "updateChartData",
+        handle,
+        series: [
+          {
+            source: { chartType: "bar", index: 0 },
+            name: "Columns",
+            categories: ["A"],
+            values: [1],
+          },
+          {
+            source: { chartType: "line", index: 7 },
+            name: "Trend",
+            categories: ["A"],
+            values: [2],
+          },
+        ],
+      });
+
+      expect(result).toMatchObject({ ok: false, code: "invalid-command" });
+      expect(session.document).toBe(before);
+      expect(session.selection).toEqual({ shapeHandle: handle });
+      expect(session.undoDepth).toBe(0);
+      expect(session.redoDepth).toBe(0);
+    }
+  });
+
   it("applies the convenience API and command with undo/redo history", () => {
     const source = buildChartEditSource();
     const chart = firstChart(source);

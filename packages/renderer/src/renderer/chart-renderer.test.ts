@@ -162,6 +162,72 @@ describe("renderChart", () => {
       );
     });
 
+    it("renders a zero-only shared axis instead of dropping the combo", () => {
+      const element = createChartElement({
+        chartType: "combo",
+        series: [
+          { name: "Columns", values: [0], color: { hex: "#4472C4", alpha: 1 } },
+          { name: "Trend", values: [0], color: { hex: "#ED7D31", alpha: 1 } },
+        ],
+        categories: ["A"],
+        plotGroups: [
+          {
+            chartType: "bar",
+            seriesIndexes: [0],
+            axisIds: ["cat", "shared"],
+            valueAxisId: "shared",
+          },
+          {
+            chartType: "line",
+            seriesIndexes: [1],
+            axisIds: ["cat", "shared"],
+            valueAxisId: "shared",
+          },
+        ],
+        valueAxes: [{ id: "shared", position: "l" }],
+      });
+
+      const result = renderChart(element);
+      expect(result.content).toContain('fill="#4472C4"');
+      expect(result.content).toContain('stroke="#ED7D31"');
+      expect(result.content).toContain(">1</text>");
+    });
+
+    it("uses zero-inclusive negative domains on primary and secondary axes", () => {
+      const element = createChartElement({
+        chartType: "combo",
+        series: [
+          { name: "Columns", values: [-5, -10], color: { hex: "#4472C4", alpha: 1 } },
+          { name: "Trend", values: [-50, -100], color: { hex: "#ED7D31", alpha: 1 } },
+        ],
+        categories: ["A", "B"],
+        plotGroups: [
+          {
+            chartType: "bar",
+            seriesIndexes: [0],
+            axisIds: ["cat", "primary"],
+            valueAxisId: "primary",
+          },
+          {
+            chartType: "line",
+            seriesIndexes: [1],
+            axisIds: ["cat", "secondary"],
+            valueAxisId: "secondary",
+          },
+        ],
+        valueAxes: [
+          { id: "primary", position: "l" },
+          { id: "secondary", position: "r" },
+        ],
+      });
+
+      const result = renderChart(element);
+      expect(result.content).toContain(">-10</text>");
+      expect(result.content).toMatch(/text-anchor="start"[^>]*>-100<\/text>/);
+      expect(result.content).toContain('stroke="#ED7D31"');
+      expect(result.content).toMatch(/<rect[^>]*height="[1-9][^"]*"[^>]*fill="#4472C4"/);
+    });
+
     it("does not render a horizontal bar and line combo", () => {
       const element = createChartElement({
         chartType: "combo",

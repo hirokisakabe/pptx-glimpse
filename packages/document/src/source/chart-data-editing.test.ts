@@ -289,6 +289,53 @@ describe("updateChartData", () => {
     expect(source.edits).toBeUndefined();
   });
 
+  it("rejects stacked and percent-stacked combo grouping atomically", () => {
+    for (const [search, replacement] of [
+      ['<c:grouping val="clustered"/>', '<c:grouping val="stacked"/>'],
+      ['<c:grouping val="standard"/>', '<c:grouping val="percentStacked"/>'],
+    ]) {
+      const files = unzipSync(buildExistingComboChart());
+      files["ppt/charts/chart1.xml"] = replaceText(
+        files["ppt/charts/chart1.xml"],
+        search,
+        replacement,
+      );
+      expectEditFailure(readPptx(zipFixture(files)), "combo chart grouping is not supported");
+    }
+  });
+
+  it("rejects incomplete or ambiguous combo axis topology atomically", () => {
+    const mutations = [
+      (xml: string) => xml.replace(/<c:lineChart>(.*?)<c:ser>.*?<\/c:ser>/, "<c:lineChart>$1"),
+      (xml: string) => xml.replace('<c:axId val="200003"/>', '<c:axId val="999999"/>'),
+      (xml: string) =>
+        xml.replace(
+          '<c:axId val="100002"/><c:axId val="200003"/>',
+          '<c:axId val="100003"/><c:axId val="200003"/>',
+        ),
+      (xml: string) =>
+        xml
+          .replace(
+            '<c:axId val="100002"/><c:axId val="200003"/>',
+            '<c:axId val="300002"/><c:axId val="200003"/>',
+          )
+          .replace("</c:plotArea>", '<c:catAx><c:axId val="300002"/></c:catAx></c:plotArea>'),
+      (xml: string) => xml.replaceAll("c:catAx", "c:dateAx"),
+    ];
+    for (const mutate of mutations) {
+      const files = unzipSync(buildExistingComboChart());
+      files["ppt/charts/chart1.xml"] = new TextEncoder().encode(
+        mutate(decoder.decode(files["ppt/charts/chart1.xml"])),
+      );
+      expectEditFailure(
+        readPptx(zipFixture(files)),
+        mutate === mutations[0]
+          ? "combo plot groups must each contain series"
+          : "combo chart axis topology is not supported",
+      );
+    }
+  });
+
   it("adds series by cloning the last series formatting and synchronizes the workbook", () => {
     const files = unzipSync(buildExistingChart());
     files["ppt/charts/chart1.xml"] = addSeriesExtensionMarkers(files["ppt/charts/chart1.xml"]);

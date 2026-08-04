@@ -133,7 +133,8 @@ function parseChartTypeAndData(
     });
     const barGroup = parsedGroups.find((group) => group.chartType === "bar");
     const valueAxes = parseValueAxes(plotArea);
-    const valueAxisIds = new Set(valueAxes.map((axis) => axis.id));
+    const categoryAxisCounts = countAxisDefinitions(plotArea, "catAx");
+    const valueAxisCounts = countAxisDefinitions(plotArea, "valAx");
     let seriesOffset = 0;
     const plotGroups = categoryComboGroups.map((group, index) => {
       const parsedGroup = parsedGroups[index];
@@ -142,11 +143,17 @@ function parseChartTypeAndData(
       const axisIds = getChildArray(group.node, "axId")
         .map((axis) => getAttr(axis, "val"))
         .filter((id): id is string => id !== undefined);
-      const valueAxisId = axisIds.find((id) => valueAxisIds.has(id));
+      const categoryAxisIds = axisIds.filter((id) => categoryAxisCounts.get(id) === 1);
+      const valueAxisIds = axisIds.filter((id) => valueAxisCounts.get(id) === 1);
+      const valueAxisId = valueAxisIds.length === 1 ? valueAxisIds[0] : undefined;
+      const grouping = getAttr(getChild(group.node, "grouping"), "val");
       return {
         chartType: group.chartType,
+        ...(grouping !== undefined ? { grouping } : {}),
         seriesIndexes,
         axisIds,
+        categoryAxisIds,
+        valueAxisIds,
         ...(valueAxisId !== undefined ? { valueAxisId } : {}),
       } satisfies ComputedChartPlotGroup;
     });
@@ -167,6 +174,15 @@ function parseChartTypeAndData(
   }
 
   return { series: [], categories: [] };
+}
+
+function countAxisDefinitions(plotArea: XmlNode, axisTag: "catAx" | "valAx"): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const axis of getChildArray(plotArea, axisTag)) {
+    const id = getAttr(getChild(axis, "axId"), "val");
+    if (id !== undefined) counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+  return counts;
 }
 
 function chartGroupsInDocumentOrder(

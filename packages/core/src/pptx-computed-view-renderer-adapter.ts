@@ -98,6 +98,8 @@ export interface RendererAdapterDiagnostic {
     | "pptx-computed-view-adapter.unsupported-rectangle-alignment"
     | "pptx-computed-view-adapter.unresolved-chart-skipped"
     | "pptx-computed-view-adapter.unsupported-horizontal-combo-skipped"
+    | "pptx-computed-view-adapter.unsupported-combo-grouping-skipped"
+    | "pptx-computed-view-adapter.unsupported-combo-axis-topology-skipped"
     | "pptx-computed-view-adapter.unresolved-smartart-skipped"
     | "pptx-computed-view-adapter.unresolved-image-skipped";
   readonly message: string;
@@ -318,6 +320,29 @@ function adaptChart(
     );
     return undefined;
   }
+  if (
+    chart.chartData.chartType === "combo" &&
+    chart.chartData.plotGroups?.some((group) => !isSupportedComboGrouping(group))
+  ) {
+    pushAdapterWarning(
+      diagnostics,
+      "pptx-computed-view-adapter.unsupported-combo-grouping-skipped",
+      "Stacked, percent-stacked, or unknown bar and line combo grouping is not supported by the renderer.",
+      slide,
+      chart.sourcePartPath,
+    );
+    return undefined;
+  }
+  if (chart.chartData.chartType === "combo" && !hasSupportedComboAxisTopology(chart.chartData)) {
+    pushAdapterWarning(
+      diagnostics,
+      "pptx-computed-view-adapter.unsupported-combo-axis-topology-skipped",
+      "Category combo plot groups must be nonempty and reference one common category axis and exactly one value axis each.",
+      slide,
+      chart.sourcePartPath,
+    );
+    return undefined;
+  }
 
   return {
     type: "chart",
@@ -343,8 +368,13 @@ function adaptChartData(chartData: ComputedChartData): ChartData {
       ? {
           plotGroups: chartData.plotGroups.map((group) => ({
             chartType: group.chartType,
+            ...(group.grouping !== undefined ? { grouping: group.grouping } : {}),
             seriesIndexes: [...group.seriesIndexes],
             axisIds: [...group.axisIds],
+            ...(group.categoryAxisIds !== undefined
+              ? { categoryAxisIds: [...group.categoryAxisIds] }
+              : {}),
+            ...(group.valueAxisIds !== undefined ? { valueAxisIds: [...group.valueAxisIds] } : {}),
             ...(group.valueAxisId !== undefined ? { valueAxisId: group.valueAxisId } : {}),
           })),
         }
@@ -365,6 +395,38 @@ function adaptChartData(chartData: ComputedChartData): ChartData {
           }
         : null,
   };
+}
+
+function isSupportedComboGrouping(
+  group: NonNullable<ComputedChartData["plotGroups"]>[number],
+): boolean {
+  if (group.chartType === "bar") {
+    return (
+      group.grouping === undefined ||
+      group.grouping === "clustered" ||
+      group.grouping === "standard"
+    );
+  }
+  return group.grouping === undefined || group.grouping === "standard";
+}
+
+function hasSupportedComboAxisTopology(chartData: ComputedChartData): boolean {
+  const groups = chartData.plotGroups;
+  if (
+    groups === undefined ||
+    groups.length !== 2 ||
+    groups.filter((group) => group.chartType === "bar").length !== 1 ||
+    groups.filter((group) => group.chartType === "line").length !== 1 ||
+    groups.some((group) => group.seriesIndexes.length === 0)
+  ) {
+    return false;
+  }
+  if (
+    groups.some((group) => group.categoryAxisIds?.length !== 1 || group.valueAxisIds?.length !== 1)
+  ) {
+    return false;
+  }
+  return groups[0]?.categoryAxisIds?.[0] === groups[1]?.categoryAxisIds?.[0];
 }
 
 function adaptSmartArt(

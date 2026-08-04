@@ -200,14 +200,19 @@ describe("createComputedView", () => {
       plotGroups: [
         {
           chartType: "line",
+          grouping: "standard",
           seriesIndexes: [0],
           axisIds: ["100002", "200003"],
+          categoryAxisIds: ["100002"],
+          valueAxisIds: ["200003"],
           valueAxisId: "200003",
         },
         {
           chartType: "bar",
           seriesIndexes: [1],
           axisIds: ["100002", "100003"],
+          categoryAxisIds: ["100002"],
+          valueAxisIds: ["100003"],
           valueAxisId: "100003",
         },
       ],
@@ -1273,8 +1278,8 @@ function categoryComboChartDataXml(): string {
   </c:ser>`;
   return `<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart">
   <c:chart><c:plotArea>
-    <c:lineChart>${series(7, "Trend", 900)}<c:axId val="100002"/><c:axId val="200003"/></c:lineChart>
-    <c:barChart><c:barDir val="col"/>${series(0, "Columns", 9)}<c:axId val="100002"/><c:axId val="100003"/></c:barChart>
+    <c:lineChart><c:grouping val="standard"/>${series(7, "Trend", 900)}<c:axId val="100002"/><c:axId val="200003"/></c:lineChart>
+    <c:barChart><c:barDir val="col"/><c:grouping val="clustered"/>${series(0, "Columns", 9)}<c:axId val="100002"/><c:axId val="100003"/></c:barChart>
     <c:catAx><c:axId val="100002"/><c:axPos val="b"/></c:catAx>
     <c:valAx><c:axId val="100003"/><c:axPos val="l"/></c:valAx>
     <c:valAx><c:axId val="200003"/><c:axPos val="r"/></c:valAx>
