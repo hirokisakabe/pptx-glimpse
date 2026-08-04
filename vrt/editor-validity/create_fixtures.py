@@ -648,7 +648,7 @@ def create_editor_validity_group_fixture(filename, *, grouped):
 
 
 def create_editor_validity_theme_fixture(filename, *, expected):
-    """Fixture pair for an existing theme color-scheme edit."""
+    """Fixture pair for existing theme color- and font-scheme edits."""
     prs = new_presentation()
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     shape = slide.shapes.add_shape(
@@ -658,11 +658,33 @@ def create_editor_validity_theme_fixture(filename, *, expected):
     shape.fill.solid()
     shape.fill.fore_color.theme_color = MSO_THEME_COLOR.ACCENT_1
     shape.line.color.theme_color = MSO_THEME_COLOR.DARK_1
-    shape.text_frame.text = "Existing theme color scheme"
-    shape.text_frame.paragraphs[0].runs[0].font.size = Pt(28)
+    major_paragraph = shape.text_frame.paragraphs[0]
+    major_paragraph.text = "Theme major font"
+    major_run = major_paragraph.runs[0]
+    major_run.font.name = "+mj-lt"
+    major_run.font.size = Pt(28)
+    minor_paragraph = shape.text_frame.add_paragraph()
+    minor_paragraph.text = "Theme minor font"
+    minor_run = minor_paragraph.runs[0]
+    minor_run.font.name = "+mn-lt"
+    minor_run.font.size = Pt(28)
 
     path = os.path.join(OUTPUT_DIR, filename)
     prs.save(path)
+    major_typeface = "Carlito" if expected else "Liberation Sans"
+    minor_typeface = "Caladea" if expected else "Liberation Serif"
+    replace_zip_part_text(
+        path,
+        "ppt/theme/theme1.xml",
+        '<a:majorFont><a:latin typeface="Calibri"/>',
+        f'<a:majorFont><a:latin typeface="{major_typeface}"/>',
+    )
+    replace_zip_part_text(
+        path,
+        "ppt/theme/theme1.xml",
+        '<a:minorFont><a:latin typeface="Calibri"/>',
+        f'<a:minorFont><a:latin typeface="{minor_typeface}"/>',
+    )
     if expected:
         replace_zip_part_text(
             path,

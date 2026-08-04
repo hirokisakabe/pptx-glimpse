@@ -305,6 +305,88 @@ describe("updateThemeScheme", () => {
     );
   });
 
+  it("replaces one identity-grouped DrawingML color and preserves foreign same-key siblings in order", () => {
+    const files = unzipSync(existingThemeFixture());
+    const namespacedTheme = decoder
+      .decode(requireEntry(files, themePath))
+      .replace(
+        '<a:accent1><a:srgbClr val="4472C4"/></a:accent1>',
+        '<a:accent1><a:srgbClr val="4472C4"/><x:between marker="preserve"/><a:srgbClr xmlns:a="urn:test:foreign-a" val="FOREIGN"/></a:accent1>',
+      );
+    const source = readPptx(zipSync({ ...files, [themePath]: encoder.encode(namespacedTheme) }));
+    const output = writePptx(
+      updateThemeScheme(source, requireThemeHandle(source), {
+        colorScheme: { accent1: "123456" },
+      }),
+    );
+    const outputTheme = decoder.decode(requireEntry(unzipSync(output), themePath));
+    const expectedSlot =
+      '<a:accent1><a:srgbClr val="123456"/><x:between marker="preserve"/><a:srgbClr xmlns:a="urn:test:foreign-a" val="FOREIGN"/></a:accent1>';
+
+    expect(extractElement(outputTheme, "a:accent1")).toBe(expectedSlot);
+    const reread = readPptx(output);
+    expect(reread.themes[0]?.colorScheme?.colors.accent1).toEqual({
+      kind: "srgb",
+      hex: "123456",
+    });
+    expect(
+      extractElement(
+        decoder.decode(requireEntry(unzipSync(writePptx(reread)), themePath)),
+        "a:accent1",
+      ),
+    ).toBe(expectedSlot);
+  });
+
+  it.each([
+    {
+      name: "prefixed",
+      sourceChoice:
+        '<d:schemeClr xmlns:d="http://schemas.openxmlformats.org/drawingml/2006/main" val="accent2"/>',
+      expectedChoice:
+        '<d:srgbClr xmlns:d="http://schemas.openxmlformats.org/drawingml/2006/main" val="123456"/>',
+    },
+    {
+      name: "default",
+      sourceChoice:
+        '<schemeClr xmlns="http://schemas.openxmlformats.org/drawingml/2006/main" val="accent2"/>',
+      expectedChoice:
+        '<srgbClr xmlns="http://schemas.openxmlformats.org/drawingml/2006/main" val="123456"/>',
+    },
+  ])(
+    "preserves an element-local $name DrawingML namespace on replacement",
+    ({ sourceChoice, expectedChoice }) => {
+      const files = unzipSync(existingThemeFixture());
+      const namespacedTheme = decoder
+        .decode(requireEntry(files, themePath))
+        .replace(
+          '<a:accent1><a:srgbClr val="4472C4"/></a:accent1>',
+          `<a:accent1>${sourceChoice}</a:accent1>`,
+        );
+      const source = readPptx(zipSync({ ...files, [themePath]: encoder.encode(namespacedTheme) }));
+      const output = writePptx(
+        updateThemeScheme(source, requireThemeHandle(source), {
+          colorScheme: { accent1: "123456" },
+        }),
+      );
+      const expectedSlot = `<a:accent1>${expectedChoice}</a:accent1>`;
+
+      expect(
+        extractElement(decoder.decode(requireEntry(unzipSync(output), themePath)), "a:accent1"),
+      ).toBe(expectedSlot);
+      const reread = readPptx(output);
+      expect(reread.themes[0]?.colorScheme?.colors.accent1).toEqual({
+        kind: "srgb",
+        hex: "123456",
+      });
+      expect(
+        extractElement(
+          decoder.decode(requireEntry(unzipSync(writePptx(reread)), themePath)),
+          "a:accent1",
+        ),
+      ).toBe(expectedSlot);
+    },
+  );
+
   it("accepts an in-scope DrawingML prefix alias but rejects two DrawingML siblings", () => {
     const aliasFiles = unzipSync(existingThemeFixture());
     const aliasTheme = decoder
