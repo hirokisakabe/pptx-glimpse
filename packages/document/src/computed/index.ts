@@ -1,4 +1,4 @@
-export { createComputedView } from "./create-computed-view.js";
+export { createComputedTemplateView, createComputedView } from "./create-computed-view.js";
 export type {
   ComputedBackground,
   ComputedBlipEffects,
@@ -36,6 +36,7 @@ export type {
   ComputedTableData,
   ComputedTableElement,
   ComputedTableRow,
+  ComputedTemplateTarget,
   ComputedTextBody,
   ComputedTextRun,
   CreateComputedViewOptions,

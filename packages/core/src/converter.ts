@@ -1,9 +1,10 @@
-import type { PptxSourceModel } from "@pptx-glimpse/document";
+import type { PptxComputedView, PptxSourceModel } from "@pptx-glimpse/document";
 import { DEFAULT_OUTPUT_WIDTH } from "@pptx-glimpse/renderer";
 
 import {
   type ConvertOptions,
   convertPptxToSvg as convertPptxToSvgBase,
+  renderPptxComputedViewToSvg as renderPptxComputedViewToSvgBase,
   renderPptxSourceModelToSvg as renderPptxSourceModelToSvgBase,
   type SupportCoverage,
   type SvgConversionReport,
@@ -86,6 +87,15 @@ export async function renderPptxSourceModelToSvg(
   options?: ConvertOptions,
 ): Promise<SvgConversionReport> {
   return renderPptxSourceModelToSvgBase(source, options, loadSystemFontSetup);
+}
+
+/** @internal Render a preselected computed target with Node font discovery semantics. */
+export async function renderPptxComputedViewToSvg(
+  source: PptxSourceModel,
+  computed: PptxComputedView,
+  options?: ConvertOptions,
+): Promise<SvgConversionReport> {
+  return renderPptxComputedViewToSvgBase(source, computed, options, loadSystemFontSetup);
 }
 
 /**

@@ -282,12 +282,24 @@ export async function renderPptxSourceModelToSvg(
   options?: ConvertOptions,
   loadSystemFontSetup?: SystemFontSetupLoader,
 ): Promise<SvgConversionReport> {
+  const computed = createComputedView(source, { slides: options?.slides });
+  return renderPptxComputedViewToSvg(source, computed, options, loadSystemFontSetup, true);
+}
+
+/** @internal Renders an already selected computed target through the shared core adapter. */
+export async function renderPptxComputedViewToSvg(
+  source: PptxSourceModel,
+  computed: PptxComputedView,
+  options?: ConvertOptions,
+  loadSystemFontSetup?: SystemFontSetupLoader,
+  warnWhenPresentationHasNoSlides = false,
+): Promise<SvgConversionReport> {
   const textOutput = options?.textOutput ?? "path";
   const logLevel = options?.logLevel ?? "off";
   const setup = await createOpentypeSetup(options, loadSystemFontSetup);
 
   const fontUsageCollector = textOutput === "text" ? new FontUsageCollector() : null;
-  const scriptFontScheme = findScriptFontScheme(source);
+  const scriptFontScheme = findScriptFontScheme(source, computed);
   const warningLogger = createWarningLogger(logLevel === "off" ? "warn" : logLevel);
   const context = createRendererContext({
     ...(setup !== null ? { textMeasurer: setup.measurer } : {}),
@@ -301,11 +313,10 @@ export async function renderPptxSourceModelToSvg(
     warningLogger,
   });
 
-  if (source.presentation.slidePartPaths.length === 0) {
+  if (warnWhenPresentationHasNoSlides && source.presentation.slidePartPaths.length === 0) {
     context.warningLogger.warn("presentation.noSlides", "No slides found in the PPTX file");
   }
 
-  const computed = createComputedView(source, { slides: options?.slides });
   const adapted = adaptComputedViewToRendererModel(computed);
   const slideSize = adapted.slideSize;
   if (slideSize === undefined && adapted.slides.length > 0) {
@@ -346,10 +357,10 @@ export async function renderPptxSourceModelToSvg(
   return { slides, diagnostics, supportCoverage };
 }
 
-function findScriptFontScheme(source: PptxSourceModel) {
-  const firstThemePartPath = source.slideMasters.find(
-    (master) => master.themePartPath !== undefined,
-  )?.themePartPath;
+function findScriptFontScheme(source: PptxSourceModel, computed: PptxComputedView) {
+  const firstThemePartPath =
+    computed.slides.find((slide) => slide.themePartPath !== undefined)?.themePartPath ??
+    source.slideMasters.find((master) => master.themePartPath !== undefined)?.themePartPath;
   return (
     source.themes.find((theme) => theme.partPath === firstThemePartPath)?.fontScheme ??
     source.themes[0]?.fontScheme

@@ -10,8 +10,10 @@
 import {
   asEmu,
   countImageReferencesToMedia,
+  createComputedTemplateView,
   type MediaPart,
   type PartPath,
+  type PptxComputedView,
   type PptxSourceModel,
   readPptx,
   type Relationship,
@@ -39,7 +41,9 @@ import {
 } from "@pptx-glimpse/editor";
 
 import {
+  type ConversionDiagnostic,
   type ConvertOptions,
+  renderPptxComputedViewToSvg,
   renderPptxSourceModelToSvg,
   type SlideSvg,
   type SvgConversionReport,
@@ -116,6 +120,36 @@ export interface PptxEditorSlideMasterCatalogEntry {
   readonly name?: string;
   readonly layouts: readonly PptxEditorSlideLayoutCatalogEntry[];
 }
+
+/** Kind of ordered catalog entry rendered by a template preview request. */
+export type PptxEditorTemplatePreviewTargetKind = "master" | "layout";
+
+/** Stable expected-failure code returned without throwing by template preview lookup. */
+export type PptxEditorTemplatePreviewErrorCode =
+  | "preview-handle-not-found"
+  | "preview-handle-ambiguous";
+
+/** Successful one-target master/layout SVG preview. */
+export interface PptxEditorTemplatePreviewSuccess {
+  readonly ok: true;
+  readonly targetKind: PptxEditorTemplatePreviewTargetKind;
+  readonly handle: SourceHandle;
+  readonly svg: string;
+  readonly diagnostics: readonly ConversionDiagnostic[];
+}
+
+/** Expected failure when a catalog handle cannot identify exactly one template target. */
+export interface PptxEditorTemplatePreviewFailure {
+  readonly ok: false;
+  readonly code: PptxEditorTemplatePreviewErrorCode;
+  readonly message: string;
+  readonly handle: SourceHandle;
+}
+
+/** Result of one non-mutating master/layout preview request. */
+export type PptxEditorTemplatePreviewResult =
+  | PptxEditorTemplatePreviewSuccess
+  | PptxEditorTemplatePreviewFailure;
 
 /**
  * Legacy plain-text run view with a required editable source handle.
@@ -293,6 +327,11 @@ type PptxEditorSvgRenderer = (
   source: PptxSourceModel,
   options?: ConvertOptions,
 ) => Promise<SvgConversionReport>;
+type PptxEditorComputedSvgRenderer = (
+  source: PptxSourceModel,
+  computed: PptxComputedView,
+  options?: ConvertOptions,
+) => Promise<SvgConversionReport>;
 type PptxEditorAffectedSlidesResolver = (
   before: PptxSourceModel,
   after: PptxSourceModel,
@@ -300,11 +339,13 @@ type PptxEditorAffectedSlidesResolver = (
 
 interface PptxEditorSessionDependencies {
   readonly renderToSvg: PptxEditorSvgRenderer;
+  readonly renderComputedToSvg: PptxEditorComputedSvgRenderer;
   readonly resolveAffectedSlides: PptxEditorAffectedSlidesResolver;
 }
 
 const DEFAULT_PPTX_EDITOR_SESSION_DEPENDENCIES: PptxEditorSessionDependencies = {
   renderToSvg: renderPptxSourceModelToSvg,
+  renderComputedToSvg: renderPptxComputedViewToSvg,
   resolveAffectedSlides: affectedSlidePartPaths,
 };
 
@@ -348,6 +389,7 @@ export class PptxEditorSession {
   #slides: readonly PptxEditorSlideSvg[] = [];
   readonly #renderOptions: PptxEditorRenderOptions;
   readonly #renderToSvg: PptxEditorSvgRenderer;
+  readonly #renderComputedToSvg: PptxEditorComputedSvgRenderer;
   readonly #resolveAffectedSlides: PptxEditorAffectedSlidesResolver;
 
   static {
@@ -367,6 +409,7 @@ export class PptxEditorSession {
     this.#session = createEditorSession(source);
     this.#renderOptions = renderOptions;
     this.#renderToSvg = dependencies.renderToSvg;
+    this.#renderComputedToSvg = dependencies.renderComputedToSvg;
     this.#resolveAffectedSlides = dependencies.resolveAffectedSlides;
   }
 
@@ -423,6 +466,64 @@ export class PptxEditorSession {
    */
   get layoutCatalog(): readonly PptxEditorSlideMasterCatalogEntry[] {
     return buildLayoutCatalog(this.#session.document);
+  }
+
+  /**
+   * Render exactly one ordered-catalog master or layout without modifying editor state.
+   *
+   * Missing and ambiguous handles are returned as stable failures. Unsupported render content is
+   * skipped and reported through stable conversion diagnostics. Runtime renderer failures use the
+   * existing {@link PptxEditorError} `render-failed` integration contract.
+   */
+  async previewLayoutCatalogTarget(handle: SourceHandle): Promise<PptxEditorTemplatePreviewResult> {
+    const matches = findTemplatePreviewTargets(this.#session.document, handle);
+    if (matches.length === 0) {
+      return {
+        ok: false,
+        code: "preview-handle-not-found",
+        message: `No slide master or layout matches handle '${formatSourceHandle(handle)}'.`,
+        handle,
+      };
+    }
+    if (matches.length > 1) {
+      return {
+        ok: false,
+        code: "preview-handle-ambiguous",
+        message: `Multiple slide masters or layouts match handle '${formatSourceHandle(handle)}'.`,
+        handle,
+      };
+    }
+    const target = matches[0];
+    if (target === undefined) throw new Error("template preview target invariant failed");
+    const computed = createComputedTemplateView(this.#session.document, {
+      kind: target.kind === "master" ? "slideMaster" : "slideLayout",
+      partPath: target.handle.partPath,
+    });
+    let report: SvgConversionReport;
+    try {
+      report = await this.#renderComputedToSvg(this.#session.document, computed, {
+        textOutput: "text",
+        skipSystemFonts: true,
+        ...this.#renderOptions,
+      });
+    } catch (cause) {
+      throw integrationError("render-failed", "Failed to render master or layout preview", cause);
+    }
+    const rendered = report.slides[0];
+    if (rendered === undefined) {
+      throw new Error("PptxEditorSession: renderer did not return template preview target");
+    }
+    return {
+      ok: true,
+      targetKind: target.kind,
+      handle: target.handle,
+      svg: rendered.svg,
+      diagnostics: report.diagnostics
+        .filter((diagnostic) =>
+          templatePreviewDiagnosticApplies(diagnostic, this.#session.document, target),
+        )
+        .map(withoutSyntheticSlideNumber),
+    };
   }
 
   /**
@@ -813,6 +914,82 @@ function buildLayoutCatalog(source: PptxSourceModel): readonly PptxEditorSlideMa
   });
 }
 
+interface TemplatePreviewTarget {
+  readonly kind: PptxEditorTemplatePreviewTargetKind;
+  readonly handle: SourceHandle;
+}
+
+function findTemplatePreviewTargets(
+  source: PptxSourceModel,
+  handle: SourceHandle,
+): readonly TemplatePreviewTarget[] {
+  return buildLayoutCatalog(source).flatMap((master) => [
+    ...(sourceHandlesMatch(master.handle, handle)
+      ? [{ kind: "master" as const, handle: master.handle }]
+      : []),
+    ...master.layouts.flatMap((layout) =>
+      sourceHandlesMatch(layout.handle, handle)
+        ? [{ kind: "layout" as const, handle: layout.handle }]
+        : [],
+    ),
+  ]);
+}
+
+function sourceHandlesMatch(left: SourceHandle, right: SourceHandle): boolean {
+  return (
+    left.partPath === right.partPath &&
+    left.nodeId === right.nodeId &&
+    left.relationshipId === right.relationshipId &&
+    left.orderingSlot === right.orderingSlot &&
+    arraysEqual(left.rawSidecarIds, right.rawSidecarIds)
+  );
+}
+
+function arraysEqual<T>(left: readonly T[] | undefined, right: readonly T[] | undefined): boolean {
+  if (left === undefined || right === undefined) return left === right;
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function formatSourceHandle(handle: SourceHandle): string {
+  return handle.nodeId === undefined
+    ? handle.partPath
+    : `${handle.partPath}#${String(handle.nodeId)}`;
+}
+
+function withoutSyntheticSlideNumber(diagnostic: ConversionDiagnostic): ConversionDiagnostic {
+  const { slideNumber, ...previewDiagnostic } = diagnostic;
+  void slideNumber;
+  return previewDiagnostic;
+}
+
+function templatePreviewDiagnosticApplies(
+  diagnostic: ConversionDiagnostic,
+  source: PptxSourceModel,
+  target: TemplatePreviewTarget,
+): boolean {
+  if (diagnostic.source !== "document" || diagnostic.sourcePartPath === undefined) return true;
+  return templatePreviewDependencyPartPaths(source, target).has(diagnostic.sourcePartPath);
+}
+
+function templatePreviewDependencyPartPaths(
+  source: PptxSourceModel,
+  target: TemplatePreviewTarget,
+): ReadonlySet<string> {
+  const partPaths = new Set<string>([target.handle.partPath]);
+  let master: SourceSlideMaster | undefined;
+  if (target.kind === "master") {
+    master = source.slideMasters.find((candidate) => candidate.partPath === target.handle.partPath);
+  } else {
+    const layout = source.slideLayouts.find(
+      (candidate) => candidate.partPath === target.handle.partPath,
+    );
+    if (layout !== undefined) partPaths.add(layout.masterPartPath);
+    master = source.slideMasters.find((candidate) => candidate.partPath === layout?.masterPartPath);
+  }
+  if (master?.themePartPath !== undefined) partPaths.add(master.themePartPath);
+  return partPaths;
+}
+
 /**
  * Creates an entry-specific editor-session factory with immutable internal dependencies.
  *
@@ -821,8 +998,13 @@ function buildLayoutCatalog(source: PptxSourceModel): readonly PptxEditorSlideMa
 export function createPptxEditorSessionFactory(
   renderToSvg: PptxEditorSvgRenderer,
   resolveAffectedSlides: PptxEditorAffectedSlidesResolver = affectedSlidePartPaths,
+  renderComputedToSvg: PptxEditorComputedSvgRenderer = renderPptxComputedViewToSvg,
 ): (input: Uint8Array, renderOptions?: PptxEditorRenderOptions) => Promise<PptxEditorSession> {
-  const dependencies: PptxEditorSessionDependencies = { renderToSvg, resolveAffectedSlides };
+  const dependencies: PptxEditorSessionDependencies = {
+    renderToSvg,
+    renderComputedToSvg,
+    resolveAffectedSlides,
+  };
   return (input, renderOptions = {}) =>
     createPptxEditorSessionWithDependencies(input, renderOptions, dependencies);
 }

@@ -23,6 +23,7 @@ import {
 import {
   type ConvertOptions,
   convertPptxToSvg as convertPptxToSvgBase,
+  renderPptxComputedViewToSvg as renderPptxComputedViewToSvgForEditor,
   renderPptxSourceModelToSvg as renderPptxSourceModelToSvgForEditor,
 } from "./svg-converter.js";
 
@@ -31,6 +32,7 @@ export class PptxEditorSession extends BasePptxEditorSession {
   private constructor(source: PptxSourceModel, renderOptions: PptxEditorRenderOptions) {
     super(source, renderOptions, {
       renderToSvg: renderPptxSourceModelToSvgForEditor,
+      renderComputedToSvg: renderPptxComputedViewToSvgForEditor,
       resolveAffectedSlides: affectedSlidePartPaths,
     });
   }
@@ -72,6 +74,11 @@ export type {
   PptxEditorSlideMasterCatalogEntry,
   PptxEditorSlidesResponse,
   PptxEditorSlideSvg,
+  PptxEditorTemplatePreviewErrorCode,
+  PptxEditorTemplatePreviewFailure,
+  PptxEditorTemplatePreviewResult,
+  PptxEditorTemplatePreviewSuccess,
+  PptxEditorTemplatePreviewTargetKind,
   PptxEditorTextBodyView,
   PptxEditorTextParagraphView,
   PptxEditorTextRunInfo,

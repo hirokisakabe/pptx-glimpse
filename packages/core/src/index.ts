@@ -9,7 +9,10 @@
 
 import type { PptxSourceModel } from "@pptx-glimpse/document";
 
-import { renderPptxSourceModelToSvg as renderPptxSourceModelToSvgForEditor } from "./converter.js";
+import {
+  renderPptxComputedViewToSvg as renderPptxComputedViewToSvgForEditor,
+  renderPptxSourceModelToSvg as renderPptxSourceModelToSvgForEditor,
+} from "./converter.js";
 import {
   affectedSlidePartPaths,
   initializePptxEditorSession,
@@ -22,6 +25,7 @@ export class PptxEditorSession extends BasePptxEditorSession {
   private constructor(source: PptxSourceModel, renderOptions: PptxEditorRenderOptions) {
     super(source, renderOptions, {
       renderToSvg: renderPptxSourceModelToSvgForEditor,
+      renderComputedToSvg: renderPptxComputedViewToSvgForEditor,
       resolveAffectedSlides: affectedSlidePartPaths,
     });
   }
@@ -75,6 +79,11 @@ export type {
   PptxEditorSlideMasterCatalogEntry,
   PptxEditorSlidesResponse,
   PptxEditorSlideSvg,
+  PptxEditorTemplatePreviewErrorCode,
+  PptxEditorTemplatePreviewFailure,
+  PptxEditorTemplatePreviewResult,
+  PptxEditorTemplatePreviewSuccess,
+  PptxEditorTemplatePreviewTargetKind,
   PptxEditorTextBodyView,
   PptxEditorTextParagraphView,
   PptxEditorTextRunInfo,

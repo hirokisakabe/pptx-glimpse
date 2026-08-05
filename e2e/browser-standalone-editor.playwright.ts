@@ -10,9 +10,13 @@ import { build } from "esbuild";
 import JSZip from "jszip";
 
 import {
+  asEmu,
+  createPptx,
+  createPptxAuthoringSession,
   type PptxSourceModel,
   readPptx,
   type SourceShape,
+  writePptx,
 } from "../packages/document/src/index.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -136,6 +140,34 @@ test("replaces a selected image with copy-on-write, reject, undo, and redo", asy
     const saved = readPptx(await readFile(savedPath));
     expect(mediaBytes(saved, "ppt/media/image1.png")).toEqual(RED_PNG);
     expect(mediaBytes(saved, "ppt/media/image2.png")).toEqual(BLUE_PNG);
+  } finally {
+    await editor.close();
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
+test("renders a layout catalog preview through the browser entry without slide user content", async ({
+  page,
+}) => {
+  const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-browser-template-preview-test-"));
+  const editor = await startStandaloneEditor();
+  try {
+    const sourcePath = join(dir, "fixture.pptx");
+    await writeFile(sourcePath, await buildTemplatePreviewFixture());
+
+    await page.goto(editor.url);
+    await page.getByTestId("pptx-input").setInputFiles(sourcePath);
+    await expect(page.getByTestId("status")).toContainText("1 slide ready");
+    await expect
+      .poll(async () => page.evaluate(() => window.__pptxGlimpseEditorSmoke?.layoutPreview?.ok))
+      .toBe(true);
+    const preview = await page.evaluate(() => window.__pptxGlimpseEditorSmoke?.layoutPreview);
+    expect(preview?.targetKind).toBe("layout");
+    expect(preview?.svg).toContain('aria-label="Master normal shape"');
+    expect(preview?.svg).toContain('aria-label="Layout normal shape"');
+    expect(preview?.svg).toContain("LAYOUT PROMPT");
+    expect(preview?.svg).not.toContain("REAL SLIDE USER CONTENT");
+    expect(preview?.diagnosticCodes).toContain("pptx-computed-view-adapter.raw-element-skipped");
   } finally {
     await editor.close();
     await rm(dir, { recursive: true, force: true });
@@ -373,6 +405,16 @@ pptxInput.addEventListener("change", async () => {
     textOutput: "text",
   });
   render();
+  const previewHandle = editor.layoutCatalog[0]?.layouts[0]?.handle;
+  if (previewHandle) {
+    const preview = await editor.previewLayoutCatalogTarget(previewHandle);
+    window.__pptxGlimpseEditorSmoke.layoutPreview = preview.ok ? {
+      ok: true,
+      targetKind: preview.targetKind,
+      svg: preview.svg,
+      diagnosticCodes: preview.diagnostics.map((diagnostic) => diagnostic.code),
+    } : { ok: false };
+  }
   status.textContent = editor.slides.length + " slide" + (editor.slides.length === 1 ? "" : "s") + " ready";
   addConnectorButton.disabled = false;
   downloadButton.disabled = false;
@@ -446,6 +488,9 @@ function render() {
   );
   window.__pptxGlimpseEditorSmoke = {
     hasTextBody: shapes.some((shape) => Boolean(shape.textBody)),
+    ...(window.__pptxGlimpseEditorSmoke?.layoutPreview
+      ? { layoutPreview: window.__pptxGlimpseEditorSmoke.layoutPreview }
+      : {}),
   };
   selectedShape = selectedShapeKey
     ? shapes.find((shape) => shapeKey(shape) === selectedShapeKey) || null
@@ -856,6 +901,72 @@ async function buildShapeFixture(): Promise<Uint8Array> {
   return zip.generateAsync({ type: "uint8array" });
 }
 
+async function buildTemplatePreviewFixture(): Promise<Uint8Array> {
+  const source = createPptx({
+    slideMaster: {
+      background: { kind: "solid", color: { kind: "srgb", hex: "AA1122" } },
+    },
+  });
+  const masterHandle = source.slideMasters[0]?.handle;
+  const layoutHandle = source.slideLayouts[0]?.handle;
+  const slideHandle = source.slides[0]?.handle;
+  if (masterHandle === undefined || layoutHandle === undefined || slideHandle === undefined) {
+    throw new Error("template preview fixture handles are missing");
+  }
+  const session = createPptxAuthoringSession(source);
+  session.target(masterHandle).addShape({
+    name: "Master normal shape",
+    geometry: { kind: "preset", preset: "rect" },
+    offsetX: asEmu(200000),
+    offsetY: asEmu(200000),
+    width: asEmu(1800000),
+    height: asEmu(500000),
+    text: "MASTER NORMAL",
+  });
+  session.target(masterHandle).addPlaceholder({
+    type: "title",
+    index: 7,
+    transform: {
+      offsetX: asEmu(900000),
+      offsetY: asEmu(900000),
+      width: asEmu(5000000),
+      height: asEmu(1000000),
+    },
+    promptText: "MASTER PROMPT",
+  });
+  session.target(layoutHandle).addShape({
+    name: "Layout normal shape",
+    geometry: { kind: "preset", preset: "roundRect" },
+    offsetX: asEmu(300000),
+    offsetY: asEmu(4200000),
+    width: asEmu(2200000),
+    height: asEmu(500000),
+    text: "LAYOUT NORMAL",
+  });
+  session.target(layoutHandle).addPlaceholder({
+    type: "ctrTitle",
+    index: 7,
+    promptText: "LAYOUT PROMPT",
+  });
+  session.target(slideHandle).addTextBox({
+    offsetX: asEmu(1000000),
+    offsetY: asEmu(2500000),
+    width: asEmu(5000000),
+    height: asEmu(800000),
+    text: "REAL SLIDE USER CONTENT",
+  });
+
+  const zip = await JSZip.loadAsync(writePptx(session.source));
+  const layoutFile = zip.file(layoutHandle.partPath);
+  if (layoutFile === null) throw new Error("template preview layout part is missing");
+  const layoutXml = await layoutFile.async("string");
+  zip.file(
+    layoutHandle.partPath,
+    layoutXml.replace("</p:spTree>", '<p:contentPart r:id="rIdUnsupported"/></p:spTree>'),
+  );
+  return zip.generateAsync({ type: "uint8array" });
+}
+
 async function buildImageFixture(): Promise<Uint8Array> {
   const zip = new JSZip();
   zip.file(
@@ -966,6 +1077,12 @@ declare global {
   interface Window {
     __pptxGlimpseEditorSmoke?: {
       hasTextBody: boolean;
+      layoutPreview?: {
+        ok: boolean;
+        targetKind?: string;
+        svg?: string;
+        diagnosticCodes?: string[];
+      };
     };
   }
 }

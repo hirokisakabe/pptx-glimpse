@@ -36,6 +36,12 @@ must never import a higher layer's error class.
 | Warning                              | A future successful operation with non-fatal compatibility concerns              | Successful result/response `warnings`; never thrown and never added to an error-code union         |
 | Programmer error/invariant violation | Unknown command discriminant, impossible internal state, broken result invariant | Propagate unchanged; do not turn it into an expected result or integration code                    |
 
+Master/layout preview lookup is read-only and has a narrower result contract: missing or ambiguous
+ordered-catalog handles return `PptxEditorTemplatePreviewFailure` with
+`preview-handle-not-found` or `preview-handle-ambiguous`. Unsupported render content is a successful
+preview with diagnostics. Only an actual renderer/runtime failure throws `PptxEditorError` with
+`render-failed`; lookup failures do not enter editor command history or error wrapping.
+
 An operation rejection is expected when the caller can reasonably branch on it and continue
 using the session. An integration failure is owned by an asynchronous or serialization boundary.
 A warning describes a successfully committed operation. A programmer error indicates that the
@@ -65,7 +71,8 @@ Catch only at a boundary that owns a classification:
   validation. Warning collection, normalization, selection reconciliation, and unrelated
   internal logic stay outside that catch.
 - Core may catch `readPptx()` in session creation, the configured renderer invocation in
-  `renderCurrentSlides()`, and `writePptx()` plus output reread validation in `save()`.
+  `renderCurrentSlides()` or `previewLayoutCatalogTarget()`, and `writePptx()` plus output reread
+  validation in `save()`.
 - Core unwraps an explicit headless failure. It does not catch arbitrary exceptions around an
   entire public method and guess a code.
 
