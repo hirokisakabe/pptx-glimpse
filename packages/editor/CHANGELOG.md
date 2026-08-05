@@ -1,5 +1,30 @@
 # @pptx-glimpse/editor
 
+## 0.6.0
+
+### Minor Changes
+
+- 0f69f37: Add typed existing bubble Chart XYZ data editing with synchronized chart formulas, caches, series
+  topology, and standard three-column embedded worksheet tables.
+- 347f661: Add fixed-topology column and line category combo Chart data editing with typed source identities,
+  synchronized caches/formulas/workbooks, ordered axis-aware computed projection and rendering, and
+  atomic rejection of unsupported topology including horizontal, stacked, empty-group, and invalid-
+  axis combos. Combo rendering also supports zero-only and all-negative primary/secondary domains.
+- ddfa337: Add handle-based existing theme color and font scheme editing with field-level XML preservation,
+  undo/redo history, and shared-theme-aware slide rerendering.
+- a6383a9: Add typed existing scatter Chart XY data editing with synchronized chart formulas, caches, series
+  topology, and standard two-column embedded worksheet tables.
+
+### Patch Changes
+
+- Updated dependencies [0f69f37]
+- Updated dependencies [347f661]
+- Updated dependencies [ddfa337]
+- Updated dependencies [bf484fd]
+- Updated dependencies [24978d6]
+- Updated dependencies [a6383a9]
+  - @pptx-glimpse/document@0.16.0
+
 ## 0.5.0
 
 ### Minor Changes
