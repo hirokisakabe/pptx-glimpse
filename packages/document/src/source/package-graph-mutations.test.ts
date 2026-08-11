@@ -351,7 +351,33 @@ describe("removePackageParts", () => {
     expect(noneRetained.contentTypes.defaults).toEqual([]);
   });
 
-  it("Remove the parts and their .rels parts from all four package graph lists", () => {
+  it("does not treat an extensionless file name as an extension", () => {
+    const graph = buildGraph({
+      parts: [{ partPath: asPartPath("ppt/custom/data"), contentType: "application/x-data" }],
+      contentTypes: {
+        defaults: [{ extension: "data", contentType: "application/x-data" }],
+        overrides: [],
+      },
+    });
+
+    const removed = removePackageParts(graph, [asPartPath("ppt/custom/data")]);
+    expect(removed.contentTypes.defaults).toEqual(graph.contentTypes.defaults);
+  });
+
+  it("ignores dots in a directory when an extensionless part is removed", () => {
+    const graph = buildGraph({
+      parts: [{ partPath: asPartPath("ppt/custom.v1/data"), contentType: "application/x-data" }],
+      contentTypes: {
+        defaults: [{ extension: "v1/data", contentType: "application/x-directory-dot" }],
+        overrides: [],
+      },
+    });
+
+    const removed = removePackageParts(graph, [asPartPath("ppt/custom.v1/data")]);
+    expect(removed.contentTypes.defaults).toEqual(graph.contentTypes.defaults);
+  });
+
+  it("Remove the parts and their .rels parts from every related package graph collection", () => {
     const graph = buildGraph({
       parts: [
         { partPath: asPartPath("ppt/slides/slide1.xml"), contentType: SLIDE_CONTENT_TYPE },

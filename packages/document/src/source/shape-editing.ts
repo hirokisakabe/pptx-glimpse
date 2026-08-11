@@ -638,11 +638,12 @@ function planDrawingDeletionCleanup(
   }
   if (candidateRelationshipIds.size === 0) return source.packageGraph;
 
-  const remainingRelationshipIds = new Set<string>();
-  collectRelationshipAttributeValues(
+  const remainingRelationshipIds = collectEffectiveRemainingRelationshipIds(
+    source.edits ?? [],
+    handle,
     root,
+    spTree,
     relationshipPrefixes,
-    remainingRelationshipIds,
     skippedXmlSubtrees,
   );
   const ownerRelationships = source.packageGraph.relationships.find(
@@ -664,6 +665,56 @@ function planDrawingDeletionCleanup(
     if (targetPartPath !== undefined) reachableTargets.push(targetPartPath);
   }
   return removeUnreferencedReachableParts(graph, reachableTargets);
+}
+
+function collectEffectiveRemainingRelationshipIds(
+  edits: readonly PptxSourceModelEdit[],
+  ownerHandle: SourceHandle,
+  root: XmlNode,
+  shapeTree: XmlNode,
+  relationshipPrefixes: ReadonlySet<string>,
+  skippedSubtrees: ReadonlySet<XmlNode>,
+): ReadonlySet<string> {
+  const pendingReplacements = edits.flatMap((edit) => {
+    if (
+      edit.kind !== "replaceImage" ||
+      edit.mode !== "copyOnWrite" ||
+      edit.handle.partPath !== ownerHandle.partPath ||
+      edit.handle.nodeId === undefined ||
+      edit.replacementRelationshipId === undefined
+    ) {
+      return [];
+    }
+    const matches = findXmlDrawingMatches(shapeTree, String(edit.handle.nodeId));
+    if (matches.some((match) => match.insideAlternateContent)) {
+      throw new Error("deleteShape: pending image replacement is inside AlternateContent");
+    }
+    const supportedMatches = matches.filter((match) => !match.insideAlternateContent);
+    if (supportedMatches.length > 1) {
+      throw duplicateNodeIdError("deleteShape", edit.handle);
+    }
+    if (supportedMatches[0] === undefined) {
+      throw new Error(
+        `deleteShape: pending image replacement '${String(edit.handle.nodeId)}' was not found in preserved owner XML`,
+      );
+    }
+    return [{ edit, node: supportedMatches[0].node }];
+  });
+  const replacementSubtrees = new Set(pendingReplacements.map(({ node }) => node));
+  const excludedSubtrees = new Set([...skippedSubtrees, ...replacementSubtrees]);
+  const output = new Set<string>();
+  collectRelationshipAttributeValues(root, relationshipPrefixes, output, excludedSubtrees);
+
+  for (const { edit, node } of pendingReplacements) {
+    if (skippedSubtrees.has(node)) continue;
+    const effectiveIds = new Set<string>();
+    collectRelationshipAttributeValues(node, relationshipPrefixes, effectiveIds);
+    const sourceRelationshipId = edit.sourceRelationshipId ?? edit.handle.relationshipId;
+    if (sourceRelationshipId !== undefined) effectiveIds.delete(String(sourceRelationshipId));
+    effectiveIds.add(String(edit.replacementRelationshipId));
+    for (const relationshipId of effectiveIds) output.add(relationshipId);
+  }
+  return output;
 }
 
 function collectPreviouslyDeletedXmlSubtrees(

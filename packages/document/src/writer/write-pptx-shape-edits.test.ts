@@ -16,13 +16,16 @@ import {
   findShapeNodeBySourceHandle,
   groupShapes,
   readPptx,
+  replaceImageBytes,
   replaceTextRunPlainText,
   setShapeFill,
   setShapeOutline,
   updateShapeTransform,
   writePptx,
 } from "../index.js";
+import { resolveInternalRelationshipTarget } from "../source/package-paths.js";
 import {
+  BLUE_PNG,
   buildConnectedShapeFixture,
   buildMediaReplacementFixture,
   buildShapeDeleteFixture,
@@ -36,6 +39,7 @@ import {
   findShapeByName,
   firstShape,
   getEntry,
+  GREEN_PNG,
   RED_PNG,
   requireHandle,
   requireShape,
@@ -480,36 +484,79 @@ describe("writePptx - shape add/delete edits", () => {
   });
 
   it("deletes a top-level picture and cleans its unshared relationship and media part", () => {
-    const source = readPptx(buildShapeDeleteFixture());
-    const image = source.slides[0].shapes[1];
+    const source = readPptx(buildMediaReplacementFixture());
+    const image = source.slides[0].shapes.find((shape) => shape.name === "Replace Target");
     const deleted = deleteShape(source, requireHandle(image?.handle));
     const output = writePptx(deleted);
+    const reread = readPptx(output);
+    const archive = unzipSync(output);
+    const slideRelationships = reread.packageGraph.relationships.find(
+      (group) => group.sourcePartPath === "ppt/slides/slide1.xml",
+    );
 
-    expect(
-      readPptx(output).slides[0].shapes.map((shape) =>
-        shape.kind === "raw" ? undefined : shape.name,
-      ),
-    ).not.toContain("Keep Picture");
+    expect(reread.slides[0].shapes).toEqual([]);
+    expect(slideRelationships?.relationships.map((relationship) => relationship.id)).not.toContain(
+      "rIdImage1",
+    );
+    expect(archive["ppt/media/image1.png"]).toBeUndefined();
+    expect(slideRelationships?.relationships.map((relationship) => relationship.id)).toContain(
+      "rIdImage2",
+    );
+    expect(archive["ppt/media/image2.png"]).toEqual(GREEN_PNG);
+    expect(archive["docProps/custom.xml"]).toBeDefined();
   });
 
   it("removes the last picture media default only after the final extension user is deleted", () => {
     let authored = createPptx();
-    authored = addPicture(authored, authored.slides[0].handle!, {
-      bytes: RED_PNG,
-      offsetX: asEmu(100),
-      offsetY: asEmu(100),
-      width: asEmu(1000),
-      height: asEmu(1000),
-      name: "Only Picture",
-    });
+    for (const [index, bytes] of [RED_PNG, GREEN_PNG].entries()) {
+      authored = addPicture(authored, authored.slides[0].handle!, {
+        bytes,
+        offsetX: asEmu(100 + index * 1200),
+        offsetY: asEmu(100),
+        width: asEmu(1000),
+        height: asEmu(1000),
+        name: `Picture ${index + 1}`,
+      });
+    }
     const persisted = readPptx(writePptx(authored));
-    const picture = persisted.slides[0].shapes.find((shape) => shape.kind === "image");
-    const reread = readPptx(writePptx(deleteShape(persisted, requireHandle(picture?.handle))));
+    const first = persisted.slides[0].shapes.find((shape) => shape.name === "Picture 1");
+    const afterFirst = deleteShape(persisted, requireHandle(first?.handle));
+    const firstReread = readPptx(writePptx(afterFirst));
+
+    expect(firstReread.packageGraph.media).toHaveLength(1);
+    expect(
+      firstReread.packageGraph.contentTypes.defaults.map((entry) => entry.extension),
+    ).toContain("png");
+
+    const second = afterFirst.slides[0].shapes.find((shape) => shape.name === "Picture 2");
+    const reread = readPptx(writePptx(deleteShape(afterFirst, requireHandle(second?.handle))));
 
     expect(reread.packageGraph.media).toEqual([]);
     expect(reread.packageGraph.contentTypes.defaults.map((entry) => entry.extension)).not.toContain(
       "png",
     );
+  });
+
+  it("cleans the old shared image after the surviving picture has a pending copy-on-write replacement", () => {
+    const source = readPptx(buildMediaReplacementFixture(true));
+    const pictureA = source.slides[0].shapes.find((shape) => shape.name === "Replace Target");
+    const pictureB = source.slides[0].shapes.find((shape) => shape.name === "Keep Shared");
+    const replaced = replaceImageBytes(source, requireHandle(pictureB?.handle), BLUE_PNG);
+    const deleted = deleteShape(replaced, requireHandle(pictureA?.handle));
+    const output = writePptx(deleted);
+    const reread = readPptx(output);
+    const archive = unzipSync(output);
+    const remainingPicture = reread.slides[0].shapes.find((shape) => shape.kind === "image");
+    const relationshipIds = reread.packageGraph.relationships
+      .find((group) => group.sourcePartPath === "ppt/slides/slide1.xml")
+      ?.relationships.map((relationship) => relationship.id);
+
+    expect(remainingPicture?.name).toBe("Keep Shared");
+    expect(remainingPicture?.blipRelationshipId).toBe("rId3");
+    expect(relationshipIds).not.toContain("rIdImage1");
+    expect(relationshipIds).toContain("rId3");
+    expect(archive["ppt/media/image1.png"]).toBeUndefined();
+    expect(archive["ppt/media/image3.png"]).toEqual(BLUE_PNG);
   });
 
   it("cancels a newly added picture and its package resources before the first write", () => {
@@ -685,10 +732,17 @@ describe("writePptx - shape add/delete edits", () => {
     const chartRelationship = persisted.packageGraph.relationships
       .find((group) => group.sourcePartPath === persisted.slides[0].partPath)
       ?.relationships.find((relationship) => relationship.id === chart?.handle?.relationshipId);
-    const chartPath = chartRelationship?.target.replace("../", "ppt/");
-    const workbookPath = persisted.packageGraph.relationships
+    const chartPath =
+      chartRelationship === undefined
+        ? undefined
+        : resolveInternalRelationshipTarget(persisted.slides[0].partPath, chartRelationship);
+    const workbookRelationship = persisted.packageGraph.relationships
       .find((group) => group.sourcePartPath === chartPath)
-      ?.relationships[0]?.target.replace("../", "ppt/");
+      ?.relationships.find((relationship) => relationship.type.endsWith("/package"));
+    const workbookPath =
+      chartPath === undefined || workbookRelationship === undefined
+        ? undefined
+        : resolveInternalRelationshipTarget(chartPath, workbookRelationship);
     if (chartPath === undefined || workbookPath === undefined) {
       throw new Error("authored chart cleanup paths were not found");
     }

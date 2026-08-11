@@ -161,7 +161,7 @@ function mediaContentTypeRegistration(
   };
 }
 
-/** Removes the given parts and their `.rels` parts from all four PackageGraph lists. */
+/** Removes the given parts and their `.rels` parts from every related PackageGraph collection. */
 export function removePackageParts(
   graph: PackageGraph,
   partPaths: readonly PartPath[],
@@ -222,7 +222,10 @@ export function removePackageParts(
 }
 
 function partExtension(partPath: string): string | undefined {
-  return partPath.split("/").at(-1)?.split(".").at(-1)?.toLowerCase();
+  const dot = partPath.lastIndexOf(".");
+  const slash = partPath.lastIndexOf("/");
+  if (dot === -1 || dot < slash) return undefined;
+  return partPath.slice(dot + 1).toLowerCase();
 }
 
 /**
