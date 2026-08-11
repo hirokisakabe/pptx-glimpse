@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { createPptxEditorSession } from "./index.js";
 import {
+  buildDrawingDeleteSessionFixture,
   buildGroupCommandFixture,
   buildShapeFixture,
   connectorByName,
@@ -151,6 +152,39 @@ describe("PptxEditorSession - shapes", () => {
     await expect(editor.deleteShape(connectedShape.handle)).rejects.toThrow(
       /referenced by connector/,
     );
+  });
+
+  it("rerenders, saves, and restores history for picture, table, chart, and group deletes", async () => {
+    for (const kind of ["image", "table", "chart", "group"] as const) {
+      const editor = await createPptxEditorSession(buildDrawingDeleteSessionFixture(), {
+        skipSystemFonts: true,
+      });
+      const target = editor.shapes(1).find((shape) => shape.kind === kind);
+      if (target?.handle === undefined) throw new Error(`${kind} delete target was not found`);
+      expect(target.editableDelete).toBe(true);
+      editor.selectShape(target.handle);
+
+      const deleted = await editor.deleteSelectedShape();
+      expect(deleted.selection).toBeUndefined();
+      expect(deleted.history.undoDepth).toBe(1);
+      expect(
+        editor.shapes(1).some((shape) => handleKey(shape.handle) === handleKey(target.handle)),
+      ).toBe(false);
+      expect(
+        readPptx(editor.save().pptx).slides[0].shapes.some(
+          (shape) => handleKey(shape.handle) === handleKey(target.handle),
+        ),
+      ).toBe(false);
+
+      await editor.undo();
+      expect(
+        editor.shapes(1).some((shape) => handleKey(shape.handle) === handleKey(target.handle)),
+      ).toBe(true);
+      await editor.redo();
+      expect(
+        editor.shapes(1).some((shape) => handleKey(shape.handle) === handleKey(target.handle)),
+      ).toBe(false);
+    }
   });
 
   it("groups and ungroups with topology and selection restored by history", async () => {

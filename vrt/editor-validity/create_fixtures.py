@@ -647,6 +647,48 @@ def create_editor_validity_group_fixture(filename, *, grouped):
     print(f"  Created: {filename}")
 
 
+def create_editor_validity_drawing_delete_fixture(filename):
+    """Fixture containing one native picture, Table, Chart, and group delete target."""
+    grouped_path = os.path.join(OUTPUT_DIR, "editor-validity-group-expected.pptx")
+    prs = Presentation(grouped_path)
+    slide = prs.slides[0]
+
+    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmp:
+        tmp.write(base64.b64decode(
+            "iVBORw0KGgoAAAANSUhEUgAAAAQAAAAECAIAAAAmkwkpAAAAEUlEQVR4nGP8z4AATEhsPBwAM9EBBzDn4UwAAAAASUVORK5CYII="
+        ))
+        image_path = tmp.name
+    try:
+        picture = slide.shapes.add_picture(
+            image_path, Inches(0.5), Inches(4.1), Inches(1.3), Inches(0.8)
+        )
+        picture.name = "Delete Picture"
+    finally:
+        os.unlink(image_path)
+
+    table = slide.shapes.add_table(
+        1, 1, Inches(2.0), Inches(4.1), Inches(2.0), Inches(0.8)
+    )
+    table.name = "Delete Table"
+    table.table.cell(0, 0).text = "Delete"
+
+    chart_data = CategoryChartData()
+    chart_data.categories = ["A"]
+    chart_data.add_series("Delete", (1,))
+    chart = slide.shapes.add_chart(
+        XL_CHART_TYPE.COLUMN_CLUSTERED,
+        Inches(4.3),
+        Inches(3.8),
+        Inches(2.0),
+        Inches(1.2),
+        chart_data,
+    )
+    chart.name = "Delete Chart"
+
+    prs.save(os.path.join(OUTPUT_DIR, filename))
+    print(f"  Created: {filename}")
+
+
 def create_editor_validity_theme_fixture(filename, *, expected):
     """Fixture pair for existing theme color- and font-scheme edits."""
     prs = new_presentation()
@@ -850,6 +892,9 @@ def create_editor_validity_fixtures():
     create_editor_validity_group_fixture(
         "editor-validity-group-expected.pptx",
         grouped=True,
+    )
+    create_editor_validity_drawing_delete_fixture(
+        "editor-validity-drawing-delete-source.pptx",
     )
 
 

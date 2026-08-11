@@ -1627,7 +1627,7 @@ describe("editing shape operations", () => {
       }),
     ).toThrow("updateShapeTransform: shape transform edit requires a node id");
     expect(() => deleteShape(source, imageHandle)).toThrow(
-      "deleteShape: only top-level sp or cxnSp shapes can be deleted",
+      "deleteShape: drawing part 'ppt/slides/slide1.xml' has no shape tree",
     );
     expect(() =>
       addConnector(source, requireHandle(source.slides[0].handle), {

@@ -204,7 +204,11 @@ export function deleteShapeXml(spTree: XmlNode | undefined, nodeId: string): boo
   if (
     location === undefined ||
     location.nested ||
-    (location.nodeKind !== "sp" && location.nodeKind !== "cxnSp")
+    (location.nodeKind !== "sp" &&
+      location.nodeKind !== "cxnSp" &&
+      location.nodeKind !== "pic" &&
+      location.nodeKind !== "graphicFrame" &&
+      location.nodeKind !== "grpSp")
   ) {
     return false;
   }

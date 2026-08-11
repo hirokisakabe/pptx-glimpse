@@ -170,14 +170,25 @@ export function removePackageParts(
   const removedRelationshipPartPaths = new Set<string>(
     partPaths.map((partPath) => relationshipsPartPath(partPath)),
   );
+  const retainedParts = graph.parts.filter(
+    (part) =>
+      !removedPartPaths.has(part.partPath) && !removedRelationshipPartPaths.has(part.partPath),
+  );
+  const retainedMedia = graph.media.filter((part) => !removedPartPaths.has(part.partPath));
+  const retainedExtensions = new Set(
+    [...retainedParts, ...retainedMedia].flatMap((part) => {
+      const extension = part.partPath.split("/").at(-1)?.split(".").at(-1)?.toLowerCase();
+      return extension === undefined ? [] : [extension];
+    }),
+  );
   return {
     ...graph,
-    parts: graph.parts.filter(
-      (part) =>
-        !removedPartPaths.has(part.partPath) && !removedRelationshipPartPaths.has(part.partPath),
-    ),
+    parts: retainedParts,
     contentTypes: {
       ...graph.contentTypes,
+      defaults: graph.contentTypes.defaults.filter((entry) =>
+        retainedExtensions.has(entry.extension.toLowerCase()),
+      ),
       overrides: graph.contentTypes.overrides.filter(
         (override) =>
           !removedPartPaths.has(override.partName) &&
@@ -191,6 +202,7 @@ export function removePackageParts(
       (part) =>
         !removedPartPaths.has(part.partPath) && !removedRelationshipPartPaths.has(part.partPath),
     ),
+    media: retainedMedia,
   };
 }
 

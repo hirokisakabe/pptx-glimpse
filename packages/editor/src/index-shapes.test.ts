@@ -11,6 +11,7 @@ import { describe, expect, it } from "vitest";
 
 import { createEditorSession } from "./index.js";
 import {
+  buildDrawingDeleteFixture,
   buildShapeStyleFixture,
   buildTextEditFixture,
   expectApplied,
@@ -138,6 +139,28 @@ describe("EditorSession shape add/delete commands", () => {
       for (let i = 0; i < commands.length; i += 1) expectHistory(session.redo());
       expect(findShapeNodeBySourceHandle(session.document, handle)).toBeUndefined();
       expect(firstRun(readPptx(writePptx(session.document))).text).toBe("No xfrm");
+    }
+  });
+
+  it("deletes every supported top-level drawing kind with selection and history restoration", () => {
+    for (const kind of ["shape", "image", "table", "chart", "group"] as const) {
+      const source = readPptx(buildDrawingDeleteFixture());
+      const session = createEditorSession(source);
+      const target = source.slides[0].shapes.find((shape) => shape.kind === kind);
+      const handle = requireHandle(target?.handle);
+      expectApplied(session.selectShape(handle));
+
+      const deleted = expectApplied(session.apply({ kind: "deleteShape", handle }));
+      expect(findShapeNodeBySourceHandle(deleted, handle)).toBeUndefined();
+      expect(session.selection).toBeUndefined();
+      expect(session.undoDepth).toBe(1);
+
+      expectHistory(session.undo());
+      expect(findShapeNodeBySourceHandle(session.document, handle)).toBeDefined();
+      expect(session.selection).toBeUndefined();
+      expectHistory(session.redo());
+      expect(findShapeNodeBySourceHandle(session.document, handle)).toBeUndefined();
+      expect(session.selection).toBeUndefined();
     }
   });
 

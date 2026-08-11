@@ -171,7 +171,7 @@ export interface AddConnectorCommand extends AddConnectorInput {
   readonly slideHandle: SourceHandle;
 }
 
-/** Delete one shape. @inline */
+/** Delete one supported top-level drawing, including a native group subtree. @inline */
 export interface DeleteShapeCommand {
   readonly kind: "deleteShape";
   readonly handle: SourceHandle;
@@ -580,6 +580,7 @@ export class EditorSession {
     }));
   }
 
+  /** Delete one supported top-level drawing through its current or stale source node. */
   deleteShape(shape: SourceShapeNode): EditorApplyCommandResult {
     return this.applyToShapeNode("deleteShape", shape, (handle) => ({
       kind: "deleteShape",

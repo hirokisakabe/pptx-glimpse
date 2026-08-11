@@ -1602,6 +1602,23 @@ describeOrSkip("LibreOffice shape add/delete validity", { timeout: 120000 }, () 
       writePptx(edited),
     );
   });
+
+  it("opens PPTX after deleting native picture, Table, Chart, and group drawings", () => {
+    const sourcePptx = readFileSync(
+      join(FIXTURE_DIR, "editor-validity-drawing-delete-source.pptx"),
+    );
+    let edited = readPptx(sourcePptx);
+    for (const kind of ["image", "table", "chart", "group"] as const) {
+      const target = edited.slides[0]?.shapes.find((shape) => shape.kind === kind);
+      edited = deleteShape(edited, requireHandle(target?.handle));
+    }
+
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-drawing-delete-edited.pptx",
+      writePptx(edited),
+    );
+  });
 });
 
 function findLibreOfficeDockerImage(): string | undefined {
