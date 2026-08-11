@@ -10,6 +10,7 @@ import {
   addTable,
   addTextBox,
   asEmu,
+  asRelationshipId,
   asSourceNodeId,
   createPptx,
   deleteShape,
@@ -559,6 +560,145 @@ describe("writePptx - shape add/delete edits", () => {
     expect(archive["ppt/media/image3.png"]).toEqual(BLUE_PNG);
   });
 
+  it("cleans a pending copy-on-write replacement inside a persisted group being deleted", () => {
+    let grouped = readPptx(buildMediaReplacementFixture(true));
+    grouped = groupShapes(
+      grouped,
+      grouped.slides[0].shapes.map((shape) => requireHandle(shape.handle)),
+    );
+    const persisted = readPptx(writePptx(grouped));
+    const persistedGroup = persisted.slides[0].shapes.find((shape) => shape.kind === "group");
+    if (persistedGroup?.kind !== "group") throw new Error("persisted picture group was not found");
+    const replacementTarget = persistedGroup.children.find((shape) => shape.name === "Keep Shared");
+    const replaced = replaceImageBytes(
+      persisted,
+      requireHandle(replacementTarget?.handle),
+      BLUE_PNG,
+    );
+    const deleted = deleteShape(replaced, requireHandle(persistedGroup.handle));
+    const output = writePptx(deleted);
+    const reread = readPptx(output);
+    const archive = unzipSync(output);
+    const relationshipIds = reread.packageGraph.relationships
+      .find((group) => group.sourcePartPath === "ppt/slides/slide1.xml")
+      ?.relationships.map((relationship) => relationship.id);
+
+    expect(reread.slides[0].shapes).toEqual([]);
+    expect(relationshipIds).not.toContain("rIdImage1");
+    expect(relationshipIds).not.toContain("rId3");
+    expect(archive["ppt/media/image1.png"]).toBeUndefined();
+    expect(archive["ppt/media/image3.png"]).toBeUndefined();
+  });
+
+  it("cleans reachable parts to a fixed point when a child candidate precedes its owner", () => {
+    let authored = createPptx();
+    const slideHandle = authored.slides[0].handle!;
+    authored = addPicture(authored, slideHandle, {
+      bytes: RED_PNG,
+      offsetX: asEmu(100),
+      offsetY: asEmu(100),
+      width: asEmu(1000),
+      height: asEmu(1000),
+      name: "Delete Picture First",
+    });
+    authored = addChart(authored, slideHandle, {
+      chartType: "bar",
+      series: [{ name: "Series", categories: ["A"], values: [1] }],
+      offsetX: asEmu(1200),
+      offsetY: asEmu(100),
+      width: asEmu(2000),
+      height: asEmu(1000),
+      name: "Delete Chart Second",
+    });
+    authored = groupShapes(
+      authored,
+      authored.slides[0].shapes.map((shape) => requireHandle(shape.handle)),
+    );
+    const persisted = readPptx(writePptx(authored));
+    const chart = persisted.slides[0].shapes
+      .flatMap((shape) => (shape.kind === "group" ? shape.children : []))
+      .find((shape) => shape.kind === "chart");
+    const chartRelationship = persisted.packageGraph.relationships
+      .find((group) => group.sourcePartPath === persisted.slides[0].partPath)
+      ?.relationships.find((relationship) => relationship.id === chart?.chartRelationshipId);
+    const chartPath =
+      chartRelationship === undefined
+        ? undefined
+        : resolveInternalRelationshipTarget(persisted.slides[0].partPath, chartRelationship);
+    if (chartPath === undefined) throw new Error("fixed-point chart path was not found");
+    const adverseOrder = {
+      ...persisted,
+      packageGraph: {
+        ...persisted.packageGraph,
+        relationships: persisted.packageGraph.relationships.map((group) =>
+          group.sourcePartPath === chartPath
+            ? {
+                ...group,
+                relationships: [
+                  ...group.relationships,
+                  {
+                    id: asRelationshipId("rIdAdverseImage"),
+                    type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+                    target: "../media/image1.png",
+                  },
+                ],
+              }
+            : group,
+        ),
+      },
+    };
+    const group = adverseOrder.slides[0].shapes.find((shape) => shape.kind === "group");
+    const output = writePptx(deleteShape(adverseOrder, requireHandle(group?.handle)));
+    const archive = unzipSync(output);
+
+    expect(archive["ppt/media/image1.png"]).toBeUndefined();
+    expect(archive[chartPath]).toBeUndefined();
+  });
+
+  it.each([
+    {
+      name: "an r prefix rebound to a custom namespace",
+      rawReference: `<x:keep xmlns:r="urn:custom" r:id="rIdImage1"/>`,
+    },
+    {
+      name: "a URI that only contains the relationships suffix",
+      rawReference: `<x:keep xmlns:fake="urn:custom/relationships" fake:id="rIdImage1"/>`,
+    },
+  ])("does not retain media for $name", ({ rawReference }) => {
+    const archive = unzipSync(buildMediaReplacementFixture());
+    const slidePath = "ppt/slides/slide1.xml";
+    const slideXml = decoder.decode(archive[slidePath]);
+    const source = readPptx(
+      zipSync({
+        ...archive,
+        [slidePath]: encoder.encode(slideXml.replace("</p:spTree>", `${rawReference}</p:spTree>`)),
+      }),
+    );
+    const target = source.slides[0].shapes.find((shape) => shape.name === "Replace Target");
+    const output = writePptx(deleteShape(source, requireHandle(target?.handle)));
+
+    expect(unzipSync(output)["ppt/media/image1.png"]).toBeUndefined();
+  });
+
+  it("retains media referenced through a custom prefix bound to the exact relationship namespace", () => {
+    const archive = unzipSync(buildMediaReplacementFixture());
+    const slidePath = "ppt/slides/slide1.xml";
+    const slideXml = decoder.decode(archive[slidePath]);
+    const rawReference =
+      `<x:keep xmlns:rel="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ` +
+      `rel:id="rIdImage1"/>`;
+    const source = readPptx(
+      zipSync({
+        ...archive,
+        [slidePath]: encoder.encode(slideXml.replace("</p:spTree>", `${rawReference}</p:spTree>`)),
+      }),
+    );
+    const target = source.slides[0].shapes.find((shape) => shape.name === "Replace Target");
+    const output = writePptx(deleteShape(source, requireHandle(target?.handle)));
+
+    expect(unzipSync(output)["ppt/media/image1.png"]).toEqual(RED_PNG);
+  });
+
   it("cancels a newly added picture and its package resources before the first write", () => {
     let source = createPptx();
     source = addPicture(source, source.slides[0].handle!, {
@@ -874,6 +1014,39 @@ describe("writePptx - shape add/delete edits", () => {
 
     expect(() => deleteShape(source, requireHandle(sourceGroup?.handle))).toThrow(
       /referenced by connector 'External Connector'/,
+    );
+    expect(source).toEqual(before);
+  });
+
+  it("atomically rejects an external connector to a raw contentPart descendant of a group", () => {
+    const persisted = buildAuthoredDrawingDeleteSource();
+    const archive = unzipSync(writePptx(persisted));
+    const slidePath = "ppt/slides/slide1.xml";
+    const slideXml = decoder.decode(archive[slidePath]);
+    const contentPart =
+      `<p:contentPart><p:nvContentPartPr><p:cNvPr id="97" name="Raw Content Part"/>` +
+      `<p:cNvContentPartPr/></p:nvContentPartPr></p:contentPart>`;
+    const connector =
+      `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="99" name="Raw Descendant Connector"/>` +
+      `<p:cNvCxnSpPr><a:stCxn id="97" idx="0"/></p:cNvCxnSpPr><p:nvPr/></p:nvCxnSpPr>` +
+      `<p:spPr><a:prstGeom prst="straightConnector1"/></p:spPr></p:cxnSp>`;
+    const withRawDescendant = slideXml.replace(
+      /(<p:grpSp(?:\s[^>]*)?>.*?)(<\/p:grpSp>)/,
+      `$1${contentPart}$2`,
+    );
+    const source = readPptx(
+      zipSync({
+        ...archive,
+        [slidePath]: encoder.encode(
+          withRawDescendant.replace("</p:spTree>", `${connector}</p:spTree>`),
+        ),
+      }),
+    );
+    const group = source.slides[0].shapes.find((shape) => shape.kind === "group");
+    const before = structuredClone(source);
+
+    expect(() => deleteShape(source, requireHandle(group?.handle))).toThrow(
+      /referenced by connector 'Raw Descendant Connector'/,
     );
     expect(source).toEqual(before);
   });

@@ -627,13 +627,13 @@ function planDrawingDeletionCleanup(
     throw new Error(`deleteShape: shape is referenced by connector '${rawReferencingConnector}'`);
   }
 
-  const relationshipPrefixes = collectRelationshipPrefixes(root);
   const candidateRelationshipIds = typedRelationshipIds;
   for (const deletedXmlTarget of currentXmlTargets) {
     collectRelationshipAttributeValues(
       deletedXmlTarget,
-      relationshipPrefixes,
       candidateRelationshipIds,
+      new Set(),
+      findNamespaceBindingsForNode(root, deletedXmlTarget),
     );
   }
   if (candidateRelationshipIds.size === 0) return source.packageGraph;
@@ -643,7 +643,6 @@ function planDrawingDeletionCleanup(
     handle,
     root,
     spTree,
-    relationshipPrefixes,
     skippedXmlSubtrees,
   );
   const ownerRelationships = source.packageGraph.relationships.find(
@@ -672,7 +671,6 @@ function collectEffectiveRemainingRelationshipIds(
   ownerHandle: SourceHandle,
   root: XmlNode,
   shapeTree: XmlNode,
-  relationshipPrefixes: ReadonlySet<string>,
   skippedSubtrees: ReadonlySet<XmlNode>,
 ): ReadonlySet<string> {
   const pendingReplacements = edits.flatMap((edit) => {
@@ -703,12 +701,17 @@ function collectEffectiveRemainingRelationshipIds(
   const replacementSubtrees = new Set(pendingReplacements.map(({ node }) => node));
   const excludedSubtrees = new Set([...skippedSubtrees, ...replacementSubtrees]);
   const output = new Set<string>();
-  collectRelationshipAttributeValues(root, relationshipPrefixes, output, excludedSubtrees);
+  collectRelationshipAttributeValues(root, output, excludedSubtrees);
 
   for (const { edit, node } of pendingReplacements) {
-    if (skippedSubtrees.has(node)) continue;
+    if (isNodeWithinAnySubtree(node, skippedSubtrees)) continue;
     const effectiveIds = new Set<string>();
-    collectRelationshipAttributeValues(node, relationshipPrefixes, effectiveIds);
+    collectRelationshipAttributeValues(
+      node,
+      effectiveIds,
+      new Set(),
+      findNamespaceBindingsForNode(root, node),
+    );
     const sourceRelationshipId = edit.sourceRelationshipId ?? edit.handle.relationshipId;
     if (sourceRelationshipId !== undefined) effectiveIds.delete(String(sourceRelationshipId));
     effectiveIds.add(String(edit.replacementRelationshipId));
@@ -773,11 +776,7 @@ function cleanupDirectAdditionRelationships(
   }
   if (candidateRelationshipIds.size === 0) return source.packageGraph;
   const retainedRelationshipIds = new Set<string>();
-  collectRelationshipAttributeValues(
-    ownerRoot,
-    collectRelationshipPrefixes(ownerRoot),
-    retainedRelationshipIds,
-  );
+  collectRelationshipAttributeValues(ownerRoot, retainedRelationshipIds);
   const ownerRelationships = source.packageGraph.relationships.find(
     (group) => group.sourcePartPath === handle.partPath,
   );
@@ -858,42 +857,87 @@ function findXmlConnectorReferencingIds(
   return result;
 }
 
-function collectRelationshipPrefixes(root: XmlNode): ReadonlySet<string> {
-  // Finalized edit fragments use the conventional `r` prefix and intentionally omit
-  // namespace declarations because the owner drawing root supplies them at write time.
-  const prefixes = new Set<string>(["r"]);
-  const visit = (node: XmlNode): void => {
-    for (const [key, value] of Object.entries(node)) {
-      if (key.startsWith("@_xmlns:") && String(value).includes("/relationships")) {
-        prefixes.add(key.slice("@_xmlns:".length));
-      }
-      if (!key.startsWith("@_")) for (const child of xmlNodes(value)) visit(child);
-    }
-  };
-  visit(root);
-  return prefixes;
-}
+const RELATIONSHIP_NAMESPACE_URIS = new Set([
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+  "http://purl.oclc.org/ooxml/officeDocument/relationships",
+]);
+
+type NamespaceBindings = ReadonlyMap<string, string>;
 
 function collectRelationshipAttributeValues(
   root: XmlNode,
-  relationshipPrefixes: ReadonlySet<string>,
   output: Set<string>,
   skippedSubtrees: ReadonlySet<XmlNode> = new Set(),
+  inheritedBindings: NamespaceBindings = new Map(),
 ): void {
   if (skippedSubtrees.has(root)) return;
+  const bindings = namespaceBindingsForElement(root, inheritedBindings);
   for (const [key, value] of Object.entries(root)) {
     if (key.startsWith("@_")) {
       const qualifiedName = key.slice(2);
       const colon = qualifiedName.indexOf(":");
-      if (colon > 0 && relationshipPrefixes.has(qualifiedName.slice(0, colon))) {
+      if (
+        colon > 0 &&
+        RELATIONSHIP_NAMESPACE_URIS.has(bindings.get(qualifiedName.slice(0, colon)) ?? "")
+      ) {
         output.add(String(value));
       }
       continue;
     }
     for (const child of xmlNodes(value)) {
-      collectRelationshipAttributeValues(child, relationshipPrefixes, output, skippedSubtrees);
+      collectRelationshipAttributeValues(child, output, skippedSubtrees, bindings);
     }
   }
+}
+
+function namespaceBindingsForElement(
+  node: XmlNode,
+  inheritedBindings: NamespaceBindings,
+): NamespaceBindings {
+  let bindings: Map<string, string> | undefined;
+  for (const [key, value] of Object.entries(node)) {
+    if (!key.startsWith("@_xmlns:")) continue;
+    bindings ??= new Map(inheritedBindings);
+    bindings.set(key.slice("@_xmlns:".length), String(value));
+  }
+  return bindings ?? inheritedBindings;
+}
+
+function findNamespaceBindingsForNode(root: XmlNode, target: XmlNode): NamespaceBindings {
+  const visit = (
+    node: XmlNode,
+    inheritedBindings: NamespaceBindings,
+  ): NamespaceBindings | undefined => {
+    const bindings = namespaceBindingsForElement(node, inheritedBindings);
+    if (node === target) return bindings;
+    for (const [key, value] of Object.entries(node)) {
+      if (key.startsWith("@_")) continue;
+      for (const child of xmlNodes(value)) {
+        const result = visit(child, bindings);
+        if (result !== undefined) return result;
+      }
+    }
+    return undefined;
+  };
+  return visit(root, new Map()) ?? new Map();
+}
+
+function isNodeWithinAnySubtree(node: XmlNode, subtrees: ReadonlySet<XmlNode>): boolean {
+  for (const subtree of subtrees) {
+    if (xmlSubtreeContains(subtree, node)) return true;
+  }
+  return false;
+}
+
+function xmlSubtreeContains(root: XmlNode, target: XmlNode): boolean {
+  if (root === target) return true;
+  for (const [key, value] of Object.entries(root)) {
+    if (key.startsWith("@_")) continue;
+    for (const child of xmlNodes(value)) {
+      if (xmlSubtreeContains(child, target)) return true;
+    }
+  }
+  return false;
 }
 
 function removeUnreferencedReachableParts(
@@ -901,33 +945,41 @@ function removeUnreferencedReachableParts(
   initialTargets: readonly SourceHandle["partPath"][],
 ): PptxSourceModel["packageGraph"] {
   let graph = initialGraph;
+  const candidates = new Map<string, SourceHandle["partPath"]>();
   const pending = [...initialTargets];
-  const visited = new Set<string>();
   while (pending.length > 0) {
     const partPath = pending.shift();
-    if (partPath === undefined || visited.has(partPath)) continue;
-    visited.add(partPath);
-    const hasIncoming = graph.relationships.some((group) =>
-      group.relationships.some(
-        (relationship) =>
-          resolveInternalRelationshipTarget(group.sourcePartPath, relationship) === partPath,
-      ),
-    );
-    if (hasIncoming) continue;
-    const exists =
-      graph.parts.some((part) => part.partPath === partPath) ||
-      graph.media.some((part) => part.partPath === partPath) ||
-      graph.rawParts?.some((part) => part.partPath === partPath) === true;
-    if (!exists) continue;
+    if (partPath === undefined || candidates.has(partPath)) continue;
+    candidates.set(partPath, partPath);
     const outboundTargets =
-      graph.relationships
+      initialGraph.relationships
         .find((group) => group.sourcePartPath === partPath)
         ?.relationships.flatMap((relationship) => {
           const target = resolveInternalRelationshipTarget(partPath, relationship);
           return target === undefined ? [] : [target];
         }) ?? [];
-    graph = removePackageParts(graph, [partPath]);
     pending.push(...outboundTargets);
+  }
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const partPath of candidates.values()) {
+      const exists =
+        graph.parts.some((part) => part.partPath === partPath) ||
+        graph.media.some((part) => part.partPath === partPath) ||
+        graph.rawParts?.some((part) => part.partPath === partPath) === true;
+      if (!exists) continue;
+      const hasIncoming = graph.relationships.some((group) =>
+        group.relationships.some(
+          (relationship) =>
+            resolveInternalRelationshipTarget(group.sourcePartPath, relationship) === partPath,
+        ),
+      );
+      if (hasIncoming) continue;
+      graph = removePackageParts(graph, [partPath]);
+      changed = true;
+    }
   }
   return graph;
 }
@@ -944,7 +996,7 @@ function collectXmlDrawingIds(node: XmlNode, output: Set<string>): void {
   const id = xmlDrawingId(node);
   if (id !== undefined) output.add(id);
   for (const [key, value] of Object.entries(node)) {
-    if (key.startsWith("@_") || !isDrawingElement(localName(key))) continue;
+    if (key.startsWith("@_")) continue;
     for (const child of xmlNodes(value)) collectXmlDrawingIds(child, output);
   }
 }
@@ -1024,7 +1076,12 @@ function collectPendingAddedRelationshipIds(
     }
     try {
       const fragment = parseXml(edit.xml);
-      collectRelationshipAttributeValues(fragment, collectRelationshipPrefixes(fragment), output);
+      collectRelationshipAttributeValues(
+        fragment,
+        output,
+        new Set(),
+        new Map([["r", "http://schemas.openxmlformats.org/officeDocument/2006/relationships"]]),
+      );
     } catch (cause) {
       throw new Error("deleteShape: pending drawing XML could not be validated", { cause });
     }
@@ -1038,7 +1095,8 @@ function xmlDrawingId(node: XmlNode): string | undefined {
     getChild(node, "nvPicPr") ??
     getChild(node, "nvCxnSpPr") ??
     getChild(node, "nvGrpSpPr") ??
-    getChild(node, "nvGraphicFramePr");
+    getChild(node, "nvGraphicFramePr") ??
+    getChild(node, "nvContentPartPr");
   return getAttr(getChild(nonVisual, "cNvPr"), "id");
 }
 
