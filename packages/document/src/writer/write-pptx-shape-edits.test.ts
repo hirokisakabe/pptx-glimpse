@@ -21,6 +21,7 @@ import {
   replaceTextRunPlainText,
   setShapeFill,
   setShapeOutline,
+  type SourceShapeNode,
   updateShapeTransform,
   writePptx,
 } from "../index.js";
@@ -115,6 +116,38 @@ function buildAuthoredDrawingDeleteSource(): ReturnType<typeof readPptx> {
       "docProps/custom.xml": xml(`<Properties><custom value="unrelated-orphan"/></Properties>`),
     }),
   );
+}
+
+function buildNestedDrawingDeleteSource(): ReturnType<typeof readPptx> {
+  let source = buildAuthoredDrawingDeleteSource();
+  source = addPicture(source, source.slides[0].handle!, {
+    bytes: RED_PNG,
+    offsetX: asEmu(1200),
+    offsetY: asEmu(1200),
+    width: asEmu(1000),
+    height: asEmu(1000),
+    name: "Delete Picture",
+  });
+  source = addConnector(source, source.slides[0].handle!, {
+    preset: "straightConnector1",
+    offsetX: asEmu(100),
+    offsetY: asEmu(1200),
+    width: asEmu(1000),
+    height: asEmu(1000),
+    name: "Delete Connector",
+  });
+  source = groupShapes(
+    source,
+    source.slides[0].shapes.map((shape) => requireHandle(shape.handle)),
+  );
+  return readPptx(writePptx(source));
+}
+
+function flattenDrawingNodes(shapes: readonly SourceShapeNode[]): SourceShapeNode[] {
+  return shapes.flatMap((shape) => [
+    shape,
+    ...(shape.kind === "group" ? flattenDrawingNodes(shape.children) : []),
+  ]);
 }
 
 describe("writePptx - shape add/delete edits", () => {
@@ -862,6 +895,211 @@ describe("writePptx - shape add/delete edits", () => {
     }
   });
 
+  it("deletes every supported drawing kind from nested groups by stable handle", () => {
+    for (const kind of ["shape", "connector", "image", "table", "chart", "group"] as const) {
+      const source = buildNestedDrawingDeleteSource();
+      const outer = source.slides[0].shapes[0];
+      if (outer?.kind !== "group") throw new Error("outer delete fixture group was not found");
+      const target = flattenDrawingNodes(outer.children).find(
+        (shape) => shape.kind === kind && (kind !== "group" || shape.name !== outer.name),
+      );
+      if (target === undefined) throw new Error(`${kind} nested delete target was not found`);
+      const handle = requireHandle(target?.handle);
+      const stableHandle = { ...handle, orderingSlot: 999 };
+      const before = structuredClone(source);
+      const edited = deleteShape(source, stableHandle);
+      const editedOuter = edited.slides[0].shapes[0];
+      if (editedOuter?.kind !== "group") throw new Error("edited outer group was not preserved");
+
+      expect(source).toEqual(before);
+      expect(findShapeNodeBySourceHandle(edited, handle)).toBeUndefined();
+      expect(editedOuter.handle).toEqual(outer.handle);
+      expect(editedOuter.transform).toEqual(outer.transform);
+
+      const reread = readPptx(writePptx(edited));
+      expect(findShapeNodeBySourceHandle(reread, handle)).toBeUndefined();
+      expect(reread.slides[0].shapes).toHaveLength(1);
+      expect(reread.slides[0].shapes[0]).toMatchObject({
+        kind: "group",
+        nodeId: outer.nodeId,
+        transform: outer.transform,
+      });
+    }
+  });
+
+  it("cleans unshared nested picture/chart resources and preserves unrelated orphan parts", () => {
+    for (const kind of ["image", "chart"] as const) {
+      const source = buildNestedDrawingDeleteSource();
+      const target = flattenDrawingNodes(source.slides[0].shapes).find(
+        (shape) => shape.kind === kind,
+      );
+      if (target === undefined) throw new Error(`${kind} cleanup target was not found`);
+      const ownerRelationships = source.packageGraph.relationships.find(
+        (group) => group.sourcePartPath === source.slides[0].partPath,
+      );
+      const relationshipId =
+        target.kind === "image" ? target.blipRelationshipId : target.chartRelationshipId;
+      const relationship = ownerRelationships?.relationships.find(
+        (candidate) => candidate.id === relationshipId,
+      );
+      const targetPartPath =
+        relationship === undefined
+          ? undefined
+          : resolveInternalRelationshipTarget(source.slides[0].partPath, relationship);
+      if (targetPartPath === undefined) throw new Error(`${kind} cleanup path was not found`);
+
+      const archive = unzipSync(writePptx(deleteShape(source, requireHandle(target.handle))));
+      expect(archive[targetPartPath]).toBeUndefined();
+      expect(archive["docProps/custom.xml"]).toBeDefined();
+      if (kind === "chart") {
+        expect(Object.keys(archive).some((path) => path.startsWith("ppt/embeddings/"))).toBe(false);
+      }
+    }
+  });
+
+  it("keeps shared media when deleting one nested picture", () => {
+    let source = readPptx(buildMediaReplacementFixture(true));
+    source = groupShapes(
+      source,
+      source.slides[0].shapes.map((shape) => requireHandle(shape.handle)),
+    );
+    source = readPptx(writePptx(source));
+    const group = source.slides[0].shapes[0];
+    if (group?.kind !== "group") throw new Error("shared picture group was not found");
+    const target = group.children.find((shape) => shape.name === "Replace Target");
+    const reread = readPptx(writePptx(deleteShape(source, requireHandle(target?.handle))));
+
+    expect(reread.packageGraph.media.map((media) => media.partPath)).toContain(
+      "ppt/media/image1.png",
+    );
+    expect(
+      reread.packageGraph.relationships
+        .find((relationships) => relationships.sourcePartPath === reread.slides[0].partPath)
+        ?.relationships.map((relationship) => relationship.id),
+    ).toContain("rIdImage1");
+  });
+
+  it("keeps an empty parent group after deleting its last nested child", () => {
+    const input = buildTextEditFixtureFromSlide(
+      `<p:grpSp><p:nvGrpSpPr><p:cNvPr id="30" name="Keep Empty"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>` +
+        `<p:grpSpPr><a:xfrm><a:off x="10" y="20"/><a:ext cx="300" cy="400"/><a:chOff x="0" y="0"/><a:chExt cx="300" cy="400"/></a:xfrm></p:grpSpPr>` +
+        `<p:sp><p:nvSpPr><p:cNvPr id="31" name="Only Child"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>` +
+        `<p:spPr><a:xfrm><a:off x="1" y="2"/><a:ext cx="3" cy="4"/></a:xfrm><a:prstGeom prst="rect"/></p:spPr></p:sp></p:grpSp>`,
+    );
+    const source = readPptx(input);
+    const group = source.slides[0].shapes[0];
+    if (group?.kind !== "group") throw new Error("single-child group was not found");
+    const child = group.children[0];
+    const reread = readPptx(writePptx(deleteShape(source, requireHandle(child?.handle))));
+    const emptyGroup = reread.slides[0].shapes[0];
+
+    expect(emptyGroup).toMatchObject({ kind: "group", nodeId: group.nodeId });
+    if (emptyGroup?.kind !== "group") throw new Error("empty group was not preserved");
+    expect(emptyGroup.children).toEqual([]);
+    expect(emptyGroup.transform).toEqual(group.transform);
+  });
+
+  it("preserves pending group topology while deleting newly added nested children", () => {
+    let source = createPptx();
+    const slideHandle = source.slides[0].handle!;
+    for (const name of ["Added A", "Added B"]) {
+      source = addShape(source, slideHandle, {
+        geometry: { kind: "preset", preset: "rect" },
+        offsetX: asEmu(100),
+        offsetY: asEmu(100),
+        width: asEmu(1000),
+        height: asEmu(1000),
+        name,
+      });
+    }
+    source = groupShapes(
+      source,
+      source.slides[0].shapes.map((shape) => requireHandle(shape.handle)),
+    );
+    const group = source.slides[0].shapes[0];
+    if (group?.kind !== "group") throw new Error("pending group was not created");
+    const afterFirst = deleteShape(source, requireHandle(group.children[0]?.handle));
+    const afterFirstGroup = afterFirst.slides[0].shapes[0];
+    if (afterFirstGroup?.kind !== "group") throw new Error("pending group was not preserved");
+    const deleted = deleteShape(afterFirst, requireHandle(afterFirstGroup.children[0]?.handle));
+    const reread = readPptx(writePptx(deleted));
+
+    expect(deleted.edits?.map((edit) => edit.kind)).toEqual([
+      "addShape",
+      "addShape",
+      "groupShapes",
+      "deleteShape",
+      "deleteShape",
+    ]);
+    expect(reread.slides[0].shapes).toHaveLength(1);
+    expect(reread.slides[0].shapes[0]?.kind).toBe("group");
+    if (reread.slides[0].shapes[0]?.kind !== "group") {
+      throw new Error("empty pending group was not written");
+    }
+    expect(reread.slides[0].shapes[0].children).toEqual([]);
+  });
+
+  it("allows internal connector references to leave with a nested subtree and rejects external ones", () => {
+    let source = createPptx();
+    const slideHandle = source.slides[0].handle!;
+    for (const [name, offsetX] of [
+      ["Connected A", 100],
+      ["Connected B", 1200],
+    ] as const) {
+      source = addShape(source, slideHandle, {
+        geometry: { kind: "preset", preset: "rect" },
+        offsetX: asEmu(offsetX),
+        offsetY: asEmu(100),
+        width: asEmu(1000),
+        height: asEmu(1000),
+        name,
+      });
+    }
+    const [start, end] = source.slides[0].shapes;
+    source = addConnector(source, slideHandle, {
+      preset: "straightConnector1",
+      offsetX: asEmu(100),
+      offsetY: asEmu(100),
+      width: asEmu(1000),
+      height: asEmu(1000),
+      start: { shapeHandle: requireHandle(start?.handle), connectionSiteIndex: 0 },
+      end: { shapeHandle: requireHandle(end?.handle), connectionSiteIndex: 0 },
+      name: "Internal Connector",
+    });
+    source = groupShapes(
+      source,
+      source.slides[0].shapes.map((shape) => requireHandle(shape.handle)),
+    );
+    source = addShape(source, slideHandle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(2400),
+      offsetY: asEmu(100),
+      width: asEmu(1000),
+      height: asEmu(1000),
+      name: "Outer Sibling",
+    });
+    source = groupShapes(
+      source,
+      source.slides[0].shapes.map((shape) => requireHandle(shape.handle)),
+    );
+    source = readPptx(writePptx(source));
+    const outer = source.slides[0].shapes[0];
+    if (outer?.kind !== "group") throw new Error("outer connector group was not found");
+    const inner = outer.children.find((shape) => shape.kind === "group");
+    if (inner?.kind !== "group") throw new Error("inner connector group was not found");
+    const connectedChild = inner.children.find((shape) => shape.kind === "shape");
+    const before = structuredClone(source);
+
+    expect(() => deleteShape(source, requireHandle(connectedChild?.handle))).toThrow(
+      /referenced by connector/,
+    );
+    expect(source).toEqual(before);
+
+    const reread = readPptx(writePptx(deleteShape(source, requireHandle(inner.handle))));
+    expect(findShapeNodeBySourceHandle(reread, inner.handle)).toBeUndefined();
+    expect(reread.slides[0].shapes[0]?.kind).toBe("group");
+  });
+
   it("recursively removes an unshared chart and embedded workbook but keeps an orphan", () => {
     const persisted = buildAuthoredDrawingDeleteSource();
     const chart = persisted.slides[0].shapes.find((shape) => shape.name === "Delete Chart");
@@ -988,7 +1226,7 @@ describe("writePptx - shape add/delete edits", () => {
       expect(() => deleteShape(source, requireHandle(target?.handle))).toThrow(
         alternate
           ? /AlternateContent/
-          : /only top-level sp, cxnSp, pic, native table\/chart graphicFrame, or grpSp/,
+          : /only sp, cxnSp, pic, native table\/chart graphicFrame, or grpSp/,
       );
       expect(source).toEqual(before);
     }
@@ -1505,11 +1743,23 @@ describe("writePptx - shape xfrm edit", () => {
     const editedInner = findShapeNodeBySourceHandle(reread, inner.handle);
     const rereadOuter = reread.slides[0].shapes[0];
     if (rereadOuter.kind !== "group") throw new Error("reread outer group not found");
+    const deleted = readPptx(writePptx(deleteShape(source, stableHandle)));
+    const deletedOuter = deleted.slides[0].shapes[0];
+    if (deletedOuter?.kind !== "group") throw new Error("delete did not preserve outer group");
+    const deletedInner = deletedOuter.children[0];
+    if (deletedInner?.kind !== "group") throw new Error("delete did not preserve inner group");
 
     expect(findShapeNodeBySourceHandle(source, stableHandle)).toBe(child);
-    expect(() => deleteShape(source, stableHandle)).toThrow(
-      /nested group shape deletion is not supported/,
-    );
+    expect(findShapeNodeBySourceHandle(deleted, stableHandle)).toBeUndefined();
+    expect(deletedInner.children).toEqual([]);
+    expect(deletedOuter.children[1]).toMatchObject({
+      kind: "shape",
+      nodeId: outer.children[1]?.nodeId,
+      name: "Preserved Sibling",
+      handle: outer.children[1]?.handle,
+      transform: outer.children[1]?.transform,
+    });
+    expect(deletedOuter.transform).toEqual(outer.transform);
     expect(editedChild).toMatchObject({
       kind: "shape",
       transform: { offsetX: 111, offsetY: 222, width: 333, height: 444 },
