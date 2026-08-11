@@ -42,7 +42,7 @@ export function renderTable(
       const cellH = computeSpannedSize(rowHeights, rowIdx, cell.rowSpan);
 
       // Cell background
-      const fillResult = renderFillAttrs(cell.fill);
+      const fillResult = renderFillAttrs(cell.fill, context);
       if (fillResult.defs) defs.push(fillResult.defs);
       parts.push(
         `<rect x="${x}" y="${y}" width="${cellW}" height="${cellH}" ${fillResult.attrs}/>`,

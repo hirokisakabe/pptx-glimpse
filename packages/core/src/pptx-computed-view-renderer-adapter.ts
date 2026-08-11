@@ -37,6 +37,7 @@ import type {
   ComputedImageElement,
   ComputedOutline,
   ComputedParagraph,
+  ComputedRawElement,
   ComputedRunProperties,
   ComputedShapeElement,
   ComputedSlide,
@@ -45,6 +46,7 @@ import type {
   ComputedTableElement,
   ComputedTextBody,
   PptxComputedView,
+  RawOoxmlNode,
 } from "@pptx-glimpse/document";
 import type {
   Background,
@@ -201,7 +203,10 @@ function adaptElement(
       const smartArt = adaptSmartArt(element, slide, diagnostics);
       return smartArt === undefined ? [] : [smartArt];
     }
-    case "raw":
+    case "raw": {
+      const olePreview = adaptOlePreviewImage(element, slide, diagnostics);
+      if (olePreview.kind === "image") return [olePreview.image];
+      if (olePreview.kind === "skipped") return [];
       pushAdapterWarning(
         diagnostics,
         "pptx-computed-view-adapter.raw-element-skipped",
@@ -210,7 +215,124 @@ function adaptElement(
         element.sourcePartPath,
       );
       return [];
+    }
   }
+}
+
+type OlePreviewAdaptation =
+  | { readonly kind: "not-ole" }
+  | { readonly kind: "skipped" }
+  | { readonly kind: "image"; readonly image: ImageElement };
+
+function adaptOlePreviewImage(
+  element: ComputedRawElement,
+  slide: ComputedSlide,
+  diagnostics: DiagnosticSink,
+): OlePreviewAdaptation {
+  const rawNode = element.sourceNode.raw.node;
+  const oleObject = findDescendant(rawNode, "oleObj");
+  if (oleObject === undefined) return { kind: "not-ole" };
+
+  const picture = childByLocalName(oleObject, "pic");
+  const blipFill = childByLocalName(picture, "blipFill");
+  const blip = childByLocalName(blipFill, "blip");
+  const relationshipId = blip?.attributes?.["r:embed"];
+  const relationship = relationshipId
+    ? slide.relationships.find((candidate) => String(candidate.id) === relationshipId)
+    : undefined;
+  if (picture === undefined || relationship?.media === undefined) {
+    pushAdapterWarning(
+      diagnostics,
+      "pptx-computed-view-adapter.unresolved-image-skipped",
+      "OLE object preview has no resolved image payload.",
+      slide,
+      element.sourcePartPath,
+    );
+    return { kind: "skipped" };
+  }
+
+  const outerXfrm =
+    localRawName(rawNode.name) === "graphicFrame" ? childByLocalName(rawNode, "xfrm") : undefined;
+  const innerXfrm = childByLocalName(childByLocalName(picture, "spPr"), "xfrm");
+  const xfrm = outerXfrm ?? innerXfrm;
+  const offset = childByLocalName(xfrm, "off");
+  const extent = childByLocalName(xfrm, "ext");
+  if (offset === undefined || extent === undefined) {
+    pushAdapterWarning(
+      diagnostics,
+      "pptx-computed-view-adapter.missing-transform",
+      "OLE object preview picture has no transform; using a zero-size fallback.",
+      slide,
+      element.sourcePartPath,
+    );
+  }
+
+  const srcRect = childByLocalName(blipFill, "srcRect");
+  const cNvPr = childByLocalName(childByLocalName(picture, "nvPicPr"), "cNvPr");
+  return {
+    kind: "image",
+    image: {
+      type: "image",
+      transform: {
+        offsetX: asEmu(numericRawAttr(offset, "x")),
+        offsetY: asEmu(numericRawAttr(offset, "y")),
+        extentWidth: asEmu(numericRawAttr(extent, "cx")),
+        extentHeight: asEmu(numericRawAttr(extent, "cy")),
+        rotation: numericRawAttr(xfrm, "rot") / 60000,
+        flipH: booleanRawAttr(xfrm, "flipH"),
+        flipV: booleanRawAttr(xfrm, "flipV"),
+      },
+      imageData: uint8ArrayToBase64(relationship.media.bytes),
+      mimeType: normalizeImageMimeType(
+        relationship.media.contentType,
+        diagnostics,
+        slide,
+        element.sourcePartPath,
+      ),
+      effects: null,
+      blipEffects: null,
+      srcRect:
+        srcRect !== undefined
+          ? {
+              left: numericRawAttr(srcRect, "l") / 100000,
+              top: numericRawAttr(srcRect, "t") / 100000,
+              right: numericRawAttr(srcRect, "r") / 100000,
+              bottom: numericRawAttr(srcRect, "b") / 100000,
+            }
+          : null,
+      ...(cNvPr?.attributes?.name !== undefined ? { altText: cNvPr.attributes.name } : {}),
+      stretch: null,
+      tile: null,
+    },
+  };
+}
+
+function findDescendant(node: RawOoxmlNode, name: string): RawOoxmlNode | undefined {
+  if (localRawName(node.name) === name) return node;
+  for (const child of node.children ?? []) {
+    const match = findDescendant(child, name);
+    if (match !== undefined) return match;
+  }
+  return undefined;
+}
+
+function childByLocalName(node: RawOoxmlNode | undefined, name: string): RawOoxmlNode | undefined {
+  return node?.children?.find((child) => localRawName(child.name) === name);
+}
+
+function localRawName(name: string): string {
+  const separator = name.indexOf(":");
+  return separator >= 0 ? name.slice(separator + 1) : name;
+}
+
+function numericRawAttr(node: RawOoxmlNode | undefined, name: string): number {
+  const value = Number(node?.attributes?.[name]);
+  return Number.isFinite(value) ? value : 0;
+}
+
+function booleanRawAttr(node: RawOoxmlNode | undefined, name: string): boolean {
+  const value = node?.attributes?.[name];
+  return value === "1" || value === "true";
 }
 
 function adaptConnector(

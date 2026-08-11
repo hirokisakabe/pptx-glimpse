@@ -37,6 +37,8 @@
   "license": "MIT",
   "dependencies": {
     "@resvg/resvg-wasm": "^2.6.2",
-    "opentype.js": "1.3.4"
+    "@xmldom/xmldom": "0.9.10",
+    "opentype.js": "1.3.4",
+    "rtf.js": "3.0.9"
   }
 }

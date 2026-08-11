@@ -5,6 +5,8 @@ import { fileURLToPath } from "node:url";
 import { build } from "esbuild";
 import { describe, expect, it, vi } from "vitest";
 
+import { buildMetafileImagesFixture } from "../../../vrt/snapshot/fixtures-src/images.js";
+
 const resvgMocks = vi.hoisted(() => ({
   initWasm: vi.fn().mockResolvedValue(undefined),
   MockResvg: class {
@@ -56,6 +58,19 @@ describe("browser entry", () => {
     await initResvgWasm(wasm);
 
     expect(resvgMocks.initWasm).toHaveBeenCalledWith(wasm);
+  });
+
+  it("renders EMF/WMF content through the public browser SVG and PNG APIs", async () => {
+    const { convertPptxToPng, convertPptxToSvg } = await import("./browser.js");
+    const fixture = await buildMetafileImagesFixture();
+
+    const svgReport = await convertPptxToSvg(fixture, { logLevel: "warn" });
+    expect(svgReport.slides[0]?.svg.match(/viewBox="0 0 1000 1000"/g)).toHaveLength(8);
+    expect(svgReport.diagnostics).toEqual([]);
+
+    const pngReport = await convertPptxToPng(fixture, { logLevel: "warn" });
+    expect(pngReport.slides[0]?.png).toEqual(new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    expect(pngReport.diagnostics).toEqual([]);
   });
 
   it("bundles browser-safe entry APIs without Node built-ins", async () => {

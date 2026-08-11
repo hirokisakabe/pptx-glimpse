@@ -28,7 +28,7 @@ export function renderShape(
   const h = emuToPixels(effectiveTransform.extentHeight);
 
   const transformAttr = buildTransformAttr(effectiveTransform);
-  const fillResult = renderFillAttrs(fill);
+  const fillResult = renderFillAttrs(fill, context);
   const outlineResult = renderOutlineAttrs(outline);
   const effectResult = renderEffects(effects);
 

@@ -55,6 +55,7 @@ export const VRT_CASES = [
   { name: "style-reference", fixture: "style-reference.pptx" },
   { name: "blip-effects", fixture: "blip-effects.pptx" },
   { name: "image-stretch-tile", fixture: "image-stretch-tile.pptx" },
+  { name: "metafile-images", fixture: "metafile-images.pptx" },
   { name: "vertical-text", fixture: "vertical-text.pptx" },
   { name: "shape-hyperlink-text-outline", fixture: "shape-hyperlink-text-outline.pptx" },
   { name: "charts-3d-fallback", fixture: "charts-3d-fallback.pptx" },

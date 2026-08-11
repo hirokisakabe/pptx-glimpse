@@ -2,17 +2,32 @@ import type { ImageElement } from "../model/image.js";
 import { emuToPixels } from "../utils/emu.js";
 import { renderBlipEffects } from "./blip-effect-renderer.js";
 import { renderEffects } from "./effect-renderer.js";
+import { inlineSvgData, resolveMetafileImageSource } from "./metafile-converter.js";
+import type { RendererContext } from "./render-context.js";
+import { createLegacyRendererContext, nextMetafileIdNamespace } from "./render-context.js";
 import type { RenderResult } from "./render-result.js";
 import { buildTransformAttr } from "./transform.js";
 
-export function renderImage(image: ImageElement): RenderResult {
+export function renderImage(
+  image: ImageElement,
+  context: RendererContext = createLegacyRendererContext(),
+): RenderResult {
   const w = emuToPixels(image.transform.extentWidth);
   const h = emuToPixels(image.transform.extentHeight);
   const transformAttr = buildTransformAttr(image.transform);
 
-  if (image.mimeType === "image/emf" || image.mimeType === "image/wmf") {
+  const source = resolveMetafileImageSource(
+    image.imageData,
+    image.mimeType,
+    context.warningLogger,
+    context.metafileConversionCache,
+  );
+  if (source === undefined) {
     return { content: renderPlaceholder(image.mimeType, w, h, transformAttr), defs: [] };
   }
+  const inlineMetafile = image.mimeType === "image/emf" || image.mimeType === "image/wmf";
+  const metafileIdNamespace = inlineMetafile ? nextMetafileIdNamespace(context) : "";
+  const resolvedImage = { ...image, ...source };
 
   const effectResult = renderEffects(image.effects);
   const blipEffectResult = renderBlipEffects(image.blipEffects);
@@ -24,11 +39,21 @@ export function renderImage(image: ImageElement): RenderResult {
   const filterAttr = effectResult.filterAttr ? ` ${effectResult.filterAttr}` : "";
   const blipFilterAttr = blipEffectResult.filterAttr ? ` ${blipEffectResult.filterAttr}` : "";
 
-  if (image.tile) {
-    return renderTiled(image, w, h, transformAttr, filterAttr, blipFilterAttr, defs);
+  if (resolvedImage.tile) {
+    return renderTiled(
+      resolvedImage,
+      w,
+      h,
+      transformAttr,
+      filterAttr,
+      blipFilterAttr,
+      defs,
+      inlineMetafile,
+      metafileIdNamespace,
+    );
   }
 
-  const imgTag = buildImageTag(image, w, h);
+  const imgTag = buildImageTag(resolvedImage, w, h, inlineMetafile, metafileIdNamespace);
 
   let inner = imgTag;
   if (blipFilterAttr) inner = `<g${blipFilterAttr}>${inner}</g>`;
@@ -37,7 +62,13 @@ export function renderImage(image: ImageElement): RenderResult {
   return { content, defs };
 }
 
-function buildImageTag(image: ImageElement, w: number, h: number): string {
+function buildImageTag(
+  image: ImageElement,
+  w: number,
+  h: number,
+  inlineSvg: boolean,
+  idNamespace: string,
+): string {
   const src = image.srcRect;
   const stretch = image.stretch;
 
@@ -47,9 +78,13 @@ function buildImageTag(image: ImageElement, w: number, h: number): string {
     const scaledH = Math.round(h / (1 - src.top - src.bottom));
     const imgX = Math.round(-src.left * scaledW);
     const imgY = Math.round(-src.top * scaledH);
+    const media = renderImageMedia(image, imgX, imgY, scaledW, scaledH, {}, inlineSvg, idNamespace);
+    const clippedMedia = inlineSvg
+      ? `<g clip-path="url(#${clipId})">${media}</g>`
+      : media.replace(/^<image/, `<image clip-path="url(#${clipId})"`);
     return (
       `<defs><clipPath id="${clipId}"><rect x="0" y="0" width="${w}" height="${h}"/></clipPath></defs>` +
-      `<image clip-path="url(#${clipId})" href="data:${image.mimeType};base64,${image.imageData}" x="${imgX}" y="${imgY}" width="${scaledW}" height="${scaledH}" preserveAspectRatio="none"/>`
+      clippedMedia
     );
   }
 
@@ -58,10 +93,33 @@ function buildImageTag(image: ImageElement, w: number, h: number): string {
     const imgY = Math.round(h * stretch.top);
     const imgW = Math.round(w * (1 - stretch.left - stretch.right));
     const imgH = Math.round(h * (1 - stretch.top - stretch.bottom));
-    return `<image href="data:${image.mimeType};base64,${image.imageData}" x="${imgX}" y="${imgY}" width="${imgW}" height="${imgH}" preserveAspectRatio="none"/>`;
+    return renderImageMedia(image, imgX, imgY, imgW, imgH, {}, inlineSvg, idNamespace);
   }
 
-  return `<image href="data:${image.mimeType};base64,${image.imageData}" width="${w}" height="${h}" preserveAspectRatio="none"/>`;
+  return renderImageMedia(image, 0, 0, w, h, {}, inlineSvg, idNamespace);
+}
+
+function renderImageMedia(
+  image: ImageElement,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  extraAttributes: Readonly<Record<string, string | number>> = {},
+  inlineSvg = false,
+  idNamespace = "",
+): string {
+  if (inlineSvg && image.mimeType === "image/svg+xml") {
+    return inlineSvgData(
+      image.imageData,
+      { x, y, width, height, preserveAspectRatio: "none", ...extraAttributes },
+      idNamespace,
+    );
+  }
+  const extra = Object.entries(extraAttributes)
+    .map(([name, value]) => ` ${name}="${String(value)}"`)
+    .join("");
+  return `<image${extra} href="data:${image.mimeType};base64,${image.imageData}" x="${x}" y="${y}" width="${width}" height="${height}" preserveAspectRatio="none"/>`;
 }
 
 function renderTiled(
@@ -72,6 +130,8 @@ function renderTiled(
   filterAttr: string,
   blipFilterAttr: string,
   defs: string[],
+  inlineSvg: boolean,
+  idNamespace: string,
 ): RenderResult {
   const t = image.tile!;
   const patternId = `tile-${crypto.randomUUID()}`;
@@ -90,7 +150,11 @@ function renderTiled(
     imgTransform = ` transform="translate(${tileW}, ${tileH}) scale(-1, -1)"`;
   }
 
-  const patternDef = `<pattern id="${patternId}" patternUnits="userSpaceOnUse" x="${offsetX}" y="${offsetY}" width="${tileW}" height="${tileH}"><image href="data:${image.mimeType};base64,${image.imageData}" width="${tileW}" height="${tileH}" preserveAspectRatio="none"${imgTransform}/></pattern>`;
+  const tileMedia =
+    inlineSvg && image.mimeType === "image/svg+xml"
+      ? `<g${imgTransform}>${inlineSvgData(image.imageData, { width: tileW, height: tileH, preserveAspectRatio: "none" }, idNamespace)}</g>`
+      : `<image href="data:${image.mimeType};base64,${image.imageData}" width="${tileW}" height="${tileH}" preserveAspectRatio="none"${imgTransform}/>`;
+  const patternDef = `<pattern id="${patternId}" patternUnits="userSpaceOnUse" x="${offsetX}" y="${offsetY}" width="${tileW}" height="${tileH}">${tileMedia}</pattern>`;
   defs.push(patternDef);
 
   let inner = `<rect width="${w}" height="${h}" fill="url(#${patternId})"/>`;

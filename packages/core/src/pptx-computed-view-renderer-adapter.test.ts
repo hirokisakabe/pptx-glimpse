@@ -984,6 +984,68 @@ describe("adaptComputedViewToRendererModel", () => {
     );
   });
 
+  it("adapts an OLE preview from the graphicFrame direct transform", () => {
+    const source = sourceWithOlePreview({
+      outerTransform: { x: 100, y: 200, cx: 300, cy: 400 },
+      innerTransform: null,
+      contentType: "image/x-emf",
+    });
+
+    const result = adaptComputedViewToRendererModel(createComputedView(source));
+
+    expect(findElementByAltText(result.slides[0].elements, "OLE preview")).toMatchObject({
+      type: "image",
+      mimeType: "image/emf",
+      transform: { offsetX: 100, offsetY: 200, extentWidth: 300, extentHeight: 400 },
+    });
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it("prefers the graphicFrame direct transform over a differing picture transform", () => {
+    const source = sourceWithOlePreview({
+      outerTransform: { x: 10, y: 20, cx: 30, cy: 40 },
+      innerTransform: { x: 110, y: 120, cx: 130, cy: 140 },
+      contentType: "image/x-wmf",
+    });
+
+    const result = adaptComputedViewToRendererModel(createComputedView(source));
+
+    expect(findElementByAltText(result.slides[0].elements, "OLE preview")).toMatchObject({
+      mimeType: "image/wmf",
+      transform: { offsetX: 10, offsetY: 20, extentWidth: 30, extentHeight: 40 },
+    });
+  });
+
+  it("falls back to the picture transform for an OLE preview without an outer transform", () => {
+    const source = sourceWithOlePreview({
+      outerTransform: null,
+      innerTransform: { x: 51, y: 52, cx: 53, cy: 54 },
+      contentType: "image/x-emf",
+    });
+
+    const result = adaptComputedViewToRendererModel(createComputedView(source));
+
+    expect(findElementByAltText(result.slides[0].elements, "OLE preview")).toMatchObject({
+      transform: { offsetX: 51, offsetY: 52, extentWidth: 53, extentHeight: 54 },
+    });
+  });
+
+  it("warns once for a recognized OLE preview with an unresolved relationship", () => {
+    const source = sourceWithOlePreview({
+      outerTransform: { x: 10, y: 20, cx: 30, cy: 40 },
+      innerTransform: null,
+      contentType: null,
+    });
+
+    const result = adaptComputedViewToRendererModel(createComputedView(source));
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: "pptx-computed-view-adapter.unresolved-image-skipped",
+      }),
+    ]);
+  });
+
   it("Leave unsupported subset in diagnostic that requires fallback", () => {
     const source = buildSource({
       slideBackground: { kind: "raw", raw: rawSidecar("raw-bg", "p:bg") },
@@ -1466,5 +1528,95 @@ function rawSidecar(id: string, name: string) {
   return {
     id: asRawSidecarId(id),
     node: { name },
+  };
+}
+
+interface OlePreviewFixtureOptions {
+  readonly outerTransform: RawTransformFixture | null;
+  readonly innerTransform: RawTransformFixture | null;
+  readonly contentType: "image/x-emf" | "image/x-wmf" | null;
+}
+
+interface RawTransformFixture {
+  readonly x: number;
+  readonly y: number;
+  readonly cx: number;
+  readonly cy: number;
+}
+
+function sourceWithOlePreview(options: OlePreviewFixtureOptions): PptxSourceModel {
+  const xfrm = (name: "p:xfrm" | "a:xfrm", value: RawTransformFixture) => ({
+    name,
+    children: [
+      { name: "a:off", attributes: { x: String(value.x), y: String(value.y) } },
+      { name: "a:ext", attributes: { cx: String(value.cx), cy: String(value.cy) } },
+    ],
+  });
+  const pictureChildren = [
+    {
+      name: "p:nvPicPr",
+      children: [{ name: "p:cNvPr", attributes: { name: "OLE preview" } }],
+    },
+    {
+      name: "p:blipFill",
+      children: [{ name: "a:blip", attributes: { "r:embed": "rIdOlePreview" } }],
+    },
+    ...(options.innerTransform === null
+      ? []
+      : [{ name: "p:spPr", children: [xfrm("a:xfrm", options.innerTransform)] }]),
+  ];
+  const raw = {
+    id: asRawSidecarId("raw-ole"),
+    node: {
+      name: "p:graphicFrame",
+      children: [
+        ...(options.outerTransform === null ? [] : [xfrm("p:xfrm", options.outerTransform)]),
+        {
+          name: "a:graphic",
+          children: [
+            {
+              name: "a:graphicData",
+              children: [
+                { name: "p:oleObj", children: [{ name: "p:pic", children: pictureChildren }] },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  };
+  const source = buildSource({ extraSlideShapes: [{ kind: "raw", raw }] });
+  if (options.contentType === null) return source;
+  const slidePath = asPartPath("ppt/slides/slide1.xml");
+  return {
+    ...source,
+    packageGraph: {
+      ...source.packageGraph,
+      relationships: source.packageGraph.relationships.map((entry) =>
+        entry.sourcePartPath === slidePath
+          ? {
+              ...entry,
+              relationships: [
+                ...entry.relationships,
+                {
+                  id: asRelationshipId("rIdOlePreview"),
+                  type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+                  target: `../media/preview.${options.contentType === "image/x-emf" ? "emf" : "wmf"}`,
+                },
+              ],
+            }
+          : entry,
+      ),
+      media: [
+        ...source.packageGraph.media,
+        {
+          partPath: asPartPath(
+            `ppt/media/preview.${options.contentType === "image/x-emf" ? "emf" : "wmf"}`,
+          ),
+          contentType: options.contentType,
+          bytes: new Uint8Array([1, 2, 3, 4]),
+        },
+      ],
+    },
   };
 }

@@ -5,8 +5,9 @@ import { emuToPixels } from "../utils/emu.js";
 import { renderChart } from "./chart-renderer.js";
 import { renderFillAttrs } from "./fill-renderer.js";
 import { renderImage } from "./image-renderer.js";
+import { inlineSvgData, resolveMetafileImageSource } from "./metafile-converter.js";
 import type { RendererContext } from "./render-context.js";
-import { createLegacyRendererContext } from "./render-context.js";
+import { createLegacyRendererContext, nextMetafileIdNamespace } from "./render-context.js";
 import type { RenderResult } from "./render-result.js";
 import { renderConnector, renderShape } from "./shape-renderer.js";
 import { renderTable } from "./table-renderer.js";
@@ -32,11 +33,28 @@ export function renderSlideToSvg(
   // Background
   if (slide.background?.fill?.type === "image") {
     const bg = slide.background.fill;
-    parts.push(
-      `<image href="data:${bg.mimeType};base64,${bg.imageData}" width="${width}" height="${height}" preserveAspectRatio="none"/>`,
+    const source = resolveMetafileImageSource(
+      bg.imageData,
+      bg.mimeType,
+      context.warningLogger,
+      context.metafileConversionCache,
     );
+    if (source !== undefined) {
+      parts.push(
+        (bg.mimeType === "image/emf" || bg.mimeType === "image/wmf") &&
+          source.mimeType === "image/svg+xml"
+          ? inlineSvgData(
+              source.imageData,
+              { width, height, preserveAspectRatio: "none" },
+              nextMetafileIdNamespace(context),
+            )
+          : `<image href="data:${source.mimeType};base64,${source.imageData}" width="${width}" height="${height}" preserveAspectRatio="none"/>`,
+      );
+    } else {
+      parts.push(`<rect width="${width}" height="${height}" fill="#E0E0E0"/>`);
+    }
   } else if (slide.background?.fill) {
-    const fillResult = renderFillAttrs(slide.background.fill);
+    const fillResult = renderFillAttrs(slide.background.fill, context);
     if (fillResult.defs) defs.push(fillResult.defs);
     parts.push(`<rect width="${width}" height="${height}" ${fillResult.attrs}/>`);
   } else {
@@ -68,7 +86,7 @@ function renderElement(element: SlideElement, context: RendererContext): RenderR
       result = renderShape(element, context);
       break;
     case "image":
-      result = renderImage(element);
+      result = renderImage(element, context);
       break;
     case "connector":
       result = renderConnector(element);

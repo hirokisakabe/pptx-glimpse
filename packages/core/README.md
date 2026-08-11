@@ -150,7 +150,37 @@ signatures are available for
   `fontDirs` or opt into system-font discovery.
 - Browser PNG conversion requires explicit `initResvgWasm` initialization. SVG conversion and the
   editor session do not.
+- EMF and WMF pictures, image fills, and OLE preview pictures are converted to SVG in both Node.js
+  and browser builds. The supported subset covers common GDI paths, filled/outlined primitives,
+  text, and bitmap records. Unknown records, malformed streams, and conversion errors use a labeled
+  placeholder and add an `image.metafile-conversion` warning instead of failing the presentation.
 - Expected editor failures throw `PptxEditorError`; successful commands can still return warnings.
+
+### EMF/WMF images
+
+Pictures, image fills, backgrounds, and OLE preview pictures use one synchronous EMF/WMF-to-SVG
+path in Node.js and browser builds. The initial subset covers window/viewport state, pen and brush
+objects, rectangles and rounded rectangles, lines, polygons, Bezier paths, path clipping, EMF
+extended text, WMF text, and WMF DIB bitmap records. The record stream and deterministic fixtures
+follow Microsoft's [MS-EMF](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-emf/91c257d7-c39d-4a36-9b1f-63e3f73d30ca)
+and [MS-WMF](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-wmf/4813e7fd-52d0-4f42-965f-228c8b7488d2)
+specifications.
+
+EMF extended-text fallback is intentionally conservative: it supports anisotropic compatible-mode
+text with left/top alignment, window/viewport origin and extent mapping, LOGFONT height, weight,
+italic state, escapement rotation, and per-character `offDx` advances. Text records using a font
+width, incompatible orientation, non-compatible graphics mode, other map/alignment modes, or text
+options that cannot be represented accurately fall back with `unsupported-record`.
+
+An unknown record, malformed stream, or conversion error falls back for that metafile as a whole.
+SVG output keeps the labeled `[EMF]` or `[WMF]` placeholder, and conversion reports include a
+`renderer.image.metafile-conversion` warning whose message identifies `unsupported-record`,
+`invalid-data`, or `conversion-failed`. Complete EMF/WMF and EMF+ record fidelity is not supported.
+For predictable resource use, conversion rejects decoded metafiles over 8 MiB, individual records
+over 4 MiB, bitmap records over 2 MiB, streams over 50,000 records or 200,000 geometry points, and
+generated SVG over 100,000 nodes or 8 MiB. The per-render conversion cache retains at most 16
+entries and 16 MiB of converted results; every cached SVG insertion receives a distinct,
+deterministic fragment-ID namespace.
 
 Read the detailed guides for
 [font loading and mapping](https://glimpse.pptx.app/docs/fonts),
