@@ -1,9 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createRepresentativeEmf } from "../../../../vrt/snapshot/fixtures-src/images.js";
 import type { ImageElement } from "../model/image.js";
 import type { Transform } from "../model/shape.js";
 import { unsafeFixtureAssertion } from "../unsafe-type-assertion.js";
+import { createWarningLogger } from "../warning-logger.js";
 import { renderImage } from "./image-renderer.js";
+import { createRendererContext } from "./render-context.js";
 
 beforeEach(() => {
   let counter = 0;
@@ -39,6 +42,26 @@ function makeImage(overrides: Partial<ImageElement> = {}): ImageElement {
     ...overrides,
   };
 }
+
+describe("EMF rendering", () => {
+  it("converts EMF content before applying the existing crop contract", () => {
+    const warnings = createWarningLogger("warn");
+    const result = renderImage(
+      makeImage({
+        mimeType: "image/emf",
+        imageData: createRepresentativeEmf().toString("base64"),
+        srcRect: { left: 0.1, top: 0, right: 0, bottom: 0 },
+      }),
+      createRendererContext({ warningLogger: warnings }),
+    );
+
+    expect(result.content).toContain('viewBox="0 0 1000 1000"');
+    expect(result.content).toContain(">EMF</text>");
+    expect(result.content).toContain("clip-path=");
+    expect(result.content).not.toContain("[EMF]");
+    expect(warnings.getWarningEntries()).toEqual([]);
+  });
+});
 
 describe("renderImage", () => {
   it("renders basic image element", () => {
@@ -137,9 +160,17 @@ describe("renderImage", () => {
   });
 
   it("renders WMF placeholder", () => {
-    const result = renderImage(makeImage({ mimeType: "image/wmf" }));
+    const warnings = createWarningLogger("warn");
+    const result = renderImage(
+      makeImage({ mimeType: "image/wmf" }),
+      createRendererContext({ warningLogger: warnings }),
+    );
     expect(result.content).toContain("[WMF]");
     expect(result.content).not.toContain("<image");
+    const warning = warnings
+      .getWarningEntries()
+      .find((entry) => entry.feature === "image.metafile-conversion");
+    expect(warning?.message).toContain("WMF conversion invalid-data");
   });
 
   it("renders image with blipEffects grayscale", () => {

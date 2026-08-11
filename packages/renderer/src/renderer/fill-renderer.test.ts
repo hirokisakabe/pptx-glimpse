@@ -1,8 +1,28 @@
 import { describe, expect, it } from "vitest";
 
+import { createRepresentativeWmf } from "../../../../vrt/snapshot/fixtures-src/images.js";
+import { createWarningLogger } from "../warning-logger.js";
 import { renderFillAttrs, renderOutlineAttrs } from "./fill-renderer.js";
+import { createRendererContext } from "./render-context.js";
 
 describe("renderFillAttrs", () => {
+  it("converts a WMF image fill to an SVG pattern", () => {
+    const warnings = createWarningLogger("warn");
+    const result = renderFillAttrs(
+      {
+        type: "image",
+        mimeType: "image/wmf",
+        imageData: createRepresentativeWmf().toString("base64"),
+        tile: null,
+      },
+      createRendererContext({ warningLogger: warnings }),
+    );
+
+    expect(result.attrs).toContain('fill="url(#imgfill-');
+    expect(result.defs).toContain('viewBox="0 0 1000 1000"');
+    expect(result.defs).toContain(">WMF</text>");
+    expect(warnings.getWarningEntries()).toEqual([]);
+  });
   it("renders null fill as none", () => {
     const result = renderFillAttrs(null);
     expect(result.attrs).toBe('fill="none"');

@@ -12,6 +12,7 @@ import {
 import JSZip from "jszip";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
+import { buildMetafileImagesFixture } from "../../../vrt/snapshot/fixtures-src/images.js";
 import {
   convertPptxToPng as convertPptxToPngBase,
   convertPptxToSvg as convertPptxToSvgBase,
@@ -38,6 +39,42 @@ const CONVERTER_TEST_SCOPE = [
   "existing SVG renderer",
   "existing SVG to PNG conversion",
 ] as const;
+
+describe("EMF/WMF public Node conversion", () => {
+  it("renders pictures, image fills, and an OLE preview through SVG and PNG APIs", async () => {
+    const fixture = await buildMetafileImagesFixture();
+    const svgReport = await convertPptxToSvg(fixture, { logLevel: "warn" });
+    const svg = svgReport.slides[0]?.svg ?? "";
+
+    expect(svg.match(/viewBox="0 0 1000 1000"/g)).toHaveLength(8);
+    expect(svg).not.toMatch(/\[(?:EMF|WMF)\]/);
+    expect(svg).toContain('aria-label="OLE WMF preview image"');
+    expect(svgReport.diagnostics).toEqual([]);
+
+    const pngReport = await convertPptxToPng(fixture, { width: 480, logLevel: "warn" });
+    expect(pngReport.slides[0]?.png.length).toBeGreaterThan(100);
+    expect(pngReport.diagnostics).toEqual([]);
+  });
+
+  it("returns a structured warning and placeholder for corrupt metafile data", async () => {
+    const archive = await JSZip.loadAsync(await buildMetafileImagesFixture());
+    archive.file("ppt/media/representative.emf", "broken-emf");
+
+    const report = await convertPptxToSvg(await archive.generateAsync({ type: "uint8array" }), {
+      logLevel: "warn",
+    });
+    expect(report.slides[0]?.svg).toContain("[EMF]");
+    const diagnostic = report.diagnostics.find(
+      (candidate) => candidate.code === "renderer.image.metafile-conversion",
+    );
+    expect(diagnostic).toMatchObject({
+      source: "renderer",
+      severity: "warning",
+      code: "renderer.image.metafile-conversion",
+    });
+    expect(diagnostic?.message).toContain("EMF conversion invalid-data");
+  });
+});
 
 describe("native chart writer renderer integration", () => {
   it("renders createPptx theme colors and fonts after a write/read boundary", async () => {

@@ -197,6 +197,11 @@ artifacts rather than installed as a public runtime package. The root tsup confi
 mirrors this boundary for manual builds; package-specific configurations define normal
 publication.
 
+Renderer-owned runtime helpers that form part of the same private implementation boundary are
+bundled with it. In particular, the EMF/WMF-to-SVG parser and its XML DOM implementation are listed
+in core's `noExternal` configuration so consumers do not need to install private renderer
+dependencies separately. They remain renderer dependencies rather than document-layer concepts.
+
 `@pptx-glimpse/mcp` declares `pptx-glimpse`, the MCP SDK, and its schema library as runtime
 dependencies and keeps each external in its build. This preserves the one-way integration
 boundary and prevents MCP dependencies from entering core's Node or browser artifacts.

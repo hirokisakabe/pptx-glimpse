@@ -12,5 +12,5 @@ export default defineConfig({
   },
   clean: true,
   external: ["@pptx-glimpse/document", "@pptx-glimpse/editor"],
-  noExternal: ["@pptx-glimpse/renderer"],
+  noExternal: ["@pptx-glimpse/renderer", "@xmldom/xmldom", "rtf.js"],
 });

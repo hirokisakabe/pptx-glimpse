@@ -150,7 +150,26 @@ signatures are available for
   `fontDirs` or opt into system-font discovery.
 - Browser PNG conversion requires explicit `initResvgWasm` initialization. SVG conversion and the
   editor session do not.
+- EMF and WMF pictures, image fills, and OLE preview pictures are converted to SVG in both Node.js
+  and browser builds. The supported subset covers common GDI paths, filled/outlined primitives,
+  text, and bitmap records. Unknown records, malformed streams, and conversion errors use a labeled
+  placeholder and add an `image.metafile-conversion` warning instead of failing the presentation.
 - Expected editor failures throw `PptxEditorError`; successful commands can still return warnings.
+
+### EMF/WMF images
+
+Pictures, image fills, backgrounds, and OLE preview pictures use one synchronous EMF/WMF-to-SVG
+path in Node.js and browser builds. The initial subset covers window/viewport state, pen and brush
+objects, rectangles and rounded rectangles, lines, polygons, Bezier paths, path clipping, EMF
+extended text, WMF text, and WMF DIB bitmap records. The record stream and deterministic fixtures
+follow Microsoft's [MS-EMF](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-emf/91c257d7-c39d-4a36-9b1f-63e3f73d30ca)
+and [MS-WMF](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-wmf/4813e7fd-52d0-4f42-965f-228c8b7488d2)
+specifications.
+
+An unknown record, malformed stream, or conversion error falls back for that metafile as a whole.
+SVG output keeps the labeled `[EMF]` or `[WMF]` placeholder, and conversion reports include a
+`renderer.image.metafile-conversion` warning whose message identifies `unsupported-record`,
+`invalid-data`, or `conversion-failed`. Complete EMF/WMF and EMF+ record fidelity is not supported.
 
 Read the detailed guides for
 [font loading and mapping](https://glimpse.pptx.app/docs/fonts),
