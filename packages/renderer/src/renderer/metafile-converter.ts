@@ -40,7 +40,7 @@ const SUPPORTED_WMF_RECORD_TYPES = new Set([
 
 export type MetafileMimeType = Extract<ImageMimeType, "image/emf" | "image/wmf">;
 
-export type MetafileConversionFailureReason =
+type MetafileConversionFailureReason =
   | "invalid-data"
   | "unsupported-record"
   | "conversion-failed";
