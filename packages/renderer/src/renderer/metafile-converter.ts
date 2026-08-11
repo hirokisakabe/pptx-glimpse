@@ -246,6 +246,9 @@ function validateEmf(bytes: Uint8Array): MetafileValidationResult {
     if (!SUPPORTED_EMF_RECORD_TYPES.has(type)) {
       return failure("unsupported-record", `EMF record 0x${type.toString(16)} is unsupported.`);
     }
+    if (type === 0x0e && (size < 20 || view.getUint32(offset + size - 4, true) !== size)) {
+      return failure("invalid-data", "EMF EOF record has an invalid declared size.");
+    }
     recordCount++;
     if (recordCount > 200_000) {
       return failure("invalid-data", "EMF record limit exceeded.");
@@ -282,7 +285,14 @@ function validateWmf(bytes: Uint8Array): MetafileValidationResult {
   }
   const type = view.getUint16(headerOffset, true);
   const headerSizeWords = view.getUint16(headerOffset + 2, true);
-  if ((type !== 1 && type !== 2) || headerSizeWords !== 9) {
+  const version = view.getUint16(headerOffset + 4, true);
+  const parameterCount = view.getUint16(headerOffset + 16, true);
+  if (
+    (type !== 1 && type !== 2) ||
+    headerSizeWords !== 9 ||
+    (version !== 0x0100 && version !== 0x0300) ||
+    parameterCount !== 0
+  ) {
     return failure("invalid-data", "WMF meta header is invalid.");
   }
   const declaredSizeBytes = view.getUint32(headerOffset + 6, true) * 2;
@@ -304,6 +314,9 @@ function validateWmf(bytes: Uint8Array): MetafileValidationResult {
     const sizeWords = view.getUint32(offset, true);
     const recordType = view.getUint16(offset + 4, true);
     const size = sizeWords * 2;
+    if (recordType === 0 && sizeWords !== 3) {
+      return failure("invalid-data", "WMF EOF record has an invalid declared size.");
+    }
     if (size < 6 || offset + size > bytes.byteLength) {
       return failure(
         "invalid-data",

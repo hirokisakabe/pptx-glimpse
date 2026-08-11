@@ -159,6 +159,31 @@ describe("convertMetafileToSvgData", () => {
     });
   });
 
+  it("validates EOF-declared sizes and the placeable WMF checksum", () => {
+    const emf = createRepresentativeEmf();
+    const emfEof = findEmfRecord(emf, 0x0e);
+    emf.writeUInt32LE(emf.readUInt32LE(emfEof + 4) + 4, emf.length - 4);
+
+    const wmf = createRepresentativeWmf();
+    wmf.writeUInt32LE(4, wmf.length - 6);
+
+    const placeable = withPlaceableHeader(createRepresentativeWmf(), 0, 0, 1000, 1000);
+    placeable.writeUInt16LE(placeable.readUInt16LE(20) ^ 1, 20);
+
+    expect(convertMetafileToSvgData(emf.toString("base64"), "image/emf")).toMatchObject({
+      ok: false,
+      message: expect.stringContaining("EOF record has an invalid declared size"),
+    });
+    expect(convertMetafileToSvgData(wmf.toString("base64"), "image/wmf")).toMatchObject({
+      ok: false,
+      message: expect.stringContaining("EOF record has an invalid declared size"),
+    });
+    expect(convertMetafileToSvgData(placeable.toString("base64"), "image/wmf")).toMatchObject({
+      ok: false,
+      message: expect.stringContaining("checksum"),
+    });
+  });
+
   it("escapes allowlisted inline SVG attributes and rejects all other names", () => {
     const encoded = Buffer.from('<svg viewBox="0 0 1 1"></svg>').toString("base64");
 
