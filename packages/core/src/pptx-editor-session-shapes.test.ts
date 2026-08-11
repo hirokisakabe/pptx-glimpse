@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { createPptxEditorSession } from "./index.js";
 import {
   buildDrawingDeleteSessionFixture,
+  buildExternallyConnectedGroupFixture,
   buildGroupCommandFixture,
   buildShapeFixture,
   connectorByName,
@@ -152,6 +153,19 @@ describe("PptxEditorSession - shapes", () => {
     await expect(editor.deleteShape(connectedShape.handle)).rejects.toThrow(
       /referenced by connector/,
     );
+  });
+
+  it("does not expose group delete when an external connector references a child", async () => {
+    const editor = await createPptxEditorSession(await buildExternallyConnectedGroupFixture(), {
+      skipSystemFonts: true,
+    });
+    const editableGroup = editor.shapes(1).find((shape) => shape.kind === "group");
+    if (editableGroup?.handle === undefined) throw new Error("editable group was not found");
+
+    expect(editableGroup.editableDelete).toBeUndefined();
+    await expect(editor.deleteShape(editableGroup.handle)).rejects.toMatchObject({
+      code: "invalid-command",
+    });
   });
 
   it("rerenders, saves, and restores history for picture, table, chart, and group deletes", async () => {

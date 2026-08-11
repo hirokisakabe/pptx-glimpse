@@ -101,6 +101,30 @@ export function buildDrawingDeleteSessionFixture(): Uint8Array {
   return writePptx(source);
 }
 
+export async function buildExternallyConnectedGroupFixture(): Promise<Uint8Array> {
+  const pptx = buildDrawingDeleteSessionFixture();
+  const source = readPptx(pptx);
+  const group = source.slides[0].shapes.find((shape) => shape.kind === "group");
+  if (group?.kind !== "group") throw new Error("external connector group is missing");
+  const childId = group.children[0]?.nodeId;
+  if (childId === undefined) throw new Error("external connector child id is missing");
+  const zip = await JSZip.loadAsync(pptx);
+  const slidePath = source.slides[0].partPath;
+  const slideFile = zip.file(slidePath);
+  if (slideFile === null) throw new Error("external connector slide part is missing");
+  const slideXml = await slideFile.async("string");
+  zip.file(
+    slidePath,
+    slideXml.replace(
+      "</p:spTree>",
+      `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="99" name="External Connector"/><p:cNvCxnSpPr>` +
+        `<a:stCxn id="${String(childId)}" idx="0"/></p:cNvCxnSpPr><p:nvPr/></p:nvCxnSpPr>` +
+        `<p:spPr><a:prstGeom prst="straightConnector1"/></p:spPr></p:cxnSp></p:spTree>`,
+    ),
+  );
+  return zip.generateAsync({ type: "uint8array" });
+}
+
 export async function buildTemplatePreviewFixture(): Promise<Uint8Array> {
   const source = createPptx({
     slideMaster: {

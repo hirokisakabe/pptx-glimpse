@@ -166,6 +166,8 @@ export function removePackageParts(
   graph: PackageGraph,
   partPaths: readonly PartPath[],
 ): PackageGraph {
+  if (partPaths.length === 0) return graph;
+
   const removedPartPaths = new Set<string>(partPaths);
   const removedRelationshipPartPaths = new Set<string>(
     partPaths.map((partPath) => relationshipsPartPath(partPath)),
@@ -175,9 +177,21 @@ export function removePackageParts(
       !removedPartPaths.has(part.partPath) && !removedRelationshipPartPaths.has(part.partPath),
   );
   const retainedMedia = graph.media.filter((part) => !removedPartPaths.has(part.partPath));
+  const removedExtensions = new Set(
+    [...graph.parts, ...graph.media].flatMap((part) => {
+      if (
+        !removedPartPaths.has(part.partPath) &&
+        !removedRelationshipPartPaths.has(part.partPath)
+      ) {
+        return [];
+      }
+      const extension = partExtension(part.partPath);
+      return extension === undefined ? [] : [extension];
+    }),
+  );
   const retainedExtensions = new Set(
     [...retainedParts, ...retainedMedia].flatMap((part) => {
-      const extension = part.partPath.split("/").at(-1)?.split(".").at(-1)?.toLowerCase();
+      const extension = partExtension(part.partPath);
       return extension === undefined ? [] : [extension];
     }),
   );
@@ -186,9 +200,10 @@ export function removePackageParts(
     parts: retainedParts,
     contentTypes: {
       ...graph.contentTypes,
-      defaults: graph.contentTypes.defaults.filter((entry) =>
-        retainedExtensions.has(entry.extension.toLowerCase()),
-      ),
+      defaults: graph.contentTypes.defaults.filter((entry) => {
+        const extension = entry.extension.toLowerCase();
+        return !removedExtensions.has(extension) || retainedExtensions.has(extension);
+      }),
       overrides: graph.contentTypes.overrides.filter(
         (override) =>
           !removedPartPaths.has(override.partName) &&
@@ -204,6 +219,10 @@ export function removePackageParts(
     ),
     media: retainedMedia,
   };
+}
+
+function partExtension(partPath: string): string | undefined {
+  return partPath.split("/").at(-1)?.split(".").at(-1)?.toLowerCase();
 }
 
 /**

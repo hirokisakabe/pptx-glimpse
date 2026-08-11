@@ -598,28 +598,38 @@ function planDrawingDeletionCleanup(
   }
 
   const deletedIds = collectSourceShapeIds(target);
-  const xmlTargets = new Set<XmlNode>();
-  if (xmlTarget !== undefined) xmlTargets.add(xmlTarget);
+  const currentXmlTargets = new Set<XmlNode>();
+  if (xmlTarget !== undefined) currentXmlTargets.add(xmlTarget);
   if (xmlTarget === undefined && pendingGroupCreation && target.kind === "group") {
-    for (const child of target.children) {
+    for (const child of flattenSourceShapeTree(target.children)) {
       if (child.nodeId === undefined) continue;
       const childMatches = findXmlDrawingMatches(spTree, String(child.nodeId)).filter(
         (match) => !match.insideAlternateContent,
       );
       if (childMatches.length > 1)
         throw duplicateNodeIdError("deleteShape", child.handle ?? handle);
-      if (childMatches[0] !== undefined) xmlTargets.add(childMatches[0].node);
+      if (childMatches[0] !== undefined) currentXmlTargets.add(childMatches[0].node);
     }
   }
-  for (const deletedXmlTarget of xmlTargets) collectXmlDrawingIds(deletedXmlTarget, deletedIds);
-  const rawReferencingConnector = findXmlConnectorReferencingIds(spTree, xmlTargets, deletedIds);
+  for (const deletedXmlTarget of currentXmlTargets) {
+    collectXmlDrawingIds(deletedXmlTarget, deletedIds);
+  }
+  const skippedXmlSubtrees = new Set([
+    ...collectPreviouslyDeletedXmlSubtrees(source.edits ?? [], handle, spTree),
+    ...currentXmlTargets,
+  ]);
+  const rawReferencingConnector = findXmlConnectorReferencingIds(
+    spTree,
+    skippedXmlSubtrees,
+    deletedIds,
+  );
   if (rawReferencingConnector !== undefined) {
     throw new Error(`deleteShape: shape is referenced by connector '${rawReferencingConnector}'`);
   }
 
   const relationshipPrefixes = collectRelationshipPrefixes(root);
   const candidateRelationshipIds = typedRelationshipIds;
-  for (const deletedXmlTarget of xmlTargets) {
+  for (const deletedXmlTarget of currentXmlTargets) {
     collectRelationshipAttributeValues(
       deletedXmlTarget,
       relationshipPrefixes,
@@ -633,7 +643,7 @@ function planDrawingDeletionCleanup(
     root,
     relationshipPrefixes,
     remainingRelationshipIds,
-    xmlTargets,
+    skippedXmlSubtrees,
   );
   const ownerRelationships = source.packageGraph.relationships.find(
     (group) => group.sourcePartPath === handle.partPath,
@@ -654,6 +664,50 @@ function planDrawingDeletionCleanup(
     if (targetPartPath !== undefined) reachableTargets.push(targetPartPath);
   }
   return removeUnreferencedReachableParts(graph, reachableTargets);
+}
+
+function collectPreviouslyDeletedXmlSubtrees(
+  edits: readonly PptxSourceModelEdit[],
+  ownerHandle: SourceHandle,
+  shapeTree: XmlNode,
+): ReadonlySet<XmlNode> {
+  const deletedIds = new Set<string>();
+  const pendingGroupChildren = new Map<string, readonly string[]>();
+  for (const edit of edits) {
+    if (edit.kind === "deleteShape" && edit.handle.partPath === ownerHandle.partPath) {
+      if (edit.handle.nodeId !== undefined) deletedIds.add(String(edit.handle.nodeId));
+    }
+    if (edit.kind === "groupShapes" && edit.targetPartPath === ownerHandle.partPath) {
+      pendingGroupChildren.set(edit.groupId, edit.shapeIds);
+    }
+  }
+
+  const pending = [...deletedIds];
+  while (pending.length > 0) {
+    const groupId = pending.shift();
+    if (groupId === undefined) continue;
+    for (const childId of pendingGroupChildren.get(groupId) ?? []) {
+      if (deletedIds.has(childId)) continue;
+      deletedIds.add(childId);
+      pending.push(childId);
+    }
+  }
+
+  const subtrees = new Set<XmlNode>();
+  for (const nodeId of deletedIds) {
+    const matches = findXmlDrawingMatches(shapeTree, nodeId);
+    if (matches.some((match) => match.insideAlternateContent)) {
+      throw new Error("deleteShape: prior deleted shape is inside AlternateContent");
+    }
+    const supportedMatches = matches.filter((match) => !match.insideAlternateContent);
+    if (supportedMatches.length > 1) {
+      throw new Error(
+        `deleteShape: duplicate node id '${nodeId}' in the target drawing part is not supported`,
+      );
+    }
+    if (supportedMatches[0] !== undefined) subtrees.add(supportedMatches[0].node);
+  }
+  return subtrees;
 }
 
 function cleanupDirectAdditionRelationships(
@@ -729,6 +783,7 @@ function findXmlConnectorReferencingIds(
       if (key.startsWith("@_")) continue;
       const local = localName(key);
       for (const child of xmlNodes(value)) {
+        if (skippedSubtrees.has(child)) continue;
         if (local === "cxnSp") {
           const properties = getChild(getChild(child, "nvCxnSpPr"), "cNvCxnSpPr");
           const startId = getAttr(getChild(properties, "stCxn"), "id");
