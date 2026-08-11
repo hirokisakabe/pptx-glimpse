@@ -79,11 +79,10 @@ describe("convertMetafileToSvgData", () => {
     const bytes = createRepresentativeEmf();
     bytes.writeUInt32LE(0xfffffff0, findEmfRecord(bytes, 0x54) + 72);
 
-    expect(convertMetafileToSvgData(bytes.toString("base64"), "image/emf")).toMatchObject({
-      ok: false,
-      reason: "invalid-data",
-      message: expect.stringContaining("advance range"),
-    });
+    expectFailureMessage(
+      convertMetafileToSvgData(bytes.toString("base64"), "image/emf"),
+      "advance range",
+    );
   });
 
   it("uses non-1000 WMF stream window extents as the SVG viewBox", () => {
@@ -109,22 +108,20 @@ describe("convertMetafileToSvgData", () => {
     ["EMF", "image/emf", emfWithTrailingBytes],
     ["WMF", "image/wmf", wmfWithTrailingBytes],
   ] as const)("rejects trailing bytes after the %s EOF record", (_label, mimeType, fixture) => {
-    expect(convertMetafileToSvgData(fixture().toString("base64"), mimeType)).toMatchObject({
-      ok: false,
-      reason: "invalid-data",
-      message: expect.stringContaining("trailing bytes"),
-    });
+    expectFailureMessage(
+      convertMetafileToSvgData(fixture().toString("base64"), mimeType),
+      "trailing bytes",
+    );
   });
 
   it.each([
     ["EMF", "image/emf", emfWithoutEof],
     ["WMF", "image/wmf", wmfWithoutEof],
   ] as const)("requires an explicit %s EOF record", (_label, mimeType, fixture) => {
-    expect(convertMetafileToSvgData(fixture().toString("base64"), mimeType)).toMatchObject({
-      ok: false,
-      reason: "invalid-data",
-      message: expect.stringContaining("EOF record is missing"),
-    });
+    expectFailureMessage(
+      convertMetafileToSvgData(fixture().toString("base64"), mimeType),
+      "EOF record is missing",
+    );
   });
 
   it("validates the EMF declared byte size and record count", () => {
@@ -133,14 +130,14 @@ describe("convertMetafileToSvgData", () => {
     const wrongCount = createRepresentativeEmf();
     wrongCount.writeUInt32LE(wrongCount.readUInt32LE(52) + 1, 52);
 
-    expect(convertMetafileToSvgData(wrongSize.toString("base64"), "image/emf")).toMatchObject({
-      ok: false,
-      message: expect.stringContaining("declared byte size"),
-    });
-    expect(convertMetafileToSvgData(wrongCount.toString("base64"), "image/emf")).toMatchObject({
-      ok: false,
-      message: expect.stringContaining("declared record count"),
-    });
+    expectFailureMessage(
+      convertMetafileToSvgData(wrongSize.toString("base64"), "image/emf"),
+      "declared byte size",
+    );
+    expectFailureMessage(
+      convertMetafileToSvgData(wrongCount.toString("base64"), "image/emf"),
+      "declared record count",
+    );
   });
 
   it("validates WMF declared byte and maximum-record sizes", () => {
@@ -149,14 +146,14 @@ describe("convertMetafileToSvgData", () => {
     const wrongMaximum = createRepresentativeWmf();
     wrongMaximum.writeUInt32LE(wrongMaximum.readUInt32LE(12) + 1, 12);
 
-    expect(convertMetafileToSvgData(wrongSize.toString("base64"), "image/wmf")).toMatchObject({
-      ok: false,
-      message: expect.stringContaining("declared byte size"),
-    });
-    expect(convertMetafileToSvgData(wrongMaximum.toString("base64"), "image/wmf")).toMatchObject({
-      ok: false,
-      message: expect.stringContaining("maximum record size"),
-    });
+    expectFailureMessage(
+      convertMetafileToSvgData(wrongSize.toString("base64"), "image/wmf"),
+      "declared byte size",
+    );
+    expectFailureMessage(
+      convertMetafileToSvgData(wrongMaximum.toString("base64"), "image/wmf"),
+      "maximum record size",
+    );
   });
 
   it("validates EOF-declared sizes and the placeable WMF checksum", () => {
@@ -170,18 +167,18 @@ describe("convertMetafileToSvgData", () => {
     const placeable = withPlaceableHeader(createRepresentativeWmf(), 0, 0, 1000, 1000);
     placeable.writeUInt16LE(placeable.readUInt16LE(20) ^ 1, 20);
 
-    expect(convertMetafileToSvgData(emf.toString("base64"), "image/emf")).toMatchObject({
-      ok: false,
-      message: expect.stringContaining("EOF record has an invalid declared size"),
-    });
-    expect(convertMetafileToSvgData(wmf.toString("base64"), "image/wmf")).toMatchObject({
-      ok: false,
-      message: expect.stringContaining("EOF record has an invalid declared size"),
-    });
-    expect(convertMetafileToSvgData(placeable.toString("base64"), "image/wmf")).toMatchObject({
-      ok: false,
-      message: expect.stringContaining("checksum"),
-    });
+    expectFailureMessage(
+      convertMetafileToSvgData(emf.toString("base64"), "image/emf"),
+      "EOF record has an invalid declared size",
+    );
+    expectFailureMessage(
+      convertMetafileToSvgData(wmf.toString("base64"), "image/wmf"),
+      "EOF record has an invalid declared size",
+    );
+    expectFailureMessage(
+      convertMetafileToSvgData(placeable.toString("base64"), "image/wmf"),
+      "checksum",
+    );
   });
 
   it("escapes allowlisted inline SVG attributes and rejects all other names", () => {
@@ -200,6 +197,16 @@ function decodedSvg(result: ReturnType<typeof convertMetafileToSvgData>): string
   expect(result.ok).toBe(true);
   if (!result.ok) throw new Error(result.message);
   return Buffer.from(result.imageData, "base64").toString("utf8");
+}
+
+function expectFailureMessage(
+  result: ReturnType<typeof convertMetafileToSvgData>,
+  message: string,
+): void {
+  expect(result.ok).toBe(false);
+  if (result.ok) throw new Error("Expected metafile conversion to fail.");
+  expect(result.reason).toBe("invalid-data");
+  expect(result.message).toContain(message);
 }
 
 function findEmfRecord(buffer: Buffer, recordType: number): number {

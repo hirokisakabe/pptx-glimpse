@@ -387,18 +387,13 @@ function wmfGeometry(
     if (width > 0 && height > 0) return { originX, originY, width, height };
   }
 
-  let originX = 0;
-  let originY = 0;
   let width = 0;
   let height = 0;
   let offset = headerOffset + 18;
   while (offset + 6 <= view.byteLength) {
     const size = view.getUint32(offset, true) * 2;
     const type = view.getUint16(offset + 4, true);
-    if (type === 0x020b && size >= 10) {
-      originY = view.getInt16(offset + 6, true);
-      originX = view.getInt16(offset + 8, true);
-    } else if (type === 0x020c && size >= 10) {
+    if (type === 0x020c && size >= 10) {
       height = Math.abs(view.getInt16(offset + 6, true));
       width = Math.abs(view.getInt16(offset + 8, true));
       break;
