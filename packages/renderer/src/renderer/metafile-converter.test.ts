@@ -47,6 +47,45 @@ describe("convertMetafileToSvgData", () => {
     expect(decodedSvg(result)).toContain('viewBox="120 40 1600 700"');
   });
 
+  it("maps EMF text origin, font size, rotation, weight, and offDx advances", () => {
+    const result = convertMetafileToSvgData(
+      createRepresentativeEmf().toString("base64"),
+      "image/emf",
+    );
+
+    const svg = decodedSvg(result);
+    expect(svg).toContain('<text x="250" y="820"');
+    expect(svg).toContain('dx="0 150 150"');
+    expect(svg).toContain('font-family="Noto Sans"');
+    expect(svg).toContain('font-size="72"');
+    expect(svg).toContain('font-weight="bold"');
+    expect(svg).toContain('transform="rotate(-12 250 820)"');
+  });
+
+  it.each([
+    ["non-compatible graphics mode", 0x54, 24, 2],
+    ["explicit font width", 0x52, 16, 20],
+  ] as const)("rejects EMF text with unsupported %s", (_label, recordType, fieldOffset, value) => {
+    const bytes = createRepresentativeEmf();
+    bytes.writeInt32LE(value, findEmfRecord(bytes, recordType) + fieldOffset);
+
+    expect(convertMetafileToSvgData(bytes.toString("base64"), "image/emf")).toMatchObject({
+      ok: false,
+      reason: "unsupported-record",
+    });
+  });
+
+  it("rejects an out-of-range EMF offDx array", () => {
+    const bytes = createRepresentativeEmf();
+    bytes.writeUInt32LE(0xfffffff0, findEmfRecord(bytes, 0x54) + 72);
+
+    expect(convertMetafileToSvgData(bytes.toString("base64"), "image/emf")).toMatchObject({
+      ok: false,
+      reason: "invalid-data",
+      message: expect.stringContaining("advance range"),
+    });
+  });
+
   it("uses non-1000 WMF stream window extents as the SVG viewBox", () => {
     const bytes = createRepresentativeWmf();
     // META_SETWINDOWEXT follows the 18-byte header and 10-byte META_SETWINDOWORG record.
@@ -136,6 +175,15 @@ function decodedSvg(result: ReturnType<typeof convertMetafileToSvgData>): string
   expect(result.ok).toBe(true);
   if (!result.ok) throw new Error(result.message);
   return Buffer.from(result.imageData, "base64").toString("utf8");
+}
+
+function findEmfRecord(buffer: Buffer, recordType: number): number {
+  let offset = 0;
+  while (offset + 8 <= buffer.length) {
+    if (buffer.readUInt32LE(offset) === recordType) return offset;
+    offset += buffer.readUInt32LE(offset + 4);
+  }
+  throw new Error(`EMF record 0x${recordType.toString(16)} not found`);
 }
 
 function writeInt32Rectangle(

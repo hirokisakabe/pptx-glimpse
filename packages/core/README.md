@@ -166,6 +166,12 @@ follow Microsoft's [MS-EMF](https://learn.microsoft.com/en-us/openspecs/windows_
 and [MS-WMF](https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-wmf/4813e7fd-52d0-4f42-965f-228c8b7488d2)
 specifications.
 
+EMF extended-text fallback is intentionally conservative: it supports anisotropic compatible-mode
+text with left/top alignment, window/viewport origin and extent mapping, LOGFONT height, weight,
+italic state, escapement rotation, and per-character `offDx` advances. Text records using a font
+width, incompatible orientation, non-compatible graphics mode, other map/alignment modes, or text
+options that cannot be represented accurately fall back with `unsupported-record`.
+
 An unknown record, malformed stream, or conversion error falls back for that metafile as a whole.
 SVG output keeps the labeled `[EMF]` or `[WMF]` placeholder, and conversion reports include a
 `renderer.image.metafile-conversion` warning whose message identifies `unsupported-record`,

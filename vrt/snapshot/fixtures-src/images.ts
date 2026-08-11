@@ -487,7 +487,13 @@ export function createRepresentativeEmf(): Buffer {
     emfRecord(0x25, uint32Values(2)),
     emfRecord(0x2b, int32Values(80, 80, 920, 600)),
     emfRecord(0x18, uint32Values(0x00333333)),
-    emfTextRecord("EMF", 250, 820),
+    emfFontRecord(3, -72, 120, "Noto Sans"),
+    emfRecord(0x25, uint32Values(3)),
+    emfRecord(0x0a, int32Values(100, 50)),
+    emfRecord(0x09, int32Values(1000, 1000)),
+    emfRecord(0x0c, int32Values(0, 0)),
+    emfRecord(0x0b, int32Values(1000, 1000)),
+    emfTextRecord("EMF", 350, 870, [150, 150, 150]),
     emfRecord(0x0e, uint32Values(0, 0, 20)),
   ];
   const totalBytes = 88 + records.reduce((sum, record) => sum + record.length, 0);
@@ -547,9 +553,11 @@ function emfRecord(type: number, payload: Buffer): Buffer {
   return record;
 }
 
-function emfTextRecord(text: string, x: number, y: number): Buffer {
+function emfTextRecord(text: string, x: number, y: number, advances?: readonly number[]): Buffer {
   const encoded = Buffer.from(text, "utf16le");
-  const payload = Buffer.alloc(Math.ceil((68 + encoded.length) / 4) * 4);
+  const stringEnd = 68 + encoded.length;
+  const dxStart = Math.ceil(stringEnd / 4) * 4;
+  const payload = Buffer.alloc(dxStart + (advances === undefined ? 0 : advances.length * 4));
   writeInt32Sequence(payload, 0, [0, 0, 1000, 1000]);
   payload.writeUInt32LE(1, 16);
   payload.writeFloatLE(1, 20);
@@ -559,8 +567,27 @@ function emfTextRecord(text: string, x: number, y: number): Buffer {
   payload.writeUInt32LE(text.length, 36);
   payload.writeUInt32LE(76, 40);
   writeInt32Sequence(payload, 48, [0, 0, 1000, 1000]);
+  if (advances !== undefined) payload.writeUInt32LE(dxStart + 8, 64);
   encoded.copy(payload, 68);
+  advances?.forEach((advance, index) => payload.writeInt32LE(advance, dxStart + index * 4));
   return emfRecord(0x54, payload);
+}
+
+function emfFontRecord(
+  index: number,
+  height: number,
+  escapement: number,
+  faceName: string,
+): Buffer {
+  const payload = Buffer.alloc(96);
+  payload.writeUInt32LE(index, 0);
+  payload.writeInt32LE(height, 4);
+  payload.writeInt32LE(0, 8);
+  payload.writeInt32LE(escapement, 12);
+  payload.writeInt32LE(escapement, 16);
+  payload.writeInt32LE(700, 20);
+  Buffer.from(faceName, "utf16le").copy(payload, 32, 0, 64);
+  return emfRecord(0x52, payload);
 }
 
 function wmfRecord(type: number, payload: Buffer): Buffer {

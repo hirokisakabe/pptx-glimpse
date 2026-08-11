@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { createRepresentativeEmf } from "../../../../vrt/snapshot/fixtures-src/images.js";
+import {
+  createRepresentativeEmf,
+  createRepresentativeWmf,
+} from "../../../../vrt/snapshot/fixtures-src/images.js";
 import type { ImageElement } from "../model/image.js";
 import type { Transform } from "../model/shape.js";
 import { unsafeFixtureAssertion } from "../unsafe-type-assertion.js";
@@ -60,6 +63,76 @@ describe("EMF rendering", () => {
     expect(result.content).toContain("clip-path=");
     expect(result.content).not.toContain("[EMF]");
     expect(warnings.getWarningEntries()).toEqual([]);
+  });
+
+  it("renders valid WMF content instead of a placeholder", () => {
+    const result = renderImage(
+      makeImage({
+        mimeType: "image/wmf",
+        imageData: createRepresentativeWmf().toString("base64"),
+      }),
+    );
+
+    expect(result.content).toContain('viewBox="0 0 1000 1000"');
+    expect(result.content).toContain(">WMF</text>");
+    expect(result.content).not.toContain("[WMF]");
+  });
+
+  it("applies stretch insets to converted metafile SVG", () => {
+    const result = renderImage(
+      makeImage({
+        mimeType: "image/emf",
+        imageData: createRepresentativeEmf().toString("base64"),
+        stretch: { left: 0.1, top: 0.2, right: 0.3, bottom: 0.1 },
+      }),
+    );
+
+    expect(result.content).toContain('<svg viewBox="0 0 1000 1000"');
+    expect(result.content).toContain('x="19" y="29" width="115" height="101"');
+  });
+
+  it.each([
+    ["x", "translate(96, 0) scale(-1, 1)"],
+    ["y", "translate(0, 72) scale(1, -1)"],
+    ["xy", "translate(96, 72) scale(-1, -1)"],
+  ] as const)("applies tile flip %s to converted WMF SVG", (flip, transform) => {
+    const result = renderImage(
+      makeImage({
+        mimeType: "image/wmf",
+        imageData: createRepresentativeWmf().toString("base64"),
+        tile: { tx: 0, ty: 0, sx: 0.5, sy: 0.5, flip, align: "tl" },
+      }),
+    );
+
+    expect(result.defs[0]).toContain(`transform="${transform}"`);
+    expect(result.defs[0]).toContain(">WMF</text>");
+  });
+
+  it("applies shape and blip effects around converted EMF SVG", () => {
+    const result = renderImage(
+      makeImage({
+        mimeType: "image/emf",
+        imageData: createRepresentativeEmf().toString("base64"),
+        effects: {
+          outerShadow: null,
+          innerShadow: null,
+          glow: { radius: 50800, color: { hex: "#FF0000", alpha: 0.5 } },
+          softEdge: null,
+        },
+        blipEffects: {
+          grayscale: true,
+          biLevel: null,
+          blur: null,
+          lum: null,
+          duotone: null,
+        },
+      }),
+    );
+
+    expect(result.defs).toHaveLength(2);
+    expect(result.content).toContain('filter="url(#effect-');
+    expect(result.content).toContain('filter="url(#blip-effect-');
+    expect(result.content).toContain(">EMF</text>");
   });
 
   it("caches a successful conversion for repeated images in one render context", () => {

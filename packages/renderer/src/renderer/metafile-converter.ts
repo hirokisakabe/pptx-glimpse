@@ -151,9 +151,7 @@ export function convertMetafileToSvgData(
           });
 
     let svg = new XMLSerializer().serializeToString(unsafeMetafileNodeAssertion(svgElement));
-    if (mimeType === "image/emf") {
-      svg = appendEmfText(svg, bytes);
-    }
+    if (validation.emfTextSvg !== undefined) svg = appendSvgContent(svg, validation.emfTextSvg);
     svg = normalizeMetafileSvg(svg, geometry);
     return {
       ok: true,
@@ -179,7 +177,7 @@ interface MetafileGeometry {
 }
 
 type MetafileValidationResult =
-  | { readonly ok: true; readonly geometry: MetafileGeometry }
+  | { readonly ok: true; readonly geometry: MetafileGeometry; readonly emfTextSvg?: string }
   | Exclude<MetafileConversionResult, { readonly ok: true }>;
 
 const INLINE_SVG_ATTRIBUTES = new Set(["x", "y", "width", "height", "preserveAspectRatio"]);
@@ -265,7 +263,13 @@ function validateEmf(bytes: Uint8Array): MetafileValidationResult {
   if (recordCount !== declaredRecords) {
     return failure("invalid-data", "EMF declared record count does not match the stream.");
   }
-  return { ok: true, geometry };
+  const text = extractEmfText(bytes, geometry);
+  if (!text.ok) return text;
+  return {
+    ok: true,
+    geometry,
+    ...(text.svg.length > 0 ? { emfTextSvg: text.svg } : {}),
+  };
 }
 
 function validateWmf(bytes: Uint8Array): MetafileValidationResult {
@@ -394,10 +398,50 @@ function wmfGeometry(
   return width > 0 && height > 0 ? { originX: 0, originY: 0, width, height } : undefined;
 }
 
-function appendEmfText(svg: string, bytes: Uint8Array): string {
+interface EmfFontState {
+  readonly height: number;
+  readonly width: number;
+  readonly escapement: number;
+  readonly orientation: number;
+  readonly weight: number;
+  readonly italic: boolean;
+  readonly faceName: string;
+}
+
+interface EmfMappingState {
+  mapMode: number;
+  windowX: number;
+  windowY: number;
+  windowWidth: number;
+  windowHeight: number;
+  viewportX: number;
+  viewportY: number;
+  viewportWidth: number;
+  viewportHeight: number;
+}
+
+type EmfTextExtractionResult =
+  | { readonly ok: true; readonly svg: string }
+  | Exclude<MetafileConversionResult, { readonly ok: true }>;
+
+function extractEmfText(bytes: Uint8Array, geometry: MetafileGeometry): EmfTextExtractionResult {
   const view = dataView(bytes);
   const textElements: string[] = [];
+  const fonts = new Map<number, EmfFontState>();
+  let selectedFont: EmfFontState | undefined;
   let textColor = "#000000";
+  let textAlign = 0;
+  const mapping: EmfMappingState = {
+    mapMode: MM_ANISOTROPIC,
+    windowX: 0,
+    windowY: 0,
+    windowWidth: geometry.width,
+    windowHeight: geometry.height,
+    viewportX: 0,
+    viewportY: 0,
+    viewportWidth: geometry.width,
+    viewportHeight: geometry.height,
+  };
   let offset = 0;
 
   while (offset + 8 <= bytes.byteLength) {
@@ -405,33 +449,198 @@ function appendEmfText(svg: string, bytes: Uint8Array): string {
     const size = view.getUint32(offset + 4, true);
     if (size < 8 || offset + size > bytes.byteLength) break;
 
-    if (type === 0x18 && size >= 12) {
+    if (type === 0x09 && size >= 16) {
+      mapping.windowWidth = view.getInt32(offset + 8, true);
+      mapping.windowHeight = view.getInt32(offset + 12, true);
+    } else if (type === 0x0a && size >= 16) {
+      mapping.windowX = view.getInt32(offset + 8, true);
+      mapping.windowY = view.getInt32(offset + 12, true);
+    } else if (type === 0x0b && size >= 16) {
+      mapping.viewportWidth = view.getInt32(offset + 8, true);
+      mapping.viewportHeight = view.getInt32(offset + 12, true);
+    } else if (type === 0x0c && size >= 16) {
+      mapping.viewportX = view.getInt32(offset + 8, true);
+      mapping.viewportY = view.getInt32(offset + 12, true);
+    } else if (type === 0x11 && size >= 12) {
+      mapping.mapMode = view.getInt32(offset + 8, true);
+    } else if (type === 0x16 && size >= 12) {
+      textAlign = view.getUint32(offset + 8, true);
+    } else if (type === 0x18 && size >= 12) {
       textColor = colorRefToHex(view.getUint32(offset + 8, true));
+    } else if (type === 0x52) {
+      const font = readEmfFont(view, offset, size);
+      if (!font.ok) return font;
+      fonts.set(view.getUint32(offset + 8, true), font.font);
+    } else if (type === 0x25 && size >= 12) {
+      const index = view.getUint32(offset + 8, true);
+      if (fonts.has(index)) selectedFont = fonts.get(index);
+    } else if (type === 0x28 && size >= 12) {
+      fonts.delete(view.getUint32(offset + 8, true));
     } else if ((type === 0x53 || type === 0x54) && size >= 76) {
-      const x = view.getInt32(offset + 36, true);
-      const y = view.getInt32(offset + 40, true);
-      const charCount = view.getUint32(offset + 44, true);
-      const stringOffset = view.getUint32(offset + 48, true);
-      const bytesPerCharacter = type === 0x54 ? 2 : 1;
-      const start = offset + stringOffset;
-      const end = start + charCount * bytesPerCharacter;
-      if (start >= offset && end <= offset + size) {
-        const textBytes = bytes.subarray(start, end);
-        const text =
-          type === 0x54
-            ? new TextDecoder("utf-16le").decode(textBytes)
-            : new TextDecoder("windows-1252").decode(textBytes);
-        textElements.push(
-          `<text x="${x}" y="${y}" fill="${textColor}" font-family="sans-serif" font-size="96">${escapeXmlText(text)}</text>`,
-        );
-      }
+      const text = renderEmfTextRecord(bytes, view, offset, size, type, {
+        mapping,
+        textAlign,
+        textColor,
+        font: selectedFont,
+      });
+      if (!text.ok) return text;
+      textElements.push(text.svg);
     }
 
     offset += size;
     if (type === 0x0e) break;
   }
 
-  return textElements.length > 0 ? svg.replace("</svg>", `${textElements.join("")}</svg>`) : svg;
+  return { ok: true, svg: textElements.join("") };
+}
+
+function readEmfFont(
+  view: DataView,
+  offset: number,
+  size: number,
+):
+  | { readonly ok: true; readonly font: EmfFontState }
+  | Exclude<MetafileConversionResult, { readonly ok: true }> {
+  if (size < 104) return failure("invalid-data", "EMF font record is truncated.");
+  const width = view.getInt32(offset + 16, true);
+  const orientation = view.getInt32(offset + 24, true);
+  const escapement = view.getInt32(offset + 20, true);
+  if (width !== 0 || (orientation !== 0 && orientation !== escapement)) {
+    return failure("unsupported-record", "EMF text font width/orientation is unsupported.");
+  }
+  const faceBytes = new Uint8Array(view.buffer, view.byteOffset + offset + 40, 64);
+  const faceName = new TextDecoder("utf-16le").decode(faceBytes).split("\0", 1)[0] || "Noto Sans";
+  return {
+    ok: true,
+    font: {
+      height: view.getInt32(offset + 12, true),
+      width,
+      escapement,
+      orientation,
+      weight: view.getInt32(offset + 28, true),
+      italic: view.getUint8(offset + 32) !== 0,
+      faceName,
+    },
+  };
+}
+
+function renderEmfTextRecord(
+  bytes: Uint8Array,
+  view: DataView,
+  offset: number,
+  size: number,
+  type: number,
+  state: {
+    readonly mapping: EmfMappingState;
+    readonly textAlign: number;
+    readonly textColor: string;
+    readonly font: EmfFontState | undefined;
+  },
+): EmfTextExtractionResult {
+  const graphicsMode = view.getUint32(offset + 24, true);
+  const scaleX = view.getFloat32(offset + 28, true);
+  const scaleY = view.getFloat32(offset + 32, true);
+  const options = view.getUint32(offset + 52, true);
+  if (
+    state.mapping.mapMode !== MM_ANISOTROPIC ||
+    graphicsMode !== 1 ||
+    scaleX !== 1 ||
+    scaleY !== 1 ||
+    state.textAlign !== 0 ||
+    options !== 0 ||
+    state.mapping.windowWidth === 0 ||
+    state.mapping.windowHeight === 0
+  ) {
+    return failure("unsupported-record", "EMF text mapping/alignment/options are unsupported.");
+  }
+
+  const charCount = view.getUint32(offset + 44, true);
+  const stringOffset = view.getUint32(offset + 48, true);
+  const bytesPerCharacter = type === 0x54 ? 2 : 1;
+  const start = offset + stringOffset;
+  const end = start + charCount * bytesPerCharacter;
+  if (start < offset || end > offset + size) {
+    return failure("invalid-data", "EMF text string range is invalid.");
+  }
+  const textBytes = bytes.subarray(start, end);
+  const text =
+    type === 0x54
+      ? new TextDecoder("utf-16le").decode(textBytes)
+      : new TextDecoder("windows-1252").decode(textBytes);
+  const font = state.font ?? {
+    height: -80,
+    width: 0,
+    escapement: 0,
+    orientation: 0,
+    weight: 400,
+    italic: false,
+    faceName: "Noto Sans",
+  };
+  const x = mapEmfCoordinate(
+    view.getInt32(offset + 36, true),
+    state.mapping.windowX,
+    state.mapping.windowWidth,
+    state.mapping.viewportX,
+    state.mapping.viewportWidth,
+  );
+  const y = mapEmfCoordinate(
+    view.getInt32(offset + 40, true),
+    state.mapping.windowY,
+    state.mapping.windowHeight,
+    state.mapping.viewportY,
+    state.mapping.viewportHeight,
+  );
+  const fontSize = Math.abs(
+    mapEmfLength(font.height, state.mapping.windowHeight, state.mapping.viewportHeight),
+  );
+  if (!Number.isFinite(fontSize) || fontSize === 0) {
+    return failure("unsupported-record", "EMF text font height cannot be mapped.");
+  }
+
+  const offDx = view.getUint32(offset + 72, true);
+  let dxAttribute = "";
+  if (offDx !== 0) {
+    const dxStart = offset + offDx;
+    const dxEnd = dxStart + charCount * 4;
+    if (dxStart < offset || dxEnd > offset + size) {
+      return failure("invalid-data", "EMF text advance range is invalid.");
+    }
+    const advances = Array.from({ length: Math.max(0, charCount - 1) }, (_, index) =>
+      mapEmfLength(
+        view.getInt32(dxStart + index * 4, true),
+        state.mapping.windowWidth,
+        state.mapping.viewportWidth,
+      ),
+    );
+    dxAttribute = ` dx="${[0, ...advances].join(" ")}"`;
+  }
+
+  const rotation =
+    font.escapement === 0 ? "" : ` transform="rotate(${-font.escapement / 10} ${x} ${y})"`;
+  const weight = font.weight >= 700 ? ' font-weight="bold"' : "";
+  const italic = font.italic ? ' font-style="italic"' : "";
+  return {
+    ok: true,
+    svg: `<text x="${x}" y="${y}"${dxAttribute} fill="${state.textColor}" font-family="${escapeXmlAttribute(font.faceName)}" font-size="${fontSize}" dominant-baseline="hanging"${weight}${italic}${rotation}>${escapeXmlText(text)}</text>`,
+  };
+}
+
+function mapEmfCoordinate(
+  value: number,
+  windowOrigin: number,
+  windowExtent: number,
+  viewportOrigin: number,
+  viewportExtent: number,
+): number {
+  return ((value - windowOrigin) * viewportExtent) / windowExtent + viewportOrigin;
+}
+
+function mapEmfLength(value: number, windowExtent: number, viewportExtent: number): number {
+  return (value * viewportExtent) / windowExtent;
+}
+
+function appendSvgContent(svg: string, content: string): string {
+  return svg.replace("</svg>", `${content}</svg>`);
 }
 
 function colorRefToHex(value: number): string {
