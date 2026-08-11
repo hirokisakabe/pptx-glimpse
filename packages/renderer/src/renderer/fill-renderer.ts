@@ -29,7 +29,12 @@ export function renderFillAttrs(
   }
 
   if (fill.type === "image") {
-    const source = resolveMetafileImageSource(fill.imageData, fill.mimeType, context.warningLogger);
+    const source = resolveMetafileImageSource(
+      fill.imageData,
+      fill.mimeType,
+      context.warningLogger,
+      context.metafileConversionCache,
+    );
     if (source === undefined) {
       return { attrs: `fill="#E0E0E0"`, defs: "" };
     }

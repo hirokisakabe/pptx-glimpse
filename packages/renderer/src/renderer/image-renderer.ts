@@ -16,7 +16,12 @@ export function renderImage(
   const h = emuToPixels(image.transform.extentHeight);
   const transformAttr = buildTransformAttr(image.transform);
 
-  const source = resolveMetafileImageSource(image.imageData, image.mimeType, context.warningLogger);
+  const source = resolveMetafileImageSource(
+    image.imageData,
+    image.mimeType,
+    context.warningLogger,
+    context.metafileConversionCache,
+  );
   if (source === undefined) {
     return { content: renderPlaceholder(image.mimeType, w, h, transformAttr), defs: [] };
   }

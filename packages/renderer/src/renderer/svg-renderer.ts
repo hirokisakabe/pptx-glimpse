@@ -33,7 +33,12 @@ export function renderSlideToSvg(
   // Background
   if (slide.background?.fill?.type === "image") {
     const bg = slide.background.fill;
-    const source = resolveMetafileImageSource(bg.imageData, bg.mimeType, context.warningLogger);
+    const source = resolveMetafileImageSource(
+      bg.imageData,
+      bg.mimeType,
+      context.warningLogger,
+      context.metafileConversionCache,
+    );
     if (source !== undefined) {
       parts.push(
         (bg.mimeType === "image/emf" || bg.mimeType === "image/wmf") &&

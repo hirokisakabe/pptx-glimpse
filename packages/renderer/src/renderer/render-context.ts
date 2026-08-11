@@ -11,6 +11,7 @@ import {
   getActiveWarningLogger,
   type WarningLogger,
 } from "../warning-logger.js";
+import type { MetafileConversionCache } from "./metafile-converter.js";
 
 export interface RendererScriptFonts {
   readonly majorJpan: string | null;
@@ -25,6 +26,7 @@ export interface RendererContext {
   readonly scriptFonts: RendererScriptFonts;
   readonly warningLogger: WarningLogger;
   readonly fontWarningCache: Set<string>;
+  readonly metafileConversionCache: MetafileConversionCache;
 }
 
 export function createRendererContext(overrides: Partial<RendererContext> = {}): RendererContext {
@@ -36,6 +38,7 @@ export function createRendererContext(overrides: Partial<RendererContext> = {}):
     scriptFonts: overrides.scriptFonts ?? { majorJpan: null, minorJpan: null },
     warningLogger: overrides.warningLogger ?? createWarningLogger("off"),
     fontWarningCache: overrides.fontWarningCache ?? new Set<string>(),
+    metafileConversionCache: overrides.metafileConversionCache ?? new Map(),
   };
 }
 
@@ -48,6 +51,7 @@ export function createLegacyRendererContext(): RendererContext {
     scriptFonts: getScriptFonts(),
     warningLogger: getActiveWarningLogger(),
     fontWarningCache: new Set<string>(),
+    metafileConversionCache: new Map(),
   };
 }
 

@@ -7,7 +7,6 @@ import type { ImageMimeType } from "../model/tokens.js";
 import type { WarningLogger } from "../warning-logger.js";
 
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
-const RENDER_EXTENT = 1000;
 const MM_ANISOTROPIC = 8;
 
 interface MetafileRendererApi {
@@ -40,10 +39,7 @@ const SUPPORTED_WMF_RECORD_TYPES = new Set([
 
 export type MetafileMimeType = Extract<ImageMimeType, "image/emf" | "image/wmf">;
 
-type MetafileConversionFailureReason =
-  | "invalid-data"
-  | "unsupported-record"
-  | "conversion-failed";
+type MetafileConversionFailureReason = "invalid-data" | "unsupported-record" | "conversion-failed";
 
 export type MetafileConversionResult =
   | { readonly ok: true; readonly imageData: string; readonly mimeType: "image/svg+xml" }
@@ -58,15 +54,23 @@ export interface ResolvedImageSource {
   readonly mimeType: ImageMimeType;
 }
 
+export type MetafileConversionCache = Map<string, MetafileConversionResult>;
+
 export function resolveMetafileImageSource(
   imageData: string,
   mimeType: ImageMimeType,
   warningLogger: WarningLogger,
+  cache?: MetafileConversionCache,
 ): ResolvedImageSource | undefined {
   if (mimeType !== "image/emf" && mimeType !== "image/wmf") {
     return { imageData, mimeType };
   }
-  const result = convertMetafileToSvgData(imageData, mimeType);
+  const cacheKey = `${mimeType}:${imageData}`;
+  let result = cache?.get(cacheKey);
+  if (result === undefined) {
+    result = convertMetafileToSvgData(imageData, mimeType);
+    cache?.set(cacheKey, result);
+  }
   if (result.ok) return result;
 
   warningLogger.warn(
@@ -89,7 +93,12 @@ export function inlineSvgData(
     .slice(0, openingEnd)
     .replace(/\s(?:x|y|width|height|preserveAspectRatio)="[^"]*"/g, "");
   const renderedAttributes = Object.entries(attributes)
-    .map(([name, value]) => ` ${name}="${String(value)}"`)
+    .map(([name, value]) => {
+      if (!INLINE_SVG_ATTRIBUTES.has(name)) {
+        throw new Error(`Unsupported inline SVG attribute '${name}'.`);
+      }
+      return ` ${name}="${escapeXmlAttribute(String(value))}"`;
+    })
     .join("");
   return `${opening}${renderedAttributes}>${svg.slice(openingEnd + 1)}`;
 }
@@ -106,7 +115,8 @@ export function convertMetafileToSvgData(
   }
 
   const validation = validateMetafile(bytes, mimeType);
-  if (validation !== undefined) return validation;
+  if (!validation.ok) return validation;
+  const geometry = validation.geometry;
 
   const document = new DOMImplementation().createDocument(SVG_NAMESPACE, "svg");
   const previousDocument = Reflect.get(globalThis, "document");
@@ -124,19 +134,19 @@ export function convertMetafileToSvgData(
     const svgElement =
       mimeType === "image/emf"
         ? new emfJs.Renderer(arrayBuffer).render({
-            width: String(RENDER_EXTENT),
-            height: String(RENDER_EXTENT),
-            wExt: RENDER_EXTENT,
-            hExt: RENDER_EXTENT,
-            xExt: RENDER_EXTENT,
-            yExt: RENDER_EXTENT,
+            width: String(geometry.width),
+            height: String(geometry.height),
+            wExt: geometry.width,
+            hExt: geometry.height,
+            xExt: geometry.width,
+            yExt: geometry.height,
             mapMode: MM_ANISOTROPIC,
           })
         : new wmfJs.Renderer(arrayBuffer).render({
-            width: String(RENDER_EXTENT),
-            height: String(RENDER_EXTENT),
-            xExt: RENDER_EXTENT,
-            yExt: RENDER_EXTENT,
+            width: String(geometry.width),
+            height: String(geometry.height),
+            xExt: geometry.width,
+            yExt: geometry.height,
             mapMode: MM_ANISOTROPIC,
           });
 
@@ -144,7 +154,7 @@ export function convertMetafileToSvgData(
     if (mimeType === "image/emf") {
       svg = appendEmfText(svg, bytes);
     }
-    svg = normalizeMetafileSvg(svg);
+    svg = normalizeMetafileSvg(svg, geometry);
     return {
       ok: true,
       imageData: uint8ArrayToBase64(new TextEncoder().encode(svg)),
@@ -161,8 +171,25 @@ export function convertMetafileToSvgData(
   }
 }
 
-function normalizeMetafileSvg(svg: string): string {
+interface MetafileGeometry {
+  readonly originX: number;
+  readonly originY: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+type MetafileValidationResult =
+  | { readonly ok: true; readonly geometry: MetafileGeometry }
+  | Exclude<MetafileConversionResult, { readonly ok: true }>;
+
+const INLINE_SVG_ATTRIBUTES = new Set(["x", "y", "width", "height", "preserveAspectRatio"]);
+
+function normalizeMetafileSvg(svg: string, geometry: MetafileGeometry): string {
   return svg
+    .replace(
+      / viewBox="[^"]*"/,
+      ` viewBox="${geometry.originX} ${geometry.originY} ${geometry.width} ${geometry.height}"`,
+    )
     .replace(/ filter="url\(#undefined\)"/g, "")
     .replace(/font-family="(?:sans-serif|Helvetica)"/g, 'font-family="Noto Sans"');
 }
@@ -183,24 +210,32 @@ function resolveRendererApi(module: MetafileRendererModule): MetafileRendererApi
   return api;
 }
 
-function validateMetafile(
-  bytes: Uint8Array,
-  mimeType: MetafileMimeType,
-): Exclude<MetafileConversionResult, { readonly ok: true }> | undefined {
+function validateMetafile(bytes: Uint8Array, mimeType: MetafileMimeType): MetafileValidationResult {
   return mimeType === "image/emf" ? validateEmf(bytes) : validateWmf(bytes);
 }
 
-function validateEmf(
-  bytes: Uint8Array,
-): Exclude<MetafileConversionResult, { readonly ok: true }> | undefined {
+function validateEmf(bytes: Uint8Array): MetafileValidationResult {
   if (bytes.byteLength < 88) return failure("invalid-data", "EMF header is truncated.");
   const view = dataView(bytes);
   if (view.getUint32(0, true) !== 1 || view.getUint32(40, true) !== 0x464d4520) {
     return failure("invalid-data", "EMF header signature is invalid.");
   }
+  const headerSize = view.getUint32(4, true);
+  const declaredBytes = view.getUint32(48, true);
+  const declaredRecords = view.getUint32(52, true);
+  if (headerSize < 88 || headerSize % 4 !== 0 || headerSize > bytes.byteLength) {
+    return failure("invalid-data", "EMF header size is invalid.");
+  }
+  if (declaredBytes !== bytes.byteLength) {
+    return failure("invalid-data", "EMF declared byte size does not match the stream.");
+  }
+
+  const geometry = emfHeaderGeometry(view);
+  if (geometry === undefined) return failure("invalid-data", "EMF header bounds are empty.");
 
   let offset = 0;
   let recordCount = 0;
+  let foundEof = false;
   while (offset < bytes.byteLength) {
     if (offset + 8 > bytes.byteLength) {
       return failure("invalid-data", "EMF record header is truncated.");
@@ -218,17 +253,22 @@ function validateEmf(
       return failure("invalid-data", "EMF record limit exceeded.");
     }
     offset += size;
-    if (type === 0x0e) break;
+    if (type === 0x0e) {
+      foundEof = true;
+      break;
+    }
   }
-  if (offset > bytes.byteLength || recordCount === 0) {
-    return failure("invalid-data", "EMF record stream is invalid.");
+  if (!foundEof) return failure("invalid-data", "EMF EOF record is missing.");
+  if (offset !== bytes.byteLength) {
+    return failure("invalid-data", "EMF stream has trailing bytes after EOF.");
   }
-  return undefined;
+  if (recordCount !== declaredRecords) {
+    return failure("invalid-data", "EMF declared record count does not match the stream.");
+  }
+  return { ok: true, geometry };
 }
 
-function validateWmf(
-  bytes: Uint8Array,
-): Exclude<MetafileConversionResult, { readonly ok: true }> | undefined {
+function validateWmf(bytes: Uint8Array): MetafileValidationResult {
   if (bytes.byteLength < 18) return failure("invalid-data", "WMF header is truncated.");
   const view = dataView(bytes);
   const placeable = view.getUint32(0, true) === 0x9ac6cdd7;
@@ -241,9 +281,18 @@ function validateWmf(
   if ((type !== 1 && type !== 2) || headerSizeWords !== 9) {
     return failure("invalid-data", "WMF meta header is invalid.");
   }
+  const declaredSizeBytes = view.getUint32(headerOffset + 6, true) * 2;
+  if (declaredSizeBytes !== bytes.byteLength - headerOffset) {
+    return failure("invalid-data", "WMF declared byte size does not match the stream.");
+  }
+  if (placeable && !hasValidPlaceableChecksum(view)) {
+    return failure("invalid-data", "WMF placeable header checksum is invalid.");
+  }
 
   let offset = headerOffset + headerSizeWords * 2;
   let recordCount = 0;
+  let foundEof = false;
+  let maximumRecordWords = 0;
   while (offset < bytes.byteLength) {
     if (offset + 6 > bytes.byteLength) {
       return failure("invalid-data", "WMF record header is truncated.");
@@ -264,16 +313,85 @@ function validateWmf(
       );
     }
     recordCount++;
+    maximumRecordWords = Math.max(maximumRecordWords, sizeWords);
     if (recordCount > 200_000) {
       return failure("invalid-data", "WMF record limit exceeded.");
     }
     offset += size;
-    if (recordType === 0) break;
+    if (recordType === 0) {
+      foundEof = true;
+      break;
+    }
   }
-  if (offset > bytes.byteLength || recordCount === 0) {
-    return failure("invalid-data", "WMF record stream is invalid.");
+  if (!foundEof) return failure("invalid-data", "WMF EOF record is missing.");
+  if (offset !== bytes.byteLength) {
+    return failure("invalid-data", "WMF stream has trailing bytes after EOF.");
   }
-  return undefined;
+  if (view.getUint32(headerOffset + 12, true) !== maximumRecordWords) {
+    return failure("invalid-data", "WMF declared maximum record size does not match the stream.");
+  }
+  const geometry = wmfGeometry(view, headerOffset, placeable);
+  if (geometry === undefined) {
+    return failure("invalid-data", "WMF has no usable placeable bounds or window extent.");
+  }
+  return { ok: true, geometry };
+}
+
+function emfHeaderGeometry(view: DataView): MetafileGeometry | undefined {
+  const bounds = rectangleGeometry(view, 8);
+  if (bounds !== undefined) return bounds;
+  return rectangleGeometry(view, 24);
+}
+
+function rectangleGeometry(view: DataView, offset: number): MetafileGeometry | undefined {
+  const originX = view.getInt32(offset, true);
+  const originY = view.getInt32(offset + 4, true);
+  const width = view.getInt32(offset + 8, true) - originX;
+  const height = view.getInt32(offset + 12, true) - originY;
+  return width > 0 && height > 0 ? { originX, originY, width, height } : undefined;
+}
+
+function hasValidPlaceableChecksum(view: DataView): boolean {
+  let checksum = 0;
+  for (let offset = 0; offset < 20; offset += 2) checksum ^= view.getUint16(offset, true);
+  return checksum === view.getUint16(20, true);
+}
+
+function wmfGeometry(
+  view: DataView,
+  headerOffset: number,
+  placeable: boolean,
+): MetafileGeometry | undefined {
+  if (placeable) {
+    const originX = view.getInt16(6, true);
+    const originY = view.getInt16(8, true);
+    const width = view.getInt16(10, true) - originX;
+    const height = view.getInt16(12, true) - originY;
+    if (width > 0 && height > 0) return { originX, originY, width, height };
+  }
+
+  let originX = 0;
+  let originY = 0;
+  let width = 0;
+  let height = 0;
+  let offset = headerOffset + 18;
+  while (offset + 6 <= view.byteLength) {
+    const size = view.getUint32(offset, true) * 2;
+    const type = view.getUint16(offset + 4, true);
+    if (type === 0x020b && size >= 10) {
+      originY = view.getInt16(offset + 6, true);
+      originX = view.getInt16(offset + 8, true);
+    } else if (type === 0x020c && size >= 10) {
+      height = Math.abs(view.getInt16(offset + 6, true));
+      width = Math.abs(view.getInt16(offset + 8, true));
+      break;
+    }
+    offset += size;
+    if (type === 0) break;
+  }
+  // WMFJS applies META_SETWINDOWORG while rendering, so its output device coordinates begin at
+  // zero even when the logical stream window has a non-zero origin.
+  return width > 0 && height > 0 ? { originX: 0, originY: 0, width, height } : undefined;
 }
 
 function appendEmfText(svg: string, bytes: Uint8Array): string {
@@ -329,6 +447,14 @@ function hexByte(value: number): string {
 
 function escapeXmlText(value: string): string {
   return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+function escapeXmlAttribute(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 function dataView(bytes: Uint8Array): DataView {

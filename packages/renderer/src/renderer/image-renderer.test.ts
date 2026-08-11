@@ -61,6 +61,33 @@ describe("EMF rendering", () => {
     expect(result.content).not.toContain("[EMF]");
     expect(warnings.getWarningEntries()).toEqual([]);
   });
+
+  it("caches a successful conversion for repeated images in one render context", () => {
+    const context = createRendererContext();
+    const image = makeImage({
+      mimeType: "image/emf",
+      imageData: createRepresentativeEmf().toString("base64"),
+    });
+
+    renderImage(image, context);
+    renderImage(image, context);
+
+    expect(context.metafileConversionCache.size).toBe(1);
+  });
+
+  it("caches a failed conversion while warning for each repeated fallback", () => {
+    const warnings = createWarningLogger("warn");
+    const context = createRendererContext({ warningLogger: warnings });
+    const image = makeImage({ mimeType: "image/emf", imageData: "broken" });
+
+    renderImage(image, context);
+    renderImage(image, context);
+
+    expect(context.metafileConversionCache.size).toBe(1);
+    expect(
+      warnings.getWarningEntries().filter((entry) => entry.feature === "image.metafile-conversion"),
+    ).toHaveLength(2);
+  });
 });
 
 describe("renderImage", () => {
