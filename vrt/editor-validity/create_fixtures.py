@@ -896,6 +896,10 @@ def create_editor_validity_fixtures():
     create_editor_validity_drawing_delete_fixture(
         "editor-validity-drawing-delete-source.pptx",
     )
+    create_editor_validity_group_fixture(
+        "editor-validity-nested-group-delete-source.pptx",
+        grouped=True,
+    )
 
 
 def main():

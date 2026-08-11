@@ -77,6 +77,8 @@ The released command set includes:
   `addTextBox`, `addConnector`, `deleteShape`, `groupShapes`, and `ungroupShape`. Grouping accepts
   two or more consecutive siblings with the same direct parent; the typed source-node convenience
   method covers shape, picture, connector, Table/Chart graphic frames, and native group nodes.
+  Deletion accepts those same typed drawing kinds at the slide root or any native-group depth,
+  removes a group as one subtree, and keeps an empty parent group when its last child is deleted.
   Ungrouping is limited to non-empty groups whose identity child mapping, appearance, unknown XML,
   and connector references can be expanded losslessly; see the document package's
   [group constraints](../document/docs/editing.md#lossless-group-and-ungroup).
