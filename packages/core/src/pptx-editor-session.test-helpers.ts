@@ -2,10 +2,13 @@ import { Buffer } from "node:buffer";
 
 import {
   addChart,
+  addPicture,
   addShape,
+  addTable,
   asEmu,
   createPptx,
   createPptxAuthoringSession,
+  groupShapes,
   readPptx,
   type SourceConnector,
   type SourceShape,
@@ -41,6 +44,85 @@ export function buildGroupCommandFixture(): Uint8Array {
     });
   }
   return writePptx(source);
+}
+
+export function buildDrawingDeleteSessionFixture(): Uint8Array {
+  let source = createPptx();
+  const slideHandle = source.slides[0]?.handle;
+  if (slideHandle === undefined) throw new Error("drawing delete slide handle is missing");
+  source = addPicture(source, slideHandle, {
+    bytes: RED_PNG,
+    offsetX: asEmu(100),
+    offsetY: asEmu(100),
+    width: asEmu(1000),
+    height: asEmu(1000),
+    name: "Delete Picture",
+  });
+  source = addTable(source, slideHandle, {
+    offsetX: asEmu(1200),
+    offsetY: asEmu(100),
+    width: asEmu(1000),
+    height: asEmu(1000),
+    columnWidths: [asEmu(1000)],
+    rows: [{ height: asEmu(1000), cells: [{ text: "Cell" }] }],
+    name: "Delete Table",
+  });
+  source = addChart(source, slideHandle, {
+    chartType: "bar",
+    series: [{ categories: ["A"], values: [1] }],
+    offsetX: asEmu(2300),
+    offsetY: asEmu(100),
+    width: asEmu(1000),
+    height: asEmu(1000),
+    name: "Delete Chart",
+  });
+  for (const [name, offsetX] of [
+    ["Group A", 3400],
+    ["Group B", 4500],
+  ] as const) {
+    source = addShape(source, slideHandle, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(offsetX),
+      offsetY: asEmu(100),
+      width: asEmu(1000),
+      height: asEmu(1000),
+      name,
+    });
+  }
+  source = groupShapes(
+    source,
+    source.slides[0].shapes
+      .filter((shape) => shape.kind !== "raw" && shape.name?.startsWith("Group "))
+      .map((shape) => {
+        if (shape.handle === undefined) throw new Error("group child handle is missing");
+        return shape.handle;
+      }),
+  );
+  return writePptx(source);
+}
+
+export async function buildExternallyConnectedGroupFixture(): Promise<Uint8Array> {
+  const pptx = buildDrawingDeleteSessionFixture();
+  const source = readPptx(pptx);
+  const group = source.slides[0].shapes.find((shape) => shape.kind === "group");
+  if (group?.kind !== "group") throw new Error("external connector group is missing");
+  const childId = group.children[0]?.nodeId;
+  if (childId === undefined) throw new Error("external connector child id is missing");
+  const zip = await JSZip.loadAsync(pptx);
+  const slidePath = source.slides[0].partPath;
+  const slideFile = zip.file(slidePath);
+  if (slideFile === null) throw new Error("external connector slide part is missing");
+  const slideXml = await slideFile.async("string");
+  zip.file(
+    slidePath,
+    slideXml.replace(
+      "</p:spTree>",
+      `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="99" name="External Connector"/><p:cNvCxnSpPr>` +
+        `<a:stCxn id="${String(childId)}" idx="0"/></p:cNvCxnSpPr><p:nvPr/></p:nvCxnSpPr>` +
+        `<p:spPr><a:prstGeom prst="straightConnector1"/></p:spPr></p:cxnSp></p:spTree>`,
+    ),
+  );
+  return zip.generateAsync({ type: "uint8array" });
 }
 
 export async function buildTemplatePreviewFixture(): Promise<Uint8Array> {

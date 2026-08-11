@@ -161,23 +161,49 @@ function mediaContentTypeRegistration(
   };
 }
 
-/** Removes the given parts and their `.rels` parts from all four PackageGraph lists. */
+/** Removes the given parts and their `.rels` parts from every related PackageGraph collection. */
 export function removePackageParts(
   graph: PackageGraph,
   partPaths: readonly PartPath[],
 ): PackageGraph {
+  if (partPaths.length === 0) return graph;
+
   const removedPartPaths = new Set<string>(partPaths);
   const removedRelationshipPartPaths = new Set<string>(
     partPaths.map((partPath) => relationshipsPartPath(partPath)),
   );
+  const retainedParts = graph.parts.filter(
+    (part) =>
+      !removedPartPaths.has(part.partPath) && !removedRelationshipPartPaths.has(part.partPath),
+  );
+  const retainedMedia = graph.media.filter((part) => !removedPartPaths.has(part.partPath));
+  const removedExtensions = new Set(
+    [...graph.parts, ...graph.media].flatMap((part) => {
+      if (
+        !removedPartPaths.has(part.partPath) &&
+        !removedRelationshipPartPaths.has(part.partPath)
+      ) {
+        return [];
+      }
+      const extension = partExtension(part.partPath);
+      return extension === undefined ? [] : [extension];
+    }),
+  );
+  const retainedExtensions = new Set(
+    [...retainedParts, ...retainedMedia].flatMap((part) => {
+      const extension = partExtension(part.partPath);
+      return extension === undefined ? [] : [extension];
+    }),
+  );
   return {
     ...graph,
-    parts: graph.parts.filter(
-      (part) =>
-        !removedPartPaths.has(part.partPath) && !removedRelationshipPartPaths.has(part.partPath),
-    ),
+    parts: retainedParts,
     contentTypes: {
       ...graph.contentTypes,
+      defaults: graph.contentTypes.defaults.filter((entry) => {
+        const extension = entry.extension.toLowerCase();
+        return !removedExtensions.has(extension) || retainedExtensions.has(extension);
+      }),
       overrides: graph.contentTypes.overrides.filter(
         (override) =>
           !removedPartPaths.has(override.partName) &&
@@ -191,7 +217,15 @@ export function removePackageParts(
       (part) =>
         !removedPartPaths.has(part.partPath) && !removedRelationshipPartPaths.has(part.partPath),
     ),
+    media: retainedMedia,
   };
+}
+
+function partExtension(partPath: string): string | undefined {
+  const dot = partPath.lastIndexOf(".");
+  const slash = partPath.lastIndexOf("/");
+  if (dot === -1 || dot < slash) return undefined;
+  return partPath.slice(dot + 1).toLowerCase();
 }
 
 /**

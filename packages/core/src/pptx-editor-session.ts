@@ -738,7 +738,7 @@ export class PptxEditorSession {
   }
 
   /**
-   * Delete a shape by stable source handle.
+   * Delete a supported top-level drawing by stable source handle.
    *
    * @param handle Handle returned by {@link shapes}.
    * @returns Updated editor state.
@@ -797,7 +797,7 @@ export class PptxEditorSession {
   }
 
   /**
-   * Delete the currently selected shape.
+   * Delete the currently selected supported top-level drawing.
    *
    * @returns Updated editor state.
    * @throws {@link PptxEditorError} with `invalid-selection`, `invalid-command`, or
@@ -1468,12 +1468,17 @@ function isDeletableShape(
   slideShapes: readonly SourceShapeNode[],
 ): boolean {
   if (
-    (shape.kind !== "shape" && shape.kind !== "connector") ||
+    (shape.kind !== "shape" &&
+      shape.kind !== "connector" &&
+      shape.kind !== "image" &&
+      shape.kind !== "table" &&
+      shape.kind !== "chart" &&
+      shape.kind !== "group") ||
     shape.handle?.nodeId === undefined
   ) {
     return false;
   }
-  if (shape.kind === "shape" && isShapeReferencedByConnector(shape, slideShapes)) {
+  if (isShapeReferencedByConnector(shape, slideShapes)) {
     return false;
   }
   return !shape.rawSidecars?.some((sidecar) => sidecar.node.name === "mc:AlternateContent");
@@ -1483,12 +1488,25 @@ function isShapeReferencedByConnector(
   shape: SourceShapeNode,
   slideShapes: readonly SourceShapeNode[],
 ): boolean {
-  return slideShapes.some(
+  const deletedIds = new Set(
+    flattenShapeTree([shape]).flatMap((candidate) =>
+      candidate.nodeId === undefined ? [] : [String(candidate.nodeId)],
+    ),
+  );
+  return flattenShapeTree(slideShapes).some(
     (candidate) =>
       candidate.kind === "connector" &&
-      (candidate.connection?.start?.shapeId === shape.nodeId ||
-        candidate.connection?.end?.shapeId === shape.nodeId),
+      !deletedIds.has(String(candidate.nodeId)) &&
+      (deletedIds.has(String(candidate.connection?.start?.shapeId)) ||
+        deletedIds.has(String(candidate.connection?.end?.shapeId))),
   );
+}
+
+function flattenShapeTree(shapes: readonly SourceShapeNode[]): SourceShapeNode[] {
+  return shapes.flatMap((shape) => [
+    shape,
+    ...(shape.kind === "group" ? flattenShapeTree(shape.children) : []),
+  ]);
 }
 
 function collectTextRuns(runs: readonly SourceTextRun[]): PptxEditorTextRunInfo[] {

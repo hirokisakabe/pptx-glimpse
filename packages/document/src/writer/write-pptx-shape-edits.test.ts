@@ -3,24 +3,32 @@ import { describe, expect, it } from "vitest";
 
 // Import via the actual public surface (`@pptx-glimpse/document`).
 import {
+  addChart,
   addConnector,
   addPicture,
   addShape,
+  addTable,
   addTextBox,
   asEmu,
+  asRelationshipId,
   asSourceNodeId,
   createPptx,
   deleteShape,
   findShapeNodeBySourceHandle,
   groupShapes,
   readPptx,
+  replaceImageBytes,
   replaceTextRunPlainText,
   setShapeFill,
   setShapeOutline,
   updateShapeTransform,
   writePptx,
 } from "../index.js";
+import { resolveInternalRelationshipTarget } from "../source/package-paths.js";
 import {
+  BLUE_PNG,
+  buildConnectedShapeFixture,
+  buildMediaReplacementFixture,
   buildShapeDeleteFixture,
   buildShapeStyleFixture,
   buildTextEditFixture,
@@ -32,11 +40,82 @@ import {
   findShapeByName,
   firstShape,
   getEntry,
+  GREEN_PNG,
   RED_PNG,
   requireHandle,
   requireShape,
   xml,
 } from "./write-pptx.test-helpers.js";
+
+function buildAuthoredDrawingDeleteSource(): ReturnType<typeof readPptx> {
+  let source = createPptx();
+  const slideHandle = source.slides[0]?.handle;
+  if (slideHandle === undefined) throw new Error("authored drawing fixture slide is missing");
+  source = addShape(source, slideHandle, {
+    geometry: { kind: "preset", preset: "rect" },
+    offsetX: asEmu(100),
+    offsetY: asEmu(100),
+    width: asEmu(1000),
+    height: asEmu(1000),
+    name: "Keep Before",
+  });
+  source = addTable(source, slideHandle, {
+    offsetX: asEmu(1200),
+    offsetY: asEmu(100),
+    width: asEmu(2000),
+    height: asEmu(1000),
+    columnWidths: [asEmu(2000)],
+    rows: [{ height: asEmu(1000), cells: [{ text: "Table" }] }],
+    name: "Delete Table",
+  });
+  source = addChart(source, slideHandle, {
+    chartType: "bar",
+    series: [{ name: "Series", categories: ["A"], values: [1] }],
+    offsetX: asEmu(3400),
+    offsetY: asEmu(100),
+    width: asEmu(2000),
+    height: asEmu(1000),
+    name: "Delete Chart",
+  });
+  source = addShape(source, slideHandle, {
+    geometry: { kind: "preset", preset: "rect" },
+    offsetX: asEmu(5600),
+    offsetY: asEmu(100),
+    width: asEmu(1000),
+    height: asEmu(1000),
+    name: "Group Child A",
+  });
+  source = addShape(source, slideHandle, {
+    geometry: { kind: "preset", preset: "rect" },
+    offsetX: asEmu(6800),
+    offsetY: asEmu(100),
+    width: asEmu(1000),
+    height: asEmu(1000),
+    name: "Group Child B",
+  });
+  const children = source.slides[0].shapes.filter(
+    (shape) => shape.kind !== "raw" && shape.name?.startsWith("Group Child"),
+  );
+  source = groupShapes(
+    source,
+    children.map((shape) => requireHandle(shape.handle)),
+  );
+  source = addShape(source, slideHandle, {
+    geometry: { kind: "preset", preset: "rect" },
+    offsetX: asEmu(8000),
+    offsetY: asEmu(100),
+    width: asEmu(1000),
+    height: asEmu(1000),
+    name: "Keep After",
+  });
+  const archive = unzipSync(writePptx(source));
+  return readPptx(
+    zipSync({
+      ...archive,
+      "docProps/custom.xml": xml(`<Properties><custom value="unrelated-orphan"/></Properties>`),
+    }),
+  );
+}
 
 describe("writePptx - shape add/delete edits", () => {
   it("adds a text box with a collision-free shape id and persists it", () => {
@@ -199,6 +278,18 @@ describe("writePptx - shape add/delete edits", () => {
     expect(() => deleteShape(withConnector, requireHandle(start.handle))).toThrow(
       /referenced by connector/,
     );
+  });
+
+  it("allows deleting a connector before its connected target in one edit journal", () => {
+    const source = readPptx(buildConnectedShapeFixture());
+    const connector = findConnectorByName(source, "Connected Shapes");
+    const withoutConnector = deleteShape(source, requireHandle(connector.handle));
+    const target = findShapeByName(withoutConnector, "Delete Me");
+    const deleted = deleteShape(withoutConnector, requireHandle(target.handle));
+    const reread = readPptx(writePptx(deleted));
+
+    expect(findConnectorByNameOptional(reread, "Connected Shapes")).toBeUndefined();
+    expect(reread.slides[0].shapes.map((shape) => shape.nodeId)).not.toContain("10");
   });
 
   it("allows an added text box to be edited before write", () => {
@@ -393,12 +484,571 @@ describe("writePptx - shape add/delete edits", () => {
     expect(decoder.decode(getEntry(output, "docProps/custom.xml"))).toContain("preserve-me");
   });
 
-  it("rejects deleting pic and graphicFrame nodes through the sp/cxnSp delete API", () => {
-    const source = readPptx(buildShapeDeleteFixture());
-
-    expect(() => deleteShape(source, requireHandle(source.slides[0].shapes[1]?.handle))).toThrow(
-      /only top-level sp or cxnSp shapes/,
+  it("deletes a top-level picture and cleans its unshared relationship and media part", () => {
+    const source = readPptx(buildMediaReplacementFixture());
+    const image = source.slides[0].shapes.find((shape) => shape.name === "Replace Target");
+    const deleted = deleteShape(source, requireHandle(image?.handle));
+    const output = writePptx(deleted);
+    const reread = readPptx(output);
+    const archive = unzipSync(output);
+    const slideRelationships = reread.packageGraph.relationships.find(
+      (group) => group.sourcePartPath === "ppt/slides/slide1.xml",
     );
+
+    expect(reread.slides[0].shapes).toEqual([]);
+    expect(slideRelationships?.relationships.map((relationship) => relationship.id)).not.toContain(
+      "rIdImage1",
+    );
+    expect(archive["ppt/media/image1.png"]).toBeUndefined();
+    expect(slideRelationships?.relationships.map((relationship) => relationship.id)).toContain(
+      "rIdImage2",
+    );
+    expect(archive["ppt/media/image2.png"]).toEqual(GREEN_PNG);
+    expect(archive["docProps/custom.xml"]).toBeDefined();
+  });
+
+  it("removes the last picture media default only after the final extension user is deleted", () => {
+    let authored = createPptx();
+    for (const [index, bytes] of [RED_PNG, GREEN_PNG].entries()) {
+      authored = addPicture(authored, authored.slides[0].handle!, {
+        bytes,
+        offsetX: asEmu(100 + index * 1200),
+        offsetY: asEmu(100),
+        width: asEmu(1000),
+        height: asEmu(1000),
+        name: `Picture ${index + 1}`,
+      });
+    }
+    const persisted = readPptx(writePptx(authored));
+    const first = persisted.slides[0].shapes.find((shape) => shape.name === "Picture 1");
+    const afterFirst = deleteShape(persisted, requireHandle(first?.handle));
+    const firstReread = readPptx(writePptx(afterFirst));
+
+    expect(firstReread.packageGraph.media).toHaveLength(1);
+    expect(
+      firstReread.packageGraph.contentTypes.defaults.map((entry) => entry.extension),
+    ).toContain("png");
+
+    const second = afterFirst.slides[0].shapes.find((shape) => shape.name === "Picture 2");
+    const reread = readPptx(writePptx(deleteShape(afterFirst, requireHandle(second?.handle))));
+
+    expect(reread.packageGraph.media).toEqual([]);
+    expect(reread.packageGraph.contentTypes.defaults.map((entry) => entry.extension)).not.toContain(
+      "png",
+    );
+  });
+
+  it("cleans the old shared image after the surviving picture has a pending copy-on-write replacement", () => {
+    const source = readPptx(buildMediaReplacementFixture(true));
+    const pictureA = source.slides[0].shapes.find((shape) => shape.name === "Replace Target");
+    const pictureB = source.slides[0].shapes.find((shape) => shape.name === "Keep Shared");
+    const replaced = replaceImageBytes(source, requireHandle(pictureB?.handle), BLUE_PNG);
+    const deleted = deleteShape(replaced, requireHandle(pictureA?.handle));
+    const output = writePptx(deleted);
+    const reread = readPptx(output);
+    const archive = unzipSync(output);
+    const remainingPicture = reread.slides[0].shapes.find((shape) => shape.kind === "image");
+    const relationshipIds = reread.packageGraph.relationships
+      .find((group) => group.sourcePartPath === "ppt/slides/slide1.xml")
+      ?.relationships.map((relationship) => relationship.id);
+
+    expect(remainingPicture?.name).toBe("Keep Shared");
+    expect(remainingPicture?.blipRelationshipId).toBe("rId3");
+    expect(relationshipIds).not.toContain("rIdImage1");
+    expect(relationshipIds).toContain("rId3");
+    expect(archive["ppt/media/image1.png"]).toBeUndefined();
+    expect(archive["ppt/media/image3.png"]).toEqual(BLUE_PNG);
+  });
+
+  it("cleans a pending copy-on-write replacement inside a persisted group being deleted", () => {
+    let grouped = readPptx(buildMediaReplacementFixture(true));
+    grouped = groupShapes(
+      grouped,
+      grouped.slides[0].shapes.map((shape) => requireHandle(shape.handle)),
+    );
+    const persisted = readPptx(writePptx(grouped));
+    const persistedGroup = persisted.slides[0].shapes.find((shape) => shape.kind === "group");
+    if (persistedGroup?.kind !== "group") throw new Error("persisted picture group was not found");
+    const replacementTarget = persistedGroup.children.find((shape) => shape.name === "Keep Shared");
+    const replaced = replaceImageBytes(
+      persisted,
+      requireHandle(replacementTarget?.handle),
+      BLUE_PNG,
+    );
+    const deleted = deleteShape(replaced, requireHandle(persistedGroup.handle));
+    const output = writePptx(deleted);
+    const reread = readPptx(output);
+    const archive = unzipSync(output);
+    const relationshipIds = reread.packageGraph.relationships
+      .find((group) => group.sourcePartPath === "ppt/slides/slide1.xml")
+      ?.relationships.map((relationship) => relationship.id);
+
+    expect(reread.slides[0].shapes).toEqual([]);
+    expect(relationshipIds).not.toContain("rIdImage1");
+    expect(relationshipIds).not.toContain("rId3");
+    expect(archive["ppt/media/image1.png"]).toBeUndefined();
+    expect(archive["ppt/media/image3.png"]).toBeUndefined();
+  });
+
+  it("cleans reachable parts to a fixed point when a child candidate precedes its owner", () => {
+    let authored = createPptx();
+    const slideHandle = authored.slides[0].handle!;
+    authored = addPicture(authored, slideHandle, {
+      bytes: RED_PNG,
+      offsetX: asEmu(100),
+      offsetY: asEmu(100),
+      width: asEmu(1000),
+      height: asEmu(1000),
+      name: "Delete Picture First",
+    });
+    authored = addChart(authored, slideHandle, {
+      chartType: "bar",
+      series: [{ name: "Series", categories: ["A"], values: [1] }],
+      offsetX: asEmu(1200),
+      offsetY: asEmu(100),
+      width: asEmu(2000),
+      height: asEmu(1000),
+      name: "Delete Chart Second",
+    });
+    authored = groupShapes(
+      authored,
+      authored.slides[0].shapes.map((shape) => requireHandle(shape.handle)),
+    );
+    const persisted = readPptx(writePptx(authored));
+    const chart = persisted.slides[0].shapes
+      .flatMap((shape) => (shape.kind === "group" ? shape.children : []))
+      .find((shape) => shape.kind === "chart");
+    const chartRelationship = persisted.packageGraph.relationships
+      .find((group) => group.sourcePartPath === persisted.slides[0].partPath)
+      ?.relationships.find((relationship) => relationship.id === chart?.chartRelationshipId);
+    const chartPath =
+      chartRelationship === undefined
+        ? undefined
+        : resolveInternalRelationshipTarget(persisted.slides[0].partPath, chartRelationship);
+    if (chartPath === undefined) throw new Error("fixed-point chart path was not found");
+    const adverseOrder = {
+      ...persisted,
+      packageGraph: {
+        ...persisted.packageGraph,
+        relationships: persisted.packageGraph.relationships.map((group) =>
+          group.sourcePartPath === chartPath
+            ? {
+                ...group,
+                relationships: [
+                  ...group.relationships,
+                  {
+                    id: asRelationshipId("rIdAdverseImage"),
+                    type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/image",
+                    target: "../media/image1.png",
+                  },
+                ],
+              }
+            : group,
+        ),
+      },
+    };
+    const group = adverseOrder.slides[0].shapes.find((shape) => shape.kind === "group");
+    const output = writePptx(deleteShape(adverseOrder, requireHandle(group?.handle)));
+    const archive = unzipSync(output);
+
+    expect(archive["ppt/media/image1.png"]).toBeUndefined();
+    expect(archive[chartPath]).toBeUndefined();
+  });
+
+  it.each([
+    {
+      name: "an r prefix rebound to a custom namespace",
+      rawReference: `<x:keep xmlns:r="urn:custom" r:id="rIdImage1"/>`,
+    },
+    {
+      name: "a URI that only contains the relationships suffix",
+      rawReference: `<x:keep xmlns:fake="urn:custom/relationships" fake:id="rIdImage1"/>`,
+    },
+  ])("does not retain media for $name", ({ rawReference }) => {
+    const archive = unzipSync(buildMediaReplacementFixture());
+    const slidePath = "ppt/slides/slide1.xml";
+    const slideXml = decoder.decode(archive[slidePath]);
+    const source = readPptx(
+      zipSync({
+        ...archive,
+        [slidePath]: encoder.encode(slideXml.replace("</p:spTree>", `${rawReference}</p:spTree>`)),
+      }),
+    );
+    const target = source.slides[0].shapes.find((shape) => shape.name === "Replace Target");
+    const output = writePptx(deleteShape(source, requireHandle(target?.handle)));
+
+    expect(unzipSync(output)["ppt/media/image1.png"]).toBeUndefined();
+  });
+
+  it("retains media referenced through a custom prefix bound to the exact relationship namespace", () => {
+    const archive = unzipSync(buildMediaReplacementFixture());
+    const slidePath = "ppt/slides/slide1.xml";
+    const slideXml = decoder.decode(archive[slidePath]);
+    const rawReference =
+      `<x:keep xmlns:rel="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ` +
+      `rel:id="rIdImage1"/>`;
+    const source = readPptx(
+      zipSync({
+        ...archive,
+        [slidePath]: encoder.encode(slideXml.replace("</p:spTree>", `${rawReference}</p:spTree>`)),
+      }),
+    );
+    const target = source.slides[0].shapes.find((shape) => shape.name === "Replace Target");
+    const output = writePptx(deleteShape(source, requireHandle(target?.handle)));
+
+    expect(unzipSync(output)["ppt/media/image1.png"]).toEqual(RED_PNG);
+  });
+
+  it("cancels a newly added picture and its package resources before the first write", () => {
+    let source = createPptx();
+    source = addPicture(source, source.slides[0].handle!, {
+      bytes: RED_PNG,
+      offsetX: asEmu(100),
+      offsetY: asEmu(100),
+      width: asEmu(1000),
+      height: asEmu(1000),
+    });
+    const picture = source.slides[0].shapes.find((shape) => shape.kind === "image");
+    const deleted = deleteShape(source, requireHandle(picture?.handle));
+
+    expect(deleted.edits).toEqual([]);
+    expect(deleted.packageGraph.media).toEqual([]);
+    expect(readPptx(writePptx(deleted)).slides[0].shapes).toEqual([]);
+  });
+
+  it("cancels a newly added table and its external hyperlink relationship", () => {
+    let source = createPptx();
+    source = addTable(source, source.slides[0].handle!, {
+      offsetX: asEmu(100),
+      offsetY: asEmu(100),
+      width: asEmu(1000),
+      height: asEmu(1000),
+      columnWidths: [asEmu(1000)],
+      rows: [
+        {
+          height: asEmu(1000),
+          cells: [{ runs: [{ text: "Link", hyperlink: "https://example.com" }] }],
+        },
+      ],
+    });
+    const table = source.slides[0].shapes.find((shape) => shape.kind === "table");
+    const deleted = deleteShape(source, requireHandle(table?.handle));
+    const slideRelationships = deleted.packageGraph.relationships.find(
+      (group) => group.sourcePartPath === deleted.slides[0].partPath,
+    );
+
+    expect(
+      slideRelationships?.relationships.filter((relationship) =>
+        relationship.type.endsWith("/hyperlink"),
+      ),
+    ).toEqual([]);
+    expect(readPptx(writePptx(deleted)).slides[0].shapes).toEqual([]);
+  });
+
+  it("deletes a group created earlier in the same edit journal", () => {
+    let source = createPptx();
+    const slideHandle = source.slides[0].handle!;
+    for (const offsetX of [100, 1200]) {
+      source = addShape(source, slideHandle, {
+        geometry: { kind: "preset", preset: "rect" },
+        offsetX: asEmu(offsetX),
+        offsetY: asEmu(100),
+        width: asEmu(1000),
+        height: asEmu(1000),
+      });
+    }
+    source = groupShapes(
+      source,
+      source.slides[0].shapes.map((shape) => requireHandle(shape.handle)),
+    );
+    const group = source.slides[0].shapes.find((shape) => shape.kind === "group");
+    const deleted = deleteShape(source, requireHandle(group?.handle));
+
+    expect(readPptx(writePptx(deleted)).slides[0].shapes).toEqual([]);
+    expect(deleted.edits?.map((edit) => edit.kind)).toEqual([
+      "addShape",
+      "addShape",
+      "groupShapes",
+      "deleteShape",
+    ]);
+  });
+
+  it("keeps media referenced by another picture, image fill, or raw VML node", () => {
+    for (const shared of [true, "fill", "vml"] as const) {
+      const source = readPptx(buildMediaReplacementFixture(shared));
+      const target = source.slides[0].shapes.find((shape) => shape.name === "Replace Target");
+      const output = writePptx(deleteShape(source, requireHandle(target?.handle)));
+      const reread = readPptx(output);
+
+      expect(reread.packageGraph.media.map((media) => media.partPath)).toContain(
+        "ppt/media/image1.png",
+      );
+      expect(
+        reread.packageGraph.relationships
+          .find((group) => group.sourcePartPath === "ppt/slides/slide1.xml")
+          ?.relationships.map((relationship) => relationship.id),
+      ).toContain("rIdImage1");
+    }
+  });
+
+  it("removes a shared image relationship and media after sequentially deleting all pictures", () => {
+    const source = readPptx(buildMediaReplacementFixture(true));
+    const first = source.slides[0].shapes.find((shape) => shape.name === "Replace Target");
+    const afterFirst = deleteShape(source, requireHandle(first?.handle));
+    const second = afterFirst.slides[0].shapes.find((shape) => shape.name === "Keep Shared");
+    const deleted = deleteShape(afterFirst, requireHandle(second?.handle));
+    const reread = readPptx(writePptx(deleted));
+
+    expect(reread.packageGraph.media.map((media) => media.partPath)).not.toContain(
+      "ppt/media/image1.png",
+    );
+    expect(
+      reread.packageGraph.relationships
+        .find((group) => group.sourcePartPath === "ppt/slides/slide1.xml")
+        ?.relationships.map((relationship) => relationship.id),
+    ).not.toContain("rIdImage1");
+  });
+
+  it("cleans relationships inside every descendant of a pending nested group delete", () => {
+    let source = readPptx(buildMediaReplacementFixture(true));
+    source = groupShapes(
+      source,
+      source.slides[0].shapes.map((shape) => requireHandle(shape.handle)),
+    );
+    source = addShape(source, source.slides[0].handle!, {
+      geometry: { kind: "preset", preset: "rect" },
+      offsetX: asEmu(100),
+      offsetY: asEmu(100),
+      width: asEmu(1000),
+      height: asEmu(1000),
+    });
+    source = groupShapes(
+      source,
+      source.slides[0].shapes.map((shape) => requireHandle(shape.handle)),
+    );
+    const outerGroup = source.slides[0].shapes.find((shape) => shape.kind === "group");
+    const deleted = deleteShape(source, requireHandle(outerGroup?.handle));
+    const reread = readPptx(writePptx(deleted));
+
+    expect(reread.slides[0].shapes).toEqual([]);
+    expect(reread.packageGraph.media.map((media) => media.partPath)).not.toContain(
+      "ppt/media/image1.png",
+    );
+  });
+
+  it("deletes native table, chart, and group drawings while preserving sibling order", () => {
+    const persisted = buildAuthoredDrawingDeleteSource();
+    const targets = [
+      persisted.slides[0].shapes.find(
+        (shape) => shape.kind === "table" && shape.name === "Delete Table",
+      ),
+      persisted.slides[0].shapes.find(
+        (shape) => shape.kind === "chart" && shape.name === "Delete Chart",
+      ),
+      persisted.slides[0].shapes.find((shape) => shape.kind === "group"),
+    ];
+    for (const target of targets) {
+      const beforeNames = persisted.slides[0].shapes
+        .filter((shape) => shape !== target)
+        .map((shape) => (shape.kind === "raw" ? undefined : shape.name));
+      const reread = readPptx(writePptx(deleteShape(persisted, requireHandle(target?.handle))));
+
+      expect(
+        reread.slides[0].shapes.map((shape) => (shape.kind === "raw" ? undefined : shape.name)),
+      ).toEqual(beforeNames);
+      expect(reread.slides[0].shapes.map((shape) => shape.nodeId)).toEqual(
+        persisted.slides[0].shapes.filter((shape) => shape !== target).map((shape) => shape.nodeId),
+      );
+    }
+  });
+
+  it("recursively removes an unshared chart and embedded workbook but keeps an orphan", () => {
+    const persisted = buildAuthoredDrawingDeleteSource();
+    const chart = persisted.slides[0].shapes.find((shape) => shape.name === "Delete Chart");
+    const chartEdit = persisted.edits?.find(
+      (edit) => edit.kind === "addChart" && edit.shapeId === String(chart?.nodeId),
+    );
+    expect(chartEdit).toBeUndefined();
+    const chartRelationship = persisted.packageGraph.relationships
+      .find((group) => group.sourcePartPath === persisted.slides[0].partPath)
+      ?.relationships.find((relationship) => relationship.id === chart?.handle?.relationshipId);
+    const chartPath =
+      chartRelationship === undefined
+        ? undefined
+        : resolveInternalRelationshipTarget(persisted.slides[0].partPath, chartRelationship);
+    const workbookRelationship = persisted.packageGraph.relationships
+      .find((group) => group.sourcePartPath === chartPath)
+      ?.relationships.find((relationship) => relationship.type.endsWith("/package"));
+    const workbookPath =
+      chartPath === undefined || workbookRelationship === undefined
+        ? undefined
+        : resolveInternalRelationshipTarget(chartPath, workbookRelationship);
+    if (chartPath === undefined || workbookPath === undefined) {
+      throw new Error("authored chart cleanup paths were not found");
+    }
+
+    const output = writePptx(deleteShape(persisted, requireHandle(chart?.handle)));
+    const archive = unzipSync(output);
+    expect(archive[chartPath]).toBeUndefined();
+    expect(archive[workbookPath]).toBeUndefined();
+    expect(archive["docProps/custom.xml"]).toBeDefined();
+    const contentTypes = decoder.decode(archive["[Content_Types].xml"]);
+    expect(contentTypes).not.toContain(`PartName="/${chartPath}"`);
+    expect(contentTypes).not.toContain(`PartName="/${workbookPath}"`);
+  });
+
+  it("keeps a shared chart and workbook when another frame retains the owner relationship", () => {
+    const persisted = buildAuthoredDrawingDeleteSource();
+    const archive = unzipSync(writePptx(persisted));
+    const slidePath = "ppt/slides/slide1.xml";
+    const slideXml = decoder.decode(archive[slidePath]);
+    const chartXml = /<p:graphicFrame>.*?Delete Chart.*?<\/p:graphicFrame>/.exec(slideXml)?.[0];
+    if (chartXml === undefined) throw new Error("authored chart XML was not found");
+    const sharedChartXml = chartXml
+      .replace(/<p:cNvPr id="\d+" name="Delete Chart"/, '<p:cNvPr id="98" name="Delete Chart"')
+      .replace("Delete Chart", "Keep Shared Chart");
+    const source = readPptx(
+      zipSync({
+        ...archive,
+        [slidePath]: encoder.encode(
+          slideXml.replace("</p:spTree>", `${sharedChartXml}</p:spTree>`),
+        ),
+      }),
+    );
+    const target = source.slides[0].shapes.find(
+      (shape) => shape.kind === "chart" && shape.name === "Delete Chart",
+    );
+    const output = writePptx(deleteShape(source, requireHandle(target?.handle)));
+    const reread = readPptx(output);
+
+    expect(
+      reread.slides[0].shapes.map((shape) => (shape.kind === "raw" ? undefined : shape.name)),
+    ).toContain("Keep Shared Chart");
+    expect(reread.packageGraph.parts.some((part) => part.partPath.startsWith("ppt/charts/"))).toBe(
+      true,
+    );
+    expect(
+      reread.packageGraph.parts.some((part) => part.partPath.startsWith("ppt/embeddings/")),
+    ).toBe(true);
+  });
+
+  it("removes a shared chart and workbook after sequentially deleting all frames", () => {
+    const persisted = buildAuthoredDrawingDeleteSource();
+    const archive = unzipSync(writePptx(persisted));
+    const slidePath = "ppt/slides/slide1.xml";
+    const slideXml = decoder.decode(archive[slidePath]);
+    const chartXml = /<p:graphicFrame>.*?Delete Chart.*?<\/p:graphicFrame>/.exec(slideXml)?.[0];
+    if (chartXml === undefined) throw new Error("authored chart XML was not found");
+    const sharedChartXml = chartXml
+      .replace(/<p:cNvPr id="\d+" name="Delete Chart"/, '<p:cNvPr id="98" name="Delete Chart"')
+      .replace("Delete Chart", "Keep Shared Chart");
+    const source = readPptx(
+      zipSync({
+        ...archive,
+        [slidePath]: encoder.encode(
+          slideXml.replace("</p:spTree>", `${sharedChartXml}</p:spTree>`),
+        ),
+      }),
+    );
+    const first = source.slides[0].shapes.find((shape) => shape.name === "Delete Chart");
+    const afterFirst = deleteShape(source, requireHandle(first?.handle));
+    const second = afterFirst.slides[0].shapes.find((shape) => shape.name === "Keep Shared Chart");
+    const reread = readPptx(writePptx(deleteShape(afterFirst, requireHandle(second?.handle))));
+
+    expect(reread.packageGraph.parts.some((part) => part.partPath.startsWith("ppt/charts/"))).toBe(
+      false,
+    );
+    expect(
+      reread.packageGraph.parts.some((part) => part.partPath.startsWith("ppt/embeddings/")),
+    ).toBe(false);
+  });
+
+  it("atomically rejects SmartArt, unknown graphicFrame, and AlternateContent targets", () => {
+    const archive = unzipSync(buildShapeDeleteFixture());
+    const slidePath = "ppt/slides/slide1.xml";
+    const slideXml = decoder.decode(getEntry(buildShapeDeleteFixture(), slidePath));
+    const unsupported =
+      `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="40" name="Unknown Frame"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><a:graphic><a:graphicData uri="urn:unknown"><x:payload xmlns:x="urn:unknown"/></a:graphicData></a:graphic></p:graphicFrame>` +
+      `<p:graphicFrame><p:nvGraphicFramePr><p:cNvPr id="41" name="SmartArt"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/diagram"><dgm:relIds xmlns:dgm="http://schemas.openxmlformats.org/drawingml/2006/diagram" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:dm="rIdDiagram"/></a:graphicData></a:graphic></p:graphicFrame>` +
+      `<mc:AlternateContent xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"><mc:Choice Requires="p14"><p:sp><p:nvSpPr><p:cNvPr id="42" name="Alternate Shape"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:prstGeom prst="rect"/></p:spPr></p:sp></mc:Choice></mc:AlternateContent>`;
+    const source = readPptx(
+      zipSync({
+        ...archive,
+        [slidePath]: encoder.encode(slideXml.replace("</p:spTree>", `${unsupported}</p:spTree>`)),
+      }),
+    );
+
+    for (const [nodeId, alternate] of [
+      ["40", false],
+      ["41", false],
+      ["42", true],
+    ] as const) {
+      const target = source.slides[0].shapes.find((shape) => shape.nodeId === nodeId);
+      const before = structuredClone(source);
+      expect(() => deleteShape(source, requireHandle(target?.handle))).toThrow(
+        alternate
+          ? /AlternateContent/
+          : /only top-level sp, cxnSp, pic, native table\/chart graphicFrame, or grpSp/,
+      );
+      expect(source).toEqual(before);
+    }
+  });
+
+  it("atomically rejects deleting a group whose descendant is referenced externally", () => {
+    const persisted = buildAuthoredDrawingDeleteSource();
+    const group = persisted.slides[0].shapes.find((shape) => shape.kind === "group");
+    if (group?.kind !== "group") throw new Error("group fixture was not found");
+    const descendantId = group.children[0]?.nodeId;
+    const archive = unzipSync(writePptx(persisted));
+    const slidePath = "ppt/slides/slide1.xml";
+    const slideXml = decoder.decode(archive[slidePath]);
+    const connector = `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="99" name="External Connector"/><p:cNvCxnSpPr><a:stCxn id="${String(descendantId)}" idx="0"/></p:cNvCxnSpPr><p:nvPr/></p:nvCxnSpPr><p:spPr><a:prstGeom prst="straightConnector1"/></p:spPr></p:cxnSp>`;
+    const source = readPptx(
+      zipSync({
+        ...archive,
+        [slidePath]: encoder.encode(slideXml.replace("</p:spTree>", `${connector}</p:spTree>`)),
+      }),
+    );
+    const sourceGroup = source.slides[0].shapes.find((shape) => shape.kind === "group");
+    const before = structuredClone(source);
+
+    expect(() => deleteShape(source, requireHandle(sourceGroup?.handle))).toThrow(
+      /referenced by connector 'External Connector'/,
+    );
+    expect(source).toEqual(before);
+  });
+
+  it("atomically rejects an external connector to a raw contentPart descendant of a group", () => {
+    const persisted = buildAuthoredDrawingDeleteSource();
+    const archive = unzipSync(writePptx(persisted));
+    const slidePath = "ppt/slides/slide1.xml";
+    const slideXml = decoder.decode(archive[slidePath]);
+    const contentPart =
+      `<p:contentPart><p:nvContentPartPr><p:cNvPr id="97" name="Raw Content Part"/>` +
+      `<p:cNvContentPartPr/></p:nvContentPartPr></p:contentPart>`;
+    const connector =
+      `<p:cxnSp><p:nvCxnSpPr><p:cNvPr id="99" name="Raw Descendant Connector"/>` +
+      `<p:cNvCxnSpPr><a:stCxn id="97" idx="0"/></p:cNvCxnSpPr><p:nvPr/></p:nvCxnSpPr>` +
+      `<p:spPr><a:prstGeom prst="straightConnector1"/></p:spPr></p:cxnSp>`;
+    const withRawDescendant = slideXml.replace(
+      /(<p:grpSp(?:\s[^>]*)?>.*?)(<\/p:grpSp>)/,
+      `$1${contentPart}$2`,
+    );
+    const source = readPptx(
+      zipSync({
+        ...archive,
+        [slidePath]: encoder.encode(
+          withRawDescendant.replace("</p:spTree>", `${connector}</p:spTree>`),
+        ),
+      }),
+    );
+    const group = source.slides[0].shapes.find((shape) => shape.kind === "group");
+    const before = structuredClone(source);
+
+    expect(() => deleteShape(source, requireHandle(group?.handle))).toThrow(
+      /referenced by connector 'Raw Descendant Connector'/,
+    );
+    expect(source).toEqual(before);
   });
 
   it("rejects conflicting shape additions for the same shape id", () => {
