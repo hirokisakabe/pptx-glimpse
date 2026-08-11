@@ -641,7 +641,7 @@ export async function buildMetafileImagesFixture(): Promise<Buffer> {
   const olePreview = `<p:graphicFrame>
   <p:nvGraphicFramePr><p:cNvPr id="5" name="OLE WMF preview"/><p:cNvGraphicFramePr/><p:nvPr/></p:nvGraphicFramePr>
   <p:xfrm><a:off x="4700000" y="2600000"/><a:ext cx="3600000" cy="1800000"/></p:xfrm>
-  <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/presentationml/2006/ole"><p:oleObj r:id="rId4" progId="Package"><p:embed/><p:pic><p:nvPicPr><p:cNvPr id="6" name="OLE WMF preview image"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rId3"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="4700000" y="2600000"/><a:ext cx="3600000" cy="1800000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic></p:oleObj></a:graphicData></a:graphic>
+  <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/presentationml/2006/ole"><p:oleObj r:id="rId4" progId="Package"><p:embed/><p:pic><p:nvPicPr><p:cNvPr id="6" name="OLE WMF preview image"/><p:cNvPicPr/><p:nvPr/></p:nvPicPr><p:blipFill><a:blip r:embed="rId3"/><a:stretch><a:fillRect/></a:stretch></p:blipFill><p:spPr><a:xfrm><a:off x="250000" y="250000"/><a:ext cx="1200000" cy="900000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:pic></p:oleObj></a:graphicData></a:graphic>
 </p:graphicFrame>`;
   const slide = wrapSlideXml(
     [
