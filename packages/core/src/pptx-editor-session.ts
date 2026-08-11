@@ -738,7 +738,7 @@ export class PptxEditorSession {
   }
 
   /**
-   * Delete a supported top-level drawing by stable source handle.
+   * Delete a supported root or nested drawing by stable source handle.
    *
    * @param handle Handle returned by {@link shapes}.
    * @returns Updated editor state.
@@ -797,7 +797,7 @@ export class PptxEditorSession {
   }
 
   /**
-   * Delete the currently selected supported top-level drawing.
+   * Delete the currently selected supported root or nested drawing.
    *
    * @returns Updated editor state.
    * @throws {@link PptxEditorError} with `invalid-selection`, `invalid-command`, or
@@ -1431,7 +1431,7 @@ function shapeInfo(
           editableTransform: true,
         }
       : {}),
-    ...(editableTransform && isDeletableShape(shape, slideShapes) ? { editableDelete: true } : {}),
+    ...(isDeletableShape(shape, slideShapes) ? { editableDelete: true } : {}),
     ...("textBody" in shape && shape.textBody !== undefined
       ? {
           textRuns: collectTextRuns(

@@ -5,6 +5,7 @@ import {
   findShapeNodeBySourceHandle,
   readPptx,
   type SourceHandle,
+  type SourceShapeNode,
   writePptx,
 } from "@pptx-glimpse/document";
 import { describe, expect, it } from "vitest";
@@ -12,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import { createEditorSession } from "./index.js";
 import {
   buildDrawingDeleteFixture,
+  buildNestedDrawingDeleteFixture,
   buildShapeStyleFixture,
   buildTextEditFixture,
   expectApplied,
@@ -24,6 +26,13 @@ import {
   requireShape,
   shapeWithoutTransform,
 } from "./index.test-helpers.js";
+
+function flattenShapeTree(shapes: readonly SourceShapeNode[]): SourceShapeNode[] {
+  return shapes.flatMap((shape) => [
+    shape,
+    ...(shape.kind === "group" ? flattenShapeTree(shape.children) : []),
+  ]);
+}
 
 describe("EditorSession shape add/delete commands", () => {
   it("adds a text box and lets existing text/xfrm commands edit it before save", async () => {
@@ -161,6 +170,30 @@ describe("EditorSession shape add/delete commands", () => {
       expectHistory(session.redo());
       expect(findShapeNodeBySourceHandle(session.document, handle)).toBeUndefined();
       expect(session.selection).toBeUndefined();
+    }
+  });
+
+  it("deletes every supported drawing kind across multiple nested group levels", () => {
+    for (const kind of ["shape", "connector", "image", "table", "chart", "group"] as const) {
+      const source = readPptx(buildNestedDrawingDeleteFixture());
+      const session = createEditorSession(source);
+      const candidates = flattenShapeTree(source.slides[0].shapes).filter(
+        (shape) => shape.kind === kind,
+      );
+      const target = candidates.at(-1);
+      const handle = requireHandle(target?.handle);
+      expectApplied(session.selectShape(handle));
+
+      const deleted = expectApplied(session.apply({ kind: "deleteShape", handle }));
+      expect(findShapeNodeBySourceHandle(deleted, handle)).toBeUndefined();
+      expect(session.selection).toBeUndefined();
+      expect(session.undoDepth).toBe(1);
+      expect(findShapeNodeBySourceHandle(readPptx(writePptx(deleted)), handle)).toBeUndefined();
+
+      expectHistory(session.undo());
+      expect(findShapeNodeBySourceHandle(session.document, handle)).toBeDefined();
+      expectHistory(session.redo());
+      expect(findShapeNodeBySourceHandle(session.document, handle)).toBeUndefined();
     }
   });
 
