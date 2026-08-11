@@ -4,7 +4,7 @@ import { renderBlipEffects } from "./blip-effect-renderer.js";
 import { renderEffects } from "./effect-renderer.js";
 import { inlineSvgData, resolveMetafileImageSource } from "./metafile-converter.js";
 import type { RendererContext } from "./render-context.js";
-import { createLegacyRendererContext } from "./render-context.js";
+import { createLegacyRendererContext, nextMetafileIdNamespace } from "./render-context.js";
 import type { RenderResult } from "./render-result.js";
 import { buildTransformAttr } from "./transform.js";
 
@@ -26,6 +26,7 @@ export function renderImage(
     return { content: renderPlaceholder(image.mimeType, w, h, transformAttr), defs: [] };
   }
   const inlineMetafile = image.mimeType === "image/emf" || image.mimeType === "image/wmf";
+  const metafileIdNamespace = inlineMetafile ? nextMetafileIdNamespace(context) : "";
   const resolvedImage = { ...image, ...source };
 
   const effectResult = renderEffects(image.effects);
@@ -48,10 +49,11 @@ export function renderImage(
       blipFilterAttr,
       defs,
       inlineMetafile,
+      metafileIdNamespace,
     );
   }
 
-  const imgTag = buildImageTag(resolvedImage, w, h, inlineMetafile);
+  const imgTag = buildImageTag(resolvedImage, w, h, inlineMetafile, metafileIdNamespace);
 
   let inner = imgTag;
   if (blipFilterAttr) inner = `<g${blipFilterAttr}>${inner}</g>`;
@@ -60,7 +62,13 @@ export function renderImage(
   return { content, defs };
 }
 
-function buildImageTag(image: ImageElement, w: number, h: number, inlineSvg: boolean): string {
+function buildImageTag(
+  image: ImageElement,
+  w: number,
+  h: number,
+  inlineSvg: boolean,
+  idNamespace: string,
+): string {
   const src = image.srcRect;
   const stretch = image.stretch;
 
@@ -70,7 +78,7 @@ function buildImageTag(image: ImageElement, w: number, h: number, inlineSvg: boo
     const scaledH = Math.round(h / (1 - src.top - src.bottom));
     const imgX = Math.round(-src.left * scaledW);
     const imgY = Math.round(-src.top * scaledH);
-    const media = renderImageMedia(image, imgX, imgY, scaledW, scaledH, {}, inlineSvg);
+    const media = renderImageMedia(image, imgX, imgY, scaledW, scaledH, {}, inlineSvg, idNamespace);
     const clippedMedia = inlineSvg
       ? `<g clip-path="url(#${clipId})">${media}</g>`
       : media.replace(/^<image/, `<image clip-path="url(#${clipId})"`);
@@ -85,10 +93,10 @@ function buildImageTag(image: ImageElement, w: number, h: number, inlineSvg: boo
     const imgY = Math.round(h * stretch.top);
     const imgW = Math.round(w * (1 - stretch.left - stretch.right));
     const imgH = Math.round(h * (1 - stretch.top - stretch.bottom));
-    return renderImageMedia(image, imgX, imgY, imgW, imgH, {}, inlineSvg);
+    return renderImageMedia(image, imgX, imgY, imgW, imgH, {}, inlineSvg, idNamespace);
   }
 
-  return renderImageMedia(image, 0, 0, w, h, {}, inlineSvg);
+  return renderImageMedia(image, 0, 0, w, h, {}, inlineSvg, idNamespace);
 }
 
 function renderImageMedia(
@@ -99,16 +107,14 @@ function renderImageMedia(
   height: number,
   extraAttributes: Readonly<Record<string, string | number>> = {},
   inlineSvg = false,
+  idNamespace = "",
 ): string {
   if (inlineSvg && image.mimeType === "image/svg+xml") {
-    return inlineSvgData(image.imageData, {
-      x,
-      y,
-      width,
-      height,
-      preserveAspectRatio: "none",
-      ...extraAttributes,
-    });
+    return inlineSvgData(
+      image.imageData,
+      { x, y, width, height, preserveAspectRatio: "none", ...extraAttributes },
+      idNamespace,
+    );
   }
   const extra = Object.entries(extraAttributes)
     .map(([name, value]) => ` ${name}="${String(value)}"`)
@@ -125,6 +131,7 @@ function renderTiled(
   blipFilterAttr: string,
   defs: string[],
   inlineSvg: boolean,
+  idNamespace: string,
 ): RenderResult {
   const t = image.tile!;
   const patternId = `tile-${crypto.randomUUID()}`;
@@ -145,7 +152,7 @@ function renderTiled(
 
   const tileMedia =
     inlineSvg && image.mimeType === "image/svg+xml"
-      ? `<g${imgTransform}>${inlineSvgData(image.imageData, { width: tileW, height: tileH, preserveAspectRatio: "none" })}</g>`
+      ? `<g${imgTransform}>${inlineSvgData(image.imageData, { width: tileW, height: tileH, preserveAspectRatio: "none" }, idNamespace)}</g>`
       : `<image href="data:${image.mimeType};base64,${image.imageData}" width="${tileW}" height="${tileH}" preserveAspectRatio="none"${imgTransform}/>`;
   const patternDef = `<pattern id="${patternId}" patternUnits="userSpaceOnUse" x="${offsetX}" y="${offsetY}" width="${tileW}" height="${tileH}">${tileMedia}</pattern>`;
   defs.push(patternDef);

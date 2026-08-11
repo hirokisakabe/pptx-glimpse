@@ -176,6 +176,11 @@ An unknown record, malformed stream, or conversion error falls back for that met
 SVG output keeps the labeled `[EMF]` or `[WMF]` placeholder, and conversion reports include a
 `renderer.image.metafile-conversion` warning whose message identifies `unsupported-record`,
 `invalid-data`, or `conversion-failed`. Complete EMF/WMF and EMF+ record fidelity is not supported.
+For predictable resource use, conversion rejects decoded metafiles over 8 MiB, individual records
+over 4 MiB, bitmap records over 2 MiB, streams over 50,000 records or 200,000 geometry points, and
+generated SVG over 100,000 nodes or 8 MiB. The per-render conversion cache retains at most 16
+entries and 16 MiB of converted results; every cached SVG insertion receives a distinct,
+deterministic fragment-ID namespace.
 
 Read the detailed guides for
 [font loading and mapping](https://glimpse.pptx.app/docs/fonts),

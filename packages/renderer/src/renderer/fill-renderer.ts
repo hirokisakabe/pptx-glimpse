@@ -3,7 +3,7 @@ import type { ArrowEndpoint, ArrowSize, Outline } from "../model/line.js";
 import { emuToPixels } from "../utils/emu.js";
 import { inlineSvgData, resolveMetafileImageSource } from "./metafile-converter.js";
 import type { RendererContext } from "./render-context.js";
-import { createLegacyRendererContext } from "./render-context.js";
+import { createLegacyRendererContext, nextMetafileIdNamespace } from "./render-context.js";
 
 interface FillAttrs {
   attrs: string;
@@ -40,21 +40,18 @@ export function renderFillAttrs(
     }
 
     const id = `imgfill-${crypto.randomUUID()}`;
+    const inlineMetafile = fill.mimeType === "image/emf" || fill.mimeType === "image/wmf";
+    const metafileIdNamespace = inlineMetafile ? nextMetafileIdNamespace(context) : "";
 
     if (fill.tile) {
       const t = fill.tile;
       const scalePct = (v: number) => `${v * 100}%`;
-      const image = renderFillImage(
-        source,
-        "100%",
-        "100%",
-        fill.mimeType === "image/emf" || fill.mimeType === "image/wmf",
-      );
+      const image = renderFillImage(source, "100%", "100%", inlineMetafile, metafileIdNamespace);
       const defs = `<pattern id="${id}" patternUnits="objectBoundingBox" width="${scalePct(t.sx)}" height="${scalePct(t.sy)}">${image}</pattern>`;
       return { attrs: `fill="url(#${id})"`, defs };
     }
 
-    const defs = `<pattern id="${id}" patternContentUnits="objectBoundingBox" width="1" height="1">${renderFillImage(source, 1, 1, fill.mimeType === "image/emf" || fill.mimeType === "image/wmf")}</pattern>`;
+    const defs = `<pattern id="${id}" patternContentUnits="objectBoundingBox" width="1" height="1">${renderFillImage(source, 1, 1, inlineMetafile, metafileIdNamespace)}</pattern>`;
     return { attrs: `fill="url(#${id})"`, defs };
   }
 
@@ -70,9 +67,10 @@ function renderFillImage(
   width: string | number,
   height: string | number,
   inlineSvg: boolean,
+  idNamespace: string,
 ): string {
   return inlineSvg && source.mimeType === "image/svg+xml"
-    ? inlineSvgData(source.imageData, { width, height, preserveAspectRatio: "none" })
+    ? inlineSvgData(source.imageData, { width, height, preserveAspectRatio: "none" }, idNamespace)
     : `<image href="data:${source.mimeType};base64,${source.imageData}" width="${width}" height="${height}" preserveAspectRatio="none"/>`;
 }
 

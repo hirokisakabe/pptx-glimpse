@@ -7,7 +7,7 @@ import { renderFillAttrs } from "./fill-renderer.js";
 import { renderImage } from "./image-renderer.js";
 import { inlineSvgData, resolveMetafileImageSource } from "./metafile-converter.js";
 import type { RendererContext } from "./render-context.js";
-import { createLegacyRendererContext } from "./render-context.js";
+import { createLegacyRendererContext, nextMetafileIdNamespace } from "./render-context.js";
 import type { RenderResult } from "./render-result.js";
 import { renderConnector, renderShape } from "./shape-renderer.js";
 import { renderTable } from "./table-renderer.js";
@@ -43,7 +43,11 @@ export function renderSlideToSvg(
       parts.push(
         (bg.mimeType === "image/emf" || bg.mimeType === "image/wmf") &&
           source.mimeType === "image/svg+xml"
-          ? inlineSvgData(source.imageData, { width, height, preserveAspectRatio: "none" })
+          ? inlineSvgData(
+              source.imageData,
+              { width, height, preserveAspectRatio: "none" },
+              nextMetafileIdNamespace(context),
+            )
           : `<image href="data:${source.mimeType};base64,${source.imageData}" width="${width}" height="${height}" preserveAspectRatio="none"/>`,
       );
     } else {

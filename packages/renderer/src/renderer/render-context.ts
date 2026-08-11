@@ -11,7 +11,10 @@ import {
   getActiveWarningLogger,
   type WarningLogger,
 } from "../warning-logger.js";
-import type { MetafileConversionCache, MetafileConversionResult } from "./metafile-converter.js";
+import {
+  BoundedMetafileConversionCache,
+  type MetafileConversionCache,
+} from "./metafile-converter.js";
 
 export interface RendererScriptFonts {
   readonly majorJpan: string | null;
@@ -27,6 +30,7 @@ export interface RendererContext {
   readonly warningLogger: WarningLogger;
   readonly fontWarningCache: Set<string>;
   readonly metafileConversionCache: MetafileConversionCache;
+  readonly metafileInsertionState: { nextId: number };
 }
 
 export function createRendererContext(overrides: Partial<RendererContext> = {}): RendererContext {
@@ -39,7 +43,8 @@ export function createRendererContext(overrides: Partial<RendererContext> = {}):
     warningLogger: overrides.warningLogger ?? createWarningLogger("off"),
     fontWarningCache: overrides.fontWarningCache ?? new Set<string>(),
     metafileConversionCache:
-      overrides.metafileConversionCache ?? new Map<string, MetafileConversionResult>(),
+      overrides.metafileConversionCache ?? new BoundedMetafileConversionCache(),
+    metafileInsertionState: overrides.metafileInsertionState ?? { nextId: 0 },
   };
 }
 
@@ -52,8 +57,13 @@ export function createLegacyRendererContext(): RendererContext {
     scriptFonts: getScriptFonts(),
     warningLogger: getActiveWarningLogger(),
     fontWarningCache: new Set<string>(),
-    metafileConversionCache: new Map(),
+    metafileConversionCache: new BoundedMetafileConversionCache(),
+    metafileInsertionState: { nextId: 0 },
   };
+}
+
+export function nextMetafileIdNamespace(context: RendererContext): string {
+  return `metafile-${context.metafileInsertionState.nextId++}-`;
 }
 
 export function getJpanFallbackFontFromContext(context: RendererContext): string | null {

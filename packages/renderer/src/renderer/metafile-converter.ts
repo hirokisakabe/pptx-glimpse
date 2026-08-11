@@ -8,6 +8,16 @@ import type { WarningLogger } from "../warning-logger.js";
 
 const SVG_NAMESPACE = "http://www.w3.org/2000/svg";
 const MM_ANISOTROPIC = 8;
+const MAX_METAFILE_BYTES = 8 * 1024 * 1024;
+const MAX_BASE64_LENGTH = Math.ceil(MAX_METAFILE_BYTES / 3) * 4;
+const MAX_RECORD_BYTES = 4 * 1024 * 1024;
+const MAX_BITMAP_BYTES = 2 * 1024 * 1024;
+const MAX_RECORDS = 50_000;
+const MAX_GEOMETRY_POINTS = 200_000;
+const MAX_SVG_NODES = 100_000;
+const MAX_SVG_LENGTH = 8 * 1024 * 1024;
+const MAX_CACHE_ENTRIES = 16;
+const MAX_CACHE_BYTES = 16 * 1024 * 1024;
 
 interface MetafileRendererApi {
   readonly Renderer: new (data: ArrayBuffer) => {
@@ -37,6 +47,8 @@ const SUPPORTED_WMF_RECORD_TYPES = new Set([
   0x061c, 0x0626, 0x06ff, 0x0940, 0x0a32, 0x0b41, 0x0f43,
 ]);
 
+const COUNTED_EMF_POINT_RECORD_TYPES = new Set([0x02, 0x03, 0x05, 0x55, 0x56, 0x57, 0x58, 0x59]);
+
 export type MetafileMimeType = Extract<ImageMimeType, "image/emf" | "image/wmf">;
 
 type MetafileConversionFailureReason = "invalid-data" | "unsupported-record" | "conversion-failed";
@@ -54,7 +66,50 @@ export interface ResolvedImageSource {
   readonly mimeType: ImageMimeType;
 }
 
-export type MetafileConversionCache = Map<string, MetafileConversionResult>;
+export interface MetafileConversionCache {
+  readonly size: number;
+  get(key: string): MetafileConversionResult | undefined;
+  set(key: string, result: MetafileConversionResult): void;
+}
+
+export class BoundedMetafileConversionCache implements MetafileConversionCache {
+  readonly #entries = new Map<
+    string,
+    { readonly result: MetafileConversionResult; readonly bytes: number }
+  >();
+  #bytes = 0;
+
+  get size(): number {
+    return this.#entries.size;
+  }
+
+  get(key: string): MetafileConversionResult | undefined {
+    const entry = this.#entries.get(key);
+    if (entry === undefined) return undefined;
+    this.#entries.delete(key);
+    this.#entries.set(key, entry);
+    return entry.result;
+  }
+
+  set(key: string, result: MetafileConversionResult): void {
+    const bytes = conversionResultBytes(result) + key.length * 2;
+    if (bytes > MAX_CACHE_BYTES) return;
+    const previous = this.#entries.get(key);
+    if (previous !== undefined) {
+      this.#bytes -= previous.bytes;
+      this.#entries.delete(key);
+    }
+    this.#entries.set(key, { result, bytes });
+    this.#bytes += bytes;
+    while (this.#entries.size > MAX_CACHE_ENTRIES || this.#bytes > MAX_CACHE_BYTES) {
+      const oldestKey = this.#entries.keys().next().value;
+      if (oldestKey === undefined) break;
+      const oldest = this.#entries.get(oldestKey);
+      this.#entries.delete(oldestKey);
+      this.#bytes -= oldest?.bytes ?? 0;
+    }
+  }
+}
 
 export function resolveMetafileImageSource(
   imageData: string,
@@ -65,7 +120,7 @@ export function resolveMetafileImageSource(
   if (mimeType !== "image/emf" && mimeType !== "image/wmf") {
     return { imageData, mimeType };
   }
-  const cacheKey = `${mimeType}:${imageData}`;
+  const cacheKey = metafileCacheKey(imageData, mimeType);
   let result = cache?.get(cacheKey);
   if (result === undefined) {
     result = convertMetafileToSvgData(imageData, mimeType);
@@ -83,8 +138,9 @@ export function resolveMetafileImageSource(
 export function inlineSvgData(
   imageData: string,
   attributes: Readonly<Record<string, string | number>>,
+  idNamespace = "",
 ): string {
-  const svg = new TextDecoder().decode(base64ToUint8Array(imageData));
+  const svg = namespaceSvgIds(new TextDecoder().decode(base64ToUint8Array(imageData)), idNamespace);
   const openingEnd = svg.indexOf(">");
   if (!svg.startsWith("<svg") || openingEnd < 0) {
     throw new Error("Converted metafile SVG root is invalid.");
@@ -109,14 +165,27 @@ export function convertMetafileToSvgData(
 ): MetafileConversionResult {
   let bytes: Uint8Array;
   try {
+    if (imageData.length > MAX_BASE64_LENGTH) {
+      return failure("invalid-data", "Metafile encoded input limit exceeded.");
+    }
     bytes = base64ToUint8Array(imageData);
   } catch (error: unknown) {
     return failure("invalid-data", errorMessage(error));
   }
 
+  if (bytes.byteLength > MAX_METAFILE_BYTES) {
+    return failure("invalid-data", "Metafile decoded byte limit exceeded.");
+  }
+
   const validation = validateMetafile(bytes, mimeType);
   if (!validation.ok) return validation;
   const geometry = validation.geometry;
+  let renderBytes = bytes;
+  if (mimeType === "image/emf") {
+    const normalizedRecords = normalizeEmfRestoreDcRecords(bytes);
+    if (!normalizedRecords.ok) return normalizedRecords;
+    renderBytes = normalizedRecords.bytes;
+  }
 
   const document = new DOMImplementation().createDocument(SVG_NAMESPACE, "svg");
   const previousDocument = Reflect.get(globalThis, "document");
@@ -129,8 +198,8 @@ export function convertMetafileToSvgData(
     emfJs.loggingEnabled(false);
     wmfJs.loggingEnabled(false);
 
-    const arrayBuffer = new ArrayBuffer(bytes.byteLength);
-    new Uint8Array(arrayBuffer).set(bytes);
+    const arrayBuffer = new ArrayBuffer(renderBytes.byteLength);
+    new Uint8Array(arrayBuffer).set(renderBytes);
     const svgElement =
       mimeType === "image/emf"
         ? new emfJs.Renderer(arrayBuffer).render({
@@ -150,12 +219,24 @@ export function convertMetafileToSvgData(
             mapMode: MM_ANISOTROPIC,
           });
 
-    let svg = new XMLSerializer().serializeToString(unsafeMetafileNodeAssertion(svgElement));
+    const svgNode = unsafeMetafileNodeAssertion(svgElement);
+    if (countSvgNodes(svgNode) > MAX_SVG_NODES) {
+      return failure("conversion-failed", "Converted metafile SVG node limit exceeded.");
+    }
+    let svg = new XMLSerializer().serializeToString(svgNode);
     if (validation.emfTextSvg !== undefined) svg = appendSvgContent(svg, validation.emfTextSvg);
     svg = normalizeMetafileSvg(svg, geometry);
+    svg = sanitizeXml10(svg);
+    if (svg.length > MAX_SVG_LENGTH) {
+      return failure("conversion-failed", "Converted metafile SVG output limit exceeded.");
+    }
+    const svgBytes = new TextEncoder().encode(svg);
+    if (svgBytes.byteLength > MAX_SVG_LENGTH) {
+      return failure("conversion-failed", "Converted metafile SVG output limit exceeded.");
+    }
     return {
       ok: true,
-      imageData: uint8ArrayToBase64(new TextEncoder().encode(svg)),
+      imageData: uint8ArrayToBase64(svgBytes),
       mimeType: "image/svg+xml",
     };
   } catch (error: unknown) {
@@ -233,6 +314,7 @@ function validateEmf(bytes: Uint8Array): MetafileValidationResult {
 
   let offset = 0;
   let recordCount = 0;
+  let geometryPointCount = 0;
   let foundEof = false;
   while (offset < bytes.byteLength) {
     if (offset + 8 > bytes.byteLength) {
@@ -243,14 +325,24 @@ function validateEmf(bytes: Uint8Array): MetafileValidationResult {
     if (size < 8 || size % 4 !== 0 || offset + size > bytes.byteLength) {
       return failure("invalid-data", `EMF record 0x${type.toString(16)} has an invalid size.`);
     }
+    if (size > MAX_RECORD_BYTES) {
+      return failure("invalid-data", "EMF record payload limit exceeded.");
+    }
     if (!SUPPORTED_EMF_RECORD_TYPES.has(type)) {
       return failure("unsupported-record", `EMF record 0x${type.toString(16)} is unsupported.`);
     }
-    if (type === 0x0e && (size < 20 || view.getUint32(offset + size - 4, true) !== size)) {
-      return failure("invalid-data", "EMF EOF record has an invalid declared size.");
+    if (type === 0x0e) {
+      const eofValidation = validateEmfEof(view, offset, size);
+      if (eofValidation !== undefined) return eofValidation;
+    }
+    const allocationValidation = validateEmfRecordAllocations(view, offset, type, size);
+    if (!allocationValidation.ok) return allocationValidation;
+    geometryPointCount += allocationValidation.geometryPoints;
+    if (geometryPointCount > MAX_GEOMETRY_POINTS) {
+      return failure("invalid-data", "EMF geometry point limit exceeded.");
     }
     recordCount++;
-    if (recordCount > 200_000) {
+    if (recordCount > MAX_RECORDS) {
       return failure("invalid-data", "EMF record limit exceeded.");
     }
     offset += size;
@@ -305,6 +397,7 @@ function validateWmf(bytes: Uint8Array): MetafileValidationResult {
 
   let offset = headerOffset + headerSizeWords * 2;
   let recordCount = 0;
+  let geometryPointCount = 0;
   let foundEof = false;
   let maximumRecordWords = 0;
   while (offset < bytes.byteLength) {
@@ -323,6 +416,15 @@ function validateWmf(bytes: Uint8Array): MetafileValidationResult {
         `WMF record 0x${recordType.toString(16)} has an invalid size.`,
       );
     }
+    if (size > MAX_RECORD_BYTES) {
+      return failure("invalid-data", "WMF record payload limit exceeded.");
+    }
+    const allocationValidation = validateWmfRecordAllocations(view, offset, recordType, size);
+    if (!allocationValidation.ok) return allocationValidation;
+    geometryPointCount += allocationValidation.geometryPoints;
+    if (geometryPointCount > MAX_GEOMETRY_POINTS) {
+      return failure("invalid-data", "WMF geometry point limit exceeded.");
+    }
     if (!SUPPORTED_WMF_RECORD_TYPES.has(recordType)) {
       return failure(
         "unsupported-record",
@@ -331,7 +433,7 @@ function validateWmf(bytes: Uint8Array): MetafileValidationResult {
     }
     recordCount++;
     maximumRecordWords = Math.max(maximumRecordWords, sizeWords);
-    if (recordCount > 200_000) {
+    if (recordCount > MAX_RECORDS) {
       return failure("invalid-data", "WMF record limit exceeded.");
     }
     offset += size;
@@ -428,6 +530,13 @@ interface EmfMappingState {
   viewportHeight: number;
 }
 
+interface EmfTextState {
+  readonly mapping: EmfMappingState;
+  readonly selectedFont: EmfFontState | undefined;
+  readonly textColor: string;
+  readonly textAlign: number;
+}
+
 type EmfTextExtractionResult =
   | { readonly ok: true; readonly svg: string }
   | Exclude<MetafileConversionResult, { readonly ok: true }>;
@@ -436,20 +545,23 @@ function extractEmfText(bytes: Uint8Array, geometry: MetafileGeometry): EmfTextE
   const view = dataView(bytes);
   const textElements: string[] = [];
   const fonts = new Map<number, EmfFontState>();
-  let selectedFont: EmfFontState | undefined;
-  let textColor = "#000000";
-  let textAlign = 0;
-  const mapping: EmfMappingState = {
-    mapMode: MM_ANISOTROPIC,
-    windowX: 0,
-    windowY: 0,
-    windowWidth: geometry.width,
-    windowHeight: geometry.height,
-    viewportX: 0,
-    viewportY: 0,
-    viewportWidth: geometry.width,
-    viewportHeight: geometry.height,
+  let state: EmfTextState = {
+    selectedFont: undefined,
+    textColor: "#000000",
+    textAlign: 0,
+    mapping: {
+      mapMode: MM_ANISOTROPIC,
+      windowX: 0,
+      windowY: 0,
+      windowWidth: geometry.width,
+      windowHeight: geometry.height,
+      viewportX: 0,
+      viewportY: 0,
+      viewportWidth: geometry.width,
+      viewportHeight: geometry.height,
+    },
   };
+  const savedStates: EmfTextState[] = [];
   let offset = 0;
 
   while (offset + 8 <= bytes.byteLength) {
@@ -458,39 +570,42 @@ function extractEmfText(bytes: Uint8Array, geometry: MetafileGeometry): EmfTextE
     if (size < 8 || offset + size > bytes.byteLength) break;
 
     if (type === 0x09 && size >= 16) {
-      mapping.windowWidth = view.getInt32(offset + 8, true);
-      mapping.windowHeight = view.getInt32(offset + 12, true);
+      state.mapping.windowWidth = view.getInt32(offset + 8, true);
+      state.mapping.windowHeight = view.getInt32(offset + 12, true);
     } else if (type === 0x0a && size >= 16) {
-      mapping.windowX = view.getInt32(offset + 8, true);
-      mapping.windowY = view.getInt32(offset + 12, true);
+      state.mapping.windowX = view.getInt32(offset + 8, true);
+      state.mapping.windowY = view.getInt32(offset + 12, true);
     } else if (type === 0x0b && size >= 16) {
-      mapping.viewportWidth = view.getInt32(offset + 8, true);
-      mapping.viewportHeight = view.getInt32(offset + 12, true);
+      state.mapping.viewportWidth = view.getInt32(offset + 8, true);
+      state.mapping.viewportHeight = view.getInt32(offset + 12, true);
     } else if (type === 0x0c && size >= 16) {
-      mapping.viewportX = view.getInt32(offset + 8, true);
-      mapping.viewportY = view.getInt32(offset + 12, true);
+      state.mapping.viewportX = view.getInt32(offset + 8, true);
+      state.mapping.viewportY = view.getInt32(offset + 12, true);
     } else if (type === 0x11 && size >= 12) {
-      mapping.mapMode = view.getInt32(offset + 8, true);
+      state.mapping.mapMode = view.getInt32(offset + 8, true);
     } else if (type === 0x16 && size >= 12) {
-      textAlign = view.getUint32(offset + 8, true);
+      state = { ...state, textAlign: view.getUint32(offset + 8, true) };
     } else if (type === 0x18 && size >= 12) {
-      textColor = colorRefToHex(view.getUint32(offset + 8, true));
+      state = { ...state, textColor: colorRefToHex(view.getUint32(offset + 8, true)) };
+    } else if (type === 0x21) {
+      savedStates.push(cloneEmfTextState(state));
+    } else if (type === 0x22 && size >= 12) {
+      const restored = restoreEmfTextState(savedStates, view.getInt32(offset + 8, true));
+      if (restored === undefined) {
+        return failure("invalid-data", "EMF RestoreDC references an invalid saved state.");
+      }
+      state = restored;
     } else if (type === 0x52) {
       const font = readEmfFont(view, offset, size);
       if (!font.ok) return font;
       fonts.set(view.getUint32(offset + 8, true), font.font);
     } else if (type === 0x25 && size >= 12) {
       const index = view.getUint32(offset + 8, true);
-      if (fonts.has(index)) selectedFont = fonts.get(index);
+      if (fonts.has(index)) state = { ...state, selectedFont: fonts.get(index) };
     } else if (type === 0x28 && size >= 12) {
       fonts.delete(view.getUint32(offset + 8, true));
     } else if ((type === 0x53 || type === 0x54) && size >= 76) {
-      const text = renderEmfTextRecord(bytes, view, offset, size, type, {
-        mapping,
-        textAlign,
-        textColor,
-        font: selectedFont,
-      });
+      const text = renderEmfTextRecord(bytes, view, offset, size, type, state);
       if (!text.ok) return text;
       textElements.push(text.svg);
     }
@@ -517,7 +632,8 @@ function readEmfFont(
     return failure("unsupported-record", "EMF text font width/orientation is unsupported.");
   }
   const faceBytes = new Uint8Array(view.buffer, view.byteOffset + offset + 40, 64);
-  const faceName = new TextDecoder("utf-16le").decode(faceBytes).split("\0", 1)[0] || "Noto Sans";
+  const faceName =
+    sanitizeXml10(new TextDecoder("utf-16le").decode(faceBytes).split("\0", 1)[0]) || "Noto Sans";
   return {
     ok: true,
     font: {
@@ -542,7 +658,7 @@ function renderEmfTextRecord(
     readonly mapping: EmfMappingState;
     readonly textAlign: number;
     readonly textColor: string;
-    readonly font: EmfFontState | undefined;
+    readonly selectedFont: EmfFontState | undefined;
   },
 ): EmfTextExtractionResult {
   const graphicsMode = view.getUint32(offset + 24, true);
@@ -571,11 +687,12 @@ function renderEmfTextRecord(
     return failure("invalid-data", "EMF text string range is invalid.");
   }
   const textBytes = bytes.subarray(start, end);
-  const text =
+  const text = sanitizeXml10(
     type === 0x54
       ? new TextDecoder("utf-16le").decode(textBytes)
-      : new TextDecoder("windows-1252").decode(textBytes);
-  const font = state.font ?? {
+      : new TextDecoder("windows-1252").decode(textBytes),
+  );
+  const font = state.selectedFont ?? {
     height: -80,
     width: 0,
     escapement: 0,
@@ -651,6 +768,273 @@ function appendSvgContent(svg: string, content: string): string {
   return svg.replace("</svg>", `${content}</svg>`);
 }
 
+function cloneEmfTextState(state: EmfTextState): EmfTextState {
+  return { ...state, mapping: { ...state.mapping } };
+}
+
+function restoreEmfTextState(
+  savedStates: EmfTextState[],
+  relativeOrAbsolute: number,
+): EmfTextState | undefined {
+  if (relativeOrAbsolute === 0) return undefined;
+  const index =
+    relativeOrAbsolute < 0 ? savedStates.length + relativeOrAbsolute : relativeOrAbsolute - 1;
+  const restored = savedStates[index];
+  if (restored === undefined) return undefined;
+  savedStates.length = index;
+  return cloneEmfTextState(restored);
+}
+
+function normalizeEmfRestoreDcRecords(
+  bytes: Uint8Array,
+):
+  | { readonly ok: true; readonly bytes: Uint8Array }
+  | Exclude<MetafileConversionResult, { readonly ok: true }> {
+  const view = dataView(bytes);
+  if (!emfNeedsRestoreNormalization(view)) return { ok: true, bytes };
+  const records: Uint8Array[] = [];
+  let savedDepth = 0;
+  let normalizedRecordCount = 0;
+  let normalizedBytes = 0;
+  let offset = 0;
+  while (offset < bytes.byteLength) {
+    const type = view.getUint32(offset, true);
+    const size = view.getUint32(offset + 4, true);
+    if (type === 0x21) savedDepth++;
+    if (type !== 0x22) {
+      const record = bytes.subarray(offset, offset + size);
+      records.push(record);
+      normalizedBytes += record.byteLength;
+      normalizedRecordCount++;
+    } else {
+      const restoreValue = view.getInt32(offset + 8, true);
+      const restoreCount = restoreValue < 0 ? -restoreValue : savedDepth - restoreValue + 1;
+      for (let index = 0; index < restoreCount; index++) {
+        const record = new Uint8Array(12);
+        const recordView = dataView(record);
+        recordView.setUint32(0, 0x22, true);
+        recordView.setUint32(4, 12, true);
+        recordView.setInt32(8, -1, true);
+        records.push(record);
+        normalizedBytes += record.byteLength;
+        normalizedRecordCount++;
+      }
+      savedDepth -= restoreCount;
+    }
+    if (normalizedBytes > MAX_METAFILE_BYTES || normalizedRecordCount > MAX_RECORDS) {
+      return failure("invalid-data", "Normalized EMF RestoreDC limit exceeded.");
+    }
+    offset += size;
+  }
+  if (records.length === 0) return { ok: true, bytes };
+  const normalized = new Uint8Array(normalizedBytes);
+  let normalizedOffset = 0;
+  for (const record of records) {
+    normalized.set(record, normalizedOffset);
+    normalizedOffset += record.byteLength;
+  }
+  const normalizedView = dataView(normalized);
+  normalizedView.setUint32(48, normalized.byteLength, true);
+  normalizedView.setUint32(52, normalizedRecordCount, true);
+  return { ok: true, bytes: normalized };
+}
+
+function emfNeedsRestoreNormalization(view: DataView): boolean {
+  let offset = 0;
+  while (offset < view.byteLength) {
+    const type = view.getUint32(offset, true);
+    const size = view.getUint32(offset + 4, true);
+    if (type === 0x22 && view.getInt32(offset + 8, true) !== -1) return true;
+    offset += size;
+  }
+  return false;
+}
+
+function validateEmfEof(
+  view: DataView,
+  offset: number,
+  size: number,
+): Exclude<MetafileConversionResult, { readonly ok: true }> | undefined {
+  if (size < 20 || view.getUint32(offset + 16, true) !== size) {
+    return failure("invalid-data", "EMF EOF record has an invalid declared size.");
+  }
+  const paletteEntries = view.getUint32(offset + 8, true);
+  const paletteOffset = view.getUint32(offset + 12, true);
+  if (paletteEntries === 0) return undefined;
+  const paletteEnd = paletteOffset + paletteEntries * 4;
+  if (
+    paletteEntries > MAX_GEOMETRY_POINTS ||
+    paletteOffset < 20 ||
+    paletteOffset % 4 !== 0 ||
+    !Number.isSafeInteger(paletteEnd) ||
+    paletteEnd > size
+  ) {
+    return failure("invalid-data", "EMF EOF palette declaration is invalid.");
+  }
+  return undefined;
+}
+
+function validateEmfRecordAllocations(
+  view: DataView,
+  offset: number,
+  type: number,
+  size: number,
+): RecordAllocationValidation {
+  let geometryPoints = 0;
+  const countOffset = COUNTED_EMF_POINT_RECORD_TYPES.has(type) ? 24 : undefined;
+  if (countOffset !== undefined) {
+    if (size < countOffset + 4) {
+      return failure("invalid-data", "EMF geometry point declaration is invalid.");
+    }
+    const count = view.getUint32(offset + countOffset, true);
+    const pointBytes = type >= 0x55 ? 4 : 8;
+    if (count > MAX_GEOMETRY_POINTS) {
+      return failure("invalid-data", "EMF geometry point limit exceeded.");
+    }
+    if (28 + count * pointBytes > size) {
+      return failure("invalid-data", "EMF geometry point declaration is invalid.");
+    }
+    geometryPoints += count;
+  }
+  if (type === 0x08 || type === 0x5b) {
+    if (size < 32) {
+      return failure("invalid-data", "EMF geometry point declaration is invalid.");
+    }
+    const polygonCount = view.getUint32(offset + 24, true);
+    const pointCount = view.getUint32(offset + 28, true);
+    const pointBytes = type === 0x5b ? 4 : 8;
+    if (
+      polygonCount > MAX_GEOMETRY_POINTS ||
+      pointCount > MAX_GEOMETRY_POINTS ||
+      32 + polygonCount * 4 + pointCount * pointBytes > size
+    ) {
+      return failure("invalid-data", "EMF geometry point declaration is invalid.");
+    }
+    let declaredPointCount = 0;
+    for (let index = 0; index < polygonCount; index++) {
+      declaredPointCount += view.getUint32(offset + 32 + index * 4, true);
+      if (declaredPointCount > MAX_GEOMETRY_POINTS) {
+        return failure("invalid-data", "EMF geometry point limit exceeded.");
+      }
+    }
+    if (declaredPointCount !== pointCount) {
+      return failure("invalid-data", "EMF geometry point declaration is invalid.");
+    }
+    geometryPoints += pointCount;
+  }
+  if (type === 0x22 && size < 12) {
+    return failure("invalid-data", "EMF RestoreDC record is truncated.");
+  }
+  if (type === 0x4b && size > MAX_BITMAP_BYTES) {
+    return failure("invalid-data", "EMF bitmap payload limit exceeded.");
+  }
+  return { ok: true, geometryPoints };
+}
+
+function validateWmfRecordAllocations(
+  view: DataView,
+  offset: number,
+  type: number,
+  size: number,
+): RecordAllocationValidation {
+  let geometryPoints = 0;
+  if ((type === 0x0324 || type === 0x0325) && size >= 8) {
+    geometryPoints = view.getUint16(offset + 6, true);
+    if (geometryPoints > MAX_GEOMETRY_POINTS || 8 + geometryPoints * 4 > size) {
+      return failure("invalid-data", "WMF geometry point limit exceeded.");
+    }
+  }
+  if (type === 0x0538 && size >= 8) {
+    const polygonCount = view.getUint16(offset + 6, true);
+    if (polygonCount > MAX_GEOMETRY_POINTS || 8 + polygonCount * 2 > size) {
+      return failure("invalid-data", "WMF geometry point declaration is invalid.");
+    }
+    let pointCount = 0;
+    for (let index = 0; index < polygonCount; index++) {
+      pointCount += view.getUint16(offset + 8 + index * 2, true);
+      if (pointCount > MAX_GEOMETRY_POINTS) {
+        return failure("invalid-data", "WMF geometry point limit exceeded.");
+      }
+    }
+    if (8 + polygonCount * 2 + pointCount * 4 > size) {
+      return failure("invalid-data", "WMF geometry point declaration is invalid.");
+    }
+    geometryPoints = pointCount;
+  }
+  if ((type === 0x0940 || type === 0x0b41 || type === 0x0f43) && size > MAX_BITMAP_BYTES) {
+    return failure("invalid-data", "WMF bitmap payload limit exceeded.");
+  }
+  return { ok: true, geometryPoints };
+}
+
+type RecordAllocationValidation =
+  | { readonly ok: true; readonly geometryPoints: number }
+  | Exclude<MetafileConversionResult, { readonly ok: true }>;
+
+function countSvgNodes(root: XmlDomNode): number {
+  let count = 0;
+  const pending: XmlDomNode[] = [root];
+  while (pending.length > 0) {
+    const node = pending.pop();
+    if (node === undefined) break;
+    count++;
+    if (count > MAX_SVG_NODES) return count;
+    for (let child = node.firstChild; child !== null; child = child.nextSibling)
+      pending.push(child);
+  }
+  return count;
+}
+
+function sanitizeXml10(value: string): string {
+  let sanitized = "";
+  for (const character of value) {
+    const codePoint = character.codePointAt(0) ?? 0;
+    sanitized +=
+      codePoint === 0x09 ||
+      codePoint === 0x0a ||
+      codePoint === 0x0d ||
+      (codePoint >= 0x20 && codePoint <= 0xd7ff) ||
+      (codePoint >= 0xe000 && codePoint <= 0xfffd) ||
+      (codePoint >= 0x10000 && codePoint <= 0x10ffff)
+        ? character
+        : "\uFFFD";
+  }
+  return sanitized;
+}
+
+function namespaceSvgIds(svg: string, namespace: string): string {
+  if (namespace.length === 0) return svg;
+  const ids = new Map<string, string>();
+  const withIds = svg.replace(/\bid="([^"]+)"/g, (_match, id: string) => {
+    const namespaced = `${namespace}${id}`;
+    ids.set(id, namespaced);
+    return `id="${namespaced}"`;
+  });
+  if (ids.size === 0) return withIds;
+  return withIds
+    .replace(/url\(#([^)]+)\)/g, (match, id: string) =>
+      ids.has(id) ? `url(#${ids.get(id)})` : match,
+    )
+    .replace(/\b(xlink:href|href)="#([^"]+)"/g, (match, name: string, id: string) =>
+      ids.has(id) ? `${name}="#${ids.get(id)}"` : match,
+    );
+}
+
+function metafileCacheKey(imageData: string, mimeType: MetafileMimeType): string {
+  let first = 0x811c9dc5;
+  let second = 0x9e3779b9;
+  for (let index = 0; index < imageData.length; index++) {
+    const code = imageData.charCodeAt(index);
+    first = Math.imul(first ^ code, 0x01000193);
+    second = Math.imul(second ^ code, 0x85ebca6b);
+  }
+  return `${mimeType}:${imageData.length}:${first >>> 0}:${second >>> 0}:${imageData.slice(0, 64)}:${imageData.slice(-64)}`;
+}
+
+function conversionResultBytes(result: MetafileConversionResult): number {
+  return result.ok ? result.imageData.length : result.message.length + result.reason.length;
+}
+
 function colorRefToHex(value: number): string {
   const red = value & 0xff;
   const green = (value >>> 8) & 0xff;
@@ -690,6 +1074,7 @@ function errorMessage(error: unknown): string {
 }
 
 function base64ToUint8Array(value: string): Uint8Array {
+  validateBase64(value);
   if (typeof Buffer !== "undefined") {
     const bytes = Buffer.from(value, "base64");
     if (bytes.length === 0 && value.length > 0) throw new Error("Invalid base64 image data.");
@@ -697,6 +1082,24 @@ function base64ToUint8Array(value: string): Uint8Array {
   }
   const binary = atob(value);
   return Uint8Array.from(binary, (character) => character.charCodeAt(0));
+}
+
+function validateBase64(value: string): void {
+  if (value.length % 4 !== 0) throw new Error("Invalid base64 image data.");
+  const padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
+  for (let index = 0; index < value.length - padding; index++) {
+    const code = value.charCodeAt(index);
+    const valid =
+      (code >= 0x41 && code <= 0x5a) ||
+      (code >= 0x61 && code <= 0x7a) ||
+      (code >= 0x30 && code <= 0x39) ||
+      code === 0x2b ||
+      code === 0x2f;
+    if (!valid) throw new Error("Invalid base64 image data.");
+  }
+  for (let index = value.length - padding; index < value.length; index++) {
+    if (value.charCodeAt(index) !== 0x3d) throw new Error("Invalid base64 image data.");
+  }
 }
 
 function uint8ArrayToBase64(bytes: Uint8Array): string {

@@ -1,10 +1,15 @@
+import { DOMParser } from "@xmldom/xmldom";
 import { describe, expect, it } from "vitest";
 
 import {
   createRepresentativeEmf,
   createRepresentativeWmf,
 } from "../../../../vrt/snapshot/fixtures-src/images.js";
-import { convertMetafileToSvgData, inlineSvgData } from "./metafile-converter.js";
+import {
+  BoundedMetafileConversionCache,
+  convertMetafileToSvgData,
+  inlineSvgData,
+} from "./metafile-converter.js";
 
 describe("convertMetafileToSvgData", () => {
   it.each([
@@ -181,6 +186,140 @@ describe("convertMetafileToSvgData", () => {
     );
   });
 
+  it("reads EMR_EOF nSizeLast at offset 16 and validates optional palette data", () => {
+    const valid = emfWithPaletteEof();
+    const malformedOffset = Buffer.from(valid);
+    const malformedSize = Buffer.from(valid);
+    const eof = findEmfRecord(valid, 0x0e);
+    malformedOffset.writeUInt32LE(24, eof + 12);
+    malformedSize.writeUInt32LE(20, eof + 16);
+
+    expect(convertMetafileToSvgData(valid.toString("base64"), "image/emf")).toMatchObject({
+      ok: true,
+    });
+    expectFailureMessage(
+      convertMetafileToSvgData(malformedOffset.toString("base64"), "image/emf"),
+      "palette declaration",
+    );
+    expectFailureMessage(
+      convertMetafileToSvgData(malformedSize.toString("base64"), "image/emf"),
+      "EOF record has an invalid declared size",
+    );
+  });
+
+  it.each([
+    ["top-relative", -1, "#00FF00"],
+    ["multi-relative", -2, "#333333"],
+    ["absolute", 1, "#333333"],
+  ] as const)(
+    "restores mapping, selected font, text color, and alignment with %s RestoreDC",
+    (_label, restoreValue, restoredColor) => {
+      const bytes = emfWithRestoredTextState(restoreValue);
+
+      const svg = decodedSvg(convertMetafileToSvgData(bytes.toString("base64"), "image/emf"));
+
+      expect(svg).toContain('<text x="250" y="820"');
+      expect(svg).toContain(`fill="${restoredColor}"`);
+      expect(svg).toContain('font-family="Noto Sans"');
+      expect(svg).not.toContain("Changed Font");
+    },
+  );
+
+  it("rejects RestoreDC references outside the saved-state stack", () => {
+    const bytes = createRepresentativeEmf();
+    const textOffset = findEmfRecord(bytes, 0x54);
+    const restore = emfRecord(0x22, int32Values(-1));
+    const malformed = Buffer.concat([
+      bytes.subarray(0, textOffset),
+      restore,
+      bytes.subarray(textOffset),
+    ]);
+    malformed.writeUInt32LE(malformed.length, 48);
+    malformed.writeUInt32LE(malformed.readUInt32LE(52) + 1, 52);
+
+    expectFailureMessage(
+      convertMetafileToSvgData(malformed.toString("base64"), "image/emf"),
+      "invalid saved state",
+    );
+  });
+
+  it("sanitizes XML 1.0 forbidden controls in EMF text and font names", () => {
+    const bytes = createRepresentativeEmf();
+    const font = findEmfRecord(bytes, 0x52);
+    const text = findEmfRecord(bytes, 0x54);
+    bytes.writeUInt16LE(1, font + 40);
+    bytes.writeUInt16LE(1, text + 76);
+
+    const svg = decodedSvg(convertMetafileToSvgData(bytes.toString("base64"), "image/emf"));
+
+    expect(svg).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/);
+    expect(svg).toContain("�");
+    expect(new DOMParser().parseFromString(svg, "image/svg+xml").documentElement.tagName).toBe(
+      "svg",
+    );
+  });
+
+  it("rejects oversized encoded input and adversarial allocation declarations", () => {
+    const geometry = createRepresentativeEmf();
+    geometry.writeUInt32LE(0x02, findEmfRecord(geometry, 0x26));
+
+    expectFailureMessage(
+      convertMetafileToSvgData("A".repeat(12 * 1024 * 1024 + 1), "image/emf"),
+      "encoded input limit",
+    );
+    expectFailureMessage(
+      convertMetafileToSvgData(geometry.toString("base64"), "image/emf"),
+      "geometry point limit",
+    );
+    expectFailureMessage(
+      convertMetafileToSvgData(
+        largeEmfRecord(0x4b, 2 * 1024 * 1024 + 4).toString("base64"),
+        "image/emf",
+      ),
+      "bitmap payload limit",
+    );
+    expectFailureMessage(
+      convertMetafileToSvgData(
+        largeEmfRecord(0x02, 4 * 1024 * 1024 + 4).toString("base64"),
+        "image/emf",
+      ),
+      "record payload limit",
+    );
+  });
+
+  it("bounds conversion cache entries while retaining compact keys", () => {
+    const cache = new BoundedMetafileConversionCache();
+    for (let index = 0; index < 20; index++) {
+      cache.set(`image/emf:4:${index}:${index}`, {
+        ok: false,
+        reason: "invalid-data",
+        message: "test",
+      });
+    }
+
+    expect(cache.size).toBe(16);
+    expect(cache.get("image/emf:4:0:0")).toBeUndefined();
+    expect(cache.get("image/emf:4:19:19")).toMatchObject({ ok: false });
+  });
+
+  it("bounds conversion cache result memory", () => {
+    const cache = new BoundedMetafileConversionCache();
+    cache.set("first", {
+      ok: true,
+      imageData: "A".repeat(9 * 1024 * 1024),
+      mimeType: "image/svg+xml",
+    });
+    cache.set("second", {
+      ok: true,
+      imageData: "B".repeat(9 * 1024 * 1024),
+      mimeType: "image/svg+xml",
+    });
+
+    expect(cache.size).toBe(1);
+    expect(cache.get("first")).toBeUndefined();
+    expect(cache.get("second")).toMatchObject({ ok: true });
+  });
+
   it("escapes allowlisted inline SVG attributes and rejects all other names", () => {
     const encoded = Buffer.from('<svg viewBox="0 0 1 1"></svg>').toString("base64");
 
@@ -191,11 +330,26 @@ describe("convertMetafileToSvgData", () => {
       "Unsupported inline SVG attribute 'onload'.",
     );
   });
+
+  it("deterministically namespaces IDs and all local fragment references", () => {
+    const encoded = Buffer.from(
+      '<svg><defs><linearGradient id="paint"><stop/></linearGradient><path id="shape" fill="url(#paint)"/></defs><use href="#shape" xlink:href="#shape"/></svg>',
+    ).toString("base64");
+
+    const first = inlineSvgData(encoded, {}, "metafile-0-");
+    const second = inlineSvgData(encoded, {}, "metafile-1-");
+
+    expect(first).toContain('id="metafile-0-paint"');
+    expect(first).toContain('fill="url(#metafile-0-paint)"');
+    expect(first).toContain('href="#metafile-0-shape"');
+    expect(second).toContain('id="metafile-1-paint"');
+    expect(second).not.toContain('id="metafile-0-paint"');
+  });
 });
 
 function decodedSvg(result: ReturnType<typeof convertMetafileToSvgData>): string {
-  expect(result.ok).toBe(true);
   if (!result.ok) throw new Error(result.message);
+  expect(result.ok).toBe(true);
   return Buffer.from(result.imageData, "base64").toString("utf8");
 }
 
@@ -278,4 +432,81 @@ function wmfWithoutEof(): Buffer {
   const bytes = original.subarray(0, original.length - 6);
   bytes.writeUInt32LE(bytes.length / 2, 6);
   return bytes;
+}
+
+function emfWithPaletteEof(): Buffer {
+  const original = createRepresentativeEmf();
+  const eofOffset = findEmfRecord(original, 0x0e);
+  const eof = emfRecord(0x0e, Buffer.alloc(20));
+  eof.writeUInt32LE(2, 8);
+  eof.writeUInt32LE(20, 12);
+  eof.writeUInt32LE(eof.length, 16);
+  eof.writeUInt32LE(0x00112233, 20);
+  eof.writeUInt32LE(0x00445566, 24);
+  const result = Buffer.concat([original.subarray(0, eofOffset), eof]);
+  result.writeUInt32LE(result.length, 48);
+  return result;
+}
+
+function emfWithRestoredTextState(restoreValue: number): Buffer {
+  const original = createRepresentativeEmf();
+  const textOffset = findEmfRecord(original, 0x54);
+  const fontOffset = findEmfRecord(original, 0x52);
+  const changedFont = Buffer.from(
+    original.subarray(fontOffset, fontOffset + original.readUInt32LE(fontOffset + 4)),
+  );
+  changedFont.writeUInt32LE(4, 8);
+  changedFont.fill(0, 40, 104);
+  Buffer.from("Changed Font", "utf16le").copy(changedFont, 40);
+  const inserted = [
+    emfRecord(0x21),
+    emfRecord(0x18, uint32Values(0x0000ff00)),
+    emfRecord(0x21),
+    emfRecord(0x0a, int32Values(500, 500)),
+    emfRecord(0x18, uint32Values(0x00ff0000)),
+    emfRecord(0x16, uint32Values(6)),
+    changedFont,
+    emfRecord(0x25, uint32Values(4)),
+    emfRecord(0x22, int32Values(restoreValue)),
+  ];
+  const result = Buffer.concat([
+    original.subarray(0, textOffset),
+    ...inserted,
+    original.subarray(textOffset),
+  ]);
+  result.writeUInt32LE(result.length, 48);
+  result.writeUInt32LE(result.readUInt32LE(52) + inserted.length, 52);
+  return result;
+}
+
+function largeEmfRecord(type: number, recordSize: number): Buffer {
+  const original = createRepresentativeEmf();
+  const eofOffset = findEmfRecord(original, 0x0e);
+  const record = Buffer.alloc(recordSize);
+  record.writeUInt32LE(type, 0);
+  record.writeUInt32LE(record.length, 4);
+  const result = Buffer.concat([original.subarray(0, 88), record, original.subarray(eofOffset)]);
+  result.writeUInt32LE(result.length, 48);
+  result.writeUInt32LE(3, 52);
+  return result;
+}
+
+function emfRecord(type: number, payload: Buffer = Buffer.alloc(0)): Buffer {
+  const record = Buffer.alloc(8 + payload.length);
+  record.writeUInt32LE(type, 0);
+  record.writeUInt32LE(record.length, 4);
+  payload.copy(record, 8);
+  return record;
+}
+
+function int32Values(...values: number[]): Buffer {
+  const result = Buffer.alloc(values.length * 4);
+  values.forEach((value, index) => result.writeInt32LE(value, index * 4));
+  return result;
+}
+
+function uint32Values(...values: number[]): Buffer {
+  const result = Buffer.alloc(values.length * 4);
+  values.forEach((value, index) => result.writeUInt32LE(value, index * 4));
+  return result;
 }
