@@ -938,7 +938,14 @@ describe("writePptx - shape add/delete edits", () => {
         (group) => group.sourcePartPath === source.slides[0].partPath,
       );
       const relationshipId =
-        target.kind === "image" ? target.blipRelationshipId : target.chartRelationshipId;
+        target.kind === "image"
+          ? target.blipRelationshipId
+          : target.kind === "chart"
+            ? target.chartRelationshipId
+            : undefined;
+      if (relationshipId === undefined) {
+        throw new Error(`${kind} cleanup target resolved to an unsupported kind`);
+      }
       const relationship = ownerRelationships?.relationships.find(
         (candidate) => candidate.id === relationshipId,
       );
@@ -1748,16 +1755,18 @@ describe("writePptx - shape xfrm edit", () => {
     if (deletedOuter?.kind !== "group") throw new Error("delete did not preserve outer group");
     const deletedInner = deletedOuter.children[0];
     if (deletedInner?.kind !== "group") throw new Error("delete did not preserve inner group");
+    const preservedSibling = outer.children[1];
+    if (preservedSibling?.kind !== "shape") throw new Error("preserved sibling was not found");
 
     expect(findShapeNodeBySourceHandle(source, stableHandle)).toBe(child);
     expect(findShapeNodeBySourceHandle(deleted, stableHandle)).toBeUndefined();
     expect(deletedInner.children).toEqual([]);
     expect(deletedOuter.children[1]).toMatchObject({
       kind: "shape",
-      nodeId: outer.children[1]?.nodeId,
+      nodeId: preservedSibling.nodeId,
       name: "Preserved Sibling",
-      handle: outer.children[1]?.handle,
-      transform: outer.children[1]?.transform,
+      handle: preservedSibling.handle,
+      transform: preservedSibling.transform,
     });
     expect(deletedOuter.transform).toEqual(outer.transform);
     expect(editedChild).toMatchObject({
