@@ -205,7 +205,8 @@ function adaptElement(
     }
     case "raw": {
       const olePreview = adaptOlePreviewImage(element, slide, diagnostics);
-      if (olePreview !== undefined) return [olePreview];
+      if (olePreview.kind === "image") return [olePreview.image];
+      if (olePreview.kind === "skipped") return [];
       pushAdapterWarning(
         diagnostics,
         "pptx-computed-view-adapter.raw-element-skipped",
@@ -218,16 +219,23 @@ function adaptElement(
   }
 }
 
+type OlePreviewAdaptation =
+  | { readonly kind: "not-ole" }
+  | { readonly kind: "skipped" }
+  | { readonly kind: "image"; readonly image: ImageElement };
+
 function adaptOlePreviewImage(
   element: ComputedRawElement,
   slide: ComputedSlide,
   diagnostics: DiagnosticSink,
-): ImageElement | undefined {
-  const oleObject = findDescendant(element.sourceNode.raw.node, "oleObj");
-  if (oleObject === undefined) return undefined;
+): OlePreviewAdaptation {
+  const rawNode = element.sourceNode.raw.node;
+  const oleObject = findDescendant(rawNode, "oleObj");
+  if (oleObject === undefined) return { kind: "not-ole" };
 
-  const picture = findDescendant(oleObject, "pic");
-  const blip = picture !== undefined ? findDescendant(picture, "blip") : undefined;
+  const picture = childByLocalName(oleObject, "pic");
+  const blipFill = childByLocalName(picture, "blipFill");
+  const blip = childByLocalName(blipFill, "blip");
   const relationshipId = blip?.attributes?.["r:embed"];
   const relationship = relationshipId
     ? slide.relationships.find((candidate) => String(candidate.id) === relationshipId)
@@ -240,10 +248,13 @@ function adaptOlePreviewImage(
       slide,
       element.sourcePartPath,
     );
-    return undefined;
+    return { kind: "skipped" };
   }
 
-  const xfrm = findDescendant(picture, "xfrm");
+  const outerXfrm =
+    localRawName(rawNode.name) === "graphicFrame" ? childByLocalName(rawNode, "xfrm") : undefined;
+  const innerXfrm = childByLocalName(childByLocalName(picture, "spPr"), "xfrm");
+  const xfrm = outerXfrm ?? innerXfrm;
   const offset = childByLocalName(xfrm, "off");
   const extent = childByLocalName(xfrm, "ext");
   if (offset === undefined || extent === undefined) {
@@ -256,40 +267,43 @@ function adaptOlePreviewImage(
     );
   }
 
-  const srcRect = findDescendant(picture, "srcRect");
-  const cNvPr = findDescendant(picture, "cNvPr");
+  const srcRect = childByLocalName(blipFill, "srcRect");
+  const cNvPr = childByLocalName(childByLocalName(picture, "nvPicPr"), "cNvPr");
   return {
-    type: "image",
-    transform: {
-      offsetX: asEmu(numericRawAttr(offset, "x")),
-      offsetY: asEmu(numericRawAttr(offset, "y")),
-      extentWidth: asEmu(numericRawAttr(extent, "cx")),
-      extentHeight: asEmu(numericRawAttr(extent, "cy")),
-      rotation: numericRawAttr(xfrm, "rot") / 60000,
-      flipH: booleanRawAttr(xfrm, "flipH"),
-      flipV: booleanRawAttr(xfrm, "flipV"),
+    kind: "image",
+    image: {
+      type: "image",
+      transform: {
+        offsetX: asEmu(numericRawAttr(offset, "x")),
+        offsetY: asEmu(numericRawAttr(offset, "y")),
+        extentWidth: asEmu(numericRawAttr(extent, "cx")),
+        extentHeight: asEmu(numericRawAttr(extent, "cy")),
+        rotation: numericRawAttr(xfrm, "rot") / 60000,
+        flipH: booleanRawAttr(xfrm, "flipH"),
+        flipV: booleanRawAttr(xfrm, "flipV"),
+      },
+      imageData: uint8ArrayToBase64(relationship.media.bytes),
+      mimeType: normalizeImageMimeType(
+        relationship.media.contentType,
+        diagnostics,
+        slide,
+        element.sourcePartPath,
+      ),
+      effects: null,
+      blipEffects: null,
+      srcRect:
+        srcRect !== undefined
+          ? {
+              left: numericRawAttr(srcRect, "l") / 100000,
+              top: numericRawAttr(srcRect, "t") / 100000,
+              right: numericRawAttr(srcRect, "r") / 100000,
+              bottom: numericRawAttr(srcRect, "b") / 100000,
+            }
+          : null,
+      ...(cNvPr?.attributes?.name !== undefined ? { altText: cNvPr.attributes.name } : {}),
+      stretch: null,
+      tile: null,
     },
-    imageData: uint8ArrayToBase64(relationship.media.bytes),
-    mimeType: normalizeImageMimeType(
-      relationship.media.contentType,
-      diagnostics,
-      slide,
-      element.sourcePartPath,
-    ),
-    effects: null,
-    blipEffects: null,
-    srcRect:
-      srcRect !== undefined
-        ? {
-            left: numericRawAttr(srcRect, "l") / 100000,
-            top: numericRawAttr(srcRect, "t") / 100000,
-            right: numericRawAttr(srcRect, "r") / 100000,
-            bottom: numericRawAttr(srcRect, "b") / 100000,
-          }
-        : null,
-    ...(cNvPr?.attributes?.name !== undefined ? { altText: cNvPr.attributes.name } : {}),
-    stretch: null,
-    tile: null,
   };
 }
 
