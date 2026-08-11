@@ -5,10 +5,12 @@ import {
   createRepresentativeEmf,
   createRepresentativeWmf,
 } from "../../../../vrt/snapshot/fixtures-src/images.js";
+import { createWarningLogger } from "../warning-logger.js";
 import {
   BoundedMetafileConversionCache,
   convertMetafileToSvgData,
   inlineSvgData,
+  resolveMetafileImageSource,
 } from "./metafile-converter.js";
 
 describe("convertMetafileToSvgData", () => {
@@ -186,19 +188,25 @@ describe("convertMetafileToSvgData", () => {
     );
   });
 
-  it("reads EMR_EOF nSizeLast at offset 16 and validates optional palette data", () => {
+  it("reads EMR_EOF SizeLast from the last DWORD and validates optional palette data", () => {
     const valid = emfWithPaletteEof();
     const malformedOffset = Buffer.from(valid);
+    const malformedCount = Buffer.from(valid);
     const malformedSize = Buffer.from(valid);
     const eof = findEmfRecord(valid, 0x0e);
     malformedOffset.writeUInt32LE(24, eof + 12);
-    malformedSize.writeUInt32LE(20, eof + 16);
+    malformedCount.writeUInt32LE(3, eof + 8);
+    malformedSize.writeUInt32LE(20, eof + valid.readUInt32LE(eof + 4) - 4);
 
     expect(convertMetafileToSvgData(valid.toString("base64"), "image/emf")).toMatchObject({
       ok: true,
     });
     expectFailureMessage(
       convertMetafileToSvgData(malformedOffset.toString("base64"), "image/emf"),
+      "palette declaration",
+    );
+    expectFailureMessage(
+      convertMetafileToSvgData(malformedCount.toString("base64"), "image/emf"),
       "palette declaration",
     );
     expectFailureMessage(
@@ -210,7 +218,6 @@ describe("convertMetafileToSvgData", () => {
   it.each([
     ["top-relative", -1, "#00FF00"],
     ["multi-relative", -2, "#333333"],
-    ["absolute", 1, "#333333"],
   ] as const)(
     "restores mapping, selected font, text color, and alignment with %s RestoreDC",
     (_label, restoreValue, restoredColor) => {
@@ -224,6 +231,16 @@ describe("convertMetafileToSvgData", () => {
       expect(svg).not.toContain("Changed Font");
     },
   );
+
+  it.each([0, 1])("rejects non-negative RestoreDC SavedDC value %i", (restoreValue) => {
+    expectFailureMessage(
+      convertMetafileToSvgData(
+        emfWithRestoredTextState(restoreValue).toString("base64"),
+        "image/emf",
+      ),
+      "SavedDC must be negative",
+    );
+  });
 
   it("rejects RestoreDC references outside the saved-state stack", () => {
     const bytes = createRepresentativeEmf();
@@ -273,7 +290,7 @@ describe("convertMetafileToSvgData", () => {
     );
     expectFailureMessage(
       convertMetafileToSvgData(
-        largeEmfRecord(0x4b, 2 * 1024 * 1024 + 4).toString("base64"),
+        largeEmfRecord(0x51, 2 * 1024 * 1024 + 4).toString("base64"),
         "image/emf",
       ),
       "bitmap payload limit",
@@ -285,6 +302,25 @@ describe("convertMetafileToSvgData", () => {
       ),
       "record payload limit",
     );
+  });
+
+  it("rejects oversized encoded input before consulting the conversion cache", () => {
+    const cache = {
+      size: 0,
+      get: () => {
+        throw new Error("oversized input reached cache key lookup");
+      },
+      set: () => {
+        throw new Error("oversized input reached cache storage");
+      },
+    };
+    const warnings = createWarningLogger("warn");
+
+    expect(
+      resolveMetafileImageSource("A".repeat(12 * 1024 * 1024 + 1), "image/emf", warnings, cache),
+    ).toBeUndefined();
+    expect(warnings.getWarningEntries()).toHaveLength(1);
+    expect(warnings.getWarningEntries()[0]?.message).toContain("encoded input limit");
   });
 
   it("bounds conversion cache entries while retaining compact keys", () => {
@@ -439,10 +475,10 @@ function emfWithPaletteEof(): Buffer {
   const eofOffset = findEmfRecord(original, 0x0e);
   const eof = emfRecord(0x0e, Buffer.alloc(20));
   eof.writeUInt32LE(2, 8);
-  eof.writeUInt32LE(20, 12);
-  eof.writeUInt32LE(eof.length, 16);
-  eof.writeUInt32LE(0x00112233, 20);
-  eof.writeUInt32LE(0x00445566, 24);
+  eof.writeUInt32LE(16, 12);
+  eof.writeUInt32LE(0x00112233, 16);
+  eof.writeUInt32LE(0x00445566, 20);
+  eof.writeUInt32LE(eof.length, eof.length - 4);
   const result = Buffer.concat([original.subarray(0, eofOffset), eof]);
   result.writeUInt32LE(result.length, 48);
   return result;

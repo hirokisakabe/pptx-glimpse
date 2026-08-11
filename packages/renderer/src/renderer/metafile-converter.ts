@@ -37,7 +37,8 @@ interface MetafileRendererModule {
 const SUPPORTED_EMF_RECORD_TYPES = new Set([
   0x01, 0x02, 0x03, 0x05, 0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x11, 0x12, 0x13, 0x15, 0x16,
   0x18, 0x19, 0x1a, 0x1b, 0x21, 0x22, 0x25, 0x26, 0x27, 0x28, 0x2b, 0x2c, 0x36, 0x3a, 0x3b, 0x3c,
-  0x3d, 0x3e, 0x40, 0x43, 0x44, 0x4b, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5b, 0x5f,
+  0x3d, 0x3e, 0x40, 0x43, 0x44, 0x4b, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5b,
+  0x5f,
 ]);
 
 const SUPPORTED_WMF_RECORD_TYPES = new Set([
@@ -120,11 +121,14 @@ export function resolveMetafileImageSource(
   if (mimeType !== "image/emf" && mimeType !== "image/wmf") {
     return { imageData, mimeType };
   }
-  const cacheKey = metafileCacheKey(imageData, mimeType);
-  let result = cache?.get(cacheKey);
-  if (result === undefined) {
-    result = convertMetafileToSvgData(imageData, mimeType);
-    cache?.set(cacheKey, result);
+  let result: MetafileConversionResult;
+  if (imageData.length > MAX_BASE64_LENGTH) {
+    result = failure("invalid-data", "Metafile encoded input limit exceeded.");
+  } else {
+    const cacheKey = metafileCacheKey(imageData, mimeType);
+    const cached = cache?.get(cacheKey);
+    result = cached ?? convertMetafileToSvgData(imageData, mimeType);
+    if (cached === undefined) cache?.set(cacheKey, result);
   }
   if (result.ok) return result;
 
@@ -774,11 +778,10 @@ function cloneEmfTextState(state: EmfTextState): EmfTextState {
 
 function restoreEmfTextState(
   savedStates: EmfTextState[],
-  relativeOrAbsolute: number,
+  relative: number,
 ): EmfTextState | undefined {
-  if (relativeOrAbsolute === 0) return undefined;
-  const index =
-    relativeOrAbsolute < 0 ? savedStates.length + relativeOrAbsolute : relativeOrAbsolute - 1;
+  if (relative >= 0) return undefined;
+  const index = savedStates.length + relative;
   const restored = savedStates[index];
   if (restored === undefined) return undefined;
   savedStates.length = index;
@@ -793,14 +796,12 @@ function normalizeEmfRestoreDcRecords(
   const view = dataView(bytes);
   if (!emfNeedsRestoreNormalization(view)) return { ok: true, bytes };
   const records: Uint8Array[] = [];
-  let savedDepth = 0;
   let normalizedRecordCount = 0;
   let normalizedBytes = 0;
   let offset = 0;
   while (offset < bytes.byteLength) {
     const type = view.getUint32(offset, true);
     const size = view.getUint32(offset + 4, true);
-    if (type === 0x21) savedDepth++;
     if (type !== 0x22) {
       const record = bytes.subarray(offset, offset + size);
       records.push(record);
@@ -808,7 +809,7 @@ function normalizeEmfRestoreDcRecords(
       normalizedRecordCount++;
     } else {
       const restoreValue = view.getInt32(offset + 8, true);
-      const restoreCount = restoreValue < 0 ? -restoreValue : savedDepth - restoreValue + 1;
+      const restoreCount = -restoreValue;
       for (let index = 0; index < restoreCount; index++) {
         const record = new Uint8Array(12);
         const recordView = dataView(record);
@@ -819,7 +820,6 @@ function normalizeEmfRestoreDcRecords(
         normalizedBytes += record.byteLength;
         normalizedRecordCount++;
       }
-      savedDepth -= restoreCount;
     }
     if (normalizedBytes > MAX_METAFILE_BYTES || normalizedRecordCount > MAX_RECORDS) {
       return failure("invalid-data", "Normalized EMF RestoreDC limit exceeded.");
@@ -855,19 +855,23 @@ function validateEmfEof(
   offset: number,
   size: number,
 ): Exclude<MetafileConversionResult, { readonly ok: true }> | undefined {
-  if (size < 20 || view.getUint32(offset + 16, true) !== size) {
+  if (size < 20 || view.getUint32(offset + size - 4, true) !== size) {
     return failure("invalid-data", "EMF EOF record has an invalid declared size.");
   }
   const paletteEntries = view.getUint32(offset + 8, true);
   const paletteOffset = view.getUint32(offset + 12, true);
   if (paletteEntries === 0) return undefined;
-  const paletteEnd = paletteOffset + paletteEntries * 4;
+  const paletteBytes = paletteEntries * 4;
+  const paletteEnd = paletteOffset + paletteBytes;
+  const sizeLastOffset = size - 4;
   if (
     paletteEntries > MAX_GEOMETRY_POINTS ||
-    paletteOffset < 20 ||
+    paletteOffset < 16 ||
     paletteOffset % 4 !== 0 ||
+    !Number.isSafeInteger(paletteBytes) ||
     !Number.isSafeInteger(paletteEnd) ||
-    paletteEnd > size
+    paletteOffset > sizeLastOffset ||
+    paletteEnd > sizeLastOffset
   ) {
     return failure("invalid-data", "EMF EOF palette declaration is invalid.");
   }
@@ -922,10 +926,13 @@ function validateEmfRecordAllocations(
     }
     geometryPoints += pointCount;
   }
-  if (type === 0x22 && size < 12) {
-    return failure("invalid-data", "EMF RestoreDC record is truncated.");
+  if (type === 0x22) {
+    if (size < 12) return failure("invalid-data", "EMF RestoreDC record is truncated.");
+    if (view.getInt32(offset + 8, true) >= 0) {
+      return failure("invalid-data", "EMF RestoreDC SavedDC must be negative.");
+    }
   }
-  if (type === 0x4b && size > MAX_BITMAP_BYTES) {
+  if (type === 0x51 && size > MAX_BITMAP_BYTES) {
     return failure("invalid-data", "EMF bitmap payload limit exceeded.");
   }
   return { ok: true, geometryPoints };
