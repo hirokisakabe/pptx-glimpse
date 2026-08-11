@@ -209,19 +209,19 @@ describe("PptxEditorSession - shapes", () => {
       const target = candidates.at(-1);
       if (target?.handle === undefined) throw new Error(`${kind} nested target was not found`);
       expect(target.editableDelete).toBe(true);
+      const beforeSvg = (await editor.renderCurrentSlides())[0]?.svg;
       editor.selectShape(target.handle);
 
       const deleted = await editor.deleteSelectedShape();
       expect(deleted.selection).toBeUndefined();
       expect(deleted.history.undoDepth).toBe(1);
+      expect(deleted.slides[0]?.svg).not.toBe(beforeSvg);
       expect(
         editor.shapes(1).some((shape) => handleKey(shape.handle) === handleKey(target.handle)),
       ).toBe(false);
       expect(
-        readPptx(editor.save().pptx).slides[0].shapes.some(
-          (shape) => handleKey(shape.handle) === handleKey(target.handle),
-        ),
-      ).toBe(false);
+        findShapeNodeBySourceHandle(readPptx(editor.save().pptx), target.handle),
+      ).toBeUndefined();
 
       await editor.undo();
       expect(
