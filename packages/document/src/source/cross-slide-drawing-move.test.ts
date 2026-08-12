@@ -10,9 +10,11 @@ import {
   readPptx,
   type SourceHandle,
   type SourceTextBody,
+  updateChartData,
   writePptx,
 } from "../index.js";
 import { BLUE_PNG } from "../writer/write-pptx.test-helpers.js";
+import { resolveInternalRelationshipTarget } from "./package-paths.js";
 
 describe("moveShapesAcrossSlides", () => {
   it("moves a consecutive shape/picture block before an anchor and persists remapped ids", () => {
@@ -342,15 +344,259 @@ describe("moveShapesAcrossSlides", () => {
     ).toContain(sharedRelationshipId);
   });
 
-  it("rejects placeholders, non-root nodes, and unsupported typed drawing kinds", () => {
+  it("moves a chart while byte-preserving its chart/workbook subgraph and package metadata", () => {
+    const source = buildCleanTwoSlideSource((session, first, second) => {
+      session.target(first).addChart({
+        chartType: "bar",
+        offsetX: asEmu(0),
+        offsetY: asEmu(0),
+        width: asEmu(2_400_000),
+        height: asEmu(1_800_000),
+        name: "Moved chart",
+        series: [{ name: "Revenue", categories: ["A", "B"], values: [10, 20] }],
+      });
+      session.target(second).addChart({
+        chartType: "line",
+        offsetX: asEmu(3_000_000),
+        offsetY: asEmu(0),
+        width: asEmu(2_400_000),
+        height: asEmu(1_800_000),
+        name: "Destination chart",
+        series: [{ name: "Cost", categories: ["A", "B"], values: [5, 8] }],
+      });
+    });
+    const sourceSlide = requireValue(source.slides[0]);
+    const destinationSlide = requireValue(source.slides[1]);
+    const chart = sourceSlide.shapes[0];
+    if (
+      chart?.kind !== "chart" ||
+      chart.handle === undefined ||
+      chart.chartRelationshipId === undefined
+    ) {
+      throw new Error("chart move fixture is missing its source chart");
+    }
+    const chartPartPath = requireInternalTarget(
+      source,
+      sourceSlide.partPath,
+      chart.chartRelationshipId,
+    );
+    const workbookRelationship = requireValue(
+      source.packageGraph.relationships
+        .find((group) => group.sourcePartPath === chartPartPath)
+        ?.relationships.find((relationship) => relationship.type.endsWith("/package")),
+    );
+    const workbookPartPath = requireValue(
+      resolveInternalRelationshipTarget(chartPartPath, workbookRelationship),
+    );
+    const chartBytes = rawPartBytes(source, chartPartPath);
+    const workbookBytes = rawPartBytes(source, workbookPartPath);
+    const destinationChart = requireValue(
+      destinationSlide.shapes.find((shape) => shape.kind === "chart"),
+    );
+    const destinationChartPartPath = requireInternalTarget(
+      source,
+      destinationSlide.partPath,
+      requireValue(destinationChart.chartRelationshipId),
+    );
+    const contentTypes = structuredClone(source.packageGraph.contentTypes);
+    const partPaths = source.packageGraph.parts.map((part) => part.partPath);
+
+    const result = moveShapesAcrossSlides(
+      source,
+      [chart.handle],
+      requireValue(destinationSlide.handle),
+    );
+    const movedChart = result.document.slides[1]?.shapes.find(
+      (shape) => shape.kind === "chart" && shape.name === "Moved chart",
+    );
+    if (movedChart?.kind !== "chart" || movedChart.chartRelationshipId === undefined) {
+      throw new Error("moved chart is missing");
+    }
+    expect(movedChart.handle?.partPath).toBe(destinationSlide.partPath);
+    expect(movedChart.chartRelationshipId).not.toBe(chart.chartRelationshipId);
+    expect(
+      result.document.packageGraph.relationships
+        .find((group) => group.sourcePartPath === sourceSlide.partPath)
+        ?.relationships.some((relationship) => relationship.id === chart.chartRelationshipId),
+    ).toBe(false);
+    expect(
+      requireInternalTarget(
+        result.document,
+        destinationSlide.partPath,
+        movedChart.chartRelationshipId,
+      ),
+    ).toBe(chartPartPath);
+    expect(rawPartBytes(result.document, chartPartPath)).toEqual(chartBytes);
+    expect(rawPartBytes(result.document, workbookPartPath)).toEqual(workbookBytes);
+    const retainedDestinationChart = requireValue(
+      result.document.slides[1]?.shapes.find(
+        (shape) => shape.kind === "chart" && shape.name === "Destination chart",
+      ),
+    );
+    expect(
+      requireInternalTarget(
+        result.document,
+        destinationSlide.partPath,
+        requireValue(
+          retainedDestinationChart.kind === "chart"
+            ? retainedDestinationChart.chartRelationshipId
+            : undefined,
+        ),
+      ),
+    ).toBe(destinationChartPartPath);
+    expect(result.document.packageGraph.contentTypes).toEqual(contentTypes);
+    expect(result.document.packageGraph.parts.map((part) => part.partPath)).toEqual(partPaths);
+
+    const persisted = readPptx(writePptx(result.document));
+    expect(persisted.slides[0]?.shapes.some((shape) => shape.kind === "chart")).toBe(false);
+    const persistedMovedChart = persisted.slides[1]?.shapes.find(
+      (shape) => shape.kind === "chart" && shape.name === "Moved chart",
+    );
+    if (persistedMovedChart?.kind !== "chart") throw new Error("persisted chart is missing");
+    expect(
+      requireInternalTarget(
+        persisted,
+        destinationSlide.partPath,
+        requireValue(persistedMovedChart.chartRelationshipId),
+      ),
+    ).toBe(chartPartPath);
+    expect(rawPartBytes(persisted, chartPartPath)).toEqual(chartBytes);
+    expect(rawPartBytes(persisted, workbookPartPath)).toEqual(workbookBytes);
+    expect(persisted.packageGraph.contentTypes).toEqual(contentTypes);
+    expect(new Set(persisted.packageGraph.parts.map((part) => part.partPath))).toEqual(
+      new Set(partPaths),
+    );
+  });
+
+  it("allows chronological chart data edits before and after a move using the current handle", () => {
     const source = buildCleanTwoSlideSource((session, first) => {
       session.target(first).addChart({
         chartType: "bar",
         offsetX: asEmu(0),
         offsetY: asEmu(0),
-        width: asEmu(1000),
-        height: asEmu(1000),
-        series: [{ categories: ["A"], values: [1] }],
+        width: asEmu(2_400_000),
+        height: asEmu(1_800_000),
+        name: "Edited moved chart",
+        series: [{ name: "Before", categories: ["A"], values: [1] }],
+      });
+    });
+    const sourceChart = source.slides[0]?.shapes[0];
+    if (sourceChart?.kind !== "chart" || sourceChart.handle === undefined) {
+      throw new Error("chronological chart fixture is missing");
+    }
+    const editedBeforeMove = updateChartData(source, sourceChart.handle, {
+      series: [{ name: "Before move", categories: ["A", "B"], values: [2, 3] }],
+    });
+    const moved = moveShapesAcrossSlides(
+      editedBeforeMove,
+      [sourceChart.handle],
+      requireValue(editedBeforeMove.slides[1]?.handle),
+    );
+    const movedHandle = requireValue(
+      moved.moved.find((mapping) => mapping.before.nodeId === sourceChart.nodeId)?.after,
+    );
+    expect(expectPersistedChartXml(moved.document, 1)).toContain("Before move");
+    expect(() =>
+      updateChartData(moved.document, sourceChart.handle, {
+        series: [{ name: "Stale", categories: ["A"], values: [9] }],
+      }),
+    ).toThrow("chart handle was not found");
+
+    const editedAfterMove = updateChartData(moved.document, movedHandle, {
+      series: [{ name: "After move", categories: ["A", "B"], values: [4, 5] }],
+    });
+    const persisted = readPptx(writePptx(editedAfterMove));
+    const persistedChart = persisted.slides[1]?.shapes.find((shape) => shape.kind === "chart");
+    expect(persistedChart?.kind).toBe("chart");
+    const chartPartPath = requireInternalTarget(
+      persisted,
+      requireValue(persisted.slides[1]).partPath,
+      requireValue(
+        persistedChart?.kind === "chart" ? persistedChart.chartRelationshipId : undefined,
+      ),
+    );
+    expect(new TextDecoder().decode(rawPartBytes(persisted, chartPartPath))).toContain(
+      "After move",
+    );
+  });
+
+  it("retains a source chart relationship while another source chart still uses it", () => {
+    const source = buildCleanTwoSlideSource((session, first) => {
+      for (const [index, name] of ["Move shared chart", "Keep shared chart"].entries()) {
+        session.target(first).addChart({
+          chartType: "bar",
+          offsetX: asEmu(index * 2_600_000),
+          offsetY: asEmu(0),
+          width: asEmu(2_400_000),
+          height: asEmu(1_800_000),
+          name,
+          series: [{ name, categories: ["A"], values: [index + 1] }],
+        });
+      }
+    });
+    const [move, keep] = requireValue(source.slides[0]).shapes;
+    if (
+      move?.kind !== "chart" ||
+      keep?.kind !== "chart" ||
+      move.handle === undefined ||
+      keep.handle === undefined ||
+      move.chartRelationshipId === undefined ||
+      keep.chartRelationshipId === undefined
+    ) {
+      throw new Error("shared chart fixture is missing");
+    }
+    const sharedSource = shareChartRelationship(
+      source,
+      requireValue(source.slides[0]).partPath,
+      requireValue(keep.nodeId),
+      keep.chartRelationshipId,
+      move.chartRelationshipId,
+    );
+    const sharedChartPartPath = requireInternalTarget(
+      sharedSource,
+      requireValue(sharedSource.slides[0]).partPath,
+      move.chartRelationshipId,
+    );
+    const moved = moveShapesAcrossSlides(
+      sharedSource,
+      [move.handle],
+      requireValue(sharedSource.slides[1]?.handle),
+    );
+    expect(
+      moved.document.packageGraph.relationships
+        .find((group) => group.sourcePartPath === sharedSource.slides[0]?.partPath)
+        ?.relationships.map((relationship) => relationship.id),
+    ).toContain(move.chartRelationshipId);
+    const movedSharedChart = requireValue(
+      moved.document.slides[1]?.shapes.find(
+        (shape) => shape.kind === "chart" && shape.name === "Move shared chart",
+      ),
+    );
+    expect(
+      requireInternalTarget(
+        moved.document,
+        requireValue(moved.document.slides[1]).partPath,
+        requireValue(
+          movedSharedChart.kind === "chart" ? movedSharedChart.chartRelationshipId : undefined,
+        ),
+      ),
+    ).toBe(sharedChartPartPath);
+    const persisted = readPptx(writePptx(moved.document));
+    const keptChart = persisted.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    expect(keptChart?.kind === "chart" ? keptChart.chartRelationshipId : undefined).toBe(
+      move.chartRelationshipId,
+    );
+  });
+
+  it("rejects placeholders, non-root nodes, and unsupported typed drawing kinds", () => {
+    const source = buildCleanTwoSlideSource((session, first) => {
+      session.target(first).addTable({
+        offsetX: asEmu(0),
+        offsetY: asEmu(0),
+        width: asEmu(1_000_000),
+        height: asEmu(1_000_000),
+        columnWidths: [asEmu(1_000_000)],
+        rows: [{ height: asEmu(1_000_000), cells: [{ text: "Unsupported table" }] }],
       });
     });
     expect(() =>
@@ -467,6 +713,57 @@ function sharePictureRelationship(
   };
 }
 
+function shareChartRelationship(
+  source: PptxSourceModel,
+  slidePartPath: PptxSourceModel["slides"][number]["partPath"],
+  keepNodeId: NonNullable<PptxSourceModel["slides"][number]["shapes"][number]["nodeId"]>,
+  oldRelationshipId: NonNullable<
+    Extract<
+      PptxSourceModel["slides"][number]["shapes"][number],
+      { kind: "chart" }
+    >["chartRelationshipId"]
+  >,
+  sharedRelationshipId: typeof oldRelationshipId,
+): PptxSourceModel {
+  return {
+    ...source,
+    packageGraph: {
+      ...source.packageGraph,
+      rawParts: source.packageGraph.rawParts?.map((part) =>
+        part.partPath === slidePartPath && part.kind === "binary"
+          ? {
+              ...part,
+              bytes: new TextEncoder().encode(
+                new TextDecoder()
+                  .decode(part.bytes)
+                  .replaceAll(`r:id="${oldRelationshipId}"`, `r:id="${sharedRelationshipId}"`),
+              ),
+            }
+          : part,
+      ),
+    },
+    slides: source.slides.map((slide) =>
+      slide.partPath !== slidePartPath
+        ? slide
+        : {
+            ...slide,
+            shapes: slide.shapes.map((shape) =>
+              shape.kind === "chart" && shape.nodeId === keepNodeId
+                ? {
+                    ...shape,
+                    chartRelationshipId: sharedRelationshipId,
+                    handle: {
+                      ...requireValue(shape.handle),
+                      relationshipId: sharedRelationshipId,
+                    },
+                  }
+                : shape,
+            ),
+          },
+    ),
+  };
+}
+
 function textHandles(textBody: SourceTextBody): readonly SourceHandle[] {
   return [
     ...(textBody.handle === undefined ? [] : [textBody.handle]),
@@ -475,6 +772,41 @@ function textHandles(textBody: SourceTextBody): readonly SourceHandle[] {
       ...paragraph.runs.flatMap((run) => (run.handle === undefined ? [] : [run.handle])),
     ]),
   ];
+}
+
+function requireInternalTarget(
+  source: PptxSourceModel,
+  ownerPartPath: PptxSourceModel["slides"][number]["partPath"],
+  relationshipId: NonNullable<
+    Extract<
+      PptxSourceModel["slides"][number]["shapes"][number],
+      { kind: "chart" }
+    >["chartRelationshipId"]
+  >,
+) {
+  const relationship = requireValue(
+    source.packageGraph.relationships
+      .find((group) => group.sourcePartPath === ownerPartPath)
+      ?.relationships.find((item) => item.id === relationshipId),
+  );
+  return requireValue(resolveInternalRelationshipTarget(ownerPartPath, relationship));
+}
+
+function rawPartBytes(source: PptxSourceModel, partPath: string): Uint8Array {
+  const part = source.packageGraph.rawParts?.find((item) => item.partPath === partPath);
+  if (part?.kind !== "binary") throw new Error(`raw part '${partPath}' is missing`);
+  return part.bytes;
+}
+
+function expectPersistedChartXml(source: PptxSourceModel, slideIndex: number): string {
+  const persisted = readPptx(writePptx(source));
+  const slide = requireValue(persisted.slides[slideIndex]);
+  const chart = slide.shapes.find((shape) => shape.kind === "chart");
+  const relationshipId = requireValue(
+    chart?.kind === "chart" ? chart.chartRelationshipId : undefined,
+  );
+  const chartPartPath = requireInternalTarget(persisted, slide.partPath, relationshipId);
+  return new TextDecoder().decode(rawPartBytes(persisted, chartPartPath));
 }
 
 function withSlideRootNamespace(

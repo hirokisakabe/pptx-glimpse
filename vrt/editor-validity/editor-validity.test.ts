@@ -459,12 +459,19 @@ const LO_EDITOR_VALIDITY_CASES: readonly EditorValidityCase[] = [
     createEditedPptx: (input: Uint8Array) => {
       const source = readPptx(input);
       const moved = findShapeByName(source.slides[0]?.shapes ?? [], "Cross Slide Move Target");
+      const movedChart = source.slides[0]?.shapes.find(
+        (shape) => shape.kind === "chart" && shape.name === "Cross Slide Chart Move Target",
+      );
       const destination = source.slides[1];
       if (destination?.handle === undefined) {
         throw new Error("cross-slide validity fixture has no destination handle");
       }
       return writePptx(
-        moveShapesAcrossSlides(source, [requireHandle(moved.handle)], destination.handle).document,
+        moveShapesAcrossSlides(
+          source,
+          [requireHandle(moved.handle), requireHandle(movedChart?.handle)],
+          destination.handle,
+        ).document,
       );
     },
   },

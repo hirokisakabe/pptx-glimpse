@@ -87,9 +87,12 @@ The released command set includes:
   cross-parent destinations may use rotation, flips, and uniform/non-uniform group scale when the
   moved root transform is exactly representable after integer OOXML quantization. Shear,
   singular, incomplete, and inexact mappings are rejected atomically.
-  `moveShapesAcrossSlides` is limited to consecutive non-placeholder shape/picture/connector
-  roots. It reissues destination identities, maps moved selection across apply/undo/redo, and
-  rejects connector boundaries and unsupported cross-part content atomically.
+  `moveShapesAcrossSlides` is limited to consecutive non-placeholder shape/picture/connector/
+  native chart roots. It reissues destination identities and owner relationships, reuses existing
+  chart and embedded-workbook parts without cloning, maps moved selection across apply/undo/redo,
+  and rejects connector boundaries and unsupported cross-part content atomically. An
+  `updateChartData` command may precede the batch-final move; later chart edits use the remapped
+  destination handle.
 - Media: `replaceImage`, `setPictureCrop`, and `clearPictureCrop`. Crop uses integer OOXML
   percentages (`100000` = 100%), rejects invalid or fully consumed axes without clamping, and is
   limited to pictures with exactly one stretch fill and no tile fill.
