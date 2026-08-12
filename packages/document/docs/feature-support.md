@@ -28,8 +28,9 @@ the `SourceHandle` of each newly added drawing or slide. The public `reorderShap
 available on target scopes) sets the complete direct-child drawing order for a slide, layout,
 master, or native group after additions, including placing a connector behind its connection
 targets. `moveShapes` moves a consecutive sibling block within one container or across
-identity-mapped root/native-group parents in the same part before an anchor or to the
-drawing-order end without requiring a complete sibling list.
+root/native-group parents in the same part before an anchor or to the drawing-order end without
+requiring a complete sibling list. Cross-parent moves rewrite only moved root transforms when the
+source-to-destination affine mapping is exactly representable after OOXML quantization.
 
 At drawing-part roots, `readPptx` retains unmodeled slide, layout, and master children such as
 timing and extension lists as raw sidecars. They remain preservation-only (`P`) material and are

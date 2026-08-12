@@ -159,7 +159,7 @@ change appearance. It also rejects a group referenced by a connector. A removed 
 reserved for the edit session and is not reused by a later group operation. Every rejection is
 atomic because validation completes before a new source model or edit record is created.
 
-## Partial and identity-mapped cross-parent drawing moves
+## Partial and exact cross-parent drawing moves
 
 `moveShapes` moves one or more consecutive siblings to a slide, layout, master, or native group
 in the same drawing part. Input handles are normalized to source document order. Pass a
@@ -187,17 +187,19 @@ const beforeFirst = moveShapes(source, [third, second], slide.handle, {
 const movedToEnd = moveShapes(beforeFirst, [first], slide.handle);
 ```
 
-The operation preserves node ids, handles, transforms, connector endpoints, relationship ids,
-package parts, non-target sibling order, empty source groups, and authored slots for non-drawing
-or unknown XML. Cross-parent moves require every source and destination ancestor group to have a
-complete, non-zero identity child mapping (`off == chOff`, `ext == chExt`, with no rotation or
-flip), so source-local transforms remain exact without coordinate conversion. A connector may
-cross parents only when it and every referenced endpoint are all inside the moved subtree.
+The operation preserves node ids, handles, connector endpoints, relationship ids, package parts,
+non-target sibling order, empty source groups, and authored slots for non-drawing or unknown XML.
+Identity-mapped parent chains keep moved root transforms unchanged. For complete non-zero affine
+group chains, each moved root is re-expressed as `inverse(Pdst) · Psrc · L`; integer EMU and OOXML
+angle values are committed only when rebuilding them reproduces the same matrix. Moving a group
+changes only that group root transform, leaving descendant transforms and XML untouched. A
+connector may cross parents only when it and every referenced endpoint are all inside the moved
+subtree.
 
 The operation rejects empty, duplicate, idless, non-consecutive, cross-part inputs; cycles;
-non-identity/incomplete ancestors; connector boundary crossings; and SmartArt, raw, or
-`mc:AlternateContent` moved targets. General affine and cross-part moves remain separate
-contracts.
+incomplete, zero-extent, singular, non-finite, shear-producing, or quantization-inexact affine
+mappings; connector boundary crossings; and SmartArt, raw, or `mc:AlternateContent` moved targets.
+Affine approximation, connector rerouting, and cross-part moves remain separate contracts.
 
 `updateChartData(source, chartHandle, input)` replaces the series topology, names, shared category
 labels, and finite numeric values of an existing supported category Chart. It keeps the Chart

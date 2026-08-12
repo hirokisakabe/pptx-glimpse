@@ -1,3 +1,5 @@
+import { moveShapes, readPptx, type SourceGroup, writePptx } from "@pptx-glimpse/document";
+
 import type { FixtureCreatorMap, GridPos } from "../fixture-builder.js";
 import {
   buildPptx,
@@ -587,6 +589,60 @@ async function createIdentityCrossParentMoveFixture(): Promise<void> {
 </p:grpSp>`;
   const buffer = await buildPptx({ slides: [{ xml: wrapSlideXml(group), rels: slideRelsXml() }] });
   savePptx(buffer, "identity-cross-parent-move.pptx");
+}
+
+async function createGeneralAffineCrossParentMoveFixture(): Promise<void> {
+  const nestedGroup = `<p:grpSp>
+  <p:nvGrpSpPr><p:cNvPr id="2" name="Outer Affine Group"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+  <p:grpSpPr><a:xfrm rot="10800000" flipV="1">
+    <a:off x="0" y="0"/><a:ext cx="9144000" cy="5143500"/>
+    <a:chOff x="0" y="0"/><a:chExt cx="9144000" cy="5143500"/>
+  </a:xfrm></p:grpSpPr>
+  <p:grpSp>
+    <p:nvGrpSpPr><p:cNvPr id="3" name="Affine Move Destination"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+    <p:grpSpPr><a:xfrm rot="5400000" flipH="1">
+      <a:off x="3000000" y="1000000"/><a:ext cx="4000000" cy="3000000"/>
+      <a:chOff x="0" y="0"/><a:chExt cx="2000000" cy="1000000"/>
+    </a:xfrm></p:grpSpPr>
+    ${shapeXml(4, "Affine Destination Marker", {
+      preset: "ellipse",
+      x: 100000,
+      y: 100000,
+      cx: 300000,
+      cy: 200000,
+      fillXml: solidFillXml("A5A5A5"),
+    })}
+  </p:grpSp>
+</p:grpSp>`;
+  const movedShape = shapeXml(5, "Affine Moved Rectangle", {
+    preset: "roundRect",
+    x: 5200000,
+    y: 1800000,
+    cx: 600000,
+    cy: 900000,
+    fillXml: solidFillXml("4472C4"),
+    textBodyXml: textBodyXmlHelper("general affine", { fontSize: 12, color: "FFFFFF" }),
+  });
+  const slideXml = wrapSlideXml(`${nestedGroup}${movedShape}`);
+  const input = await buildPptx({
+    slides: [
+      { xml: slideXml, rels: slideRelsXml() },
+      { xml: slideXml, rels: slideRelsXml() },
+    ],
+  });
+  const source = readPptx(input);
+  const secondSlide = source.slides[1];
+  const destination = secondSlide?.shapes
+    .flatMap((shape) => (shape.kind === "group" ? shape.children : []))
+    .find((shape): shape is SourceGroup => shape.kind === "group");
+  const rootShape = secondSlide?.shapes.find((shape) => shape.kind === "shape");
+  if (destination?.handle === undefined || rootShape?.handle === undefined) {
+    throw new Error("general affine VRT fixture handles are missing");
+  }
+  savePptx(
+    writePptx(moveShapes(source, [rootShape.handle], destination.handle)),
+    "general-affine-cross-parent-move.pptx",
+  );
 }
 
 async function createConnectorsFixture(): Promise<void> {
@@ -1444,6 +1500,7 @@ export const shapeFixtureCreators: FixtureCreatorMap = {
   "transform.pptx": createTransformFixture,
   "groups.pptx": createGroupsFixture,
   "identity-cross-parent-move.pptx": createIdentityCrossParentMoveFixture,
+  "general-affine-cross-parent-move.pptx": createGeneralAffineCrossParentMoveFixture,
   "connectors.pptx": createConnectorsFixture,
   "custom-geometry.pptx": createCustomGeometryFixture,
   "flowchart.pptx": createFlowchartFixture,

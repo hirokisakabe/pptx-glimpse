@@ -84,7 +84,15 @@ const BLUE_PNG = new Uint8Array(
   ),
 );
 
-const LO_EDITOR_VALIDITY_CASES = [
+interface EditorValidityCase {
+  readonly name: string;
+  readonly sourceFixture: string;
+  readonly expectedFixture: string;
+  readonly createEditedPptx: (input: Uint8Array) => Uint8Array;
+  readonly mismatchTolerance?: number;
+}
+
+const LO_EDITOR_VALIDITY_CASES: readonly EditorValidityCase[] = [
   {
     name: "existing theme color and font schemes",
     sourceFixture: "editor-validity-theme-source.pptx",
@@ -428,6 +436,22 @@ const LO_EDITOR_VALIDITY_CASES = [
     },
   },
   {
+    name: "representable affine cross-parent drawing move",
+    sourceFixture: "editor-validity-affine-move.pptx",
+    expectedFixture: "editor-validity-affine-move.pptx",
+    mismatchTolerance: 0.002,
+    createEditedPptx: (input: Uint8Array) => {
+      const source = readPptx(input);
+      const slide = source.slides[0];
+      const group = slide?.shapes.find((shape): shape is SourceGroup => shape.kind === "group");
+      const rootShape = slide?.shapes.find((shape) => shape.kind === "shape");
+      if (group?.handle === undefined || rootShape?.handle === undefined) {
+        throw new Error("affine cross-parent move fixture has no root shape or group handle");
+      }
+      return writePptx(moveShapes(source, [rootShape.handle], group.handle));
+    },
+  },
+  {
     name: "group shapes",
     sourceFixture: "editor-validity-group-source.pptx",
     expectedFixture: "editor-validity-group-expected.pptx",
@@ -487,7 +511,7 @@ describeOrSkip("LibreOffice edited PPTX validity", { timeout: 120000 }, () => {
         join(DIFF_DIR, `editor-validity-${slugify(testCase.name)}-diff.png`),
         {
           pixelThreshold: 0,
-          mismatchTolerance: 0,
+          mismatchTolerance: testCase.mismatchTolerance ?? 0,
           includeAntiAliased: true,
         },
       );

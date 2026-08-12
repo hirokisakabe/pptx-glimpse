@@ -83,7 +83,9 @@ The released command set includes:
   and connector references can be expanded losslessly; see the document package's
   [group constraints](../document/docs/editing.md#lossless-group-and-ungroup). `moveShapes`
   preserves selection and history while moving a consecutive block within one drawing part;
-  cross-parent destinations require identity-mapped group ancestor chains.
+  cross-parent destinations may use rotation, flips, and uniform/non-uniform group scale when the
+  moved root transform is exactly representable after integer OOXML quantization. Shear,
+  singular, incomplete, and inexact mappings are rejected atomically.
 - Media: `replaceImage`, `setPictureCrop`, and `clearPictureCrop`. Crop uses integer OOXML
   percentages (`100000` = 100%), rejects invalid or fully consumed axes without clamping, and is
   limited to pictures with exactly one stretch fill and no tile fill.
