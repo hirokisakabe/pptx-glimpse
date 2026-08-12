@@ -125,6 +125,7 @@ export function EditorLayoutPicker({
           onKeyDown={(event) => {
             if (event.key !== "Escape") return;
             event.preventDefault();
+            if (busy || adding) return;
             close(true);
           }}
         >

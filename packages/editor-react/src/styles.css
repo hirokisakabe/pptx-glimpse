@@ -631,12 +631,6 @@
     margin-left: 0;
   }
 
-  .pptx-glimpse-editor .layout-picker-popover {
-    position: fixed;
-    right: 16px;
-    top: 72px;
-  }
-
   .pptx-glimpse-editor .layout-master-options {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
