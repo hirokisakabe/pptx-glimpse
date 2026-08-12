@@ -23,6 +23,7 @@ export interface EditorTextRunOption {
 interface EditorToolbarProps {
   readonly busy: boolean;
   readonly error: string;
+  readonly selectionScope: object;
   readonly selectedShape: PptxEditorShapeInfo | null;
   readonly selectedShapeKey: string | null;
   readonly slidesCount: number;
@@ -60,6 +61,7 @@ export function EditorHistoryToolbar({ busy, history, onRedo, onUndo }: EditorHi
 export function EditorToolbar({
   busy,
   error,
+  selectionScope,
   selectedShape,
   selectedShapeKey,
   slidesCount,
@@ -81,7 +83,7 @@ export function EditorToolbar({
 
   useEffect(() => {
     setSelectedRunIndex(0);
-  }, [selectedShapeKey]);
+  }, [selectedShapeKey, selectionScope]);
 
   return (
     <aside className="editor-panel" aria-label="Editing controls" data-editor-component="toolbar">

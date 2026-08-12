@@ -106,6 +106,10 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
   const dragStateRef = useRef<DragState | null>(null);
   const compositionRef = useRef(false);
   const commitAfterCompositionRef = useRef(false);
+  const compositionCompletionRef = useRef<{
+    readonly promise: Promise<boolean>;
+    readonly resolve: (completed: boolean) => void;
+  } | null>(null);
 
   const currentSlide = slides[currentIndex];
   const selectedShape = useMemo(() => {
@@ -259,6 +263,8 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
   );
 
   const closeDirectTextEditor = useCallback((restoreFocus = true) => {
+    compositionCompletionRef.current?.resolve(false);
+    compositionCompletionRef.current = null;
     directTextEditorStateRef.current = null;
     compositionRef.current = false;
     commitAfterCompositionRef.current = false;
@@ -269,6 +275,8 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
   }, []);
 
   useEffect(() => {
+    compositionCompletionRef.current?.resolve(false);
+    compositionCompletionRef.current = null;
     directTextEditorStateRef.current = null;
     directTextCommitPromiseRef.current = null;
     compositionRef.current = false;
@@ -522,16 +530,22 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
     );
   }, [currentIndex, currentSlide?.handle, runEditorOperation]);
 
-  const waitForDirectTextCommit = useCallback(async () => {
-    const commit = directTextCommitPromiseRef.current;
-    return commit === null || (await commit);
-  }, []);
+  const commitPendingEdits = useCallback(async () => {
+    if (compositionRef.current) {
+      const compositionCompletion = compositionCompletionRef.current;
+      if (compositionCompletion === null || !(await compositionCompletion.promise)) return false;
+    }
+    const commit =
+      directTextCommitPromiseRef.current ??
+      (directTextEditorStateRef.current === null ? undefined : commitDirectTextEditor(false));
+    return commit === undefined || (await commit);
+  }, [commitDirectTextEditor]);
 
   const handleSelectSlide = useCallback(
     async (index: number) => {
-      if (await waitForDirectTextCommit()) controller.selectSlide(index);
+      if (await commitPendingEdits()) controller.selectSlide(index);
     },
-    [controller, waitForDirectTextCommit],
+    [commitPendingEdits, controller],
   );
 
   const handleMoveSlide = useCallback(
@@ -553,7 +567,7 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
 
   const handleImageReplacement = useCallback(
     async (file: File) => {
-      if (!(await waitForDirectTextCommit()) || selectedShape?.handle === undefined) return;
+      if (!(await commitPendingEdits()) || selectedShape?.handle === undefined) return;
       const replacement = selectedShape.editableImageReplacement;
       if (replacement === undefined) return;
       if (file.size > MAX_IMAGE_REPLACEMENT_BYTES) {
@@ -579,25 +593,36 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
         "Image replaced",
       );
     },
-    [applyCommand, controller, selectedShape, waitForDirectTextCommit],
+    [applyCommand, commitPendingEdits, controller, selectedShape],
   );
+
+  const hasUnsavedChanges = useCallback(
+    () => controller.getSnapshot().dirty || directTextEditorStateRef.current !== null,
+    [controller],
+  );
+  const markSaved = useCallback(
+    (savedHistory: ReturnType<PptxEditorSession["save"]>["history"], savedMessage: string) =>
+      controller.markSaved(savedHistory, savedMessage),
+    [controller],
+  );
+  const save = useCallback(async () => {
+    if (!(await commitPendingEdits()) || controller.getSnapshot().busy) return undefined;
+    return controller.save();
+  }, [commitPendingEdits, controller]);
+  const setError = useCallback((error: string) => controller.setError(error), [controller]);
 
   const hostControls = useMemo<EditorSurfaceHostControls>(
     () => ({
       busy,
       dirty,
       message,
-      commitPendingEdits: waitForDirectTextCommit,
-      hasUnsavedChanges: () =>
-        controller.getSnapshot().dirty || directTextEditorStateRef.current !== null,
-      markSaved: (savedHistory, savedMessage) => controller.markSaved(savedHistory, savedMessage),
-      save: async () => {
-        if (!(await waitForDirectTextCommit()) || controller.getSnapshot().busy) return undefined;
-        return controller.save();
-      },
-      setError: (error) => controller.setError(error),
+      commitPendingEdits,
+      hasUnsavedChanges,
+      markSaved,
+      save,
+      setError,
     }),
-    [busy, controller, dirty, message, waitForDirectTextCommit],
+    [busy, commitPendingEdits, dirty, hasUnsavedChanges, markSaved, message, save, setError],
   );
 
   if (currentSlide === undefined) {
@@ -723,6 +748,9 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
                 onBlur={handleDirectTextEditorBlur}
                 onCompositionEnd={() => {
                   compositionRef.current = false;
+                  const compositionCompletion = compositionCompletionRef.current;
+                  compositionCompletionRef.current = null;
+                  compositionCompletion?.resolve(true);
                   if (
                     commitAfterCompositionRef.current &&
                     !directTextEditorRef.current?.contains(document.activeElement)
@@ -734,6 +762,15 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
                 onCompositionStart={() => {
                   compositionRef.current = true;
                   commitAfterCompositionRef.current = false;
+                  compositionCompletionRef.current?.resolve(false);
+                  let resolveComposition: (completed: boolean) => void = () => {};
+                  const promise = new Promise<boolean>((resolve) => {
+                    resolveComposition = resolve;
+                  });
+                  compositionCompletionRef.current = {
+                    promise,
+                    resolve: resolveComposition,
+                  };
                 }}
                 onKeyDown={handleDirectTextEditorKeyDown}
               >
@@ -793,6 +830,7 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
         <EditorToolbar
           busy={busy}
           error={operationError}
+          selectionScope={controller}
           selectedShape={selectedShape}
           selectedShapeKey={selectedShapeKey}
           slidesCount={slides.length}

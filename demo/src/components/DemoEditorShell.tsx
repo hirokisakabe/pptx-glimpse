@@ -34,7 +34,7 @@ export function DemoEditorShell({
       !controls.hasUnsavedChanges() ||
       window.confirm("Discard your unsaved changes and open another version of the presentation?")
     );
-  }, [controls]);
+  }, [controls.commitPendingEdits, controls.hasUnsavedChanges]);
 
   useEffect(() => {
     const confirmMessage = "Discard your unsaved changes and leave the editor?";
@@ -60,7 +60,7 @@ export function DemoEditorShell({
       window.removeEventListener("beforeunload", handleBeforeUnload);
       document.removeEventListener("click", handleLinkClick, true);
     };
-  }, [controls]);
+  }, [controls.hasUnsavedChanges]);
 
   const handleDownload = useCallback(async () => {
     const saved = await controls.save();
@@ -80,7 +80,7 @@ export function DemoEditorShell({
     } catch (error) {
       controls.setError(error instanceof Error ? error.message : String(error));
     }
-  }, [controls, downloadName, fileName]);
+  }, [controls.markSaved, controls.save, controls.setError, downloadName, fileName]);
 
   const runAfterDiscardConfirmation = useCallback(
     async (action: () => void) => {

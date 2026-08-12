@@ -40,4 +40,22 @@ describe("demo editor component boundary", () => {
       expect(surface).not.toContain(hostResponsibility);
     }
   });
+
+  it("resets toolbar-local run selection when the editor session identity changes", async () => {
+    const toolbar = await readFile(resolve(componentsRoot, "EditorToolbar.tsx"), "utf8");
+    const surface = await readFile(resolve(componentsRoot, "EditorSurface.tsx"), "utf8");
+
+    expect(toolbar).toContain("readonly selectionScope: object");
+    expect(toolbar).toMatch(
+      /setSelectedRunIndex\(0\);\s*}\, \[selectedShapeKey, selectionScope\]\);/,
+    );
+    expect(surface).toContain("selectionScope={controller}");
+  });
+
+  it("keeps navigation guard listeners independent from volatile host-control snapshots", async () => {
+    const shell = await readFile(resolve(componentsRoot, "DemoEditorShell.tsx"), "utf8");
+
+    expect(shell).not.toContain("}, [controls]);");
+    expect(shell).toContain("[controls.hasUnsavedChanges]");
+  });
 });
