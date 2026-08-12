@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   EditorController,
   type EditorControllerSession,
-} from "../demo/src/components/use-editor-controller.js";
+} from "../demo/src/components/editor-controller.js";
 
 const CLEAN_HISTORY = {
   canUndo: false,
