@@ -1,4 +1,6 @@
 import {
+  addChart,
+  asEmu,
   moveShapes,
   moveShapesAcrossSlides,
   readPptx,
@@ -122,12 +124,31 @@ async function createCrossSlideDrawingMoveFixture(): Promise<void> {
       { xml: destinationXml, rels: slideRelsXml() },
     ],
   });
-  const source = readPptx(bytes);
+  let source = readPptx(bytes);
+  const authoredSourceHandle = source.slides[0]?.handle;
+  if (authoredSourceHandle === undefined) {
+    throw new Error("cross-slide VRT source handle is missing");
+  }
+  source = readPptx(
+    writePptx(
+      addChart(source, authoredSourceHandle, {
+        chartType: "bar",
+        offsetX: asEmu(700000),
+        offsetY: asEmu(3000000),
+        width: asEmu(2400000),
+        height: asEmu(1500000),
+        name: "Move chart",
+        title: "Moved chart",
+        showLegend: false,
+        series: [{ name: "Values", categories: ["A", "B", "C"], values: [2, 5, 3] }],
+      }),
+    ),
+  );
   const sourceHandles = source.slides[0]?.shapes.flatMap((shape) =>
     shape.handle === undefined ? [] : [shape.handle],
   );
   const destination = source.slides[1];
-  if (sourceHandles?.length !== 2 || destination?.handle === undefined) {
+  if (sourceHandles?.length !== 3 || destination?.handle === undefined) {
     throw new Error("cross-slide VRT fixture handles are missing");
   }
   const moved = moveShapesAcrossSlides(source, sourceHandles, destination.handle, {

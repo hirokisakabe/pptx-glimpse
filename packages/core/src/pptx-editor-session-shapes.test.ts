@@ -401,6 +401,33 @@ describe("PptxEditorSession - shapes", () => {
     await editor.redo();
     expect(editor.selection).toEqual({ shapeHandle: movedHandle });
   });
+
+  it("rerenders both affected slides and preserves chart selection through history", async () => {
+    const editor = await createPptxEditorSession(buildCrossSlideChartMoveFixture(), {
+      skipSystemFonts: true,
+    });
+    const chart = editor.document.slides[0]?.shapes.find((shape) => shape.kind === "chart");
+    const destinationHandle = editor.document.slides[1]?.handle;
+    if (chart?.kind !== "chart" || chart.handle === undefined || destinationHandle === undefined) {
+      throw new Error("cross-slide chart move fixture handles are missing");
+    }
+    editor.selectShape(chart.handle);
+    const before = await editor.renderCurrentSlides();
+
+    const response = await editor.moveShapesAcrossSlides([chart.handle], destinationHandle);
+    const movedHandle = response.selection?.shapeHandle;
+    if (movedHandle === undefined) throw new Error("chart selection mapping is missing");
+    expect(response.slides[0]?.svg).not.toBe(before[0]?.svg);
+    expect(response.slides[1]?.svg).not.toBe(before[1]?.svg);
+    expect(movedHandle.partPath).toBe(editor.document.slides[1]?.partPath);
+    const persisted = readPptx(editor.save().pptx);
+    expect(persisted.slides[0]?.shapes.some((shape) => shape.kind === "chart")).toBe(false);
+    expect(persisted.slides[1]?.shapes.some((shape) => shape.kind === "chart")).toBe(true);
+    await editor.undo();
+    expect(editor.selection).toEqual({ shapeHandle: chart.handle });
+    await editor.redo();
+    expect(editor.selection).toEqual({ shapeHandle: movedHandle });
+  });
 });
 
 function buildCrossSlideMoveFixture(): Uint8Array {
@@ -427,6 +454,27 @@ function buildCrossSlideMoveFixture(): Uint8Array {
     width: asEmu(1000),
     height: asEmu(1000),
     name: "Destination",
+  });
+  return writePptx(session.source);
+}
+
+function buildCrossSlideChartMoveFixture(): Uint8Array {
+  const initial = createPptx();
+  const session = createPptxAuthoringSession(initial);
+  const first = initial.slides[0]?.handle;
+  const layout = initial.slideLayouts[0]?.handle;
+  if (first === undefined || layout === undefined) {
+    throw new Error("cross-slide chart move fixture roots are missing");
+  }
+  session.addEmptySlideFromLayout({ layoutPartPath: layout.partPath });
+  session.target(first).addChart({
+    chartType: "bar",
+    offsetX: asEmu(0),
+    offsetY: asEmu(0),
+    width: asEmu(2400),
+    height: asEmu(1800),
+    name: "Moved chart",
+    series: [{ name: "Revenue", categories: ["A", "B"], values: [10, 20] }],
   });
   return writePptx(session.source);
 }

@@ -112,6 +112,11 @@ selects the remapped destination handle, and uses the old-to-new handle/ID trans
 the exact selection snapshot across undo and redo. If any topology command is rejected, the
 document, selection, history, and both cross-slide participants remain unchanged.
 
+A supported Chart data edit may run before a cross-slide Chart move because the edit updates the
+preserved Chart/workbook bytes before the writer applies the chronological two-slide move. The
+move remains last in an `applyAll()` batch. A later Chart edit is a separate command that must use
+the remapped destination handle; the stale source handle rejects without changing state.
+
 `applyAll()` builds a candidate document and commits it only after every command and
 cross-command validation succeeds. Failed selection and empty undo/redo checks inspect state
 before mutation.

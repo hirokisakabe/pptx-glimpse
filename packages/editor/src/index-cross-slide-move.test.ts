@@ -75,6 +75,74 @@ describe("EditorSession cross-slide drawing move", () => {
     expect(session.document).toBe(source);
     expect(session.undoDepth).toBe(0);
   });
+
+  it("keeps chart edit ordering, selection, and history atomic across a move", () => {
+    const source = chartTwoSlideSource();
+    const chart = source.slides[0]?.shapes[0];
+    if (chart?.kind !== "chart" || chart.handle === undefined) {
+      throw new Error("editor chart move fixture is missing");
+    }
+    const destinationHandle = requireValue(source.slides[1]?.handle);
+    const rejected = createEditorSession(source);
+    expect(rejected.selectShape(chart.handle)).toMatchObject({ ok: true });
+    expect(
+      rejected.applyAll([
+        {
+          kind: "moveShapesAcrossSlides",
+          shapeHandles: [chart.handle],
+          destinationSlideHandle: destinationHandle,
+        },
+        {
+          kind: "updateChartData",
+          handle: chart.handle,
+          series: [{ name: "Rejected", categories: ["A"], values: [9] }],
+        },
+      ]),
+    ).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(rejected.document).toBe(source);
+    expect(rejected.selection).toEqual({ shapeHandle: chart.handle });
+    expect(rejected.undoDepth).toBe(0);
+
+    const session = createEditorSession(source);
+    expect(session.selectShape(chart.handle)).toMatchObject({ ok: true });
+    expect(
+      session.applyAll([
+        {
+          kind: "updateChartData",
+          handle: chart.handle,
+          series: [{ name: "Before move", categories: ["A", "B"], values: [2, 3] }],
+        },
+        {
+          kind: "moveShapesAcrossSlides",
+          shapeHandles: [chart.handle],
+          destinationSlideHandle: destinationHandle,
+        },
+      ]),
+    ).toMatchObject({ ok: true });
+    const movedHandle = requireValue(session.selection).shapeHandle;
+    expect(movedHandle.partPath).toBe(source.slides[1]?.partPath);
+    expect(session.document.edits?.map((edit) => edit.kind)).toEqual([
+      "updateChartData",
+      "moveShapesAcrossSlides",
+    ]);
+    expect(session.undoDepth).toBe(1);
+    expect(
+      session.apply({
+        kind: "updateChartData",
+        handle: movedHandle,
+        series: [{ name: "After move", categories: ["A", "B"], values: [4, 5] }],
+      }),
+    ).toMatchObject({ ok: true });
+    expect(session.selection).toEqual({ shapeHandle: movedHandle });
+    expect(session.undoDepth).toBe(2);
+    expect(session.undo()).toMatchObject({ ok: true });
+    expect(session.selection).toEqual({ shapeHandle: movedHandle });
+    expect(session.undo()).toMatchObject({ ok: true });
+    expect(session.selection).toEqual({ shapeHandle: chart.handle });
+    expect(session.document).toBe(source);
+    expect(session.redo()).toMatchObject({ ok: true });
+    expect(session.selection).toEqual({ shapeHandle: movedHandle });
+  });
 });
 
 function twoSlideSource() {
@@ -97,6 +165,20 @@ function connectedTwoSlideSource() {
       height: asEmu(1),
       start: { shapeHandle: start, connectionSiteIndex: 1 },
       end: { shapeHandle: end, connectionSiteIndex: 3 },
+    });
+  });
+}
+
+function chartTwoSlideSource() {
+  return cleanTwoSlideSource((session, first) => {
+    session.target(first).addChart({
+      chartType: "bar",
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(2400),
+      height: asEmu(1800),
+      name: "Moved chart",
+      series: [{ name: "Initial", categories: ["A"], values: [1] }],
     });
   });
 }

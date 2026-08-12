@@ -711,6 +711,23 @@ def create_editor_validity_cross_slide_move_fixture(filename, *, expected):
     moved.text_frame.text = "Moved between slides"
     moved.text_frame.paragraphs[0].runs[0].font.size = Pt(18)
 
+    chart_data = CategoryChartData()
+    chart_data.categories = ["A", "B", "C"]
+    chart_data.add_series("Values", (2, 5, 3))
+    moved_chart_frame = moved_owner.shapes.add_chart(
+        XL_CHART_TYPE.COLUMN_CLUSTERED,
+        Inches(0.8),
+        Inches(3.5),
+        Inches(3.2),
+        Inches(2.1),
+        chart_data,
+    )
+    moved_chart_frame.name = "Cross Slide Chart Move Target"
+    moved_chart = moved_chart_frame.chart
+    moved_chart.has_title = True
+    moved_chart.chart_title.text_frame.text = "Moved chart"
+    moved_chart.has_legend = False
+
     prs.save(os.path.join(OUTPUT_DIR, filename))
     print(f"  Created: {filename}")
 

@@ -9,6 +9,7 @@ import type { PartPath, RelationshipId, SourceHandle, SourceNodeId } from "./han
 import type { PptxSourceModel } from "./pptx-source-model.js";
 import type { RawOoxmlNode, RawSidecar } from "./raw.js";
 import type {
+  SourceChart,
   SourceConnector,
   SourceFill,
   SourceImage,
@@ -36,10 +37,10 @@ export interface MoveShapesAcrossSlidesResult {
   readonly affectedSlidePartPaths: readonly PartPath[];
 }
 
-type SupportedCrossSlideDrawing = SourceShape | SourceImage | SourceConnector;
+type SupportedCrossSlideDrawing = SourceShape | SourceImage | SourceConnector | SourceChart;
 
 /**
- * Moves consecutive non-placeholder shape, picture, and connector roots between two slides.
+ * Moves consecutive non-placeholder shape, picture, connector, and chart roots between two slides.
  * Authored local OOXML is retained, so effective appearance may change under the destination
  * slide's layout, master, theme, or color-map cascade.
  */
@@ -233,7 +234,12 @@ export function moveShapesAcrossSlides(
 }
 
 function assertSupportedRoot(shape: SourceShapeNode): asserts shape is SupportedCrossSlideDrawing {
-  if (shape.kind !== "shape" && shape.kind !== "image" && shape.kind !== "connector") {
+  if (
+    shape.kind !== "shape" &&
+    shape.kind !== "image" &&
+    shape.kind !== "connector" &&
+    shape.kind !== "chart"
+  ) {
     throw new Error(
       `moveShapesAcrossSlides: drawing kind '${shape.kind}' is outside the slide-to-slide typed slice`,
     );
@@ -244,7 +250,12 @@ function assertSupportedRoot(shape: SourceShapeNode): asserts shape is Supported
 }
 
 function isSupportedRoot(shape: SourceShapeNode): shape is SupportedCrossSlideDrawing {
-  return shape.kind === "shape" || shape.kind === "image" || shape.kind === "connector";
+  return (
+    shape.kind === "shape" ||
+    shape.kind === "image" ||
+    shape.kind === "connector" ||
+    shape.kind === "chart"
+  );
 }
 
 function remapSupportedDrawing(
@@ -304,6 +315,20 @@ function remapSupportedDrawing(
         : {}),
       ...(shape.outline !== undefined
         ? { outline: remapOutline(shape.outline, relationshipIdMap) }
+        : {}),
+      ...(rawSidecars !== undefined ? { rawSidecars } : {}),
+    };
+  }
+  if (shape.kind === "chart") {
+    return {
+      ...shape,
+      ...(nodeId !== undefined ? { nodeId } : {}),
+      ...(handle !== undefined ? { handle } : {}),
+      ...(shape.chartRelationshipId !== undefined
+        ? {
+            chartRelationshipId:
+              relationshipIdMap.get(String(shape.chartRelationshipId)) ?? shape.chartRelationshipId,
+          }
         : {}),
       ...(rawSidecars !== undefined ? { rawSidecars } : {}),
     };
