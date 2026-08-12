@@ -21,6 +21,7 @@ import {
   writePptx,
 } from "../index.js";
 import { BLUE_PNG } from "../writer/write-pptx.test-helpers.js";
+import { resolveInternalRelationshipTarget } from "./package-paths.js";
 
 describe("moveShapes", () => {
   it("moves single and multi-node blocks at slide, layout, and master roots in source order", () => {
@@ -143,6 +144,28 @@ describe("moveShapes", () => {
     const connector = requireValue(slide.shapes.find((shape) => shape.kind === "connector"));
     const picture = requireValue(slide.shapes.find((shape) => shape.kind === "image"));
     const chart = requireValue(slide.shapes.find((shape) => shape.kind === "chart"));
+    const slideRelationships = requireValue(
+      source.packageGraph.relationships.find((group) => group.sourcePartPath === slide.partPath),
+    );
+    const pictureRelationship = requireValue(
+      slideRelationships.relationships.find(
+        (relationship) => relationship.id === picture.handle?.relationshipId,
+      ),
+    );
+    const chartRelationship = requireValue(
+      slideRelationships.relationships.find(
+        (relationship) => relationship.id === chart.handle?.relationshipId,
+      ),
+    );
+    const picturePath = resolveInternalRelationshipTarget(slide.partPath, pictureRelationship);
+    const chartPath = resolveInternalRelationshipTarget(slide.partPath, chartRelationship);
+    const workbookRelationship = requireValue(
+      source.packageGraph.relationships
+        .find((group) => group.sourcePartPath === chartPath)
+        ?.relationships.find((relationship) => relationship.type.endsWith("/package")),
+    );
+    const workbookPath = resolveInternalRelationshipTarget(chartPath, workbookRelationship);
+    const beforeArchive = unzipSync(writePptx(source));
     const edited = moveShapes(
       source,
       [requireValue(chart.handle), requireValue(picture.handle)],
@@ -172,8 +195,48 @@ describe("moveShapes", () => {
     expect(rereadChart.kind === "chart" ? rereadChart.chartRelationshipId : undefined).toBe(
       chart.kind === "chart" ? chart.chartRelationshipId : undefined,
     );
-    expect(reread.packageGraph.parts.map((part) => part.partPath).sort()).toEqual(
-      source.packageGraph.parts.map((part) => part.partPath).sort(),
+    const rereadSlideRelationships = requireValue(
+      reread.packageGraph.relationships.find((group) => group.sourcePartPath === slide.partPath),
+    );
+    expect(
+      relationshipIdentity(
+        requireValue(
+          rereadSlideRelationships.relationships.find(
+            (relationship) => relationship.id === pictureRelationship.id,
+          ),
+        ),
+      ),
+    ).toEqual(relationshipIdentity(pictureRelationship));
+    expect(
+      relationshipIdentity(
+        requireValue(
+          rereadSlideRelationships.relationships.find(
+            (relationship) => relationship.id === chartRelationship.id,
+          ),
+        ),
+      ),
+    ).toEqual(relationshipIdentity(chartRelationship));
+    expect(
+      relationshipIdentity(
+        requireValue(
+          reread.packageGraph.relationships
+            .find((group) => group.sourcePartPath === chartPath)
+            ?.relationships.find((relationship) => relationship.id === workbookRelationship.id),
+        ),
+      ),
+    ).toEqual(relationshipIdentity(workbookRelationship));
+
+    const afterArchive = unzipSync(writePptx(edited));
+    for (const partPath of [picturePath, chartPath, workbookPath]) {
+      expect(afterArchive[partPath], `missing preserved part ${partPath}`).toBeDefined();
+      expect(afterArchive[partPath]).toEqual(beforeArchive[partPath]);
+    }
+    expect(reread.packageGraph.parts).toEqual(
+      expect.arrayContaining(
+        source.packageGraph.parts.filter((part) =>
+          [picturePath, chartPath, workbookPath].includes(part.partPath),
+        ),
+      ),
     );
   });
 
@@ -198,8 +261,93 @@ describe("moveShapes", () => {
       requireValue(unzipSync(writePptx(edited))[slidePath]),
     );
 
-    expect(outputXml.indexOf(`id="${third.nodeId}"`)).toBeLessThan(outputXml.indexOf('uri="slot"'));
-    expect(outputXml.indexOf('uri="slot"')).toBeLessThan(outputXml.indexOf(`id="${first.nodeId}"`));
+    expectXmlOrder(outputXml, [`id="${third.nodeId}"`, 'uri="slot"', `id="${first.nodeId}"`]);
+  });
+
+  it("keeps raw drawing siblings in z-order during a forward move and rejects forged gaps", () => {
+    const source = readPptx(
+      insertAfterFirstShape(
+        createShapes(3),
+        '<p:contentPart data-marker="raw-drawing"><p:nvContentPartPr><p:cNvPr id="99" name="Raw Drawing"/></p:nvContentPartPr></p:contentPart>',
+      ),
+    );
+    const slide = requireValue(source.slides[0]);
+    const [first, raw, second, third] = slide.shapes;
+    expect(raw?.kind).toBe("raw");
+    const edited = moveShapes(source, [requireValue(first?.handle)], requireValue(slide.handle), {
+      beforeShapeHandle: requireValue(third?.handle),
+    });
+    expect(edited.slides[0]?.shapes.map(shapeIdentity)).toEqual([
+      "raw:contentPart",
+      String(second?.nodeId),
+      String(first?.nodeId),
+      String(third?.nodeId),
+    ]);
+
+    const output = writePptx(edited);
+    const outputXml = slideXml(output);
+    expectXmlOrder(outputXml, [
+      'data-marker="raw-drawing"',
+      `id="${second?.nodeId}"`,
+      `id="${first?.nodeId}"`,
+      `id="${third?.nodeId}"`,
+    ]);
+    expect(readPptx(output).slides[0]?.shapes.map(shapeIdentity)).toEqual(
+      edited.slides[0]?.shapes.map(shapeIdentity),
+    );
+
+    const forged: PptxSourceModel = {
+      ...source,
+      edits: [
+        {
+          kind: "moveShapes",
+          targetPartPath: slide.partPath,
+          shapeIds: [String(first?.nodeId), String(second?.nodeId)],
+        },
+      ],
+    };
+    expect(() => writePptx(forged)).toThrow("not consecutive");
+  });
+
+  it("keeps idless drawing siblings in z-order during an end move and rejects forged gaps", () => {
+    const source = readPptx(
+      insertAfterFirstShape(createShapes(3), idlessShapeXml(createShapes(1))),
+    );
+    const slide = requireValue(source.slides[0]);
+    const [first, idless, second, third] = slide.shapes;
+    expect(idless?.kind).toBe("shape");
+    expect(idless?.nodeId).toBeUndefined();
+    const edited = moveShapes(source, [requireValue(first?.handle)], requireValue(slide.handle));
+    expect(edited.slides[0]?.shapes.map(shapeIdentity)).toEqual([
+      "idless:shape",
+      String(second?.nodeId),
+      String(third?.nodeId),
+      String(first?.nodeId),
+    ]);
+
+    const output = writePptx(edited);
+    const outputXml = slideXml(output);
+    expectXmlOrder(outputXml, [
+      'name="Idless Drawing"',
+      `id="${second?.nodeId}"`,
+      `id="${third?.nodeId}"`,
+      `id="${first?.nodeId}"`,
+    ]);
+    expect(readPptx(output).slides[0]?.shapes.map(shapeIdentity)).toEqual(
+      edited.slides[0]?.shapes.map(shapeIdentity),
+    );
+
+    const forged: PptxSourceModel = {
+      ...source,
+      edits: [
+        {
+          kind: "moveShapes",
+          targetPartPath: slide.partPath,
+          shapeIds: [String(first?.nodeId), String(second?.nodeId)],
+        },
+      ],
+    };
+    expect(() => writePptx(forged)).toThrow("not consecutive");
   });
 
   it("atomically rejects invalid blocks, anchors, parts, ids, and unsupported targets", () => {
@@ -289,6 +437,28 @@ describe("moveShapes", () => {
     }
   });
 
+  it("rejects moving a group-A child into group B without changing source or edits", () => {
+    const source = createShapes(4);
+    const handles = requireValue(source.slides[0]).shapes.map((shape) =>
+      requireValue(shape.handle),
+    );
+    const withGroupA = groupShapes(source, handles.slice(0, 2));
+    const withBothGroups = groupShapes(withGroupA, handles.slice(2));
+    const [groupA, groupB] = requireValue(withBothGroups.slides[0]).shapes.map(requireGroup);
+    const before = structuredClone(withBothGroups);
+    const beforeEdits = withBothGroups.edits;
+
+    expect(() =>
+      moveShapes(
+        withBothGroups,
+        [requireValue(groupA.children[0]?.handle)],
+        requireValue(groupB.handle),
+      ),
+    ).toThrow("direct child");
+    expect(withBothGroups).toEqual(before);
+    expect(withBothGroups.edits).toBe(beforeEdits);
+  });
+
   it("rejects duplicate node ids without adding an edit", () => {
     const source = createShapes(2);
     const slide = requireValue(source.slides[0]);
@@ -340,6 +510,50 @@ function createShapes(count: number): PptxSourceModel {
   for (let index = 0; index < count; index += 1)
     source = addShape(source, target, shapeInput(index));
   return source;
+}
+
+function insertAfterFirstShape(source: PptxSourceModel, fragment: string): Uint8Array {
+  const archive = unzipSync(writePptx(source));
+  const partPath = "ppt/slides/slide1.xml";
+  const xml = new TextDecoder().decode(requireValue(archive[partPath]));
+  archive[partPath] = new TextEncoder().encode(
+    xml.replace(/(<p:sp>[\s\S]*?<\/p:sp>)/, `$1${fragment}`),
+  );
+  return zipSync(archive);
+}
+
+function idlessShapeXml(source: PptxSourceModel): string {
+  const xml = slideXml(writePptx(source));
+  const shape = requireValue(xml.match(/<p:sp>[\s\S]*?<\/p:sp>/)?.[0]);
+  return shape.replace(/ id="[^"]+"/, "").replace(/ name="[^"]*"/, ' name="Idless Drawing"');
+}
+
+function slideXml(bytes: Uint8Array): string {
+  return new TextDecoder().decode(requireValue(unzipSync(bytes)["ppt/slides/slide1.xml"]));
+}
+
+function expectXmlOrder(xml: string, markers: readonly string[]): void {
+  const indexes = markers.map((marker) => xml.indexOf(marker));
+  for (const [index, marker] of indexes.map((value, index) => [value, markers[index]] as const)) {
+    expect(index, `missing XML marker ${marker}`).toBeGreaterThanOrEqual(0);
+  }
+  for (let index = 1; index < indexes.length; index += 1) {
+    expect(indexes[index - 1]).toBeLessThan(requireValue(indexes[index]));
+  }
+}
+
+function shapeIdentity(shape: SourceShapeNode): string {
+  if (shape.nodeId !== undefined) return String(shape.nodeId);
+  if (shape.kind === "raw") return `raw:${shape.raw.node.name.split(":").at(-1)}`;
+  return `idless:${shape.kind}`;
+}
+
+function relationshipIdentity(relationship: { id: string; type: string; target: string }) {
+  return {
+    id: relationship.id,
+    type: relationship.type,
+    target: relationship.target,
+  };
 }
 
 function directChildren(source: PptxSourceModel, handle: SourceHandle): readonly SourceShapeNode[] {

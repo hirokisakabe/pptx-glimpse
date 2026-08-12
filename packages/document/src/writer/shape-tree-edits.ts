@@ -149,7 +149,7 @@ export function applyMoveShapesEdit(root: XmlNode, edit: PptxSourceModelMoveShap
   const spTree = getShapeTree(root, edit.targetPartPath);
   const container = groupParentContainer(spTree, edit.parentGroupId, "move");
   const current = completeRememberedChildOrder(container);
-  const drawingEntries = current.filter((entry) => shapeTreeEntryNodeId(entry.value) !== undefined);
+  const drawingEntries = current.filter(isShapeTreeZOrderEntry);
   const shapeById = new Map<string, { key: string; value: unknown }>();
   for (const entry of drawingEntries) {
     const nodeId = shapeTreeEntryNodeId(entry.value);
@@ -182,10 +182,8 @@ export function applyMoveShapesEdit(root: XmlNode, edit: PptxSourceModelMoveShap
     throw new Error("writePptx: move anchor must not be inside the moved block");
   }
 
-  const remaining = drawingEntries.filter((entry) => {
-    const nodeId = shapeTreeEntryNodeId(entry.value);
-    return nodeId === undefined || !movedIds.has(nodeId);
-  });
+  const movedEntrySet = new Set(movedEntries);
+  const remaining = drawingEntries.filter((entry) => !movedEntrySet.has(entry));
   const insertionIndex =
     edit.beforeShapeId === undefined
       ? remaining.length
@@ -204,7 +202,7 @@ export function applyMoveShapesEdit(root: XmlNode, edit: PptxSourceModelMoveShap
   setXmlChildOrder(
     container,
     current.map((entry) =>
-      shapeTreeEntryNodeId(entry.value) === undefined ? entry : reorderedDrawings[drawingIndex++],
+      isShapeTreeZOrderEntry(entry) ? reorderedDrawings[drawingIndex++] : entry,
     ),
   );
 }
@@ -494,6 +492,12 @@ function xmlNodeAttributesAreAllowed(node: XmlNode, allowed: ReadonlySet<string>
 
 function isShapeTreeEntry(entry: { readonly key: string; readonly value: unknown }): boolean {
   return ["sp", "pic", "cxnSp", "graphicFrame", "grpSp"].includes(localName(entry.key));
+}
+
+function isShapeTreeZOrderEntry(entry: { readonly key: string; readonly value: unknown }): boolean {
+  return (
+    isShapeTreeEntry(entry) || ["contentPart", "AlternateContent"].includes(localName(entry.key))
+  );
 }
 
 function replaceContainerChildren(
