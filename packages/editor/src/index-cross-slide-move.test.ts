@@ -125,7 +125,7 @@ describe("EditorSession cross-slide drawing move", () => {
       "updateChartData",
       "moveShapesAcrossSlides",
     ]);
-    expectPersistedChartText(session.document, "Before move");
+    expectPersistedChartText(session.document, 1, "Before move");
     expect(session.undoDepth).toBe(1);
     expect(
       session.apply({
@@ -134,18 +134,18 @@ describe("EditorSession cross-slide drawing move", () => {
         series: [{ name: "After move", categories: ["A", "B"], values: [4, 5] }],
       }),
     ).toMatchObject({ ok: true });
-    expectPersistedChartText(session.document, "After move");
+    expectPersistedChartText(session.document, 1, "After move");
     expect(session.selection).toEqual({ shapeHandle: movedHandle });
     expect(session.undoDepth).toBe(2);
     expect(session.undo()).toMatchObject({ ok: true });
     expect(session.selection).toEqual({ shapeHandle: movedHandle });
-    expectPersistedChartText(session.document, "Before move");
+    expectPersistedChartText(session.document, 1, "Before move");
     expect(session.undo()).toMatchObject({ ok: true });
     expect(session.selection).toEqual({ shapeHandle: chart.handle });
     expect(session.document).toBe(source);
     expect(session.redo()).toMatchObject({ ok: true });
     expect(session.selection).toEqual({ shapeHandle: movedHandle });
-    expectPersistedChartText(session.document, "Before move");
+    expectPersistedChartText(session.document, 1, "Before move");
   });
 });
 
@@ -214,11 +214,38 @@ function requireValue<T>(value: T | undefined): T {
   return value;
 }
 
-function expectPersistedChartText(source: ReturnType<typeof readPptx>, expected: string): void {
+function expectPersistedChartText(
+  source: ReturnType<typeof readPptx>,
+  slideIndex: number,
+  expected: string,
+): void {
   const persisted = readPptx(writePptx(source));
-  const chartXml = persisted.packageGraph.rawParts
-    ?.filter((part) => part.kind === "binary" && part.partPath.includes("/charts/chart"))
-    .map((part) => new TextDecoder().decode(part.bytes))
-    .join("\n");
-  expect(chartXml).toContain(expected);
+  const slide = requireValue(persisted.slides[slideIndex]);
+  const chart = slide.shapes.find((shape) => shape.kind === "chart");
+  const relationshipId = requireValue(
+    chart?.kind === "chart" ? chart.chartRelationshipId : undefined,
+  );
+  const relationship = requireValue(
+    persisted.packageGraph.relationships
+      .find((group) => group.sourcePartPath === slide.partPath)
+      ?.relationships.find((candidate) => candidate.id === relationshipId),
+  );
+  const chartPartPath = resolvePackageTarget(slide.partPath, relationship.target);
+  const chartPart = requireValue(
+    persisted.packageGraph.rawParts?.find((part) => part.partPath === chartPartPath),
+  );
+  if (chartPart.kind !== "binary") throw new Error("persisted chart part is not binary");
+  expect(new TextDecoder().decode(chartPart.bytes)).toContain(expected);
+}
+
+function resolvePackageTarget(sourcePartPath: string, target: string): string {
+  const baseDirectory = sourcePartPath.slice(0, Math.max(0, sourcePartPath.lastIndexOf("/")));
+  const combined = target.startsWith("/") ? target.slice(1) : `${baseDirectory}/${target}`;
+  const segments: string[] = [];
+  for (const segment of combined.split("/")) {
+    if (segment === "" || segment === ".") continue;
+    if (segment === "..") segments.pop();
+    else segments.push(segment);
+  }
+  return segments.join("/");
 }

@@ -350,17 +350,17 @@ describe("moveShapesAcrossSlides", () => {
         chartType: "bar",
         offsetX: asEmu(0),
         offsetY: asEmu(0),
-        width: asEmu(2400),
-        height: asEmu(1800),
+        width: asEmu(2_400_000),
+        height: asEmu(1_800_000),
         name: "Moved chart",
         series: [{ name: "Revenue", categories: ["A", "B"], values: [10, 20] }],
       });
       session.target(second).addChart({
         chartType: "line",
-        offsetX: asEmu(3000),
+        offsetX: asEmu(3_000_000),
         offsetY: asEmu(0),
-        width: asEmu(2400),
-        height: asEmu(1800),
+        width: asEmu(2_400_000),
+        height: asEmu(1_800_000),
         name: "Destination chart",
         series: [{ name: "Cost", categories: ["A", "B"], values: [5, 8] }],
       });
@@ -450,8 +450,8 @@ describe("moveShapesAcrossSlides", () => {
         chartType: "bar",
         offsetX: asEmu(0),
         offsetY: asEmu(0),
-        width: asEmu(2400),
-        height: asEmu(1800),
+        width: asEmu(2_400_000),
+        height: asEmu(1_800_000),
         name: "Edited moved chart",
         series: [{ name: "Before", categories: ["A"], values: [1] }],
       });
@@ -471,6 +471,7 @@ describe("moveShapesAcrossSlides", () => {
     const movedHandle = requireValue(
       moved.moved.find((mapping) => mapping.before.nodeId === sourceChart.nodeId)?.after,
     );
+    expect(expectPersistedChartXml(moved.document, 1)).toContain("Before move");
     expect(() =>
       updateChartData(moved.document, sourceChart.handle, {
         series: [{ name: "Stale", categories: ["A"], values: [9] }],
@@ -500,10 +501,10 @@ describe("moveShapesAcrossSlides", () => {
       for (const [index, name] of ["Move shared chart", "Keep shared chart"].entries()) {
         session.target(first).addChart({
           chartType: "bar",
-          offsetX: asEmu(index * 2600),
+          offsetX: asEmu(index * 2_600_000),
           offsetY: asEmu(0),
-          width: asEmu(2400),
-          height: asEmu(1800),
+          width: asEmu(2_400_000),
+          height: asEmu(1_800_000),
           name,
           series: [{ name, categories: ["A"], values: [index + 1] }],
         });
@@ -752,6 +753,17 @@ function rawPartBytes(source: PptxSourceModel, partPath: string): Uint8Array {
   const part = source.packageGraph.rawParts?.find((item) => item.partPath === partPath);
   if (part?.kind !== "binary") throw new Error(`raw part '${partPath}' is missing`);
   return part.bytes;
+}
+
+function expectPersistedChartXml(source: PptxSourceModel, slideIndex: number): string {
+  const persisted = readPptx(writePptx(source));
+  const slide = requireValue(persisted.slides[slideIndex]);
+  const chart = slide.shapes.find((shape) => shape.kind === "chart");
+  const relationshipId = requireValue(
+    chart?.kind === "chart" ? chart.chartRelationshipId : undefined,
+  );
+  const chartPartPath = requireInternalTarget(persisted, slide.partPath, relationshipId);
+  return new TextDecoder().decode(rawPartBytes(persisted, chartPartPath));
 }
 
 function withSlideRootNamespace(
