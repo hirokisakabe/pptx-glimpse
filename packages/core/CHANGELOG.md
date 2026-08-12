@@ -1,5 +1,59 @@
 # pptx-glimpse
 
+## 5.3.0
+
+### Minor Changes
+
+- 0f69f37: Add typed existing bubble Chart XYZ data editing with synchronized chart formulas, caches, series
+  topology, and standard three-column embedded worksheet tables.
+- 347f661: Add fixed-topology column and line category combo Chart data editing with typed source identities,
+  synchronized caches/formulas/workbooks, ordered axis-aware computed projection and rendering, and
+  atomic rejection of unsupported topology including horizontal, stacked, empty-group, and invalid-
+  axis combos. Combo rendering also supports zero-only and all-negative primary/secondary domains.
+- 981df6b: Allow native charts to move between slide roots while preserving chart/workbook parts, remapping
+  owner relationships and selection identity, and retaining chronological chart data edits.
+- ddfa337: Add handle-based existing theme color and font scheme editing with field-level XML preservation,
+  undo/redo history, and shared-theme-aware slide rerendering.
+- 862a64e: Allow cross-parent drawing moves across exactly representable rotated, flipped, and scaled native
+  group coordinate spaces while rejecting shear, singular, invalid, and quantization-inexact moves
+  atomically.
+- 8d99a47: Add identity-mapped cross-parent drawing moves within one slide, layout, or master part, including
+  connector-closure validation, headless and integrated editor commands, history, and round-trip
+  preservation.
+- bf484fd: Add non-mutating one-target SVG previews for ordered slide master and layout catalog handles,
+  including template inheritance, structured diagnostics, and matching Node/browser contracts.
+- 90afc56: Render supported EMF and WMF pictures, image fills, backgrounds, and OLE preview images in Node.js
+  and browser SVG/PNG conversions, with structured warning and placeholder fallback for unsupported or
+  invalid metafiles.
+- a6383a9: Add typed existing scatter Chart XY data editing with synchronized chart formulas, caches, series
+  topology, and standard two-column embedded worksheet tables.
+- 027f0a1: Add atomic slide-to-slide moves for consecutive non-placeholder shape, picture, and closed
+  connector blocks with destination identity/relationship remapping, editor selection history, and
+  affected-slide rerendering.
+- 73f0258: Extend the public top-level drawing delete operation to pictures, native Table and Chart graphic
+  frames, and native groups, with atomic connector validation and reference-safe recursive package
+  cleanup for relationships, media, charts, and embedded workbooks.
+
+### Patch Changes
+
+- be2d83a: Support stable-handle deletion of typed drawings nested at any native-group depth while preserving parent groups, sibling topology, and reference-safe package cleanup.
+- Updated dependencies [0f69f37]
+- Updated dependencies [b52c6c7]
+- Updated dependencies [347f661]
+- Updated dependencies [981df6b]
+- Updated dependencies [ddfa337]
+- Updated dependencies [862a64e]
+- Updated dependencies [8d99a47]
+- Updated dependencies [bf484fd]
+- Updated dependencies [24978d6]
+- Updated dependencies [be2d83a]
+- Updated dependencies [90f31d7]
+- Updated dependencies [a6383a9]
+- Updated dependencies [027f0a1]
+- Updated dependencies [73f0258]
+  - @pptx-glimpse/document@0.16.0
+  - @pptx-glimpse/editor@0.6.0
+
 ## 5.2.0
 
 ### Minor Changes
