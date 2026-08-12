@@ -304,10 +304,12 @@ test("adds a slide from the ordered accessible layout catalog and preserves hist
 
   await trigger.click();
   await expect(picker).toBeVisible();
-  await expect(picker.getByRole("radio", { name: /BLANK, current layout/ })).toContainText(
-    "Current",
-  );
-  await picker.press("Escape");
+  const currentLayoutBeforeUndo = picker.getByRole("radio", {
+    name: /BLANK, current layout/,
+  });
+  await expect(currentLayoutBeforeUndo).toContainText("Current");
+  await expect(currentLayoutBeforeUndo).toBeFocused();
+  await page.keyboard.press("Escape");
 
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.getByTestId("editor-thumbnail")).toHaveCount(2);
@@ -318,10 +320,10 @@ test("adds a slide from the ordered accessible layout catalog and preserves hist
 
   await trigger.click();
   await expect(picker).toBeVisible();
-  await expect(picker.getByRole("radio", { name: /BLANK, current layout/ })).toContainText(
-    "Current",
-  );
-  await picker.press("Escape");
+  const currentLayoutAfterRedo = picker.getByRole("radio", { name: /BLANK, current layout/ });
+  await expect(currentLayoutAfterRedo).toContainText("Current");
+  await expect(currentLayoutAfterRedo).toBeFocused();
+  await page.keyboard.press("Escape");
   await expect(picker).toHaveCount(0);
   await expect(trigger).toBeFocused();
 });

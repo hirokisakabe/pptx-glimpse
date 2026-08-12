@@ -5,7 +5,15 @@ import type {
   PptxEditorSlideMasterCatalogEntry,
   SourceHandle,
 } from "pptx-glimpse";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import {
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import { LayoutPickerAddLifecycle } from "./layout-picker-add-lifecycle.js";
 import {
@@ -135,63 +143,66 @@ export function EditorLayoutPicker({
             </button>
           </div>
           <div className="layout-catalog" role="radiogroup" aria-label="Slide layouts">
-            {catalog.map((master, masterIndex) => (
-              <section className="layout-master-group" key={handleKey(master.handle)}>
-                <h3>{master.name?.trim() || `Master ${(masterIndex + 1).toString()}`}</h3>
-                <div className="layout-master-options">
-                  {master.layouts.map((layout, layoutIndex) => {
-                    const key = handleKey(layout.handle);
-                    const name = layout.name?.trim() || `Layout ${(layoutIndex + 1).toString()}`;
-                    const selected =
-                      selectedLayout !== undefined && key === handleKey(selectedLayout.handle);
-                    const current = layout.handle.partPath === currentLayoutPartPath;
-                    const preview = previewStore.get(layout.handle);
-                    return (
-                      <button
-                        ref={(element) => {
-                          if (element === null) optionRefs.current.delete(key);
-                          else optionRefs.current.set(key, element);
-                        }}
-                        aria-checked={selected}
-                        aria-label={`${name}${layout.hidden ? ", hidden" : ""}${current ? ", current layout" : ""}`}
-                        className={`layout-option${selected ? " selected" : ""}`}
-                        data-layout-part-path={layout.handle.partPath}
-                        data-testid="layout-option"
-                        key={key}
-                        role="radio"
-                        tabIndex={selected ? 0 : -1}
-                        type="button"
-                        disabled={busy || adding}
-                        onClick={() => setSelectedKey(key)}
-                        onKeyDown={(event) => {
-                          const direction =
-                            event.key === "ArrowRight" || event.key === "ArrowDown"
-                              ? 1
-                              : event.key === "ArrowLeft" || event.key === "ArrowUp"
-                                ? -1
-                                : event.key === "Home"
-                                  ? "first"
-                                  : event.key === "End"
-                                    ? "last"
-                                    : undefined;
-                          if (direction === undefined) return;
-                          event.preventDefault();
-                          selectRelative(key, direction);
-                        }}
-                      >
-                        <LayoutThumbnail name={name} preview={preview} />
-                        <span className="layout-option-name">{name}</span>
-                        <span className="layout-option-metadata">
-                          {layout.type ?? "Unspecified type"}
-                          {layout.hidden ? <em>Hidden</em> : null}
-                          {current ? <em>Current</em> : null}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
-            ))}
+            {catalog.map((master, masterIndex) => {
+              const masterName = master.name?.trim() || `Master ${(masterIndex + 1).toString()}`;
+              return (
+                <section className="layout-master-group" key={handleKey(master.handle)}>
+                  <h3>{masterName}</h3>
+                  <div className="layout-master-options">
+                    {master.layouts.map((layout, layoutIndex) => {
+                      const key = handleKey(layout.handle);
+                      const name = layout.name?.trim() || `Layout ${(layoutIndex + 1).toString()}`;
+                      const selected =
+                        selectedLayout !== undefined && key === handleKey(selectedLayout.handle);
+                      const current = layout.handle.partPath === currentLayoutPartPath;
+                      const preview = previewStore.get(layout.handle);
+                      return (
+                        <button
+                          ref={(element) => {
+                            if (element === null) optionRefs.current.delete(key);
+                            else optionRefs.current.set(key, element);
+                          }}
+                          aria-checked={selected}
+                          aria-label={`${masterName}, ${name}${layout.hidden ? ", hidden" : ""}${current ? ", current layout" : ""}`}
+                          className={`layout-option${selected ? " selected" : ""}`}
+                          data-layout-part-path={layout.handle.partPath}
+                          data-testid="layout-option"
+                          key={key}
+                          role="radio"
+                          tabIndex={selected ? 0 : -1}
+                          type="button"
+                          disabled={busy || adding}
+                          onClick={() => setSelectedKey(key)}
+                          onKeyDown={(event) => {
+                            const direction =
+                              event.key === "ArrowRight" || event.key === "ArrowDown"
+                                ? 1
+                                : event.key === "ArrowLeft" || event.key === "ArrowUp"
+                                  ? -1
+                                  : event.key === "Home"
+                                    ? "first"
+                                    : event.key === "End"
+                                      ? "last"
+                                      : undefined;
+                            if (direction === undefined) return;
+                            event.preventDefault();
+                            selectRelative(key, direction);
+                          }}
+                        >
+                          <MemoizedLayoutThumbnail name={name} preview={preview} />
+                          <span className="layout-option-name">{name}</span>
+                          <span className="layout-option-metadata">
+                            {layout.type ?? "Unspecified type"}
+                            {layout.hidden ? <em>Hidden</em> : null}
+                            {current ? <em>Current</em> : null}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </section>
+              );
+            })}
           </div>
           <div className="layout-picker-actions">
             <span aria-live="polite">
@@ -264,6 +275,8 @@ export function LayoutThumbnail({
     </span>
   );
 }
+
+const MemoizedLayoutThumbnail = memo(LayoutThumbnail);
 
 function handleKey(handle: SourceHandle): string {
   return [

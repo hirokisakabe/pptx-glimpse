@@ -28,6 +28,7 @@
   background: color-mix(in srgb, var(--pptx-editor-surface) 94%, var(--pptx-editor-ink));
   border-bottom: 1px solid var(--pptx-editor-border);
   border-top: 1px solid var(--pptx-editor-border);
+  container-type: inline-size;
   display: flex;
   gap: 8px;
   min-height: 48px;
@@ -73,7 +74,7 @@
   position: absolute;
   right: 0;
   top: calc(100% + 8px);
-  width: min(720px, calc(100vw - 32px));
+  width: min(720px, calc(100vw - 32px), calc(100cqw - 28px));
   z-index: 10;
 }
 
@@ -186,10 +187,10 @@
 }
 
 .pptx-glimpse-editor .layout-thumbnail-fallback.is-loading {
-  animation: layout-preview-pulse 1.4s ease-in-out infinite;
+  animation: pptx-editor-layout-preview-pulse 1.4s ease-in-out infinite;
 }
 
-@keyframes layout-preview-pulse {
+@keyframes pptx-editor-layout-preview-pulse {
   50% {
     opacity: 0.62;
   }
