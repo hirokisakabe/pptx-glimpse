@@ -1,3 +1,7 @@
+import {
+  getShapeTreeContainerPropertyKeys,
+  isShapeTreeZOrderChildKey,
+} from "../reader/shape-tree-child-classification.js";
 import { getAttr, getChild, localName, type XmlNode } from "../reader/xml.js";
 import type {
   PptxSourceModelAddChartEdit,
@@ -149,7 +153,10 @@ export function applyMoveShapesEdit(root: XmlNode, edit: PptxSourceModelMoveShap
   const spTree = getShapeTree(root, edit.targetPartPath);
   const container = groupParentContainer(spTree, edit.parentGroupId, "move");
   const current = completeRememberedChildOrder(container);
-  const drawingEntries = current.filter(isShapeTreeZOrderEntry);
+  const containerPropertyKeys = getShapeTreeContainerPropertyKeys(container);
+  const drawingEntries = current.filter((entry) =>
+    isShapeTreeZOrderChildKey(entry.key, containerPropertyKeys),
+  );
   const shapeById = new Map<string, { key: string; value: unknown }>();
   for (const entry of drawingEntries) {
     const nodeId = shapeTreeEntryNodeId(entry.value);
@@ -202,7 +209,9 @@ export function applyMoveShapesEdit(root: XmlNode, edit: PptxSourceModelMoveShap
   setXmlChildOrder(
     container,
     current.map((entry) =>
-      isShapeTreeZOrderEntry(entry) ? reorderedDrawings[drawingIndex++] : entry,
+      isShapeTreeZOrderChildKey(entry.key, containerPropertyKeys)
+        ? reorderedDrawings[drawingIndex++]
+        : entry,
     ),
   );
 }
@@ -492,12 +501,6 @@ function xmlNodeAttributesAreAllowed(node: XmlNode, allowed: ReadonlySet<string>
 
 function isShapeTreeEntry(entry: { readonly key: string; readonly value: unknown }): boolean {
   return ["sp", "pic", "cxnSp", "graphicFrame", "grpSp"].includes(localName(entry.key));
-}
-
-function isShapeTreeZOrderEntry(entry: { readonly key: string; readonly value: unknown }): boolean {
-  return (
-    isShapeTreeEntry(entry) || ["contentPart", "AlternateContent"].includes(localName(entry.key))
-  );
 }
 
 function replaceContainerChildren(

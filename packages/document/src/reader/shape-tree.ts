@@ -55,6 +55,10 @@ import {
   parseTransform,
 } from "./drawing.js";
 import { collectUnknownSidecars, makeSidecar } from "./raw-node.js";
+import {
+  getShapeTreeContainerPropertyKeys,
+  isShapeTreeZOrderChildKey,
+} from "./shape-tree-child-classification.js";
 import { parseTextBody } from "./text.js";
 import {
   getAttr,
@@ -201,12 +205,7 @@ function parseShapeTreeOrdered(
 ): SourceShapeNode[] {
   const nodes: SourceShapeNode[] = [];
   const tagCounters: Record<string, number> = {};
-  const containerPropertyKeys = new Set(
-    ["nvGrpSpPr", "grpSpPr", "extLst"].flatMap((name) => {
-      const key = preferredQualifiedChildKey(spTree, name);
-      return key === undefined ? [] : [key];
-    }),
-  );
+  const containerPropertyKeys = getShapeTreeContainerPropertyKeys(spTree);
   let orderingSlot = 0;
 
   for (const child of orderedChildren) {
@@ -229,7 +228,7 @@ function parseShapeTreeOrdered(
     // The container's own properties are not z-order nodes. Every other child must remain in
     // the typed sequence, including unsupported extensions, so topology edits cannot mistake
     // shapes separated by preserved XML for consecutive siblings.
-    if (containerPropertyKeys.has(key)) continue;
+    if (!isShapeTreeZOrderChildKey(key, containerPropertyKeys)) continue;
     const index = tagCounters[key] ?? 0;
     tagCounters[key] = index + 1;
     const node = getQualifiedChildArray(spTree, key)[index];
@@ -1154,15 +1153,4 @@ function getQualifiedChildArray(node: XmlNode, key: string): XmlNode[] {
   const value = node[key];
   if (value === undefined || value === null) return [];
   return unsafeOoxmlBoundaryAssertion<XmlNode[]>(Array.isArray(value) ? value : [value]);
-}
-
-function preferredQualifiedChildKey(node: XmlNode, childLocalName: string): string | undefined {
-  const candidates = Object.keys(node).filter(
-    (key) => !key.startsWith("@_") && localName(key) === childLocalName,
-  );
-  return (
-    candidates.find((key) => key === `p:${childLocalName}`) ??
-    candidates.find((key) => key === childLocalName) ??
-    (candidates.length === 1 ? candidates[0] : undefined)
-  );
 }

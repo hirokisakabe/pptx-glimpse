@@ -195,6 +195,9 @@ describe("moveShapes", () => {
     expect(rereadChart.kind === "chart" ? rereadChart.chartRelationshipId : undefined).toBe(
       chart.kind === "chart" ? chart.chartRelationshipId : undefined,
     );
+    expect(reread.packageGraph.parts.map((part) => part.partPath).sort()).toEqual(
+      source.packageGraph.parts.map((part) => part.partPath).sort(),
+    );
     const rereadSlideRelationships = requireValue(
       reread.packageGraph.relationships.find((group) => group.sourcePartPath === slide.partPath),
     );
@@ -265,12 +268,11 @@ describe("moveShapes", () => {
   });
 
   it("keeps raw drawing siblings in z-order during a forward move and rejects forged gaps", () => {
-    const source = readPptx(
-      insertAfterFirstShape(
-        createShapes(3),
-        '<p:contentPart data-marker="raw-drawing"><p:nvContentPartPr><p:cNvPr id="99" name="Raw Drawing"/></p:nvContentPartPr></p:contentPart>',
-      ),
+    const input = insertAfterFirstShape(
+      createShapes(3),
+      '<p:contentPart data-marker="raw-drawing"><p:nvContentPartPr><p:cNvPr id="99" name="Raw Drawing"/></p:nvContentPartPr></p:contentPart>',
     );
+    const source = readPptx(input);
     const slide = requireValue(source.slides[0]);
     const [first, raw, second, third] = slide.shapes;
     expect(raw?.kind).toBe("raw");
@@ -295,6 +297,64 @@ describe("moveShapes", () => {
     expect(readPptx(output).slides[0]?.shapes.map(shapeIdentity)).toEqual(
       edited.slides[0]?.shapes.map(shapeIdentity),
     );
+    expect(extractElementContaining(slideXml(output), "p:contentPart", "raw-drawing")).toBe(
+      extractElementContaining(slideXml(input), "p:contentPart", "raw-drawing"),
+    );
+
+    const forged: PptxSourceModel = {
+      ...source,
+      edits: [
+        {
+          kind: "moveShapes",
+          targetPartPath: slide.partPath,
+          shapeIds: [String(first?.nodeId), String(second?.nodeId)],
+        },
+      ],
+    };
+    expect(() => writePptx(forged)).toThrow("not consecutive");
+  });
+
+  it("treats unknown future drawing children as z-order siblings and rejects forged gaps", () => {
+    const input = insertAfterFirstShape(
+      createShapes(3),
+      '<p15:futureDrawing xmlns:p15="urn:future-drawing" data-marker="future-drawing" p15:flag="keep"><p15:payload value="42">raw payload</p15:payload></p15:futureDrawing>',
+    );
+    const source = readPptx(input);
+    const slide = requireValue(source.slides[0]);
+    const [first, raw, second, third] = slide.shapes;
+    expect(raw?.kind).toBe("raw");
+    expect(shapeIdentity(requireValue(raw))).toBe("raw:futureDrawing");
+
+    const edited = moveShapes(source, [requireValue(first?.handle)], requireValue(slide.handle), {
+      beforeShapeHandle: requireValue(third?.handle),
+    });
+    const expectedOrder = [
+      "raw:futureDrawing",
+      String(second?.nodeId),
+      String(first?.nodeId),
+      String(third?.nodeId),
+    ];
+    expect(edited.slides[0]?.shapes.map(shapeIdentity)).toEqual(expectedOrder);
+
+    const output = writePptx(edited);
+    const outputXml = slideXml(output);
+    expectXmlOrder(outputXml, [
+      'data-marker="future-drawing"',
+      `id="${second?.nodeId}"`,
+      `id="${first?.nodeId}"`,
+      `id="${third?.nodeId}"`,
+    ]);
+    const reread = readPptx(output);
+    expect(reread.slides[0]?.shapes.map(shapeIdentity)).toEqual(expectedOrder);
+    const rereadRaw = requireValue(reread.slides[0]?.shapes[0]);
+    expect(rereadRaw.kind).toBe("raw");
+    if (raw?.kind !== "raw" || rereadRaw.kind !== "raw") {
+      throw new Error("future drawing fixture was not preserved as raw XML");
+    }
+    expect(rereadRaw.raw.node).toEqual(raw.raw.node);
+    expect(extractElementContaining(outputXml, "p15:futureDrawing", "future-drawing")).toBe(
+      extractElementContaining(slideXml(input), "p15:futureDrawing", "future-drawing"),
+    );
 
     const forged: PptxSourceModel = {
       ...source,
@@ -310,9 +370,8 @@ describe("moveShapes", () => {
   });
 
   it("keeps idless drawing siblings in z-order during an end move and rejects forged gaps", () => {
-    const source = readPptx(
-      insertAfterFirstShape(createShapes(3), idlessShapeXml(createShapes(1))),
-    );
+    const input = insertAfterFirstShape(createShapes(3), idlessShapeXml(createShapes(1)));
+    const source = readPptx(input);
     const slide = requireValue(source.slides[0]);
     const [first, idless, second, third] = slide.shapes;
     expect(idless?.kind).toBe("shape");
@@ -335,6 +394,9 @@ describe("moveShapes", () => {
     ]);
     expect(readPptx(output).slides[0]?.shapes.map(shapeIdentity)).toEqual(
       edited.slides[0]?.shapes.map(shapeIdentity),
+    );
+    expect(extractElementContaining(outputXml, "p:sp", "Idless Drawing")).toBe(
+      extractElementContaining(slideXml(input), "p:sp", "Idless Drawing"),
     );
 
     const forged: PptxSourceModel = {
@@ -548,11 +610,29 @@ function shapeIdentity(shape: SourceShapeNode): string {
   return `idless:${shape.kind}`;
 }
 
-function relationshipIdentity(relationship: { id: string; type: string; target: string }) {
+function extractElementContaining(xml: string, qualifiedName: string, marker: string): string {
+  const markerIndex = xml.indexOf(marker);
+  if (markerIndex < 0) throw new Error(`XML marker '${marker}' was not found`);
+  const start = xml.lastIndexOf(`<${qualifiedName}`, markerIndex);
+  const closingTag = `</${qualifiedName}>`;
+  const end = xml.indexOf(closingTag, markerIndex);
+  if (start < 0 || end < 0) {
+    throw new Error(`XML element '${qualifiedName}' containing '${marker}' was not found`);
+  }
+  return xml.slice(start, end + closingTag.length);
+}
+
+function relationshipIdentity(relationship: {
+  id: string;
+  type: string;
+  target: string;
+  targetMode?: string;
+}) {
   return {
     id: relationship.id,
     type: relationship.type,
     target: relationship.target,
+    targetMode: relationship.targetMode,
   };
 }
 
