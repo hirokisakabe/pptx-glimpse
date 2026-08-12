@@ -40,6 +40,7 @@ export interface EditorControllerOperationOptions<Session extends EditorControll
   readonly success: string;
   readonly preferredIndex?: PreferredSlideIndex<Session>;
   readonly recoverError?: (error: unknown, session: Session) => string | undefined;
+  readonly historyAction?: "mutation" | "undo" | "redo";
 }
 
 /**
@@ -49,13 +50,19 @@ export interface EditorControllerOperationOptions<Session extends EditorControll
 export class EditorController<Session extends EditorControllerSession> {
   readonly session: Session;
   private state: EditorControllerState;
-  private cleanUndoDepth: number;
+  private historyRevisions: number[];
+  private cleanRevision: number;
+  private nextRevision: number;
   private operationQueue = Promise.resolve();
+  private pendingOperations = 0;
   private readonly listeners = new Set<() => void>();
 
   constructor(session: Session) {
     this.session = session;
-    this.cleanUndoDepth = session.history.undoDepth;
+    const historyLength = session.history.undoDepth + session.history.redoDepth + 1;
+    this.historyRevisions = Array.from({ length: historyLength }, (_, index) => index);
+    this.cleanRevision = this.historyRevisions[session.history.undoDepth] ?? 0;
+    this.nextRevision = historyLength;
     this.state = createEditorControllerSnapshot(session, 0, null, {
       busy: false,
       dirty: false,
@@ -71,16 +78,20 @@ export class EditorController<Session extends EditorControllerSession> {
 
   readonly getSnapshot = (): EditorControllerState => this.state;
 
-  selectSlide(index: number): void {
+  selectSlide(index: number): boolean {
+    if (this.pendingOperations > 0) return false;
     this.sync(index);
+    return true;
   }
 
-  selectShape(handle: SourceHandle): void {
+  selectShape(handle: SourceHandle): boolean {
+    if (this.pendingOperations > 0) return false;
     this.session.selectShape(handle);
     this.update({
       ...this.state,
       selectedShapeKey: handleKey(handle),
     });
+    return true;
   }
 
   setMessage(message: string): void {
@@ -96,9 +107,11 @@ export class EditorController<Session extends EditorControllerSession> {
     options: EditorControllerOperationOptions<Session>,
   ): Promise<boolean> {
     return this.enqueue(async () => {
-      this.update({ ...this.state, busy: true, error: "" });
+      this.update({ ...this.state, error: "" });
+      const beforeHistory = this.session.history;
       try {
         const message = await operation(this.session);
+        this.reconcileHistory(options.historyAction ?? "mutation", beforeHistory);
         const preferredIndex =
           typeof options.preferredIndex === "function"
             ? options.preferredIndex(this.session)
@@ -106,9 +119,11 @@ export class EditorController<Session extends EditorControllerSession> {
         this.sync(preferredIndex, message ?? options.success);
         return true;
       } catch (error) {
+        this.reconcileHistory(options.historyAction ?? "mutation", beforeHistory);
         const recoveredMessage = options.recoverError?.(error, this.session);
         if (recoveredMessage !== undefined) {
           this.sync(this.state.currentIndex, recoveredMessage);
+          this.update({ ...this.state, error: errorMessage(error) });
           return true;
         }
         this.update({
@@ -118,32 +133,32 @@ export class EditorController<Session extends EditorControllerSession> {
           error: errorMessage(error),
         });
         return false;
-      } finally {
-        this.update({ ...this.state, busy: false });
       }
     });
   }
 
   save(): Promise<EditorSaveResult | undefined> {
     return this.enqueue(async () => {
-      this.update({ ...this.state, busy: true, error: "" });
+      this.update({ ...this.state, error: "" });
       try {
         const saved = this.session.save();
-        this.cleanUndoDepth = saved.history.undoDepth;
         this.update({
           ...this.state,
           history: saved.history,
-          dirty: false,
-          message: "PPTX downloaded",
         });
         return saved;
       } catch (error) {
         this.update({ ...this.state, error: errorMessage(error) });
         return undefined;
-      } finally {
-        this.update({ ...this.state, busy: false });
       }
     });
+  }
+
+  markSaved(history: EditorHistory, message: string): boolean {
+    if (!sameHistory(history, this.session.history)) return false;
+    this.cleanRevision = this.currentRevision();
+    this.update({ ...this.state, history, dirty: false, message, error: "" });
+    return true;
   }
 
   private sync(preferredIndex: number, message = this.state.message): void {
@@ -158,16 +173,45 @@ export class EditorController<Session extends EditorControllerSession> {
   }
 
   private isDirty(): boolean {
-    return this.session.history.undoDepth !== this.cleanUndoDepth;
+    return this.currentRevision() !== this.cleanRevision;
   }
 
   private enqueue<Result>(operation: () => Promise<Result>): Promise<Result> {
+    this.pendingOperations += 1;
+    if (this.pendingOperations === 1) this.update({ ...this.state, busy: true });
     const result = this.operationQueue.then(operation, operation);
     this.operationQueue = result.then(
       () => undefined,
       () => undefined,
     );
-    return result;
+    return result.finally(() => {
+      this.pendingOperations -= 1;
+      if (this.pendingOperations === 0) this.update({ ...this.state, busy: false });
+    });
+  }
+
+  private reconcileHistory(
+    action: NonNullable<EditorControllerOperationOptions<Session>["historyAction"]>,
+    before: EditorHistory,
+  ): void {
+    const after = this.session.history;
+    if (sameHistory(before, after)) return;
+    if (action === "mutation") {
+      this.historyRevisions = this.historyRevisions.slice(0, before.undoDepth + 1);
+      while (this.historyRevisions.length <= after.undoDepth) {
+        this.historyRevisions.push(this.nextRevision);
+        this.nextRevision += 1;
+      }
+      return;
+    }
+    while (this.historyRevisions.length <= after.undoDepth + after.redoDepth) {
+      this.historyRevisions.push(this.nextRevision);
+      this.nextRevision += 1;
+    }
+  }
+
+  private currentRevision(): number {
+    return this.historyRevisions[this.session.history.undoDepth] ?? -1;
   }
 
   private update(state: EditorControllerState): void {
@@ -201,9 +245,12 @@ export function createEditorControllerSnapshot(
     .shapes(currentIndex + 1)
     .filter((shape) => shape.handle !== undefined && shape.bounds !== undefined);
   const responseSelection = session.selection?.shapeHandle;
+  const responseSelectionKey =
+    responseSelection === undefined ? null : handleKey(responseSelection);
   const nextSelectionKey =
-    responseSelection !== undefined
-      ? handleKey(responseSelection)
+    responseSelectionKey !== null &&
+    shapes.some((shape) => shapeKey(shape) === responseSelectionKey)
+      ? responseSelectionKey
       : selectedShapeKey !== null && shapes.some((shape) => shapeKey(shape) === selectedShapeKey)
         ? selectedShapeKey
         : null;
@@ -237,4 +284,13 @@ function clamp(value: number, min: number, max: number): number {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function sameHistory(a: EditorHistory, b: EditorHistory): boolean {
+  return (
+    a.canUndo === b.canUndo &&
+    a.canRedo === b.canRedo &&
+    a.undoDepth === b.undoDepth &&
+    a.redoDepth === b.redoDepth
+  );
 }

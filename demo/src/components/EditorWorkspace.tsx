@@ -167,10 +167,11 @@ export function EditorWorkspace({
       operation: (session: EditorSession) => Promise<string | void> | string | void,
       success: string,
       preferredIndex: PreferredSlideIndex<EditorSession> = currentIndex,
+      historyAction: "mutation" | "undo" | "redo" = "mutation",
     ) => {
       const directTextCommit = directTextCommitPromiseRef.current;
       if (directTextCommit !== null && !(await directTextCommit)) return false;
-      return controller.run(operation, { success, preferredIndex });
+      return controller.run(operation, { success, preferredIndex, historyAction });
     },
     [controller, currentIndex],
   );
@@ -541,6 +542,7 @@ export function EditorWorkspace({
       },
       "Undone",
       (session) => findSlideIndexByHandle(session.slides, selectedSlideHandle, currentIndex),
+      "undo",
     );
   }, [currentIndex, currentSlide?.handle, runEditorOperation]);
 
@@ -552,6 +554,7 @@ export function EditorWorkspace({
       },
       "Redone",
       (session) => findSlideIndexByHandle(session.slides, selectedSlideHandle, currentIndex),
+      "redo",
     );
   }, [currentIndex, currentSlide?.handle, runEditorOperation]);
 
@@ -723,6 +726,7 @@ export function EditorWorkspace({
       link.download = downloadFileName(downloadName, fileName);
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(href), 0);
+      controller.markSaved(saved.history, "PPTX downloaded");
     } catch (error) {
       controller.setError(error instanceof Error ? error.message : String(error));
     }
