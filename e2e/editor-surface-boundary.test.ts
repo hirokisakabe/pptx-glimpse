@@ -3,6 +3,8 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { PLAYWRIGHT_BUILD_PACKAGE_PATHS } from "./global-setup.js";
+
 const demoComponentsRoot = resolve(import.meta.dirname, "../demo/src/components");
 const packageRoot = resolve(import.meta.dirname, "../packages/editor-react");
 const packageSourceRoot = resolve(packageRoot, "src");
@@ -36,6 +38,13 @@ describe("editor React package boundary", () => {
     expect(packageJson).toContain('"react": "^19.2.0"');
     expect(packageJson).toContain('"react-dom": "^19.2.0"');
     expect(packageJson).toContain('"./styles.css": "./dist/styles.css"');
+  });
+
+  it("builds the private package before fresh-checkout Playwright consumers", () => {
+    expect(PLAYWRIGHT_BUILD_PACKAGE_PATHS).toContain("packages/editor-react");
+    expect(PLAYWRIGHT_BUILD_PACKAGE_PATHS.indexOf("packages/editor-react")).toBeGreaterThan(
+      PLAYWRIGHT_BUILD_PACKAGE_PATHS.indexOf("packages/core"),
+    );
   });
 
   it("composes file-oriented host policy around the package editor", async () => {
