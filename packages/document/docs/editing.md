@@ -159,10 +159,10 @@ change appearance. It also rejects a group referenced by a connector. A removed 
 reserved for the edit session and is not reused by a later group operation. Every rejection is
 atomic because validation completes before a new source model or edit record is created.
 
-## Same-parent partial drawing moves
+## Partial and identity-mapped cross-parent drawing moves
 
-`moveShapes` moves one or more consecutive direct-child drawings within the same slide, layout,
-master, or native group. Input handles are normalized to source document order. Pass a
+`moveShapes` moves one or more consecutive siblings to a slide, layout, master, or native group
+in the same drawing part. Input handles are normalized to source document order. Pass a
 direct-child anchor to insert the block immediately before it, or omit the anchor to move the
 block to the end of the container's drawing order:
 
@@ -188,10 +188,16 @@ const movedToEnd = moveShapes(beforeFirst, [first], slide.handle);
 ```
 
 The operation preserves node ids, handles, transforms, connector endpoints, relationship ids,
-package parts, non-target sibling order, and authored slots for non-drawing or unknown XML. It
-rejects empty, duplicate, idless, non-consecutive, cross-part, or non-direct-child inputs; an
-anchor inside the moved block; and SmartArt, raw, or `mc:AlternateContent` targets. This operation
-does not move drawings across parents and never converts coordinate systems.
+package parts, non-target sibling order, empty source groups, and authored slots for non-drawing
+or unknown XML. Cross-parent moves require every source and destination ancestor group to have a
+complete, non-zero identity child mapping (`off == chOff`, `ext == chExt`, with no rotation or
+flip), so source-local transforms remain exact without coordinate conversion. A connector may
+cross parents only when it and every referenced endpoint are all inside the moved subtree.
+
+The operation rejects empty, duplicate, idless, non-consecutive, cross-part inputs; cycles;
+non-identity/incomplete ancestors; connector boundary crossings; and SmartArt, raw, or
+`mc:AlternateContent` moved targets. General affine and cross-part moves remain separate
+contracts.
 
 `updateChartData(source, chartHandle, input)` replaces the series topology, names, shared category
 labels, and finite numeric values of an existing supported category Chart. It keeps the Chart

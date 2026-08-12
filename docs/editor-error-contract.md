@@ -102,10 +102,11 @@ Headless expected rejection is atomic:
 - `selection` remains unchanged;
 - undo and redo stacks retain their contents and depths.
 
-`groupShapes` and `ungroupShape` commit topology and selection as one history transition. A
+`groupShapes`, `moveShapes`, and `ungroupShape` commit topology and selection as one history transition. A
 successful group selects the new group. A successful ungroup keeps the single-selection model and
 selects the first expanded child in document order. Undo and redo restore the corresponding
-before/after topology, ids, z-order, and selection snapshot. If either command is rejected, none of
+before/after topology, ids, z-order, and selection snapshot. A successful cross-parent move keeps
+the existing selection when its handle still resolves. If any topology command is rejected, none of
 those values changes.
 
 `applyAll()` builds a candidate document and commits it only after every command and

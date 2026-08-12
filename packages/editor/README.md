@@ -74,14 +74,16 @@ The released command set includes:
 - Text: `replaceTextRunPlainText`, `replaceParagraphPlainText`, `setTextRunProperties`,
   `clearTextRunProperties`, `setParagraphProperties`, and `clearParagraphProperties`.
 - Shapes: `moveShape`, `resizeShape`, `setShapeTransform`, `setShapeFill`, `setShapeOutline`,
-  `addTextBox`, `addConnector`, `deleteShape`, `groupShapes`, and `ungroupShape`. Grouping accepts
+  `addTextBox`, `addConnector`, `deleteShape`, `groupShapes`, `moveShapes`, and `ungroupShape`. Grouping accepts
   two or more consecutive siblings with the same direct parent; the typed source-node convenience
   method covers shape, picture, connector, Table/Chart graphic frames, and native group nodes.
   Deletion accepts those same typed drawing kinds at the slide root or any native-group depth,
   removes a group as one subtree, and keeps an empty parent group when its last child is deleted.
   Ungrouping is limited to non-empty groups whose identity child mapping, appearance, unknown XML,
   and connector references can be expanded losslessly; see the document package's
-  [group constraints](../document/docs/editing.md#lossless-group-and-ungroup).
+  [group constraints](../document/docs/editing.md#lossless-group-and-ungroup). `moveShapes`
+  preserves selection and history while moving a consecutive block within one drawing part;
+  cross-parent destinations require identity-mapped group ancestor chains.
 - Media: `replaceImage`, `setPictureCrop`, and `clearPictureCrop`. Crop uses integer OOXML
   percentages (`100000` = 100%), rejects invalid or fully consumed axes without clamping, and is
   limited to pictures with exactly one stretch fill and no tile fill.
