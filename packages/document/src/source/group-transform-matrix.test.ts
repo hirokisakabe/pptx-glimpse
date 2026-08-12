@@ -133,6 +133,26 @@ describe("source affine matrix composition", () => {
       ok: false,
       reason: "non-finite-matrix",
     });
+    expect(
+      composeSourceAncestorMatrices([
+        { a: 1e308, b: 0, c: 0, d: 1e308, e: 0, f: 0 },
+        { a: 1e308, b: 0, c: 0, d: 1e308, e: 0, f: 0 },
+      ]),
+    ).toEqual({ ok: false, reason: "non-finite-matrix" });
+  });
+
+  it("inverts small but well-conditioned scales without treating magnitude as singularity", () => {
+    const tinyScale = { a: 1e-8, b: 0, c: 0, d: 2e-8, e: 3, f: -4 };
+    const inverse = valueOf(invertSourceAffineMatrix(tinyScale));
+
+    expectMatrixClose(multiplySourceAffineMatrices(tinyScale, inverse), {
+      a: 1,
+      b: 0,
+      c: 0,
+      d: 1,
+      e: 0,
+      f: 0,
+    });
   });
 });
 
@@ -181,6 +201,26 @@ describe("source transform decomposition and reconstruction", () => {
       ok: false,
       reason: "quantization-mismatch",
     });
+    expect(
+      decomposeSourceTransformMatrix({
+        a: 1_000_000_000_000.25,
+        b: 0,
+        c: 0,
+        d: 100,
+        e: 0,
+        f: 0,
+      }),
+    ).toEqual({ ok: false, reason: "quantization-mismatch" });
+    expect(
+      decomposeSourceTransformMatrix({
+        a: 100,
+        b: 0,
+        c: 0,
+        d: 100,
+        e: 1_000_000_000_000.25,
+        f: 0,
+      }),
+    ).toEqual({ ok: false, reason: "quantization-mismatch" });
   });
 
   it("rejects zero, negative, and non-finite OOXML extents", () => {

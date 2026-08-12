@@ -29,7 +29,6 @@ export type SourceTransformMatrixResult<T> =
 const IDENTITY_MATRIX: SourceAffineMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
 const OOXML_ANGLE_PER_RADIAN = (60000 * 180) / Math.PI;
 const MATRIX_ABSOLUTE_TOLERANCE = 1e-6;
-const MATRIX_RELATIVE_TOLERANCE = 1e-12;
 
 /** Multiplies matrices so the returned mapping applies `inner` before `outer`. */
 export function multiplySourceAffineMatrices(
@@ -51,12 +50,11 @@ export function composeSourceAncestorMatrices(
   outerToInner: readonly SourceAffineMatrix[],
 ): SourceTransformMatrixResult<SourceAffineMatrix> {
   if (!outerToInner.every(isFiniteMatrix)) return reject("non-finite-matrix");
-  return accept(
-    outerToInner.reduce(
-      (composed, current) => multiplySourceAffineMatrices(composed, current),
-      IDENTITY_MATRIX,
-    ),
+  const composed = outerToInner.reduce(
+    (current, inner) => multiplySourceAffineMatrices(current, inner),
+    IDENTITY_MATRIX,
   );
+  return isFiniteMatrix(composed) ? accept(composed) : reject("non-finite-matrix");
 }
 
 /**
@@ -111,24 +109,33 @@ export function invertSourceAffineMatrix(
   matrix: SourceAffineMatrix,
 ): SourceTransformMatrixResult<SourceAffineMatrix> {
   if (!isFiniteMatrix(matrix)) return reject("non-finite-matrix");
-  const determinant = matrix.a * matrix.d - matrix.b * matrix.c;
-  const determinantScale = Math.max(
-    1,
-    Math.abs(matrix.a * matrix.d),
-    Math.abs(matrix.b * matrix.c),
+  const linearScale = Math.max(
+    Math.abs(matrix.a),
+    Math.abs(matrix.b),
+    Math.abs(matrix.c),
+    Math.abs(matrix.d),
   );
-  if (Math.abs(determinant) <= Number.EPSILON * determinantScale * 8) {
+  if (linearScale === 0) return reject("singular-matrix");
+  const normalizedA = matrix.a / linearScale;
+  const normalizedB = matrix.b / linearScale;
+  const normalizedC = matrix.c / linearScale;
+  const normalizedD = matrix.d / linearScale;
+  const normalizedDeterminant = normalizedA * normalizedD - normalizedB * normalizedC;
+  if (Math.abs(normalizedDeterminant) <= Number.EPSILON * 8) {
     return reject("singular-matrix");
   }
 
+  const inverseScale = 1 / (linearScale * normalizedDeterminant);
   const inverse = {
-    a: matrix.d / determinant,
-    b: -matrix.b / determinant,
-    c: -matrix.c / determinant,
-    d: matrix.a / determinant,
-    e: (matrix.c * matrix.f - matrix.d * matrix.e) / determinant,
-    f: (matrix.b * matrix.e - matrix.a * matrix.f) / determinant,
+    a: normalizedD * inverseScale,
+    b: -normalizedB * inverseScale,
+    c: -normalizedC * inverseScale,
+    d: normalizedA * inverseScale,
+    e: 0,
+    f: 0,
   };
+  inverse.e = -(inverse.a * matrix.e + inverse.c * matrix.f);
+  inverse.f = -(inverse.b * matrix.e + inverse.d * matrix.f);
   return isFiniteMatrix(inverse) ? accept(inverse) : reject("non-finite-matrix");
 }
 
@@ -207,12 +214,20 @@ export function decomposeSourceTransformMatrix(
 
 function matricesNearlyEqual(left: SourceAffineMatrix, right: SourceAffineMatrix): boolean {
   return (["a", "b", "c", "d", "e", "f"] as const).every((key) => {
-    const scale = Math.max(1, Math.abs(left[key]), Math.abs(right[key]));
-    return (
-      Math.abs(left[key] - right[key]) <=
-      MATRIX_ABSOLUTE_TOLERANCE + MATRIX_RELATIVE_TOLERANCE * scale
+    const tolerance = Math.max(
+      MATRIX_ABSOLUTE_TOLERANCE,
+      floatingPointUlp(left[key]),
+      floatingPointUlp(right[key]),
     );
+    return Math.abs(left[key] - right[key]) <= tolerance;
   });
+}
+
+function floatingPointUlp(value: number): number {
+  const absolute = Math.abs(value);
+  if (absolute === 0) return Number.MIN_VALUE;
+  if (absolute < 2 ** -1022) return Number.MIN_VALUE;
+  return 2 ** (Math.floor(Math.log2(absolute)) - 52);
 }
 
 function isFiniteTransform(transform: SourceTransform): boolean {
