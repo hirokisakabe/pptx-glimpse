@@ -151,6 +151,10 @@ export function applyMoveShapesEdit(root: XmlNode, edit: PptxSourceModelMoveShap
     throw new Error("writePptx: moved shape ids must not be empty");
   }
   const spTree = getShapeTree(root, edit.targetPartPath);
+  if (edit.crossParent === true) {
+    applyCrossParentMoveShapesEdit(spTree, edit);
+    return;
+  }
   const container = groupParentContainer(spTree, edit.parentGroupId, "move");
   const current = completeRememberedChildOrder(container);
   const containerPropertyKeys = getShapeTreeContainerPropertyKeys(container);
@@ -214,6 +218,252 @@ export function applyMoveShapesEdit(root: XmlNode, edit: PptxSourceModelMoveShap
         : entry,
     ),
   );
+}
+
+function collectXmlDrawingNodeIds(value: unknown, output: Set<string>): void {
+  if (Array.isArray(value)) {
+    for (const child of value) collectXmlDrawingNodeIds(child, output);
+    return;
+  }
+  if (typeof value !== "object" || value === null) return;
+  const node = unsafeOoxmlBoundaryAssertion<XmlNode>(value);
+  const nodeId = shapeTreeNodeId(node);
+  if (nodeId !== undefined) output.add(nodeId);
+  for (const child of Object.values(node)) collectXmlDrawingNodeIds(child, output);
+}
+
+function assertXmlConnectorBoundary(root: XmlNode, movedIds: ReadonlySet<string>): void {
+  const visit = (node: XmlNode): void => {
+    for (const [key, value] of Object.entries(node)) {
+      if (key.startsWith("@_")) continue;
+      const values = Array.isArray(value) ? value : [value];
+      for (const childValue of values) {
+        if (typeof childValue !== "object" || childValue === null || Array.isArray(childValue)) {
+          continue;
+        }
+        const child = unsafeOoxmlBoundaryAssertion<XmlNode>(childValue);
+        if (localName(key) === "cxnSp") {
+          const nonVisual = getChild(child, "nvCxnSpPr");
+          const connectorId = getAttr(getChild(nonVisual, "cNvPr"), "id");
+          const connectorMoved = connectorId !== undefined && movedIds.has(connectorId);
+          const connectionProperties = getChild(nonVisual, "cNvCxnSpPr");
+          for (const endpointId of [
+            getAttr(getChild(connectionProperties, "stCxn"), "id"),
+            getAttr(getChild(connectionProperties, "endCxn"), "id"),
+          ]) {
+            if (endpointId !== undefined && connectorMoved !== movedIds.has(endpointId)) {
+              throw new Error("writePptx: connector endpoint crosses the moved block boundary");
+            }
+          }
+        }
+        visit(child);
+      }
+    }
+  };
+  visit(root);
+}
+
+function applyCrossParentMoveShapesEdit(
+  spTree: XmlNode,
+  edit: PptxSourceModelMoveShapesEdit,
+): void {
+  assertIdentityMappedGroupChainXml(spTree, edit.parentGroupId, "move source");
+  assertIdentityMappedGroupChainXml(spTree, edit.destinationParentGroupId, "move destination");
+  const sourceContainer = groupParentContainer(spTree, edit.parentGroupId, "move source");
+  const destinationContainer = groupParentContainer(
+    spTree,
+    edit.destinationParentGroupId,
+    "move destination",
+  );
+  if (sourceContainer === destinationContainer) {
+    throw new Error("writePptx: cross-parent move requires different containers");
+  }
+
+  const sourceOrder = completeRememberedChildOrder(sourceContainer);
+  const sourceProperties = getShapeTreeContainerPropertyKeys(sourceContainer);
+  const sourceDrawings = sourceOrder.filter((entry) =>
+    isShapeTreeZOrderChildKey(entry.key, sourceProperties),
+  );
+  const sourceById = uniqueDirectDrawingEntries(sourceDrawings, "move source");
+  const movedEntries = edit.shapeIds.map((shapeId) => {
+    const entry = sourceById.get(shapeId);
+    if (entry === undefined) {
+      throw new Error(`writePptx: moved shape '${shapeId}' was not found as a source direct child`);
+    }
+    return entry;
+  });
+  const movedSubtreeIds = new Set<string>();
+  for (const entry of movedEntries) collectXmlDrawingNodeIds(entry.value, movedSubtreeIds);
+  assertXmlConnectorBoundary(spTree, movedSubtreeIds);
+  const firstDrawingIndex = sourceDrawings.findIndex((entry) => entry === movedEntries[0]);
+  if (
+    firstDrawingIndex < 0 ||
+    movedEntries.some((entry, index) => sourceDrawings[firstDrawingIndex + index] !== entry)
+  ) {
+    throw new Error("writePptx: moved shapes are not consecutive source direct-child siblings");
+  }
+
+  const movedEntrySet = new Set(movedEntries);
+  if (xmlOrderContainsAnyEntry(movedEntries, destinationContainer)) {
+    throw new Error("writePptx: move destination must not be inside the moved block");
+  }
+  const destinationOrder = completeRememberedChildOrder(destinationContainer);
+  const destinationProperties = getShapeTreeContainerPropertyKeys(destinationContainer);
+  const destinationDrawings = destinationOrder.filter((entry) =>
+    isShapeTreeZOrderChildKey(entry.key, destinationProperties),
+  );
+  uniqueDirectDrawingEntries(destinationDrawings, "move destination");
+  if (edit.beforeShapeId !== undefined && edit.shapeIds.includes(edit.beforeShapeId)) {
+    throw new Error("writePptx: move anchor must not be inside the moved block");
+  }
+
+  const insertionIndex =
+    edit.beforeShapeId === undefined
+      ? crossParentEndInsertionIndex(destinationOrder, destinationProperties)
+      : destinationOrder.findIndex(
+          (entry) =>
+            isShapeTreeZOrderChildKey(entry.key, destinationProperties) &&
+            shapeTreeEntryNodeId(entry.value) === edit.beforeShapeId,
+        );
+  if (insertionIndex < 0) {
+    throw new Error(
+      `writePptx: move anchor '${edit.beforeShapeId}' was not found as a destination direct child`,
+    );
+  }
+
+  replaceContainerChildren(
+    sourceContainer,
+    sourceOrder.filter((entry) => !movedEntrySet.has(entry)),
+  );
+  replaceContainerChildren(destinationContainer, [
+    ...destinationOrder.slice(0, insertionIndex),
+    ...movedEntries,
+    ...destinationOrder.slice(insertionIndex),
+  ]);
+}
+
+function assertIdentityMappedGroupChainXml(
+  spTree: XmlNode,
+  groupId: string | undefined,
+  context: string,
+): void {
+  if (groupId === undefined) return;
+  const path = findGroupPathXml(spTree, groupId);
+  if (path === undefined) {
+    throw new Error(`writePptx: ${context} group '${groupId}' was not found`);
+  }
+  for (const group of path) {
+    const xfrm = getChild(getChild(group, "grpSpPr"), "xfrm");
+    const off = getChild(xfrm, "off");
+    const ext = getChild(xfrm, "ext");
+    const childOff = getChild(xfrm, "chOff");
+    const childExt = getChild(xfrm, "chExt");
+    const width = getAttr(ext, "cx");
+    const height = getAttr(ext, "cy");
+    const childWidth = getAttr(childExt, "cx");
+    const childHeight = getAttr(childExt, "cy");
+    const offsetX = getAttr(off, "x");
+    const offsetY = getAttr(off, "y");
+    const childOffsetX = getAttr(childOff, "x");
+    const childOffsetY = getAttr(childOff, "y");
+    if (
+      xfrm === undefined ||
+      offsetX === undefined ||
+      offsetY === undefined ||
+      childOffsetX === undefined ||
+      childOffsetY === undefined ||
+      width === undefined ||
+      height === undefined ||
+      childWidth === undefined ||
+      childHeight === undefined ||
+      Number(offsetX) !== Number(childOffsetX) ||
+      Number(offsetY) !== Number(childOffsetY) ||
+      Number(width) !== Number(childWidth) ||
+      Number(height) !== Number(childHeight) ||
+      Number(width) <= 0 ||
+      Number(height) <= 0 ||
+      Number(childWidth) <= 0 ||
+      Number(childHeight) <= 0 ||
+      Number(getAttr(xfrm, "rot") ?? 0) !== 0 ||
+      isTrueXmlAttribute(getAttr(xfrm, "flipH")) ||
+      isTrueXmlAttribute(getAttr(xfrm, "flipV"))
+    ) {
+      throw new Error(
+        `writePptx: ${context} ancestor '${shapeTreeNodeId(group) ?? "unknown"}' is not identity-mapped`,
+      );
+    }
+  }
+}
+
+function findGroupPathXml(
+  container: XmlNode,
+  groupId: string,
+  ancestors: readonly XmlNode[] = [],
+): readonly XmlNode[] | undefined {
+  for (const entry of completeRememberedChildOrder(container)) {
+    if (localName(entry.key) !== "grpSp") continue;
+    if (typeof entry.value !== "object" || entry.value === null || Array.isArray(entry.value)) {
+      continue;
+    }
+    const group = unsafeOoxmlBoundaryAssertion<XmlNode>(entry.value);
+    const path = [...ancestors, group];
+    if (shapeTreeNodeId(group) === groupId) return path;
+    const nested = findGroupPathXml(group, groupId, path);
+    if (nested !== undefined) return nested;
+  }
+  return undefined;
+}
+
+function uniqueDirectDrawingEntries(
+  drawings: readonly { readonly key: string; readonly value: unknown }[],
+  context: string,
+): ReadonlyMap<string, { readonly key: string; readonly value: unknown }> {
+  const byId = new Map<string, { key: string; value: unknown }>();
+  for (const entry of drawings) {
+    const nodeId = shapeTreeEntryNodeId(entry.value);
+    if (nodeId === undefined) continue;
+    if (byId.has(nodeId)) {
+      throw new Error(`writePptx: duplicate shape id '${nodeId}' in ${context} container`);
+    }
+    byId.set(nodeId, entry);
+  }
+  return byId;
+}
+
+function crossParentEndInsertionIndex(
+  order: readonly { readonly key: string; readonly value: unknown }[],
+  propertyKeys: ReadonlySet<string>,
+): number {
+  let lastDrawing = -1;
+  for (let index = 0; index < order.length; index += 1) {
+    const entry = order[index];
+    if (entry !== undefined && isShapeTreeZOrderChildKey(entry.key, propertyKeys)) {
+      lastDrawing = index;
+    }
+  }
+  if (lastDrawing >= 0) return lastDrawing + 1;
+  const trailingExtension = order.findIndex((entry) => localName(entry.key) === "extLst");
+  return trailingExtension >= 0 ? trailingExtension : order.length;
+}
+
+function xmlOrderContainsAnyEntry(
+  entries: readonly { readonly value: unknown }[],
+  candidate: XmlNode,
+): boolean {
+  const targets = new Set(entries.map((entry) => entry.value));
+  const visit = (value: unknown): boolean => {
+    if (targets.has(value)) return value === candidate || xmlValueContainsNode(value, candidate);
+    return xmlValueContainsNode(value, candidate);
+  };
+  return entries.some((entry) => visit(entry.value));
+}
+
+function xmlValueContainsNode(value: unknown, candidate: XmlNode): boolean {
+  if (value === candidate) return true;
+  if (Array.isArray(value)) return value.some((child) => xmlValueContainsNode(child, candidate));
+  if (typeof value !== "object" || value === null) return false;
+  const node = unsafeOoxmlBoundaryAssertion<XmlNode>(value);
+  return Object.values(node).some((child) => xmlValueContainsNode(child, candidate));
 }
 
 function completeRememberedChildOrder(container: XmlNode): { key: string; value: unknown }[] {

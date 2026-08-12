@@ -559,6 +559,36 @@ async function createGroupsFixture(): Promise<void> {
   savePptx(buffer, "groups.pptx");
 }
 
+async function createIdentityCrossParentMoveFixture(): Promise<void> {
+  const group = `<p:grpSp>
+  <p:nvGrpSpPr><p:cNvPr id="2" name="Identity Move Destination"/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>
+  <p:grpSpPr><a:xfrm>
+    <a:off x="500000" y="500000"/><a:ext cx="8000000" cy="4000000"/>
+    <a:chOff x="500000" y="500000"/><a:chExt cx="8000000" cy="4000000"/>
+  </a:xfrm></p:grpSpPr>
+  ${shapeXml(3, "Moved Rectangle", {
+    preset: "rect",
+    x: 900000,
+    y: 1000000,
+    cx: 2000000,
+    cy: 1400000,
+    fillXml: solidFillXml("4472C4"),
+    textBodyXml: textBodyXmlHelper("root → group", { fontSize: 16, color: "FFFFFF" }),
+  })}
+  ${shapeXml(4, "Moved Ellipse", {
+    preset: "ellipse",
+    x: 3400000,
+    y: 1900000,
+    cx: 2000000,
+    cy: 1400000,
+    fillXml: solidFillXml("ED7D31"),
+    textBodyXml: textBodyXmlHelper("identity", { fontSize: 16, color: "FFFFFF" }),
+  })}
+</p:grpSp>`;
+  const buffer = await buildPptx({ slides: [{ xml: wrapSlideXml(group), rels: slideRelsXml() }] });
+  savePptx(buffer, "identity-cross-parent-move.pptx");
+}
+
 async function createConnectorsFixture(): Promise<void> {
   // Row 1: Basic connectors (straight, dash, dot)
   const basicConnectors = [
@@ -1413,6 +1443,7 @@ export const shapeFixtureCreators: FixtureCreatorMap = {
   "fill-and-lines.pptx": createFillAndLinesFixture,
   "transform.pptx": createTransformFixture,
   "groups.pptx": createGroupsFixture,
+  "identity-cross-parent-move.pptx": createIdentityCrossParentMoveFixture,
   "connectors.pptx": createConnectorsFixture,
   "custom-geometry.pptx": createCustomGeometryFixture,
   "flowchart.pptx": createFlowchartFixture,

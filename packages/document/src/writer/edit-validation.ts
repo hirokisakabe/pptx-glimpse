@@ -116,6 +116,12 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
         if (edit.beforeShapeId !== undefined && edit.shapeIds.includes(edit.beforeShapeId)) {
           throw new Error("writePptx: move anchor must not be inside the moved block");
         }
+        if (edit.crossParent !== true && edit.destinationParentGroupId !== undefined) {
+          throw new Error("writePptx: same-parent move must not specify a destination parent");
+        }
+        if (edit.crossParent === true && edit.parentGroupId === edit.destinationParentGroupId) {
+          throw new Error("writePptx: cross-parent move requires different containers");
+        }
         break;
       }
       case "groupShapes": {

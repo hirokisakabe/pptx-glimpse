@@ -115,9 +115,10 @@ with stable diagnostics. Renderer/runtime failures still throw `PptxEditorError`
 `render-failed`. PNG preview, cache policy, cancellation, priority scheduling, and thumbnail UI are
 not part of this API.
 
-Native group topology is available through typed `groupShapes` / `ungroupShape` commands and the
+Native group topology is available through typed `groupShapes` / `moveShapes` / `ungroupShape` commands and the
 matching `PptxEditorSession` methods. A successful group selects the new group; a successful
-ungroup selects its first child in document order. Undo and redo restore topology, ids, z-order,
+ungroup selects its first child in document order, while identity-mapped cross-parent moves retain
+the current selection. Undo and redo restore topology, ids, z-order,
 and the corresponding selection.
 
 Existing theme schemes can be patched through `editor.updateThemeScheme(themeHandle, input)` or

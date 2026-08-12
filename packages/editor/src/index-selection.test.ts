@@ -196,6 +196,60 @@ describe("EditorSession selection", () => {
     expect(session.redoDepth).toBe(1);
   });
 
+  it("moves shapes across identity-mapped parents with selection and history preserved", () => {
+    const source = createThreeShapeSource();
+    const handles = source.slides[0]?.shapes.map((shape) => requireHandle(shape.handle)) ?? [];
+    const session = createEditorSession(source);
+    expectApplied(session.apply({ kind: "groupShapes", shapeHandles: handles.slice(0, 2) }));
+    const group = session.document.slides[0]?.shapes[0];
+    if (group?.kind !== "group" || group.handle === undefined) {
+      throw new Error("move command fixture group is missing");
+    }
+    expect(session.selectShape(handles[2])).toMatchObject({ ok: true });
+
+    expectApplied(
+      session.apply({
+        kind: "moveShapes",
+        shapeHandles: [handles[2]],
+        destinationHandle: group.handle,
+        beforeShapeHandle: handles[0],
+      }),
+    );
+    expect(session.selection).toEqual({ shapeHandle: handles[2] });
+    expect(session.document.slides[0]?.shapes).toHaveLength(1);
+    expect(
+      session.document.slides[0]?.shapes[0]?.kind === "group"
+        ? session.document.slides[0].shapes[0].children.map((shape) => shape.nodeId)
+        : [],
+    ).toEqual([handles[2].nodeId, handles[0].nodeId, handles[1].nodeId]);
+
+    expectHistory(session.undo());
+    expect(session.document.slides[0]?.shapes).toHaveLength(2);
+    expect(session.selection).toEqual({ shapeHandle: handles[2] });
+    expectHistory(session.redo());
+    expect(session.document.slides[0]?.shapes).toHaveLength(1);
+    expect(session.selection).toEqual({ shapeHandle: handles[2] });
+
+    const before = session.document;
+    const undoDepth = session.undoDepth;
+    const rejected = session.applyAll([
+      {
+        kind: "moveShapes",
+        shapeHandles: [handles[2]],
+        destinationHandle: requireHandle(session.document.slides[0]?.handle),
+      },
+      {
+        kind: "moveShapes",
+        shapeHandles: [handles[0], handles[2]],
+        destinationHandle: requireHandle(session.document.slides[0]?.handle),
+      },
+    ]);
+    expect(rejected).toMatchObject({ ok: false, code: "invalid-command" });
+    expect(session.document).toBe(before);
+    expect(session.undoDepth).toBe(undoDepth);
+    expect(session.selection).toEqual({ shapeHandle: handles[2] });
+  });
+
   it("keeps a later selection across ordinary command undo and redo", () => {
     const source = createThreeShapeSource();
     const handles = source.slides[0]?.shapes.map((shape) => requireHandle(shape.handle)) ?? [];

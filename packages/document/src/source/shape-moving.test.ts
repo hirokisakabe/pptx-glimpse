@@ -107,6 +107,37 @@ describe("moveShapes", () => {
     expect(rereadInner.childTransform).toEqual(beforeInner.childTransform);
   });
 
+  it("moves blocks between roots and identity groups on slide, layout, and master parts", () => {
+    const initial = createPptx();
+    const session = createPptxAuthoringSession(initial);
+    for (const targetHandle of [
+      requireValue(initial.slides[0]?.handle),
+      requireValue(initial.slideLayouts[0]?.handle),
+      requireValue(initial.slideMasters[0]?.handle),
+    ]) {
+      const target = session.target(targetHandle);
+      const first = addRect(target, 0);
+      const second = addRect(target, 1000);
+      const third = addRect(target, 2000);
+      const group = target.groupShapes([first, second]);
+      target.moveShapes([third], { beforeShapeHandle: group });
+      session.target(group).moveShapes([third]);
+      expect(directChildren(session.source, group).map(shapeIdentity)).toEqual([
+        String(first.nodeId),
+        String(second.nodeId),
+        String(third.nodeId),
+      ]);
+      session.target(targetHandle).moveShapes([third]);
+      expect(directChildren(session.source, targetHandle).at(-1)?.nodeId).toBe(third.nodeId);
+    }
+
+    const reread = readPptx(writePptx(session.source));
+    for (const root of [reread.slides[0], reread.slideLayouts[0], reread.slideMasters[0]]) {
+      expect(root?.shapes.at(-1)?.kind).toBe("shape");
+      expect(requireGroup(root?.shapes[0]).children).toHaveLength(2);
+    }
+  });
+
   it("preserves connector endpoints and picture/chart relationships and package parts", () => {
     let source = createPptx();
     const slideHandle = requireValue(source.slides[0]?.handle);
@@ -139,11 +170,18 @@ describe("moveShapes", () => {
       width: asEmu(1000),
       height: asEmu(1000),
     });
+    source = addShape(source, slideHandle, shapeInput(4000));
+    source = addShape(source, slideHandle, shapeInput(5000));
+    const destinationMembers = requireValue(source.slides[0])
+      .shapes.slice(-2)
+      .map((shape) => requireValue(shape.handle));
+    source = groupShapes(source, destinationMembers);
     const beforeGraph = source.packageGraph;
     const slide = requireValue(source.slides[0]);
     const connector = requireValue(slide.shapes.find((shape) => shape.kind === "connector"));
     const picture = requireValue(slide.shapes.find((shape) => shape.kind === "image"));
     const chart = requireValue(slide.shapes.find((shape) => shape.kind === "chart"));
+    const destinationGroup = requireValue(slide.shapes.find((shape) => shape.kind === "group"));
     const slideRelationships = requireValue(
       source.packageGraph.relationships.find((group) => group.sourcePartPath === slide.partPath),
     );
@@ -169,8 +207,7 @@ describe("moveShapes", () => {
     const edited = moveShapes(
       source,
       [requireValue(chart.handle), requireValue(picture.handle)],
-      slideHandle,
-      { beforeShapeHandle: first },
+      requireValue(destinationGroup.handle),
     );
 
     expect(edited.packageGraph).toBe(beforeGraph);
@@ -178,11 +215,14 @@ describe("moveShapes", () => {
     const rereadConnector = requireValue(
       reread.slides[0]?.shapes.find((shape) => shape.kind === "connector"),
     );
+    const rereadDestinationGroup = requireGroup(
+      reread.slides[0]?.shapes.find((shape) => shape.kind === "group"),
+    );
     const rereadPicture = requireValue(
-      reread.slides[0]?.shapes.find((shape) => shape.kind === "image"),
+      rereadDestinationGroup.children.find((shape) => shape.kind === "image"),
     );
     const rereadChart = requireValue(
-      reread.slides[0]?.shapes.find((shape) => shape.kind === "chart"),
+      rereadDestinationGroup.children.find((shape) => shape.kind === "chart"),
     );
     expect(rereadConnector.kind).toBe("connector");
     if (rereadConnector.kind !== "connector") throw new Error("connector fixture was lost");
@@ -241,6 +281,71 @@ describe("moveShapes", () => {
         ),
       ),
     );
+  });
+
+  it("allows a connector closure to move together across an identity-mapped parent", () => {
+    let source = createShapes(4);
+    const slide = requireValue(source.slides[0]);
+    const slideHandle = requireValue(slide.handle);
+    const handles = slide.shapes.map((shape) => requireValue(shape.handle));
+    source = addConnector(source, slideHandle, {
+      preset: "straightConnector1",
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(1000),
+      height: asEmu(1),
+      start: { shapeHandle: handles[0], connectionSiteIndex: 1 },
+      end: { shapeHandle: handles[1], connectionSiteIndex: 3 },
+    });
+    const connector = requireValue(source.slides[0]?.shapes.at(-1));
+    const connectorHandle = requireValue(connector.handle);
+    source = moveShapes(source, [connectorHandle], slideHandle, { beforeShapeHandle: handles[2] });
+    source = groupShapes(source, handles.slice(2));
+    const group = requireGroup(source.slides[0]?.shapes.at(-1));
+    const edited = moveShapes(
+      source,
+      [connectorHandle, handles[1], handles[0]],
+      requireValue(group.handle),
+      {
+        beforeShapeHandle: handles[2],
+      },
+    );
+    const reread = readPptx(writePptx(edited));
+    const rereadGroup = requireGroup(reread.slides[0]?.shapes[0]);
+    expect(rereadGroup.children.map(shapeIdentity)).toEqual([
+      String(handles[0].nodeId),
+      String(handles[1].nodeId),
+      String(connectorHandle.nodeId),
+      String(handles[2].nodeId),
+      String(handles[3].nodeId),
+    ]);
+    const rereadConnector = rereadGroup.children[2];
+    expect(rereadConnector?.kind).toBe("connector");
+    if (rereadConnector?.kind !== "connector") throw new Error("moved connector was lost");
+    expect(rereadConnector.connection?.start?.shapeId).toBe(handles[0].nodeId);
+    expect(rereadConnector.connection?.end?.shapeId).toBe(handles[1].nodeId);
+  });
+
+  it("moves typed shapes when preserved raw part XML is unavailable", () => {
+    let source = createShapes(3);
+    const slide = requireValue(source.slides[0]);
+    const [first, second, third] = slide.shapes.map((shape) => requireValue(shape.handle));
+    source = groupShapes(source, [second, third]);
+    const group = requireGroup(source.slides[0]?.shapes.at(-1));
+    source = {
+      ...source,
+      packageGraph: { ...source.packageGraph, rawParts: undefined },
+    };
+
+    const edited = moveShapes(source, [first], requireValue(group.handle), {
+      beforeShapeHandle: second,
+    });
+
+    expect(requireGroup(edited.slides[0]?.shapes[0]).children.map(shapeIdentity)).toEqual([
+      String(first.nodeId),
+      String(second.nodeId),
+      String(third.nodeId),
+    ]);
   });
 
   it("keeps non-drawing XML in its authored slot while moving a block", () => {
@@ -471,9 +576,13 @@ describe("moveShapes", () => {
     const group = requireGroup(grouped.slides[0]?.shapes[0]);
     const groupHandle = requireValue(group.handle);
 
-    expect(() => moveShapes(grouped, [handles[0]], requireValue(slide.handle))).toThrow(
-      "direct child",
-    );
+    const movedToRoot = moveShapes(grouped, [handles[0]], requireValue(slide.handle));
+    expect(movedToRoot.slides[0]?.shapes.map(shapeIdentity)).toEqual([
+      String(groupHandle.nodeId),
+      String(handles[2].nodeId),
+      String(handles[3].nodeId),
+      String(handles[0].nodeId),
+    ]);
     expect(() =>
       moveShapes(grouped, [requireValue(group.children[0]?.handle)], groupHandle, {
         beforeShapeHandle: handles[2],
@@ -499,7 +608,7 @@ describe("moveShapes", () => {
     }
   });
 
-  it("rejects moving a group-A child into group B without changing source or edits", () => {
+  it("moves root/group and group/group blocks while preserving identity and empty groups", () => {
     const source = createShapes(4);
     const handles = requireValue(source.slides[0]).shapes.map((shape) =>
       requireValue(shape.handle),
@@ -507,18 +616,148 @@ describe("moveShapes", () => {
     const withGroupA = groupShapes(source, handles.slice(0, 2));
     const withBothGroups = groupShapes(withGroupA, handles.slice(2));
     const [groupA, groupB] = requireValue(withBothGroups.slides[0]).shapes.map(requireGroup);
-    const before = structuredClone(withBothGroups);
-    const beforeEdits = withBothGroups.edits;
+    const firstHandle = requireValue(groupA.children[0]?.handle);
+    const secondHandle = requireValue(groupA.children[1]?.handle);
+    const groupBHandle = requireValue(groupB.handle);
+    const groupToGroup = moveShapes(withBothGroups, [secondHandle, firstHandle], groupBHandle, {
+      beforeShapeHandle: requireValue(groupB.children[0]?.handle),
+    });
+    const [emptyA, filledB] = requireValue(groupToGroup.slides[0]).shapes.map(requireGroup);
+    expect(emptyA.children).toEqual([]);
+    expect(filledB.children.map(shapeIdentity)).toEqual([
+      String(firstHandle.nodeId),
+      String(secondHandle.nodeId),
+      String(handles[2].nodeId),
+      String(handles[3].nodeId),
+    ]);
+    expect(filledB.children.slice(0, 2).map((shape) => shape.handle)).toEqual([
+      firstHandle,
+      secondHandle,
+    ]);
 
+    const slideHandle = requireValue(groupToGroup.slides[0]?.handle);
+    const groupToRoot = moveShapes(groupToGroup, [firstHandle, secondHandle], slideHandle);
+    expect(requireGroup(groupToRoot.slides[0]?.shapes[0]).children).toEqual([]);
+    expect(groupToRoot.slides[0]?.shapes.slice(-2).map(shapeIdentity)).toEqual([
+      String(firstHandle.nodeId),
+      String(secondHandle.nodeId),
+    ]);
+
+    const rootToGroup = moveShapes(groupToRoot, [firstHandle, secondHandle], groupBHandle);
+    const reread = readPptx(writePptx(rootToGroup));
+    const rereadGroups = requireValue(reread.slides[0]).shapes.map(requireGroup);
+    expect(rereadGroups[0]?.children).toEqual([]);
+    expect(rereadGroups[1]?.children.map(shapeIdentity)).toEqual([
+      String(handles[2].nodeId),
+      String(handles[3].nodeId),
+      String(firstHandle.nodeId),
+      String(secondHandle.nodeId),
+    ]);
+    expect(rereadGroups[1]?.children.at(-2)?.transform).toEqual(groupA.children[0]?.transform);
+    expect(rereadGroups[1]?.children.at(-1)?.transform).toEqual(groupA.children[1]?.transform);
+  });
+
+  it("rejects cycles, non-identity ancestors, and connector boundary crossings atomically", () => {
+    const source = createShapes(4);
+    const slide = requireValue(source.slides[0]);
+    const handles = slide.shapes.map((shape) => requireValue(shape.handle));
+    const grouped = groupShapes(source, handles.slice(0, 3));
+    const group = requireGroup(grouped.slides[0]?.shapes[0]);
+    const nested = groupShapes(
+      grouped,
+      group.children.slice(0, 2).map((shape) => requireValue(shape.handle)),
+    );
+    const outer = requireGroup(nested.slides[0]?.shapes[0]);
+    const inner = requireGroup(outer.children[0]);
     expect(() =>
-      moveShapes(
-        withBothGroups,
-        [requireValue(groupA.children[0]?.handle)],
-        requireValue(groupB.handle),
-      ),
-    ).toThrow("direct child");
-    expect(withBothGroups).toEqual(before);
-    expect(withBothGroups.edits).toBe(beforeEdits);
+      moveShapes(nested, [requireValue(outer.handle)], requireValue(inner.handle)),
+    ).toThrow("inside the moved block");
+
+    const invalidAncestors: SourceGroup[] = [
+      {
+        ...outer,
+        transform: {
+          ...requireValue(outer.transform),
+          width: asEmu(Number(requireValue(outer.transform).width) + 1),
+        },
+      },
+      { ...outer, transform: undefined },
+      { ...outer, childTransform: undefined },
+      {
+        ...outer,
+        childTransform: { ...requireValue(outer.childTransform), width: asEmu(0) },
+      },
+    ];
+    for (const invalidAncestor of invalidAncestors) {
+      const invalid: PptxSourceModel = {
+        ...nested,
+        slides: [
+          {
+            ...requireValue(nested.slides[0]),
+            shapes: [invalidAncestor, ...requireValue(nested.slides[0]).shapes.slice(1)],
+          },
+        ],
+      };
+      expect(() =>
+        moveShapes(invalid, [requireValue(inner.children[0]?.handle)], requireValue(slide.handle)),
+      ).toThrow("identity child mapping");
+    }
+
+    let connected = createShapes(4);
+    const connectedSlide = requireValue(connected.slides[0]);
+    const connectedHandles = connectedSlide.shapes.map((shape) => requireValue(shape.handle));
+    connected = addConnector(connected, requireValue(connectedSlide.handle), {
+      preset: "straightConnector1",
+      offsetX: asEmu(0),
+      offsetY: asEmu(0),
+      width: asEmu(1000),
+      height: asEmu(1),
+      start: { shapeHandle: connectedHandles[0], connectionSiteIndex: 0 },
+      end: { shapeHandle: connectedHandles[1], connectionSiteIndex: 0 },
+    });
+    const groupedConnected = groupShapes(connected, connectedHandles.slice(2));
+    const destination = requireGroup(groupedConnected.slides[0]?.shapes[2]);
+    const before = structuredClone(groupedConnected);
+    expect(() =>
+      moveShapes(groupedConnected, [connectedHandles[0]], requireValue(destination.handle)),
+    ).toThrow("connector endpoint crosses");
+    expect(groupedConnected).toEqual(before);
+
+    const materialized = readPptx(writePptx(connected));
+    const materializedSlide = requireValue(materialized.slides[0]);
+    const materializedHandles = materializedSlide.shapes
+      .filter((shape) => shape.kind !== "connector")
+      .map((shape) => requireValue(shape.handle));
+    const materializedGrouped = groupShapes(materialized, materializedHandles.slice(2));
+    const rawOnly: PptxSourceModel = {
+      ...materializedGrouped,
+      slides: [
+        {
+          ...requireValue(materializedGrouped.slides[0]),
+          shapes: requireValue(materializedGrouped.slides[0]).shapes.map((shape) =>
+            shape.kind === "connector" ? { ...shape, connection: undefined } : shape,
+          ),
+        },
+      ],
+    };
+    const rawDestination = requireGroup(rawOnly.slides[0]?.shapes[2]);
+    expect(() =>
+      moveShapes(rawOnly, [materializedHandles[0]], requireValue(rawDestination.handle)),
+    ).toThrow("raw XML connector endpoint crosses");
+    const forgedRawBoundary: PptxSourceModel = {
+      ...materializedGrouped,
+      edits: [
+        ...(materializedGrouped.edits ?? []),
+        {
+          kind: "moveShapes",
+          targetPartPath: requireValue(materializedGrouped.slides[0]).partPath,
+          crossParent: true,
+          destinationParentGroupId: String(rawDestination.nodeId),
+          shapeIds: [String(materializedHandles[0].nodeId)],
+        },
+      ],
+    };
+    expect(() => writePptx(forgedRawBoundary)).toThrow("connector endpoint crosses");
   });
 
   it("rejects duplicate node ids without adding an edit", () => {
@@ -642,7 +881,25 @@ function directChildren(source: PptxSourceModel, handle: SourceHandle): readonly
       return root.shapes;
     }
   }
+  for (const root of [...source.slides, ...source.slideLayouts, ...source.slideMasters]) {
+    const group = findGroupByHandle(root.shapes, handle);
+    if (group !== undefined) return group.children;
+  }
   throw new Error("test target was not found");
+}
+
+function findGroupByHandle(
+  nodes: readonly SourceShapeNode[],
+  handle: SourceHandle,
+): SourceGroup | undefined {
+  for (const node of nodes) {
+    if (node.kind !== "group") continue;
+    if (node.handle?.partPath === handle.partPath && node.handle.nodeId === handle.nodeId)
+      return node;
+    const nested = findGroupByHandle(node.children, handle);
+    if (nested !== undefined) return nested;
+  }
+  return undefined;
 }
 
 function requireValue<T>(value: T | undefined): T {

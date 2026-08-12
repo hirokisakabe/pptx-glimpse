@@ -768,6 +768,30 @@ export class PptxEditorSession {
   }
 
   /**
+   * Move consecutive sibling drawings to a root/native-group destination in the same part.
+   * Identity-mapped ancestor chains preserve each moved drawing's rendered transform.
+   */
+  async moveShapes(
+    shapeHandles: readonly SourceHandle[],
+    destinationHandle: SourceHandle,
+    options: { readonly beforeShapeHandle?: SourceHandle } = {},
+  ): Promise<PptxEditorSlidesResponse> {
+    const before = this.#session.document;
+    const result = unwrapEditorOperation(
+      this.#session.apply({
+        kind: "moveShapes",
+        shapeHandles,
+        destinationHandle,
+        ...(options.beforeShapeHandle !== undefined
+          ? { beforeShapeHandle: options.beforeShapeHandle }
+          : {}),
+      }),
+    );
+    await this.#renderChangedSlides(before);
+    return this.response(result.warnings);
+  }
+
+  /**
    * Expand one losslessly ungroupable native group and select its first child in document order.
    *
    * @param groupHandle Stable handle of the native group.

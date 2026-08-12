@@ -289,4 +289,45 @@ describe("PptxEditorSession - shapes", () => {
       expect(editor.document.slides[0]?.shapes[0]?.kind).toBe("group");
     }
   });
+
+  it("rerenders, saves, and restores an identity-mapped cross-parent move", async () => {
+    const editor = await createPptxEditorSession(buildGroupCommandFixture(), {
+      skipSystemFonts: true,
+    });
+    const [first, second, third] = editor.shapes(1).map((shape) => shape.handle);
+    if (first === undefined || second === undefined || third === undefined) {
+      throw new Error("cross-parent move fixture handles are missing");
+    }
+    await editor.groupShapes([first, second]);
+    const group = editor.document.slides[0]?.shapes[0];
+    if (group?.kind !== "group" || group.handle === undefined) {
+      throw new Error("cross-parent move fixture group is missing");
+    }
+    editor.selectShape(third);
+    const beforeSvg = (await editor.renderCurrentSlides())[0]?.svg;
+
+    const moved = await editor.moveShapes([third], group.handle, { beforeShapeHandle: first });
+    expect(moved.selection).toEqual({ shapeHandle: third });
+    expect(moved.history.undoDepth).toBe(2);
+    expect(moved.slides[0]?.svg).not.toBe(beforeSvg);
+    const movedGroup = editor.document.slides[0]?.shapes[0];
+    expect(
+      movedGroup?.kind === "group" ? movedGroup.children.map((shape) => shape.nodeId) : [],
+    ).toEqual([third.nodeId, first.nodeId, second.nodeId]);
+    const savedGroup = readPptx(editor.save().pptx).slides[0]?.shapes[0];
+    expect(
+      savedGroup?.kind === "group" ? savedGroup.children.map((shape) => shape.nodeId) : [],
+    ).toEqual([third.nodeId, first.nodeId, second.nodeId]);
+
+    await editor.undo();
+    expect(editor.document.slides[0]?.shapes.map((shape) => shape.nodeId)).toEqual([
+      group.nodeId,
+      third.nodeId,
+    ]);
+    await editor.redo();
+    const redoneGroup = editor.document.slides[0]?.shapes[0];
+    expect(
+      redoneGroup?.kind === "group" ? redoneGroup.children.map((shape) => shape.nodeId) : [],
+    ).toEqual([third.nodeId, first.nodeId, second.nodeId]);
+  });
 });

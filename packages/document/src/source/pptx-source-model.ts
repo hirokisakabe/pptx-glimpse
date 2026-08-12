@@ -361,8 +361,12 @@ export interface PptxSourceModelReorderShapesEdit {
 export interface PptxSourceModelMoveShapesEdit {
   readonly kind: "moveShapes";
   readonly targetPartPath: PartPath;
-  /** Direct-child container group id. Omitted for the root `p:spTree`. */
+  /** Source direct-child container group id. Omitted for the root `p:spTree`. */
   readonly parentGroupId?: string;
+  /** True when source and destination are different direct-child containers. */
+  readonly crossParent?: true;
+  /** Destination direct-child group id for a cross-parent move. Omitted for the root `p:spTree`. */
+  readonly destinationParentGroupId?: string;
   /** Consecutive drawing ids in source document order. */
   readonly shapeIds: readonly string[];
   /** Direct-child anchor id. Omitted to move the block to the drawing-order end. */

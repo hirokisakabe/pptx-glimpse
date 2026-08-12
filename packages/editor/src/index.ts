@@ -32,6 +32,7 @@ import {
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
   groupShapes,
+  moveShapes,
   moveSlide,
   type MoveSlideInput,
   type PptxSourceModel,
@@ -183,6 +184,14 @@ export interface GroupShapesCommand {
   readonly shapeHandles: readonly SourceHandle[];
 }
 
+/** Move consecutive sibling drawings to a root/native-group destination in the same part. @inline */
+export interface MoveShapesCommand {
+  readonly kind: "moveShapes";
+  readonly shapeHandles: readonly SourceHandle[];
+  readonly destinationHandle: SourceHandle;
+  readonly beforeShapeHandle?: SourceHandle;
+}
+
 /** Expand one losslessly ungroupable native DrawingML group. @inline */
 export interface UngroupShapeCommand {
   readonly kind: "ungroupShape";
@@ -286,6 +295,7 @@ export interface UpdateThemeSchemeCommand extends UpdateThemeSchemeInput {
  * @inlineType AddConnectorCommand
  * @inlineType DeleteShapeCommand
  * @inlineType GroupShapesCommand
+ * @inlineType MoveShapesCommand
  * @inlineType UngroupShapeCommand
  * @inlineType ReplaceImageCommand
  * @inlineType SetPictureCropCommand
@@ -325,6 +335,7 @@ export type EditorCommand =
   | AddConnectorCommand
   | DeleteShapeCommand
   | GroupShapesCommand
+  | MoveShapesCommand
   | UngroupShapeCommand
   | ReplaceImageCommand
   | SetPictureCropCommand
@@ -607,6 +618,26 @@ export class EditorSession {
       handles.push(shape.handle);
     }
     return this.apply({ kind: "groupShapes", shapeHandles: handles });
+  }
+
+  moveShapes(
+    shapes: readonly GroupableSourceShape[],
+    destinationHandle: SourceHandle,
+    beforeShapeHandle?: SourceHandle,
+  ): EditorApplyCommandResult {
+    const handles: SourceHandle[] = [];
+    for (const shape of shapes) {
+      if (!isGroupableSourceShape(shape) || shape.handle === undefined) {
+        return invalidSourceNodeFailure("moveShapes", "every source shape requires a handle");
+      }
+      handles.push(shape.handle);
+    }
+    return this.apply({
+      kind: "moveShapes",
+      shapeHandles: handles,
+      destinationHandle,
+      ...(beforeShapeHandle !== undefined ? { beforeShapeHandle } : {}),
+    });
   }
 
   ungroupShape(group: SourceShapeNode): EditorApplyCommandResult {
@@ -917,6 +948,7 @@ const EDITOR_COMMAND_KINDS: ReadonlySet<string> = new Set([
   "addConnector",
   "deleteShape",
   "groupShapes",
+  "moveShapes",
   "ungroupShape",
   "replaceImage",
   "setPictureCrop",
@@ -947,6 +979,7 @@ const EXPECTED_COMMAND_REJECTION_PREFIXES = [
   "addConnector:",
   "deleteShape:",
   "groupShapes:",
+  "moveShapes:",
   "ungroupShape:",
   "replaceImageBytes:",
   "setPictureCrop:",
@@ -987,6 +1020,7 @@ function applyCommandToDocument(
     case "addConnector":
     case "deleteShape":
     case "groupShapes":
+    case "moveShapes":
     case "ungroupShape":
     case "replaceImage":
     case "setPictureCrop":
@@ -1142,6 +1176,12 @@ function executeCommand(document: PptxSourceModel, command: EditorCommand): Pptx
       return deleteShape(document, command.handle);
     case "groupShapes":
       return groupShapesCommand(document, command);
+    case "moveShapes":
+      return moveShapes(document, command.shapeHandles, command.destinationHandle, {
+        ...(command.beforeShapeHandle !== undefined
+          ? { beforeShapeHandle: command.beforeShapeHandle }
+          : {}),
+      });
     case "ungroupShape":
       return ungroupShapeCommand(document, command);
     case "replaceImage":
