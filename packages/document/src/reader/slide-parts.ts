@@ -37,7 +37,7 @@ import {
   parseLine,
   parseRectangleAlignment,
 } from "./drawing.js";
-import { makeSidecar } from "./raw-node.js";
+import { collectUnknownSidecars, makeSidecar } from "./raw-node.js";
 import { parseShapeTree } from "./shape-tree.js";
 import { parseTextStyle } from "./text.js";
 import {
@@ -73,6 +73,15 @@ const FILL_LOCAL_NAMES: ReadonlySet<string> = new Set([
   "blipFill",
   "noFill",
 ]);
+const KNOWN_SLIDE_CHILDREN: ReadonlySet<string> = new Set(["cSld", "clrMapOvr"]);
+const KNOWN_LAYOUT_CHILDREN: ReadonlySet<string> = new Set(["cSld", "clrMapOvr"]);
+const KNOWN_COMMON_SLIDE_DATA_CHILDREN: ReadonlySet<string> = new Set(["bg", "spTree"]);
+const KNOWN_MASTER_CHILDREN: ReadonlySet<string> = new Set([
+  "cSld",
+  "clrMap",
+  "sldLayoutIdLst",
+  "txStyles",
+]);
 
 /** Parsed slide root (`p:sld`) to `SourceSlide` . */
 export function parseSlide(
@@ -86,6 +95,10 @@ export function parseSlide(
   const background = parseBackground(getChild(cSld, "bg"), nextId);
   const colorMapOverride = parseColorMapOverride(getChild(root, "clrMapOvr"));
   const showMasterShapes = booleanAttr(root, "showMasterSp");
+  const rawSidecars = [
+    ...collectUnknownSidecars(cSld, KNOWN_COMMON_SLIDE_DATA_CHILDREN, nextId),
+    ...collectUnknownSidecars(root, KNOWN_SLIDE_CHILDREN, nextId),
+  ];
 
   return {
     partPath,
@@ -95,6 +108,7 @@ export function parseSlide(
     ...(showMasterShapes !== undefined ? { showMasterShapes } : {}),
     shapes: parseShapeTree(getChild(cSld, "spTree"), partPath, nextId, orderedSpTree),
     handle: { partPath },
+    ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
   };
 }
 
@@ -113,6 +127,10 @@ export function parseSlideLayout(
   const background = parseBackground(getChild(cSld, "bg"), nextId);
   const colorMapOverride = parseColorMapOverride(getChild(root, "clrMapOvr"));
   const showMasterShapes = booleanAttr(root, "showMasterSp");
+  const rawSidecars = [
+    ...collectUnknownSidecars(cSld, KNOWN_COMMON_SLIDE_DATA_CHILDREN, nextId),
+    ...collectUnknownSidecars(root, KNOWN_LAYOUT_CHILDREN, nextId),
+  ];
 
   return {
     partPath,
@@ -125,6 +143,7 @@ export function parseSlideLayout(
     ...(showMasterShapes !== undefined ? { showMasterShapes } : {}),
     shapes: parseShapeTree(getChild(cSld, "spTree"), partPath, nextId, orderedSpTree),
     handle: { partPath },
+    ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
   };
 }
 
@@ -142,6 +161,10 @@ export function parseSlideMaster(
   const background = parseBackground(getChild(cSld, "bg"), nextId);
   const colorMap = parseColorMap(getChild(root, "clrMap"));
   const txStyles = parseMasterTextStyles(getChild(root, "txStyles"));
+  const rawSidecars = [
+    ...collectUnknownSidecars(cSld, KNOWN_COMMON_SLIDE_DATA_CHILDREN, nextId),
+    ...collectUnknownSidecars(root, KNOWN_MASTER_CHILDREN, nextId),
+  ];
 
   return {
     partPath,
@@ -153,6 +176,7 @@ export function parseSlideMaster(
     ...(txStyles !== undefined ? { txStyles } : {}),
     shapes: parseShapeTree(getChild(cSld, "spTree"), partPath, nextId, orderedSpTree),
     handle: { partPath },
+    ...(rawSidecars.length > 0 ? { rawSidecars } : {}),
   };
 }
 

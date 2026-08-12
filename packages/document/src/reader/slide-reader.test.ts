@@ -5,6 +5,7 @@ import { zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 
 import type {
+  RawOoxmlNode,
   SourceChart,
   SourceConnector,
   SourceGroup,
@@ -21,6 +22,19 @@ const encoder = new TextEncoder();
 
 function xml(content: string): Uint8Array {
   return encoder.encode(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n${content}`);
+}
+
+function findRawNode(
+  node: RawOoxmlNode | undefined,
+  expectedLocalName: string,
+): RawOoxmlNode | undefined {
+  if (node === undefined) return undefined;
+  if (node.name.split(":").at(-1) === expectedLocalName) return node;
+  for (const child of node.children ?? []) {
+    const found = findRawNode(child, expectedLocalName);
+    if (found !== undefined) return found;
+  }
+  return undefined;
 }
 
 function fixture(name: string): Uint8Array {
@@ -174,7 +188,11 @@ describe("readPptx - typed slide reading (real fixtures)", () => {
  * Real fixtures such as color conversion / line / rotation / gradient fill / unsupported attributes, etc.
  * Synthetic PPTX for definitive verification of misaligned structures.
  */
-function buildSyntheticPptx(slideSpTree: string): Uint8Array {
+function buildSyntheticPptx(
+  slideSpTree: string,
+  slideRootExtras = "",
+  commonSlideDataExtras = "",
+): Uint8Array {
   const files: Record<string, Uint8Array> = {
     "[Content_Types].xml": xml(
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -202,14 +220,19 @@ function buildSyntheticPptx(slideSpTree: string): Uint8Array {
     ),
     "ppt/slides/slide1.xml": xml(
       `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
-        `<p:cSld><p:spTree>${slideSpTree}</p:spTree></p:cSld>` +
+        `<p:cSld><p:spTree>${slideSpTree}</p:spTree>${commonSlideDataExtras}</p:cSld>` +
+        slideRootExtras +
         `</p:sld>`,
     ),
   };
   return zipSync(files);
 }
 
-function buildSyntheticPptxWithLayout(slideLayoutAttrs: string): Uint8Array {
+function buildSyntheticPptxWithLayout(
+  slideLayoutAttrs: string,
+  layoutRootExtras = "",
+  masterRootExtras = "",
+): Uint8Array {
   const files: Record<string, Uint8Array> = {
     "[Content_Types].xml": xml(
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -249,6 +272,7 @@ function buildSyntheticPptxWithLayout(slideLayoutAttrs: string): Uint8Array {
     "ppt/slideLayouts/slideLayout1.xml": xml(
       `<p:sldLayout${slideLayoutAttrs} xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
         `<p:cSld><p:spTree/></p:cSld>` +
+        layoutRootExtras +
         `</p:sldLayout>`,
     ),
     "ppt/slideLayouts/_rels/slideLayout1.xml.rels": xml(
@@ -259,6 +283,7 @@ function buildSyntheticPptxWithLayout(slideLayoutAttrs: string): Uint8Array {
     "ppt/slideMasters/slideMaster1.xml": xml(
       `<p:sldMaster xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">` +
         `<p:cSld><p:spTree/></p:cSld>` +
+        masterRootExtras +
         `</p:sldMaster>`,
     ),
   };
@@ -266,6 +291,47 @@ function buildSyntheticPptxWithLayout(slideLayoutAttrs: string): Uint8Array {
 }
 
 describe("readPptx - typed shape detail (synthetic)", () => {
+  it("preserves slide-root timing and extension XML as raw sidecars", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        "",
+        `<p:timing><p:tnLst><p:par><p:cTn><p:childTnLst><p:set><p:cBhvr><p:tgtEl><p:spTgt spid="42"/></p:tgtEl></p:cBhvr></p:set></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>` +
+          `<p:extLst><p:ext uri="test"/></p:extLst>`,
+      ),
+    );
+
+    expect(source.slides[0]?.rawSidecars?.map((sidecar) => sidecar.node.name)).toEqual([
+      "p:timing",
+      "p:extLst",
+    ]);
+    expect(source.slides[0]?.rawSidecars?.[0]?.node.children).toBeDefined();
+    expect(findRawNode(source.slides[0]?.rawSidecars?.[0]?.node, "spTgt")?.attributes?.spid).toBe(
+      "42",
+    );
+    expect(findRawNode(source.slides[0]?.rawSidecars?.[1]?.node, "ext")?.attributes?.uri).toBe(
+      "test",
+    );
+  });
+
+  it("preserves common-slide-data controls and layout/master root extensions", () => {
+    const slide = readPptx(
+      buildSyntheticPptx("", "", `<p:controls><p:control spid="42"/></p:controls>`),
+    );
+    expect(findRawNode(slide.slides[0]?.rawSidecars?.[0]?.node, "control")?.attributes?.spid).toBe(
+      "42",
+    );
+
+    const templates = readPptx(
+      buildSyntheticPptxWithLayout(
+        "",
+        `<p:extLst><p:ext uri="layout"/></p:extLst>`,
+        `<p:extLst><p:ext uri="master"/></p:extLst>`,
+      ),
+    );
+    expect(templates.slideLayouts[0]?.rawSidecars?.[0]?.node.name).toBe("p:extLst");
+    expect(templates.slideMasters[0]?.rawSidecars?.[0]?.node.name).toBe("p:extLst");
+  });
+
   it.each([
     ['show="0"', ` show="0"`, false, false],
     ['show="false"', ` show="false"`, false, false],
