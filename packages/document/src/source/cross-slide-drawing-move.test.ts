@@ -692,7 +692,7 @@ function shareChartRelationship(
               bytes: new TextEncoder().encode(
                 new TextDecoder()
                   .decode(part.bytes)
-                  .replaceAll(oldRelationshipId, sharedRelationshipId),
+                  .replaceAll(`r:id="${oldRelationshipId}"`, `r:id="${sharedRelationshipId}"`),
               ),
             }
           : part,

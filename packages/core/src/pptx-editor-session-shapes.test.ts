@@ -471,8 +471,8 @@ function buildCrossSlideChartMoveFixture(): Uint8Array {
     chartType: "bar",
     offsetX: asEmu(0),
     offsetY: asEmu(0),
-    width: asEmu(2400),
-    height: asEmu(1800),
+    width: asEmu(2_400_000),
+    height: asEmu(1_800_000),
     name: "Moved chart",
     series: [{ name: "Revenue", categories: ["A", "B"], values: [10, 20] }],
   });

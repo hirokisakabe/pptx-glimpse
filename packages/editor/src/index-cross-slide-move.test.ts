@@ -125,6 +125,7 @@ describe("EditorSession cross-slide drawing move", () => {
       "updateChartData",
       "moveShapesAcrossSlides",
     ]);
+    expectPersistedChartText(session.document, "Before move");
     expect(session.undoDepth).toBe(1);
     expect(
       session.apply({
@@ -133,15 +134,18 @@ describe("EditorSession cross-slide drawing move", () => {
         series: [{ name: "After move", categories: ["A", "B"], values: [4, 5] }],
       }),
     ).toMatchObject({ ok: true });
+    expectPersistedChartText(session.document, "After move");
     expect(session.selection).toEqual({ shapeHandle: movedHandle });
     expect(session.undoDepth).toBe(2);
     expect(session.undo()).toMatchObject({ ok: true });
     expect(session.selection).toEqual({ shapeHandle: movedHandle });
+    expectPersistedChartText(session.document, "Before move");
     expect(session.undo()).toMatchObject({ ok: true });
     expect(session.selection).toEqual({ shapeHandle: chart.handle });
     expect(session.document).toBe(source);
     expect(session.redo()).toMatchObject({ ok: true });
     expect(session.selection).toEqual({ shapeHandle: movedHandle });
+    expectPersistedChartText(session.document, "Before move");
   });
 });
 
@@ -175,8 +179,8 @@ function chartTwoSlideSource() {
       chartType: "bar",
       offsetX: asEmu(0),
       offsetY: asEmu(0),
-      width: asEmu(2400),
-      height: asEmu(1800),
+      width: asEmu(2_400_000),
+      height: asEmu(1_800_000),
       name: "Moved chart",
       series: [{ name: "Initial", categories: ["A"], values: [1] }],
     });
@@ -208,4 +212,13 @@ function rect(offsetX: number) {
 function requireValue<T>(value: T | undefined): T {
   if (value === undefined) throw new Error("fixture value is missing");
   return value;
+}
+
+function expectPersistedChartText(source: ReturnType<typeof readPptx>, expected: string): void {
+  const persisted = readPptx(writePptx(source));
+  const chartXml = persisted.packageGraph.rawParts
+    ?.filter((part) => part.kind === "binary" && part.partPath.includes("/charts/chart"))
+    .map((part) => new TextDecoder().decode(part.bytes))
+    .join("\n");
+  expect(chartXml).toContain(expected);
 }

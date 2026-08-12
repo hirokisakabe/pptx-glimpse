@@ -124,11 +124,11 @@ Undo and redo restore topology, ids, z-order,
 and the corresponding selection.
 
 Use `editor.moveShapesAcrossSlides(shapeHandles, destinationSlideHandle, options)` for a
-consecutive non-placeholder shape/picture/connector/native Chart block at a slide root. Both
+consecutive non-placeholder shape/picture/connector/native chart block at a slide root. Both
 source and destination slides rerender, moved selection follows the returned destination identity,
 and save/read preserves the remapped node, relationship, and connector endpoint IDs. Chart and
-embedded-workbook target parts remain shared and byte-preserved. Authored local OOXML is retained,
-so destination theme/layout/master differences can change effective appearance.
+embedded-workbook target parts are reused without cloning and remain byte-preserved. Authored local
+OOXML is retained, so destination theme/layout/master differences can change effective appearance.
 
 Existing theme schemes can be patched through `editor.updateThemeScheme(themeHandle, input)` or
 the matching command. Omitted color/font fields and the format scheme are preserved. When masters

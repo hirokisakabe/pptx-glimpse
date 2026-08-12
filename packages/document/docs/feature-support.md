@@ -31,12 +31,12 @@ targets. `moveShapes` moves a consecutive sibling block within one container or 
 root/native-group parents in the same part before an anchor or to the drawing-order end without
 requiring a complete sibling list. Cross-parent moves rewrite only moved root transforms when the
 source-to-destination affine mapping is exactly representable after OOXML quantization.
-`moveShapesAcrossSlides` separately moves consecutive non-placeholder shape/picture/connector/Chart
+`moveShapesAcrossSlides` separately moves consecutive non-placeholder shape/picture/connector/chart
 roots between slides, reissues destination-local identities and relationships, and returns the
 old-to-new handle mapping. It shares picture media, remaps closed connector endpoints, rejects
-selection-crossing references atomically, shares Chart/embedded-workbook target parts without
-changing their bytes or paths, and preserves authored local values rather than materializing
-source-slide effective appearance.
+selection-crossing references atomically, reuses chart/embedded-workbook target parts at their
+existing paths without changing their bytes, and preserves authored local values rather than
+materializing source-slide effective appearance.
 
 At drawing-part roots, `readPptx` retains unmodeled slide, layout, and master children such as
 timing and extension lists as raw sidecars. They remain preservation-only (`P`) material and are
