@@ -118,6 +118,20 @@ describe("cross-part move planning", () => {
     expect(Object.isFrozen(plan)).toBe(true);
     expect(Object.isFrozen(plan.relationshipRemaps)).toBe(true);
 
+    const rawSidecarIds = [asRawSidecarId("mutable-sidecar")];
+    const mutableHandleSource = replaceFirstShape(source, {
+      ...picture,
+      handle: { ...requireValue(picture.handle), rawSidecarIds },
+    });
+    const immutablePlan = planCrossPartDrawingMove(
+      mutableHandleSource,
+      [{ ...requireValue(picture.handle), rawSidecarIds }],
+      requireValue(destinationSlide.handle),
+    );
+    rawSidecarIds.push(asRawSidecarId("later-sidecar"));
+    expect(immutablePlan.handleMappings[0]?.before.rawSidecarIds).toEqual(["mutable-sidecar"]);
+    expect(Object.isFrozen(immutablePlan.handleMappings[0]?.before.rawSidecarIds)).toBe(true);
+
     const reservedPlan = planCrossPartDrawingMove(
       source,
       movedHandles,
@@ -166,6 +180,30 @@ describe("cross-part move planning", () => {
     expect(reusedPlan.relationshipRemaps).toHaveLength(1);
     expect(reusedPlan.relationshipRemaps[0]?.after.id).toBe("rId77");
     expect(reusedPlan.relationshipRemaps[0]?.reusedDestinationRelationship).toBe(true);
+
+    const explicitInternalReuse: PptxSourceModel = {
+      ...withReusableDestinationRelationship,
+      packageGraph: {
+        ...withReusableDestinationRelationship.packageGraph,
+        relationships: withReusableDestinationRelationship.packageGraph.relationships.map(
+          (group) => ({
+            ...group,
+            relationships: group.relationships.map((relationship) =>
+              relationship.id === "rId77"
+                ? { ...relationship, targetMode: "Internal" }
+                : relationship,
+            ),
+          }),
+        ),
+      },
+    };
+    expect(
+      planCrossPartDrawingMove(
+        explicitInternalReuse,
+        [requireValue(picture.handle)],
+        requireValue(destinationSlide.handle),
+      ).relationshipRemaps[0]?.reusedDestinationRelationship,
+    ).toBe(true);
 
     const external: PptxSourceModel = {
       ...sourceWithRawReference,
@@ -258,6 +296,114 @@ describe("cross-part move planning", () => {
     expect(plan.relationshipReferences).toEqual([]);
   });
 
+  it("inventories text-run and table-cell hyperlink sidecars in the relationship closure", () => {
+    const source = buildCleanTwoSlideSource((session, first) => {
+      session.target(first).addShape({
+        ...rectInput(0),
+        paragraphs: [{ runs: [{ text: "shape" }] }],
+      });
+      session.target(first).addTable({
+        offsetX: asEmu(1200),
+        offsetY: asEmu(0),
+        width: asEmu(1000),
+        height: asEmu(1000),
+        columnWidths: [asEmu(1000)],
+        rows: [{ height: asEmu(1000), cells: [{ text: "cell" }] }],
+      });
+    });
+    const sourceSlide = requireValue(source.slides[0]);
+    const destination = requireValue(source.slides[1]?.handle);
+    const hyperlinkId = asRelationshipId("rId99");
+    const hyperlink = {
+      id: hyperlinkId,
+      type: "http://schemas.openxmlformats.org/officeDocument/2006/relationships/hyperlink",
+      target: "https://example.com/",
+      targetMode: "External" as const,
+    };
+    const hyperlinkSidecar = {
+      id: asRawSidecarId("hyperlink"),
+      node: {
+        name: "a:hlinkClick",
+        attributes: {
+          "xmlns:r": "http://schemas.openxmlformats.org/officeDocument/2006/relationships",
+          "r:id": hyperlinkId,
+        },
+      },
+    };
+    const [shape, table] = sourceSlide.shapes;
+    if (shape?.kind !== "shape" || table?.kind !== "table") {
+      throw new Error("text relationship fixtures are missing");
+    }
+    const shapeRun = requireValue(shape.textBody?.paragraphs[0]?.runs[0]);
+    const tableRun = requireValue(table.table.rows[0]?.cells[0]?.textBody?.paragraphs[0]?.runs[0]);
+    const withSidecars: PptxSourceModel = {
+      ...source,
+      slides: [
+        {
+          ...sourceSlide,
+          shapes: [
+            {
+              ...shape,
+              textBody: {
+                ...requireValue(shape.textBody),
+                paragraphs: [
+                  {
+                    ...requireValue(shape.textBody?.paragraphs[0]),
+                    runs: [{ ...shapeRun, rawSidecars: [hyperlinkSidecar] }],
+                  },
+                ],
+              },
+            },
+            {
+              ...table,
+              table: {
+                ...table.table,
+                rows: [
+                  {
+                    ...requireValue(table.table.rows[0]),
+                    cells: [
+                      {
+                        ...requireValue(table.table.rows[0]?.cells[0]),
+                        textBody: {
+                          ...requireValue(table.table.rows[0]?.cells[0]?.textBody),
+                          paragraphs: [
+                            {
+                              ...requireValue(
+                                table.table.rows[0]?.cells[0]?.textBody?.paragraphs[0],
+                              ),
+                              runs: [{ ...tableRun, rawSidecars: [hyperlinkSidecar] }],
+                            },
+                          ],
+                        },
+                      },
+                    ],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+        ...source.slides.slice(1),
+      ],
+      packageGraph: {
+        ...source.packageGraph,
+        relationships: source.packageGraph.relationships.map((group) =>
+          group.sourcePartPath === sourceSlide.partPath
+            ? { ...group, relationships: [...group.relationships, hyperlink] }
+            : group,
+        ),
+      },
+    };
+
+    expect(() =>
+      planCrossPartDrawingMove(
+        withSidecars,
+        [requireValue(shape.handle), requireValue(table.handle)],
+        destination,
+      ),
+    ).toThrow("external relationships");
+  });
+
   it("uses declared namespace bindings when inventorying preserved relationship attributes", () => {
     const references = inventoryRawRelationshipReferences({
       name: "p:ext",
@@ -277,6 +423,23 @@ describe("cross-part move planning", () => {
         relationshipId: "rId8",
       },
     ]);
+
+    const inherited = inventoryRawRelationshipReferences(
+      { name: "a:hlinkClick", attributes: { "rel:id": "rId9" } },
+      {
+        inheritedNamespaces: new Map([
+          ["rel", "http://purl.oclc.org/ooxml/officeDocument/relationships"],
+        ]),
+        rejectUnboundRelationshipAttributes: true,
+      },
+    );
+    expect(inherited[0]?.relationshipId).toBe("rId9");
+    expect(() =>
+      inventoryRawRelationshipReferences(
+        { name: "a:hlinkClick", attributes: { "rel:id": "rId9" } },
+        { rejectUnboundRelationshipAttributes: true },
+      ),
+    ).toThrow("namespace binding");
   });
 
   it("resolves template fan-out in presentation slide order", () => {
@@ -364,6 +527,31 @@ describe("cross-part move planning", () => {
       ],
     };
     expect(() => planCrossPartDrawingMove(pending, handles, destination)).toThrow("pending edits");
+
+    const maxDestinationId: PptxSourceModel = {
+      ...source,
+      slides: source.slides.map((slide, index) =>
+        index !== 1
+          ? slide
+          : {
+              ...slide,
+              shapes: [
+                {
+                  ...requireValue(sourceSlide.shapes[0]),
+                  nodeId: asSourceNodeId("4294967295"),
+                  handle: {
+                    ...requireValue(sourceSlide.shapes[0]?.handle),
+                    partPath: slide.partPath,
+                    nodeId: asSourceNodeId("4294967295"),
+                  },
+                },
+              ],
+            },
+      ),
+    };
+    expect(() => planCrossPartDrawingMove(maxDestinationId, handles, destination)).toThrow(
+      "no drawing node id remains",
+    );
     expect(source).toEqual(before);
     expect(source.edits).toBeUndefined();
   });

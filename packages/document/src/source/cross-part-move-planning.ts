@@ -18,11 +18,15 @@ import type {
   SourceOutline,
   SourceShapeNode,
   SourceTableCell,
+  SourceTextBody,
 } from "./shapes.js";
 
 const TRANSITIONAL_RELATIONSHIPS_NAMESPACE =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 const STRICT_RELATIONSHIPS_NAMESPACE = "http://purl.oclc.org/ooxml/officeDocument/relationships";
+const RELATIONSHIP_ATTRIBUTE_LOCAL_NAMES = new Set(["id", "embed", "link", "dm", "lo", "qs", "cs"]);
+const MAX_DRAWING_NODE_ID = 4_294_967_295n;
+const STANDARD_RAW_NAMESPACE_CONTEXT = new Map([["r", TRANSITIONAL_RELATIONSHIPS_NAMESPACE]]);
 
 type DrawingPartKind = "slide" | "layout" | "master";
 
@@ -51,6 +55,11 @@ interface RawRelationshipReference {
   readonly elementPath: readonly string[];
   readonly attributeName: string;
   readonly relationshipId: RelationshipId;
+}
+
+interface RawRelationshipInventoryOptions {
+  readonly inheritedNamespaces?: ReadonlyMap<string, string>;
+  readonly rejectUnboundRelationshipAttributes?: boolean;
 }
 
 /** One typed or preserved relationship reference owned by a moved drawing node. */
@@ -179,7 +188,12 @@ export function planCrossPartDrawingMove(
     "planCrossPartDrawingMove: destination contains duplicate node ids",
   );
   for (const reserved of options.reservedDestinationNodeIds ?? []) destinationIds.add(reserved);
-  const allocateNodeId = createNumericIdAllocator(destinationIds, asSourceNodeId);
+  const allocateNodeId = createNumericIdAllocator(
+    destinationIds,
+    asSourceNodeId,
+    "",
+    MAX_DRAWING_NODE_ID,
+  );
   const nodeRecords: NodeRecord[] = [];
   for (const root of movedRoots) {
     visitShapeTree(root, (node) => {
@@ -190,6 +204,7 @@ export function planCrossPartDrawingMove(
           "planCrossPartDrawingMove: every moved handle must match its owning part and node id",
         );
       }
+      validatePrimaryRelationshipHandle(node, beforeHandle);
       nodeRecords.push({ node, oldNodeId, beforeHandle, newNodeId: allocateNodeId() });
     });
   }
@@ -220,7 +235,7 @@ export function planCrossPartDrawingMove(
       }
       return [
         freezeObject({
-          ownerHandle: freezeObject({ ...record.beforeHandle }),
+          ownerHandle: freezeHandle(record.beforeHandle),
           location,
           before: endpoint.shapeId,
           after,
@@ -230,18 +245,23 @@ export function planCrossPartDrawingMove(
   });
 
   const handleMappings = nodeRecords.map((record) => {
-    const relationshipId =
-      record.beforeHandle.relationshipId === undefined
-        ? undefined
-        : relationshipIdMap.get(record.beforeHandle.relationshipId);
+    let relationshipId: RelationshipId | undefined;
+    if (record.beforeHandle.relationshipId !== undefined) {
+      relationshipId = relationshipIdMap.get(record.beforeHandle.relationshipId);
+      if (relationshipId === undefined) {
+        throw new Error(
+          "planCrossPartDrawingMove: a handle relationship id has no finalized remap",
+        );
+      }
+    }
     const after: SourceHandle = {
       partPath: destinationRoot.partPath,
       nodeId: record.newNodeId,
       ...(relationshipId !== undefined ? { relationshipId } : {}),
     };
     return freezeObject({
-      before: freezeObject({ ...record.beforeHandle }),
-      after: freezeObject(after),
+      before: freezeHandle(record.beforeHandle),
+      after: freezeHandle(after),
     });
   });
 
@@ -269,9 +289,16 @@ export function planCrossPartDrawingMove(
 /** Inventories relationship attributes using namespace URI bindings, not prefix spelling. */
 export function inventoryRawRelationshipReferences(
   root: RawOoxmlNode,
+  options: RawRelationshipInventoryOptions = {},
 ): readonly RawRelationshipReference[] {
   const references: RawRelationshipReference[] = [];
-  visitRawNode(root, new Map([["r", TRANSITIONAL_RELATIONSHIPS_NAMESPACE]]), [], references);
+  visitRawNode(
+    root,
+    options.inheritedNamespaces ?? new Map(),
+    [],
+    references,
+    options.rejectUnboundRelationshipAttributes ?? false,
+  );
   return freezeArray(
     references.map((item) => freezeObject({ ...item, elementPath: freezeArray(item.elementPath) })),
   );
@@ -282,6 +309,7 @@ function visitRawNode(
   inheritedNamespaces: ReadonlyMap<string, string>,
   parentPath: readonly string[],
   references: RawRelationshipReference[],
+  rejectUnboundRelationshipAttributes: boolean,
 ): void {
   const namespaces = new Map(inheritedNamespaces);
   for (const [name, value] of Object.entries(node.attributes ?? {})) {
@@ -293,6 +321,16 @@ function visitRawNode(
     const separator = name.indexOf(":");
     if (separator === -1 || name.startsWith("xmlns:")) continue;
     const namespace = namespaces.get(name.slice(0, separator));
+    const localAttribute = name.slice(separator + 1);
+    if (
+      namespace === undefined &&
+      rejectUnboundRelationshipAttributes &&
+      RELATIONSHIP_ATTRIBUTE_LOCAL_NAMES.has(localAttribute)
+    ) {
+      throw new Error(
+        `planCrossPartDrawingMove: namespace binding for relationship-like attribute '${name}' is unavailable`,
+      );
+    }
     if (!isRelationshipsNamespace(namespace)) continue;
     references.push({
       elementPath,
@@ -301,7 +339,7 @@ function visitRawNode(
     });
   }
   for (const child of node.children ?? []) {
-    visitRawNode(child, namespaces, elementPath, references);
+    visitRawNode(child, namespaces, elementPath, references, rejectUnboundRelationshipAttributes);
   }
 }
 
@@ -342,7 +380,7 @@ function validateSupportedSubtree(node: SourceShapeNode): void {
   if ("placeholder" in node && node.placeholder !== undefined) {
     throw new Error("planCrossPartDrawingMove: placeholder drawings are not supported");
   }
-  for (const sidecar of node.rawSidecars ?? []) {
+  for (const sidecar of nodeRawSidecars(node)) {
     if (rawContainsElement(sidecar.node, "AlternateContent")) {
       throw new Error("planCrossPartDrawingMove: mc:AlternateContent is not supported");
     }
@@ -411,7 +449,7 @@ function validateRawReferenceClosure(
         "planCrossPartDrawingMove: source-part raw drawing nodes make reference closure unprovable",
       );
     }
-    for (const sidecar of node.rawSidecars ?? []) {
+    for (const sidecar of nodeRawSidecars(node)) {
       if (rawContainsElement(sidecar.node, "AlternateContent")) {
         throw new Error("planCrossPartDrawingMove: mc:AlternateContent is not supported");
       }
@@ -455,8 +493,11 @@ function collectRelationshipReferences(
         location,
       });
     }
-    for (const sidecar of rawSidecars(record.node)) {
-      for (const raw of inventoryRawRelationshipReferences(sidecar.node)) {
+    for (const sidecar of nodeRawSidecars(record.node)) {
+      for (const raw of inventoryRawRelationshipReferences(sidecar.node, {
+        inheritedNamespaces: STANDARD_RAW_NAMESPACE_CONTEXT,
+        rejectUnboundRelationshipAttributes: true,
+      })) {
         references.push({
           ownerHandle: record.beforeHandle,
           relationshipId: raw.relationshipId,
@@ -529,9 +570,48 @@ function collectFillRelationship(
   }
 }
 
-function rawSidecars(node: SourceShapeNode): readonly RawSidecar[] {
+function nodeRawSidecars(node: SourceShapeNode): readonly RawSidecar[] {
   if (node.kind === "raw") return [node.raw];
-  return node.rawSidecars ?? [];
+  const sidecars = [...(node.rawSidecars ?? [])];
+  if (node.kind === "shape") sidecars.push(...textBodyRawSidecars(node.textBody));
+  if (node.kind === "table") {
+    for (const row of node.table.rows) {
+      for (const cell of row.cells) {
+        sidecars.push(...(cell.rawSidecars ?? []), ...textBodyRawSidecars(cell.textBody));
+        sidecars.push(...rawFillSidecars(cell.fill));
+        for (const outline of [
+          cell.borders?.top,
+          cell.borders?.bottom,
+          cell.borders?.left,
+          cell.borders?.right,
+        ]) {
+          sidecars.push(...rawFillSidecars(outline?.fill));
+        }
+      }
+    }
+  }
+  if (node.kind === "shape" || node.kind === "group") {
+    sidecars.push(...rawFillSidecars(node.fill));
+  }
+  if (node.kind === "shape" || node.kind === "connector") {
+    sidecars.push(...rawFillSidecars(node.outline?.fill));
+  }
+  return sidecars;
+}
+
+function textBodyRawSidecars(textBody: SourceTextBody | undefined): readonly RawSidecar[] {
+  if (textBody === undefined) return [];
+  return [
+    ...(textBody.rawSidecars ?? []),
+    ...textBody.paragraphs.flatMap((paragraph) => [
+      ...(paragraph.rawSidecars ?? []),
+      ...paragraph.runs.flatMap((run) => run.rawSidecars ?? []),
+    ]),
+  ];
+}
+
+function rawFillSidecars(fill: SourceFill | undefined): readonly RawSidecar[] {
+  return fill?.kind === "raw" ? [fill.raw] : [];
 }
 
 function planRelationshipRemaps(
@@ -581,7 +661,7 @@ function planRelationshipRemaps(
     const reusable = destinationRelationships.find(
       (candidate) =>
         candidate.type === before.type &&
-        candidate.targetMode === before.targetMode &&
+        candidate.targetMode !== "External" &&
         resolveInternalRelationshipTarget(destinationRoot.partPath, candidate) === resolvedTarget,
     );
     const after =
@@ -750,21 +830,30 @@ function createNumericIdAllocator<T extends string>(
   used: Set<string>,
   brand: (value: string) => T,
   prefix = "",
+  maximum?: bigint,
 ): () => T {
-  let next =
-    Math.max(
-      0,
-      ...[...used].flatMap((value) => {
-        const numeric =
-          prefix === "" ? value : value.startsWith(prefix) ? value.slice(prefix.length) : "";
-        return /^\d+$/.test(numeric) ? [Number(numeric)] : [];
-      }),
-    ) + 1;
+  let largest = 0n;
+  for (const value of used) {
+    const numeric =
+      prefix === "" ? value : value.startsWith(prefix) ? value.slice(prefix.length) : "";
+    if (!/^\d+$/.test(numeric)) continue;
+    const parsed = BigInt(numeric);
+    if (maximum !== undefined && parsed > maximum) {
+      throw new Error(
+        `planCrossPartDrawingMove: numeric id '${value}' exceeds the supported OOXML range`,
+      );
+    }
+    if (parsed > largest) largest = parsed;
+  }
+  let next = largest + 1n;
   return () => {
-    while (used.has(`${prefix}${next}`)) next += 1;
+    if (maximum !== undefined && next > maximum) {
+      throw new Error("planCrossPartDrawingMove: no drawing node id remains in the OOXML range");
+    }
+    while (used.has(`${prefix}${next}`)) next += 1n;
     const value = `${prefix}${next}`;
     used.add(value);
-    next += 1;
+    next += 1n;
     return brand(value);
   };
 }
@@ -792,10 +881,37 @@ function requireNodeHandle(node: SourceShapeNode): SourceHandle {
   return node.handle;
 }
 
+function validatePrimaryRelationshipHandle(node: SourceShapeNode, handle: SourceHandle): void {
+  const typedRelationshipId =
+    node.kind === "image"
+      ? node.blipRelationshipId
+      : node.kind === "chart"
+        ? node.chartRelationshipId
+        : undefined;
+  if (
+    typedRelationshipId !== undefined &&
+    handle.relationshipId !== undefined &&
+    typedRelationshipId !== handle.relationshipId
+  ) {
+    throw new Error(
+      "planCrossPartDrawingMove: typed relationship id and source handle relationship id differ",
+    );
+  }
+}
+
+function freezeHandle(handle: SourceHandle): SourceHandle {
+  return freezeObject({
+    ...handle,
+    ...(handle.rawSidecarIds !== undefined
+      ? { rawSidecarIds: freezeArray(handle.rawSidecarIds) }
+      : {}),
+  });
+}
+
 function freezeRelationshipReference(
   item: CrossPartRelationshipReference,
 ): CrossPartRelationshipReference {
-  return freezeObject({ ...item, ownerHandle: freezeObject({ ...item.ownerHandle }) });
+  return freezeObject({ ...item, ownerHandle: freezeHandle(item.ownerHandle) });
 }
 
 function freezeRelationshipRemap(item: CrossPartRelationshipRemap): CrossPartRelationshipRemap {
