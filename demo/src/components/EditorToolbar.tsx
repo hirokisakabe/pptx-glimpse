@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type {
   EditorCommand,
   PptxEditorSession,
@@ -81,9 +81,16 @@ export function EditorToolbar({
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const selectedRun = textRuns[selectedRunIndex];
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setSelectedRunIndex(0);
   }, [selectedShapeKey, selectionScope]);
+
+  useLayoutEffect(() => {
+    setSelectedRunIndex(0);
+    setFontSize("24");
+    setTypeface("");
+    setColor("#2454a6");
+  }, [selectionScope]);
 
   return (
     <aside className="editor-panel" aria-label="Editing controls" data-editor-component="toolbar">

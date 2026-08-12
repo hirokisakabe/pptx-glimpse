@@ -48,6 +48,7 @@ export interface EditorSurfaceHostControls {
   readonly busy: boolean;
   readonly dirty: boolean;
   readonly message: string;
+  readonly resetScope: object;
   readonly commitPendingEdits: () => Promise<boolean>;
   readonly hasUnsavedChanges: () => boolean;
   readonly markSaved: (
@@ -668,13 +669,24 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
       busy,
       dirty,
       message,
+      resetScope: controller,
       commitPendingEdits,
       hasUnsavedChanges,
       markSaved,
       save,
       setError,
     }),
-    [busy, commitPendingEdits, dirty, hasUnsavedChanges, markSaved, message, save, setError],
+    [
+      busy,
+      commitPendingEdits,
+      controller,
+      dirty,
+      hasUnsavedChanges,
+      markSaved,
+      message,
+      save,
+      setError,
+    ],
   );
 
   if (currentSlide === undefined) {

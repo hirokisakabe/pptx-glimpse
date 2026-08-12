@@ -47,10 +47,20 @@ describe("demo editor component boundary", () => {
     const surface = await readFile(resolve(componentsRoot, "EditorSurface.tsx"), "utf8");
 
     expect(toolbar).toContain("readonly selectionScope: object");
-    expect(toolbar).toMatch(
-      /setSelectedRunIndex\(0\);\s*}\, \[selectedShapeKey, selectionScope\]\);/,
-    );
+    expect(toolbar).toContain('setFontSize("24")');
+    expect(toolbar).toContain('setTypeface("")');
+    expect(toolbar).toContain('setColor("#2454a6")');
+    expect(toolbar).toContain("[selectedShapeKey, selectionScope]");
+    expect(toolbar).toContain("[selectionScope]");
     expect(surface).toContain("selectionScope={controller}");
+  });
+
+  it("resets the demo download name from an explicit presentation identity", async () => {
+    const shell = await readFile(resolve(componentsRoot, "DemoEditorShell.tsx"), "utf8");
+    const surface = await readFile(resolve(componentsRoot, "EditorSurface.tsx"), "utf8");
+
+    expect(surface).toContain("resetScope: controller");
+    expect(shell).toContain("[controls.resetScope, fileName]");
   });
 
   it("keeps navigation guard listeners independent from volatile host-control snapshots", async () => {

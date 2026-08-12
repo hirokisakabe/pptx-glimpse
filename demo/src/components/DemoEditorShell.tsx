@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 
 import type { EditorSurfaceHostControls } from "./EditorSurface";
 
@@ -24,9 +24,9 @@ export function DemoEditorShell({
 }: DemoEditorShellProps) {
   const [downloadName, setDownloadName] = useState(() => fileStem(fileName));
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setDownloadName(fileStem(fileName));
-  }, [fileName]);
+  }, [controls.resetScope, fileName]);
 
   const confirmDiscardChanges = useCallback(async () => {
     if (!(await controls.commitPendingEdits())) return false;

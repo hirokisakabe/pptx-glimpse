@@ -327,6 +327,40 @@ test("cancels shape and slide gestures when the editor session prop changes", as
   await expect(page.getByTestId("editor-error")).toHaveCount(0);
 });
 
+test("resets toolbar inputs and download name when a same-named session replaces the editor", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  if (demoServer === null) throw new Error("demo server was not started");
+
+  await page.goto(demoServer.url);
+  await expect(page.getByTestId("editor-workspace")).toBeVisible();
+  const fileNameInput = page.getByRole("textbox", { name: "Presentation file name" });
+  await fileNameInput.fill("custom-download-name");
+
+  await page.locator('[data-testid="shape-hit-area"][data-editable-text="true"]').nth(1).click();
+  const runSelect = page.getByTestId("text-run-select");
+  await expect(runSelect.locator("option")).toHaveCount(2);
+  await runSelect.selectOption("1");
+  await page.getByRole("spinbutton", { name: "Font size" }).fill("72");
+  await page.getByRole("textbox", { name: "Typeface" }).fill("Old Presentation Font");
+  await page.getByLabel("Text color").fill("#abcdef");
+
+  await page.getByTestId("pptx-input").setInputFiles({
+    name: "editor-demo.pptx",
+    mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    buffer: await readFile(resolve(demoRoot, "assets/editor-demo.pptx")),
+  });
+
+  await expect(page.getByTestId("replacement-loading")).toHaveCount(0);
+  await expect(fileNameInput).toHaveValue("editor-demo");
+  await expect(page.getByRole("spinbutton", { name: "Font size" })).toHaveValue("24");
+  await expect(page.getByRole("textbox", { name: "Typeface" })).toHaveValue("");
+  await expect(page.getByLabel("Text color")).toHaveValue("#2454a6");
+  await page.locator('[data-testid="shape-hit-area"][data-editable-text="true"]').nth(1).click();
+  await expect(runSelect).toHaveValue("0");
+});
+
 test("runs the public demo browser editor flow entirely client-side", async ({ page }) => {
   test.setTimeout(120_000);
   if (demoServer === null) throw new Error("demo server was not started");
