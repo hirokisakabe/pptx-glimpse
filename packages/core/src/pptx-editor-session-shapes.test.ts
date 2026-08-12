@@ -1,4 +1,4 @@
-import { asEmu, readPptx } from "@pptx-glimpse/document";
+import { asEmu, findShapeNodeBySourceHandle, readPptx } from "@pptx-glimpse/document";
 import { describe, expect, it } from "vitest";
 
 import { createPptxEditorSession } from "./index.js";
@@ -6,6 +6,7 @@ import {
   buildDrawingDeleteSessionFixture,
   buildExternallyConnectedGroupFixture,
   buildGroupCommandFixture,
+  buildNestedDrawingDeleteSessionFixture,
   buildShapeFixture,
   connectorByName,
   handleKey,
@@ -185,10 +186,42 @@ describe("PptxEditorSession - shapes", () => {
         editor.shapes(1).some((shape) => handleKey(shape.handle) === handleKey(target.handle)),
       ).toBe(false);
       expect(
-        readPptx(editor.save().pptx).slides[0].shapes.some(
-          (shape) => handleKey(shape.handle) === handleKey(target.handle),
-        ),
+        findShapeNodeBySourceHandle(readPptx(editor.save().pptx), target.handle),
+      ).toBeUndefined();
+
+      await editor.undo();
+      expect(
+        editor.shapes(1).some((shape) => handleKey(shape.handle) === handleKey(target.handle)),
+      ).toBe(true);
+      await editor.redo();
+      expect(
+        editor.shapes(1).some((shape) => handleKey(shape.handle) === handleKey(target.handle)),
       ).toBe(false);
+    }
+  });
+
+  it("rerenders, saves, selects, and restores history for nested drawing deletes", async () => {
+    for (const kind of ["shape", "connector", "image", "table", "chart", "group"] as const) {
+      const editor = await createPptxEditorSession(buildNestedDrawingDeleteSessionFixture(), {
+        skipSystemFonts: true,
+      });
+      const candidates = editor.shapes(1).filter((shape) => shape.kind === kind);
+      const target = candidates.at(-1);
+      if (target?.handle === undefined) throw new Error(`${kind} nested target was not found`);
+      expect(target.editableDelete).toBe(true);
+      const beforeSvg = (await editor.renderCurrentSlides())[0]?.svg;
+      editor.selectShape(target.handle);
+
+      const deleted = await editor.deleteSelectedShape();
+      expect(deleted.selection).toBeUndefined();
+      expect(deleted.history.undoDepth).toBe(1);
+      expect(deleted.slides[0]?.svg).not.toBe(beforeSvg);
+      expect(
+        editor.shapes(1).some((shape) => handleKey(shape.handle) === handleKey(target.handle)),
+      ).toBe(false);
+      expect(
+        findShapeNodeBySourceHandle(readPptx(editor.save().pptx), target.handle),
+      ).toBeUndefined();
 
       await editor.undo();
       expect(

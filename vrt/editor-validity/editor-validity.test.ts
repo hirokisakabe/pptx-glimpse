@@ -1619,6 +1619,43 @@ describeOrSkip("LibreOffice shape add/delete validity", { timeout: 120000 }, () 
       writePptx(edited),
     );
   });
+
+  it("opens PPTX after nested child deletion and after preserving its empty parent group", () => {
+    const sourcePptx = readFileSync(
+      join(FIXTURE_DIR, "editor-validity-nested-group-delete-source.pptx"),
+    );
+    const source = readPptx(sourcePptx);
+    const group = source.slides[0]?.shapes.find(
+      (shape): shape is SourceGroup => shape.kind === "group",
+    );
+    if (group === undefined) throw new Error("nested delete validity group was not found");
+    const transform = group.transform;
+    const afterFirst = deleteShape(source, requireHandle(group.children[0]?.handle));
+    const retainedGroup = afterFirst.slides[0]?.shapes.find(
+      (shape): shape is SourceGroup => shape.kind === "group",
+    );
+    if (retainedGroup === undefined) throw new Error("nested delete did not retain its parent");
+
+    expect(retainedGroup.children).toHaveLength(1);
+    expect(retainedGroup.transform).toEqual(transform);
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-nested-group-child-delete-edited.pptx",
+      writePptx(afterFirst),
+    );
+
+    const emptied = deleteShape(afterFirst, requireHandle(retainedGroup.children[0]?.handle));
+    const emptyGroup = emptied.slides[0]?.shapes.find(
+      (shape): shape is SourceGroup => shape.kind === "group",
+    );
+    expect(emptyGroup?.children).toEqual([]);
+    expect(emptyGroup?.transform).toEqual(transform);
+    renderSingleWithLibreOffice(
+      libreOfficeImage,
+      "editor-validity-nested-group-empty-parent-edited.pptx",
+      writePptx(emptied),
+    );
+  });
 });
 
 function findLibreOfficeDockerImage(): string | undefined {

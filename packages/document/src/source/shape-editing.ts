@@ -162,9 +162,6 @@ export function deleteShape(source: PptxSourceModel, handle: SourceHandle): Pptx
   }
 
   const target = requireUniqueSlideShapeTarget(source, handle, "deleteShape");
-  if (target.nested) {
-    throw new Error("deleteShape: nested group shape deletion is not supported");
-  }
   if (
     target.node.kind !== "shape" &&
     target.node.kind !== "connector" &&
@@ -174,7 +171,7 @@ export function deleteShape(source: PptxSourceModel, handle: SourceHandle): Pptx
     target.node.kind !== "group"
   ) {
     throw new Error(
-      "deleteShape: only top-level sp, cxnSp, pic, native table/chart graphicFrame, or grpSp drawings can be deleted",
+      "deleteShape: only sp, cxnSp, pic, native table/chart graphicFrame, or grpSp drawings can be deleted",
     );
   }
   assertNotAlternateContentTarget(target, "deleteShape");
@@ -182,13 +179,9 @@ export function deleteShape(source: PptxSourceModel, handle: SourceHandle): Pptx
   const cleanupPlan = planDrawingDeletionCleanup(source, handle, target.node);
 
   const slides = source.slides.map((slide) => {
-    let slideChanged = false;
-    const nextShapes = slide.shapes.filter((shape) => {
-      if (!sourceHandlesEqual(shape.handle, handle)) return true;
-      slideChanged = true;
-      return false;
-    });
-    return slideChanged ? { ...slide, shapes: nextShapes } : slide;
+    if (slide.partPath !== handle.partPath) return slide;
+    const shapes = deleteShapeNodeFromTree(slide.shapes, handle);
+    return shapes === slide.shapes ? slide : { ...slide, shapes };
   });
 
   const referencingConnector = findConnectorReferencingDeletedSubtree(source, handle, target.node);
@@ -199,7 +192,10 @@ export function deleteShape(source: PptxSourceModel, handle: SourceHandle): Pptx
   }
 
   const retainedEdits = (source.edits ?? []).filter(
-    (edit) => isPendingGroupCreationForHandle(edit, handle) || !editTargetsShape(edit, handle),
+    (edit) =>
+      (target.nested && isDrawingTopologyRequiredForNestedDelete(edit, handle)) ||
+      isPendingGroupCreationForHandle(edit, handle) ||
+      !editTargetsShape(edit, handle),
   );
   const deletedInsertedShape = isDirectlyAddedDrawing(source.edits ?? [], handle);
 
@@ -207,16 +203,50 @@ export function deleteShape(source: PptxSourceModel, handle: SourceHandle): Pptx
     ...source,
     slides,
     packageGraph: cleanupPlan,
-    edits: deletedInsertedShape
-      ? retainedEdits
-      : [
-          ...retainedEdits,
-          {
-            kind: "deleteShape",
-            handle,
-          },
-        ],
+    edits:
+      deletedInsertedShape && !target.nested
+        ? retainedEdits
+        : [
+            ...retainedEdits,
+            {
+              kind: "deleteShape",
+              handle,
+            },
+          ],
   };
+}
+
+function deleteShapeNodeFromTree(
+  shapes: readonly SourceShapeNode[],
+  handle: SourceHandle,
+): readonly SourceShapeNode[] {
+  let changed = false;
+  const nextShapes = shapes.flatMap((shape): readonly SourceShapeNode[] => {
+    if (sourceHandlesEqual(shape.handle, handle)) {
+      changed = true;
+      return [];
+    }
+    if (shape.kind !== "group") return [shape];
+    const children = deleteShapeNodeFromTree(shape.children, handle);
+    if (children === shape.children) return [shape];
+    changed = true;
+    return [{ ...shape, children }];
+  });
+  return changed ? nextShapes : shapes;
+}
+
+function isDrawingTopologyRequiredForNestedDelete(
+  edit: PptxSourceModelEdit,
+  handle: SourceHandle,
+): boolean {
+  if (edit.kind === "groupShapes") {
+    return (
+      edit.targetPartPath === handle.partPath &&
+      (edit.groupId === String(handle.nodeId) || edit.shapeIds.includes(String(handle.nodeId)))
+    );
+  }
+  const inserted = editInsertedShape(edit);
+  return inserted?.slidePartPath === handle.partPath && inserted.shapeId === String(handle.nodeId);
 }
 
 function shapeTransformPositionAndSizeEqual(

@@ -203,7 +203,6 @@ export function deleteShapeXml(spTree: XmlNode | undefined, nodeId: string): boo
   const location = locateShapeTreeNodeLocation(spTree, { nodeId });
   if (
     location === undefined ||
-    location.nested ||
     (location.nodeKind !== "sp" &&
       location.nodeKind !== "cxnSp" &&
       location.nodeKind !== "pic" &&

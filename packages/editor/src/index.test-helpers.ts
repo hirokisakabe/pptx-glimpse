@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 
 import {
   addChart,
+  addConnector,
   addPicture,
   addShape,
   addTable,
@@ -112,6 +113,36 @@ export function buildDrawingDeleteFixture(): Uint8Array {
     source.slides[0].shapes
       .filter((shape) => shape.kind !== "raw" && shape.name?.startsWith("Group "))
       .map((shape) => requireHandle(shape.handle)),
+  );
+  return writePptx(source);
+}
+
+export function buildNestedDrawingDeleteFixture(): Uint8Array {
+  let source = readPptx(buildDrawingDeleteFixture());
+  const slideHandle = requireHandle(source.slides[0]?.handle);
+  source = addConnector(source, slideHandle, {
+    preset: "straightConnector1",
+    offsetX: asEmu(6700),
+    offsetY: asEmu(100),
+    width: asEmu(1000),
+    height: asEmu(1000),
+    name: "Delete Connector",
+  });
+  source = groupShapes(
+    source,
+    source.slides[0].shapes.map((shape) => requireHandle(shape.handle)),
+  );
+  source = addShape(source, slideHandle, {
+    geometry: { kind: "preset", preset: "rect" },
+    offsetX: asEmu(7800),
+    offsetY: asEmu(100),
+    width: asEmu(1000),
+    height: asEmu(1000),
+    name: "Outer Sibling",
+  });
+  source = groupShapes(
+    source,
+    source.slides[0].shapes.map((shape) => requireHandle(shape.handle)),
   );
   return writePptx(source);
 }

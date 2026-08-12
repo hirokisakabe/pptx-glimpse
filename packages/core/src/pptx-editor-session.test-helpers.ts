@@ -2,6 +2,7 @@ import { Buffer } from "node:buffer";
 
 import {
   addChart,
+  addConnector,
   addPicture,
   addShape,
   addTable,
@@ -97,6 +98,43 @@ export function buildDrawingDeleteSessionFixture(): Uint8Array {
         if (shape.handle === undefined) throw new Error("group child handle is missing");
         return shape.handle;
       }),
+  );
+  return writePptx(source);
+}
+
+export function buildNestedDrawingDeleteSessionFixture(): Uint8Array {
+  let source = readPptx(buildDrawingDeleteSessionFixture());
+  const slideHandle = source.slides[0]?.handle;
+  if (slideHandle === undefined) throw new Error("nested drawing delete slide handle is missing");
+  source = addConnector(source, slideHandle, {
+    preset: "straightConnector1",
+    offsetX: asEmu(5600),
+    offsetY: asEmu(100),
+    width: asEmu(1000),
+    height: asEmu(1000),
+    name: "Delete Connector",
+  });
+  source = groupShapes(
+    source,
+    source.slides[0].shapes.map((shape) => {
+      if (shape.handle === undefined) throw new Error("nested drawing handle is missing");
+      return shape.handle;
+    }),
+  );
+  source = addShape(source, slideHandle, {
+    geometry: { kind: "preset", preset: "rect" },
+    offsetX: asEmu(6700),
+    offsetY: asEmu(100),
+    width: asEmu(1000),
+    height: asEmu(1000),
+    name: "Outer Sibling",
+  });
+  source = groupShapes(
+    source,
+    source.slides[0].shapes.map((shape) => {
+      if (shape.handle === undefined) throw new Error("outer drawing handle is missing");
+      return shape.handle;
+    }),
   );
   return writePptx(source);
 }

@@ -100,7 +100,7 @@ export function applyDeleteShapeEdit(root: XmlNode, edit: PptxSourceModelDeleteS
   const spTree = getChild(getChild(getChild(root, "sld"), "cSld"), "spTree");
   if (!deleteShapeXml(spTree, locator.nodeId)) {
     throw new Error(
-      `writePptx: drawing delete handle '${locator.nodeId}' no longer matches a supported top-level drawing`,
+      `writePptx: drawing delete handle '${locator.nodeId}' no longer matches a supported drawing`,
     );
   }
 }
