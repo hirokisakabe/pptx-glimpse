@@ -27,16 +27,28 @@ describe("LayoutPreviewStore", () => {
     expect(load).toHaveBeenCalledTimes(1);
   });
 
-  it("uses deterministic fallback states for lookup, runtime, and unsupported failures", async () => {
+  it("keeps usable successful SVGs despite unsupported warning diagnostics", async () => {
     const unsupported: ConversionDiagnostic = {
       source: "renderer-adapter",
       severity: "warning",
       code: "pptx-computed-view-adapter.unsupported-test",
       message: "unsupported",
     };
+    const store = new LayoutPreviewStore(() =>
+      Promise.resolve({ ...success(first), diagnostics: [unsupported] }),
+    );
+
+    store.load([first]);
+    await settled();
+
+    expect(store.get(first)).toEqual({ status: "ready", svg: "<svg />" });
+  });
+
+  it("uses deterministic fallback states for lookup, invalid SVG, and runtime failures", async () => {
     const results: Array<PptxEditorTemplatePreviewResult | Error> = [
       { ok: false, code: "preview-handle-not-found", message: "missing", handle: first },
-      { ...success(second), diagnostics: [unsupported] },
+      { ...success(second), svg: "not an svg" },
+      { ...success(first), svg: "  " },
       new Error("renderer failed"),
     ];
     const store = new LayoutPreviewStore(() => {
@@ -46,13 +58,15 @@ describe("LayoutPreviewStore", () => {
       return Promise.resolve(result);
     }, 1);
     const third: SourceHandle = { partPath: asPartPath("ppt/slideLayouts/slideLayout3.xml") };
+    const fourth: SourceHandle = { partPath: asPartPath("ppt/slideLayouts/slideLayout4.xml") };
 
-    store.load([first, second, third]);
-    await settled(6);
+    store.load([first, second, third, fourth]);
+    await settled(8);
 
     expect(store.get(first)).toEqual({ status: "fallback", message: "Preview unavailable" });
-    expect(store.get(second)).toEqual({ status: "fallback", message: "Preview unsupported" });
-    expect(store.get(third)).toEqual({ status: "fallback", message: "Preview failed" });
+    expect(store.get(second)).toEqual({ status: "fallback", message: "Preview unavailable" });
+    expect(store.get(third)).toEqual({ status: "fallback", message: "Preview unavailable" });
+    expect(store.get(fourth)).toEqual({ status: "fallback", message: "Preview failed" });
 
     const fallbackMarkup = renderToStaticMarkup(
       LayoutThumbnail({ name: "Missing layout", preview: store.get(first) }),

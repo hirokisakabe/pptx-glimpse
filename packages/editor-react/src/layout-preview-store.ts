@@ -1,8 +1,4 @@
-import type {
-  ConversionDiagnostic,
-  PptxEditorTemplatePreviewResult,
-  SourceHandle,
-} from "pptx-glimpse";
+import type { PptxEditorTemplatePreviewResult, SourceHandle } from "pptx-glimpse";
 
 export type LayoutPreviewLoader = (
   handle: SourceHandle,
@@ -102,14 +98,17 @@ export class LayoutPreviewStore {
 
 function previewState(result: PptxEditorTemplatePreviewResult): LayoutPreviewState {
   if (!result.ok) return { status: "fallback", message: "Preview unavailable" };
-  if (result.diagnostics.some(isUnsupportedPreviewDiagnostic)) {
-    return { status: "fallback", message: "Preview unsupported" };
-  }
+  if (!hasSvgRoot(result.svg)) return { status: "fallback", message: "Preview unavailable" };
   return { status: "ready", svg: result.svg };
 }
 
-function isUnsupportedPreviewDiagnostic(diagnostic: ConversionDiagnostic): boolean {
-  return diagnostic.severity === "error" || diagnostic.code.includes("unsupported");
+function hasSvgRoot(svg: string): boolean {
+  const trimmed = svg.trim();
+  // The preview API owns SVG correctness; the UI only rejects an absent/non-SVG root.
+  return (
+    /^<svg(?:\s[^>]*)?\/\s*>$/i.test(trimmed) ||
+    /^<svg(?:\s[^>]*)?>[\s\S]*<\/svg\s*>$/i.test(trimmed)
+  );
 }
 
 function handleKey(handle: SourceHandle): string {

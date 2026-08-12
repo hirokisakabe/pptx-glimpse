@@ -7,6 +7,7 @@ import type {
 } from "pptx-glimpse";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 
+import { LayoutPickerAddLifecycle } from "./layout-picker-add-lifecycle.js";
 import {
   type LayoutPreviewLoader,
   type LayoutPreviewState,
@@ -36,6 +37,7 @@ export function EditorLayoutPicker({
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [addLifecycle] = useState(() => new LayoutPickerAddLifecycle(interactionScope));
   const previewStore = useMemo(
     () => new LayoutPreviewStore(previewLayout),
     [interactionScope, previewLayout],
@@ -49,11 +51,13 @@ export function EditorLayoutPicker({
     layouts[0];
 
   useLayoutEffect(() => {
+    addLifecycle.activate(interactionScope);
     setOpen(false);
     setAdding(false);
     setSelectedKey(null);
     optionRefs.current.clear();
-  }, [interactionScope]);
+    return () => addLifecycle.invalidate();
+  }, [addLifecycle, interactionScope]);
 
   useEffect(() => () => previewStore.dispose(), [previewStore]);
 
@@ -201,13 +205,22 @@ export function EditorLayoutPicker({
               type="button"
               onClick={() => {
                 if (selectedLayout === undefined) return;
+                const completion = addLifecycle.capture();
                 setAdding(true);
                 void onAdd(selectedLayout).then(
                   (added) => {
+                    if (!addLifecycle.isCurrent(completion)) return;
                     setAdding(false);
-                    if (added) close(true);
+                    if (added) {
+                      setOpen(false);
+                      window.setTimeout(() => {
+                        if (addLifecycle.isCurrent(completion)) triggerRef.current?.focus();
+                      }, 0);
+                    }
                   },
-                  () => setAdding(false),
+                  () => {
+                    if (addLifecycle.isCurrent(completion)) setAdding(false);
+                  },
                 );
               }}
             >

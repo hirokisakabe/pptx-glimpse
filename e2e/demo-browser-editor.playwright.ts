@@ -300,10 +300,19 @@ test("adds a slide from the ordered accessible layout catalog and preserves hist
   await expect(page.getByTestId("editor-thumbnail")).toHaveCount(3);
   await expect(page.getByTestId("editor-thumbnail").last()).toHaveClass(/active/);
 
+  await trigger.click();
+  await expect(picker).toBeVisible();
+  await expect(picker.getByRole("radio", { name: /BLANK, current layout/ })).toContainText(
+    "Current",
+  );
+  await picker.press("Escape");
+
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.getByTestId("editor-thumbnail")).toHaveCount(2);
   await page.getByRole("button", { name: "Redo" }).click();
   await expect(page.getByTestId("editor-thumbnail")).toHaveCount(3);
+  await page.getByTestId("editor-thumbnail").last().click();
+  await expect(page.getByTestId("editor-thumbnail").last()).toHaveClass(/active/);
 
   await trigger.click();
   await expect(picker).toBeVisible();
