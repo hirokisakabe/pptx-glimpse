@@ -390,6 +390,14 @@ describe("moveShapesAcrossSlides", () => {
     );
     const chartBytes = rawPartBytes(source, chartPartPath);
     const workbookBytes = rawPartBytes(source, workbookPartPath);
+    const destinationChart = requireValue(
+      destinationSlide.shapes.find((shape) => shape.kind === "chart"),
+    );
+    const destinationChartPartPath = requireInternalTarget(
+      source,
+      destinationSlide.partPath,
+      requireValue(destinationChart.chartRelationshipId),
+    );
     const contentTypes = structuredClone(source.packageGraph.contentTypes);
     const partPaths = source.packageGraph.parts.map((part) => part.partPath);
 
@@ -420,6 +428,18 @@ describe("moveShapesAcrossSlides", () => {
     ).toBe(chartPartPath);
     expect(rawPartBytes(result.document, chartPartPath)).toEqual(chartBytes);
     expect(rawPartBytes(result.document, workbookPartPath)).toEqual(workbookBytes);
+    const retainedDestinationChart = requireValue(
+      result.document.slides[1]?.shapes.find(
+        (shape) => shape.kind === "chart" && shape.name === "Destination chart",
+      ),
+    );
+    expect(
+      requireInternalTarget(
+        result.document,
+        destinationSlide.partPath,
+        requireValue(retainedDestinationChart.chartRelationshipId),
+      ),
+    ).toBe(destinationChartPartPath);
     expect(result.document.packageGraph.contentTypes).toEqual(contentTypes);
     expect(result.document.packageGraph.parts.map((part) => part.partPath)).toEqual(partPaths);
 
@@ -528,6 +548,11 @@ describe("moveShapesAcrossSlides", () => {
       keep.chartRelationshipId,
       move.chartRelationshipId,
     );
+    const sharedChartPartPath = requireInternalTarget(
+      sharedSource,
+      requireValue(sharedSource.slides[0]).partPath,
+      move.chartRelationshipId,
+    );
     const moved = moveShapesAcrossSlides(
       sharedSource,
       [move.handle],
@@ -538,6 +563,18 @@ describe("moveShapesAcrossSlides", () => {
         .find((group) => group.sourcePartPath === sharedSource.slides[0]?.partPath)
         ?.relationships.map((relationship) => relationship.id),
     ).toContain(move.chartRelationshipId);
+    const movedSharedChart = requireValue(
+      moved.document.slides[1]?.shapes.find(
+        (shape) => shape.kind === "chart" && shape.name === "Move shared chart",
+      ),
+    );
+    expect(
+      requireInternalTarget(
+        moved.document,
+        requireValue(moved.document.slides[1]).partPath,
+        requireValue(movedSharedChart.chartRelationshipId),
+      ),
+    ).toBe(sharedChartPartPath);
     const persisted = readPptx(writePptx(moved.document));
     const keptChart = persisted.slides[0]?.shapes.find((shape) => shape.kind === "chart");
     expect(keptChart?.kind === "chart" ? keptChart.chartRelationshipId : undefined).toBe(
@@ -550,10 +587,10 @@ describe("moveShapesAcrossSlides", () => {
       session.target(first).addTable({
         offsetX: asEmu(0),
         offsetY: asEmu(0),
-        width: asEmu(1000),
-        height: asEmu(1000),
-        columnWidths: [asEmu(1000)],
-        rows: [{ height: asEmu(1000), cells: [{ text: "Unsupported table" }] }],
+        width: asEmu(1_000_000),
+        height: asEmu(1_000_000),
+        columnWidths: [asEmu(1_000_000)],
+        rows: [{ height: asEmu(1_000_000), cells: [{ text: "Unsupported table" }] }],
       });
     });
     expect(() =>

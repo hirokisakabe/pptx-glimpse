@@ -125,7 +125,7 @@ describe("EditorSession cross-slide drawing move", () => {
       "updateChartData",
       "moveShapesAcrossSlides",
     ]);
-    expectPersistedChartText(session.document, 1, "Before move");
+    expectPersistedChartText(session.document, 1, "Before move", ["After move"]);
     expect(session.undoDepth).toBe(1);
     expect(
       session.apply({
@@ -134,18 +134,21 @@ describe("EditorSession cross-slide drawing move", () => {
         series: [{ name: "After move", categories: ["A", "B"], values: [4, 5] }],
       }),
     ).toMatchObject({ ok: true });
-    expectPersistedChartText(session.document, 1, "After move");
+    expectPersistedChartText(session.document, 1, "After move", ["Before move"]);
     expect(session.selection).toEqual({ shapeHandle: movedHandle });
     expect(session.undoDepth).toBe(2);
     expect(session.undo()).toMatchObject({ ok: true });
     expect(session.selection).toEqual({ shapeHandle: movedHandle });
-    expectPersistedChartText(session.document, 1, "Before move");
+    expectPersistedChartText(session.document, 1, "Before move", ["After move"]);
     expect(session.undo()).toMatchObject({ ok: true });
     expect(session.selection).toEqual({ shapeHandle: chart.handle });
     expect(session.document).toBe(source);
     expect(session.redo()).toMatchObject({ ok: true });
     expect(session.selection).toEqual({ shapeHandle: movedHandle });
-    expectPersistedChartText(session.document, 1, "Before move");
+    expectPersistedChartText(session.document, 1, "Before move", ["After move"]);
+    expect(session.redo()).toMatchObject({ ok: true });
+    expect(session.selection).toEqual({ shapeHandle: movedHandle });
+    expectPersistedChartText(session.document, 1, "After move", ["Before move"]);
   });
 });
 
@@ -218,6 +221,7 @@ function expectPersistedChartText(
   source: ReturnType<typeof readPptx>,
   slideIndex: number,
   expected: string,
+  absent: readonly string[] = [],
 ): void {
   const persisted = readPptx(writePptx(source));
   const slide = requireValue(persisted.slides[slideIndex]);
@@ -235,7 +239,9 @@ function expectPersistedChartText(
     persisted.packageGraph.rawParts?.find((part) => part.partPath === chartPartPath),
   );
   if (chartPart.kind !== "binary") throw new Error("persisted chart part is not binary");
-  expect(new TextDecoder().decode(chartPart.bytes)).toContain(expected);
+  const chartXml = new TextDecoder().decode(chartPart.bytes);
+  expect(chartXml).toContain(expected);
+  for (const value of absent) expect(chartXml).not.toContain(value);
 }
 
 function resolvePackageTarget(sourcePartPath: string, target: string): string {
