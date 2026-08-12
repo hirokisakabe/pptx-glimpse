@@ -11,6 +11,8 @@ import {
   type SourceHandle,
 } from "pptx-glimpse";
 
+import { type PreferredSlideIndex, useEditorController } from "./use-editor-controller";
+
 const EMU_PER_PIXEL = 9525;
 const MIN_SHAPE_SIZE = 8;
 const MAX_IMAGE_REPLACEMENT_BYTES = 5 * 1024 * 1024;
@@ -85,8 +87,6 @@ interface SlideSortDragState {
   readonly hasMoved: boolean;
 }
 
-type PreferredSlideIndex = number | ((session: EditorSession) => number);
-
 type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
 export function EditorWorkspace({
@@ -98,22 +98,23 @@ export function EditorWorkspace({
   onOpenSample,
 }: EditorWorkspaceProps) {
   const [downloadName, setDownloadName] = useState(() => fileStem(fileName));
-  const [slides, setSlides] = useState<PptxEditorSlideSvg[]>(() => [...editor.slides]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [shapeOptions, setShapeOptions] = useState<PptxEditorShapeInfo[]>(() => [
-    ...editor.shapes(1).filter((shape) => shape.handle && shape.bounds),
-  ]);
-  const [selectedShapeKey, setSelectedShapeKey] = useState<string | null>(null);
+  const {
+    controller,
+    slides,
+    currentIndex,
+    shapes: shapeOptions,
+    selectedShapeKey,
+    history,
+    busy,
+    message,
+    error: operationError,
+  } = useEditorController(editor);
   const [draftBounds, setDraftBounds] = useState<PptxEditorShapeBoundsPx | null>(null);
   const [selectedRunIndex, setSelectedRunIndex] = useState(0);
   const [directTextEditor, setDirectTextEditor] = useState<DirectTextEditorState | null>(null);
   const [fontSize, setFontSize] = useState("24");
   const [typeface, setTypeface] = useState("");
   const [color, setColor] = useState("#2454a6");
-  const [history, setHistory] = useState(editor.history);
-  const [message, setMessage] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [operationError, setOperationError] = useState("");
   const [draggedSlideIndex, setDraggedSlideIndex] = useState<number | null>(null);
   const [slideDropTarget, setSlideDropTarget] = useState<SlideDropTarget | null>(null);
   const overlayRef = useRef<SVGSVGElement | null>(null);
@@ -125,9 +126,6 @@ export function EditorWorkspace({
   const slideSortDragRef = useRef<SlideSortDragState | null>(null);
   const suppressSlideClickRef = useRef(false);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
-  const busyRef = useRef(false);
-  const dirtyRef = useRef(false);
-  const cleanUndoDepthRef = useRef(editor.history.undoDepth);
   const compositionRef = useRef(false);
   const commitAfterCompositionRef = useRef(false);
 
@@ -156,68 +154,25 @@ export function EditorWorkspace({
     setDownloadName(fileStem(fileName));
   }, [fileName]);
 
-  const syncFromEditor = useCallback(
-    (session: EditorSession, preferredIndex = currentIndex) => {
-      const nextSlides = [...session.slides];
-      const nextIndex = clamp(preferredIndex, 0, Math.max(nextSlides.length - 1, 0));
-      const nextShapes = session
-        .shapes(nextIndex + 1)
-        .filter((shape) => shape.handle !== undefined && shape.bounds !== undefined);
-      const responseSelection = session.selection?.shapeHandle;
-      const nextSelectionKey =
-        responseSelection !== undefined
-          ? handleKey(responseSelection)
-          : selectedShapeKey !== null &&
-              nextShapes.some((shape) => shapeKey(shape) === selectedShapeKey)
-            ? selectedShapeKey
-            : null;
-
-      setSlides(nextSlides);
-      setCurrentIndex(nextIndex);
-      setShapeOptions([...nextShapes]);
-      setSelectedShapeKey(nextSelectionKey);
-      setDraftBounds(null);
-      setHistory(session.history);
-      setSelectedRunIndex(0);
-    },
-    [currentIndex, selectedShapeKey],
-  );
-
   useEffect(() => {
     setSelectedRunIndex(0);
   }, [selectedShapeKey]);
 
   useEffect(() => {
-    syncFromEditor(editor, currentIndex);
-  }, [currentIndex, editor, syncFromEditor]);
+    setDraftBounds(null);
+  }, [currentIndex, selectedShapeKey]);
 
   const runEditorOperation = useCallback(
     async (
       operation: (session: EditorSession) => Promise<string | void> | string | void,
       success: string,
-      preferredIndex: PreferredSlideIndex = currentIndex,
+      preferredIndex: PreferredSlideIndex<EditorSession> = currentIndex,
     ) => {
       const directTextCommit = directTextCommitPromiseRef.current;
-      if (directTextCommit !== null && !(await directTextCommit)) return;
-      if (busyRef.current) return;
-      busyRef.current = true;
-      setBusy(true);
-      setOperationError("");
-      try {
-        const messageOverride = await operation(editor);
-        const nextIndex =
-          typeof preferredIndex === "function" ? preferredIndex(editor) : preferredIndex;
-        syncFromEditor(editor, nextIndex);
-        dirtyRef.current = editor.history.undoDepth !== cleanUndoDepthRef.current;
-        setMessage(messageOverride ?? success);
-      } catch (error) {
-        setOperationError(error instanceof Error ? error.message : String(error));
-      } finally {
-        busyRef.current = false;
-        setBusy(false);
-      }
+      if (directTextCommit !== null && !(await directTextCommit)) return false;
+      return controller.run(operation, { success, preferredIndex });
     },
-    [currentIndex, editor, syncFromEditor],
+    [controller, currentIndex],
   );
 
   const applyCommand = useCallback(
@@ -231,17 +186,16 @@ export function EditorWorkspace({
 
   const handleSelectShape = useCallback(
     (shape: PptxEditorShapeInfo, event?: React.PointerEvent<SVGRectElement>) => {
-      if (busyRef.current || directTextEditorStateRef.current !== null) return;
+      if (controller.getSnapshot().busy || directTextEditorStateRef.current !== null) return;
       if (shape.handle === undefined) return;
-      editor?.selectShape(shape.handle);
-      setSelectedShapeKey(shapeKey(shape));
+      controller.selectShape(shape.handle);
       setDraftBounds(null);
       slideFrameRef.current?.focus({ preventScroll: true });
       if (event !== undefined && shape.editableTransform && shape.bounds !== undefined) {
         beginDrag("move", undefined, shape.handle, event, shape.bounds, dragStateRef, overlayRef);
       }
     },
-    [editor],
+    [controller],
   );
 
   const updateDrag = useCallback((event: PointerEvent) => {
@@ -318,7 +272,7 @@ export function EditorWorkspace({
 
   const handleResizeStart = useCallback(
     (handle: ResizeHandle, event: React.PointerEvent<SVGRectElement>) => {
-      if (busyRef.current) return;
+      if (controller.getSnapshot().busy) return;
       if (selectedShape?.bounds === undefined || selectedShape.handle === undefined) return;
       event.preventDefault();
       event.stopPropagation();
@@ -332,7 +286,7 @@ export function EditorWorkspace({
         overlayRef,
       );
     },
-    [selectedShape],
+    [controller, selectedShape],
   );
 
   const closeDirectTextEditor = useCallback((restoreFocus = true) => {
@@ -344,6 +298,16 @@ export function EditorWorkspace({
       window.setTimeout(() => slideFrameRef.current?.focus({ preventScroll: true }), 0);
     }
   }, []);
+
+  useEffect(() => {
+    directTextEditorStateRef.current = null;
+    directTextCommitPromiseRef.current = null;
+    compositionRef.current = false;
+    commitAfterCompositionRef.current = false;
+    setDirectTextEditor(null);
+    setDraftBounds(null);
+    setSelectedRunIndex(0);
+  }, [controller]);
 
   const commitDirectTextEditor = useCallback(
     (restoreFocus = true): Promise<boolean> | undefined => {
@@ -374,45 +338,45 @@ export function EditorWorkspace({
 
       if (commands.length === 0) {
         closeDirectTextEditor(restoreFocus);
-        setMessage("Text unchanged");
+        controller.setMessage("Text unchanged");
         return Promise.resolve(true);
       }
 
       const commit = (async () => {
-        busyRef.current = true;
-        setOperationError("");
+        const committed = await controller.run(
+          async () => {
+            const result = await session.applyAll(commands);
+            return commandMessage("Text updated", result.warnings);
+          },
+          {
+            success: "Text updated",
+            preferredIndex: currentIndex,
+            recoverError: (error) =>
+              isPptxEditorError(error) && error.code === "render-failed"
+                ? "Text updated; slide preview could not refresh"
+                : undefined,
+          },
+        );
         try {
-          const result = await session.applyAll(commands);
-          syncFromEditor(session, currentIndex);
-          dirtyRef.current = session.history.undoDepth !== cleanUndoDepthRef.current;
-          setMessage(commandMessage("Text updated", result.warnings));
-          closeDirectTextEditor(restoreFocus);
-          return true;
-        } catch (error) {
-          setHistory(session.history);
-          setOperationError(error instanceof Error ? error.message : String(error));
-          if (isPptxEditorError(error) && error.code === "render-failed") {
-            dirtyRef.current = session.history.undoDepth !== cleanUndoDepthRef.current;
-            setMessage("Text updated; slide preview could not refresh");
+          if (committed) {
             closeDirectTextEditor(restoreFocus);
             return true;
           }
           return false;
         } finally {
-          busyRef.current = false;
           directTextCommitPromiseRef.current = null;
         }
       })();
       directTextCommitPromiseRef.current = commit;
       return commit;
     },
-    [closeDirectTextEditor, currentIndex, editor, syncFromEditor],
+    [closeDirectTextEditor, controller, currentIndex, editor],
   );
 
   const startDirectTextEditor = useCallback(
     (shape: PptxEditorShapeInfo) => {
       if (
-        busyRef.current ||
+        controller.getSnapshot().busy ||
         directTextEditorStateRef.current !== null ||
         shape.handle === undefined ||
         shape.bounds === undefined ||
@@ -433,8 +397,7 @@ export function EditorWorkspace({
       }
 
       dragStateRef.current = null;
-      editor.selectShape(shape.handle);
-      setSelectedShapeKey(shapeKey(shape));
+      controller.selectShape(shape.handle);
       setDraftBounds(null);
       const nextEditor = {
         shapeKey: shapeKey(shape),
@@ -443,9 +406,9 @@ export function EditorWorkspace({
       };
       directTextEditorStateRef.current = nextEditor;
       setDirectTextEditor(nextEditor);
-      setMessage("Editing text");
+      controller.setMessage("Editing text");
     },
-    [editor],
+    [controller],
   );
 
   useEffect(() => {
@@ -465,7 +428,7 @@ export function EditorWorkspace({
         event.preventDefault();
         event.stopPropagation();
         closeDirectTextEditor();
-        setMessage("Text edit canceled");
+        controller.setMessage("Text edit canceled");
         return;
       }
       if (event.key === "Enter") {
@@ -474,7 +437,7 @@ export function EditorWorkspace({
         void commitDirectTextEditor();
       }
     },
-    [closeDirectTextEditor, commitDirectTextEditor],
+    [closeDirectTextEditor, commitDirectTextEditor, controller],
   );
 
   const handleDirectTextEditorBlur = useCallback(
@@ -600,10 +563,10 @@ export function EditorWorkspace({
   const confirmDiscardChanges = useCallback(async () => {
     if (!(await waitForDirectTextCommit())) return false;
     return (
-      !dirtyRef.current ||
+      !controller.getSnapshot().dirty ||
       window.confirm("Discard your unsaved changes and open another version of the presentation?")
     );
-  }, [waitForDirectTextCommit]);
+  }, [controller, waitForDirectTextCommit]);
 
   const handleOpenPptx = useCallback(async () => {
     if (await confirmDiscardChanges()) onOpenPptx();
@@ -619,7 +582,8 @@ export function EditorWorkspace({
 
   useEffect(() => {
     const confirmMessage = "Discard your unsaved changes and leave the editor?";
-    const hasUnsavedChanges = () => dirtyRef.current || directTextEditorStateRef.current !== null;
+    const hasUnsavedChanges = () =>
+      controller.getSnapshot().dirty || directTextEditorStateRef.current !== null;
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       if (!hasUnsavedChanges()) return;
       event.preventDefault();
@@ -642,13 +606,13 @@ export function EditorWorkspace({
       window.removeEventListener("beforeunload", handleBeforeUnload);
       document.removeEventListener("click", handleLinkClick, true);
     };
-  }, []);
+  }, [controller]);
 
   const handleSelectSlide = useCallback(
     async (index: number) => {
-      if (await waitForDirectTextCommit()) setCurrentIndex(index);
+      if (await waitForDirectTextCommit()) controller.selectSlide(index);
     },
-    [waitForDirectTextCommit],
+    [controller, waitForDirectTextCommit],
   );
 
   const handleMoveSlide = useCallback(
@@ -718,17 +682,17 @@ export function EditorWorkspace({
       const replacement = selectedShape.editableImageReplacement;
       if (replacement === undefined) return;
       if (file.size > MAX_IMAGE_REPLACEMENT_BYTES) {
-        setOperationError("Replacement image must be 5 MB or smaller.");
+        controller.setError("Replacement image must be 5 MB or smaller.");
         return;
       }
       if (file.type !== "" && file.type !== replacement.contentType) {
-        setOperationError(`Replacement image must use ${replacement.contentType}.`);
+        controller.setError(`Replacement image must use ${replacement.contentType}.`);
         return;
       }
       const bytes = new Uint8Array(await file.arrayBuffer());
       const detectedContentType = detectImageContentType(bytes);
       if (detectedContentType !== replacement.contentType) {
-        setOperationError(`Replacement image must use ${replacement.contentType}.`);
+        controller.setError(`Replacement image must use ${replacement.contentType}.`);
         return;
       }
       await applyCommand(
@@ -740,19 +704,15 @@ export function EditorWorkspace({
         "Image replaced",
       );
     },
-    [applyCommand, selectedShape],
+    [applyCommand, controller, selectedShape],
   );
 
   const handleDownload = useCallback(async () => {
     if (!(await waitForDirectTextCommit())) return;
-    if (busyRef.current) return;
-    busyRef.current = true;
-    setBusy(true);
-    setOperationError("");
+    if (controller.getSnapshot().busy) return;
+    const saved = await controller.save();
+    if (saved === undefined) return;
     try {
-      const saved = editor.save();
-      setHistory(saved.history);
-      cleanUndoDepthRef.current = saved.history.undoDepth;
       const href = URL.createObjectURL(
         new Blob([uint8ArrayToArrayBuffer(saved.pptx)], {
           type: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -763,15 +723,10 @@ export function EditorWorkspace({
       link.download = downloadFileName(downloadName, fileName);
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(href), 0);
-      dirtyRef.current = false;
-      setMessage("PPTX downloaded");
     } catch (error) {
-      setOperationError(error instanceof Error ? error.message : String(error));
-    } finally {
-      busyRef.current = false;
-      setBusy(false);
+      controller.setError(error instanceof Error ? error.message : String(error));
     }
-  }, [downloadName, editor, fileName, waitForDirectTextCommit]);
+  }, [controller, downloadName, fileName, waitForDirectTextCommit]);
 
   if (currentSlide === undefined) {
     return (
@@ -1350,10 +1305,6 @@ function pxToEmu(value: number): ShapeTransformCommand["offsetX"] {
 
 function pt(value: number): NonNullable<TextRunProperties["fontSize"]> {
   return value as NonNullable<TextRunProperties["fontSize"]>;
-}
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
 }
 
 function isPositiveFiniteNumber(value: string): boolean {
