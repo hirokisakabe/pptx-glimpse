@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { DirectTextEditorLifecycle } from "../demo/src/components/direct-text-editor-lifecycle";
+import { DirectTextEditorLifecycle } from "./direct-text-editor-lifecycle.js";
 
 describe("DirectTextEditorLifecycle", () => {
   it("releases an IME composition waiter when the editor unmounts", async () => {
@@ -20,8 +20,10 @@ describe("DirectTextEditorLifecycle", () => {
   it("isolates an old commit completion after the editor session changes", async () => {
     const lifecycle = new DirectTextEditorLifecycle();
     const oldGeneration = lifecycle.currentGeneration();
-    const oldCommitCompletion = Promise.withResolvers<boolean>();
-    const oldCommit = oldCommitCompletion.promise;
+    let resolveOldCommit: (committed: boolean) => void = () => {};
+    const oldCommit = new Promise<boolean>((resolve) => {
+      resolveOldCommit = resolve;
+    });
     expect(lifecycle.setCommit(oldGeneration, oldCommit)).toBe(true);
 
     lifecycle.invalidate();
@@ -30,10 +32,10 @@ describe("DirectTextEditorLifecycle", () => {
     const newCommit = new Promise<boolean>(() => {});
     expect(lifecycle.setCommit(newGeneration, newCommit)).toBe(true);
 
-    oldCommitCompletion.resolve(true);
+    resolveOldCommit(true);
     const committed = await oldCommit;
     if (committed && lifecycle.isCurrent(oldGeneration)) activeEditor = null;
-    lifecycle.clearCommit(oldGeneration, oldCommit);
+    lifecycle.clearCommit(oldGeneration);
 
     expect(activeEditor).toBe("new");
     expect(lifecycle.isCurrent(oldGeneration)).toBe(false);

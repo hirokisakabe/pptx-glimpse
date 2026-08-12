@@ -3,31 +3,57 @@ import { resolve } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
-const componentsRoot = resolve(import.meta.dirname, "../demo/src/components");
+import { PLAYWRIGHT_BUILD_PACKAGE_PATHS } from "./global-setup.js";
+
+const demoComponentsRoot = resolve(import.meta.dirname, "../demo/src/components");
+const packageRoot = resolve(import.meta.dirname, "../packages/editor-react");
+const packageSourceRoot = resolve(packageRoot, "src");
 const reusableComponentFiles = [
-  "EditorSurface.tsx",
+  "PptxEditor.tsx",
   "EditorToolbar.tsx",
   "EditorSlideStrip.tsx",
   "direct-text-editor-lifecycle.ts",
-  "editor-controller.ts",
-  "use-editor-controller.ts",
+  "pptx-editor-controller.ts",
+  "use-pptx-editor-controller.ts",
 ];
 
-describe("demo editor component boundary", () => {
-  it("keeps reusable editor components independent from Next.js and the demo shell", async () => {
+describe("editor React package boundary", () => {
+  it("keeps package components independent from Next.js, demo source, and lower packages", async () => {
     for (const fileName of reusableComponentFiles) {
-      const source = await readFile(resolve(componentsRoot, fileName), "utf8");
+      const source = await readFile(resolve(packageSourceRoot, fileName), "utf8");
       expect(source, fileName).not.toMatch(/from ["']next(?:\/|["'])/);
       expect(source, fileName).not.toContain("DemoEditorShell");
+      expect(source, fileName).not.toMatch(
+        /from ["']@pptx-glimpse\/(?:document|editor|renderer|mcp)(?:\/|["'])/,
+      );
+      expect(source, fileName).not.toMatch(/from ["']pptx-glimpse\//);
     }
   });
 
-  it("composes file-oriented host policy around the reusable surface", async () => {
-    const workspace = await readFile(resolve(componentsRoot, "EditorWorkspace.tsx"), "utf8");
-    const shell = await readFile(resolve(componentsRoot, "DemoEditorShell.tsx"), "utf8");
-    const surface = await readFile(resolve(componentsRoot, "EditorSurface.tsx"), "utf8");
+  it("declares browser peers and an explicit stylesheet export", async () => {
+    const packageJson = await readFile(resolve(packageRoot, "package.json"), "utf8");
 
-    expect(workspace).toContain("<EditorSurface");
+    expect(packageJson).toContain('"private": true');
+    expect(packageJson).toContain('"pptx-glimpse": "*"');
+    expect(packageJson).toContain('"react": "^19.2.0"');
+    expect(packageJson).toContain('"react-dom": "^19.2.0"');
+    expect(packageJson).toContain('"./styles.css": "./dist/styles.css"');
+  });
+
+  it("builds the private package before fresh-checkout Playwright consumers", () => {
+    expect(PLAYWRIGHT_BUILD_PACKAGE_PATHS).toContain("packages/editor-react");
+    expect(PLAYWRIGHT_BUILD_PACKAGE_PATHS.indexOf("packages/editor-react")).toBeGreaterThan(
+      PLAYWRIGHT_BUILD_PACKAGE_PATHS.indexOf("packages/core"),
+    );
+  });
+
+  it("composes file-oriented host policy around the package editor", async () => {
+    const workspace = await readFile(resolve(demoComponentsRoot, "EditorWorkspace.tsx"), "utf8");
+    const shell = await readFile(resolve(demoComponentsRoot, "DemoEditorShell.tsx"), "utf8");
+    const editor = await readFile(resolve(packageSourceRoot, "PptxEditor.tsx"), "utf8");
+
+    expect(workspace).toContain('from "@pptx-glimpse/editor-react"');
+    expect(workspace).toContain("<PptxEditor session={editor}>");
     expect(workspace).toContain("<DemoEditorShell");
     for (const hostResponsibility of [
       "Open PPTX",
@@ -38,13 +64,27 @@ describe("demo editor component boundary", () => {
       "beforeunload",
     ]) {
       expect(shell).toContain(hostResponsibility);
-      expect(surface).not.toContain(hostResponsibility);
+      expect(editor).not.toContain(hostResponsibility);
     }
   });
 
+  it("scopes every distributed stylesheet selector beneath the package root", async () => {
+    const stylesheet = await readFile(resolve(packageSourceRoot, "styles.css"), "utf8");
+    const demoGlobals = await readFile(
+      resolve(import.meta.dirname, "../demo/src/app/globals.css"),
+      "utf8",
+    );
+
+    expect(stylesheet).toContain(".pptx-glimpse-editor");
+    expect(stylesheet).not.toMatch(/(?:^|\n)(?:body|:root|\.editor-|\.selection-|\.button-row)/);
+    expect(demoGlobals).not.toContain(".editor-commandbar");
+    expect(demoGlobals).not.toContain(".editor-slide-frame");
+    expect(demoGlobals).not.toContain(".selection-box");
+  });
+
   it("resets toolbar-local run selection when the editor session identity changes", async () => {
-    const toolbar = await readFile(resolve(componentsRoot, "EditorToolbar.tsx"), "utf8");
-    const surface = await readFile(resolve(componentsRoot, "EditorSurface.tsx"), "utf8");
+    const toolbar = await readFile(resolve(packageSourceRoot, "EditorToolbar.tsx"), "utf8");
+    const editor = await readFile(resolve(packageSourceRoot, "PptxEditor.tsx"), "utf8");
 
     expect(toolbar).toContain("readonly selectionScope: object");
     expect(toolbar).toContain('setFontSize("24")');
@@ -52,33 +92,21 @@ describe("demo editor component boundary", () => {
     expect(toolbar).toContain('setColor("#2454a6")');
     expect(toolbar).toContain("[selectedShapeKey, selectionScope]");
     expect(toolbar).toContain("[selectionScope]");
-    expect(surface).toContain("selectionScope={controller}");
+    expect(editor).toContain("selectionScope={controller}");
   });
 
-  it("resets the demo download name from an explicit presentation identity", async () => {
-    const shell = await readFile(resolve(componentsRoot, "DemoEditorShell.tsx"), "utf8");
-    const surface = await readFile(resolve(componentsRoot, "EditorSurface.tsx"), "utf8");
+  it("keeps host state and transient gesture lifecycle scoped to the active session", async () => {
+    const shell = await readFile(resolve(demoComponentsRoot, "DemoEditorShell.tsx"), "utf8");
+    const editor = await readFile(resolve(packageSourceRoot, "PptxEditor.tsx"), "utf8");
+    const slideStrip = await readFile(resolve(packageSourceRoot, "EditorSlideStrip.tsx"), "utf8");
 
-    expect(surface).toContain("resetScope: controller");
+    expect(editor).toContain("resetScope: controller");
     expect(shell).toContain("[controls.resetScope, fileName]");
-  });
-
-  it("keeps navigation guard listeners independent from volatile host-control snapshots", async () => {
-    const shell = await readFile(resolve(componentsRoot, "DemoEditorShell.tsx"), "utf8");
-
     expect(shell).not.toContain("}, [controls]);");
     expect(shell).toContain("[controls.hasUnsavedChanges]");
-  });
-
-  it("moves session lifecycle invalidation out of render and scopes transient gestures", async () => {
-    const surface = await readFile(resolve(componentsRoot, "EditorSurface.tsx"), "utf8");
-    const slideStrip = await readFile(resolve(componentsRoot, "EditorSlideStrip.tsx"), "utf8");
-
-    expect(surface).not.toContain("directTextSessionRef");
-    expect(surface).toContain("useLayoutEffect(() => {");
-    expect(surface).toContain("committedInteractionScopeRef.current = controller");
-    expect(surface).toContain("interactionScope={controller}");
-    expect(slideStrip).toContain("readonly interactionScope: object");
+    expect(editor).not.toContain("directTextSessionRef");
+    expect(editor).toContain("committedInteractionScopeRef.current = controller");
+    expect(editor).toContain("interactionScope={controller}");
     expect(slideStrip).toContain("drag.interactionScope !== interactionScope");
   });
 });

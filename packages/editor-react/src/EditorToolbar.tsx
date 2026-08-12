@@ -1,12 +1,12 @@
 "use client";
 
-import { useLayoutEffect, useRef, useState } from "react";
 import type {
   EditorCommand,
   PptxEditorSession,
   PptxEditorShapeInfo,
   SourceHandle,
 } from "pptx-glimpse";
+import { useLayoutEffect, useRef, useState } from "react";
 
 type EditorHistory = PptxEditorSession["history"];
 type TextRunProperties = Extract<
@@ -265,6 +265,8 @@ function handleKey(handle: SourceHandle): string {
 }
 
 function pt(value: number): NonNullable<TextRunProperties["fontSize"]> {
+  // This is the package-local constructor for the branded public point command field.
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
   return value as NonNullable<TextRunProperties["fontSize"]>;
 }
 

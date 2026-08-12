@@ -54,8 +54,8 @@ export class DirectTextEditorLifecycle {
     return true;
   }
 
-  clearCommit(generation: number, commit: Promise<boolean>): void {
-    if (this.isCurrent(generation) && this.commit === commit) this.commit = null;
+  clearCommit(generation: number): void {
+    if (this.isCurrent(generation)) this.commit = null;
   }
 
   invalidate(): void {

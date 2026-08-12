@@ -30,6 +30,7 @@
     "node_modules",
     "dist",
     "**/dist",
+    "packages/editor-react/src",
     "vrt",
     "packages/*/src/**/*.test.ts",
     "packages/*/src/**/*.test-helpers.ts"

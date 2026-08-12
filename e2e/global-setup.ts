@@ -6,13 +6,16 @@ import { promisify } from "node:util";
 const execFileAsync = promisify(execFile);
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
+export const PLAYWRIGHT_BUILD_PACKAGE_PATHS = [
+  "packages/document",
+  "packages/editor",
+  "packages/renderer",
+  "packages/core",
+  "packages/editor-react",
+] as const;
+
 export default async function globalSetup(): Promise<void> {
-  for (const packagePath of [
-    "packages/document",
-    "packages/editor",
-    "packages/renderer",
-    "packages/core",
-  ]) {
+  for (const packagePath of PLAYWRIGHT_BUILD_PACKAGE_PATHS) {
     await execFileAsync(
       resolve(repoRoot, "node_modules/.bin/tsup"),
       ["--config", "tsup.config.ts"],

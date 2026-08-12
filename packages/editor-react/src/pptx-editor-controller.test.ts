@@ -3,9 +3,9 @@ import type { SourceHandle } from "pptx-glimpse";
 import { describe, expect, it, vi } from "vitest";
 
 import {
-  EditorController,
-  type EditorControllerSession,
-} from "../demo/src/components/editor-controller.js";
+  PptxEditorController,
+  type PptxEditorControllerSession,
+} from "./pptx-editor-controller.js";
 
 const CLEAN_HISTORY = {
   canUndo: false,
@@ -23,7 +23,7 @@ const SECOND_HANDLE: SourceHandle = {
   nodeId: asSourceNodeId("shape-2"),
 };
 
-class TestSession implements EditorControllerSession {
+class TestSession implements PptxEditorControllerSession {
   readonly slides = [
     { slideNumber: 1, svg: "<svg>one</svg>" },
     { slideNumber: 2, svg: "<svg>two</svg>" },
@@ -50,7 +50,7 @@ class TestSession implements EditorControllerSession {
     this.selection = { shapeHandle: handle };
   }
 
-  save(): ReturnType<EditorControllerSession["save"]> {
+  save(): ReturnType<PptxEditorControllerSession["save"]> {
     this.saveCalls += 1;
     return { ok: true, pptx: new Uint8Array([1, 2, 3]), history: this.history };
   }
@@ -74,10 +74,10 @@ class TestSession implements EditorControllerSession {
   }
 }
 
-describe("EditorController", () => {
+describe("PptxEditorController", () => {
   it("clamps slide selection and refreshes shapes for the active slide", () => {
     const session = new TestSession();
-    const controller = new EditorController(session);
+    const controller = new PptxEditorController(session);
 
     controller.selectSlide(99);
 
@@ -87,7 +87,7 @@ describe("EditorController", () => {
 
   it("keeps busy true while work is queued and gates selection mutations", async () => {
     const session = new TestSession();
-    const controller = new EditorController(session);
+    const controller = new PptxEditorController(session);
     let finishFirst = () => {};
     const firstGate = new Promise<void>((resolve) => {
       finishFirst = resolve;
@@ -110,7 +110,7 @@ describe("EditorController", () => {
 
   it("serializes mutations and publishes a coherent session snapshot", async () => {
     const session = new TestSession();
-    const controller = new EditorController(session);
+    const controller = new PptxEditorController(session);
     const events: string[] = [];
     let finishFirst = () => {};
     const firstGate = new Promise<void>((resolve) => {
@@ -148,7 +148,7 @@ describe("EditorController", () => {
   });
 
   it("transports operation failures without rejecting the controller queue", async () => {
-    const controller = new EditorController(new TestSession());
+    const controller = new PptxEditorController(new TestSession());
 
     await expect(
       controller.run(
@@ -170,7 +170,7 @@ describe("EditorController", () => {
 
   it("marks the current history depth clean after save", async () => {
     const session = new TestSession();
-    const controller = new EditorController(session);
+    const controller = new PptxEditorController(session);
     await controller.run(
       (activeSession) => {
         activeSession.markEdited();
@@ -194,7 +194,7 @@ describe("EditorController", () => {
 
   it("keeps the document dirty when the host does not acknowledge a serialized save", async () => {
     const session = new TestSession();
-    const controller = new EditorController(session);
+    const controller = new PptxEditorController(session);
     await controller.run((activeSession) => activeSession.markEdited(), { success: "Edited" });
 
     await expect(controller.save()).resolves.toMatchObject({ ok: true });
@@ -209,7 +209,7 @@ describe("EditorController", () => {
 
   it("uses history revision identity when a new branch returns to the saved depth", async () => {
     const session = new TestSession();
-    const controller = new EditorController(session);
+    const controller = new PptxEditorController(session);
     await controller.run((activeSession) => activeSession.markEdited(), { success: "Edited" });
     const saved = await controller.save();
     expect(controller.markSaved(saved!.history, "Saved")).toBe(true);
@@ -229,7 +229,7 @@ describe("EditorController", () => {
 
   it("keeps recovered operation errors while publishing committed session state", async () => {
     const session = new TestSession();
-    const controller = new EditorController(session);
+    const controller = new PptxEditorController(session);
 
     await expect(
       controller.run(
@@ -253,7 +253,7 @@ describe("EditorController", () => {
 
   it("only exposes session selection when it belongs to the active slide", () => {
     const session = new TestSession();
-    const controller = new EditorController(session);
+    const controller = new PptxEditorController(session);
     expect(controller.selectShape(FIRST_HANDLE)).toBe(true);
     expect(controller.getSnapshot().selectedShapeKey).not.toBeNull();
 

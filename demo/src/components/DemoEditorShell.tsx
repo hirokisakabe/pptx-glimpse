@@ -2,10 +2,10 @@
 
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 
-import type { EditorSurfaceHostControls } from "./EditorSurface";
+import type { PptxEditorHostControls } from "@pptx-glimpse/editor-react";
 
 interface DemoEditorShellProps {
-  readonly controls: EditorSurfaceHostControls;
+  readonly controls: PptxEditorHostControls;
   readonly fileName: string;
   readonly fontFileCount: number;
   readonly onAddFonts: () => void;
@@ -90,9 +90,9 @@ export function DemoEditorShell({
   );
 
   return (
-    <div className="editor-topbar" data-editor-component="demo-shell">
-      <div className="editor-file">
-        <label className="editor-file-name">
+    <div className="demo-editor-topbar" data-editor-component="demo-shell">
+      <div className="demo-editor-file">
+        <label className="demo-editor-file-name">
           <span className="visually-hidden">Presentation file name</span>
           <input
             aria-label="Presentation file name"
@@ -111,11 +111,11 @@ export function DemoEditorShell({
           <span aria-hidden="true">.pptx</span>
         </label>
       </div>
-      <div className="editor-status" data-testid="editor-status" role="status">
+      <div className="demo-editor-status" data-testid="editor-status" role="status">
         {controls.message === "" ? null : <span>{controls.message}</span>}
         {controls.busy ? <span>Working...</span> : null}
       </div>
-      <div className="editor-file-actions">
+      <div className="demo-editor-file-actions">
         <button
           disabled={controls.busy}
           type="button"
