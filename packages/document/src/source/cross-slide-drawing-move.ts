@@ -162,6 +162,9 @@ export function moveShapesAcrossSlides(
     referencedDrawingRelationshipIds(remainingSourceShapes, [
       ...(sourceSlide.rawSidecars ?? []),
       ...(sourceSlide.background?.kind === "raw" ? [sourceSlide.background.raw] : []),
+      ...(sourceSlide.background?.kind === "fill" && sourceSlide.background.fill.kind === "raw"
+        ? [sourceSlide.background.fill.raw]
+        : []),
     ]),
   );
   if (

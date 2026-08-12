@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   asEmu,
+  asRawSidecarId,
   createPptx,
   createPptxAuthoringSession,
   moveShapesAcrossSlides,
@@ -297,6 +298,48 @@ describe("moveShapesAcrossSlides", () => {
         ? persistedBackground.fill.blipRelationshipId
         : undefined,
     ).toBe(sharedRelationshipId);
+
+    const rawFillSource: PptxSourceModel = {
+      ...sharedSource,
+      slides: sharedSource.slides.map((slide) =>
+        slide.partPath === sourceSlide.partPath
+          ? {
+              ...slide,
+              background: {
+                kind: "fill" as const,
+                fill: {
+                  kind: "raw" as const,
+                  raw: {
+                    id: asRawSidecarId("background-fill"),
+                    node: {
+                      name: "a:blipFill",
+                      children: [
+                        {
+                          name: "a:blip",
+                          attributes: { "r:embed": sharedRelationshipId },
+                        },
+                      ],
+                    },
+                  },
+                },
+              },
+            }
+          : slide,
+      ),
+    };
+    const rawFillResult = moveShapesAcrossSlides(
+      rawFillSource,
+      [picture.handle],
+      requireValue(rawFillSource.slides[1]?.handle),
+    );
+    const rawFillSourceRelationships = requireValue(
+      rawFillResult.document.packageGraph.relationships.find(
+        (group) => group.sourcePartPath === sourceSlide.partPath,
+      ),
+    );
+    expect(
+      rawFillSourceRelationships.relationships.map((relationship) => relationship.id),
+    ).toContain(sharedRelationshipId);
   });
 
   it("rejects placeholders, non-root nodes, and unsupported typed drawing kinds", () => {
