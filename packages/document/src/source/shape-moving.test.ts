@@ -651,31 +651,35 @@ describe("moveShapes", () => {
       moveShapes(nested, [requireValue(outer.handle)], requireValue(inner.handle)),
     ).toThrow("inside the moved block");
 
-    const nonIdentity: PptxSourceModel = {
-      ...nested,
-      slides: [
-        {
-          ...requireValue(nested.slides[0]),
-          shapes: [
-            {
-              ...outer,
-              transform: {
-                ...requireValue(outer.transform),
-                width: asEmu(Number(requireValue(outer.transform).width) + 1),
-              },
-            },
-            ...requireValue(nested.slides[0]).shapes.slice(1),
-          ],
+    const invalidAncestors: SourceGroup[] = [
+      {
+        ...outer,
+        transform: {
+          ...requireValue(outer.transform),
+          width: asEmu(Number(requireValue(outer.transform).width) + 1),
         },
-      ],
-    };
-    expect(() =>
-      moveShapes(
-        nonIdentity,
-        [requireValue(inner.children[0]?.handle)],
-        requireValue(slide.handle),
-      ),
-    ).toThrow("identity child mapping");
+      },
+      { ...outer, transform: undefined },
+      { ...outer, childTransform: undefined },
+      {
+        ...outer,
+        childTransform: { ...requireValue(outer.childTransform), width: asEmu(0) },
+      },
+    ];
+    for (const invalidAncestor of invalidAncestors) {
+      const invalid: PptxSourceModel = {
+        ...nested,
+        slides: [
+          {
+            ...requireValue(nested.slides[0]),
+            shapes: [invalidAncestor, ...requireValue(nested.slides[0]).shapes.slice(1)],
+          },
+        ],
+      };
+      expect(() =>
+        moveShapes(invalid, [requireValue(inner.children[0]?.handle)], requireValue(slide.handle)),
+      ).toThrow("identity child mapping");
+    }
 
     let connected = createShapes(4);
     const connectedSlide = requireValue(connected.slides[0]);
