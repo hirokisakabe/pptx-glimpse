@@ -41,6 +41,7 @@ interface DrawingPartRoot {
   readonly partPath: PartPath;
   readonly handle: SourceHandle;
   readonly shapes: readonly SourceShapeNode[];
+  readonly rawSidecars: readonly RawSidecar[];
 }
 
 interface NodeRecord {
@@ -90,6 +91,8 @@ interface CrossPartNodeReferenceRemap {
   readonly location: "start" | "end";
   readonly before: SourceNodeId;
   readonly after: SourceNodeId;
+  /** Preserved connector fragments that must receive the same rewrite as the typed endpoint. */
+  readonly rawSidecarIds: readonly RawSidecar["id"][];
 }
 
 /** Immutable preflight result consumed by a future cross-part writer operation. */
@@ -180,7 +183,7 @@ export function planCrossPartDrawingMove(
       movedIds.add(node.nodeId);
     });
   }
-  validateRawReferenceClosure(sourceRoot.shapes, movedIds);
+  validateRawReferenceClosure(sourceRoot.shapes, sourceRoot.rawSidecars, movedRoots, movedIds);
   validateConnectorClosure(sourceRoot.shapes, movedIds);
 
   const destinationIds = collectUniqueNodeIds(
@@ -223,6 +226,11 @@ export function planCrossPartDrawingMove(
   const nodeIdMap = new Map<string, SourceNodeId>(
     nodeRecords.map((record) => [record.oldNodeId, record.newNodeId]),
   );
+  const movedRawSidecars = movedRoots.flatMap((root) => {
+    const sidecars: RawSidecar[] = [];
+    visitShapeTree(root, (node) => sidecars.push(...nodeRawSidecars(node)));
+    return sidecars;
+  });
   const nodeReferenceRemaps = nodeRecords.flatMap((record) => {
     if (record.node.kind !== "connector") return [];
     const connector = record.node;
@@ -239,12 +247,19 @@ export function planCrossPartDrawingMove(
           location,
           before: endpoint.shapeId,
           after,
+          rawSidecarIds: freezeArray(
+            movedRawSidecars
+              .filter((sidecar) =>
+                rawContainsConnectorEndpoint(sidecar.node, location, endpoint.shapeId),
+              )
+              .map((sidecar) => sidecar.id),
+          ),
         }),
       ];
     });
   });
 
-  const handleMappings = nodeRecords.map((record) => {
+  const handleMappings = nodeRecords.flatMap((record) => {
     let relationshipId: RelationshipId | undefined;
     if (record.beforeHandle.relationshipId !== undefined) {
       relationshipId = relationshipIdMap.get(record.beforeHandle.relationshipId);
@@ -259,10 +274,10 @@ export function planCrossPartDrawingMove(
       nodeId: record.newNodeId,
       ...(relationshipId !== undefined ? { relationshipId } : {}),
     };
-    return freezeObject({
-      before: freezeHandle(record.beforeHandle),
-      after: freezeHandle(after),
-    });
+    return [
+      freezeObject({ before: freezeHandle(record.beforeHandle), after: freezeHandle(after) }),
+      ...nestedTextHandleMappings(record, destinationRoot.partPath),
+    ];
   });
 
   const affectedDrawingParts = freezeArray([sourceRoot.partPath, destinationRoot.partPath]);
@@ -441,8 +456,15 @@ function validateConnectorClosure(
 
 function validateRawReferenceClosure(
   partShapes: readonly SourceShapeNode[],
+  partRawSidecars: readonly RawSidecar[],
+  movedRoots: readonly SourceShapeNode[],
   movedIds: ReadonlySet<string>,
 ): void {
+  const movedConnectors: Extract<SourceShapeNode, { readonly kind: "connector" }>[] = [];
+  visitShapeTrees(movedRoots, (node) => {
+    if (node.kind === "connector") movedConnectors.push(node);
+  });
+  for (const sidecar of partRawSidecars) validateRawNodeReference(sidecar, movedIds);
   visitShapeTrees(partShapes, (node) => {
     if (node.kind === "raw") {
       throw new Error(
@@ -450,33 +472,89 @@ function validateRawReferenceClosure(
       );
     }
     for (const sidecar of nodeRawSidecars(node)) {
-      if (rawContainsElement(sidecar.node, "AlternateContent")) {
-        throw new Error("planCrossPartDrawingMove: mc:AlternateContent is not supported");
-      }
-      if (rawContainsUnprovenNodeReference(sidecar.node, movedIds)) {
-        throw new Error(
-          "planCrossPartDrawingMove: a preserved raw sidecar may reference a moved node id",
-        );
-      }
+      validateRawNodeReference(
+        sidecar,
+        movedIds,
+        movedConnectors.find((connector) => rawRepresentsConnector(sidecar.node, connector)),
+      );
     }
   });
+}
+
+function rawRepresentsConnector(
+  node: RawOoxmlNode,
+  connector: Extract<SourceShapeNode, { readonly kind: "connector" }>,
+): boolean {
+  return (
+    connector.nodeId !== undefined &&
+    rawContainsElementWithAttribute(node, "cNvPr", "id", connector.nodeId)
+  );
+}
+
+function rawContainsElementWithAttribute(
+  node: RawOoxmlNode,
+  element: string,
+  attribute: string,
+  value: string,
+): boolean {
+  return (
+    (node.name.split(":").at(-1) === element && node.attributes?.[attribute] === value) ||
+    (node.children ?? []).some((child) =>
+      rawContainsElementWithAttribute(child, element, attribute, value),
+    )
+  );
+}
+
+function validateRawNodeReference(
+  sidecar: RawSidecar,
+  movedIds: ReadonlySet<string>,
+  movedConnector?: Extract<SourceShapeNode, { readonly kind: "connector" }>,
+): void {
+  if (rawContainsElement(sidecar.node, "AlternateContent")) {
+    throw new Error("planCrossPartDrawingMove: mc:AlternateContent is not supported");
+  }
+  if (rawContainsUnprovenNodeReference(sidecar.node, movedIds, movedConnector)) {
+    throw new Error(
+      `planCrossPartDrawingMove: preserved raw sidecar '${sidecar.node.name}' may reference a moved node id`,
+    );
+  }
 }
 
 function rawContainsUnprovenNodeReference(
   node: RawOoxmlNode,
   values: ReadonlySet<string>,
+  movedConnector?: Extract<SourceShapeNode, { readonly kind: "connector" }>,
 ): boolean {
   const localElement = node.name.split(":").at(-1);
   for (const [attributeName, value] of Object.entries(node.attributes ?? {})) {
     if (!values.has(value)) continue;
     const localAttribute = attributeName.split(":").at(-1);
     if (localAttribute !== "id" && localAttribute !== "spid") continue;
+    // cNvPr@id declares the owning drawing node. Every other matching raw id/spid is a
+    // reference whose rewrite cannot be proven by this foundation planner.
+    const endpointLocation = localElement === "stCxn" ? "start" : "end";
+    const endpoint = movedConnector?.connection?.[endpointLocation];
     const knownNodeIdAttribute =
       localAttribute === "id" &&
-      (localElement === "cNvPr" || localElement === "stCxn" || localElement === "endCxn");
+      (localElement === "cNvPr" ||
+        ((localElement === "stCxn" || localElement === "endCxn") && endpoint?.shapeId === value));
     if (!knownNodeIdAttribute) return true;
   }
-  return (node.children ?? []).some((child) => rawContainsUnprovenNodeReference(child, values));
+  return (node.children ?? []).some((child) =>
+    rawContainsUnprovenNodeReference(child, values, movedConnector),
+  );
+}
+
+function rawContainsConnectorEndpoint(
+  node: RawOoxmlNode,
+  location: "start" | "end",
+  shapeId: SourceNodeId,
+): boolean {
+  const expected = location === "start" ? "stCxn" : "endCxn";
+  return (
+    (node.name.split(":").at(-1) === expected && node.attributes?.id === shapeId) ||
+    (node.children ?? []).some((child) => rawContainsConnectorEndpoint(child, location, shapeId))
+  );
 }
 
 function collectRelationshipReferences(
@@ -608,6 +686,77 @@ function textBodyRawSidecars(textBody: SourceTextBody | undefined): readonly Raw
       ...paragraph.runs.flatMap((run) => run.rawSidecars ?? []),
     ]),
   ];
+}
+
+function nestedTextHandleMappings(
+  record: NodeRecord,
+  destinationPartPath: PartPath,
+): readonly CrossPartHandleMapping[] {
+  const mappings: CrossPartHandleMapping[] = [];
+  const collect = (
+    textBody: SourceTextBody | undefined,
+    tableCell?: { readonly rowIndex: number; readonly cellIndex: number },
+  ) => {
+    if (textBody === undefined) return;
+    textBody.paragraphs.forEach((paragraph, paragraphIndex) => {
+      if (paragraph.handle !== undefined) {
+        mappings.push(
+          mapNestedTextHandle(
+            paragraph.handle,
+            destinationPartPath,
+            textHandleNodeId("paragraph", record.newNodeId, paragraphIndex, undefined, tableCell),
+          ),
+        );
+      }
+      paragraph.runs.forEach((run, runIndex) => {
+        if (run.handle !== undefined) {
+          mappings.push(
+            mapNestedTextHandle(
+              run.handle,
+              destinationPartPath,
+              textHandleNodeId("run", record.newNodeId, paragraphIndex, runIndex, tableCell),
+            ),
+          );
+        }
+      });
+    });
+  };
+  if (record.node.kind === "shape") collect(record.node.textBody);
+  if (record.node.kind === "table") {
+    record.node.table.rows.forEach((row, rowIndex) =>
+      row.cells.forEach((cell, cellIndex) => collect(cell.textBody, { rowIndex, cellIndex })),
+    );
+  }
+  return mappings;
+}
+
+function mapNestedTextHandle(
+  before: SourceHandle,
+  destinationPartPath: PartPath,
+  nodeId: SourceNodeId,
+): CrossPartHandleMapping {
+  return freezeObject({
+    before: freezeHandle(before),
+    after: freezeHandle({
+      partPath: destinationPartPath,
+      nodeId,
+      ...(before.orderingSlot !== undefined ? { orderingSlot: before.orderingSlot } : {}),
+    }),
+  });
+}
+
+function textHandleNodeId(
+  kind: "paragraph" | "run",
+  ownerNodeId: SourceNodeId,
+  paragraphIndex: number,
+  runIndex?: number,
+  tableCell?: { readonly rowIndex: number; readonly cellIndex: number },
+): SourceNodeId {
+  const ownerKind = tableCell === undefined ? "shape" : "table";
+  const cell =
+    tableCell === undefined ? "" : `:row:${tableCell.rowIndex}:cell:${tableCell.cellIndex}`;
+  const suffix = kind === "paragraph" ? `p:${paragraphIndex}` : `p:${paragraphIndex}:r:${runIndex}`;
+  return asSourceNodeId(`text:${ownerKind}:${ownerNodeId}${cell}:${suffix}`);
 }
 
 function rawFillSidecars(fill: SourceFill | undefined): readonly RawSidecar[] {
@@ -755,6 +904,7 @@ function drawingPartRoots(source: PptxSourceModel): readonly DrawingPartRoot[] {
               partPath: item.partPath,
               handle: item.handle,
               shapes: item.shapes,
+              rawSidecars: item.rawSidecars ?? [],
             },
           ],
     ),
@@ -767,6 +917,7 @@ function drawingPartRoots(source: PptxSourceModel): readonly DrawingPartRoot[] {
               partPath: item.partPath,
               handle: item.handle,
               shapes: item.shapes,
+              rawSidecars: item.rawSidecars ?? [],
             },
           ],
     ),
@@ -779,6 +930,7 @@ function drawingPartRoots(source: PptxSourceModel): readonly DrawingPartRoot[] {
               partPath: item.partPath,
               handle: item.handle,
               shapes: item.shapes,
+              rawSidecars: item.rawSidecars ?? [],
             },
           ],
     ),

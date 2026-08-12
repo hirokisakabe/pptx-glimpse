@@ -290,6 +290,7 @@ describe("cross-part move planning", () => {
     expect(plan.nodeReferenceRemaps).toHaveLength(2);
     const mapping = new Map(plan.nodeIdMappings.map((item) => [item.before, item.after]));
     expect(plan.nodeReferenceRemaps.map((item) => item.location)).toEqual(["start", "end"]);
+    expect(plan.nodeReferenceRemaps.every((item) => item.rawSidecarIds.length === 1)).toBe(true);
     expect(plan.nodeReferenceRemaps.every((item) => item.after === mapping.get(item.before))).toBe(
       true,
     );
@@ -313,6 +314,22 @@ describe("cross-part move planning", () => {
     });
     const sourceSlide = requireValue(source.slides[0]);
     const destination = requireValue(source.slides[1]?.handle);
+    const textHandlePlan = planCrossPartDrawingMove(
+      source,
+      sourceSlide.shapes.map((node) => requireValue(node.handle)),
+      destination,
+    );
+    expect(textHandlePlan.handleMappings).toHaveLength(6);
+    expect(
+      textHandlePlan.handleMappings
+        .filter((item) => String(item.before.nodeId).startsWith("text:"))
+        .map((item) => String(item.after.nodeId)),
+    ).toEqual([
+      `text:shape:${textHandlePlan.nodeIdMappings[0]?.after}:p:0`,
+      `text:shape:${textHandlePlan.nodeIdMappings[0]?.after}:p:0:r:0`,
+      `text:table:${textHandlePlan.nodeIdMappings[1]?.after}:row:0:cell:0:p:0`,
+      `text:table:${textHandlePlan.nodeIdMappings[1]?.after}:row:0:cell:0:p:0:r:0`,
+    ]);
     const hyperlinkId = asRelationshipId("rId99");
     const hyperlink = {
       id: hyperlinkId,
@@ -505,6 +522,50 @@ describe("cross-part move planning", () => {
     });
     expect(() => planCrossPartDrawingMove(alternate, [handles[0]], destination)).toThrow(
       "AlternateContent",
+    );
+
+    const timingReference: PptxSourceModel = {
+      ...source,
+      slides: source.slides.map((slide, index) =>
+        index !== 0
+          ? slide
+          : {
+              ...slide,
+              rawSidecars: [
+                {
+                  id: asRawSidecarId("timing"),
+                  node: {
+                    name: "p:timing",
+                    children: [
+                      {
+                        name: "p:spTgt",
+                        attributes: { spid: String(handles[0].nodeId) },
+                      },
+                    ],
+                  },
+                },
+              ],
+            },
+      ),
+    };
+    expect(() => planCrossPartDrawingMove(timingReference, handles, destination)).toThrow(
+      "may reference a moved node id",
+    );
+
+    const rawConnectorReference = replaceFirstShape(source, {
+      ...requireValue(sourceSlide.shapes[0]),
+      rawSidecars: [
+        {
+          id: asRawSidecarId("raw-connector"),
+          node: {
+            name: "p:stCxn",
+            attributes: { id: String(handles[1].nodeId), idx: "0" },
+          },
+        },
+      ],
+    });
+    expect(() => planCrossPartDrawingMove(rawConnectorReference, handles, destination)).toThrow(
+      "may reference a moved node id",
     );
 
     const rawNode: SourceShapeNode = {

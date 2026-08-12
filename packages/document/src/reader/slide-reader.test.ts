@@ -174,7 +174,7 @@ describe("readPptx - typed slide reading (real fixtures)", () => {
  * Real fixtures such as color conversion / line / rotation / gradient fill / unsupported attributes, etc.
  * Synthetic PPTX for definitive verification of misaligned structures.
  */
-function buildSyntheticPptx(slideSpTree: string): Uint8Array {
+function buildSyntheticPptx(slideSpTree: string, slideRootExtras = ""): Uint8Array {
   const files: Record<string, Uint8Array> = {
     "[Content_Types].xml": xml(
       `<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">` +
@@ -203,6 +203,7 @@ function buildSyntheticPptx(slideSpTree: string): Uint8Array {
     "ppt/slides/slide1.xml": xml(
       `<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">` +
         `<p:cSld><p:spTree>${slideSpTree}</p:spTree></p:cSld>` +
+        slideRootExtras +
         `</p:sld>`,
     ),
   };
@@ -266,6 +267,22 @@ function buildSyntheticPptxWithLayout(slideLayoutAttrs: string): Uint8Array {
 }
 
 describe("readPptx - typed shape detail (synthetic)", () => {
+  it("preserves slide-root timing and extension XML as raw sidecars", () => {
+    const source = readPptx(
+      buildSyntheticPptx(
+        "",
+        `<p:timing><p:tnLst><p:par><p:cTn><p:childTnLst><p:set><p:cBhvr><p:tgtEl><p:spTgt spid="42"/></p:tgtEl></p:cBhvr></p:set></p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>` +
+          `<p:extLst><p:ext uri="test"/></p:extLst>`,
+      ),
+    );
+
+    expect(source.slides[0]?.rawSidecars?.map((sidecar) => sidecar.node.name)).toEqual([
+      "p:timing",
+      "p:extLst",
+    ]);
+    expect(source.slides[0]?.rawSidecars?.[0]?.node.children).toBeDefined();
+  });
+
   it.each([
     ['show="0"', ` show="0"`, false, false],
     ['show="false"', ` show="false"`, false, false],
