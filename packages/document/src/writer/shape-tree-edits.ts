@@ -3,6 +3,7 @@ import {
   isShapeTreeZOrderChildKey,
 } from "../reader/shape-tree-child-classification.js";
 import { getAttr, getChild, localName, type XmlNode } from "../reader/xml.js";
+import { reparentSourceTransform } from "../source/group-transform-matrix.js";
 import type {
   PptxSourceModelAddChartEdit,
   PptxSourceModelAddConnectorEdit,
@@ -17,7 +18,9 @@ import type {
   PptxSourceModelSetBackgroundEdit,
   PptxSourceModelSetSlideBackgroundEdit,
   PptxSourceModelUngroupShapeEdit,
+  SourceTransform,
 } from "../source/index.js";
+import { asEmu, asOoxmlAngle } from "../source/index.js";
 import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import {
   appendShapeTreeNodeAtEnd,
@@ -31,6 +34,7 @@ import {
 } from "./dirty-part-xml-helpers.js";
 import {
   deleteShapeXml,
+  getShapeTransformNode,
   locateShapeTreeNode,
   locateShapeTreeNodeLocation,
   parseShapeLocator,
@@ -267,8 +271,16 @@ function applyCrossParentMoveShapesEdit(
   spTree: XmlNode,
   edit: PptxSourceModelMoveShapesEdit,
 ): void {
-  assertIdentityMappedGroupChainXml(spTree, edit.parentGroupId, "move source");
-  assertIdentityMappedGroupChainXml(spTree, edit.destinationParentGroupId, "move destination");
+  const sourceGroups = groupTransformChainXml(spTree, edit.parentGroupId, "move source");
+  const destinationGroups = groupTransformChainXml(
+    spTree,
+    edit.destinationParentGroupId,
+    "move destination",
+  );
+  if (edit.transformedRoots === undefined) {
+    assertIdentityMappedGroupChainXml(sourceGroups, "move source");
+    assertIdentityMappedGroupChainXml(destinationGroups, "move destination");
+  }
   const sourceContainer = groupParentContainer(spTree, edit.parentGroupId, "move source");
   const destinationContainer = groupParentContainer(
     spTree,
@@ -292,6 +304,12 @@ function applyCrossParentMoveShapesEdit(
     }
     return entry;
   });
+  applyAndValidateMovedRootTransforms(
+    movedEntries,
+    edit,
+    sourceGroups.map((group) => group.transforms),
+    destinationGroups.map((group) => group.transforms),
+  );
   const movedSubtreeIds = new Set<string>();
   for (const entry of movedEntries) collectXmlDrawingNodeIds(entry.value, movedSubtreeIds);
   assertXmlConnectorBoundary(spTree, movedSubtreeIds);
@@ -342,57 +360,167 @@ function applyCrossParentMoveShapesEdit(
   ]);
 }
 
-function assertIdentityMappedGroupChainXml(
+interface XmlGroupCoordinateSpace {
+  readonly node: XmlNode;
+  readonly transforms: {
+    readonly transform?: SourceTransform;
+    readonly childTransform?: SourceTransform;
+  };
+}
+
+function groupTransformChainXml(
   spTree: XmlNode,
   groupId: string | undefined,
   context: string,
-): void {
-  if (groupId === undefined) return;
+): readonly XmlGroupCoordinateSpace[] {
+  if (groupId === undefined) return [];
   const path = findGroupPathXml(spTree, groupId);
   if (path === undefined) {
     throw new Error(`writePptx: ${context} group '${groupId}' was not found`);
   }
-  for (const group of path) {
-    const xfrm = getChild(getChild(group, "grpSpPr"), "xfrm");
-    const off = getChild(xfrm, "off");
-    const ext = getChild(xfrm, "ext");
-    const childOff = getChild(xfrm, "chOff");
-    const childExt = getChild(xfrm, "chExt");
-    const width = getAttr(ext, "cx");
-    const height = getAttr(ext, "cy");
-    const childWidth = getAttr(childExt, "cx");
-    const childHeight = getAttr(childExt, "cy");
-    const offsetX = getAttr(off, "x");
-    const offsetY = getAttr(off, "y");
-    const childOffsetX = getAttr(childOff, "x");
-    const childOffsetY = getAttr(childOff, "y");
+  return path.map((group) => {
+    const xfrm = getShapeTransformNode(group);
+    return {
+      node: group,
+      transforms: {
+        transform: parseTransformXml(xfrm, "off", "ext"),
+        childTransform: parseTransformXml(xfrm, "chOff", "chExt"),
+      },
+    };
+  });
+}
+
+function assertIdentityMappedGroupChainXml(
+  groups: readonly XmlGroupCoordinateSpace[],
+  context: string,
+): void {
+  for (const group of groups) {
+    const transform = group.transforms.transform;
+    const child = group.transforms.childTransform;
     if (
-      xfrm === undefined ||
-      offsetX === undefined ||
-      offsetY === undefined ||
-      childOffsetX === undefined ||
-      childOffsetY === undefined ||
-      width === undefined ||
-      height === undefined ||
-      childWidth === undefined ||
-      childHeight === undefined ||
-      Number(offsetX) !== Number(childOffsetX) ||
-      Number(offsetY) !== Number(childOffsetY) ||
-      Number(width) !== Number(childWidth) ||
-      Number(height) !== Number(childHeight) ||
-      Number(width) <= 0 ||
-      Number(height) <= 0 ||
-      Number(childWidth) <= 0 ||
-      Number(childHeight) <= 0 ||
-      Number(getAttr(xfrm, "rot") ?? 0) !== 0 ||
-      isTrueXmlAttribute(getAttr(xfrm, "flipH")) ||
-      isTrueXmlAttribute(getAttr(xfrm, "flipV"))
+      transform === undefined ||
+      child === undefined ||
+      Number(transform.offsetX) !== Number(child.offsetX) ||
+      Number(transform.offsetY) !== Number(child.offsetY) ||
+      Number(transform.width) !== Number(child.width) ||
+      Number(transform.height) !== Number(child.height) ||
+      Number(transform.width) <= 0 ||
+      Number(transform.height) <= 0 ||
+      Number(child.width) <= 0 ||
+      Number(child.height) <= 0 ||
+      Number(transform.rotation ?? 0) !== 0 ||
+      transform.flipHorizontal === true ||
+      transform.flipVertical === true
     ) {
       throw new Error(
-        `writePptx: ${context} ancestor '${shapeTreeNodeId(group) ?? "unknown"}' is not identity-mapped`,
+        `writePptx: ${context} ancestor '${shapeTreeNodeId(group.node) ?? "unknown"}' is not identity-mapped`,
       );
     }
   }
+}
+
+function applyAndValidateMovedRootTransforms(
+  entries: readonly { readonly value: unknown }[],
+  edit: PptxSourceModelMoveShapesEdit,
+  sourceGroups: readonly {
+    readonly transform?: SourceTransform;
+    readonly childTransform?: SourceTransform;
+  }[],
+  destinationGroups: readonly {
+    readonly transform?: SourceTransform;
+    readonly childTransform?: SourceTransform;
+  }[],
+): void {
+  if (edit.transformedRoots === undefined) return;
+  if (
+    edit.transformedRoots.length !== edit.shapeIds.length ||
+    edit.transformedRoots.some((entry, index) => entry.shapeId !== edit.shapeIds[index])
+  ) {
+    throw new Error("writePptx: transformed roots must match every moved shape in source order");
+  }
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    const finalized = edit.transformedRoots[index];
+    if (entry === undefined || finalized === undefined) continue;
+    if (typeof entry.value !== "object" || entry.value === null || Array.isArray(entry.value)) {
+      throw new Error(`writePptx: moved shape '${finalized.shapeId}' has invalid XML`);
+    }
+    const node = unsafeOoxmlBoundaryAssertion<XmlNode>(entry.value);
+    const xfrm = getShapeTransformNode(node);
+    const current = parseTransformXml(xfrm, "off", "ext");
+    const expected = reparentSourceTransform(sourceGroups, destinationGroups, current);
+    if (!expected.ok) {
+      throw new Error(
+        `writePptx: moved shape '${finalized.shapeId}' affine transform is not exactly representable (${expected.reason})`,
+      );
+    }
+    if (!sourceTransformsEqual(expected.value, finalized.transform)) {
+      throw new Error(`writePptx: moved shape '${finalized.shapeId}' finalized transform is stale`);
+    }
+    if (xfrm === undefined) {
+      throw new Error(`writePptx: moved shape '${finalized.shapeId}' has no xfrm`);
+    }
+    writeTransformXml(xfrm, finalized.transform);
+  }
+}
+
+function parseTransformXml(
+  xfrm: XmlNode | undefined,
+  offsetName: "off" | "chOff",
+  extentName: "ext" | "chExt",
+): SourceTransform | undefined {
+  const offset = getChild(xfrm, offsetName);
+  const extent = getChild(xfrm, extentName);
+  const x = Number(getAttr(offset, "x"));
+  const y = Number(getAttr(offset, "y"));
+  const width = Number(getAttr(extent, "cx"));
+  const height = Number(getAttr(extent, "cy"));
+  if ([x, y, width, height].some((value) => !Number.isFinite(value))) return undefined;
+  return {
+    offsetX: asEmu(x),
+    offsetY: asEmu(y),
+    width: asEmu(width),
+    height: asEmu(height),
+    ...(offsetName === "off" && getAttr(xfrm, "rot") !== undefined
+      ? { rotation: asOoxmlAngle(Number(getAttr(xfrm, "rot"))) }
+      : {}),
+    ...(offsetName === "off" && isTrueXmlAttribute(getAttr(xfrm, "flipH"))
+      ? { flipHorizontal: true }
+      : {}),
+    ...(offsetName === "off" && isTrueXmlAttribute(getAttr(xfrm, "flipV"))
+      ? { flipVertical: true }
+      : {}),
+  };
+}
+
+function sourceTransformsEqual(left: SourceTransform, right: SourceTransform): boolean {
+  return (
+    Number(left.offsetX) === Number(right.offsetX) &&
+    Number(left.offsetY) === Number(right.offsetY) &&
+    Number(left.width) === Number(right.width) &&
+    Number(left.height) === Number(right.height) &&
+    Number(left.rotation ?? 0) === Number(right.rotation ?? 0) &&
+    (left.flipHorizontal === true) === (right.flipHorizontal === true) &&
+    (left.flipVertical === true) === (right.flipVertical === true)
+  );
+}
+
+function writeTransformXml(xfrm: XmlNode, transform: SourceTransform): void {
+  const offset = getChild(xfrm, "off");
+  const extent = getChild(xfrm, "ext");
+  if (offset === undefined || extent === undefined) {
+    throw new Error("writePptx: moved shape xfrm must contain off and ext");
+  }
+  offset["@_x"] = String(transform.offsetX);
+  offset["@_y"] = String(transform.offsetY);
+  extent["@_cx"] = String(transform.width);
+  extent["@_cy"] = String(transform.height);
+  if (Number(transform.rotation ?? 0) === 0) delete xfrm["@_rot"];
+  else xfrm["@_rot"] = String(transform.rotation);
+  if (transform.flipHorizontal === true) xfrm["@_flipH"] = "1";
+  else delete xfrm["@_flipH"];
+  if (transform.flipVertical === true) xfrm["@_flipV"] = "1";
+  else delete xfrm["@_flipV"];
 }
 
 function findGroupPathXml(

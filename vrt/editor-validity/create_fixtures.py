@@ -14,6 +14,7 @@ Usage:
 
 import base64
 import os
+import re
 import tempfile
 import zipfile
 
@@ -647,6 +648,46 @@ def create_editor_validity_group_fixture(filename, *, grouped):
     print(f"  Created: {filename}")
 
 
+def create_editor_validity_affine_move_fixture():
+    """Native group with rotation, flip, and non-uniform child mapping for move validity."""
+    source_path = os.path.join(OUTPUT_DIR, "editor-validity-group-expected.pptx")
+    output_path = os.path.join(OUTPUT_DIR, "editor-validity-affine-move.pptx")
+    with zipfile.ZipFile(source_path, "r") as source_archive:
+        with zipfile.ZipFile(output_path, "w", zipfile.ZIP_DEFLATED) as output_archive:
+            for info in source_archive.infolist():
+                data = source_archive.read(info.filename)
+                if info.filename == "ppt/slides/slide1.xml":
+                    xml = data.decode("utf-8")
+                    group_match = re.search(
+                        r'<p:grpSp\b[^>]*>[\s\S]*?name="Expected Group"[\s\S]*?</p:grpSp>',
+                        xml,
+                    )
+                    if group_match is None:
+                        raise RuntimeError("affine move group XML was not found")
+                    group_xml = group_match.group(0)
+                    xfrm_match = re.search(r"<a:xfrm[^>]*>[\s\S]*?</a:xfrm>", group_xml)
+                    if xfrm_match is None:
+                        raise RuntimeError("affine move group transform XML was not found")
+                    xfrm = xfrm_match.group(0)
+                    ext_match = re.search(r'<a:ext cx="(\d+)" cy="(\d+)"/>', xfrm)
+                    if ext_match is None:
+                        raise RuntimeError("affine move group extents were not found")
+                    width = int(ext_match.group(1))
+                    transformed = re.sub(
+                        r"<a:xfrm[^>]*>",
+                        '<a:xfrm rot="5400000" flipH="1">',
+                        xfrm,
+                        count=1,
+                    ).replace(
+                        ext_match.group(0),
+                        f'<a:ext cx="{width * 2}" cy="{ext_match.group(2)}"/>',
+                    )
+                    xml = xml.replace(group_xml, group_xml.replace(xfrm, transformed))
+                    data = xml.encode("utf-8")
+                output_archive.writestr(info, data)
+    print("  Created: editor-validity-affine-move.pptx")
+
+
 def create_editor_validity_drawing_delete_fixture(filename):
     """Fixture containing one native picture, Table, Chart, and group delete target."""
     grouped_path = os.path.join(OUTPUT_DIR, "editor-validity-group-expected.pptx")
@@ -893,6 +934,7 @@ def create_editor_validity_fixtures():
         "editor-validity-group-expected.pptx",
         grouped=True,
     )
+    create_editor_validity_affine_move_fixture()
     create_editor_validity_drawing_delete_fixture(
         "editor-validity-drawing-delete-source.pptx",
     )

@@ -1,9 +1,10 @@
 import { getAttr, getChild, localName, parseXml, type XmlNode } from "../reader/xml.js";
 import { unsafeOoxmlBoundaryAssertion } from "../unsafe-type-assertion.js";
 import { sourceHandlesEqual } from "./edit-descriptors.js";
+import { reparentSourceTransform } from "./group-transform-matrix.js";
 import type { PartPath, SourceHandle, SourceNodeId } from "./handles.js";
 import type { PptxSourceModel } from "./pptx-source-model.js";
-import type { SourceGroup, SourceShapeNode } from "./shapes.js";
+import type { SourceGroup, SourceShapeNode, SourceTransform } from "./shapes.js";
 
 export interface MoveShapesOptions {
   /** Insert the moved block immediately before this direct child. Omit to move it to the end. */
@@ -35,8 +36,8 @@ interface SourceLocation extends LocatedShape {
 
 /**
  * Moves one consecutive direct-child drawing block within one drawing part. Cross-parent moves
- * are limited to complete identity-mapped native-group ancestor chains, so child transforms can
- * remain byte-for-byte unchanged while their rendered positions stay fixed.
+ * re-express moved root transforms in the destination coordinate space when the exact affine
+ * mapping is representable as integer OOXML transform values.
  */
 export function moveShapes(
   source: PptxSourceModel,
@@ -121,11 +122,40 @@ export function moveShapes(
     assertSupportedSubtree(anchor);
   }
 
-  const movedShapes = orderedLocations.map((location) => location.shape);
+  let movedShapes = orderedLocations.map((location) => location.shape);
   const crossParent = sourceParentId !== target.parentGroupId;
+  let transformedRoots:
+    | readonly { readonly shapeId: string; readonly transform: SourceTransform }[]
+    | undefined;
   if (crossParent) {
-    assertIdentityMappedAncestors(orderedLocations[0]?.ancestors ?? []);
-    assertIdentityMappedAncestors(destinationAncestors(target.shapes, target.parentGroupId));
+    const sourceAncestors = orderedLocations[0]?.ancestors ?? [];
+    const targetAncestors = destinationAncestors(target.shapes, target.parentGroupId);
+    if (
+      !isIdentityMappedAncestorChain(sourceAncestors) ||
+      !isIdentityMappedAncestorChain(targetAncestors)
+    ) {
+      const transformed = movedShapes.map((shape) => {
+        const result = reparentSourceTransform(
+          sourceAncestors,
+          targetAncestors,
+          movableRootTransform(shape),
+        );
+        if (!result.ok) {
+          throw new Error(
+            `moveShapes: affine transform is not exactly representable (${result.reason})`,
+          );
+        }
+        return { shapeId: String(shape.nodeId), transform: result.value };
+      });
+      transformedRoots = transformed;
+      const transformById = new Map(transformed.map((entry) => [entry.shapeId, entry.transform]));
+      movedShapes = movedShapes.map((shape) =>
+        withMovableRootTransform(
+          shape,
+          transformById.get(String(shape.nodeId)) ?? movableRootTransform(shape),
+        ),
+      );
+    }
     const movedIds = collectSubtreeNodeIds(movedShapes);
     if (target.parentGroupId !== undefined && movedIds.has(String(target.parentGroupId))) {
       throw new Error("moveShapes: destination must not be inside the moved block");
@@ -176,6 +206,7 @@ export function moveShapes(
         ...(crossParent && target.parentGroupId !== undefined
           ? { destinationParentGroupId: String(target.parentGroupId) }
           : {}),
+        ...(transformedRoots !== undefined ? { transformedRoots } : {}),
         shapeIds: movedShapes.map((shape) => String(shape.nodeId)),
         ...(beforeShapeId !== undefined ? { beforeShapeId } : {}),
       },
@@ -195,13 +226,39 @@ function assertSupportedSubtree(shape: SourceShapeNode): void {
   }
 }
 
-function assertIdentityMappedAncestors(ancestors: readonly SourceGroup[]): void {
+function movableRootTransform(shape: SourceShapeNode): SourceTransform | undefined {
+  if (shape.kind === "raw") return undefined;
+  return shape.transform;
+}
+
+function withMovableRootTransform(
+  shape: SourceShapeNode,
+  transform: SourceTransform | undefined,
+): SourceShapeNode {
+  if (shape.kind === "raw" || shape.kind === "smartArt") {
+    throw new Error("moveShapes: SmartArt and raw drawing targets are not supported");
+  }
+  return { ...shape, transform };
+}
+
+function isIdentityMappedAncestorChain(ancestors: readonly SourceGroup[]): boolean {
   for (const group of ancestors) {
     const transform = group.transform;
     const child = group.childTransform;
     if (
       transform === undefined ||
       child === undefined ||
+      ![
+        transform.offsetX,
+        transform.offsetY,
+        transform.width,
+        transform.height,
+        transform.rotation ?? 0,
+        child.offsetX,
+        child.offsetY,
+        child.width,
+        child.height,
+      ].every((value) => Number.isFinite(Number(value))) ||
       Number(transform.width) <= 0 ||
       Number(transform.height) <= 0 ||
       Number(child.width) <= 0 ||
@@ -214,11 +271,10 @@ function assertIdentityMappedAncestors(ancestors: readonly SourceGroup[]): void 
       transform.flipHorizontal === true ||
       transform.flipVertical === true
     ) {
-      throw new Error(
-        "moveShapes: source and destination ancestors must have a complete non-zero identity child mapping",
-      );
+      return false;
     }
   }
+  return true;
 }
 
 function destinationAncestors(

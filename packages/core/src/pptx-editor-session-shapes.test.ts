@@ -1,4 +1,11 @@
-import { asEmu, findShapeNodeBySourceHandle, readPptx } from "@pptx-glimpse/document";
+import {
+  asEmu,
+  findShapeNodeBySourceHandle,
+  groupShapes,
+  readPptx,
+  writePptx,
+} from "@pptx-glimpse/document";
+import { unzipSync, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
 
 import { createPptxEditorSession } from "./index.js";
@@ -330,4 +337,61 @@ describe("PptxEditorSession - shapes", () => {
       redoneGroup?.kind === "group" ? redoneGroup.children.map((shape) => shape.nodeId) : [],
     ).toEqual([third.nodeId, first.nodeId, second.nodeId]);
   });
+
+  it("rerenders, saves, and restores a representable affine cross-parent move", async () => {
+    const editor = await createPptxEditorSession(buildAffineCrossParentMoveFixture(), {
+      skipSystemFonts: true,
+    });
+    const group = editor.document.slides[0]?.shapes.find((shape) => shape.kind === "group");
+    const root = editor.document.slides[0]?.shapes.find((shape) => shape.kind === "shape");
+    if (group?.kind !== "group" || group.handle === undefined || root?.handle === undefined) {
+      throw new Error("affine cross-parent move fixture is missing handles");
+    }
+    editor.selectShape(root.handle);
+    const beforeTransform = root.transform;
+    const beforeSvg = (await editor.renderCurrentSlides())[0]?.svg;
+
+    const moved = await editor.moveShapes([root.handle], group.handle);
+    expect(moved.selection).toEqual({ shapeHandle: root.handle });
+    expect(moved.history.undoDepth).toBe(1);
+    expect(moved.slides[0]?.svg).toBeDefined();
+    expect(moved.slides[0]?.svg).not.toBe(beforeSvg);
+    const movedGroup = editor.document.slides[0]?.shapes[0];
+    const movedRoot = movedGroup?.kind === "group" ? movedGroup.children.at(-1) : undefined;
+    expect(movedRoot?.transform).not.toEqual(beforeTransform);
+
+    const saved = readPptx(editor.save().pptx);
+    const savedGroup = saved.slides[0]?.shapes[0];
+    expect(savedGroup?.kind === "group" ? savedGroup.children.at(-1)?.nodeId : undefined).toBe(
+      root.nodeId,
+    );
+    await editor.undo();
+    expect(editor.document.slides[0]?.shapes.at(-1)?.nodeId).toBe(root.nodeId);
+    await editor.redo();
+    expect(editor.document.slides[0]?.shapes[0]?.kind).toBe("group");
+  });
 });
+
+function buildAffineCrossParentMoveFixture(): Uint8Array {
+  const source = readPptx(buildGroupCommandFixture());
+  const handles = source.slides[0]?.shapes.map((shape) => shape.handle) ?? [];
+  if (handles[0] === undefined || handles[1] === undefined) {
+    throw new Error("affine fixture source handles are missing");
+  }
+  const grouped = groupShapes(source, [handles[0], handles[1]]);
+  const archive = unzipSync(writePptx(grouped));
+  const partPath = "ppt/slides/slide1.xml";
+  const xml = new TextDecoder().decode(requireValue(archive[partPath]));
+  const groupBlock = requireValue(xml.match(/<p:grpSp\b[^>]*>[\s\S]*?<\/p:grpSp>/)?.[0]);
+  const transformedGroup = groupBlock.replace(
+    /<a:xfrm[\s\S]*?<\/a:xfrm>/,
+    `<a:xfrm rot="5400000" flipH="1"><a:off x="0" y="0"/><a:ext cx="4000000" cy="2000000"/><a:chOff x="0" y="0"/><a:chExt cx="2000000" cy="1000000"/></a:xfrm>`,
+  );
+  archive[partPath] = new TextEncoder().encode(xml.replace(groupBlock, transformedGroup));
+  return zipSync(archive);
+}
+
+function requireValue<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error("test fixture value is missing");
+  return value;
+}

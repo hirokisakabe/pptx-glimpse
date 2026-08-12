@@ -25,6 +25,7 @@ export const VRT_CASES = [
   { name: "background", fixture: "background.pptx" },
   { name: "groups", fixture: "groups.pptx" },
   { name: "identity-cross-parent-move", fixture: "identity-cross-parent-move.pptx" },
+  { name: "general-affine-cross-parent-move", fixture: "general-affine-cross-parent-move.pptx" },
   { name: "charts", fixture: "charts.pptx" },
   { name: "connectors", fixture: "connectors.pptx" },
   { name: "custom-geometry", fixture: "custom-geometry.pptx" },

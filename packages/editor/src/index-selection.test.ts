@@ -1,9 +1,13 @@
 import {
   asEmu,
+  asOoxmlAngle,
   asPartPath,
   asSourceNodeId,
   findShapeNodeBySourceHandle,
+  groupShapes,
+  type PptxSourceModel,
   readPptx,
+  type SourceGroup,
   type SourceHandle,
 } from "@pptx-glimpse/document";
 import { describe, expect, it } from "vitest";
@@ -250,6 +254,59 @@ describe("EditorSession selection", () => {
     expect(session.selection).toEqual({ shapeHandle: handles[2] });
   });
 
+  it("keeps selection and history across a representable affine cross-parent move", () => {
+    const initial = createThreeShapeSource();
+    const handles = initial.slides[0]?.shapes.map((shape) => requireHandle(shape.handle)) ?? [];
+    const grouped = groupShapes(initial, handles.slice(0, 2));
+    const group = grouped.slides[0]?.shapes[0];
+    if (group?.kind !== "group" || group.handle === undefined) {
+      throw new Error("affine move fixture group is missing");
+    }
+    const transformedGroup: SourceGroup = {
+      ...group,
+      transform: {
+        offsetX: asEmu(0),
+        offsetY: asEmu(0),
+        width: asEmu(4000),
+        height: asEmu(2000),
+        rotation: asOoxmlAngle(5_400_000),
+        flipHorizontal: true,
+      },
+      childTransform: {
+        offsetX: asEmu(0),
+        offsetY: asEmu(0),
+        width: asEmu(2000),
+        height: asEmu(1000),
+      },
+    };
+    const source: PptxSourceModel = {
+      ...grouped,
+      slides: [
+        {
+          ...requireValue(grouped.slides[0]),
+          shapes: [transformedGroup, ...requireValue(grouped.slides[0]).shapes.slice(1)],
+        },
+      ],
+    };
+    const session = createEditorSession(source);
+    expect(session.selectShape(handles[2])).toMatchObject({ ok: true });
+
+    expectApplied(
+      session.apply({
+        kind: "moveShapes",
+        shapeHandles: [handles[2]],
+        destinationHandle: group.handle,
+      }),
+    );
+    expect(session.selection).toEqual({ shapeHandle: handles[2] });
+    expect(session.undoDepth).toBe(1);
+    expectHistory(session.undo());
+    expect(session.document).toBe(source);
+    expect(session.selection).toEqual({ shapeHandle: handles[2] });
+    expectHistory(session.redo());
+    expect(session.selection).toEqual({ shapeHandle: handles[2] });
+  });
+
   it("keeps a later selection across ordinary command undo and redo", () => {
     const source = createThreeShapeSource();
     const handles = source.slides[0]?.shapes.map((shape) => requireHandle(shape.handle)) ?? [];
@@ -342,3 +399,8 @@ describe("EditorSession selection", () => {
     expect(session.redoDepth).toBe(0);
   });
 });
+
+function requireValue<T>(value: T | undefined): T {
+  if (value === undefined) throw new Error("test fixture value is missing");
+  return value;
+}

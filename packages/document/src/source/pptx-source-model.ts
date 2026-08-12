@@ -48,7 +48,7 @@ import type {
   SourceSlideMaster,
   SourceTheme,
 } from "./presentation.js";
-import type { SourceImageCrop, SourceParagraphProperties } from "./shapes.js";
+import type { SourceImageCrop, SourceParagraphProperties, SourceTransform } from "./shapes.js";
 import type { Emu, Pt } from "./units.js";
 
 export interface PptxSourceModel {
@@ -367,6 +367,11 @@ export interface PptxSourceModelMoveShapesEdit {
   readonly crossParent?: true;
   /** Destination direct-child group id for a cross-parent move. Omitted for the root `p:spTree`. */
   readonly destinationParentGroupId?: string;
+  /** Finalized integer OOXML transforms for roots re-expressed across affine parents. */
+  readonly transformedRoots?: readonly {
+    readonly shapeId: string;
+    readonly transform: SourceTransform;
+  }[];
   /** Consecutive drawing ids in source document order. */
   readonly shapeIds: readonly string[];
   /** Direct-child anchor id. Omitted to move the block to the drawing-order end. */
