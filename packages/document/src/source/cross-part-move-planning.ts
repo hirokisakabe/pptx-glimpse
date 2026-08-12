@@ -11,6 +11,7 @@ import {
 import type { Relationship } from "./package-graph.js";
 import { resolveInternalRelationshipTarget } from "./package-paths.js";
 import type { PptxSourceModel } from "./pptx-source-model.js";
+import type { SourceBackground } from "./presentation.js";
 import type { RawOoxmlNode, RawSidecar } from "./raw.js";
 import type {
   SourceCellBorders,
@@ -990,7 +991,7 @@ function drawingPartRoots(source: PptxSourceModel): readonly DrawingPartRoot[] {
               partPath: item.partPath,
               handle: item.handle,
               shapes: item.shapes,
-              rawSidecars: item.rawSidecars ?? [],
+              rawSidecars: drawingPartRawSidecars(item.rawSidecars, item.background),
             },
           ],
     ),
@@ -1003,7 +1004,7 @@ function drawingPartRoots(source: PptxSourceModel): readonly DrawingPartRoot[] {
               partPath: item.partPath,
               handle: item.handle,
               shapes: item.shapes,
-              rawSidecars: item.rawSidecars ?? [],
+              rawSidecars: drawingPartRawSidecars(item.rawSidecars, item.background),
             },
           ],
     ),
@@ -1016,10 +1017,21 @@ function drawingPartRoots(source: PptxSourceModel): readonly DrawingPartRoot[] {
               partPath: item.partPath,
               handle: item.handle,
               shapes: item.shapes,
-              rawSidecars: item.rawSidecars ?? [],
+              rawSidecars: drawingPartRawSidecars(item.rawSidecars, item.background),
             },
           ],
     ),
+  ];
+}
+
+function drawingPartRawSidecars(
+  rawSidecars: readonly RawSidecar[] | undefined,
+  background: SourceBackground | undefined,
+): readonly RawSidecar[] {
+  return [
+    ...(rawSidecars ?? []),
+    ...(background?.kind === "raw" ? [background.raw] : []),
+    ...(background?.kind === "fill" && background.fill.kind === "raw" ? [background.fill.raw] : []),
   ];
 }
 
