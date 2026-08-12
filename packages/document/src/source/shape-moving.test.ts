@@ -814,6 +814,98 @@ describe("moveShapes", () => {
     expect(rereadMoved.handle?.nodeId).toBe(secondSourceChild.handle?.nodeId);
   });
 
+  it("re-expresses only a moved group root and preserves its complete subtree", () => {
+    let source = createShapes(6);
+    const initialSlide = requireValue(source.slides[0]);
+    const handles = initialSlide.shapes.map((shape) => requireValue(shape.handle));
+    source = groupShapes(source, handles.slice(0, 2));
+    const innerHandle = requireValue(requireGroup(source.slides[0]?.shapes[0]).handle);
+    source = groupShapes(source, [innerHandle, handles[2]]);
+    source = groupShapes(source, handles.slice(3, 5));
+
+    const groupedSlide = requireValue(source.slides[0]);
+    const sourceParent = requireGroup(groupedSlide.shapes[0]);
+    const destinationParent = requireGroup(groupedSlide.shapes[1]);
+    const rootSibling = requireValue(groupedSlide.shapes[2]);
+    source = materializeGroupTransforms(
+      source,
+      new Map([
+        [
+          String(sourceParent.nodeId),
+          `<a:xfrm><a:off x="2000" y="3000"/><a:ext cx="4000" cy="3000"/><a:chOff x="0" y="0"/><a:chExt cx="2000" cy="1000"/></a:xfrm>`,
+        ],
+        [
+          String(destinationParent.nodeId),
+          `<a:xfrm><a:off x="10000" y="2000"/><a:ext cx="3000" cy="1000"/><a:chOff x="0" y="0"/><a:chExt cx="3000" cy="1000"/></a:xfrm>`,
+        ],
+      ]),
+    );
+    source = insertIntoGroupProperties(
+      source,
+      String(innerHandle.nodeId),
+      `<a:extLst><a:ext uri="{AFFINE-GROUP-PRESERVE}"/></a:extLst>`,
+    );
+
+    const beforeSlide = requireValue(source.slides[0]);
+    const beforeSourceParent = requireGroup(beforeSlide.shapes[0]);
+    const beforeDestinationParent = requireGroup(beforeSlide.shapes[1]);
+    const beforeInner = requireGroup(beforeSourceParent.children[0]);
+    const beforeChildren = beforeInner.children.map((child) => ({
+      nodeId: child.nodeId,
+      handle: requireValue(child.handle),
+      transform: requireTransform(child),
+    }));
+    const beforeChildTransform = beforeInner.childTransform;
+    const beforeXml = slideXml(writePptx(source));
+    const beforeSiblingXml = extractElementContaining(
+      beforeXml,
+      "p:sp",
+      `<p:cNvPr id="${String(rootSibling.nodeId)}"`,
+    );
+    const absoluteBefore = multiplySourceAffineMatrices(
+      valueOf(
+        buildSourceGroupMappingMatrix(
+          beforeSourceParent.transform,
+          beforeSourceParent.childTransform,
+        ),
+      ),
+      valueOf(buildSourceTransformMatrix(requireTransform(beforeInner))),
+    );
+
+    const moved = moveShapes(source, [innerHandle], requireValue(beforeDestinationParent.handle));
+    const reread = readPptx(writePptx(moved));
+    const rereadDestination = requireGroup(reread.slides[0]?.shapes[1]);
+    const rereadInner = requireGroup(
+      rereadDestination.children.find((child) => child.nodeId === innerHandle.nodeId),
+    );
+    expectMatrixClose(
+      multiplySourceAffineMatrices(
+        valueOf(
+          buildSourceGroupMappingMatrix(
+            rereadDestination.transform,
+            rereadDestination.childTransform,
+          ),
+        ),
+        valueOf(buildSourceTransformMatrix(requireTransform(rereadInner))),
+      ),
+      absoluteBefore,
+    );
+    expect(rereadInner.childTransform).toEqual(beforeChildTransform);
+    expect(
+      rereadInner.children.map((child) => ({
+        nodeId: child.nodeId,
+        handle: requireValue(child.handle),
+        transform: requireTransform(child),
+      })),
+    ).toEqual(beforeChildren);
+
+    const afterXml = slideXml(writePptx(moved));
+    expect(afterXml).toContain(`uri="{AFFINE-GROUP-PRESERVE}"`);
+    expect(
+      extractElementContaining(afterXml, "p:sp", `<p:cNvPr id="${String(rootSibling.nodeId)}"`),
+    ).toBe(beforeSiblingXml);
+  });
+
   it.each([
     [
       "shear",
@@ -844,6 +936,11 @@ describe("moveShapes", () => {
       "EMU quantization mismatch",
       `<a:xfrm><a:off x="0" y="0"/><a:ext cx="3000" cy="3000"/><a:chOff x="0" y="0"/><a:chExt cx="1000" cy="1000"/></a:xfrm>`,
       "quantization-mismatch",
+    ],
+    [
+      "OOXML coordinate overflow",
+      `<a:xfrm><a:off x="0" y="0"/><a:ext cx="1" cy="1000"/><a:chOff x="0" y="0"/><a:chExt cx="1000000000000" cy="1000"/></a:xfrm>`,
+      "out-of-range-transform",
     ],
   ] as const)("rejects %s atomically at the move boundary", (_, transformXml, reason) => {
     let source = createShapes(3);
@@ -1057,6 +1154,22 @@ function materializeGroupTransforms(
     xml = next;
   }
   archive[partPath] = new TextEncoder().encode(xml);
+  return readPptx(zipSync(archive));
+}
+
+function insertIntoGroupProperties(
+  source: PptxSourceModel,
+  groupId: string,
+  fragment: string,
+): PptxSourceModel {
+  const archive = unzipSync(writePptx(source));
+  const partPath = "ppt/slides/slide1.xml";
+  const xml = new TextDecoder().decode(requireValue(archive[partPath]));
+  const marker = `<p:cNvPr id="${groupId}"`;
+  const groupXml = extractElementContaining(xml, "p:grpSp", marker);
+  const updatedGroupXml = groupXml.replace("</p:grpSpPr>", `${fragment}</p:grpSpPr>`);
+  if (updatedGroupXml === groupXml) throw new Error(`group '${groupId}' properties were not found`);
+  archive[partPath] = new TextEncoder().encode(xml.replace(groupXml, updatedGroupXml));
   return readPptx(zipSync(archive));
 }
 

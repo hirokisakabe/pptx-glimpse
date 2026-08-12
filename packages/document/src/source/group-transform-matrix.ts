@@ -20,6 +20,7 @@ type SourceTransformMatrixRejection =
   | "zero-child-extent"
   | "singular-matrix"
   | "shear"
+  | "out-of-range-transform"
   | "quantization-mismatch";
 
 export type SourceTransformMatrixResult<T> =
@@ -32,6 +33,11 @@ const MATRIX_ABSOLUTE_TOLERANCE = 1e-5;
 const MATRIX_ULP_TOLERANCE = 8;
 const MATRIX_TOLERANCE_CAP = 0.01;
 const NORMALIZED_SHEAR_TOLERANCE = 1e-10;
+// ECMA-376 DrawingML ST_Coordinate / ST_PositiveCoordinate bounds. These are also safely
+// representable as JavaScript integers, unlike the wider xsd:long storage type.
+const OOXML_COORDINATE_MIN = -27_273_042_329_600;
+const OOXML_COORDINATE_MAX = 27_273_042_316_900;
+const OOXML_POSITIVE_COORDINATE_MAX = 27_273_042_316_900;
 
 export interface SourceGroupCoordinateSpace {
   readonly transform?: SourceTransform;
@@ -250,11 +256,33 @@ export function decomposeSourceTransformMatrix(
     rotation: asOoxmlAngle(Math.round(rotationRadians * OOXML_ANGLE_PER_RADIAN)),
     ...(flipHorizontal ? { flipHorizontal: true } : {}),
   };
+  if (!isQuantizedTransformInOoxmlRange(quantized)) {
+    return reject("out-of-range-transform");
+  }
   const reconstructed = buildSourceTransformMatrix(quantized);
   if (!reconstructed.ok) return reconstructed;
   return matricesNearlyEqual(matrix, reconstructed.value)
     ? accept(quantized)
     : reject("quantization-mismatch");
+}
+
+function isQuantizedTransformInOoxmlRange(transform: SourceTransform): boolean {
+  const offsetX = Number(transform.offsetX);
+  const offsetY = Number(transform.offsetY);
+  const width = Number(transform.width);
+  const height = Number(transform.height);
+  const rotation = Number(transform.rotation ?? 0);
+  return (
+    [offsetX, offsetY, width, height, rotation].every(Number.isSafeInteger) &&
+    offsetX >= OOXML_COORDINATE_MIN &&
+    offsetX <= OOXML_COORDINATE_MAX &&
+    offsetY >= OOXML_COORDINATE_MIN &&
+    offsetY <= OOXML_COORDINATE_MAX &&
+    width > 0 &&
+    width <= OOXML_POSITIVE_COORDINATE_MAX &&
+    height > 0 &&
+    height <= OOXML_POSITIVE_COORDINATE_MAX
+  );
 }
 
 function matricesNearlyEqual(left: SourceAffineMatrix, right: SourceAffineMatrix): boolean {
