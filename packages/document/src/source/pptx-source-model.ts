@@ -39,7 +39,7 @@
  */
 
 import type { Diagnostic } from "./diagnostics.js";
-import type { PartPath, RelationshipId, SourceHandle } from "./handles.js";
+import type { PartPath, RelationshipId, SourceHandle, SourceNodeId } from "./handles.js";
 import type { PackageGraph } from "./package-graph.js";
 import type {
   SourcePresentation,
@@ -86,6 +86,7 @@ export type PptxSourceModelEdit =
   | PptxSourceModelAddTableEdit
   | PptxSourceModelReorderShapesEdit
   | PptxSourceModelMoveShapesEdit
+  | PptxSourceModelMoveShapesAcrossSlidesEdit
   | PptxSourceModelGroupShapesEdit
   | PptxSourceModelUngroupShapeEdit
   | PptxSourceModelDeleteShapeEdit
@@ -376,6 +377,24 @@ export interface PptxSourceModelMoveShapesEdit {
   readonly shapeIds: readonly string[];
   /** Direct-child anchor id. Omitted to move the block to the drawing-order end. */
   readonly beforeShapeId?: string;
+}
+
+/** Finalized two-part XML patch for a slide-root drawing move. */
+export interface PptxSourceModelMoveShapesAcrossSlidesEdit {
+  readonly kind: "moveShapesAcrossSlides";
+  readonly sourcePartPath: PartPath;
+  readonly destinationPartPath: PartPath;
+  readonly sourceShapeIds: readonly SourceNodeId[];
+  readonly destinationShapeIds: readonly SourceNodeId[];
+  readonly nodeIdMappings: readonly {
+    readonly before: SourceNodeId;
+    readonly after: SourceNodeId;
+  }[];
+  readonly relationshipIdMappings: readonly {
+    readonly before: RelationshipId;
+    readonly after: RelationshipId;
+  }[];
+  readonly beforeShapeId?: SourceNodeId;
 }
 
 export interface PptxSourceModelGroupShapesEdit {

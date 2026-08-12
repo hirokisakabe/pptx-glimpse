@@ -1,4 +1,10 @@
-import { moveShapes, readPptx, type SourceGroup, writePptx } from "@pptx-glimpse/document";
+import {
+  moveShapes,
+  moveShapesAcrossSlides,
+  readPptx,
+  type SourceGroup,
+  writePptx,
+} from "@pptx-glimpse/document";
 
 import type { FixtureCreatorMap, GridPos } from "../fixture-builder.js";
 import {
@@ -74,6 +80,60 @@ async function createShapesFixture(): Promise<void> {
     ],
   });
   savePptx(buffer, "shapes.pptx");
+}
+
+async function createCrossSlideDrawingMoveFixture(): Promise<void> {
+  const sourceXml = wrapSlideXml(
+    [
+      shapeXml(2, "Move blue", {
+        preset: "roundRect",
+        x: 600000,
+        y: 700000,
+        cx: 2200000,
+        cy: 1200000,
+        fillXml: solidFillXml("4472C4"),
+        textBodyXml: textBodyXmlHelper("Move blue"),
+      }),
+      shapeXml(3, "Move green", {
+        preset: "ellipse",
+        x: 3300000,
+        y: 2200000,
+        cx: 1800000,
+        cy: 1800000,
+        fillXml: solidFillXml("70AD47"),
+        textBodyXml: textBodyXmlHelper("Move green"),
+      }),
+    ].join("\n"),
+  );
+  const destinationXml = wrapSlideXml(
+    shapeXml(2, "Destination anchor", {
+      preset: "rect",
+      x: 5900000,
+      y: 900000,
+      cx: 2200000,
+      cy: 3000000,
+      fillXml: solidFillXml("ED7D31"),
+      textBodyXml: textBodyXmlHelper("Destination anchor"),
+    }),
+  );
+  const bytes = await buildPptx({
+    slides: [
+      { xml: sourceXml, rels: slideRelsXml() },
+      { xml: destinationXml, rels: slideRelsXml() },
+    ],
+  });
+  const source = readPptx(bytes);
+  const sourceHandles = source.slides[0]?.shapes.flatMap((shape) =>
+    shape.handle === undefined ? [] : [shape.handle],
+  );
+  const destination = source.slides[1];
+  if (sourceHandles?.length !== 2 || destination?.handle === undefined) {
+    throw new Error("cross-slide VRT fixture handles are missing");
+  }
+  const moved = moveShapesAcrossSlides(source, sourceHandles, destination.handle, {
+    beforeShapeHandle: destination.shapes[0]?.handle,
+  });
+  savePptx(writePptx(moved.document), "cross-slide-drawing-move.pptx");
 }
 
 async function createFillAndLinesFixture(): Promise<void> {
@@ -1501,6 +1561,7 @@ export const shapeFixtureCreators: FixtureCreatorMap = {
   "groups.pptx": createGroupsFixture,
   "identity-cross-parent-move.pptx": createIdentityCrossParentMoveFixture,
   "general-affine-cross-parent-move.pptx": createGeneralAffineCrossParentMoveFixture,
+  "cross-slide-drawing-move.pptx": createCrossSlideDrawingMoveFixture,
   "connectors.pptx": createConnectorsFixture,
   "custom-geometry.pptx": createCustomGeometryFixture,
   "flowchart.pptx": createFlowchartFixture,

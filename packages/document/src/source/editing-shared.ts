@@ -1,5 +1,5 @@
 import { getAttr, getChild, getChildArray, parseXml } from "../reader/xml.js";
-import { editDirtyPartPath, editInvalidatingPartPaths } from "./edit-descriptors.js";
+import { editDirtyPartPaths, editInvalidatingPartPaths } from "./edit-descriptors.js";
 import type {
   PartPath,
   PartRelationships,
@@ -151,7 +151,7 @@ export function hasDirtyEditForPart(
   edits: readonly PptxSourceModelEdit[],
   partPath: PartPath,
 ): boolean {
-  return edits.some((edit) => editDirtyPartPath(edit) === partPath);
+  return edits.some((edit) => editDirtyPartPaths(edit).includes(partPath));
 }
 
 export function editIsInvalidatedByDeletedParts(

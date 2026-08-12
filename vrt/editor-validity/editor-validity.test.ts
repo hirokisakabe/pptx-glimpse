@@ -31,6 +31,7 @@ import {
   duplicateSlide,
   groupShapes,
   moveShapes,
+  moveShapesAcrossSlides,
   moveSlide,
   readPptx,
   replaceImageBytes,
@@ -449,6 +450,22 @@ const LO_EDITOR_VALIDITY_CASES: readonly EditorValidityCase[] = [
         throw new Error("affine cross-parent move fixture has no root shape or group handle");
       }
       return writePptx(moveShapes(source, [rootShape.handle], group.handle));
+    },
+  },
+  {
+    name: "slide-root drawing move",
+    sourceFixture: "editor-validity-cross-slide-move-source.pptx",
+    expectedFixture: "editor-validity-cross-slide-move-expected.pptx",
+    createEditedPptx: (input: Uint8Array) => {
+      const source = readPptx(input);
+      const moved = findShapeByName(source.slides[0]?.shapes ?? [], "Cross Slide Move Target");
+      const destination = source.slides[1];
+      if (destination?.handle === undefined) {
+        throw new Error("cross-slide validity fixture has no destination handle");
+      }
+      return writePptx(
+        moveShapesAcrossSlides(source, [requireHandle(moved.handle)], destination.handle).document,
+      );
     },
   },
   {

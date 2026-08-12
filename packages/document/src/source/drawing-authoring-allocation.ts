@@ -9,7 +9,7 @@
  */
 
 import { getAttr, getChild, parseXml } from "../reader/xml.js";
-import { editReservedShapeId } from "./edit-descriptors.js";
+import { editReservedShapeIds } from "./edit-descriptors.js";
 import { asSourceNodeId, type PartPath, type SourceNodeId } from "./handles.js";
 import { nextNumberedName } from "./package-graph-mutations.js";
 import type { PptxSourceModel } from "./pptx-source-model.js";
@@ -27,8 +27,10 @@ export function nextDrawingShapeId(
   if (rootShapeId !== undefined) used.add(rootShapeId);
   collectNumericShapeIds(shapes, used);
   for (const edit of source.edits ?? []) {
-    const numericId = Number(editReservedShapeId(edit, partPath));
-    if (Number.isInteger(numericId) && numericId > 0) used.add(numericId);
+    for (const shapeId of editReservedShapeIds(edit, partPath)) {
+      const numericId = Number(shapeId);
+      if (Number.isInteger(numericId) && numericId > 0) used.add(numericId);
+    }
   }
   return asSourceNodeId(nextNumberedName(new Set([...used].map(String)), /^(\d+)$/, String));
 }

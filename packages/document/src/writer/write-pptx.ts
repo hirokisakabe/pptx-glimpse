@@ -18,7 +18,7 @@
 
 import { zipSync } from "fflate";
 
-import { editDirtyPartPath, editSlideTopologyOperation } from "../source/edit-descriptors.js";
+import { editDirtyPartPaths, editSlideTopologyOperation } from "../source/edit-descriptors.js";
 import type { PptxSourceModel } from "../source/index.js";
 import { isRelationshipPart, relationshipsPartPath } from "../source/package-paths.js";
 import { serializeDirtyXmlPart } from "./dirty-part-edits.js";
@@ -48,12 +48,7 @@ const RELS_CONTENT_TYPE = "application/vnd.openxmlformats-package.relationships+
 export function writePptx(source: PptxSourceModel): WritePptxOutput {
   const edits = source.edits ?? [];
   validateEdits(edits);
-  const dirtyPartPaths = new Set(
-    edits.flatMap((edit) => {
-      const partPath = editDirtyPartPath(edit);
-      return partPath === undefined ? [] : [partPath];
-    }),
-  );
+  const dirtyPartPaths = new Set(edits.flatMap(editDirtyPartPaths));
   const slideTopologyOperations = edits.flatMap((edit) => {
     const operation = editSlideTopologyOperation(edit);
     return operation === undefined ? [] : [operation];

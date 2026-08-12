@@ -33,6 +33,7 @@ import {
   findTextRunBySourceHandle,
   groupShapes,
   moveShapes,
+  moveShapesAcrossSlides,
   moveSlide,
   type MoveSlideInput,
   type PptxSourceModel,
@@ -192,6 +193,14 @@ export interface MoveShapesCommand {
   readonly beforeShapeHandle?: SourceHandle;
 }
 
+/** Move consecutive slide-root typed drawings to another slide root. @inline */
+export interface MoveShapesAcrossSlidesCommand {
+  readonly kind: "moveShapesAcrossSlides";
+  readonly shapeHandles: readonly SourceHandle[];
+  readonly destinationSlideHandle: SourceHandle;
+  readonly beforeShapeHandle?: SourceHandle;
+}
+
 /** Expand one losslessly ungroupable native DrawingML group. @inline */
 export interface UngroupShapeCommand {
   readonly kind: "ungroupShape";
@@ -336,6 +345,7 @@ export type EditorCommand =
   | DeleteShapeCommand
   | GroupShapesCommand
   | MoveShapesCommand
+  | MoveShapesAcrossSlidesCommand
   | UngroupShapeCommand
   | ReplaceImageCommand
   | SetPictureCropCommand
@@ -640,6 +650,35 @@ export class EditorSession {
     });
   }
 
+  moveShapesAcrossSlides(
+    shapes: readonly GroupableSourceShape[],
+    destinationSlide: SourceSlide,
+    beforeShapeHandle?: SourceHandle,
+  ): EditorApplyCommandResult {
+    if (destinationSlide.handle === undefined) {
+      return invalidSourceNodeFailure(
+        "moveShapesAcrossSlides",
+        "destination slide requires a handle",
+      );
+    }
+    const handles: SourceHandle[] = [];
+    for (const shape of shapes) {
+      if (!isGroupableSourceShape(shape) || shape.handle === undefined) {
+        return invalidSourceNodeFailure(
+          "moveShapesAcrossSlides",
+          "every source shape requires a handle",
+        );
+      }
+      handles.push(shape.handle);
+    }
+    return this.apply({
+      kind: "moveShapesAcrossSlides",
+      shapeHandles: handles,
+      destinationSlideHandle: destinationSlide.handle,
+      ...(beforeShapeHandle !== undefined ? { beforeShapeHandle } : {}),
+    });
+  }
+
   ungroupShape(group: SourceShapeNode): EditorApplyCommandResult {
     if (group.kind !== "group") {
       return invalidSourceNodeFailure("ungroupShape", "source node is not a group shape");
@@ -778,6 +817,14 @@ export class EditorSession {
     const before = this.#document;
     const beforeSelection = this.#selection;
     if (commands.length === 0) return { ok: true, document: before };
+    const crossSlideMoveIndex = commands.findIndex(
+      (command) => command.kind === "moveShapesAcrossSlides",
+    );
+    if (crossSlideMoveIndex >= 0 && crossSlideMoveIndex !== commands.length - 1) {
+      return invalidCommandFailure(
+        new Error("moveShapesAcrossSlides: command must be last in an atomic batch"),
+      );
+    }
 
     let after = before;
     let afterSelection = beforeSelection;
@@ -806,7 +853,10 @@ export class EditorSession {
     this.#document = after;
     this.#selection = reconcileSelection(after, afterSelection);
     const selectionChangedByTopologyCommand = commands.some(
-      (command) => command.kind === "groupShapes" || command.kind === "ungroupShape",
+      (command) =>
+        command.kind === "groupShapes" ||
+        command.kind === "ungroupShape" ||
+        command.kind === "moveShapesAcrossSlides",
     );
     this.#undoStack.push({
       before,
@@ -949,6 +999,7 @@ const EDITOR_COMMAND_KINDS: ReadonlySet<string> = new Set([
   "deleteShape",
   "groupShapes",
   "moveShapes",
+  "moveShapesAcrossSlides",
   "ungroupShape",
   "replaceImage",
   "setPictureCrop",
@@ -980,6 +1031,7 @@ const EXPECTED_COMMAND_REJECTION_PREFIXES = [
   "deleteShape:",
   "groupShapes:",
   "moveShapes:",
+  "moveShapesAcrossSlides:",
   "ungroupShape:",
   "replaceImageBytes:",
   "setPictureCrop:",
@@ -1021,6 +1073,7 @@ function applyCommandToDocument(
     case "deleteShape":
     case "groupShapes":
     case "moveShapes":
+    case "moveShapesAcrossSlides":
     case "ungroupShape":
     case "replaceImage":
     case "setPictureCrop":
@@ -1182,6 +1235,17 @@ function executeCommand(document: PptxSourceModel, command: EditorCommand): Pptx
           ? { beforeShapeHandle: command.beforeShapeHandle }
           : {}),
       });
+    case "moveShapesAcrossSlides":
+      return moveShapesAcrossSlides(
+        document,
+        command.shapeHandles,
+        command.destinationSlideHandle,
+        {
+          ...(command.beforeShapeHandle !== undefined
+            ? { beforeShapeHandle: command.beforeShapeHandle }
+            : {}),
+        },
+      ).document;
     case "ungroupShape":
       return ungroupShapeCommand(document, command);
     case "replaceImage":
@@ -1285,6 +1349,23 @@ function selectionAfterCommand(
     }
     const firstChildHandle = group.children[0]?.handle;
     return firstChildHandle === undefined ? undefined : { shapeHandle: firstChildHandle };
+  }
+  if (command.kind === "moveShapesAcrossSlides") {
+    if (current === undefined) return undefined;
+    const edit = after.edits?.at(-1);
+    if (edit?.kind !== "moveShapesAcrossSlides") {
+      throw new Error("EditorSession: moveShapesAcrossSlides did not produce a move edit");
+    }
+    if (current.shapeHandle.partPath !== edit.sourcePartPath) {
+      return reconcileSelection(after, current);
+    }
+    const mapping = edit.nodeIdMappings.find((item) => item.before === current.shapeHandle.nodeId);
+    if (mapping === undefined) return reconcileSelection(after, current);
+    const moved = findShapeNodeBySourceHandle(after, {
+      partPath: edit.destinationPartPath,
+      nodeId: mapping.after,
+    });
+    return moved?.handle === undefined ? undefined : { shapeHandle: moved.handle };
   }
   return reconcileSelection(after, current);
 }
@@ -1921,6 +2002,7 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
       case "duplicateSlide":
       case "groupShapes":
       case "moveShapes":
+      case "moveShapesAcrossSlides":
       case "moveSlide":
       case "reorderShapes":
       case "replaceImage":

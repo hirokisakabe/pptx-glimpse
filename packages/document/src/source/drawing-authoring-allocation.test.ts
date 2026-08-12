@@ -54,6 +54,29 @@ describe("drawing authoring allocation", () => {
     expect(nextDrawingShapeId(source, [shape(masterPath, "4", 0)], masterPath)).toBe("41");
   });
 
+  it("reserves every destination id from a pending cross-slide move", () => {
+    const sourcePath = asPartPath("ppt/slides/slide1.xml");
+    const destinationPath = asPartPath("ppt/slides/slide2.xml");
+    const source = {
+      ...createPptx(),
+      edits: [
+        {
+          kind: "moveShapesAcrossSlides",
+          sourcePartPath: sourcePath,
+          destinationPartPath: destinationPath,
+          sourceShapeIds: [asSourceNodeId("2"), asSourceNodeId("3")],
+          destinationShapeIds: [asSourceNodeId("20"), asSourceNodeId("21")],
+          nodeIdMappings: [],
+          relationshipIdMappings: [],
+        },
+      ] satisfies readonly PptxSourceModelEdit[],
+    };
+
+    expect(nextDrawingShapeId(source, [shape(destinationPath, "19", 0)], destinationPath)).toBe(
+      "22",
+    );
+  });
+
   it("keeps finalized XML and typed nodes on the same edit-time id and ordering", () => {
     let source = createPptx();
     const slideHandle = source.slides[0].handle!;

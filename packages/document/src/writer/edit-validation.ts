@@ -137,6 +137,26 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
         }
         break;
       }
+      case "moveShapesAcrossSlides": {
+        if (
+          edit.sourcePartPath === edit.destinationPartPath ||
+          edit.sourceShapeIds.length === 0 ||
+          edit.sourceShapeIds.length !== edit.destinationShapeIds.length
+        ) {
+          throw new Error("writePptx: invalid cross-slide move participants");
+        }
+        if (
+          new Set(edit.sourceShapeIds).size !== edit.sourceShapeIds.length ||
+          new Set(edit.destinationShapeIds).size !== edit.destinationShapeIds.length ||
+          new Set(edit.nodeIdMappings.map((mapping) => mapping.before)).size !==
+            edit.nodeIdMappings.length ||
+          new Set(edit.nodeIdMappings.map((mapping) => mapping.after)).size !==
+            edit.nodeIdMappings.length
+        ) {
+          throw new Error("writePptx: cross-slide move mappings must be unique");
+        }
+        break;
+      }
       case "groupShapes": {
         if (new Set(edit.shapeIds).size !== edit.shapeIds.length) {
           throw new Error("writePptx: grouped shape ids contain a duplicate shape");

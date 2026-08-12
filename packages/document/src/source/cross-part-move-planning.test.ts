@@ -544,6 +544,33 @@ describe("cross-part move planning", () => {
       "may reference a moved node id",
     );
 
+    const rawBackgroundReference: PptxSourceModel = {
+      ...source,
+      slides: source.slides.map((slide, index) =>
+        index !== 0
+          ? slide
+          : {
+              ...slide,
+              background: {
+                kind: "fill" as const,
+                fill: {
+                  kind: "raw" as const,
+                  raw: {
+                    id: asRawSidecarId("background-reference"),
+                    node: {
+                      name: "vendor:backgroundRef",
+                      attributes: { id: String(handles[0].nodeId) },
+                    },
+                  },
+                },
+              },
+            },
+      ),
+    };
+    expect(() => planCrossPartDrawingMove(rawBackgroundReference, handles, destination)).toThrow(
+      "may reference a moved node id",
+    );
+
     const rawConnectorReference = replaceFirstShape(source, {
       ...requireValue(sourceSlide.shapes[0]),
       rawSidecars: [

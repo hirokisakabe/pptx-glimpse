@@ -102,12 +102,15 @@ Headless expected rejection is atomic:
 - `selection` remains unchanged;
 - undo and redo stacks retain their contents and depths.
 
-`groupShapes`, `moveShapes`, and `ungroupShape` commit topology and selection as one history transition. A
-successful group selects the new group. A successful ungroup keeps the single-selection model and
-selects the first expanded child in document order. Undo and redo restore the corresponding
-before/after topology, ids, z-order, and selection snapshot. A successful cross-parent move keeps
-the existing selection when its handle still resolves. If any topology command is rejected, none of
-those values changes.
+`groupShapes`, `moveShapes`, `moveShapesAcrossSlides`, and `ungroupShape` commit topology and
+selection as one history transition. A successful group selects the new group. A successful
+ungroup keeps the single-selection model and selects the first expanded child in document order.
+Undo and redo restore the corresponding before/after topology, ids, z-order, and selection
+snapshot. A successful cross-parent move keeps the existing selection when its handle still
+resolves. A successful cross-slide move commits the source and destination slides together,
+selects the remapped destination handle, and uses the old-to-new handle/ID transition to restore
+the exact selection snapshot across undo and redo. If any topology command is rejected, the
+document, selection, history, and both cross-slide participants remain unchanged.
 
 `applyAll()` builds a candidate document and commits it only after every command and
 cross-command validation succeeds. Failed selection and empty undo/redo checks inspect state
@@ -122,15 +125,15 @@ creates no session. Write failure does not mutate editor state.
 
 ## Code and test matrix
 
-| Code                | Defined/created by                                                  | High-level destination      | Required evidence                                                                                                        |
-| ------------------- | ------------------------------------------------------------------- | --------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `invalid-command`   | `packages/editor/src/index.ts`: command boundary                    | Same-code `PptxEditorError` | Headless apply/applyAll rejection and atomicity, including group topology/selection; high-level field/cause preservation |
-| `invalid-selection` | `packages/editor/src/index.ts`: `selectShape()`                     | Same-code `PptxEditorError` | Selection atomicity; Node/browser same-code test                                                                         |
-| `empty-undo-stack`  | `packages/editor/src/index.ts`: `undo()`                            | Same-code `PptxEditorError` | Empty-history shape/message and unchanged state                                                                          |
-| `empty-redo-stack`  | `packages/editor/src/index.ts`: `redo()`                            | Same-code `PptxEditorError` | Empty-history shape/message and unchanged state                                                                          |
-| `read-failed`       | `packages/core/src/pptx-editor-session.ts`: `create()`              | Thrown directly             | Invalid input and retained cause                                                                                         |
-| `render-failed`     | `packages/core/src/pptx-editor-session.ts`: `renderCurrentSlides()` | Thrown directly             | Initial and post-operation renderer rejection with retained cause                                                        |
-| `write-failed`      | `packages/core/src/pptx-editor-session.ts`: `save()`                | Thrown directly             | Writer/round-trip validation rejection with retained cause                                                               |
+| Code                | Defined/created by                                                  | High-level destination      | Required evidence                                                                                                                                                                                                            |
+| ------------------- | ------------------------------------------------------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `invalid-command`   | `packages/editor/src/index.ts`: command boundary                    | Same-code `PptxEditorError` | Headless apply/applyAll rejection and atomicity, including group topology/selection plus cross-slide source/destination atomicity, ID/handle selection remap, and undo/redo restoration; high-level field/cause preservation |
+| `invalid-selection` | `packages/editor/src/index.ts`: `selectShape()`                     | Same-code `PptxEditorError` | Selection atomicity; Node/browser same-code test                                                                                                                                                                             |
+| `empty-undo-stack`  | `packages/editor/src/index.ts`: `undo()`                            | Same-code `PptxEditorError` | Empty-history shape/message and unchanged state                                                                                                                                                                              |
+| `empty-redo-stack`  | `packages/editor/src/index.ts`: `redo()`                            | Same-code `PptxEditorError` | Empty-history shape/message and unchanged state                                                                                                                                                                              |
+| `read-failed`       | `packages/core/src/pptx-editor-session.ts`: `create()`              | Thrown directly             | Invalid input and retained cause                                                                                                                                                                                             |
+| `render-failed`     | `packages/core/src/pptx-editor-session.ts`: `renderCurrentSlides()` | Thrown directly             | Initial and post-operation renderer rejection with retained cause                                                                                                                                                            |
+| `write-failed`      | `packages/core/src/pptx-editor-session.ts`: `save()`                | Thrown directly             | Writer/round-trip validation rejection with retained cause                                                                                                                                                                   |
 
 The exported `shared-media-part` warning shape remains source-compatible, but shared image
 replacement now uses copy-on-write and does not emit it. Coverage must verify isolation and the

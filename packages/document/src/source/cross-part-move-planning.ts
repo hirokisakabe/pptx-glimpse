@@ -11,6 +11,7 @@ import {
 import type { Relationship } from "./package-graph.js";
 import { resolveInternalRelationshipTarget } from "./package-paths.js";
 import type { PptxSourceModel } from "./pptx-source-model.js";
+import type { SourceBackground } from "./presentation.js";
 import type { RawOoxmlNode, RawSidecar } from "./raw.js";
 import type {
   SourceCellBorders,
@@ -96,7 +97,7 @@ interface CrossPartRelationshipRemap {
 }
 
 /** Stable identity transition for a moved root or descendant. */
-interface CrossPartHandleMapping {
+export interface CrossPartHandleMapping {
   readonly before: SourceHandle;
   readonly after: SourceHandle;
 }
@@ -112,7 +113,7 @@ interface CrossPartNodeReferenceRemap {
 }
 
 /** Immutable preflight result consumed by a future cross-part writer operation. */
-interface CrossPartDrawingMovePlan {
+export interface CrossPartDrawingMovePlan {
   readonly sourcePartPath: PartPath;
   readonly destinationPartPath: PartPath;
   readonly movedRootNodeIds: readonly SourceNodeId[];
@@ -128,7 +129,7 @@ interface CrossPartDrawingMovePlan {
   readonly affectedSlidePartPaths: readonly PartPath[];
 }
 
-interface PlanCrossPartDrawingMoveOptions {
+export interface PlanCrossPartDrawingMoveOptions {
   /** IDs already claimed by another plan in the same future atomic batch. */
   readonly reservedDestinationNodeIds?: readonly SourceNodeId[];
   /** Relationship IDs already claimed by another plan in the same future atomic batch. */
@@ -333,6 +334,34 @@ export function inventoryRawRelationshipReferences(
   return freezeArray(
     references.map((item) => freezeObject({ ...item, elementPath: freezeArray(item.elementPath) })),
   );
+}
+
+/** Relationship ids still referenced by one drawing root after a planned move. */
+export function referencedDrawingRelationshipIds(
+  shapes: readonly SourceShapeNode[],
+  rootRawSidecars: readonly RawSidecar[] = [],
+): ReadonlySet<RelationshipId> {
+  const ids = new Set<RelationshipId>();
+  visitShapeTrees(shapes, (node) => {
+    for (const [, relationshipId] of typedRelationshipIds(node)) ids.add(relationshipId);
+    for (const sidecar of nodeRawSidecars(node)) {
+      for (const reference of inventoryRawRelationshipReferences(sidecar.node, {
+        inheritedNamespaces: STANDARD_RAW_NAMESPACE_CONTEXT,
+        rejectUnboundRelationshipAttributes: true,
+      })) {
+        ids.add(reference.relationshipId);
+      }
+    }
+  });
+  for (const sidecar of rootRawSidecars) {
+    for (const reference of inventoryRawRelationshipReferences(sidecar.node, {
+      inheritedNamespaces: STANDARD_RAW_NAMESPACE_CONTEXT,
+      rejectUnboundRelationshipAttributes: true,
+    })) {
+      ids.add(reference.relationshipId);
+    }
+  }
+  return ids;
 }
 
 function visitRawNode(
@@ -962,7 +991,7 @@ function drawingPartRoots(source: PptxSourceModel): readonly DrawingPartRoot[] {
               partPath: item.partPath,
               handle: item.handle,
               shapes: item.shapes,
-              rawSidecars: item.rawSidecars ?? [],
+              rawSidecars: drawingPartRawSidecars(item.rawSidecars, item.background),
             },
           ],
     ),
@@ -975,7 +1004,7 @@ function drawingPartRoots(source: PptxSourceModel): readonly DrawingPartRoot[] {
               partPath: item.partPath,
               handle: item.handle,
               shapes: item.shapes,
-              rawSidecars: item.rawSidecars ?? [],
+              rawSidecars: drawingPartRawSidecars(item.rawSidecars, item.background),
             },
           ],
     ),
@@ -988,10 +1017,21 @@ function drawingPartRoots(source: PptxSourceModel): readonly DrawingPartRoot[] {
               partPath: item.partPath,
               handle: item.handle,
               shapes: item.shapes,
-              rawSidecars: item.rawSidecars ?? [],
+              rawSidecars: drawingPartRawSidecars(item.rawSidecars, item.background),
             },
           ],
     ),
+  ];
+}
+
+function drawingPartRawSidecars(
+  rawSidecars: readonly RawSidecar[] | undefined,
+  background: SourceBackground | undefined,
+): readonly RawSidecar[] {
+  return [
+    ...(rawSidecars ?? []),
+    ...(background?.kind === "raw" ? [background.raw] : []),
+    ...(background?.kind === "fill" && background.fill.kind === "raw" ? [background.fill.raw] : []),
   ];
 }
 
