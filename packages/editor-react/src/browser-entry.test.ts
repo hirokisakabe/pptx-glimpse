@@ -39,6 +39,11 @@ describe("editor React browser entry", () => {
     expect(entry).toHaveProperty("usePptxEditorController");
   });
 
+  it("keeps every runtime peer external in the package build", async () => {
+    const buildConfig = await readFile(resolve(packageRoot, "tsup.config.ts"), "utf8");
+    expect(buildConfig).toContain('external: ["pptx-glimpse", "react", "react-dom"]');
+  });
+
   it("bundles as browser ESM without Node built-ins or bundled peers", async () => {
     const corePackageJson: unknown = JSON.parse(
       await readFile(resolve(corePackageRoot, "package.json"), "utf8"),
@@ -62,7 +67,7 @@ describe("editor React browser entry", () => {
       format: "esm",
       platform: "browser",
       conditions: ["browser", "import"],
-      external: ["react", "react-dom", "react/jsx-runtime"],
+      external: ["pptx-glimpse", "react", "react-dom", "react/jsx-runtime"],
       logLevel: "silent",
       absWorkingDir: resolve(packageRoot, "../.."),
       plugins: [
@@ -72,27 +77,6 @@ describe("editor React browser entry", () => {
             browserBuild.onResolve({ filter: /^@pptx-glimpse\/editor-react$/ }, () => ({
               path: resolve(packageRoot, "src/index.ts"),
             }));
-            browserBuild.onResolve({ filter: /^pptx-glimpse$/ }, () => ({
-              path: resolve(
-                corePackageRoot,
-                browserExport.replace("./dist/", "src/").replace(/\.js$/, ".ts"),
-              ),
-            }));
-            browserBuild.onResolve({ filter: /^@pptx-glimpse\/document$/ }, () => ({
-              path: resolve(corePackageRoot, "../document/src/index.ts"),
-            }));
-            browserBuild.onResolve({ filter: /^@pptx-glimpse\/editor$/ }, () => ({
-              path: resolve(corePackageRoot, "../editor/src/index.ts"),
-            }));
-            browserBuild.onResolve({ filter: /^@pptx-glimpse\/renderer$/ }, () => ({
-              path: resolve(corePackageRoot, "../renderer/src/index.ts"),
-            }));
-            browserBuild.onResolve({ filter: /^@pptx-glimpse\/renderer\/png$/ }, () => ({
-              path: resolve(corePackageRoot, "../renderer/src/png.ts"),
-            }));
-            browserBuild.onResolve({ filter: /^@pptx-glimpse\/renderer\/png\/browser$/ }, () => ({
-              path: resolve(corePackageRoot, "../renderer/src/png-browser.ts"),
-            }));
           },
         },
       ],
@@ -100,7 +84,7 @@ describe("editor React browser entry", () => {
 
     const bundled = result.outputFiles[0]?.text ?? "";
     expect(bundled).toMatch(/from "react(?:\/jsx-runtime)?"/);
-    expect(bundled).not.toContain('from "pptx-glimpse"');
+    expect(bundled).toContain('from "pptx-glimpse"');
     expect(bundled).not.toMatch(
       /(?:from|import\()\s*["']node:|require\(["'](?:fs|path|os|buffer|module)(?:\/|["'])/,
     );

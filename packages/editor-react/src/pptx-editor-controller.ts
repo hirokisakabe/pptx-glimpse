@@ -41,8 +41,8 @@ export interface PptxEditorControllerOperationOptions<Session extends PptxEditor
 }
 
 /**
- * Owns the state derived from one consumer-owned editor session. It deliberately has no DOM or
- * Next.js dependencies so the boundary can move to a browser React package in a later slice.
+ * Owns state derived from one consumer-owned editor session. It deliberately has no React, DOM,
+ * or Next.js dependencies, keeping transitions independent from this package's browser UI.
  */
 export class PptxEditorController<Session extends PptxEditorControllerSession> {
   readonly session: Session;
