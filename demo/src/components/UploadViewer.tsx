@@ -184,7 +184,6 @@ export function UploadViewer() {
           <>
             <ReplacementShell {...replacementProps}>
               <EditorWorkspace
-                key={presentation.requestId}
                 editor={loaded.editor}
                 fileName={loaded.fileName}
                 fontFileCount={fontFiles.length}

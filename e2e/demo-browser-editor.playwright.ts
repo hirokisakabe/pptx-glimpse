@@ -188,6 +188,9 @@ test("opens the sample editor first and replaces it with an uploaded PPTX", asyn
 
   await page.goto(demoServer.url);
   await expect(page.getByTestId("editor-workspace")).toBeVisible();
+  await expect(page.locator('[data-editor-component="demo-shell"]')).toBeVisible();
+  await expect(page.locator('[data-editor-component="slide-strip"]')).toBeVisible();
+  await expect(page.locator('[data-editor-component="toolbar"]')).toBeVisible();
   const fileNameInput = page.getByRole("textbox", { name: "Presentation file name" });
   await expect(fileNameInput).toHaveValue("editor-demo");
   await expect(page.getByRole("button", { name: "Open PPTX" })).toBeVisible();
@@ -231,13 +234,140 @@ test("opens the sample editor first and replaces it with an uploaded PPTX", asyn
   await expect(page).toHaveURL(`${demoServer.url}/docs`);
 });
 
+test("releases a pending IME host action when its editor session changes", async ({ page }) => {
+  test.setTimeout(120_000);
+  if (demoServer === null) throw new Error("demo server was not started");
+  let replacementSampleRequests = 0;
+  await page.route("**/samples/editor-demo.pptx", async (route) => {
+    replacementSampleRequests += 1;
+    await route.continue();
+  });
+
+  await page.goto(demoServer.url);
+  await expect(page.getByTestId("editor-workspace")).toBeVisible();
+  replacementSampleRequests = 0;
+  const editableTextShape = page
+    .locator('[data-testid="shape-hit-area"][data-editable-text="true"]')
+    .nth(1);
+  await editableTextShape.dblclick();
+  const directTextRun = page.getByTestId("direct-text-editor-run").first();
+  await directTextRun.fill("Pending composition");
+  await directTextRun.evaluate((element) => {
+    element.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+  });
+
+  await page.getByRole("button", { name: "Open sample" }).evaluate((button) => {
+    if (!(button instanceof HTMLButtonElement))
+      throw new Error("open sample control is not a button");
+    button.click();
+  });
+  await page
+    .getByTestId("pptx-input")
+    .setInputFiles(resolve(repoRoot, "shared-fixtures/real-product-page.pptx"));
+
+  await expect(page.getByRole("textbox", { name: "Presentation file name" })).toHaveValue(
+    "real-product-page",
+  );
+  await expect(page.getByTestId("replacement-loading")).toHaveCount(0);
+  await page.waitForTimeout(100);
+  expect(replacementSampleRequests).toBe(0);
+});
+
+test("cancels shape and slide gestures when the editor session prop changes", async ({ page }) => {
+  test.setTimeout(120_000);
+  if (demoServer === null) throw new Error("demo server was not started");
+
+  await page.goto(demoServer.url);
+  await expect(page.getByTestId("editor-workspace")).toBeVisible();
+  const firstShape = page.locator('[data-testid="shape-hit-area"]').first();
+  const shapeBounds = await firstShape.boundingBox();
+  if (shapeBounds === null) throw new Error("shape bounds were not available");
+  await page.mouse.move(
+    shapeBounds.x + shapeBounds.width / 2,
+    shapeBounds.y + shapeBounds.height / 2,
+  );
+  await page.mouse.down();
+  await page.getByRole("button", { name: "Open sample" }).evaluate((button) => {
+    if (!(button instanceof HTMLButtonElement)) throw new Error("open sample is not a button");
+    button.click();
+  });
+  await expect(page.getByTestId("replacement-loading")).toBeVisible();
+  await expect(page.getByTestId("replacement-loading")).toHaveCount(0);
+  await page.mouse.move(
+    shapeBounds.x + shapeBounds.width / 2 + 40,
+    shapeBounds.y + shapeBounds.height / 2,
+  );
+  await page.mouse.up();
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+  await expect(page.getByTestId("editor-error")).toHaveCount(0);
+
+  const thumbnails = page.getByTestId("editor-thumbnail");
+  const sourceBounds = await thumbnails.nth(1).boundingBox();
+  const targetBounds = await thumbnails.nth(2).boundingBox();
+  if (sourceBounds === null || targetBounds === null) {
+    throw new Error("slide thumbnail bounds were not available");
+  }
+  await page.mouse.move(
+    sourceBounds.x + sourceBounds.width / 2,
+    sourceBounds.y + sourceBounds.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    targetBounds.x + targetBounds.width / 2,
+    targetBounds.y + targetBounds.height - 2,
+  );
+  await page.getByRole("button", { name: "Open sample" }).evaluate((button) => {
+    if (!(button instanceof HTMLButtonElement)) throw new Error("open sample is not a button");
+    button.click();
+  });
+  await expect(page.getByTestId("replacement-loading")).toBeVisible();
+  await expect(page.getByTestId("replacement-loading")).toHaveCount(0);
+  await page.mouse.up();
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+  await expect(page.getByTestId("editor-error")).toHaveCount(0);
+});
+
+test("resets toolbar inputs and download name when a same-named session replaces the editor", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  if (demoServer === null) throw new Error("demo server was not started");
+
+  await page.goto(demoServer.url);
+  await expect(page.getByTestId("editor-workspace")).toBeVisible();
+  const fileNameInput = page.getByRole("textbox", { name: "Presentation file name" });
+  await fileNameInput.fill("custom-download-name");
+
+  await page.locator('[data-testid="shape-hit-area"][data-editable-text="true"]').nth(1).click();
+  const runSelect = page.getByTestId("text-run-select");
+  await expect(runSelect.locator("option")).toHaveCount(2);
+  await runSelect.selectOption("1");
+  await page.getByRole("spinbutton", { name: "Font size" }).fill("72");
+  await page.getByRole("textbox", { name: "Typeface" }).fill("Old Presentation Font");
+  await page.getByLabel("Text color").fill("#abcdef");
+
+  await page.getByTestId("pptx-input").setInputFiles({
+    name: "editor-demo.pptx",
+    mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    buffer: await readFile(resolve(demoRoot, "assets/editor-demo.pptx")),
+  });
+
+  await expect(page.getByTestId("replacement-loading")).toHaveCount(0);
+  await expect(fileNameInput).toHaveValue("editor-demo");
+  await expect(page.getByRole("spinbutton", { name: "Font size" })).toHaveValue("24");
+  await expect(page.getByRole("textbox", { name: "Typeface" })).toHaveValue("");
+  await expect(page.getByLabel("Text color")).toHaveValue("#2454a6");
+  await page.locator('[data-testid="shape-hit-area"][data-editable-text="true"]').nth(1).click();
+  await expect(runSelect).toHaveValue("0");
+});
+
 test("runs the public demo browser editor flow entirely client-side", async ({ page }) => {
   test.setTimeout(120_000);
   if (demoServer === null) throw new Error("demo server was not started");
   const dir = await mkdtemp(join(tmpdir(), "pptx-glimpse-demo-editor-test-"));
   try {
     const savedPath = join(dir, "demo.edited.pptx");
-    const focusoutSavedPath = join(dir, "focusout.edited.pptx");
+    const pendingEditSavedPath = join(dir, "pending-edit.edited.pptx");
     const replacementImagePath = join(dir, "replacement.png");
     await writeFile(replacementImagePath, BLUE_PNG);
 
@@ -331,15 +461,26 @@ test("runs the public demo browser editor flow entirely client-side", async ({ p
 
     await firstEditableTextShape.dblclick();
     await directTextRun.fill("Direct edit saved");
-    const focusoutDownload = page.waitForEvent("download");
-    await page.getByRole("button", { name: "Download PPTX" }).click();
-    const focusoutDownloadedFile = await focusoutDownload;
-    expect(focusoutDownloadedFile.suggestedFilename()).toBe("browser-workshop.pptx");
-    await focusoutDownloadedFile.saveAs(focusoutSavedPath);
+    await directTextRun.evaluate((element) => {
+      element.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+    });
+    const pendingEditDownload = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Download PPTX" }).evaluate((button) => {
+      if (!(button instanceof HTMLButtonElement))
+        throw new Error("download control is not a button");
+      button.click();
+    });
+    await expect(directTextEditor).toBeVisible();
+    await directTextRun.evaluate((element) => {
+      element.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true }));
+    });
+    const pendingEditDownloadedFile = await pendingEditDownload;
+    expect(pendingEditDownloadedFile.suggestedFilename()).toBe("browser-workshop.pptx");
+    await pendingEditDownloadedFile.saveAs(pendingEditSavedPath);
     await expect(directTextEditor).toHaveCount(0);
     await expect(slideFrame).toContainText("Direct edit saved");
     expect(
-      shapeByText(readPptx(await readFile(focusoutSavedPath)), "Direct edit saved"),
+      shapeByText(readPptx(await readFile(pendingEditSavedPath)), "Direct edit saved"),
     ).toBeDefined();
     await page.getByRole("button", { name: "Undo" }).click();
     await expect(slideFrame).toContainText("Direct edit done");
