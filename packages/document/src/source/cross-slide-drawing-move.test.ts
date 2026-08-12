@@ -219,6 +219,86 @@ describe("moveShapesAcrossSlides", () => {
     );
   });
 
+  it("retains a moved picture relationship while the source background still references it", () => {
+    const source = buildCleanTwoSlideSource((session, first) => {
+      session.target(first).addPicture({
+        bytes: BLUE_PNG,
+        offsetX: asEmu(0),
+        offsetY: asEmu(0),
+        width: asEmu(1000),
+        height: asEmu(1000),
+        name: "Move shared background",
+      });
+      session.target(first).setSlideBackground({ kind: "image", bytes: BLUE_PNG });
+    });
+    const sourceSlide = requireValue(source.slides[0]);
+    const picture = sourceSlide.shapes[0];
+    const background = sourceSlide.background;
+    if (
+      picture?.kind !== "image" ||
+      picture.handle === undefined ||
+      picture.blipRelationshipId === undefined ||
+      background?.kind !== "fill" ||
+      background.fill.kind !== "image" ||
+      background.fill.blipRelationshipId === undefined
+    ) {
+      throw new Error("shared background relationship fixture is missing");
+    }
+    const oldBackgroundRelationshipId = background.fill.blipRelationshipId;
+    const sharedRelationshipId = picture.blipRelationshipId;
+    const sharedSource: PptxSourceModel = {
+      ...source,
+      packageGraph: {
+        ...source.packageGraph,
+        rawParts: source.packageGraph.rawParts?.map((part) =>
+          part.partPath === sourceSlide.partPath && part.kind === "binary"
+            ? {
+                ...part,
+                bytes: new TextEncoder().encode(
+                  new TextDecoder()
+                    .decode(part.bytes)
+                    .replaceAll(oldBackgroundRelationshipId, sharedRelationshipId),
+                ),
+              }
+            : part,
+        ),
+      },
+      slides: source.slides.map((slide) =>
+        slide.partPath === sourceSlide.partPath
+          ? {
+              ...slide,
+              background: {
+                kind: "fill" as const,
+                fill: { kind: "image" as const, blipRelationshipId: sharedRelationshipId },
+              },
+            }
+          : slide,
+      ),
+    };
+
+    const result = moveShapesAcrossSlides(
+      sharedSource,
+      [picture.handle],
+      requireValue(sharedSource.slides[1]?.handle),
+    );
+    const sourceRelationships = requireValue(
+      result.document.packageGraph.relationships.find(
+        (group) => group.sourcePartPath === sourceSlide.partPath,
+      ),
+    );
+    expect(sourceRelationships.relationships.map((relationship) => relationship.id)).toContain(
+      sharedRelationshipId,
+    );
+
+    const persisted = readPptx(writePptx(result.document));
+    const persistedBackground = persisted.slides[0]?.background;
+    expect(
+      persistedBackground?.kind === "fill" && persistedBackground.fill.kind === "image"
+        ? persistedBackground.fill.blipRelationshipId
+        : undefined,
+    ).toBe(sharedRelationshipId);
+  });
+
   it("rejects placeholders, non-root nodes, and unsupported typed drawing kinds", () => {
     const source = buildCleanTwoSlideSource((session, first) => {
       session.target(first).addChart({

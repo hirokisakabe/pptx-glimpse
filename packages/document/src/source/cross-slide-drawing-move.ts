@@ -158,10 +158,19 @@ export function moveShapesAcrossSlides(
     ...destinationSlide.shapes.slice(insertionIndex),
   ];
 
-  const stillReferencedSourceRelationships = referencedDrawingRelationshipIds(
-    remainingSourceShapes,
-    sourceSlide.rawSidecars ?? [],
+  const stillReferencedSourceRelationships = new Set(
+    referencedDrawingRelationshipIds(remainingSourceShapes, [
+      ...(sourceSlide.rawSidecars ?? []),
+      ...(sourceSlide.background?.kind === "raw" ? [sourceSlide.background.raw] : []),
+    ]),
   );
+  if (
+    sourceSlide.background?.kind === "fill" &&
+    sourceSlide.background.fill.kind === "image" &&
+    sourceSlide.background.fill.blipRelationshipId !== undefined
+  ) {
+    stillReferencedSourceRelationships.add(sourceSlide.background.fill.blipRelationshipId);
+  }
   const movedSourceRelationshipIds = new Set(
     plan.relationshipRemaps.map((mapping) => mapping.before.id),
   );
