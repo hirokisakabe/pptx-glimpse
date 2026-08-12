@@ -106,6 +106,18 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
         }
         break;
       }
+      case "moveShapes": {
+        if (edit.shapeIds.length === 0) {
+          throw new Error("writePptx: moved shape ids must not be empty");
+        }
+        if (new Set(edit.shapeIds).size !== edit.shapeIds.length) {
+          throw new Error("writePptx: moved shape ids contain a duplicate shape");
+        }
+        if (edit.beforeShapeId !== undefined && edit.shapeIds.includes(edit.beforeShapeId)) {
+          throw new Error("writePptx: move anchor must not be inside the moved block");
+        }
+        break;
+      }
       case "groupShapes": {
         if (new Set(edit.shapeIds).size !== edit.shapeIds.length) {
           throw new Error("writePptx: grouped shape ids contain a duplicate shape");

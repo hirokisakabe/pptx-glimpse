@@ -8,6 +8,7 @@ import type {
   PptxSourceModelAddTextBoxEdit,
   PptxSourceModelDeleteShapeEdit,
   PptxSourceModelGroupShapesEdit,
+  PptxSourceModelMoveShapesEdit,
   PptxSourceModelReorderShapesEdit,
   PptxSourceModelSetBackgroundEdit,
   PptxSourceModelSetSlideBackgroundEdit,
@@ -137,6 +138,73 @@ export function applyReorderShapesEdit(
     container,
     current.map((entry) =>
       shapeTreeEntryNodeId(entry.value) === undefined ? entry : orderedShapes[orderedShapeIndex++],
+    ),
+  );
+}
+
+export function applyMoveShapesEdit(root: XmlNode, edit: PptxSourceModelMoveShapesEdit): void {
+  if (edit.shapeIds.length === 0) {
+    throw new Error("writePptx: moved shape ids must not be empty");
+  }
+  const spTree = getShapeTree(root, edit.targetPartPath);
+  const container = groupParentContainer(spTree, edit.parentGroupId, "move");
+  const current = completeRememberedChildOrder(container);
+  const drawingEntries = current.filter((entry) => shapeTreeEntryNodeId(entry.value) !== undefined);
+  const shapeById = new Map<string, { key: string; value: unknown }>();
+  for (const entry of drawingEntries) {
+    const nodeId = shapeTreeEntryNodeId(entry.value);
+    if (nodeId === undefined) continue;
+    if (shapeById.has(nodeId)) {
+      throw new Error(`writePptx: duplicate shape id '${nodeId}' in moved container`);
+    }
+    shapeById.set(nodeId, entry);
+  }
+
+  const movedIds = new Set(edit.shapeIds);
+  if (movedIds.size !== edit.shapeIds.length) {
+    throw new Error("writePptx: moved shape ids contain a duplicate shape");
+  }
+  const movedEntries = edit.shapeIds.map((shapeId) => {
+    const entry = shapeById.get(shapeId);
+    if (entry === undefined) {
+      throw new Error(`writePptx: moved shape '${shapeId}' was not found as a direct child`);
+    }
+    return entry;
+  });
+  const firstDrawingIndex = drawingEntries.findIndex((entry) => entry === movedEntries[0]);
+  if (
+    firstDrawingIndex < 0 ||
+    movedEntries.some((entry, index) => drawingEntries[firstDrawingIndex + index] !== entry)
+  ) {
+    throw new Error("writePptx: moved shapes are not consecutive direct-child siblings");
+  }
+  if (edit.beforeShapeId !== undefined && movedIds.has(edit.beforeShapeId)) {
+    throw new Error("writePptx: move anchor must not be inside the moved block");
+  }
+
+  const remaining = drawingEntries.filter((entry) => {
+    const nodeId = shapeTreeEntryNodeId(entry.value);
+    return nodeId === undefined || !movedIds.has(nodeId);
+  });
+  const insertionIndex =
+    edit.beforeShapeId === undefined
+      ? remaining.length
+      : remaining.findIndex((entry) => shapeTreeEntryNodeId(entry.value) === edit.beforeShapeId);
+  if (insertionIndex < 0) {
+    throw new Error(
+      `writePptx: move anchor '${edit.beforeShapeId}' was not found as a direct child`,
+    );
+  }
+  const reorderedDrawings = [
+    ...remaining.slice(0, insertionIndex),
+    ...movedEntries,
+    ...remaining.slice(insertionIndex),
+  ];
+  let drawingIndex = 0;
+  setXmlChildOrder(
+    container,
+    current.map((entry) =>
+      shapeTreeEntryNodeId(entry.value) === undefined ? entry : reorderedDrawings[drawingIndex++],
     ),
   );
 }

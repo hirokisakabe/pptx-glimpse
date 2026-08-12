@@ -30,6 +30,7 @@ import {
   deleteSlide,
   duplicateSlide,
   groupShapes,
+  moveShapes,
   moveSlide,
   readPptx,
   replaceImageBytes,
@@ -397,6 +398,18 @@ const LO_EDITOR_VALIDITY_CASES = [
           ],
         }),
       );
+    },
+  },
+  {
+    name: "same-parent partial drawing move",
+    sourceFixture: "editor-validity-group-source.pptx",
+    expectedFixture: "editor-validity-group-source.pptx",
+    createEditedPptx: (input: Uint8Array) => {
+      const source = readPptx(input);
+      const slide = source.slides[0];
+      const first = findShapeByName(slide?.shapes ?? [], "Group Target 1");
+      if (slide?.handle === undefined) throw new Error("move fixture has no slide handle");
+      return writePptx(moveShapes(source, [requireHandle(first.handle)], slide.handle));
     },
   },
   {

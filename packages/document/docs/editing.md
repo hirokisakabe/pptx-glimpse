@@ -159,6 +159,40 @@ change appearance. It also rejects a group referenced by a connector. A removed 
 reserved for the edit session and is not reused by a later group operation. Every rejection is
 atomic because validation completes before a new source model or edit record is created.
 
+## Same-parent partial drawing moves
+
+`moveShapes` moves one or more consecutive direct-child drawings within the same slide, layout,
+master, or native group. Input handles are normalized to source document order. Pass a
+direct-child anchor to insert the block immediately before it, or omit the anchor to move the
+block to the end of the container's drawing order:
+
+```ts
+import { moveShapes } from "@pptx-glimpse/document";
+
+const slide = source.slides[0];
+const [first, second, third] =
+  slide?.shapes.flatMap((shape) => (shape.handle === undefined ? [] : [shape.handle])) ?? [];
+if (
+  slide?.handle === undefined ||
+  first === undefined ||
+  second === undefined ||
+  third === undefined
+) {
+  throw new Error("Three editable sibling drawings are required");
+}
+
+const beforeFirst = moveShapes(source, [third, second], slide.handle, {
+  beforeShapeHandle: first,
+});
+const movedToEnd = moveShapes(beforeFirst, [first], slide.handle);
+```
+
+The operation preserves node ids, handles, transforms, connector endpoints, relationship ids,
+package parts, non-target sibling order, and authored slots for non-drawing or unknown XML. It
+rejects empty, duplicate, idless, non-consecutive, cross-part, or non-direct-child inputs; an
+anchor inside the moved block; and SmartArt, raw, or `mc:AlternateContent` targets. This operation
+does not move drawings across parents and never converts coordinate systems.
+
 `updateChartData(source, chartHandle, input)` replaces the series topology, names, shared category
 labels, and finite numeric values of an existing supported category Chart. It keeps the Chart
 type, title, legend, axes, and unknown chart-level XML, and updates the Chart formulas and caches

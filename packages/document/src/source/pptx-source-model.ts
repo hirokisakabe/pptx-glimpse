@@ -85,6 +85,7 @@ export type PptxSourceModelEdit =
   | PptxSourceModelUpdateBubbleChartDataEdit
   | PptxSourceModelAddTableEdit
   | PptxSourceModelReorderShapesEdit
+  | PptxSourceModelMoveShapesEdit
   | PptxSourceModelGroupShapesEdit
   | PptxSourceModelUngroupShapeEdit
   | PptxSourceModelDeleteShapeEdit
@@ -355,6 +356,17 @@ export interface PptxSourceModelReorderShapesEdit {
   /** Direct-child container group id. Omitted for the root `p:spTree`. */
   readonly parentGroupId?: string;
   readonly shapeIds: readonly string[];
+}
+
+export interface PptxSourceModelMoveShapesEdit {
+  readonly kind: "moveShapes";
+  readonly targetPartPath: PartPath;
+  /** Direct-child container group id. Omitted for the root `p:spTree`. */
+  readonly parentGroupId?: string;
+  /** Consecutive drawing ids in source document order. */
+  readonly shapeIds: readonly string[];
+  /** Direct-child anchor id. Omitted to move the block to the drawing-order end. */
+  readonly beforeShapeId?: string;
 }
 
 export interface PptxSourceModelGroupShapesEdit {

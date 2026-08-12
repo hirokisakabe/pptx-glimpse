@@ -27,6 +27,8 @@ import type {
 } from "./shape-authoring.js";
 import { addConnector, addShape, addSlideNumber, addTextBox } from "./shape-authoring.js";
 import { groupShapes } from "./shape-grouping.js";
+import type { MoveShapesOptions } from "./shape-moving.js";
+import { moveShapes } from "./shape-moving.js";
 import { reorderShapes } from "./shape-ordering.js";
 import type { SourceGroup, SourceShapeNode } from "./shapes.js";
 import type { SetBackgroundInput, SetSlideBackgroundInput } from "./slide-background-authoring.js";
@@ -44,7 +46,8 @@ import { addTable } from "./table-authoring.js";
 
 /**
  * Consecutive authoring operations bound to one slide, layout, or master handle. Native group
- * handles are supported by the direct-child `groupShapes` and `reorderShapes` operations.
+ * handles are supported by the direct-child `groupShapes`, `moveShapes`, and `reorderShapes`
+ * operations.
  */
 export interface PptxAuthoringTarget {
   addTextBox(input: AddTextBoxInput): SourceHandle;
@@ -71,6 +74,8 @@ export interface PptxAuthoringTarget {
   setSlideBackground(input: SetSlideBackgroundInput): void;
   /** Reorders every direct child of this slide, layout, master, or native group exactly once. */
   reorderShapes(orderedShapeHandles: readonly SourceHandle[]): void;
+  /** Moves one consecutive direct-child block before an anchor or to the drawing-order end. */
+  moveShapes(shapeHandles: readonly SourceHandle[], options?: MoveShapesOptions): void;
 }
 
 type DrawingOperationInput =
@@ -104,7 +109,8 @@ export class PptxAuthoringSession {
 
   /**
    * Creates an authoring scope bound to a slide, layout, or master handle. A native group handle
-   * is also accepted for the `groupShapes` and `reorderShapes` direct-child operations.
+   * is also accepted for the `groupShapes`, `moveShapes`, and `reorderShapes` direct-child
+   * operations.
    */
   target(targetHandle: SourceHandle): PptxAuthoringTarget {
     return {
@@ -146,6 +152,9 @@ export class PptxAuthoringSession {
       },
       reorderShapes: (orderedShapeHandles) => {
         this.#source = reorderShapes(this.#source, targetHandle, orderedShapeHandles);
+      },
+      moveShapes: (shapeHandles, options) => {
+        this.#source = moveShapes(this.#source, shapeHandles, targetHandle, options);
       },
     };
   }
