@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import JSZip from "jszip";
 
 import {
   type PptxSourceModel,
@@ -232,6 +233,86 @@ test("opens the sample editor first and replaces it with an uploaded PPTX", asyn
   ).toBeAttached();
   await page.getByRole("link", { name: "Documentation" }).click();
   await expect(page).toHaveURL(`${demoServer.url}/docs`);
+});
+
+test("adds a slide from the ordered accessible layout catalog and preserves history", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  if (demoServer === null) throw new Error("demo server was not started");
+
+  const zip = await JSZip.loadAsync(
+    await readFile(resolve(repoRoot, "shared-fixtures/real-basic-theme.pptx")),
+  );
+  const hiddenLayoutFile = zip.file("ppt/slideLayouts/slideLayout2.xml");
+  if (hiddenLayoutFile === null) throw new Error("layout fixture was not found");
+  const hiddenLayoutXml = await hiddenLayoutFile.async("string");
+  zip.file(
+    "ppt/slideLayouts/slideLayout2.xml",
+    hiddenLayoutXml.replace("<p:sldLayout ", '<p:sldLayout show="0" '),
+  );
+  const fixture = await zip.generateAsync({ type: "nodebuffer" });
+
+  await page.goto(demoServer.url);
+  await page.getByTestId("pptx-input").setInputFiles({
+    name: "layout-catalog.pptx",
+    mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    buffer: fixture,
+  });
+  await expect(page.getByTestId("editor-thumbnail")).toHaveCount(2);
+
+  const trigger = page.getByRole("button", { name: "New slide" });
+  await trigger.click();
+  const picker = page.getByRole("dialog", { name: "Choose a slide layout" });
+  await expect(picker).toBeVisible();
+  await expect(picker.getByRole("heading", { name: "streamline" })).toBeVisible();
+
+  const layouts = picker.getByRole("radio");
+  await expect(layouts).toHaveCount(11);
+  await expect(layouts).toHaveText([
+    /TITLE/,
+    /SECTION_HEADER/,
+    /TITLE_AND_BODY/,
+    /TITLE_AND_TWO_COLUMNS/,
+    /TITLE_ONLY/,
+    /ONE_COLUMN_TEXT/,
+    /MAIN_POINT/,
+    /SECTION_TITLE_AND_DESCRIPTION/,
+    /CAPTION_ONLY/,
+    /BIG_NUMBER/,
+    /BLANK/,
+  ]);
+  await expect(layouts.first()).toHaveAttribute("aria-checked", "true");
+  await expect(layouts.first()).toContainText("Current");
+  await expect(layouts.nth(1)).toContainText("Hidden");
+  await expect(picker.locator('[data-thumbnail-state="loading"]')).not.toHaveCount(11);
+  await expect(picker.locator('[data-thumbnail-state="ready"]')).toHaveCount(11);
+  await expect(picker.locator('[data-thumbnail-state="ready"] svg')).toHaveCount(11);
+  await expect(picker.locator('[data-thumbnail-state="fallback"]')).toHaveCount(0);
+
+  await layouts.first().press("End");
+  await expect(layouts.last()).toBeFocused();
+  await expect(layouts.last()).toHaveAttribute("aria-checked", "true");
+  await page.getByRole("button", { name: "Add slide", exact: true }).click();
+
+  await expect(picker).toHaveCount(0);
+  await expect(page.getByTestId("editor-status")).toContainText("Slide added");
+  await expect(page.getByTestId("editor-thumbnail")).toHaveCount(3);
+  await expect(page.getByTestId("editor-thumbnail").last()).toHaveClass(/active/);
+
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByTestId("editor-thumbnail")).toHaveCount(2);
+  await page.getByRole("button", { name: "Redo" }).click();
+  await expect(page.getByTestId("editor-thumbnail")).toHaveCount(3);
+
+  await trigger.click();
+  await expect(picker).toBeVisible();
+  await expect(picker.getByRole("radio", { name: /BLANK, current layout/ })).toContainText(
+    "Current",
+  );
+  await picker.press("Escape");
+  await expect(picker).toHaveCount(0);
+  await expect(trigger).toBeFocused();
 });
 
 test("releases a pending IME host action when its editor session changes", async ({ page }) => {

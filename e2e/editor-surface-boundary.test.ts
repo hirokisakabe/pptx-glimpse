@@ -12,6 +12,7 @@ const reusableComponentFiles = [
   "PptxEditor.tsx",
   "EditorToolbar.tsx",
   "EditorSlideStrip.tsx",
+  "EditorLayoutPicker.tsx",
   "direct-text-editor-lifecycle.ts",
   "pptx-editor-controller.ts",
   "use-pptx-editor-controller.ts",
