@@ -75,6 +75,7 @@ const FILL_LOCAL_NAMES: ReadonlySet<string> = new Set([
 ]);
 const KNOWN_SLIDE_CHILDREN: ReadonlySet<string> = new Set(["cSld", "clrMapOvr"]);
 const KNOWN_LAYOUT_CHILDREN: ReadonlySet<string> = new Set(["cSld", "clrMapOvr"]);
+const KNOWN_COMMON_SLIDE_DATA_CHILDREN: ReadonlySet<string> = new Set(["bg", "spTree"]);
 const KNOWN_MASTER_CHILDREN: ReadonlySet<string> = new Set([
   "cSld",
   "clrMap",
@@ -94,7 +95,10 @@ export function parseSlide(
   const background = parseBackground(getChild(cSld, "bg"), nextId);
   const colorMapOverride = parseColorMapOverride(getChild(root, "clrMapOvr"));
   const showMasterShapes = booleanAttr(root, "showMasterSp");
-  const rawSidecars = collectUnknownSidecars(root, KNOWN_SLIDE_CHILDREN, nextId);
+  const rawSidecars = [
+    ...collectUnknownSidecars(cSld, KNOWN_COMMON_SLIDE_DATA_CHILDREN, nextId),
+    ...collectUnknownSidecars(root, KNOWN_SLIDE_CHILDREN, nextId),
+  ];
 
   return {
     partPath,
@@ -123,7 +127,10 @@ export function parseSlideLayout(
   const background = parseBackground(getChild(cSld, "bg"), nextId);
   const colorMapOverride = parseColorMapOverride(getChild(root, "clrMapOvr"));
   const showMasterShapes = booleanAttr(root, "showMasterSp");
-  const rawSidecars = collectUnknownSidecars(root, KNOWN_LAYOUT_CHILDREN, nextId);
+  const rawSidecars = [
+    ...collectUnknownSidecars(cSld, KNOWN_COMMON_SLIDE_DATA_CHILDREN, nextId),
+    ...collectUnknownSidecars(root, KNOWN_LAYOUT_CHILDREN, nextId),
+  ];
 
   return {
     partPath,
@@ -154,7 +161,10 @@ export function parseSlideMaster(
   const background = parseBackground(getChild(cSld, "bg"), nextId);
   const colorMap = parseColorMap(getChild(root, "clrMap"));
   const txStyles = parseMasterTextStyles(getChild(root, "txStyles"));
-  const rawSidecars = collectUnknownSidecars(root, KNOWN_MASTER_CHILDREN, nextId);
+  const rawSidecars = [
+    ...collectUnknownSidecars(cSld, KNOWN_COMMON_SLIDE_DATA_CHILDREN, nextId),
+    ...collectUnknownSidecars(root, KNOWN_MASTER_CHILDREN, nextId),
+  ];
 
   return {
     partPath,

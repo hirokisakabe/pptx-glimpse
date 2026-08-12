@@ -65,14 +65,9 @@ describe("cross-part move planning", () => {
     );
 
     expect(plan.movedRootNodeIds).toEqual(sourceSlide.shapes.map((node) => node.nodeId));
-    const destinationMaxId = Math.max(
-      0,
-      ...destinationSlide.shapes.map((node) => Number(node.nodeId)),
-    );
-    expect(plan.nodeIdMappings.map((item) => Number(item.after))).toEqual([
-      destinationMaxId + 1,
-      destinationMaxId + 2,
-    ]);
+    const destinationIds = new Set(destinationSlide.shapes.map((node) => node.nodeId));
+    expect(plan.nodeIdMappings.map((item) => Number(item.after))).toEqual([1, 3]);
+    expect(plan.nodeIdMappings.every((item) => !destinationIds.has(item.after))).toBe(true);
     expect(plan.relationshipRemaps).toHaveLength(2);
     expect(plan.relationshipReferences.filter((item) => item.source === "typed")).toHaveLength(2);
     expect(plan.relationshipReferences.filter((item) => item.source === "raw")).toHaveLength(2);
@@ -137,14 +132,11 @@ describe("cross-part move planning", () => {
       movedHandles,
       requireValue(destinationSlide.handle),
       {
-        reservedDestinationNodeIds: [asSourceNodeId(String(destinationMaxId + 1))],
+        reservedDestinationNodeIds: [asSourceNodeId("1")],
         reservedDestinationRelationshipIds: [asRelationshipId("rId100")],
       },
     );
-    expect(reservedPlan.nodeIdMappings.map((item) => Number(item.after))).toEqual([
-      destinationMaxId + 2,
-      destinationMaxId + 3,
-    ]);
+    expect(reservedPlan.nodeIdMappings.map((item) => Number(item.after))).toEqual([3, 4]);
     expect(reservedPlan.relationshipRemaps.map((item) => item.after.id)).toEqual([
       "rId101",
       "rId102",
@@ -568,6 +560,22 @@ describe("cross-part move planning", () => {
       "may reference a moved node id",
     );
 
+    const vendorReference = replaceFirstShape(source, {
+      ...requireValue(sourceSlide.shapes[0]),
+      rawSidecars: [
+        {
+          id: asRawSidecarId("vendor-reference"),
+          node: {
+            name: "vendor:target",
+            attributes: { shapeId: String(handles[1].nodeId) },
+          },
+        },
+      ],
+    });
+    expect(() => planCrossPartDrawingMove(vendorReference, handles, destination)).toThrow(
+      "may reference a moved node id",
+    );
+
     const rawNode: SourceShapeNode = {
       kind: "raw",
       nodeId: requireValue(sourceSlide.shapes[0]?.nodeId),
@@ -610,9 +618,9 @@ describe("cross-part move planning", () => {
             },
       ),
     };
-    expect(() => planCrossPartDrawingMove(maxDestinationId, handles, destination)).toThrow(
-      "no drawing node id remains",
-    );
+    expect(
+      planCrossPartDrawingMove(maxDestinationId, handles, destination).nodeIdMappings[0]?.after,
+    ).toBe("1");
     expect(source).toEqual(before);
     expect(source.edits).toBeUndefined();
   });

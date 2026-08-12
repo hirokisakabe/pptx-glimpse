@@ -528,18 +528,22 @@ function rawContainsUnprovenNodeReference(
   const localElement = node.name.split(":").at(-1);
   for (const [attributeName, value] of Object.entries(node.attributes ?? {})) {
     if (!values.has(value)) continue;
-    const localAttribute = attributeName.split(":").at(-1);
-    if (localAttribute !== "id" && localAttribute !== "spid") continue;
+    const localAttribute = attributeName.split(":").at(-1) ?? attributeName;
+    if (!localAttribute.toLowerCase().endsWith("id") && localAttribute !== "spid") continue;
     // cNvPr@id declares the owning drawing node. Every other matching raw id/spid is a
     // reference whose rewrite cannot be proven by this foundation planner.
     const endpointLocation = localElement === "stCxn" ? "start" : "end";
     const endpoint = movedConnector?.connection?.[endpointLocation];
+    if ((localElement === "stCxn" || localElement === "endCxn") && localAttribute === "idx") {
+      continue;
+    }
     const knownNodeIdAttribute =
       localAttribute === "id" &&
       (localElement === "cNvPr" ||
         ((localElement === "stCxn" || localElement === "endCxn") && endpoint?.shapeId === value));
     if (!knownNodeIdAttribute) return true;
   }
+  if (node.text !== undefined && values.has(node.text.trim())) return true;
   return (node.children ?? []).some((child) =>
     rawContainsUnprovenNodeReference(child, values, movedConnector),
   );
@@ -693,6 +697,7 @@ function nestedTextHandleMappings(
   destinationPartPath: PartPath,
 ): readonly CrossPartHandleMapping[] {
   const mappings: CrossPartHandleMapping[] = [];
+  const seenHandles = new Set<string>();
   const collect = (
     textBody: SourceTextBody | undefined,
     tableCell?: { readonly rowIndex: number; readonly cellIndex: number },
@@ -700,6 +705,19 @@ function nestedTextHandleMappings(
     if (textBody === undefined) return;
     textBody.paragraphs.forEach((paragraph, paragraphIndex) => {
       if (paragraph.handle !== undefined) {
+        const beforeNodeId = textHandleNodeId(
+          "paragraph",
+          record.oldNodeId,
+          paragraphIndex,
+          undefined,
+          tableCell,
+        );
+        validateNestedTextHandle(
+          paragraph.handle,
+          record.beforeHandle.partPath,
+          beforeNodeId,
+          seenHandles,
+        );
         mappings.push(
           mapNestedTextHandle(
             paragraph.handle,
@@ -710,6 +728,19 @@ function nestedTextHandleMappings(
       }
       paragraph.runs.forEach((run, runIndex) => {
         if (run.handle !== undefined) {
+          const beforeNodeId = textHandleNodeId(
+            "run",
+            record.oldNodeId,
+            paragraphIndex,
+            runIndex,
+            tableCell,
+          );
+          validateNestedTextHandle(
+            run.handle,
+            record.beforeHandle.partPath,
+            beforeNodeId,
+            seenHandles,
+          );
           mappings.push(
             mapNestedTextHandle(
               run.handle,
@@ -728,6 +759,19 @@ function nestedTextHandleMappings(
     );
   }
   return mappings;
+}
+
+function validateNestedTextHandle(
+  handle: SourceHandle,
+  partPath: PartPath,
+  nodeId: SourceNodeId,
+  seen: Set<string>,
+): void {
+  const key = `${handle.partPath}\u0000${handle.nodeId}`;
+  if (handle.partPath !== partPath || handle.nodeId !== nodeId || seen.has(key)) {
+    throw new Error("planCrossPartDrawingMove: nested text handle identity is inconsistent");
+  }
+  seen.add(key);
 }
 
 function mapNestedTextHandle(
@@ -845,6 +889,7 @@ function drawingRelationshipTypes(): ReadonlySet<string> {
     "media",
     "oleObject",
     "package",
+    "slide",
   ];
   return new Set(
     [
@@ -997,12 +1042,12 @@ function createNumericIdAllocator<T extends string>(
     }
     if (parsed > largest) largest = parsed;
   }
-  let next = largest + 1n;
+  let next = maximum !== undefined ? 1n : largest + 1n;
   return () => {
+    while (used.has(`${prefix}${next}`)) next += 1n;
     if (maximum !== undefined && next > maximum) {
       throw new Error("planCrossPartDrawingMove: no drawing node id remains in the OOXML range");
     }
-    while (used.has(`${prefix}${next}`)) next += 1n;
     const value = `${prefix}${next}`;
     used.add(value);
     next += 1n;

@@ -33,7 +33,7 @@ anchor or to the drawing-order end without requiring a complete sibling list.
 At drawing-part roots, `readPptx` retains unmodeled slide, layout, and master children such as
 timing and extension lists as raw sidecars. They remain preservation-only (`P`) material and are
 available to internal safety checks; no typed timing or extension editing API is implied. See the
-[typed reader tests][reader-tests].
+[typed reader tests][reader-tests] and [cross-part planning tests][cross-part-planning-tests].
 
 ## Matrix
 
@@ -77,6 +77,7 @@ table must not mark it `S`.
 [computed-template-view-tests]: https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/src/computed/create-computed-template-view.test.ts
 [computed-view-source]: https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/src/computed/create-computed-view.ts
 [core-editor-tests]: https://github.com/hirokisakabe/pptx-glimpse/tree/main/packages/core/src
+[cross-part-planning-tests]: https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/src/source/cross-part-move-planning.test.ts
 [editor-command-tests]: https://github.com/hirokisakabe/pptx-glimpse/tree/main/packages/editor/src
 [image-replacement]: https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/src/source/image-replacement.ts
 [picture-authoring]: https://github.com/hirokisakabe/pptx-glimpse/blob/main/packages/document/src/source/picture-authoring.ts
