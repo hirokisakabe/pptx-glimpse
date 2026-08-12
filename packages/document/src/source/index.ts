@@ -184,6 +184,7 @@ export type {
   PptxSourceModelDuplicateSlideEdit,
   PptxSourceModelEdit,
   PptxSourceModelGroupShapesEdit,
+  PptxSourceModelMoveShapesEdit,
   PptxSourceModelMoveSlideEdit,
   PptxSourceModelParagraphPropertiesEdit,
   PptxSourceModelParagraphTextEdit,
@@ -220,6 +221,8 @@ export type {
 } from "./presentation.js";
 export type { RawOoxmlNode, RawPackagePart, RawSidecar } from "./raw.js";
 export { groupShapes, ungroupShape } from "./shape-grouping.js";
+export type { MoveShapesOptions } from "./shape-moving.js";
+export { moveShapes } from "./shape-moving.js";
 export { reorderShapes } from "./shape-ordering.js";
 export type {
   SourceArrowEndpoint,

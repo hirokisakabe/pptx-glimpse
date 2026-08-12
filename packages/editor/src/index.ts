@@ -1880,6 +1880,7 @@ function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
       case "deleteSlide":
       case "duplicateSlide":
       case "groupShapes":
+      case "moveShapes":
       case "moveSlide":
       case "reorderShapes":
       case "replaceImage":

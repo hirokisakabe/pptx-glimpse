@@ -143,6 +143,7 @@ const picture = target.addPicture({
 });
 const group = target.groupShapes([shape, picture]);
 session.target(group).reorderShapes([picture, shape]);
+session.target(group).moveShapes([picture], { beforeShapeHandle: shape });
 ```
 
 Supported from-scratch children are generic shapes/text boxes, PNG/JPEG pictures, connectors,
@@ -159,6 +160,13 @@ remain in place. Missing, duplicate, foreign-part, and non-direct handles are re
 drawing parts with duplicate node ids or `mc:AlternateContent`; validation is atomic. The
 standalone `reorderShapes(source, targetHandle, orderedShapeHandles)` root export provides the same
 operation without a session.
+
+`moveShapes` accepts one or more consecutive direct children of the same target. It keeps their
+source document order, inserts them immediately before `beforeShapeHandle`, or moves them to the
+drawing-order end when the option is omitted. The operation preserves node ids, handles,
+transforms, relationships, and authored non-drawing XML slots. It rejects cross-parent and
+cross-part requests instead of transforming coordinates. The standalone
+`moveShapes(source, shapeHandles, targetHandle, options?)` root export provides the same operation.
 
 ## OOXML percentages, angles, and effects
 

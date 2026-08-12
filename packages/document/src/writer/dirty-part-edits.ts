@@ -18,6 +18,7 @@ import {
   applyAddTextBoxEdit,
   applyDeleteShapeEdit,
   applyGroupShapesEdit,
+  applyMoveShapesEdit,
   applyReorderShapesEdit,
   applySetBackgroundEdit,
   applyUngroupShapeEdit,
@@ -120,6 +121,9 @@ function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
       return;
     case "reorderShapes":
       applyReorderShapesEdit(root, edit);
+      return;
+    case "moveShapes":
+      applyMoveShapesEdit(root, edit);
       return;
     case "groupShapes":
       applyGroupShapesEdit(root, edit);
