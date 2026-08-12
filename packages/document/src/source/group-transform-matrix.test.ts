@@ -154,6 +154,27 @@ describe("source affine matrix composition", () => {
       f: 0,
     });
   });
+
+  it("avoids intermediate overflow while inverting large finite coefficients", () => {
+    const largeRotationScale = {
+      a: 1e308,
+      b: -1e308,
+      c: 1e308,
+      d: 1e308,
+      e: 0,
+      f: 0,
+    };
+    const inverse = valueOf(invertSourceAffineMatrix(largeRotationScale));
+
+    expectMatrixClose(multiplySourceAffineMatrices(largeRotationScale, inverse), {
+      a: 1,
+      b: 0,
+      c: 0,
+      d: 1,
+      e: 0,
+      f: 0,
+    });
+  });
 });
 
 describe("source transform decomposition and reconstruction", () => {
@@ -236,5 +257,32 @@ describe("source transform decomposition and reconstruction", () => {
       ok: false,
       reason: "non-finite-transform",
     });
+  });
+
+  it("allows bounded floating-point error after ancestor composition and inversion", () => {
+    const parent = valueOf(
+      buildSourceGroupMappingMatrix(
+        transform(1_000_000, 2_000_000, 9_144_000, 5_143_500, {
+          rotation: asOoxmlAngle(37 * 60000),
+          flipHorizontal: true,
+        }),
+        transform(123_456, 789_012, 3_000_000, 7_000_000),
+      ),
+    );
+    const local = valueOf(
+      buildSourceTransformMatrix(
+        transform(2_345_678, 1_234_567, 4_567_890, 2_345_678, {
+          rotation: asOoxmlAngle(-23 * 60000),
+          flipVertical: true,
+        }),
+      ),
+    );
+    const inverseParent = valueOf(invertSourceAffineMatrix(parent));
+    const roundTripped = multiplySourceAffineMatrices(
+      inverseParent,
+      multiplySourceAffineMatrices(parent, local),
+    );
+
+    expect(decomposeSourceTransformMatrix(roundTripped).ok).toBe(true);
   });
 });

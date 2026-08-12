@@ -28,7 +28,9 @@ export type SourceTransformMatrixResult<T> =
 
 const IDENTITY_MATRIX: SourceAffineMatrix = { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 };
 const OOXML_ANGLE_PER_RADIAN = (60000 * 180) / Math.PI;
-const MATRIX_ABSOLUTE_TOLERANCE = 1e-6;
+const MATRIX_ABSOLUTE_TOLERANCE = 1e-5;
+const MATRIX_ULP_TOLERANCE = 8;
+const MATRIX_TOLERANCE_CAP = 0.01;
 
 /** Multiplies matrices so the returned mapping applies `inner` before `outer`. */
 export function multiplySourceAffineMatrices(
@@ -125,7 +127,7 @@ export function invertSourceAffineMatrix(
     return reject("singular-matrix");
   }
 
-  const inverseScale = 1 / (linearScale * normalizedDeterminant);
+  const inverseScale = 1 / linearScale / normalizedDeterminant;
   const inverse = {
     a: normalizedD * inverseScale,
     b: -normalizedB * inverseScale,
@@ -214,11 +216,11 @@ export function decomposeSourceTransformMatrix(
 
 function matricesNearlyEqual(left: SourceAffineMatrix, right: SourceAffineMatrix): boolean {
   return (["a", "b", "c", "d", "e", "f"] as const).every((key) => {
-    const tolerance = Math.max(
-      MATRIX_ABSOLUTE_TOLERANCE,
-      floatingPointUlp(left[key]),
-      floatingPointUlp(right[key]),
+    const floatingPointTolerance = Math.min(
+      MATRIX_TOLERANCE_CAP,
+      MATRIX_ULP_TOLERANCE * Math.max(floatingPointUlp(left[key]), floatingPointUlp(right[key])),
     );
+    const tolerance = Math.max(MATRIX_ABSOLUTE_TOLERANCE, floatingPointTolerance);
     return Math.abs(left[key] - right[key]) <= tolerance;
   });
 }
