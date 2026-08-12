@@ -437,7 +437,11 @@ describe("moveShapesAcrossSlides", () => {
       requireInternalTarget(
         result.document,
         destinationSlide.partPath,
-        requireValue(retainedDestinationChart.chartRelationshipId),
+        requireValue(
+          retainedDestinationChart.kind === "chart"
+            ? retainedDestinationChart.chartRelationshipId
+            : undefined,
+        ),
       ),
     ).toBe(destinationChartPartPath);
     expect(result.document.packageGraph.contentTypes).toEqual(contentTypes);
@@ -572,7 +576,9 @@ describe("moveShapesAcrossSlides", () => {
       requireInternalTarget(
         moved.document,
         requireValue(moved.document.slides[1]).partPath,
-        requireValue(movedSharedChart.chartRelationshipId),
+        requireValue(
+          movedSharedChart.kind === "chart" ? movedSharedChart.chartRelationshipId : undefined,
+        ),
       ),
     ).toBe(sharedChartPartPath);
     const persisted = readPptx(writePptx(moved.document));
