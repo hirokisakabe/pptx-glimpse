@@ -234,6 +234,45 @@ test("opens the sample editor first and replaces it with an uploaded PPTX", asyn
   await expect(page).toHaveURL(`${demoServer.url}/docs`);
 });
 
+test("releases a pending IME host action when its editor session unmounts", async ({ page }) => {
+  test.setTimeout(120_000);
+  if (demoServer === null) throw new Error("demo server was not started");
+  let replacementSampleRequests = 0;
+  await page.route("**/samples/editor-demo.pptx", async (route) => {
+    replacementSampleRequests += 1;
+    await route.continue();
+  });
+
+  await page.goto(demoServer.url);
+  await expect(page.getByTestId("editor-workspace")).toBeVisible();
+  replacementSampleRequests = 0;
+  const editableTextShape = page
+    .locator('[data-testid="shape-hit-area"][data-editable-text="true"]')
+    .nth(1);
+  await editableTextShape.dblclick();
+  const directTextRun = page.getByTestId("direct-text-editor-run").first();
+  await directTextRun.fill("Pending composition");
+  await directTextRun.evaluate((element) => {
+    element.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+  });
+
+  await page.getByRole("button", { name: "Open sample" }).evaluate((button) => {
+    if (!(button instanceof HTMLButtonElement))
+      throw new Error("open sample control is not a button");
+    button.click();
+  });
+  await page
+    .getByTestId("pptx-input")
+    .setInputFiles(resolve(repoRoot, "shared-fixtures/real-product-page.pptx"));
+
+  await expect(page.getByRole("textbox", { name: "Presentation file name" })).toHaveValue(
+    "real-product-page",
+  );
+  await expect(page.getByTestId("replacement-loading")).toHaveCount(0);
+  await page.waitForTimeout(100);
+  expect(replacementSampleRequests).toBe(0);
+});
+
 test("runs the public demo browser editor flow entirely client-side", async ({ page }) => {
   test.setTimeout(120_000);
   if (demoServer === null) throw new Error("demo server was not started");

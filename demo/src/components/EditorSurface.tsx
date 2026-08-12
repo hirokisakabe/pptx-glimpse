@@ -13,6 +13,7 @@ import {
 
 import { EditorSlideStrip } from "./EditorSlideStrip";
 import { EditorHistoryToolbar, EditorToolbar, type EditorTextRunOption } from "./EditorToolbar";
+import { DirectTextEditorLifecycle } from "./direct-text-editor-lifecycle";
 import { type PreferredSlideIndex, useEditorController } from "./use-editor-controller";
 
 const EMU_PER_PIXEL = 9525;
@@ -102,14 +103,17 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
   const slideFrameRef = useRef<HTMLDivElement | null>(null);
   const directTextEditorRef = useRef<HTMLDivElement | null>(null);
   const directTextEditorStateRef = useRef<DirectTextEditorState | null>(null);
-  const directTextCommitPromiseRef = useRef<Promise<boolean> | null>(null);
+  const directTextLifecycleRef = useRef<DirectTextEditorLifecycle | null>(null);
+  directTextLifecycleRef.current ??= new DirectTextEditorLifecycle();
+  const directTextSessionRef = useRef(editor);
+  if (directTextSessionRef.current !== editor) {
+    directTextSessionRef.current = editor;
+    directTextLifecycleRef.current.invalidate();
+  }
+  const directTextLifecycle = directTextLifecycleRef.current;
   const dragStateRef = useRef<DragState | null>(null);
   const compositionRef = useRef(false);
   const commitAfterCompositionRef = useRef(false);
-  const compositionCompletionRef = useRef<{
-    readonly promise: Promise<boolean>;
-    readonly resolve: (completed: boolean) => void;
-  } | null>(null);
 
   const currentSlide = slides[currentIndex];
   const selectedShape = useMemo(() => {
@@ -141,11 +145,11 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
       preferredIndex: PreferredSlideIndex<EditorSession> = currentIndex,
       historyAction: "mutation" | "undo" | "redo" = "mutation",
     ) => {
-      const directTextCommit = directTextCommitPromiseRef.current;
+      const directTextCommit = directTextLifecycle.currentCommit();
       if (directTextCommit !== null && !(await directTextCommit)) return false;
       return controller.run(operation, { success, preferredIndex, historyAction });
     },
-    [controller, currentIndex],
+    [controller, currentIndex, directTextLifecycle],
   );
 
   const applyCommand = useCallback(
@@ -262,28 +266,34 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
     [controller, selectedShape],
   );
 
-  const closeDirectTextEditor = useCallback((restoreFocus = true) => {
-    compositionCompletionRef.current?.resolve(false);
-    compositionCompletionRef.current = null;
-    directTextEditorStateRef.current = null;
-    compositionRef.current = false;
-    commitAfterCompositionRef.current = false;
-    setDirectTextEditor(null);
-    if (restoreFocus) {
-      window.setTimeout(() => slideFrameRef.current?.focus({ preventScroll: true }), 0);
-    }
-  }, []);
+  const closeDirectTextEditor = useCallback(
+    (restoreFocus = true) => {
+      directTextLifecycle.cancelComposition();
+      directTextEditorStateRef.current = null;
+      compositionRef.current = false;
+      commitAfterCompositionRef.current = false;
+      setDirectTextEditor(null);
+      if (restoreFocus) {
+        window.setTimeout(() => slideFrameRef.current?.focus({ preventScroll: true }), 0);
+      }
+    },
+    [directTextLifecycle],
+  );
 
   useEffect(() => {
-    compositionCompletionRef.current?.resolve(false);
-    compositionCompletionRef.current = null;
+    directTextLifecycle.cancelComposition();
     directTextEditorStateRef.current = null;
-    directTextCommitPromiseRef.current = null;
     compositionRef.current = false;
     commitAfterCompositionRef.current = false;
     setDirectTextEditor(null);
     setDraftBounds(null);
-  }, [controller]);
+    return () => {
+      directTextLifecycle.invalidate();
+      directTextEditorStateRef.current = null;
+      compositionRef.current = false;
+      commitAfterCompositionRef.current = false;
+    };
+  }, [controller, directTextLifecycle]);
 
   const commitDirectTextEditor = useCallback(
     (restoreFocus = true): Promise<boolean> | undefined => {
@@ -291,7 +301,9 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
       const editorElement = directTextEditorRef.current;
       const session = editor;
       if (activeEditor === null || editorElement === null || session === null) return;
-      if (directTextCommitPromiseRef.current !== null) return directTextCommitPromiseRef.current;
+      const currentCommit = directTextLifecycle.currentCommit();
+      if (currentCommit !== null) return currentCommit;
+      const generation = directTextLifecycle.currentGeneration();
 
       const commands = activeEditor.paragraphs.flatMap((paragraph) =>
         paragraph.runs.flatMap((run) => {
@@ -318,7 +330,8 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
         return Promise.resolve(true);
       }
 
-      const commit = (async () => {
+      let commit!: Promise<boolean>;
+      commit = (async () => {
         const committed = await controller.run(
           async () => {
             const result = await session.applyAll(commands);
@@ -334,19 +347,22 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
           },
         );
         try {
+          if (!directTextLifecycle.isCurrent(generation)) return false;
           if (committed) {
             closeDirectTextEditor(restoreFocus);
             return true;
           }
           return false;
         } finally {
-          directTextCommitPromiseRef.current = null;
+          directTextLifecycle.clearCommit(generation, commit);
         }
       })();
-      directTextCommitPromiseRef.current = commit;
+      if (!directTextLifecycle.setCommit(generation, commit)) {
+        return directTextLifecycle.currentCommit() ?? Promise.resolve(false);
+      }
       return commit;
     },
-    [closeDirectTextEditor, controller, currentIndex, editor],
+    [closeDirectTextEditor, controller, currentIndex, directTextLifecycle, editor],
   );
 
   const startDirectTextEditor = useCallback(
@@ -532,14 +548,14 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
 
   const commitPendingEdits = useCallback(async () => {
     if (compositionRef.current) {
-      const compositionCompletion = compositionCompletionRef.current;
-      if (compositionCompletion === null || !(await compositionCompletion.promise)) return false;
+      const compositionCompletion = directTextLifecycle.compositionPromise();
+      if (compositionCompletion === undefined || !(await compositionCompletion)) return false;
     }
     const commit =
-      directTextCommitPromiseRef.current ??
+      directTextLifecycle.currentCommit() ??
       (directTextEditorStateRef.current === null ? undefined : commitDirectTextEditor(false));
     return commit === undefined || (await commit);
-  }, [commitDirectTextEditor]);
+  }, [commitDirectTextEditor, directTextLifecycle]);
 
   const handleSelectSlide = useCallback(
     async (index: number) => {
@@ -748,9 +764,7 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
                 onBlur={handleDirectTextEditorBlur}
                 onCompositionEnd={() => {
                   compositionRef.current = false;
-                  const compositionCompletion = compositionCompletionRef.current;
-                  compositionCompletionRef.current = null;
-                  compositionCompletion?.resolve(true);
+                  directTextLifecycle.completeComposition();
                   if (
                     commitAfterCompositionRef.current &&
                     !directTextEditorRef.current?.contains(document.activeElement)
@@ -762,15 +776,7 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
                 onCompositionStart={() => {
                   compositionRef.current = true;
                   commitAfterCompositionRef.current = false;
-                  compositionCompletionRef.current?.resolve(false);
-                  let resolveComposition: (completed: boolean) => void = () => {};
-                  const promise = new Promise<boolean>((resolve) => {
-                    resolveComposition = resolve;
-                  });
-                  compositionCompletionRef.current = {
-                    promise,
-                    resolve: resolveComposition,
-                  };
+                  directTextLifecycle.beginComposition();
                 }}
                 onKeyDown={handleDirectTextEditorKeyDown}
               >

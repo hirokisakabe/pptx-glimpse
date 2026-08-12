@@ -8,6 +8,7 @@ const reusableComponentFiles = [
   "EditorSurface.tsx",
   "EditorToolbar.tsx",
   "EditorSlideStrip.tsx",
+  "direct-text-editor-lifecycle.ts",
   "editor-controller.ts",
   "use-editor-controller.ts",
 ];
