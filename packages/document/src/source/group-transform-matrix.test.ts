@@ -210,6 +210,10 @@ describe("source transform decomposition and reconstruction", () => {
       ok: false,
       reason: "shear",
     });
+    expect(decomposeSourceTransformMatrix({ a: 1, b: 0, c: 5e-6, d: 1, e: 0, f: 0 })).toEqual({
+      ok: false,
+      reason: "shear",
+    });
     expect(decomposeSourceTransformMatrix({ a: 0, b: 0, c: 0, d: 1, e: 0, f: 0 })).toEqual({
       ok: false,
       reason: "singular-matrix",

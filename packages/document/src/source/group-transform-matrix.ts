@@ -31,6 +31,7 @@ const OOXML_ANGLE_PER_RADIAN = (60000 * 180) / Math.PI;
 const MATRIX_ABSOLUTE_TOLERANCE = 1e-5;
 const MATRIX_ULP_TOLERANCE = 8;
 const MATRIX_TOLERANCE_CAP = 0.01;
+const NORMALIZED_SHEAR_TOLERANCE = 1e-10;
 
 /** Multiplies matrices so the returned mapping applies `inner` before `outer`. */
 export function multiplySourceAffineMatrices(
@@ -188,7 +189,7 @@ export function decomposeSourceTransformMatrix(
   if (width === 0 || height === 0) return reject("singular-matrix");
 
   const normalizedDot = (matrix.a * matrix.c + matrix.b * matrix.d) / (width * height);
-  if (Math.abs(normalizedDot) > MATRIX_ABSOLUTE_TOLERANCE) return reject("shear");
+  if (Math.abs(normalizedDot) > NORMALIZED_SHEAR_TOLERANCE) return reject("shear");
 
   const determinant = matrix.a * matrix.d - matrix.b * matrix.c;
   if (!Number.isFinite(determinant) || determinant === 0) return reject("singular-matrix");
