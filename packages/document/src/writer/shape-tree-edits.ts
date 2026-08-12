@@ -5,6 +5,7 @@ import {
 import { getAttr, getChild, localName, type XmlNode } from "../reader/xml.js";
 import { reparentSourceTransform } from "../source/group-transform-matrix.js";
 import type {
+  PptxSourceModel,
   PptxSourceModelAddChartEdit,
   PptxSourceModelAddConnectorEdit,
   PptxSourceModelAddPictureEdit,
@@ -13,6 +14,7 @@ import type {
   PptxSourceModelAddTextBoxEdit,
   PptxSourceModelDeleteShapeEdit,
   PptxSourceModelGroupShapesEdit,
+  PptxSourceModelMoveShapesAcrossSlidesEdit,
   PptxSourceModelMoveShapesEdit,
   PptxSourceModelReorderShapesEdit,
   PptxSourceModelSetBackgroundEdit,
@@ -39,8 +41,13 @@ import {
   locateShapeTreeNodeLocation,
   parseShapeLocator,
 } from "./xml-locators.js";
-import { replaceNodeEntries } from "./xml-node-utils.js";
-import { getXmlChildOrder, parseXmlForEditing, setXmlChildOrder } from "./xml-serialization.js";
+import { cloneXmlNode, replaceNodeEntries } from "./xml-node-utils.js";
+import {
+  getXmlChildOrder,
+  parseXmlForEditing,
+  setXmlChildOrder,
+  textDecoder,
+} from "./xml-serialization.js";
 
 export function applyAddTextBoxEdit(root: XmlNode, edit: PptxSourceModelAddTextBoxEdit): void {
   applyAddSpEdit(root, edit);
@@ -222,6 +229,199 @@ export function applyMoveShapesEdit(root: XmlNode, edit: PptxSourceModelMoveShap
         : entry,
     ),
   );
+}
+
+export function applyMoveShapesAcrossSlidesEdit(
+  root: XmlNode,
+  source: PptxSourceModel,
+  partPath: string,
+  edit: PptxSourceModelMoveShapesAcrossSlidesEdit,
+): void {
+  if (partPath !== edit.sourcePartPath && partPath !== edit.destinationPartPath) {
+    throw new Error("writePptx: cross-slide move applied to an unrelated part");
+  }
+  const spTree = getShapeTree(root, partPath);
+  if (partPath === edit.sourcePartPath) {
+    const order = completeRememberedChildOrder(spTree);
+    const movedIds = new Set(edit.sourceShapeIds.map(String));
+    const selected = order.filter((entry) => {
+      const id = shapeTreeEntryNodeId(entry.value);
+      return id !== undefined && movedIds.has(id);
+    });
+    assertCrossSlideSourceBlock(order, selected, edit.sourceShapeIds.map(String));
+    const selectedSet = new Set(selected);
+    replaceContainerChildren(
+      spTree,
+      order.filter((entry) => !selectedSet.has(entry)),
+    );
+    return;
+  }
+
+  const rawSourcePart = source.packageGraph.rawParts?.find(
+    (part) => part.partPath === edit.sourcePartPath,
+  );
+  if (rawSourcePart?.kind !== "binary") {
+    throw new Error(
+      `writePptx: cross-slide move source '${edit.sourcePartPath}' has no raw XML material`,
+    );
+  }
+  const sourceRoot = parseXmlForEditing(textDecoder.decode(rawSourcePart.bytes));
+  const sourceSpTree = getShapeTree(sourceRoot, edit.sourcePartPath);
+  const sourceOrder = completeRememberedChildOrder(sourceSpTree);
+  const sourceIds = edit.sourceShapeIds.map(String);
+  const sourceIdSet = new Set(sourceIds);
+  const selected = sourceOrder.filter((entry) => {
+    const id = shapeTreeEntryNodeId(entry.value);
+    return id !== undefined && sourceIdSet.has(id);
+  });
+  assertCrossSlideSourceBlock(sourceOrder, selected, sourceIds);
+
+  const nodeIdMap = new Map(
+    edit.nodeIdMappings.map((mapping) => [String(mapping.before), String(mapping.after)]),
+  );
+  const relationshipIdMap = new Map(
+    edit.relationshipIdMappings.map((mapping) => [String(mapping.before), String(mapping.after)]),
+  );
+  const sourceDrawingRoot = getDrawingPartRoot(sourceRoot);
+  const destinationDrawingRoot = getDrawingPartRoot(root);
+  if (sourceDrawingRoot === undefined || destinationDrawingRoot === undefined) {
+    throw new Error("writePptx: cross-slide move requires source and destination drawing roots");
+  }
+  copyNamespaceDeclarations(sourceDrawingRoot, destinationDrawingRoot);
+  const namespaces = xmlNamespaceContext(sourceDrawingRoot);
+  const movedEntries = selected.map((entry) => {
+    if (typeof entry.value !== "object" || entry.value === null || Array.isArray(entry.value)) {
+      throw new Error("writePptx: cross-slide moved drawing has invalid XML");
+    }
+    const value = cloneXmlNode(unsafeOoxmlBoundaryAssertion<XmlNode>(entry.value));
+    remapCrossSlideXml(value, entry.key, nodeIdMap, relationshipIdMap, namespaces);
+    return { key: entry.key, value };
+  });
+  if (
+    movedEntries.some(
+      (entry, index) =>
+        shapeTreeEntryNodeId(entry.value) !== String(edit.destinationShapeIds[index]),
+    )
+  ) {
+    throw new Error("writePptx: cross-slide destination ids do not match the finalized plan");
+  }
+
+  const destinationOrder = completeRememberedChildOrder(spTree);
+  const destinationProperties = getShapeTreeContainerPropertyKeys(spTree);
+  const destinationIds = new Set(
+    destinationOrder.flatMap((entry) => {
+      const id = shapeTreeEntryNodeId(entry.value);
+      return id === undefined ? [] : [id];
+    }),
+  );
+  if (edit.destinationShapeIds.some((id) => destinationIds.has(String(id)))) {
+    throw new Error("writePptx: cross-slide destination shape id is already in use");
+  }
+  const insertionIndex =
+    edit.beforeShapeId === undefined
+      ? crossParentEndInsertionIndex(destinationOrder, destinationProperties)
+      : destinationOrder.findIndex(
+          (entry) =>
+            isShapeTreeZOrderChildKey(entry.key, destinationProperties) &&
+            shapeTreeEntryNodeId(entry.value) === String(edit.beforeShapeId),
+        );
+  if (insertionIndex < 0) {
+    throw new Error("writePptx: cross-slide destination anchor was not found");
+  }
+  replaceContainerChildren(spTree, [
+    ...destinationOrder.slice(0, insertionIndex),
+    ...movedEntries,
+    ...destinationOrder.slice(insertionIndex),
+  ]);
+}
+
+function assertCrossSlideSourceBlock(
+  order: readonly { readonly key: string; readonly value: unknown }[],
+  selected: readonly { readonly key: string; readonly value: unknown }[],
+  sourceIds: readonly string[],
+): void {
+  if (
+    selected.length !== sourceIds.length ||
+    selected.some((entry, index) => shapeTreeEntryNodeId(entry.value) !== sourceIds[index])
+  ) {
+    throw new Error("writePptx: cross-slide source drawings do not match the finalized plan");
+  }
+  const drawingEntries = order.filter((entry) => shapeTreeEntryNodeId(entry.value) !== undefined);
+  const first = drawingEntries.findIndex((entry) => entry === selected[0]);
+  if (first < 0 || selected.some((entry, index) => drawingEntries[first + index] !== entry)) {
+    throw new Error("writePptx: cross-slide source drawings are not consecutive root siblings");
+  }
+}
+
+function copyNamespaceDeclarations(source: XmlNode, destination: XmlNode): void {
+  for (const [key, value] of Object.entries(source)) {
+    if (key === "@_xmlns" || key.startsWith("@_xmlns:")) destination[key] ??= value;
+  }
+}
+
+function xmlNamespaceContext(node: XmlNode): ReadonlyMap<string, string> {
+  const namespaces = new Map<string, string>();
+  for (const [key, value] of Object.entries(node)) {
+    if (typeof value !== "string") continue;
+    if (key === "@_xmlns") namespaces.set("", value);
+    else if (key.startsWith("@_xmlns:")) namespaces.set(key.slice(8), value);
+  }
+  return namespaces;
+}
+
+function remapCrossSlideXml(
+  node: XmlNode,
+  elementName: string,
+  nodeIdMap: ReadonlyMap<string, string>,
+  relationshipIdMap: ReadonlyMap<string, string>,
+  inheritedNamespaces: ReadonlyMap<string, string>,
+): void {
+  const namespaces = new Map(inheritedNamespaces);
+  for (const [key, value] of Object.entries(node)) {
+    if (typeof value !== "string") continue;
+    if (key === "@_xmlns") namespaces.set("", value);
+    else if (key.startsWith("@_xmlns:")) namespaces.set(key.slice(8), value);
+  }
+  const elementLocal = localName(elementName);
+  for (const key of Object.keys(node)) {
+    if (!key.startsWith("@_")) continue;
+    const qualified = key.slice(2);
+    const colon = qualified.indexOf(":");
+    const prefix = colon < 0 ? "" : qualified.slice(0, colon);
+    const attributeLocal = colon < 0 ? qualified : qualified.slice(colon + 1);
+    const value = node[key];
+    if (typeof value !== "string") continue;
+    if (elementLocal === "cNvPr" && attributeLocal === "id") {
+      node[key] = nodeIdMap.get(value) ?? value;
+      continue;
+    }
+    if ((elementLocal === "stCxn" || elementLocal === "endCxn") && attributeLocal === "id") {
+      node[key] = nodeIdMap.get(value) ?? value;
+      continue;
+    }
+    const namespace = namespaces.get(prefix);
+    if (
+      colon >= 0 &&
+      (namespace === "http://schemas.openxmlformats.org/officeDocument/2006/relationships" ||
+        namespace === "http://purl.oclc.org/ooxml/officeDocument/relationships")
+    ) {
+      node[key] = relationshipIdMap.get(value) ?? value;
+    }
+  }
+  for (const [key, value] of Object.entries(node)) {
+    if (key.startsWith("@_")) continue;
+    const values = Array.isArray(value) ? value : [value];
+    for (const child of values) {
+      if (typeof child !== "object" || child === null || Array.isArray(child)) continue;
+      remapCrossSlideXml(
+        unsafeOoxmlBoundaryAssertion<XmlNode>(child),
+        key,
+        nodeIdMap,
+        relationshipIdMap,
+        namespaces,
+      );
+    }
+  }
 }
 
 function collectXmlDrawingNodeIds(value: unknown, output: Set<string>): void {

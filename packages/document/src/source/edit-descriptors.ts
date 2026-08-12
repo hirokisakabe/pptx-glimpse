@@ -309,6 +309,26 @@ const EDIT_KIND_DESCRIPTORS: {
     insertedSlidePartPath: () => undefined,
     insertedShape: () => undefined,
   },
+  moveShapesAcrossSlides: {
+    reservedPartPaths: (edit) => [edit.sourcePartPath, edit.destinationPartPath],
+    // The legacy single-part trait identifies the source. Multi-part consumers use
+    // `editDirtyPartPaths`, which includes both atomic participants.
+    dirtyPartPath: (edit) => edit.sourcePartPath,
+    targetsShape: (edit, shapeHandle) =>
+      shapeHandle.nodeId !== undefined &&
+      ((edit.sourcePartPath === shapeHandle.partPath &&
+        edit.sourceShapeIds.includes(shapeHandle.nodeId)) ||
+        (edit.destinationPartPath === shapeHandle.partPath &&
+          edit.destinationShapeIds.includes(shapeHandle.nodeId))),
+    invalidatingPartPaths: (edit) => [edit.sourcePartPath, edit.destinationPartPath],
+    reservedShapeId: (edit, slidePartPath) =>
+      slidePartPath === edit.destinationPartPath
+        ? edit.destinationShapeIds.map(String).at(-1)
+        : undefined,
+    slideTopologyOperation: () => undefined,
+    insertedSlidePartPath: () => undefined,
+    insertedShape: () => undefined,
+  },
   groupShapes: {
     reservedPartPaths: (edit) => [edit.targetPartPath],
     dirtyPartPath: (edit) => edit.targetPartPath,
@@ -496,8 +516,17 @@ export function editReservedPartPaths(edit: PptxSourceModelEdit): readonly PartP
   return descriptorFor(edit).reservedPartPaths(edit);
 }
 
-export function editDirtyPartPath(edit: PptxSourceModelEdit): PartPath | undefined {
+function editDirtyPartPath(edit: PptxSourceModelEdit): PartPath | undefined {
   return descriptorFor(edit).dirtyPartPath(edit);
+}
+
+/** XML parts changed by one edit. Most edits have one; cross-slide move has two. */
+export function editDirtyPartPaths(edit: PptxSourceModelEdit): readonly PartPath[] {
+  if (edit.kind === "moveShapesAcrossSlides") {
+    return [edit.sourcePartPath, edit.destinationPartPath];
+  }
+  const partPath = editDirtyPartPath(edit);
+  return partPath === undefined ? [] : [partPath];
 }
 
 export function editTargetsShape(edit: PptxSourceModelEdit, shapeHandle: SourceHandle): boolean {
@@ -508,11 +537,23 @@ export function editInvalidatingPartPaths(edit: PptxSourceModelEdit): readonly P
   return descriptorFor(edit).invalidatingPartPaths(edit);
 }
 
-export function editReservedShapeId(
+function editReservedShapeId(
   edit: PptxSourceModelEdit,
   slidePartPath: PartPath,
 ): string | undefined {
   return descriptorFor(edit).reservedShapeId(edit, slidePartPath);
+}
+
+/** Shape ids already allocated by one pending edit for a particular slide part. */
+export function editReservedShapeIds(
+  edit: PptxSourceModelEdit,
+  slidePartPath: PartPath,
+): readonly string[] {
+  if (edit.kind === "moveShapesAcrossSlides" && slidePartPath === edit.destinationPartPath) {
+    return edit.destinationShapeIds.map(String);
+  }
+  const shapeId = editReservedShapeId(edit, slidePartPath);
+  return shapeId === undefined ? [] : [shapeId];
 }
 
 export function editSlideTopologyOperation(

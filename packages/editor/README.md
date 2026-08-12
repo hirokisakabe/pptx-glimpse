@@ -74,7 +74,8 @@ The released command set includes:
 - Text: `replaceTextRunPlainText`, `replaceParagraphPlainText`, `setTextRunProperties`,
   `clearTextRunProperties`, `setParagraphProperties`, and `clearParagraphProperties`.
 - Shapes: `moveShape`, `resizeShape`, `setShapeTransform`, `setShapeFill`, `setShapeOutline`,
-  `addTextBox`, `addConnector`, `deleteShape`, `groupShapes`, `moveShapes`, and `ungroupShape`. Grouping accepts
+  `addTextBox`, `addConnector`, `deleteShape`, `groupShapes`, `moveShapes`,
+  `moveShapesAcrossSlides`, and `ungroupShape`. Grouping accepts
   two or more consecutive siblings with the same direct parent; the typed source-node convenience
   method covers shape, picture, connector, Table/Chart graphic frames, and native group nodes.
   Deletion accepts those same typed drawing kinds at the slide root or any native-group depth,
@@ -86,6 +87,9 @@ The released command set includes:
   cross-parent destinations may use rotation, flips, and uniform/non-uniform group scale when the
   moved root transform is exactly representable after integer OOXML quantization. Shear,
   singular, incomplete, and inexact mappings are rejected atomically.
+  `moveShapesAcrossSlides` is limited to consecutive non-placeholder shape/picture/connector
+  roots. It reissues destination identities, maps moved selection across apply/undo/redo, and
+  rejects connector boundaries and unsupported cross-part content atomically.
 - Media: `replaceImage`, `setPictureCrop`, and `clearPictureCrop`. Crop uses integer OOXML
   percentages (`100000` = 100%), rejects invalid or fully consumed axes without clamping, and is
   limited to pictures with exactly one stretch fill and no tile fill.

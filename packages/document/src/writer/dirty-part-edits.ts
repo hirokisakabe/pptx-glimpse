@@ -1,5 +1,5 @@
 import type { XmlNode } from "../reader/xml.js";
-import { editDirtyPartPath } from "../source/edit-descriptors.js";
+import { editDirtyPartPaths } from "../source/edit-descriptors.js";
 import type { PartPath, PptxSourceModel, PptxSourceModelEdit } from "../source/index.js";
 import { applyReplaceImageEdit } from "./image-replacement-edits.js";
 import { applyAddSlideLayoutEdit, applyCloneSlideLayoutEdit } from "./master-layout-edits.js";
@@ -18,6 +18,7 @@ import {
   applyAddTextBoxEdit,
   applyDeleteShapeEdit,
   applyGroupShapesEdit,
+  applyMoveShapesAcrossSlidesEdit,
   applyMoveShapesEdit,
   applyReorderShapesEdit,
   applySetBackgroundEdit,
@@ -58,8 +59,8 @@ export function serializeDirtyXmlPart(
   // so no stale-target edit can follow its delete within one part. Hand-built
   // edit arrays that violate the invariant fail fast in the apply functions.
   for (const edit of edits) {
-    if (editDirtyPartPath(edit) !== partPath) continue;
-    applyDirtyPartEdit(root, edit);
+    if (!editDirtyPartPaths(edit).includes(partPath)) continue;
+    applyDirtyPartEdit(root, source, partPath, edit);
   }
   return encodeXml(XML_DECLARATION + buildXmlPreservingChildOrder(root));
 }
@@ -69,7 +70,12 @@ export function serializeDirtyXmlPart(
  * patch. Kinds that never dirty an XML part (see `editDirtyPartPath`) throw so
  * a descriptor/apply mismatch fails fast instead of being silently skipped.
  */
-function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
+function applyDirtyPartEdit(
+  root: XmlNode,
+  source: PptxSourceModel,
+  partPath: PartPath,
+  edit: PptxSourceModelEdit,
+): void {
   switch (edit.kind) {
     case "replaceTextRunPlainText":
       applyTextRunEdit(root, edit);
@@ -124,6 +130,9 @@ function applyDirtyPartEdit(root: XmlNode, edit: PptxSourceModelEdit): void {
       return;
     case "moveShapes":
       applyMoveShapesEdit(root, edit);
+      return;
+    case "moveShapesAcrossSlides":
+      applyMoveShapesAcrossSlidesEdit(root, source, partPath, edit);
       return;
     case "groupShapes":
       applyGroupShapesEdit(root, edit);

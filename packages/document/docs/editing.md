@@ -199,7 +199,45 @@ subtree.
 The operation rejects empty, duplicate, idless, non-consecutive, cross-part inputs; cycles;
 incomplete, zero-extent, singular, non-finite, shear-producing, or quantization-inexact affine
 mappings; connector boundary crossings; and SmartArt, raw, or `mc:AlternateContent` moved targets.
-Affine approximation, connector rerouting, and cross-part moves remain separate contracts.
+Affine approximation and connector rerouting remain separate contracts.
+
+## Moving typed drawings between slides
+
+`moveShapesAcrossSlides` is the separate cross-part operation for consecutive slide-root
+`shape`, `image`, and `connector` nodes. It inserts the block immediately before an optional
+destination root anchor or at the destination drawing-order end and returns the new document,
+every old-to-new handle mapping, and both affected slide part paths:
+
+```ts
+import { moveShapesAcrossSlides } from "@pptx-glimpse/document";
+
+const [sourceSlide, destinationSlide] = source.slides;
+const movedHandles = sourceSlide?.shapes
+  .slice(0, 2)
+  .flatMap((shape) => (shape.handle === undefined ? [] : [shape.handle]));
+
+if (destinationSlide?.handle === undefined || movedHandles?.length !== 2) {
+  throw new Error("Two source drawings and a destination slide are required");
+}
+
+const result = moveShapesAcrossSlides(source, movedHandles, destinationSlide.handle);
+console.log(result.moved);
+```
+
+The operation moves authored local OOXML. It does not materialize computed theme, layout, master,
+or color-map values, so effective appearance can change on the destination slide. Drawing node
+IDs, handles, ordering slots, and owner relationship IDs are allocated in the destination; image
+media parts remain shared. A source relationship is removed only when no retained source drawing
+or preserved root XML still references it. Free connectors are allowed. Connected connectors are
+allowed only when the connector and all endpoints are inside the moved block, and endpoint IDs are
+remapped with the same finalized node-ID mapping.
+
+The initial slice rejects placeholders, groups, Tables, Charts, SmartArt, raw or
+`mc:AlternateContent` nodes, nested/group children, non-consecutive roots, template boundaries,
+pending source/destination edits, and every connector or unproven raw reference that crosses the
+selection boundary. Validation is atomic. The editor command uses the same operation, maps a moved
+selection to its destination handle, restores before/after selection on undo/redo, and must be the
+last command in one `applyAll` batch.
 
 `updateChartData(source, chartHandle, input)` replaces the series topology, names, shared category
 labels, and finite numeric values of an existing supported category Chart. It keeps the Chart

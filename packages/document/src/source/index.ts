@@ -4,6 +4,12 @@
 
 export type { PptxAuthoringTarget } from "./authoring-session.js";
 export { createPptxAuthoringSession, PptxAuthoringSession } from "./authoring-session.js";
+export type { CrossPartHandleMapping } from "./cross-part-move-planning.js";
+export type {
+  MoveShapesAcrossSlidesOptions,
+  MoveShapesAcrossSlidesResult,
+} from "./cross-slide-drawing-move.js";
+export { moveShapesAcrossSlides } from "./cross-slide-drawing-move.js";
 export type { Diagnostic, DiagnosticSeverity } from "./diagnostics.js";
 export type {
   AddChartAreaStyleInput,
@@ -184,6 +190,7 @@ export type {
   PptxSourceModelDuplicateSlideEdit,
   PptxSourceModelEdit,
   PptxSourceModelGroupShapesEdit,
+  PptxSourceModelMoveShapesAcrossSlidesEdit,
   PptxSourceModelMoveShapesEdit,
   PptxSourceModelMoveSlideEdit,
   PptxSourceModelParagraphPropertiesEdit,

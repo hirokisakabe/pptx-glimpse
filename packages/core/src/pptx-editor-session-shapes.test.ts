@@ -1,5 +1,7 @@
 import {
   asEmu,
+  createPptx,
+  createPptxAuthoringSession,
   findShapeNodeBySourceHandle,
   groupShapes,
   readPptx,
@@ -370,7 +372,68 @@ describe("PptxEditorSession - shapes", () => {
     await editor.redo();
     expect(editor.document.slides[0]?.shapes[0]?.kind).toBe("group");
   });
+
+  it("rerenders both affected slides and saves cross-slide drawing identity remaps", async () => {
+    const editor = await createPptxEditorSession(buildCrossSlideMoveFixture(), {
+      skipSystemFonts: true,
+    });
+    const sourceHandle = editor.shapes(1)[0]?.handle;
+    const destinationHandle = editor.document.slides[1]?.handle;
+    if (sourceHandle === undefined || destinationHandle === undefined) {
+      throw new Error("cross-slide move fixture handles are missing");
+    }
+    editor.selectShape(sourceHandle);
+    const before = await editor.renderCurrentSlides();
+
+    const response = await editor.moveShapesAcrossSlides([sourceHandle], destinationHandle);
+    const movedHandle = response.selection?.shapeHandle;
+    if (movedHandle === undefined) throw new Error("cross-slide selection mapping is missing");
+    expect(movedHandle.partPath).toBe(editor.document.slides[1]?.partPath);
+    expect(movedHandle.nodeId).not.toBe(sourceHandle.nodeId);
+    expect(response.slides[0]?.svg).not.toBe(before[0]?.svg);
+    expect(response.slides[1]?.svg).not.toBe(before[1]?.svg);
+
+    const persisted = readPptx(editor.save().pptx);
+    expect(persisted.slides[0]?.shapes.map(sourceShapeName)).not.toContain("Moved");
+    expect(persisted.slides[1]?.shapes.map(sourceShapeName)).toEqual(["Destination", "Moved"]);
+    await editor.undo();
+    expect(editor.selection).toEqual({ shapeHandle: sourceHandle });
+    await editor.redo();
+    expect(editor.selection).toEqual({ shapeHandle: movedHandle });
+  });
 });
+
+function buildCrossSlideMoveFixture(): Uint8Array {
+  const initial = createPptx();
+  const session = createPptxAuthoringSession(initial);
+  const first = initial.slides[0]?.handle;
+  const layout = initial.slideLayouts[0]?.handle;
+  if (first === undefined || layout === undefined) {
+    throw new Error("cross-slide move fixture roots are missing");
+  }
+  const second = session.addEmptySlideFromLayout({ layoutPartPath: layout.partPath });
+  session.target(first).addShape({
+    geometry: { kind: "preset", preset: "rect" },
+    offsetX: asEmu(0),
+    offsetY: asEmu(0),
+    width: asEmu(1000),
+    height: asEmu(1000),
+    name: "Moved",
+  });
+  session.target(second).addShape({
+    geometry: { kind: "preset", preset: "rect" },
+    offsetX: asEmu(1200),
+    offsetY: asEmu(0),
+    width: asEmu(1000),
+    height: asEmu(1000),
+    name: "Destination",
+  });
+  return writePptx(session.source);
+}
+
+function sourceShapeName(shape: { readonly kind: string }): string | undefined {
+  return "name" in shape && typeof shape.name === "string" ? shape.name : undefined;
+}
 
 function buildAffineCrossParentMoveFixture(): Uint8Array {
   const source = readPptx(buildGroupCommandFixture());

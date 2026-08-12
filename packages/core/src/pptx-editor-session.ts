@@ -791,6 +791,27 @@ export class PptxEditorSession {
     return this.response(result.warnings);
   }
 
+  /** Move consecutive non-placeholder shape/picture/connector roots to another slide. */
+  async moveShapesAcrossSlides(
+    shapeHandles: readonly SourceHandle[],
+    destinationSlideHandle: SourceHandle,
+    options: { readonly beforeShapeHandle?: SourceHandle } = {},
+  ): Promise<PptxEditorSlidesResponse> {
+    const before = this.#session.document;
+    const result = unwrapEditorOperation(
+      this.#session.apply({
+        kind: "moveShapesAcrossSlides",
+        shapeHandles,
+        destinationSlideHandle,
+        ...(options.beforeShapeHandle !== undefined
+          ? { beforeShapeHandle: options.beforeShapeHandle }
+          : {}),
+      }),
+    );
+    await this.#renderChangedSlides(before);
+    return this.response(result.warnings);
+  }
+
   /**
    * Expand one losslessly ungroupable native group and select its first child in document order.
    *

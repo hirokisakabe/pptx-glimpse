@@ -688,6 +688,33 @@ def create_editor_validity_affine_move_fixture():
     print("  Created: editor-validity-affine-move.pptx")
 
 
+def create_editor_validity_cross_slide_move_fixture(filename, *, expected):
+    """Two-slide pair for destination-local drawing identity and writer validity."""
+    prs = new_presentation()
+    source_slide = prs.slides.add_slide(prs.slide_layouts[6])
+    destination_slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+    anchor = destination_slide.shapes.add_shape(
+        MSO_SHAPE.RECTANGLE, Inches(5.8), Inches(1.0), Inches(3.0), Inches(3.8)
+    )
+    anchor.name = "Destination Anchor"
+    anchor.fill.solid()
+    anchor.fill.fore_color.rgb = RGBColor(0xED, 0x7D, 0x31)
+
+    moved_owner = destination_slide if expected else source_slide
+    moved = moved_owner.shapes.add_shape(
+        MSO_SHAPE.ROUNDED_RECTANGLE, Inches(0.8), Inches(1.4), Inches(3.2), Inches(1.8)
+    )
+    moved.name = "Cross Slide Move Target"
+    moved.fill.solid()
+    moved.fill.fore_color.rgb = RGBColor(0x44, 0x72, 0xC4)
+    moved.text_frame.text = "Moved between slides"
+    moved.text_frame.paragraphs[0].runs[0].font.size = Pt(18)
+
+    prs.save(os.path.join(OUTPUT_DIR, filename))
+    print(f"  Created: {filename}")
+
+
 def create_editor_validity_drawing_delete_fixture(filename):
     """Fixture containing one native picture, Table, Chart, and group delete target."""
     grouped_path = os.path.join(OUTPUT_DIR, "editor-validity-group-expected.pptx")
@@ -935,6 +962,14 @@ def create_editor_validity_fixtures():
         grouped=True,
     )
     create_editor_validity_affine_move_fixture()
+    create_editor_validity_cross_slide_move_fixture(
+        "editor-validity-cross-slide-move-source.pptx",
+        expected=False,
+    )
+    create_editor_validity_cross_slide_move_fixture(
+        "editor-validity-cross-slide-move-expected.pptx",
+        expected=True,
+    )
     create_editor_validity_drawing_delete_fixture(
         "editor-validity-drawing-delete-source.pptx",
     )

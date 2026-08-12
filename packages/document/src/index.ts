@@ -192,6 +192,7 @@ export type {
   PptxSourceModelDuplicateSlideEdit,
   PptxSourceModelEdit,
   PptxSourceModelGroupShapesEdit,
+  PptxSourceModelMoveShapesAcrossSlidesEdit,
   PptxSourceModelMoveShapesEdit,
   PptxSourceModelMoveSlideEdit,
   PptxSourceModelParagraphPropertiesEdit,
@@ -323,6 +324,11 @@ export type {
   UpdateThemeFontSetInput,
   UpdateThemeSchemeInput,
 } from "./source/index.js";
+export type {
+  CrossPartHandleMapping,
+  MoveShapesAcrossSlidesOptions,
+  MoveShapesAcrossSlidesResult,
+} from "./source/index.js";
 export {
   addChart,
   addConnector,
@@ -350,6 +356,7 @@ export {
   findTextRunBySourceHandle,
   groupShapes,
   moveShapes,
+  moveShapesAcrossSlides,
   moveSlide,
   PptxAuthoringSession,
   reorderShapes,
