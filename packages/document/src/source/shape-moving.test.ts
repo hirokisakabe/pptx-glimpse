@@ -326,6 +326,28 @@ describe("moveShapes", () => {
     expect(rereadConnector.connection?.end?.shapeId).toBe(handles[1].nodeId);
   });
 
+  it("moves typed shapes when preserved raw part XML is unavailable", () => {
+    let source = createShapes(3);
+    const slide = requireValue(source.slides[0]);
+    const [first, second, third] = slide.shapes.map((shape) => requireValue(shape.handle));
+    source = groupShapes(source, [second, third]);
+    const group = requireGroup(source.slides[0]?.shapes.at(-1));
+    source = {
+      ...source,
+      packageGraph: { ...source.packageGraph, rawParts: undefined },
+    };
+
+    const edited = moveShapes(source, [first], requireValue(group.handle), {
+      beforeShapeHandle: second,
+    });
+
+    expect(requireGroup(edited.slides[0]?.shapes[0]).children.map(shapeIdentity)).toEqual([
+      String(first.nodeId),
+      String(second.nodeId),
+      String(third.nodeId),
+    ]);
+  });
+
   it("keeps non-drawing XML in its authored slot while moving a block", () => {
     const authored = createShapes(3);
     const slidePath = "ppt/slides/slide1.xml";

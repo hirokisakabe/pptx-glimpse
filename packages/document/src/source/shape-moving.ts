@@ -260,11 +260,10 @@ function assertRawXmlConnectorBoundary(
   movedIds: ReadonlySet<string>,
 ): void {
   const rawPart = source.packageGraph.rawParts?.find((part) => part.partPath === target.partPath);
-  if (rawPart?.kind !== "binary") {
-    throw new Error(
-      `moveShapes: drawing part '${target.partPath}' has no preserved XML for connector validation`,
-    );
-  }
+  // From-scratch and intentionally compact source models may not retain raw part XML. Typed
+  // connectors were validated above, and the writer validates the effective XML again when the
+  // edit journal is replayed. Only scan here when preserved XML can contain untyped connectors.
+  if (rawPart?.kind !== "binary") return;
   let root: XmlNode;
   try {
     root = parseXml(new TextDecoder().decode(rawPart.bytes));
