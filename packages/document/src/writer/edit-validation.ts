@@ -122,6 +122,19 @@ export function validateEdits(edits: readonly PptxSourceModelEdit[]): void {
         if (edit.crossParent === true && edit.parentGroupId === edit.destinationParentGroupId) {
           throw new Error("writePptx: cross-parent move requires different containers");
         }
+        if (edit.transformedRoots !== undefined) {
+          if (edit.crossParent !== true) {
+            throw new Error("writePptx: transformed roots require a cross-parent move");
+          }
+          if (
+            edit.transformedRoots.length !== edit.shapeIds.length ||
+            edit.transformedRoots.some((entry, index) => entry.shapeId !== edit.shapeIds[index])
+          ) {
+            throw new Error(
+              "writePptx: transformed roots must match every moved shape in source order",
+            );
+          }
+        }
         break;
       }
       case "groupShapes": {

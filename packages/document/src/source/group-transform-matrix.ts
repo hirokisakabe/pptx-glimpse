@@ -33,6 +33,11 @@ const MATRIX_ULP_TOLERANCE = 8;
 const MATRIX_TOLERANCE_CAP = 0.01;
 const NORMALIZED_SHEAR_TOLERANCE = 1e-10;
 
+export interface SourceGroupCoordinateSpace {
+  readonly transform?: SourceTransform;
+  readonly childTransform?: SourceTransform;
+}
+
 /** Multiplies matrices so the returned mapping applies `inner` before `outer`. */
 export function multiplySourceAffineMatrices(
   outer: SourceAffineMatrix,
@@ -171,6 +176,43 @@ export function buildSourceTransformMatrix(
     f: Number(transform.offsetY) + centerY - (b + d) / 2,
   };
   return isFiniteMatrix(matrix) ? accept(matrix) : reject("non-finite-matrix");
+}
+
+/**
+ * Re-expresses one drawing root transform from a source parent coordinate space into a
+ * destination parent coordinate space without changing its part-absolute mapping.
+ */
+export function reparentSourceTransform(
+  sourceOuterToInner: readonly SourceGroupCoordinateSpace[],
+  destinationOuterToInner: readonly SourceGroupCoordinateSpace[],
+  transform: SourceTransform | undefined,
+): SourceTransformMatrixResult<SourceTransform> {
+  if (transform === undefined) return reject("missing-transform");
+  const sourceParent = composeGroupCoordinateSpaces(sourceOuterToInner);
+  if (!sourceParent.ok) return sourceParent;
+  const destinationParent = composeGroupCoordinateSpaces(destinationOuterToInner);
+  if (!destinationParent.ok) return destinationParent;
+  const destinationInverse = invertSourceAffineMatrix(destinationParent.value);
+  if (!destinationInverse.ok) return destinationInverse;
+  const local = buildSourceTransformMatrix(transform);
+  if (!local.ok) return local;
+  const reparented = multiplySourceAffineMatrices(
+    destinationInverse.value,
+    multiplySourceAffineMatrices(sourceParent.value, local.value),
+  );
+  return decomposeSourceTransformMatrix(reparented);
+}
+
+function composeGroupCoordinateSpaces(
+  groups: readonly SourceGroupCoordinateSpace[],
+): SourceTransformMatrixResult<SourceAffineMatrix> {
+  const matrices: SourceAffineMatrix[] = [];
+  for (const group of groups) {
+    const matrix = buildSourceGroupMappingMatrix(group.transform, group.childTransform);
+    if (!matrix.ok) return matrix;
+    matrices.push(matrix.value);
+  }
+  return composeSourceAncestorMatrices(matrices);
 }
 
 /**

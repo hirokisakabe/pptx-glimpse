@@ -21,6 +21,13 @@ import {
   writePptx,
 } from "../index.js";
 import { BLUE_PNG } from "../writer/write-pptx.test-helpers.js";
+import {
+  buildSourceGroupMappingMatrix,
+  buildSourceTransformMatrix,
+  multiplySourceAffineMatrices,
+  type SourceAffineMatrix,
+  type SourceTransformMatrixResult,
+} from "./group-transform-matrix.js";
 import { resolveInternalRelationshipTarget } from "./package-paths.js";
 
 describe("moveShapes", () => {
@@ -657,6 +664,205 @@ describe("moveShapes", () => {
     expect(rereadGroups[1]?.children.at(-1)?.transform).toEqual(groupA.children[1]?.transform);
   });
 
+  it("re-expresses root/group, group/root, and group/group transforms across representable affine parents", () => {
+    let source = createPptx();
+    const slideHandle = requireValue(source.slides[0]?.handle);
+    for (const offsetX of [2000, 6000, 10_000, 14_000, 18_000]) {
+      source = addShape(source, slideHandle, shapeInput(offsetX));
+    }
+    const handles = requireValue(source.slides[0]).shapes.map((shape) =>
+      requireValue(shape.handle),
+    );
+    source = groupShapes(source, handles.slice(1, 3));
+    source = groupShapes(source, handles.slice(3, 5));
+    const [rootShape, sourceGroup, destinationGroup] = requireValue(source.slides[0]).shapes;
+    const sourceGroupId = String(requireValue(sourceGroup?.nodeId));
+    const destinationGroupId = String(requireValue(destinationGroup?.nodeId));
+    source = materializeGroupTransforms(
+      source,
+      new Map([
+        [
+          sourceGroupId,
+          `<a:xfrm rot="5400000" flipV="1"><a:off x="2000" y="3000"/><a:ext cx="4000" cy="3000"/><a:chOff x="4000" y="0"/><a:chExt cx="2000" cy="1000"/></a:xfrm>`,
+        ],
+        [
+          destinationGroupId,
+          `<a:xfrm flipH="1"><a:off x="10000" y="2000"/><a:ext cx="6000" cy="2000"/><a:chOff x="12000" y="0"/><a:chExt cx="3000" cy="1000"/></a:xfrm>`,
+        ],
+      ]),
+    );
+
+    const materializedSlide = requireValue(source.slides[0]);
+    const materializedRoot = requireValue(
+      materializedSlide.shapes.find((shape) => shape.nodeId === rootShape?.nodeId),
+    );
+    const materializedSourceGroup = requireGroup(
+      materializedSlide.shapes.find((shape) => String(shape.nodeId) === sourceGroupId),
+    );
+    const materializedDestinationGroup = requireGroup(
+      materializedSlide.shapes.find((shape) => String(shape.nodeId) === destinationGroupId),
+    );
+    const sourceChild = requireValue(materializedSourceGroup.children[0]);
+    const destinationHandle = requireValue(materializedDestinationGroup.handle);
+
+    const rootBefore = valueOf(buildSourceTransformMatrix(requireTransform(materializedRoot)));
+    const rootToGroup = moveShapes(
+      source,
+      [requireValue(materializedRoot.handle)],
+      destinationHandle,
+    );
+    const rootAfter = requireValue(
+      requireGroup(
+        rootToGroup.slides[0]?.shapes.find((shape) => String(shape.nodeId) === destinationGroupId),
+      ).children.find((shape) => shape.nodeId === materializedRoot.nodeId),
+    );
+    expectMatrixClose(
+      multiplySourceAffineMatrices(
+        valueOf(
+          buildSourceGroupMappingMatrix(
+            materializedDestinationGroup.transform,
+            materializedDestinationGroup.childTransform,
+          ),
+        ),
+        valueOf(buildSourceTransformMatrix(requireTransform(rootAfter))),
+      ),
+      rootBefore,
+    );
+
+    const sourceChildBefore = multiplySourceAffineMatrices(
+      valueOf(
+        buildSourceGroupMappingMatrix(
+          materializedSourceGroup.transform,
+          materializedSourceGroup.childTransform,
+        ),
+      ),
+      valueOf(buildSourceTransformMatrix(requireTransform(sourceChild))),
+    );
+    const groupToRoot = moveShapes(
+      rootToGroup,
+      [requireValue(sourceChild.handle)],
+      requireValue(materializedSlide.handle),
+    );
+    const sourceChildAtRoot = requireValue(
+      groupToRoot.slides[0]?.shapes.find((shape) => shape.nodeId === sourceChild.nodeId),
+    );
+    expectMatrixClose(
+      valueOf(buildSourceTransformMatrix(requireTransform(sourceChildAtRoot))),
+      sourceChildBefore,
+    );
+
+    const secondSourceChild = requireValue(materializedSourceGroup.children[1]);
+    const secondBefore = multiplySourceAffineMatrices(
+      valueOf(
+        buildSourceGroupMappingMatrix(
+          materializedSourceGroup.transform,
+          materializedSourceGroup.childTransform,
+        ),
+      ),
+      valueOf(buildSourceTransformMatrix(requireTransform(secondSourceChild))),
+    );
+    const groupToGroup = moveShapes(
+      groupToRoot,
+      [requireValue(secondSourceChild.handle)],
+      destinationHandle,
+    );
+    const generalEdit = requireValue(groupToGroup.edits?.at(-1));
+    if (generalEdit.kind !== "moveShapes" || generalEdit.transformedRoots === undefined) {
+      throw new Error("general affine move edit fixture is missing");
+    }
+    const finalized = requireValue(generalEdit.transformedRoots[0]);
+    const forged: PptxSourceModel = {
+      ...groupToRoot,
+      edits: [
+        ...(groupToRoot.edits ?? []),
+        {
+          ...generalEdit,
+          transformedRoots: [
+            {
+              ...finalized,
+              transform: {
+                ...finalized.transform,
+                offsetX: asEmu(Number(finalized.transform.offsetX) + 1),
+              },
+            },
+          ],
+        },
+      ],
+    };
+    expect(() => writePptx(forged)).toThrow("finalized transform is stale");
+
+    const reread = readPptx(writePptx(groupToGroup));
+    const rereadDestination = requireGroup(
+      reread.slides[0]?.shapes.find((shape) => String(shape.nodeId) === destinationGroupId),
+    );
+    const rereadMoved = requireValue(
+      rereadDestination.children.find((shape) => shape.nodeId === secondSourceChild.nodeId),
+    );
+    expectMatrixClose(
+      multiplySourceAffineMatrices(
+        valueOf(
+          buildSourceGroupMappingMatrix(
+            rereadDestination.transform,
+            rereadDestination.childTransform,
+          ),
+        ),
+        valueOf(buildSourceTransformMatrix(requireTransform(rereadMoved))),
+      ),
+      secondBefore,
+    );
+    expect(rereadMoved.handle?.partPath).toBe(secondSourceChild.handle?.partPath);
+    expect(rereadMoved.handle?.nodeId).toBe(secondSourceChild.handle?.nodeId);
+  });
+
+  it.each([
+    [
+      "shear",
+      `<a:xfrm rot="2700000"><a:off x="0" y="0"/><a:ext cx="4000" cy="1000"/><a:chOff x="0" y="0"/><a:chExt cx="2000" cy="1000"/></a:xfrm>`,
+      "shear",
+    ],
+    [
+      "singular destination",
+      `<a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="1000"/><a:chOff x="0" y="0"/><a:chExt cx="2000" cy="1000"/></a:xfrm>`,
+      "singular-matrix",
+    ],
+    [
+      "missing child extent",
+      `<a:xfrm><a:off x="0" y="0"/><a:ext cx="2000" cy="1000"/><a:chOff x="0" y="0"/></a:xfrm>`,
+      "missing-child-transform",
+    ],
+    [
+      "zero child extent",
+      `<a:xfrm><a:off x="0" y="0"/><a:ext cx="2000" cy="1000"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="1000"/></a:xfrm>`,
+      "zero-child-extent",
+    ],
+    [
+      "invalid extent",
+      `<a:xfrm><a:off x="0" y="0"/><a:ext cx="-1" cy="1000"/><a:chOff x="0" y="0"/><a:chExt cx="2000" cy="1000"/></a:xfrm>`,
+      "invalid-extent",
+    ],
+    [
+      "EMU quantization mismatch",
+      `<a:xfrm><a:off x="0" y="0"/><a:ext cx="3000" cy="3000"/><a:chOff x="0" y="0"/><a:chExt cx="1000" cy="1000"/></a:xfrm>`,
+      "quantization-mismatch",
+    ],
+  ] as const)("rejects %s atomically at the move boundary", (_, transformXml, reason) => {
+    let source = createShapes(3);
+    const slide = requireValue(source.slides[0]);
+    const handles = slide.shapes.map((shape) => requireValue(shape.handle));
+    source = groupShapes(source, handles.slice(1));
+    const group = requireGroup(source.slides[0]?.shapes[1]);
+    source = materializeGroupTransforms(source, new Map([[String(group.nodeId), transformXml]]));
+    const before = structuredClone(source);
+    const materializedSlide = requireValue(source.slides[0]);
+    const root = requireValue(materializedSlide.shapes[0]);
+    const destination = requireGroup(materializedSlide.shapes[1]);
+
+    expect(() =>
+      moveShapes(source, [requireValue(root.handle)], requireValue(destination.handle)),
+    ).toThrow(reason);
+    expect(source).toEqual(before);
+  });
+
   it("rejects cycles, non-identity ancestors, and connector boundary crossings atomically", () => {
     const source = createShapes(4);
     const slide = requireValue(source.slides[0]);
@@ -700,7 +906,7 @@ describe("moveShapes", () => {
       };
       expect(() =>
         moveShapes(invalid, [requireValue(inner.children[0]?.handle)], requireValue(slide.handle)),
-      ).toThrow("identity child mapping");
+      ).toThrow("affine transform is not exactly representable");
     }
 
     let connected = createShapes(4);
@@ -833,6 +1039,38 @@ function slideXml(bytes: Uint8Array): string {
   return new TextDecoder().decode(requireValue(unzipSync(bytes)["ppt/slides/slide1.xml"]));
 }
 
+function materializeGroupTransforms(
+  source: PptxSourceModel,
+  transforms: ReadonlyMap<string, string>,
+): PptxSourceModel {
+  const archive = unzipSync(writePptx(source));
+  const partPath = "ppt/slides/slide1.xml";
+  let xml = new TextDecoder().decode(requireValue(archive[partPath]));
+  for (const [groupId, transformXml] of transforms) {
+    const groupBlocks = xml.match(/<p:grpSp\b[^>]*>[\s\S]*?<\/p:grpSp>/g) ?? [];
+    const idPattern = new RegExp(`<p:cNvPr[^>]*\\bid="${groupId}"`);
+    const block = groupBlocks.find((candidate) => idPattern.test(candidate));
+    if (block === undefined) throw new Error(`group '${groupId}' was not found`);
+    const updatedBlock = block.replace(/<a:xfrm[\s\S]*?<\/a:xfrm>/, transformXml);
+    const next = xml.replace(block, updatedBlock);
+    if (next === xml) throw new Error(`group '${groupId}' xfrm was not found`);
+    xml = next;
+  }
+  archive[partPath] = new TextEncoder().encode(xml);
+  return readPptx(zipSync(archive));
+}
+
+function valueOf<T>(result: SourceTransformMatrixResult<T>): T {
+  if (!result.ok) throw new Error(`unexpected matrix rejection: ${result.reason}`);
+  return result.value;
+}
+
+function expectMatrixClose(actual: SourceAffineMatrix, expected: SourceAffineMatrix): void {
+  for (const key of ["a", "b", "c", "d", "e", "f"] as const) {
+    expect(actual[key]).toBeCloseTo(expected[key], 6);
+  }
+}
+
 function expectXmlOrder(xml: string, markers: readonly string[]): void {
   const indexes = markers.map((marker) => xml.indexOf(marker));
   for (const [index, marker] of indexes.map((value, index) => [value, markers[index]] as const)) {
@@ -910,6 +1148,13 @@ function requireValue<T>(value: T | undefined): T {
 function requireGroup(shape: SourceShapeNode | undefined): SourceGroup {
   if (shape?.kind !== "group") throw new Error("test fixture group is missing");
   return shape;
+}
+
+function requireTransform(shape: SourceShapeNode): NonNullable<SourceGroup["transform"]> {
+  if (shape.kind === "raw" || shape.transform === undefined) {
+    throw new Error("test fixture transform is missing");
+  }
+  return shape.transform;
 }
 
 function replaceFirstShape(source: PptxSourceModel, shape: SourceShapeNode): PptxSourceModel {
