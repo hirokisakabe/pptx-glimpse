@@ -6,7 +6,7 @@ import type {
   PptxEditorShapeInfo,
   SourceHandle,
 } from "pptx-glimpse";
-import { useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, useLayoutEffect, useRef, useState } from "react";
 
 type EditorHistory = PptxEditorSession["history"];
 type TextRunProperties = Extract<
@@ -39,20 +39,28 @@ interface EditorToolbarProps {
 
 interface EditorHistoryToolbarProps {
   readonly busy: boolean;
+  readonly children?: ReactNode;
   readonly history: EditorHistory;
   readonly onRedo: () => void;
   readonly onUndo: () => void;
 }
 
-export function EditorHistoryToolbar({ busy, history, onRedo, onUndo }: EditorHistoryToolbarProps) {
+export function EditorHistoryToolbar({
+  busy,
+  children,
+  history,
+  onRedo,
+  onUndo,
+}: EditorHistoryToolbarProps) {
   return (
-    <div className="editor-commandbar" aria-label="Editing history">
+    <div className="editor-commandbar" aria-label="Editor commands">
       <button disabled={busy || !history.canUndo} type="button" onClick={onUndo}>
         Undo
       </button>
       <button disabled={busy || !history.canRedo} type="button" onClick={onRedo}>
         Redo
       </button>
+      {children}
     </div>
   );
 }

@@ -20,6 +20,7 @@ import {
 } from "react";
 
 import { DirectTextEditorLifecycle } from "./direct-text-editor-lifecycle.js";
+import { EditorLayoutPicker } from "./EditorLayoutPicker.js";
 import { EditorSlideStrip } from "./EditorSlideStrip.js";
 import { EditorHistoryToolbar, type EditorTextRunOption, EditorToolbar } from "./EditorToolbar.js";
 import { type PreferredSlideIndex, usePptxEditorController } from "./use-pptx-editor-controller.js";
@@ -545,6 +546,25 @@ export function PptxEditor({ session, children }: PptxEditorProps) {
     );
   }, [currentIndex, currentSlide, runEditorOperation]);
 
+  const handleAddSlideFromLayout = useCallback(
+    (layoutPartPath: NonNullable<SourceHandle["partPath"]>) => {
+      const nextIndex = slides.length;
+      return runEditorOperation(
+        async (session) => {
+          await session.apply({ kind: "addEmptySlideFromLayout", layoutPartPath });
+        },
+        "Slide added",
+        nextIndex,
+      );
+    },
+    [runEditorOperation, slides.length],
+  );
+
+  const previewLayout = useCallback(
+    (handle: SourceHandle) => session.previewLayoutCatalogTarget(handle),
+    [session],
+  );
+
   const handleDeleteSlide = useCallback(() => {
     if (currentSlide?.handle === undefined || slides.length <= 1) return;
     const nextIndex = Math.max(0, currentIndex - 1);
@@ -715,7 +735,21 @@ export function PptxEditor({ session, children }: PptxEditorProps) {
         history={history}
         onRedo={() => void handleRedo()}
         onUndo={() => void handleUndo()}
-      />
+      >
+        <EditorLayoutPicker
+          busy={busy}
+          catalog={session.layoutCatalog}
+          currentLayoutPartPath={session.document.slides[currentIndex]?.layoutPartPath}
+          interactionScope={controller}
+          onAdd={(layout) => {
+            const layoutPartPath = layout.handle.partPath;
+            return layoutPartPath === undefined
+              ? Promise.resolve(false)
+              : handleAddSlideFromLayout(layoutPartPath);
+          }}
+          previewLayout={previewLayout}
+        />
+      </EditorHistoryToolbar>
 
       <div className="editor-shell">
         <EditorSlideStrip
