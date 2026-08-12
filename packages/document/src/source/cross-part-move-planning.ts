@@ -27,6 +27,22 @@ const STRICT_RELATIONSHIPS_NAMESPACE = "http://purl.oclc.org/ooxml/officeDocumen
 const RELATIONSHIP_ATTRIBUTE_LOCAL_NAMES = new Set(["id", "embed", "link", "dm", "lo", "qs", "cs"]);
 const MAX_DRAWING_NODE_ID = 4_294_967_295n;
 const STANDARD_RAW_NAMESPACE_CONTEXT = new Map([["r", TRANSITIONAL_RELATIONSHIPS_NAMESPACE]]);
+const NON_REFERENCE_NUMERIC_ATTRIBUTES = new Set([
+  "b",
+  "cx",
+  "cy",
+  "h",
+  "idx",
+  "l",
+  "pos",
+  "r",
+  "rot",
+  "t",
+  "val",
+  "w",
+  "x",
+  "y",
+]);
 
 type DrawingPartKind = "slide" | "layout" | "master";
 
@@ -529,14 +545,11 @@ function rawContainsUnprovenNodeReference(
   for (const [attributeName, value] of Object.entries(node.attributes ?? {})) {
     if (!values.has(value)) continue;
     const localAttribute = attributeName.split(":").at(-1) ?? attributeName;
-    if (!localAttribute.toLowerCase().endsWith("id") && localAttribute !== "spid") continue;
+    if (NON_REFERENCE_NUMERIC_ATTRIBUTES.has(localAttribute)) continue;
     // cNvPr@id declares the owning drawing node. Every other matching raw id/spid is a
     // reference whose rewrite cannot be proven by this foundation planner.
     const endpointLocation = localElement === "stCxn" ? "start" : "end";
     const endpoint = movedConnector?.connection?.[endpointLocation];
-    if ((localElement === "stCxn" || localElement === "endCxn") && localAttribute === "idx") {
-      continue;
-    }
     const knownNodeIdAttribute =
       localAttribute === "id" &&
       (localElement === "cNvPr" ||
@@ -1030,6 +1043,7 @@ function createNumericIdAllocator<T extends string>(
   maximum?: bigint,
 ): () => T {
   let largest = 0n;
+  const usedNumeric = new Set<bigint>();
   for (const value of used) {
     const numeric =
       prefix === "" ? value : value.startsWith(prefix) ? value.slice(prefix.length) : "";
@@ -1040,16 +1054,18 @@ function createNumericIdAllocator<T extends string>(
         `planCrossPartDrawingMove: numeric id '${value}' exceeds the supported OOXML range`,
       );
     }
+    usedNumeric.add(parsed);
     if (parsed > largest) largest = parsed;
   }
   let next = maximum !== undefined ? 1n : largest + 1n;
   return () => {
-    while (used.has(`${prefix}${next}`)) next += 1n;
+    while (usedNumeric.has(next)) next += 1n;
     if (maximum !== undefined && next > maximum) {
       throw new Error("planCrossPartDrawingMove: no drawing node id remains in the OOXML range");
     }
     const value = `${prefix}${next}`;
     used.add(value);
+    usedNumeric.add(next);
     next += 1n;
     return brand(value);
   };
