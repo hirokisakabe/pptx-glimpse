@@ -310,11 +310,24 @@ describe("PptxEditorSession - shapes", () => {
     expect(moved.selection).toEqual({ shapeHandle: third });
     expect(moved.history.undoDepth).toBe(2);
     expect(moved.slides[0]?.svg).not.toBe(beforeSvg);
-    expect(readPptx(editor.save().pptx).slides[0]?.shapes).toHaveLength(1);
+    const movedGroup = editor.document.slides[0]?.shapes[0];
+    expect(
+      movedGroup?.kind === "group" ? movedGroup.children.map((shape) => shape.nodeId) : [],
+    ).toEqual([third.nodeId, first.nodeId, second.nodeId]);
+    const savedGroup = readPptx(editor.save().pptx).slides[0]?.shapes[0];
+    expect(
+      savedGroup?.kind === "group" ? savedGroup.children.map((shape) => shape.nodeId) : [],
+    ).toEqual([third.nodeId, first.nodeId, second.nodeId]);
 
     await editor.undo();
-    expect(editor.document.slides[0]?.shapes).toHaveLength(2);
+    expect(editor.document.slides[0]?.shapes.map((shape) => shape.nodeId)).toEqual([
+      group.nodeId,
+      third.nodeId,
+    ]);
     await editor.redo();
-    expect(editor.document.slides[0]?.shapes).toHaveLength(1);
+    const redoneGroup = editor.document.slides[0]?.shapes[0];
+    expect(
+      redoneGroup?.kind === "group" ? redoneGroup.children.map((shape) => shape.nodeId) : [],
+    ).toEqual([third.nodeId, first.nodeId, second.nodeId]);
   });
 });

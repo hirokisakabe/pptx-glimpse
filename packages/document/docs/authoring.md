@@ -161,14 +161,15 @@ drawing parts with duplicate node ids or `mc:AlternateContent`; validation is at
 standalone `reorderShapes(source, targetHandle, orderedShapeHandles)` root export provides the same
 operation without a session.
 
-`moveShapes` accepts one or more consecutive direct children of the same target. It keeps their
-source document order, inserts them immediately before `beforeShapeHandle`, or moves them to the
-drawing-order end when the option is omitted. The operation preserves node ids, handles,
-transforms, relationships, and authored non-drawing XML slots. The selected drawings may come
-from another root/native-group parent in the same part when both ancestor chains are complete,
-non-zero identity mappings and the connector graph is closed within the moved block. General
-affine parents, cycles, connector boundary crossings, and cross-part requests are rejected. The standalone
-`moveShapes(source, shapeHandles, targetHandle, options?)` root export provides the same operation.
+`moveShapes` accepts one or more consecutive direct children of the same source parent. It keeps
+their source document order, inserts them immediately before `beforeShapeHandle`, or moves them to
+the drawing-order end when the option is omitted. The operation preserves node ids, handles,
+transforms, relationships, and authored non-drawing XML slots. The selected drawings may move to
+another root/native-group parent in the same part when every ancestor group has a complete,
+non-zero identity mapping and the connector graph is closed within the moved block. General
+affine parents, cycles, connector boundary crossings, and cross-part requests are rejected. The
+standalone `moveShapes(source, shapeHandles, targetHandle, options?)` root export provides the same
+operation.
 
 ## OOXML percentages, angles, and effects
 
