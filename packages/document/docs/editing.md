@@ -235,9 +235,11 @@ remapped with the same finalized node-ID mapping.
 The initial slice rejects placeholders, groups, Tables, Charts, SmartArt, raw or
 `mc:AlternateContent` nodes, nested/group children, non-consecutive roots, template boundaries,
 pending source/destination edits, and every connector or unproven raw reference that crosses the
-selection boundary. Validation is atomic. The editor command uses the same operation, maps a moved
-selection to its destination handle, restores before/after selection on undo/redo, and must be the
-last command in one `applyAll` batch.
+selection boundary. It also rejects a namespace prefix that the two slide roots bind to different
+URIs, because preserved extension XML cannot be moved safely without rewriting that prefix.
+Validation is atomic. The editor command uses the same operation, maps a moved selection to its
+destination handle, restores before/after selection on undo/redo, and must be the last command in
+one `applyAll` batch.
 
 `updateChartData(source, chartHandle, input)` replaces the series topology, names, shared category
 labels, and finite numeric values of an existing supported category Chart. It keeps the Chart

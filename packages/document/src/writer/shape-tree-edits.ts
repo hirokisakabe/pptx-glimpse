@@ -355,7 +355,11 @@ function assertCrossSlideSourceBlock(
 
 function copyNamespaceDeclarations(source: XmlNode, destination: XmlNode): void {
   for (const [key, value] of Object.entries(source)) {
-    if (key === "@_xmlns" || key.startsWith("@_xmlns:")) destination[key] ??= value;
+    if (key !== "@_xmlns" && !key.startsWith("@_xmlns:")) continue;
+    if (destination[key] !== undefined && destination[key] !== value) {
+      throw new Error("writePptx: cross-slide move encountered a namespace prefix collision");
+    }
+    destination[key] ??= value;
   }
 }
 

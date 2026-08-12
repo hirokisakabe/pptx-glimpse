@@ -1,3 +1,4 @@
+import { getChild, parseXml, type XmlNode } from "../reader/xml.js";
 import {
   type CrossPartHandleMapping,
   planCrossPartDrawingMove,
@@ -21,6 +22,7 @@ const RELATIONSHIPS_NAMESPACE =
   "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 const STRICT_RELATIONSHIPS_NAMESPACE = "http://purl.oclc.org/ooxml/officeDocument/relationships";
 const RELATIONSHIP_ATTRIBUTE_LOCAL_NAMES = new Set(["id", "embed", "link", "dm", "lo", "qs", "cs"]);
+const textDecoder = new TextDecoder();
 
 export interface MoveShapesAcrossSlidesOptions {
   /** Insert immediately before this destination-slide root drawing. Omit to append. */
@@ -75,6 +77,7 @@ export function moveShapesAcrossSlides(
   if (supportedMovedRoots.length !== movedRoots.length) {
     throw new Error("moveShapesAcrossSlides: moved drawing kind is not supported");
   }
+  assertCompatibleSlideRootNamespaces(source, sourceSlide.partPath, destinationSlide.partPath);
 
   let beforeShapeId: SourceNodeId | undefined;
   let insertionIndex = destinationSlide.shapes.length;
@@ -302,7 +305,15 @@ function remapSupportedDrawing(
       ? { outline: remapOutline(shape.outline, relationshipIdMap) }
       : {}),
     ...(shape.textBody !== undefined
-      ? { textBody: remapTextBody(shape.textBody, handleMap, nodeIdMap, relationshipIdMap) }
+      ? {
+          textBody: remapTextBody(
+            shape.textBody,
+            handle?.partPath ?? shape.handle?.partPath,
+            handleMap,
+            nodeIdMap,
+            relationshipIdMap,
+          ),
+        }
       : {}),
     ...(rawSidecars !== undefined ? { rawSidecars } : {}),
   };
@@ -310,6 +321,7 @@ function remapSupportedDrawing(
 
 function remapTextBody(
   textBody: SourceTextBody,
+  destinationPartPath: PartPath | undefined,
   handleMap: ReadonlyMap<string, SourceHandle>,
   nodeIdMap: ReadonlyMap<string, SourceNodeId>,
   relationshipIdMap: ReadonlyMap<string, RelationshipId>,
@@ -317,7 +329,13 @@ function remapTextBody(
   return {
     ...textBody,
     ...(textBody.handle !== undefined
-      ? { handle: handleMap.get(handleIdentityKey(textBody.handle)) ?? textBody.handle }
+      ? {
+          handle:
+            handleMap.get(handleIdentityKey(textBody.handle)) ??
+            (destinationPartPath === undefined
+              ? textBody.handle
+              : { ...textBody.handle, partPath: destinationPartPath }),
+        }
       : {}),
     paragraphs: textBody.paragraphs.map((paragraph) => ({
       ...paragraph,
@@ -431,6 +449,37 @@ function remapRawNode(
         }
       : {}),
   };
+}
+
+function assertCompatibleSlideRootNamespaces(
+  source: PptxSourceModel,
+  sourcePartPath: PartPath,
+  destinationPartPath: PartPath,
+): void {
+  const sourceRoot = slideRoot(source, sourcePartPath);
+  const destinationRoot = slideRoot(source, destinationPartPath);
+  for (const [key, sourceValue] of Object.entries(sourceRoot)) {
+    if (key !== "@_xmlns" && !key.startsWith("@_xmlns:")) continue;
+    const destinationValue = destinationRoot[key];
+    if (destinationValue !== undefined && destinationValue !== sourceValue) {
+      const prefix = key === "@_xmlns" ? "(default)" : key.slice("@_xmlns:".length);
+      throw new Error(
+        `moveShapesAcrossSlides: source and destination bind namespace prefix '${prefix}' differently`,
+      );
+    }
+  }
+}
+
+function slideRoot(source: PptxSourceModel, partPath: PartPath): XmlNode {
+  const rawPart = source.packageGraph.rawParts?.find((part) => part.partPath === partPath);
+  if (rawPart?.kind !== "binary") {
+    throw new Error(`moveShapesAcrossSlides: slide '${partPath}' has no raw XML material`);
+  }
+  const root = getChild(parseXml(textDecoder.decode(rawPart.bytes)), "sld");
+  if (root === undefined) {
+    throw new Error(`moveShapesAcrossSlides: slide '${partPath}' has no slide root`);
+  }
+  return root;
 }
 
 function handleIdentityKey(handle: SourceHandle): string {

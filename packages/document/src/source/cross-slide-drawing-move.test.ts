@@ -8,6 +8,7 @@ import {
   type PptxSourceModel,
   readPptx,
   type SourceHandle,
+  type SourceTextBody,
   writePptx,
 } from "../index.js";
 import { BLUE_PNG } from "../writer/write-pptx.test-helpers.js";
@@ -16,7 +17,7 @@ describe("moveShapesAcrossSlides", () => {
   it("moves a consecutive shape/picture block before an anchor and persists remapped ids", () => {
     const source = buildCleanTwoSlideSource((session, first, second) => {
       const sourceTarget = session.target(first);
-      sourceTarget.addShape({ ...rect(0), name: "Moved shape" });
+      sourceTarget.addShape({ ...rect(0), name: "Moved shape", text: "Moved text" });
       sourceTarget.addPicture({
         bytes: BLUE_PNG,
         offsetX: asEmu(1200),
@@ -60,6 +61,17 @@ describe("moveShapesAcrossSlides", () => {
     expect(rootMappings.every((mapping) => mapping.before.nodeId !== mapping.after.nodeId)).toBe(
       true,
     );
+    const movedShape = result.document.slides[1]?.shapes.find(
+      (shape) => shape.kind === "shape" && shape.name === "Moved shape",
+    );
+    if (movedShape?.kind !== "shape" || movedShape.textBody === undefined) {
+      throw new Error("moved text shape is missing");
+    }
+    expect(
+      textHandles(movedShape.textBody).every(
+        (handle) => handle.partPath === destinationSlide.partPath,
+      ),
+    ).toBe(true);
 
     const sourceRelationships = requireValue(
       result.document.packageGraph.relationships.find(
@@ -90,6 +102,17 @@ describe("moveShapesAcrossSlides", () => {
       "Moved picture",
       "Destination anchor",
     ]);
+    const persistedShape = persisted.slides[1]?.shapes.find(
+      (shape) => shape.kind === "shape" && shape.name === "Moved shape",
+    );
+    if (persistedShape?.kind !== "shape" || persistedShape.textBody === undefined) {
+      throw new Error("persisted text shape is missing");
+    }
+    expect(
+      textHandles(persistedShape.textBody).every(
+        (handle) => handle.partPath === destinationSlide.partPath,
+      ),
+    ).toBe(true);
     const persistedPicture = persisted.slides[1]?.shapes.find((shape) => shape.kind === "image");
     expect(persistedPicture?.blipRelationshipId).toBe(
       result.document.slides[1]?.shapes.find((shape) => shape.kind === "image")?.blipRelationshipId,
@@ -215,6 +238,30 @@ describe("moveShapesAcrossSlides", () => {
       ),
     ).toThrow("outside the slide-to-slide typed slice");
   });
+
+  it("rejects conflicting slide-root namespace prefixes atomically", () => {
+    const source = buildCleanTwoSlideSource((session, first) => {
+      session.target(first).addShape({ ...rect(0), name: "Moved shape" });
+    });
+    const sourceSlide = requireValue(source.slides[0]);
+    const destinationSlide = requireValue(source.slides[1]);
+    const conflicted = withSlideRootNamespace(
+      withSlideRootNamespace(source, sourceSlide.partPath, "vnd", "urn:source-vendor"),
+      destinationSlide.partPath,
+      "vnd",
+      "urn:destination-vendor",
+    );
+    const before = structuredClone(conflicted);
+
+    expect(() =>
+      moveShapesAcrossSlides(
+        conflicted,
+        [requireValue(conflicted.slides[0]?.shapes[0]?.handle)],
+        requireValue(conflicted.slides[1]?.handle),
+      ),
+    ).toThrow("bind namespace prefix 'vnd' differently");
+    expect(conflicted).toEqual(before);
+  });
 });
 
 type AuthoringSession = ReturnType<typeof createPptxAuthoringSession>;
@@ -294,6 +341,42 @@ function sharePictureRelationship(
             ),
           },
     ),
+  };
+}
+
+function textHandles(textBody: SourceTextBody): readonly SourceHandle[] {
+  return [
+    ...(textBody.handle === undefined ? [] : [textBody.handle]),
+    ...textBody.paragraphs.flatMap((paragraph) => [
+      ...(paragraph.handle === undefined ? [] : [paragraph.handle]),
+      ...paragraph.runs.flatMap((run) => (run.handle === undefined ? [] : [run.handle])),
+    ]),
+  ];
+}
+
+function withSlideRootNamespace(
+  source: PptxSourceModel,
+  slidePartPath: PptxSourceModel["slides"][number]["partPath"],
+  prefix: string,
+  namespace: string,
+): PptxSourceModel {
+  return {
+    ...source,
+    packageGraph: {
+      ...source.packageGraph,
+      rawParts: source.packageGraph.rawParts?.map((part) =>
+        part.partPath === slidePartPath && part.kind === "binary"
+          ? {
+              ...part,
+              bytes: new TextEncoder().encode(
+                new TextDecoder()
+                  .decode(part.bytes)
+                  .replace("<p:sld ", `<p:sld xmlns:${prefix}="${namespace}" `),
+              ),
+            }
+          : part,
+      ),
+    },
   };
 }
 
