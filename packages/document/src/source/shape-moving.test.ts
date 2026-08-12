@@ -317,19 +317,19 @@ describe("moveShapes", () => {
   it("treats unknown future drawing children as z-order siblings and rejects forged gaps", () => {
     const input = insertAfterFirstShape(
       createShapes(3),
-      '<p15:futureDrawing xmlns:p15="urn:future-drawing" data-marker="future-drawing" p15:flag="keep"><p15:payload value="42">raw payload</p15:payload></p15:futureDrawing>',
+      '<p15:extLst xmlns:p15="urn:future-drawing" data-marker="future-drawing" p15:flag="keep"><p15:payload value="42">raw payload</p15:payload></p15:extLst>',
     );
     const source = readPptx(input);
     const slide = requireValue(source.slides[0]);
     const [first, raw, second, third] = slide.shapes;
     expect(raw?.kind).toBe("raw");
-    expect(shapeIdentity(requireValue(raw))).toBe("raw:futureDrawing");
+    expect(shapeIdentity(requireValue(raw))).toBe("raw:extLst");
 
     const edited = moveShapes(source, [requireValue(first?.handle)], requireValue(slide.handle), {
       beforeShapeHandle: requireValue(third?.handle),
     });
     const expectedOrder = [
-      "raw:futureDrawing",
+      "raw:extLst",
       String(second?.nodeId),
       String(first?.nodeId),
       String(third?.nodeId),
@@ -352,8 +352,8 @@ describe("moveShapes", () => {
       throw new Error("future drawing fixture was not preserved as raw XML");
     }
     expect(rereadRaw.raw.node).toEqual(raw.raw.node);
-    expect(extractElementContaining(outputXml, "p15:futureDrawing", "future-drawing")).toBe(
-      extractElementContaining(slideXml(input), "p15:futureDrawing", "future-drawing"),
+    expect(extractElementContaining(outputXml, "p15:extLst", "future-drawing")).toBe(
+      extractElementContaining(slideXml(input), "p15:extLst", "future-drawing"),
     );
 
     const forged: PptxSourceModel = {
