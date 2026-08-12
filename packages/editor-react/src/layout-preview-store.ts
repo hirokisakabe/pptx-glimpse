@@ -117,5 +117,6 @@ function handleKey(handle: SourceHandle): string {
     handle.nodeId ?? "",
     handle.relationshipId ?? "",
     handle.orderingSlot === undefined ? "" : String(handle.orderingSlot),
+    JSON.stringify(handle.rawSidecarIds ?? []),
   ].join("\u0000");
 }

@@ -53,7 +53,7 @@ export function EditorHistoryToolbar({
   onUndo,
 }: EditorHistoryToolbarProps) {
   return (
-    <div className="editor-commandbar" aria-label="Editing history">
+    <div className="editor-commandbar" aria-label="Editor commands">
       <button disabled={busy || !history.canUndo} type="button" onClick={onUndo}>
         Undo
       </button>

@@ -178,17 +178,14 @@
 
 .pptx-glimpse-editor .layout-thumbnail-preview {
   background: #ffffff;
+  display: block;
+  object-fit: contain;
   overflow: hidden;
   padding: 0;
-}
-
-.pptx-glimpse-editor .layout-thumbnail-preview > svg {
-  display: block;
-  height: 100%;
   width: 100%;
 }
 
-.pptx-glimpse-editor .layout-thumbnail-fallback.loading {
+.pptx-glimpse-editor .layout-thumbnail-fallback.is-loading {
   animation: layout-preview-pulse 1.4s ease-in-out infinite;
 }
 
@@ -650,6 +647,10 @@
   }
 
   .pptx-glimpse-editor .loading-mark {
+    animation: none;
+  }
+
+  .pptx-glimpse-editor .layout-thumbnail-fallback.is-loading {
     animation: none;
   }
 }

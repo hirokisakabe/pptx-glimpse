@@ -43,7 +43,7 @@ export function EditorLayoutPicker({
     [interactionScope, previewLayout],
   );
   useSyncExternalStore(previewStore.subscribe, previewStore.getVersion, previewStore.getVersion);
-  const layouts = catalog.flatMap((master) => master.layouts);
+  const layouts = useMemo(() => catalog.flatMap((master) => master.layouts), [catalog]);
   const currentLayout = layouts.find((layout) => layout.handle.partPath === currentLayoutPartPath);
   const selectedLayout =
     layouts.find((layout) => handleKey(layout.handle) === selectedKey) ??
@@ -242,12 +242,11 @@ export function LayoutThumbnail({
 }) {
   if (preview?.status === "ready") {
     return (
-      <span
-        aria-label={`${name} preview`}
+      <img
+        alt={`${name} preview`}
         className="layout-thumbnail-preview"
         data-thumbnail-state="ready"
-        dangerouslySetInnerHTML={{ __html: preview.svg }}
-        role="img"
+        src={`data:image/svg+xml;charset=utf-8,${encodeURIComponent(preview.svg)}`}
       />
     );
   }
@@ -256,7 +255,7 @@ export function LayoutThumbnail({
   return (
     <span
       aria-label={`${name}, ${message}`}
-      className={`layout-thumbnail-fallback${loading ? " loading" : ""}`}
+      className={`layout-thumbnail-fallback${loading ? " is-loading" : ""}`}
       data-thumbnail-state={loading ? "loading" : "fallback"}
       role="img"
     >
@@ -272,5 +271,6 @@ function handleKey(handle: SourceHandle): string {
     handle.nodeId ?? "",
     handle.relationshipId ?? "",
     handle.orderingSlot === undefined ? "" : String(handle.orderingSlot),
+    JSON.stringify(handle.rawSidecarIds ?? []),
   ].join("\u0000");
 }

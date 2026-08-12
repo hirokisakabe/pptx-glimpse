@@ -283,14 +283,16 @@ test("adds a slide from the ordered accessible layout catalog and preserves hist
     /BLANK/,
   ]);
   await expect(layouts.first()).toHaveAttribute("aria-checked", "true");
+  await expect(layouts.first()).toBeFocused();
   await expect(layouts.first()).toContainText("Current");
   await expect(layouts.nth(1)).toContainText("Hidden");
-  await expect(picker.locator('[data-thumbnail-state="loading"]')).not.toHaveCount(11);
-  await expect(picker.locator('[data-thumbnail-state="ready"]')).toHaveCount(11);
-  await expect(picker.locator('[data-thumbnail-state="ready"] svg')).toHaveCount(11);
+  await expect(layouts.nth(1)).toHaveAccessibleName(/SECTION_HEADER, hidden/);
+  const readyPreviews = picker.locator('img[data-thumbnail-state="ready"]');
+  await expect(readyPreviews).toHaveCount(11);
+  await expect(readyPreviews.first()).toHaveAttribute("src", /^data:image\/svg\+xml/);
   await expect(picker.locator('[data-thumbnail-state="fallback"]')).toHaveCount(0);
 
-  await layouts.first().press("End");
+  await page.keyboard.press("End");
   await expect(layouts.last()).toBeFocused();
   await expect(layouts.last()).toHaveAttribute("aria-checked", "true");
   await page.getByRole("button", { name: "Add slide", exact: true }).click();

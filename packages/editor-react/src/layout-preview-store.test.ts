@@ -1,4 +1,4 @@
-import { asPartPath } from "@pptx-glimpse/document";
+import { asPartPath, asRawSidecarId } from "@pptx-glimpse/document";
 import type {
   ConversionDiagnostic,
   PptxEditorTemplatePreviewResult,
@@ -27,6 +27,20 @@ describe("LayoutPreviewStore", () => {
     expect(load).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps handles with different raw sidecars in distinct cache entries", async () => {
+    const load = vi.fn((handle: SourceHandle) => Promise.resolve(success(handle)));
+    const store = new LayoutPreviewStore(load);
+    const firstSidecar = { ...first, rawSidecarIds: [asRawSidecarId("first")] };
+    const secondSidecar = { ...first, rawSidecarIds: [asRawSidecarId("second")] };
+
+    store.load([firstSidecar, secondSidecar]);
+    await settled();
+
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(store.get(firstSidecar)).toEqual({ status: "ready", svg: "<svg />" });
+    expect(store.get(secondSidecar)).toEqual({ status: "ready", svg: "<svg />" });
+  });
+
   it("keeps usable successful SVGs despite unsupported warning diagnostics", async () => {
     const unsupported: ConversionDiagnostic = {
       source: "renderer-adapter",
@@ -42,6 +56,22 @@ describe("LayoutPreviewStore", () => {
     await settled();
 
     expect(store.get(first)).toEqual({ status: "ready", svg: "<svg />" });
+  });
+
+  it("renders successful SVG previews as non-interactive image data", () => {
+    const markup = renderToStaticMarkup(
+      LayoutThumbnail({
+        name: "Linked layout",
+        preview: {
+          status: "ready",
+          svg: '<svg><a href="https://example.com"><rect /></a></svg>',
+        },
+      }),
+    );
+
+    expect(markup).toContain('<img alt="Linked layout preview"');
+    expect(markup).toContain('src="data:image/svg+xml;charset=utf-8,');
+    expect(markup).not.toContain('<a href="https://example.com"');
   });
 
   it("uses deterministic fallback states for lookup, invalid SVG, and runtime failures", async () => {
@@ -75,7 +105,7 @@ describe("LayoutPreviewStore", () => {
     expect(fallbackMarkup).toContain("Preview unavailable");
   });
 
-  it("limits concurrent work and ignores completion after its session lifecycle is disposed", async () => {
+  it("starts queued work when a concurrency slot becomes available", async () => {
     const resolvers: Array<(result: PptxEditorTemplatePreviewResult) => void> = [];
     const load = vi.fn(
       (_handle: SourceHandle) =>
@@ -87,8 +117,27 @@ describe("LayoutPreviewStore", () => {
 
     store.load([first, second]);
     expect(load).toHaveBeenCalledTimes(1);
-    store.dispose();
     resolvers[0]?.(success(first));
+    await settled();
+    expect(load).toHaveBeenCalledTimes(2);
+    resolvers[1]?.(success(second));
+    await settled();
+    expect(store.get(second)).toEqual({ status: "ready", svg: "<svg />" });
+  });
+
+  it("ignores completion after its session lifecycle is disposed", async () => {
+    let resolvePreview: (result: PptxEditorTemplatePreviewResult) => void = () => {};
+    const load = vi.fn(
+      () =>
+        new Promise<PptxEditorTemplatePreviewResult>((resolve) => {
+          resolvePreview = resolve;
+        }),
+    );
+    const store = new LayoutPreviewStore(load, 1);
+
+    store.load([first, second]);
+    store.dispose();
+    resolvePreview(success(first));
     await settled();
 
     expect(load).toHaveBeenCalledTimes(1);
