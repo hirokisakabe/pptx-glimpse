@@ -1,9 +1,9 @@
 "use client";
 
 import type { PptxEditorSession } from "pptx-glimpse";
+import { PptxEditor } from "@pptx-glimpse/editor-react";
 
 import { DemoEditorShell } from "./DemoEditorShell";
-import { EditorSurface } from "./EditorSurface";
 
 interface EditorWorkspaceProps {
   readonly editor: PptxEditorSession;
@@ -24,7 +24,7 @@ export function EditorWorkspace({
   onOpenSample,
 }: EditorWorkspaceProps) {
   return (
-    <EditorSurface editor={editor}>
+    <PptxEditor session={editor}>
       {(controls) => (
         <DemoEditorShell
           controls={controls}
@@ -35,6 +35,6 @@ export function EditorWorkspace({
           onOpenSample={onOpenSample}
         />
       )}
-    </EditorSurface>
+    </PptxEditor>
   );
 }

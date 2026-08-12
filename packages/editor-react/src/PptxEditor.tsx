@@ -1,28 +1,28 @@
 "use client";
 
 import {
+  type EditorCommand,
+  isPptxEditorError,
+  type PptxEditorSession,
+  type PptxEditorShapeBoundsPx,
+  type PptxEditorShapeInfo,
+  type PptxEditorSlideSvg,
+  type SourceHandle,
+} from "pptx-glimpse";
+import {
+  type ReactNode,
   useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
-  type ReactNode,
 } from "react";
-import {
-  isPptxEditorError,
-  type PptxEditorShapeBoundsPx,
-  type PptxEditorShapeInfo,
-  type PptxEditorSlideSvg,
-  type EditorCommand,
-  type PptxEditorSession,
-  type SourceHandle,
-} from "pptx-glimpse";
 
-import { EditorSlideStrip } from "./EditorSlideStrip";
-import { EditorHistoryToolbar, EditorToolbar, type EditorTextRunOption } from "./EditorToolbar";
-import { DirectTextEditorLifecycle } from "./direct-text-editor-lifecycle";
-import { type PreferredSlideIndex, useEditorController } from "./use-editor-controller";
+import { DirectTextEditorLifecycle } from "./direct-text-editor-lifecycle.js";
+import { EditorSlideStrip } from "./EditorSlideStrip.js";
+import { EditorHistoryToolbar, type EditorTextRunOption, EditorToolbar } from "./EditorToolbar.js";
+import { type PreferredSlideIndex, usePptxEditorController } from "./use-pptx-editor-controller.js";
 
 const EMU_PER_PIXEL = 9525;
 const MIN_SHAPE_SIZE = 8;
@@ -39,12 +39,12 @@ type ClearTextRunProperties = Extract<
   { readonly kind: "clearTextRunProperties" }
 >["properties"];
 
-interface EditorSurfaceProps {
-  readonly editor: EditorSession;
-  readonly children?: (controls: EditorSurfaceHostControls) => ReactNode;
+export interface PptxEditorProps {
+  readonly session: EditorSession;
+  readonly children?: (controls: PptxEditorHostControls) => ReactNode;
 }
 
-export interface EditorSurfaceHostControls {
+export interface PptxEditorHostControls {
   readonly busy: boolean;
   readonly dirty: boolean;
   readonly message: string;
@@ -94,7 +94,7 @@ interface Point {
 type ResizeHandle = "nw" | "ne" | "sw" | "se";
 
 /** Reusable editing UI. Document loading, download policy, and site navigation stay in its host. */
-export function EditorSurface({ editor, children }: EditorSurfaceProps) {
+export function PptxEditor({ session, children }: PptxEditorProps) {
   const {
     controller,
     slides,
@@ -106,7 +106,7 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
     dirty,
     message,
     error: operationError,
-  } = useEditorController(editor);
+  } = usePptxEditorController(session);
   const [draftBounds, setDraftBounds] = useState<PptxEditorShapeBoundsPx | null>(null);
   const [directTextEditor, setDirectTextEditor] = useState<DirectTextEditorState | null>(null);
   const overlayRef = useRef<SVGSVGElement | null>(null);
@@ -336,8 +336,7 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
     (restoreFocus = true): Promise<boolean> | undefined => {
       const activeEditor = directTextEditorStateRef.current;
       const editorElement = directTextEditorRef.current;
-      const session = editor;
-      if (activeEditor === null || editorElement === null || session === null) return;
+      if (activeEditor === null || editorElement === null) return;
       const currentCommit = directTextLifecycle.currentCommit();
       if (currentCommit !== null) return currentCommit;
       const generation = directTextLifecycle.currentGeneration();
@@ -367,8 +366,7 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
         return Promise.resolve(true);
       }
 
-      let commit!: Promise<boolean>;
-      commit = (async () => {
+      const commit = (async () => {
         const committed = await controller.run(
           async () => {
             const result = await session.applyAll(commands);
@@ -391,7 +389,7 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
           }
           return false;
         } finally {
-          directTextLifecycle.clearCommit(generation, commit);
+          directTextLifecycle.clearCommit(generation);
         }
       })();
       if (!directTextLifecycle.setCommit(generation, commit)) {
@@ -399,7 +397,7 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
       }
       return commit;
     },
-    [closeDirectTextEditor, controller, currentIndex, directTextLifecycle, editor],
+    [closeDirectTextEditor, controller, currentIndex, directTextLifecycle, session],
   );
 
   const startDirectTextEditor = useCallback(
@@ -664,7 +662,7 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
   }, [commitPendingEdits, controller]);
   const setError = useCallback((error: string) => controller.setError(error), [controller]);
 
-  const hostControls = useMemo<EditorSurfaceHostControls>(
+  const hostControls = useMemo<PptxEditorHostControls>(
     () => ({
       busy,
       dirty,
@@ -691,16 +689,22 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
 
   if (currentSlide === undefined) {
     return (
-      <div className="loading" data-testid="editor-status">
-        <div className="loading-mark" aria-hidden="true" />
-        <p>{message}</p>
-      </div>
+      <section
+        className="pptx-glimpse-editor editor-workspace"
+        aria-label="PPTX editor"
+        data-testid="editor-workspace"
+      >
+        <div className="loading" data-testid="editor-status">
+          <div className="loading-mark" aria-hidden="true" />
+          <p>{message}</p>
+        </div>
+      </section>
     );
   }
 
   return (
     <section
-      className="editor-workspace"
+      className="pptx-glimpse-editor editor-workspace"
       aria-label="PPTX editor"
       data-testid="editor-workspace"
       data-editor-component="surface"
@@ -1014,6 +1018,8 @@ function findSlideIndexByHandle(
 }
 
 function pxToEmu(value: number): ShapeTransformCommand["offsetX"] {
+  // This is the package-local constructor for the branded public EMU command field.
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
   return Math.round(value * EMU_PER_PIXEL) as ShapeTransformCommand["offsetX"];
 }
 

@@ -115,12 +115,31 @@ MCP SDK and schema dependencies remain private to this integration boundary. Cor
 editor, renderer, browser entry points, and UI packages must never depend on
 `@pptx-glimpse/mcp`.
 
+### `@pptx-glimpse/editor-react`
+
+`packages/editor-react` is a private, browser-only workspace package that connects a
+consumer-owned `PptxEditorSession` from the public `pptx-glimpse` root API to reusable React
+editor UI. It owns the editor controller, toolbar, slide strip, slide surface, selection and
+direct-edit interactions, and its scoped default stylesheet. It does not create or dispose the
+session, open files, load fonts, choose a download destination, or own site/application shell
+policy.
+
+The package exposes browser ESM declarations from its client root and an explicit
+`@pptx-glimpse/editor-react/styles.css` stylesheet. React, ReactDOM, and `pptx-glimpse` are
+peer/external dependencies so the UI and the consumer-owned session share their runtime
+instances. Production source may import only the public `pptx-glimpse` root and React package
+APIs; direct imports from document, headless editor, renderer, MCP, core subpaths, or demo source
+are forbidden. Module evaluation must not require a DOM, and DOM access stays inside effects,
+event handlers, or ref-driven helpers.
+
 ### Demo and UI
 
-`demo/` is a private Next.js application and an integration consumer of the public
-`pptx-glimpse` package. UI components own browser interaction and presentation state; they
-must not become dependencies of any workspace package. Reusable headless behavior belongs
-in a public package only after it has an intentional public contract.
+`demo/` is a private Next.js application and the first integration consumer of both the public
+`pptx-glimpse` package and private `@pptx-glimpse/editor-react`. The demo owns file/sample/font
+acquisition, session creation and replacement, download policy, navigation guards, branding, and
+site shell state. It imports the editor stylesheet explicitly and may override documented
+`--pptx-editor-*` theme variables, but reusable editor rules and behavior stay in the package.
+Demo code must not become a dependency of any workspace package.
 
 ## Dependency direction
 
@@ -138,6 +157,9 @@ Allowed workspace dependency direction is:
           |
           +------------  @pptx-glimpse/mcp (Node.js stdio)
           |
+@pptx-glimpse/editor-react (browser-only, private)
+          ^
+          |
         demo / UI
 ```
 
@@ -148,7 +170,8 @@ document and editor are lower layers. In concrete terms:
 - `editor` may depend on `document`.
 - `core` may depend on `document`, `editor`, and `renderer`.
 - `mcp` may depend on the public `pptx-glimpse` package.
-- demo/UI code may depend on public packages, normally the high-level core package.
+- `editor-react` may depend on the public `pptx-glimpse` root plus React and ReactDOM peers.
+- demo/UI code may depend on public packages and the private editor-react workspace package.
 
 Reverse dependencies are forbidden. In particular, `document` must not import from
 `editor`, `core`, `renderer`, MCP, or demo/UI; `editor` must not import from `core`,
@@ -184,6 +207,11 @@ and declaration output with package-specific tsup configurations. Document and e
 be installed independently for consumers that own the lower-level workflow. The MCP package
 builds an ESM-only Node.js root API, declarations, and a stdio executable; CommonJS is not
 supported.
+
+`@pptx-glimpse/editor-react` is not part of that published set. It is private while the demo
+dogfoods the boundary, and builds browser ESM, declarations, and a copied scoped stylesheet.
+Publication compatibility, semver, and any CommonJS decision belong to the later publication
+gate rather than this extraction.
 
 The `pptx-glimpse` package declares `@pptx-glimpse/document` and
 `@pptx-glimpse/editor` as runtime dependencies. Its build marks them as `external`, so
@@ -226,9 +254,10 @@ boundary instead of raising the ambient type surface globally.
 
 Ambient types are allowlisted per TypeScript configuration. `tsconfig.json` supplies Node types to
 package source, `tsconfig.eslint.json` adds Vitest globals for tests while covering scripts and
-other tooling, and `demo/tsconfig.json` supplies Node and React types for the Next.js application.
-Keep these `types` lists explicit when adding another compilation context so dependency-provided
-globals do not silently change its API surface.
+other tooling, `packages/editor-react/tsconfig.json` supplies DOM and React types to the isolated
+browser package, and `demo/tsconfig.json` supplies Node and React types for the Next.js
+application. Keep these `types` lists explicit when adding another compilation context so
+dependency-provided globals do not silently change its API surface.
 
 The document and editor layers operate on `Uint8Array` data and keep their public behavior
 independent of UI and renderer concerns. Node.js `Buffer` works as a `Uint8Array` subtype,

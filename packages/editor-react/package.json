@@ -1,0 +1,38 @@
+{
+  "name": "@pptx-glimpse/editor-react",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Browser-only React editor UI for consumer-owned pptx-glimpse sessions.",
+  "type": "module",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": [
+    "./dist/styles.css"
+  ],
+  "scripts": {
+    "build": "tsup"
+  },
+  "peerDependencies": {
+    "pptx-glimpse": "*",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "pptx-glimpse": "workspace:*",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  }
+}

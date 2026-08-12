@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PptxEditorSlideSvg, SourceHandle } from "pptx-glimpse";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 
 const SLIDE_DRAG_THRESHOLD_PX = 4;
 

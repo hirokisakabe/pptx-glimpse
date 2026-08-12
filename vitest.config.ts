@@ -12,6 +12,9 @@ export default defineConfig({
         new URL("./packages/editor/src/index.ts", import.meta.url),
       ),
       "pptx-glimpse": fileURLToPath(new URL("./packages/core/src/index.ts", import.meta.url)),
+      "@pptx-glimpse/editor-react": fileURLToPath(
+        new URL("./packages/editor-react/src/index.ts", import.meta.url),
+      ),
     },
   },
   test: {

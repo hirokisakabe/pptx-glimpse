@@ -11,6 +11,9 @@ const editorSource = fileURLToPath(
   new URL("./packages/editor/src/index.ts", import.meta.url),
 );
 const coreSource = fileURLToPath(new URL("./packages/core/src/index.ts", import.meta.url));
+const editorReactSource = fileURLToPath(
+  new URL("./packages/editor-react/src/index.ts", import.meta.url),
+);
 const documentBoundaryRestrictedImportPattern = {
   group: [
     "@pptx-glimpse/renderer",
@@ -43,7 +46,7 @@ const testHelperRestrictedImportPattern = {
 export default tseslint.config(
   {
     files: [
-      "packages/*/src/**/*.ts",
+      "packages/*/src/**/*.{ts,tsx}",
       "vrt/**/*.ts",
       "scripts/**/*.ts",
       "bench/**/*.ts",
@@ -72,6 +75,7 @@ export default tseslint.config(
             "@pptx-glimpse/document": [documentSource],
             "@pptx-glimpse/editor": [editorSource],
             "pptx-glimpse": [coreSource],
+            "@pptx-glimpse/editor-react": [editorReactSource],
           },
           mainFields: ["module", "main"],
         }),
@@ -146,13 +150,13 @@ export default tseslint.config(
     },
   },
   {
-    files: ["packages/*/src/**/*.ts"],
+    files: ["packages/*/src/**/*.{ts,tsx}"],
     rules: {
       "import-x/no-relative-packages": "error",
     },
   },
   {
-    files: ["packages/*/src/**/*.ts"],
+    files: ["packages/*/src/**/*.{ts,tsx}"],
     ignores: [
       "packages/*/src/**/*.test.ts",
       "packages/*/src/**/*.test-helpers.ts",
@@ -355,6 +359,55 @@ export default tseslint.config(
         "error",
         {
           patterns: [editorBoundaryRestrictedImportPattern],
+        },
+      ],
+    },
+  },
+  {
+    files: ["packages/editor-react/src/**/*.{ts,tsx}"],
+    ignores: ["packages/editor-react/src/**/*.test.ts", "packages/editor-react/src/**/*.test.tsx"],
+    rules: {
+      "import-x/no-extraneous-dependencies": [
+        "error",
+        {
+          packageDir: ["packages/editor-react"],
+          devDependencies: false,
+          includeInternal: true,
+        },
+      ],
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: [
+                "@pptx-glimpse/document",
+                "@pptx-glimpse/document/*",
+                "@pptx-glimpse/editor",
+                "@pptx-glimpse/editor/*",
+                "@pptx-glimpse/renderer",
+                "@pptx-glimpse/renderer/*",
+                "@pptx-glimpse/mcp",
+                "@pptx-glimpse/mcp/*",
+                "pptx-glimpse/*",
+              ],
+              message:
+                "@pptx-glimpse/editor-react may import only the public pptx-glimpse root plus React/ReactDOM package APIs.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["packages/editor-react/src/**/*.test.ts", "packages/editor-react/src/**/*.test.tsx"],
+    rules: {
+      "import-x/no-extraneous-dependencies": [
+        "error",
+        {
+          packageDir: ["packages/editor-react", "."],
+          devDependencies: true,
+          includeInternal: true,
         },
       ],
     },

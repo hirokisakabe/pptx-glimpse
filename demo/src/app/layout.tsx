@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Analytics } from "@vercel/analytics/next";
+import "@pptx-glimpse/editor-react/styles.css";
 import "nextra-theme-docs/style.css";
 import { SiteFooter } from "@/components/SiteFooter";
 import { SiteHeader } from "@/components/SiteHeader";

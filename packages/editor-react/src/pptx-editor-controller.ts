@@ -8,7 +8,7 @@ import type {
 type EditorHistory = PptxEditorSession["history"];
 type EditorSaveResult = ReturnType<PptxEditorSession["save"]>;
 
-export interface EditorControllerSession {
+export interface PptxEditorControllerSession {
   readonly slides: readonly PptxEditorSlideSvg[];
   readonly history: EditorHistory;
   readonly selection: PptxEditorSession["selection"];
@@ -17,7 +17,7 @@ export interface EditorControllerSession {
   save(): EditorSaveResult;
 }
 
-export interface EditorControllerState {
+export interface PptxEditorControllerState {
   readonly slides: readonly PptxEditorSlideSvg[];
   readonly currentIndex: number;
   readonly shapes: readonly PptxEditorShapeInfo[];
@@ -29,11 +29,11 @@ export interface EditorControllerState {
   readonly error: string;
 }
 
-export type PreferredSlideIndex<Session extends EditorControllerSession> =
+export type PreferredSlideIndex<Session extends PptxEditorControllerSession> =
   | number
   | ((session: Session) => number);
 
-export interface EditorControllerOperationOptions<Session extends EditorControllerSession> {
+export interface PptxEditorControllerOperationOptions<Session extends PptxEditorControllerSession> {
   readonly success: string;
   readonly preferredIndex?: PreferredSlideIndex<Session>;
   readonly recoverError?: (error: unknown, session: Session) => string | undefined;
@@ -44,9 +44,9 @@ export interface EditorControllerOperationOptions<Session extends EditorControll
  * Owns the state derived from one consumer-owned editor session. It deliberately has no DOM or
  * Next.js dependencies so the boundary can move to a browser React package in a later slice.
  */
-export class EditorController<Session extends EditorControllerSession> {
+export class PptxEditorController<Session extends PptxEditorControllerSession> {
   readonly session: Session;
-  private state: EditorControllerState;
+  private state: PptxEditorControllerState;
   private historyRevisions: number[];
   private cleanRevision: number;
   private nextRevision: number;
@@ -73,7 +73,7 @@ export class EditorController<Session extends EditorControllerSession> {
     return () => this.listeners.delete(listener);
   };
 
-  readonly getSnapshot = (): EditorControllerState => this.state;
+  readonly getSnapshot = (): PptxEditorControllerState => this.state;
 
   selectSlide(index: number): boolean {
     if (this.pendingOperations > 0) return false;
@@ -101,7 +101,7 @@ export class EditorController<Session extends EditorControllerSession> {
 
   run(
     operation: (session: Session) => Promise<string | void> | string | void,
-    options: EditorControllerOperationOptions<Session>,
+    options: PptxEditorControllerOperationOptions<Session>,
   ): Promise<boolean> {
     return this.enqueue(async () => {
       this.update({ ...this.state, error: "" });
@@ -135,7 +135,7 @@ export class EditorController<Session extends EditorControllerSession> {
   }
 
   save(): Promise<EditorSaveResult | undefined> {
-    return this.enqueue(async () => {
+    return this.enqueue(() => {
       this.update({ ...this.state, error: "" });
       try {
         const saved = this.session.save();
@@ -173,7 +173,7 @@ export class EditorController<Session extends EditorControllerSession> {
     return this.currentRevision() !== this.cleanRevision;
   }
 
-  private enqueue<Result>(operation: () => Promise<Result>): Promise<Result> {
+  private enqueue<Result>(operation: () => Promise<Result> | Result): Promise<Result> {
     this.pendingOperations += 1;
     if (this.pendingOperations === 1) this.update({ ...this.state, busy: true });
     const result = this.operationQueue.then(operation, operation);
@@ -188,7 +188,7 @@ export class EditorController<Session extends EditorControllerSession> {
   }
 
   private reconcileHistory(
-    action: NonNullable<EditorControllerOperationOptions<Session>["historyAction"]>,
+    action: NonNullable<PptxEditorControllerOperationOptions<Session>["historyAction"]>,
     before: EditorHistory,
   ): void {
     const after = this.session.history;
@@ -211,19 +211,19 @@ export class EditorController<Session extends EditorControllerSession> {
     return this.historyRevisions[this.session.history.undoDepth] ?? -1;
   }
 
-  private update(state: EditorControllerState): void {
+  private update(state: PptxEditorControllerState): void {
     if (state === this.state) return;
     this.state = state;
     for (const listener of this.listeners) listener();
   }
 }
 
-export function createEditorControllerSnapshot(
-  session: EditorControllerSession,
+function createEditorControllerSnapshot(
+  session: PptxEditorControllerSession,
   preferredIndex: number,
   selectedShapeKey: string | null,
-  status: Pick<EditorControllerState, "busy" | "dirty" | "message" | "error">,
-): EditorControllerState {
+  status: Pick<PptxEditorControllerState, "busy" | "dirty" | "message" | "error">,
+): PptxEditorControllerState {
   const slides = [...session.slides];
   const currentIndex = clamp(preferredIndex, 0, Math.max(slides.length - 1, 0));
   const shapes = session
