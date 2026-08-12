@@ -1,6 +1,14 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   isPptxEditorError,
   type PptxEditorShapeBoundsPx,
@@ -68,6 +76,7 @@ interface DirectTextEditorState {
 }
 
 interface DragState {
+  readonly interactionScope: object;
   readonly kind: "move" | "resize";
   readonly handle?: ResizeHandle;
   readonly shapeHandle: SourceHandle;
@@ -103,15 +112,9 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
   const slideFrameRef = useRef<HTMLDivElement | null>(null);
   const directTextEditorRef = useRef<HTMLDivElement | null>(null);
   const directTextEditorStateRef = useRef<DirectTextEditorState | null>(null);
-  const directTextLifecycleRef = useRef<DirectTextEditorLifecycle | null>(null);
-  directTextLifecycleRef.current ??= new DirectTextEditorLifecycle();
-  const directTextSessionRef = useRef(editor);
-  if (directTextSessionRef.current !== editor) {
-    directTextSessionRef.current = editor;
-    directTextLifecycleRef.current.invalidate();
-  }
-  const directTextLifecycle = directTextLifecycleRef.current;
+  const [directTextLifecycle] = useState(() => new DirectTextEditorLifecycle());
   const dragStateRef = useRef<DragState | null>(null);
+  const committedInteractionScopeRef = useRef<object | null>(null);
   const compositionRef = useRef(false);
   const commitAfterCompositionRef = useRef(false);
 
@@ -169,30 +172,54 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
       setDraftBounds(null);
       slideFrameRef.current?.focus({ preventScroll: true });
       if (event !== undefined && shape.editableTransform && shape.bounds !== undefined) {
-        beginDrag("move", undefined, shape.handle, event, shape.bounds, dragStateRef, overlayRef);
+        beginDrag(
+          "move",
+          undefined,
+          shape.handle,
+          controller,
+          event,
+          shape.bounds,
+          dragStateRef,
+          overlayRef,
+        );
       }
     },
     [controller],
   );
 
-  const updateDrag = useCallback((event: PointerEvent) => {
-    const dragState = dragStateRef.current;
-    if (dragState === null || event.pointerId !== dragState.pointerId) return;
-    const point = eventPoint(overlayRef.current, event.clientX, event.clientY);
-    if (point === null) return;
-    const dx = point.x - dragState.startPoint.x;
-    const dy = point.y - dragState.startPoint.y;
-    setDraftBounds(
-      dragState.kind === "move"
-        ? movedBounds(dragState.startBounds, dx, dy)
-        : resizedBounds(dragState.startBounds, dragState.handle ?? "se", dx, dy),
-    );
-  }, []);
+  const updateDrag = useCallback(
+    (event: PointerEvent) => {
+      const dragState = dragStateRef.current;
+      if (
+        dragState === null ||
+        committedInteractionScopeRef.current !== dragState.interactionScope ||
+        event.pointerId !== dragState.pointerId
+      ) {
+        return;
+      }
+      const point = eventPoint(overlayRef.current, event.clientX, event.clientY);
+      if (point === null) return;
+      const dx = point.x - dragState.startPoint.x;
+      const dy = point.y - dragState.startPoint.y;
+      setDraftBounds(
+        dragState.kind === "move"
+          ? movedBounds(dragState.startBounds, dx, dy)
+          : resizedBounds(dragState.startBounds, dragState.handle ?? "se", dx, dy),
+      );
+    },
+    [controller],
+  );
 
   const finishDrag = useCallback(
     async (event: PointerEvent) => {
       const dragState = dragStateRef.current;
-      if (dragState === null || event.pointerId !== dragState.pointerId) return;
+      if (
+        dragState === null ||
+        committedInteractionScopeRef.current !== dragState.interactionScope ||
+        event.pointerId !== dragState.pointerId
+      ) {
+        return;
+      }
       dragStateRef.current = null;
       const point = eventPoint(overlayRef.current, event.clientX, event.clientY);
       if (point === null) {
@@ -220,10 +247,12 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
           "Shape updated",
         );
       } finally {
-        setDraftBounds(null);
+        if (committedInteractionScopeRef.current === dragState.interactionScope) {
+          setDraftBounds(null);
+        }
       }
     },
-    [applyCommand],
+    [applyCommand, controller],
   );
 
   useEffect(() => {
@@ -257,6 +286,7 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
         "resize",
         handle,
         selectedShape.handle,
+        controller,
         event,
         selectedShape.bounds,
         dragStateRef,
@@ -280,15 +310,21 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
     [directTextLifecycle],
   );
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+    committedInteractionScopeRef.current = controller;
     directTextLifecycle.cancelComposition();
+    dragStateRef.current = null;
     directTextEditorStateRef.current = null;
     compositionRef.current = false;
     commitAfterCompositionRef.current = false;
     setDirectTextEditor(null);
     setDraftBounds(null);
     return () => {
+      if (committedInteractionScopeRef.current === controller) {
+        committedInteractionScopeRef.current = null;
+      }
       directTextLifecycle.invalidate();
+      dragStateRef.current = null;
       directTextEditorStateRef.current = null;
       compositionRef.current = false;
       commitAfterCompositionRef.current = false;
@@ -669,6 +705,7 @@ export function EditorSurface({ editor, children }: EditorSurfaceProps) {
         <EditorSlideStrip
           busy={busy}
           currentIndex={currentIndex}
+          interactionScope={controller}
           slides={slides}
           onMove={(fromIndex, toIndex) => void handleMoveSlide(fromIndex, toIndex)}
           onSelect={(index) => void handleSelectSlide(index)}
@@ -860,6 +897,7 @@ function beginDrag(
   kind: "move" | "resize",
   handle: ResizeHandle | undefined,
   shapeHandle: SourceHandle,
+  interactionScope: object,
   event: React.PointerEvent<SVGRectElement>,
   startBounds: PptxEditorShapeBoundsPx,
   dragStateRef: React.MutableRefObject<DragState | null>,
@@ -869,6 +907,7 @@ function beginDrag(
   if (startPoint === null) return;
   event.currentTarget.setPointerCapture(event.pointerId);
   dragStateRef.current = {
+    interactionScope,
     kind,
     handle,
     shapeHandle,

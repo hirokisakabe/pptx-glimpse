@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { PptxEditorSlideSvg, SourceHandle } from "pptx-glimpse";
 
 const SLIDE_DRAG_THRESHOLD_PX = 4;
@@ -9,6 +9,7 @@ interface EditorSlideStripProps {
   readonly slides: readonly PptxEditorSlideSvg[];
   readonly currentIndex: number;
   readonly busy: boolean;
+  readonly interactionScope: object;
   readonly onMove: (fromIndex: number, toIndex: number) => void;
   readonly onSelect: (index: number) => void;
 }
@@ -19,6 +20,7 @@ interface SlideDropTarget {
 }
 
 interface SlideSortDragState {
+  readonly interactionScope: object;
   readonly fromIndex: number;
   readonly pointerId: number;
   readonly startPoint: { readonly x: number; readonly y: number };
@@ -30,21 +32,39 @@ export function EditorSlideStrip({
   slides,
   currentIndex,
   busy,
+  interactionScope,
   onMove,
   onSelect,
 }: EditorSlideStripProps) {
   const [draggedSlideIndex, setDraggedSlideIndex] = useState<number | null>(null);
   const [slideDropTarget, setSlideDropTarget] = useState<SlideDropTarget | null>(null);
   const slideSortDragRef = useRef<SlideSortDragState | null>(null);
-  const suppressSlideClickRef = useRef(false);
+  const suppressSlideClickRef = useRef<object | null>(null);
 
-  const clearSlideSortDrag = useCallback((pointerId?: number) => {
+  const clearSlideSortDrag = useCallback((pointerId?: number, interactionOwner?: object) => {
     const drag = slideSortDragRef.current;
-    if (drag === null || (pointerId !== undefined && drag.pointerId !== pointerId)) return;
+    if (
+      drag === null ||
+      (pointerId !== undefined && drag.pointerId !== pointerId) ||
+      (interactionOwner !== undefined && drag.interactionScope !== interactionOwner)
+    ) {
+      return;
+    }
     slideSortDragRef.current = null;
     setDraggedSlideIndex(null);
     setSlideDropTarget(null);
   }, []);
+
+  useLayoutEffect(() => {
+    slideSortDragRef.current = null;
+    suppressSlideClickRef.current = null;
+    setDraggedSlideIndex(null);
+    setSlideDropTarget(null);
+    return () => {
+      slideSortDragRef.current = null;
+      suppressSlideClickRef.current = null;
+    };
+  }, [interactionScope]);
 
   useEffect(() => {
     const handleBlur = () => clearSlideSortDrag();
@@ -86,16 +106,16 @@ export function EditorSlideStrip({
           type="button"
           disabled={busy}
           onClick={(event) => {
-            if (suppressSlideClickRef.current) {
-              suppressSlideClickRef.current = false;
+            if (suppressSlideClickRef.current === interactionScope) {
+              suppressSlideClickRef.current = null;
               event.preventDefault();
               return;
             }
             onSelect(index);
           }}
           onKeyDown={(event) => handleSlideKeyDown(index, event)}
-          onLostPointerCapture={(event) => clearSlideSortDrag(event.pointerId)}
-          onPointerCancel={(event) => clearSlideSortDrag(event.pointerId)}
+          onLostPointerCapture={(event) => clearSlideSortDrag(event.pointerId, interactionScope)}
+          onPointerCancel={(event) => clearSlideSortDrag(event.pointerId, interactionScope)}
           onPointerDown={(event) => {
             if (event.pointerType === "touch") return;
             if (busy || slide.handle === undefined || slideSortDragRef.current !== null) {
@@ -103,8 +123,9 @@ export function EditorSlideStrip({
               return;
             }
             event.currentTarget.setPointerCapture(event.pointerId);
-            suppressSlideClickRef.current = false;
+            suppressSlideClickRef.current = null;
             slideSortDragRef.current = {
+              interactionScope,
               fromIndex: index,
               pointerId: event.pointerId,
               startPoint: { x: event.clientX, y: event.clientY },
@@ -115,7 +136,13 @@ export function EditorSlideStrip({
           }}
           onPointerMove={(event) => {
             let drag = slideSortDragRef.current;
-            if (drag === null || drag.pointerId !== event.pointerId) return;
+            if (
+              drag === null ||
+              drag.interactionScope !== interactionScope ||
+              drag.pointerId !== event.pointerId
+            ) {
+              return;
+            }
             if (
               !drag.hasMoved &&
               Math.hypot(event.clientX - drag.startPoint.x, event.clientY - drag.startPoint.y) >=
@@ -129,19 +156,28 @@ export function EditorSlideStrip({
           }}
           onPointerUp={(event) => {
             const drag = slideSortDragRef.current;
-            if (drag === null || drag.pointerId !== event.pointerId) return;
+            if (
+              drag === null ||
+              drag.interactionScope !== interactionScope ||
+              drag.pointerId !== event.pointerId
+            ) {
+              return;
+            }
             const target = drag.hasMoved
               ? slideDropTargetAtPoint(event.clientX, event.clientY)
               : null;
             const changesPosition =
               target !== null && slideDropIndex(drag.fromIndex, target) !== drag.fromIndex;
-            suppressSlideClickRef.current = drag.hasMoved && (target === null || changesPosition);
-            if (suppressSlideClickRef.current) {
+            suppressSlideClickRef.current =
+              drag.hasMoved && (target === null || changesPosition) ? interactionScope : null;
+            if (suppressSlideClickRef.current === interactionScope) {
               window.setTimeout(() => {
-                suppressSlideClickRef.current = false;
+                if (suppressSlideClickRef.current === interactionScope) {
+                  suppressSlideClickRef.current = null;
+                }
               }, 0);
             }
-            clearSlideSortDrag(event.pointerId);
+            clearSlideSortDrag(event.pointerId, interactionScope);
             if (target !== null && changesPosition) {
               onMove(drag.fromIndex, slideDropIndex(drag.fromIndex, target));
             }

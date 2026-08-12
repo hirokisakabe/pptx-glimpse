@@ -234,7 +234,7 @@ test("opens the sample editor first and replaces it with an uploaded PPTX", asyn
   await expect(page).toHaveURL(`${demoServer.url}/docs`);
 });
 
-test("releases a pending IME host action when its editor session unmounts", async ({ page }) => {
+test("releases a pending IME host action when its editor session changes", async ({ page }) => {
   test.setTimeout(120_000);
   if (demoServer === null) throw new Error("demo server was not started");
   let replacementSampleRequests = 0;
@@ -271,6 +271,60 @@ test("releases a pending IME host action when its editor session unmounts", asyn
   await expect(page.getByTestId("replacement-loading")).toHaveCount(0);
   await page.waitForTimeout(100);
   expect(replacementSampleRequests).toBe(0);
+});
+
+test("cancels shape and slide gestures when the editor session prop changes", async ({ page }) => {
+  test.setTimeout(120_000);
+  if (demoServer === null) throw new Error("demo server was not started");
+
+  await page.goto(demoServer.url);
+  await expect(page.getByTestId("editor-workspace")).toBeVisible();
+  const firstShape = page.locator('[data-testid="shape-hit-area"]').first();
+  const shapeBounds = await firstShape.boundingBox();
+  if (shapeBounds === null) throw new Error("shape bounds were not available");
+  await page.mouse.move(
+    shapeBounds.x + shapeBounds.width / 2,
+    shapeBounds.y + shapeBounds.height / 2,
+  );
+  await page.mouse.down();
+  await page.getByRole("button", { name: "Open sample" }).evaluate((button) => {
+    if (!(button instanceof HTMLButtonElement)) throw new Error("open sample is not a button");
+    button.click();
+  });
+  await expect(page.getByTestId("replacement-loading")).toBeVisible();
+  await expect(page.getByTestId("replacement-loading")).toHaveCount(0);
+  await page.mouse.move(
+    shapeBounds.x + shapeBounds.width / 2 + 40,
+    shapeBounds.y + shapeBounds.height / 2,
+  );
+  await page.mouse.up();
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+  await expect(page.getByTestId("editor-error")).toHaveCount(0);
+
+  const thumbnails = page.getByTestId("editor-thumbnail");
+  const sourceBounds = await thumbnails.nth(1).boundingBox();
+  const targetBounds = await thumbnails.nth(2).boundingBox();
+  if (sourceBounds === null || targetBounds === null) {
+    throw new Error("slide thumbnail bounds were not available");
+  }
+  await page.mouse.move(
+    sourceBounds.x + sourceBounds.width / 2,
+    sourceBounds.y + sourceBounds.height / 2,
+  );
+  await page.mouse.down();
+  await page.mouse.move(
+    targetBounds.x + targetBounds.width / 2,
+    targetBounds.y + targetBounds.height - 2,
+  );
+  await page.getByRole("button", { name: "Open sample" }).evaluate((button) => {
+    if (!(button instanceof HTMLButtonElement)) throw new Error("open sample is not a button");
+    button.click();
+  });
+  await expect(page.getByTestId("replacement-loading")).toBeVisible();
+  await expect(page.getByTestId("replacement-loading")).toHaveCount(0);
+  await page.mouse.up();
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+  await expect(page.getByTestId("editor-error")).toHaveCount(0);
 });
 
 test("runs the public demo browser editor flow entirely client-side", async ({ page }) => {

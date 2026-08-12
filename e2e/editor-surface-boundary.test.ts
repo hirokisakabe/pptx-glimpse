@@ -59,4 +59,16 @@ describe("demo editor component boundary", () => {
     expect(shell).not.toContain("}, [controls]);");
     expect(shell).toContain("[controls.hasUnsavedChanges]");
   });
+
+  it("moves session lifecycle invalidation out of render and scopes transient gestures", async () => {
+    const surface = await readFile(resolve(componentsRoot, "EditorSurface.tsx"), "utf8");
+    const slideStrip = await readFile(resolve(componentsRoot, "EditorSlideStrip.tsx"), "utf8");
+
+    expect(surface).not.toContain("directTextSessionRef");
+    expect(surface).toContain("useLayoutEffect(() => {");
+    expect(surface).toContain("committedInteractionScopeRef.current = controller");
+    expect(surface).toContain("interactionScope={controller}");
+    expect(slideStrip).toContain("readonly interactionScope: object");
+    expect(slideStrip).toContain("drag.interactionScope !== interactionScope");
+  });
 });
