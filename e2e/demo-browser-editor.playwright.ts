@@ -188,6 +188,9 @@ test("opens the sample editor first and replaces it with an uploaded PPTX", asyn
 
   await page.goto(demoServer.url);
   await expect(page.getByTestId("editor-workspace")).toBeVisible();
+  await expect(page.locator('[data-editor-component="demo-shell"]')).toBeVisible();
+  await expect(page.locator('[data-editor-component="slide-strip"]')).toBeVisible();
+  await expect(page.locator('[data-editor-component="toolbar"]')).toBeVisible();
   const fileNameInput = page.getByRole("textbox", { name: "Presentation file name" });
   await expect(fileNameInput).toHaveValue("editor-demo");
   await expect(page.getByRole("button", { name: "Open PPTX" })).toBeVisible();
