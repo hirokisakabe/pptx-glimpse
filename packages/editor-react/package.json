@@ -1,6 +1,6 @@
 {
   "name": "@pptx-glimpse/editor-react",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Browser-only React editor UI for consumer-owned pptx-glimpse sessions.",
   "type": "module",
