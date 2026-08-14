@@ -1,6 +1,11 @@
 "use client";
 
-import { type EditorCommand, type PptxEditorSession, type SourceHandle } from "pptx-glimpse";
+import {
+  type EditorCommand,
+  type PptxEditorSession,
+  type PptxEditorShapeInfo,
+  type SourceHandle,
+} from "pptx-glimpse";
 import { type ReactNode, useCallback, useMemo, useRef } from "react";
 
 import type { RunEditorOperation } from "./editor-interaction-types.js";
@@ -130,6 +135,14 @@ export function PptxEditor({ session, children }: PptxEditorProps) {
     message,
   });
 
+  const startDirectTextEdit = useCallback(
+    (shape: PptxEditorShapeInfo) => {
+      shapeTransform.cancelGesture();
+      directText.start(shape);
+    },
+    [directText.start, shapeTransform.cancelGesture],
+  );
+
   const handleSlideFrameKeyDown = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       if (
@@ -141,9 +154,9 @@ export function PptxEditor({ session, children }: PptxEditorProps) {
         return;
       }
       event.preventDefault();
-      directText.start(shapeTransform.selectedShape);
+      startDirectTextEdit(shapeTransform.selectedShape);
     },
-    [directText, shapeTransform.selectedShape],
+    [directText.isEditing, shapeTransform.selectedShape, startDirectTextEdit],
   );
 
   const handleApplyTextProperties = useCallback(
@@ -279,8 +292,7 @@ export function PptxEditor({ session, children }: PptxEditorProps) {
                     onDoubleClick={(event) => {
                       event.preventDefault();
                       event.stopPropagation();
-                      shapeTransform.cancelGesture();
-                      directText.start(shape);
+                      startDirectTextEdit(shape);
                     }}
                   />
                 );

@@ -454,6 +454,46 @@ test("cancels transform drafts on pointer cancel and window blur", async ({ page
   await expect(selection).toHaveCount(0);
 });
 
+test("cancels an active shape transform before Enter starts direct text editing", async ({
+  page,
+}) => {
+  test.setTimeout(120_000);
+  if (demoServer === null) throw new Error("demo server was not started");
+
+  await page.goto(demoServer.url);
+  await expect(page.getByTestId("editor-workspace")).toBeVisible();
+  const editableTextShape = page
+    .locator('[data-testid="shape-hit-area"][data-editable-text="true"]')
+    .nth(1);
+  const shapeBounds = await editableTextShape.evaluate((element) => {
+    if (!(element instanceof SVGRectElement)) throw new Error("shape hit area is not a rect");
+    return {
+      x: element.x.baseVal.value,
+      y: element.y.baseVal.value,
+      width: element.width.baseVal.value,
+      height: element.height.baseVal.value,
+    };
+  });
+  const start = await svgPointToClient(
+    page,
+    shapeBounds.x + shapeBounds.width / 2,
+    shapeBounds.y + shapeBounds.height / 2,
+  );
+  const selection = page.getByTestId("selection-box");
+
+  await page.mouse.move(start.x, start.y);
+  await page.mouse.down();
+  await page.mouse.move(start.x + 40, start.y + 20, { steps: 4 });
+  await expect(selection).not.toHaveAttribute("x", String(shapeBounds.x));
+  await page.keyboard.press("Enter");
+  await expect(page.getByTestId("direct-text-editor")).toBeVisible();
+  await expect(selection).toHaveAttribute("x", String(shapeBounds.x));
+  await page.mouse.up();
+
+  await expect(page.getByRole("button", { name: "Undo" })).toBeDisabled();
+  await expect(page.getByTestId("editor-error")).toHaveCount(0);
+});
+
 test("resets toolbar inputs and download name when a same-named session replaces the editor", async ({
   page,
 }) => {

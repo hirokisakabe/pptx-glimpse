@@ -113,6 +113,10 @@ describe("editor React package boundary", () => {
       "utf8",
     );
     const slideStrip = await readFile(resolve(packageSourceRoot, "EditorSlideStrip.tsx"), "utf8");
+    const shapeTransform = await readFile(
+      resolve(packageSourceRoot, "use-shape-transform-interactions.ts"),
+      "utf8",
+    );
 
     expect(hostSaveControls).toContain("resetScope: controller");
     expect(shell).toContain("[controls.resetScope, fileName]");
@@ -123,6 +127,12 @@ describe("editor React package boundary", () => {
     expect(editor).toContain("useShapeTransformInteractions");
     expect(editor).toContain("interactionScope={controller}");
     expect(slideStrip).toContain("drag.interactionScope !== interactionScope");
+    expect(shapeTransform).toContain("committedInteractionScopeRef.current = controller");
+    expect(
+      shapeTransform.match(
+        /committedInteractionScopeRef\.current !== dragState\.interactionScope/g,
+      ),
+    ).toHaveLength(2);
   });
 
   it("keeps feature interaction ownership outside the editor composition root", async () => {
@@ -148,5 +158,8 @@ describe("editor React package boundary", () => {
     ]) {
       expect(editor, implementationDetail).not.toContain(implementationDetail);
     }
+    expect(editor).toMatch(/const slideOperations = useSlideLayoutOperations\(\{/);
+    expect(editor).toMatch(/const mediaOperations = useMediaOperations\(\{/);
+    expect(editor).toMatch(/const hostControls = useHostSaveControls\(\{/);
   });
 });
