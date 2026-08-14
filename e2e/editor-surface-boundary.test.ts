@@ -14,10 +14,17 @@ const reusableComponentFiles = [
   "EditorSlideStrip.tsx",
   "EditorLayoutPicker.tsx",
   "direct-text-editor-lifecycle.ts",
+  "editor-interaction-types.ts",
+  "editor-interaction-utils.ts",
   "layout-picker-add-lifecycle.ts",
   "layout-preview-store.ts",
   "pptx-editor-controller.ts",
+  "use-direct-text-editor.tsx",
+  "use-host-save-controls.ts",
+  "use-media-operations.ts",
   "use-pptx-editor-controller.ts",
+  "use-shape-transform-interactions.ts",
+  "use-slide-layout-operations.ts",
 ];
 
 describe("editor React package boundary", () => {
@@ -101,15 +108,45 @@ describe("editor React package boundary", () => {
   it("keeps host state and transient gesture lifecycle scoped to the active session", async () => {
     const shell = await readFile(resolve(demoComponentsRoot, "DemoEditorShell.tsx"), "utf8");
     const editor = await readFile(resolve(packageSourceRoot, "PptxEditor.tsx"), "utf8");
+    const hostSaveControls = await readFile(
+      resolve(packageSourceRoot, "use-host-save-controls.ts"),
+      "utf8",
+    );
     const slideStrip = await readFile(resolve(packageSourceRoot, "EditorSlideStrip.tsx"), "utf8");
 
-    expect(editor).toContain("resetScope: controller");
+    expect(hostSaveControls).toContain("resetScope: controller");
     expect(shell).toContain("[controls.resetScope, fileName]");
     expect(shell).not.toContain("}, [controls]);");
     expect(shell).toContain("[controls.hasUnsavedChanges]");
     expect(editor).not.toContain("directTextSessionRef");
-    expect(editor).toContain("committedInteractionScopeRef.current = controller");
+    expect(editor).toContain("useDirectTextEditor");
+    expect(editor).toContain("useShapeTransformInteractions");
     expect(editor).toContain("interactionScope={controller}");
     expect(slideStrip).toContain("drag.interactionScope !== interactionScope");
+  });
+
+  it("keeps feature interaction ownership outside the editor composition root", async () => {
+    const editor = await readFile(resolve(packageSourceRoot, "PptxEditor.tsx"), "utf8");
+    const ownership = new Map([
+      ["use-shape-transform-interactions.ts", ["pointercancel", "setShapeTransform"]],
+      ["use-direct-text-editor.tsx", ["DirectTextEditorLifecycle", "compositionPromise"]],
+      ["use-slide-layout-operations.ts", ["duplicateSlide", "moveSlide"]],
+      ["use-media-operations.ts", ["replaceImage", "MAX_IMAGE_REPLACEMENT_BYTES"]],
+      ["use-host-save-controls.ts", ["hasUnsavedChanges", "controller.save()"]],
+    ]);
+
+    for (const [fileName, markers] of ownership) {
+      const source = await readFile(resolve(packageSourceRoot, fileName), "utf8");
+      for (const marker of markers) expect(source, `${fileName}: ${marker}`).toContain(marker);
+    }
+    for (const implementationDetail of [
+      "DirectTextEditorLifecycle",
+      "MAX_IMAGE_REPLACEMENT_BYTES",
+      'addEventListener("pointercancel"',
+      'kind: "moveSlide"',
+      "controller.save()",
+    ]) {
+      expect(editor, implementationDetail).not.toContain(implementationDetail);
+    }
   });
 });
