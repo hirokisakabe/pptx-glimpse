@@ -8,19 +8,10 @@
  */
 
 import {
-  addConnector,
   type AddConnectorInput,
-  addEmptySlideFromLayout,
   type AddEmptySlideFromLayoutInput,
-  addTextBox,
   type AddTextBoxInput,
   asSourceNodeId,
-  clearParagraphProperties,
-  clearPictureCrop,
-  clearTextRunProperties,
-  deleteShape,
-  deleteSlide,
-  duplicateSlide,
   type EditableParagraphProperties,
   type EditableParagraphProperty,
   type EditableShapeFill,
@@ -31,10 +22,6 @@ import {
   findParagraphBySourceHandle,
   findShapeNodeBySourceHandle,
   findTextRunBySourceHandle,
-  groupShapes,
-  moveShapes,
-  moveShapesAcrossSlides,
-  moveSlide,
   type MoveSlideInput,
   type PptxSourceModel,
   type PptxSourceModelEdit,
@@ -46,241 +33,72 @@ import {
   type PptxSourceModelShapeTransformEdit,
   type PptxSourceModelTextRunEdit,
   type PptxSourceModelTextRunPropertiesEdit,
-  replaceImageBytes,
-  replaceParagraphPlainText,
-  replaceTextRunPlainText,
-  setParagraphProperties,
-  setPictureCrop,
   type SetPictureCropInput,
-  setShapeFill,
-  setShapeOutline,
-  setTextRunProperties,
   type SourceChart,
-  type SourceConnector,
-  type SourceGroup,
   type SourceHandle,
   type SourceImage,
   type SourceParagraph,
-  type SourceShape,
   type SourceShapeNode,
   type SourceSlide,
-  type SourceTable,
   type SourceTextRun,
   type SourceTransform,
-  ungroupShape,
-  updateBubbleChartData,
   type UpdateBubbleChartDataInput,
-  updateChartData,
   type UpdateChartDataInput,
-  updateScatterChartData,
   type UpdateScatterChartDataInput,
-  updateShapeTransform,
-  updateThemeScheme,
   type UpdateThemeSchemeInput,
 } from "@pptx-glimpse/document";
 
-/** Replace the text of one source run. @inline */
-export interface ReplaceTextRunPlainTextCommand {
-  readonly kind: "replaceTextRunPlainText";
-  readonly handle: SourceHandle;
-  readonly text: string;
-}
+import type {
+  EditorApplyCommandResult,
+  EditorCommandWarning,
+  EditorOperationFailure,
+} from "./command-contract.js";
+import { invalidCommandFailure } from "./command-contract.js";
+import {
+  applyCommandToDocument,
+  type EditorCommand,
+  type GroupableSourceShape,
+} from "./commands/index.js";
 
-/** Replace all text in one source paragraph. @inline */
-export interface ReplaceParagraphPlainTextCommand {
-  readonly kind: "replaceParagraphPlainText";
-  readonly handle: SourceHandle;
-  readonly text: string;
-}
-
-/** Set explicitly supplied text-run properties. @inline */
-export interface SetTextRunPropertiesCommand {
-  readonly kind: "setTextRunProperties";
-  readonly handle: SourceHandle;
-  readonly properties: EditableTextRunProperties;
-}
-
-/** Clear selected text-run properties so inherited values apply. @inline */
-export interface ClearTextRunPropertiesCommand {
-  readonly kind: "clearTextRunProperties";
-  readonly handle: SourceHandle;
-  readonly properties: readonly EditableTextRunProperty[];
-}
-
-/** Set explicitly supplied paragraph properties. @inline */
-export interface SetParagraphPropertiesCommand {
-  readonly kind: "setParagraphProperties";
-  readonly handle: SourceHandle;
-  readonly properties: EditableParagraphProperties;
-}
-
-/** Clear selected paragraph properties so inherited values apply. @inline */
-export interface ClearParagraphPropertiesCommand {
-  readonly kind: "clearParagraphProperties";
-  readonly handle: SourceHandle;
-  readonly properties: readonly EditableParagraphProperty[];
-}
-
-/** Move one shape without resizing it. @inline */
-export interface MoveShapeCommand {
-  readonly kind: "moveShape";
-  readonly handle: SourceHandle;
-  readonly offsetX: Emu;
-  readonly offsetY: Emu;
-}
-
-/** Resize one shape without moving its origin. @inline */
-export interface ResizeShapeCommand {
-  readonly kind: "resizeShape";
-  readonly handle: SourceHandle;
-  readonly width: Emu;
-  readonly height: Emu;
-}
-
-/** Replace a shape's position and size together. @inline */
-export interface SetShapeTransformCommand {
-  readonly kind: "setShapeTransform";
-  readonly handle: SourceHandle;
-  readonly offsetX: Emu;
-  readonly offsetY: Emu;
-  readonly width: Emu;
-  readonly height: Emu;
-}
-
-/** Replace a shape's fill properties. @inline */
-export interface SetShapeFillCommand {
-  readonly kind: "setShapeFill";
-  readonly handle: SourceHandle;
-  readonly fill: EditableShapeFill;
-}
-
-/** Update the specified outline properties while preserving omitted properties. @inline */
-export interface SetShapeOutlineCommand {
-  readonly kind: "setShapeOutline";
-  readonly handle: SourceHandle;
-  readonly outline: EditableShapeOutline;
-}
-
-/** Add a text box to one slide. @inline */
-export interface AddTextBoxCommand extends AddTextBoxInput {
-  readonly kind: "addTextBox";
-  readonly slideHandle: SourceHandle;
-}
-
-/** Add a connector to one slide. @inline */
-export interface AddConnectorCommand extends AddConnectorInput {
-  readonly kind: "addConnector";
-  readonly slideHandle: SourceHandle;
-}
-
-/** Delete one supported drawing at the slide root or inside a native group. @inline */
-export interface DeleteShapeCommand {
-  readonly kind: "deleteShape";
-  readonly handle: SourceHandle;
-}
-
-/** Group two or more consecutive sibling drawings into one native DrawingML group. @inline */
-export interface GroupShapesCommand {
-  readonly kind: "groupShapes";
-  readonly shapeHandles: readonly SourceHandle[];
-}
-
-/** Move consecutive sibling drawings to a root/native-group destination in the same part. @inline */
-export interface MoveShapesCommand {
-  readonly kind: "moveShapes";
-  readonly shapeHandles: readonly SourceHandle[];
-  readonly destinationHandle: SourceHandle;
-  readonly beforeShapeHandle?: SourceHandle;
-}
-
-/** Move consecutive slide-root typed drawings to another slide root. @inline */
-export interface MoveShapesAcrossSlidesCommand {
-  readonly kind: "moveShapesAcrossSlides";
-  readonly shapeHandles: readonly SourceHandle[];
-  readonly destinationSlideHandle: SourceHandle;
-  readonly beforeShapeHandle?: SourceHandle;
-}
-
-/** Expand one losslessly ungroupable native DrawingML group. @inline */
-export interface UngroupShapeCommand {
-  readonly kind: "ungroupShape";
-  readonly groupHandle: SourceHandle;
-}
-
-/** Source drawing kinds supported by the typed group convenience method. */
-export type GroupableSourceShape =
-  | SourceShape
-  | SourceConnector
-  | SourceImage
-  | SourceTable
-  | SourceChart
-  | SourceGroup;
-
-/** Replace the media bytes referenced by one image shape. @inline */
-export interface ReplaceImageCommand {
-  readonly kind: "replaceImage";
-  readonly handle: SourceHandle;
-  readonly bytes: Uint8Array;
-}
-
-/** Set crop insets on one stretch-filled picture. @inline */
-export interface SetPictureCropCommand extends SetPictureCropInput {
-  readonly kind: "setPictureCrop";
-  readonly handle: SourceHandle;
-}
-
-/** Remove the crop rectangle from one stretch-filled picture. @inline */
-export interface ClearPictureCropCommand {
-  readonly kind: "clearPictureCrop";
-  readonly handle: SourceHandle;
-}
-
-/** Update the series data of one chart. @inline */
-export interface UpdateChartDataCommand extends UpdateChartDataInput {
-  readonly kind: "updateChartData";
-  readonly handle: SourceHandle;
-}
-
-/** Update the XY series data of one scatter chart. @inline */
-export interface UpdateScatterChartDataCommand extends UpdateScatterChartDataInput {
-  readonly kind: "updateScatterChartData";
-  readonly handle: SourceHandle;
-}
-
-/** Update the XYZ series data of one bubble chart. @inline */
-export interface UpdateBubbleChartDataCommand extends UpdateBubbleChartDataInput {
-  readonly kind: "updateBubbleChartData";
-  readonly handle: SourceHandle;
-}
-
-/** Add an empty slide based on an existing layout. @inline */
-export interface AddEmptySlideFromLayoutCommand extends AddEmptySlideFromLayoutInput {
-  readonly kind: "addEmptySlideFromLayout";
-}
-
-/** Duplicate one slide immediately after its source. @inline */
-export interface DuplicateSlideCommand {
-  readonly kind: "duplicateSlide";
-  readonly handle: SourceHandle;
-}
-
-/** Move one slide to a new zero-based array position. @inline */
-export interface MoveSlideCommand extends MoveSlideInput {
-  readonly kind: "moveSlide";
-  readonly handle: SourceHandle;
-}
-
-/** Delete one slide. @inline */
-export interface DeleteSlideCommand {
-  readonly kind: "deleteSlide";
-  readonly handle: SourceHandle;
-}
-
-/** Update selected color/font fields on one existing theme. @inline */
-export interface UpdateThemeSchemeCommand extends UpdateThemeSchemeInput {
-  readonly kind: "updateThemeScheme";
-  readonly handle: SourceHandle;
-}
+export type {
+  EditorApplyCommandResult,
+  EditorCommandWarning,
+  EditorOperationErrorCode,
+  EditorOperationFailure,
+} from "./command-contract.js";
+export type {
+  AddConnectorCommand,
+  AddEmptySlideFromLayoutCommand,
+  AddTextBoxCommand,
+  ClearParagraphPropertiesCommand,
+  ClearPictureCropCommand,
+  ClearTextRunPropertiesCommand,
+  DeleteShapeCommand,
+  DeleteSlideCommand,
+  DuplicateSlideCommand,
+  EditorCommand,
+  GroupableSourceShape,
+  GroupShapesCommand,
+  MoveShapeCommand,
+  MoveShapesAcrossSlidesCommand,
+  MoveShapesCommand,
+  MoveSlideCommand,
+  ReplaceImageCommand,
+  ReplaceParagraphPlainTextCommand,
+  ReplaceTextRunPlainTextCommand,
+  ResizeShapeCommand,
+  SetParagraphPropertiesCommand,
+  SetPictureCropCommand,
+  SetShapeFillCommand,
+  SetShapeOutlineCommand,
+  SetShapeTransformCommand,
+  SetTextRunPropertiesCommand,
+  UngroupShapeCommand,
+  UpdateBubbleChartDataCommand,
+  UpdateChartDataCommand,
+  UpdateScatterChartDataCommand,
+  UpdateThemeSchemeCommand,
+} from "./commands/index.js";
 
 /**
  * All commands accepted by the high-level `apply` and `applyAll` APIs.
@@ -328,67 +146,6 @@ export interface UpdateThemeSchemeCommand extends UpdateThemeSchemeInput {
  * @inlineType AddConnectorConnectionEndpointInput
  * @inlineType AddConnectorOutlineInput
  */
-export type EditorCommand =
-  | ReplaceTextRunPlainTextCommand
-  | ReplaceParagraphPlainTextCommand
-  | SetTextRunPropertiesCommand
-  | ClearTextRunPropertiesCommand
-  | SetParagraphPropertiesCommand
-  | ClearParagraphPropertiesCommand
-  | MoveShapeCommand
-  | ResizeShapeCommand
-  | SetShapeTransformCommand
-  | SetShapeFillCommand
-  | SetShapeOutlineCommand
-  | AddTextBoxCommand
-  | AddConnectorCommand
-  | DeleteShapeCommand
-  | GroupShapesCommand
-  | MoveShapesCommand
-  | MoveShapesAcrossSlidesCommand
-  | UngroupShapeCommand
-  | ReplaceImageCommand
-  | SetPictureCropCommand
-  | ClearPictureCropCommand
-  | UpdateChartDataCommand
-  | UpdateScatterChartDataCommand
-  | UpdateBubbleChartDataCommand
-  | AddEmptySlideFromLayoutCommand
-  | DuplicateSlideCommand
-  | MoveSlideCommand
-  | DeleteSlideCommand
-  | UpdateThemeSchemeCommand;
-
-export type EditorOperationErrorCode =
-  | "invalid-command"
-  | "invalid-selection"
-  | "empty-undo-stack"
-  | "empty-redo-stack";
-
-export interface EditorOperationFailure<
-  Code extends EditorOperationErrorCode = EditorOperationErrorCode,
-> {
-  readonly ok: false;
-  readonly code: Code;
-  readonly message: string;
-  readonly cause?: unknown;
-}
-
-export type EditorApplyCommandResult =
-  | {
-      readonly ok: true;
-      readonly document: PptxSourceModel;
-      readonly warnings?: readonly EditorCommandWarning[];
-    }
-  | EditorOperationFailure<"invalid-command">;
-
-export interface EditorCommandWarning {
-  readonly code: "shared-media-part";
-  readonly message: string;
-  readonly mediaPartPath: string;
-  readonly referenceCount: number;
-}
-
 export type EditorHistoryResult =
   | {
       readonly ok: true;
@@ -975,144 +732,6 @@ export function createEditorSession(document: PptxSourceModel): EditorSession {
   return new EditorSession(document);
 }
 
-type ApplyCommandAttempt =
-  | {
-      readonly ok: true;
-      readonly document: PptxSourceModel;
-    }
-  | EditorOperationFailure<"invalid-command">;
-
-const EDITOR_COMMAND_KINDS: ReadonlySet<string> = new Set([
-  "replaceTextRunPlainText",
-  "replaceParagraphPlainText",
-  "setTextRunProperties",
-  "clearTextRunProperties",
-  "setParagraphProperties",
-  "clearParagraphProperties",
-  "moveShape",
-  "resizeShape",
-  "setShapeTransform",
-  "setShapeFill",
-  "setShapeOutline",
-  "addTextBox",
-  "addConnector",
-  "deleteShape",
-  "groupShapes",
-  "moveShapes",
-  "moveShapesAcrossSlides",
-  "ungroupShape",
-  "replaceImage",
-  "setPictureCrop",
-  "clearPictureCrop",
-  "updateChartData",
-  "updateScatterChartData",
-  "updateBubbleChartData",
-  "addEmptySlideFromLayout",
-  "duplicateSlide",
-  "moveSlide",
-  "deleteSlide",
-  "updateThemeScheme",
-]);
-
-const EXPECTED_COMMAND_REJECTION_PREFIXES = [
-  "replaceTextRunPlainText:",
-  "replaceParagraphPlainText:",
-  "setTextRunProperties:",
-  "clearTextRunProperties:",
-  "setParagraphProperties:",
-  "clearParagraphProperties:",
-  "moveShape:",
-  "resizeShape:",
-  "setShapeTransform:",
-  "setShapeFill:",
-  "setShapeOutline:",
-  "addTextBox:",
-  "addConnector:",
-  "deleteShape:",
-  "groupShapes:",
-  "moveShapes:",
-  "moveShapesAcrossSlides:",
-  "ungroupShape:",
-  "replaceImageBytes:",
-  "setPictureCrop:",
-  "clearPictureCrop:",
-  "updateChartData:",
-  "updateScatterChartData:",
-  "updateBubbleChartData:",
-  "addEmptySlideFromLayout:",
-  "duplicateSlide:",
-  "moveSlide:",
-  "deleteSlide:",
-  "updateThemeScheme:",
-  "updateTextRunProperties:",
-  "updateParagraphProperties:",
-  "updateShapeTransform:",
-] as const;
-
-function applyCommandToDocument(
-  document: PptxSourceModel,
-  command: EditorCommand,
-): ApplyCommandAttempt {
-  if (!EDITOR_COMMAND_KINDS.has(command.kind)) {
-    throw new TypeError(`EditorSession: unsupported command kind '${String(command.kind)}'`);
-  }
-  switch (command.kind) {
-    case "replaceTextRunPlainText":
-    case "replaceParagraphPlainText":
-    case "setTextRunProperties":
-    case "clearTextRunProperties":
-    case "setParagraphProperties":
-    case "clearParagraphProperties":
-    case "moveShape":
-    case "resizeShape":
-    case "setShapeTransform":
-    case "setShapeFill":
-    case "setShapeOutline":
-    case "addTextBox":
-    case "addConnector":
-    case "deleteShape":
-    case "groupShapes":
-    case "moveShapes":
-    case "moveShapesAcrossSlides":
-    case "ungroupShape":
-    case "replaceImage":
-    case "setPictureCrop":
-    case "clearPictureCrop":
-    case "updateChartData":
-    case "updateScatterChartData":
-    case "updateBubbleChartData":
-    case "addEmptySlideFromLayout":
-    case "duplicateSlide":
-    case "moveSlide":
-    case "deleteSlide":
-    case "updateThemeScheme":
-      return attemptCommand(() => executeCommand(document, command));
-  }
-}
-
-function attemptCommand(operation: () => PptxSourceModel): ApplyCommandAttempt {
-  try {
-    return { ok: true, document: operation() };
-  } catch (cause) {
-    return invalidCommandFailure(cause);
-  }
-}
-
-function invalidCommandFailure(cause: unknown): EditorOperationFailure<"invalid-command"> {
-  if (
-    !(cause instanceof Error) ||
-    !EXPECTED_COMMAND_REJECTION_PREFIXES.some((prefix) => cause.message.startsWith(prefix))
-  ) {
-    throw cause;
-  }
-  return {
-    ok: false,
-    code: "invalid-command",
-    message: cause.message,
-    cause,
-  };
-}
-
 function invalidSourceNodeFailure(
   operation: string,
   reason: string,
@@ -1197,131 +816,6 @@ function sourceHandlesEqual(left: SourceHandle | undefined, right: SourceHandle)
   );
 }
 
-function executeCommand(document: PptxSourceModel, command: EditorCommand): PptxSourceModel {
-  switch (command.kind) {
-    case "replaceTextRunPlainText":
-      return replaceTextRunPlainTextCommand(document, command);
-    case "replaceParagraphPlainText":
-      return replaceParagraphPlainTextCommand(document, command);
-    case "setTextRunProperties":
-      return setTextRunPropertiesCommand(document, command);
-    case "clearTextRunProperties":
-      return clearTextRunPropertiesCommand(document, command);
-    case "setParagraphProperties":
-      return setParagraphPropertiesCommand(document, command);
-    case "clearParagraphProperties":
-      return clearParagraphPropertiesCommand(document, command);
-    case "moveShape":
-      return moveShape(document, command);
-    case "resizeShape":
-      return resizeShape(document, command);
-    case "setShapeTransform":
-      return setShapeTransform(document, command);
-    case "setShapeFill":
-      return setShapeFillCommand(document, command);
-    case "setShapeOutline":
-      return setShapeOutlineCommand(document, command);
-    case "addTextBox":
-      return addTextBoxCommand(document, command);
-    case "addConnector":
-      return addConnectorCommand(document, command);
-    case "deleteShape":
-      return deleteShape(document, command.handle);
-    case "groupShapes":
-      return groupShapesCommand(document, command);
-    case "moveShapes":
-      return moveShapes(document, command.shapeHandles, command.destinationHandle, {
-        ...(command.beforeShapeHandle !== undefined
-          ? { beforeShapeHandle: command.beforeShapeHandle }
-          : {}),
-      });
-    case "moveShapesAcrossSlides":
-      return moveShapesAcrossSlides(
-        document,
-        command.shapeHandles,
-        command.destinationSlideHandle,
-        {
-          ...(command.beforeShapeHandle !== undefined
-            ? { beforeShapeHandle: command.beforeShapeHandle }
-            : {}),
-        },
-      ).document;
-    case "ungroupShape":
-      return ungroupShapeCommand(document, command);
-    case "replaceImage":
-      return replaceImageBytes(document, command.handle, command.bytes);
-    case "setPictureCrop":
-      return setPictureCrop(document, command.handle, command);
-    case "clearPictureCrop":
-      return clearPictureCrop(document, command.handle);
-    case "updateChartData":
-      return updateChartDataCommand(document, command);
-    case "updateScatterChartData":
-      return updateScatterChartDataCommand(document, command);
-    case "updateBubbleChartData":
-      return updateBubbleChartDataCommand(document, command);
-    case "addEmptySlideFromLayout":
-      return addEmptySlideFromLayout(document, command);
-    case "duplicateSlide":
-      return duplicateSlide(document, command.handle);
-    case "moveSlide":
-      return moveSlide(document, command.handle, command);
-    case "deleteSlide":
-      return deleteSlide(document, command.handle);
-    case "updateThemeScheme":
-      return updateThemeSchemeCommand(document, command);
-  }
-}
-
-function updateThemeSchemeCommand(
-  document: PptxSourceModel,
-  command: UpdateThemeSchemeCommand,
-): PptxSourceModel {
-  return updateThemeScheme(document, command.handle, {
-    ...(command.colorScheme !== undefined ? { colorScheme: command.colorScheme } : {}),
-    ...(command.fontScheme !== undefined ? { fontScheme: command.fontScheme } : {}),
-  });
-}
-
-function groupShapesCommand(
-  document: PptxSourceModel,
-  command: GroupShapesCommand,
-): PptxSourceModel {
-  for (const handle of command.shapeHandles) {
-    const shape = findCommandShape(document, handle, "groupShapes");
-    if (shape !== undefined && !isGroupableSourceShape(shape)) {
-      throw new Error(`groupShapes: shape kind '${shape.kind}' is not supported`);
-    }
-  }
-  return groupShapes(document, command.shapeHandles);
-}
-
-function ungroupShapeCommand(
-  document: PptxSourceModel,
-  command: UngroupShapeCommand,
-): PptxSourceModel {
-  const group = findCommandShape(document, command.groupHandle, "ungroupShape");
-  if (group?.kind === "group" && group.children.length === 0) {
-    throw new Error("ungroupShape: group must contain at least one child");
-  }
-  return ungroupShape(document, command.groupHandle);
-}
-
-function findCommandShape(
-  document: PptxSourceModel,
-  handle: SourceHandle,
-  operation: "groupShapes" | "ungroupShape",
-): SourceShapeNode | undefined {
-  try {
-    return findShapeNodeBySourceHandle(document, handle);
-  } catch (cause) {
-    if (cause instanceof Error && cause.message.startsWith("findShapeNodeBySourceHandle:")) {
-      throw new Error(`${operation}: ${cause.message}`, { cause });
-    }
-    throw cause;
-  }
-}
-
 function selectionAfterCommand(
   before: PptxSourceModel,
   after: PptxSourceModel,
@@ -1380,95 +874,6 @@ function reconcileSelection(
     : selection;
 }
 
-function updateChartDataCommand(
-  document: PptxSourceModel,
-  command: UpdateChartDataCommand,
-): PptxSourceModel {
-  if (!Array.isArray(command.series) || command.series.length === 0) {
-    throw new Error("updateChartData: series must be a non-empty array");
-  }
-  for (const [index, series] of command.series.entries()) {
-    if (!isObject(series)) {
-      throw new Error(`updateChartData: series[${index}] must be an object`);
-    }
-    if (typeof series.name !== "string") {
-      throw new Error(`updateChartData: series[${index}].name must be a string`);
-    }
-    if (!Array.isArray(series.categories) || !Array.isArray(series.values)) {
-      throw new Error(`updateChartData: series[${index}] categories and values must be arrays`);
-    }
-  }
-  return updateChartData(document, command.handle, command);
-}
-
-function updateScatterChartDataCommand(
-  document: PptxSourceModel,
-  command: UpdateScatterChartDataCommand,
-): PptxSourceModel {
-  if (!Array.isArray(command.series) || command.series.length === 0) {
-    throw new Error("updateScatterChartData: series must be a non-empty array");
-  }
-  for (const [index, series] of command.series.entries()) {
-    if (!isObject(series)) {
-      throw new Error(`updateScatterChartData: series[${index}] must be an object`);
-    }
-    if (typeof series.name !== "string") {
-      throw new Error(`updateScatterChartData: series[${index}].name must be a string`);
-    }
-    if (!Array.isArray(series.xValues) || !Array.isArray(series.yValues)) {
-      throw new Error(`updateScatterChartData: series[${index}] X and Y values must be arrays`);
-    }
-  }
-  return updateScatterChartData(document, command.handle, command);
-}
-
-function updateBubbleChartDataCommand(
-  document: PptxSourceModel,
-  command: UpdateBubbleChartDataCommand,
-): PptxSourceModel {
-  if (!Array.isArray(command.series) || command.series.length === 0) {
-    throw new Error("updateBubbleChartData: series must be a non-empty array");
-  }
-  for (const [index, series] of command.series.entries()) {
-    if (!isObject(series)) {
-      throw new Error(`updateBubbleChartData: series[${index}] must be an object`);
-    }
-    if (typeof series.name !== "string") {
-      throw new Error(`updateBubbleChartData: series[${index}].name must be a string`);
-    }
-    if (
-      !Array.isArray(series.xValues) ||
-      !Array.isArray(series.yValues) ||
-      !Array.isArray(series.bubbleSizes)
-    ) {
-      throw new Error(
-        `updateBubbleChartData: series[${index}] X, Y, and bubble size values must be arrays`,
-      );
-    }
-  }
-  return updateBubbleChartData(document, command.handle, command);
-}
-
-function replaceTextRunPlainTextCommand(
-  document: PptxSourceModel,
-  command: ReplaceTextRunPlainTextCommand,
-): PptxSourceModel {
-  if (typeof command.text !== "string") {
-    throw new Error("replaceTextRunPlainText: text must be a string");
-  }
-  return replaceTextRunPlainText(document, command.handle, command.text);
-}
-
-function replaceParagraphPlainTextCommand(
-  document: PptxSourceModel,
-  command: ReplaceParagraphPlainTextCommand,
-): PptxSourceModel {
-  if (typeof command.text !== "string") {
-    throw new Error("replaceParagraphPlainText: text must be a string");
-  }
-  return replaceParagraphPlainText(document, command.handle, command.text);
-}
-
 function collectCommandWarnings(
   document: PptxSourceModel,
   commands: readonly EditorCommand[],
@@ -1516,351 +921,6 @@ function dedupeCommandWarnings(warnings: readonly EditorCommandWarning[]): Edito
     if (!deduped.has(key)) deduped.set(key, warning);
   }
   return [...deduped.values()];
-}
-
-function addTextBoxCommand(document: PptxSourceModel, command: AddTextBoxCommand): PptxSourceModel {
-  requireFiniteEmu(command.offsetX, "addTextBox", "offsetX");
-  requireFiniteEmu(command.offsetY, "addTextBox", "offsetY");
-  requirePositiveFiniteEmu(command.width, "addTextBox", "width");
-  requirePositiveFiniteEmu(command.height, "addTextBox", "height");
-  if (command.text !== undefined && typeof command.text !== "string") {
-    throw new Error("addTextBox: text must be a string");
-  }
-  if (command.name !== undefined && command.name.trim() === "") {
-    throw new Error("addTextBox: name must be a non-empty string when provided");
-  }
-  return addTextBox(document, command.slideHandle, command);
-}
-
-function addConnectorCommand(
-  document: PptxSourceModel,
-  command: AddConnectorCommand,
-): PptxSourceModel {
-  requireFiniteEmu(command.offsetX, "addConnector", "offsetX");
-  requireFiniteEmu(command.offsetY, "addConnector", "offsetY");
-  requirePositiveFiniteEmu(command.width, "addConnector", "width");
-  requirePositiveFiniteEmu(command.height, "addConnector", "height");
-  return addConnector(document, command.slideHandle, command);
-}
-
-function setTextRunPropertiesCommand(
-  document: PptxSourceModel,
-  command: SetTextRunPropertiesCommand,
-): PptxSourceModel {
-  requireNonEmptyPropertySet(command.properties, "setTextRunProperties");
-  validateTextRunPropertySet(command.properties, "setTextRunProperties");
-  return setTextRunProperties(document, command.handle, command.properties);
-}
-
-function clearTextRunPropertiesCommand(
-  document: PptxSourceModel,
-  command: ClearTextRunPropertiesCommand,
-): PptxSourceModel {
-  if (command.properties.length === 0) {
-    throw new Error("clearTextRunProperties: properties must contain at least one property name");
-  }
-  for (const property of command.properties) {
-    if (!EDITABLE_TEXT_RUN_PROPERTY_SET.has(property)) {
-      throw new Error(`clearTextRunProperties: unsupported text run property '${property}'`);
-    }
-  }
-  return clearTextRunProperties(document, command.handle, command.properties);
-}
-
-function setParagraphPropertiesCommand(
-  document: PptxSourceModel,
-  command: SetParagraphPropertiesCommand,
-): PptxSourceModel {
-  requireNonEmptyParagraphPropertySet(command.properties, "setParagraphProperties");
-  validateParagraphPropertySet(command.properties, "setParagraphProperties");
-  return setParagraphProperties(document, command.handle, command.properties);
-}
-
-function clearParagraphPropertiesCommand(
-  document: PptxSourceModel,
-  command: ClearParagraphPropertiesCommand,
-): PptxSourceModel {
-  if (command.properties.length === 0) {
-    throw new Error("clearParagraphProperties: properties must contain at least one property name");
-  }
-  for (const property of command.properties) {
-    if (!EDITABLE_PARAGRAPH_PROPERTY_SET.has(property)) {
-      throw new Error(`clearParagraphProperties: unsupported paragraph property '${property}'`);
-    }
-  }
-  return clearParagraphProperties(document, command.handle, command.properties);
-}
-
-function moveShape(document: PptxSourceModel, command: MoveShapeCommand): PptxSourceModel {
-  requireFiniteEmu(command.offsetX, "moveShape", "offsetX");
-  requireFiniteEmu(command.offsetY, "moveShape", "offsetY");
-
-  const current = requireEditableShapeTransform(document, command.handle, "moveShape");
-  return updateShapeTransform(document, command.handle, {
-    offsetX: command.offsetX,
-    offsetY: command.offsetY,
-    width: current.width,
-    height: current.height,
-  });
-}
-
-function resizeShape(document: PptxSourceModel, command: ResizeShapeCommand): PptxSourceModel {
-  requirePositiveFiniteEmu(command.width, "resizeShape", "width");
-  requirePositiveFiniteEmu(command.height, "resizeShape", "height");
-
-  const current = requireEditableShapeTransform(document, command.handle, "resizeShape");
-  return updateShapeTransform(document, command.handle, {
-    offsetX: current.offsetX,
-    offsetY: current.offsetY,
-    width: command.width,
-    height: command.height,
-  });
-}
-
-function setShapeTransform(
-  document: PptxSourceModel,
-  command: SetShapeTransformCommand,
-): PptxSourceModel {
-  requireFiniteEmu(command.offsetX, "setShapeTransform", "offsetX");
-  requireFiniteEmu(command.offsetY, "setShapeTransform", "offsetY");
-  requirePositiveFiniteEmu(command.width, "setShapeTransform", "width");
-  requirePositiveFiniteEmu(command.height, "setShapeTransform", "height");
-
-  requireEditableShapeTransform(document, command.handle, "setShapeTransform");
-  return updateShapeTransform(document, command.handle, {
-    offsetX: command.offsetX,
-    offsetY: command.offsetY,
-    width: command.width,
-    height: command.height,
-  });
-}
-
-function setShapeFillCommand(
-  document: PptxSourceModel,
-  command: SetShapeFillCommand,
-): PptxSourceModel {
-  validateShapeFill(command.fill, "setShapeFill");
-  return setShapeFill(document, command.handle, command.fill);
-}
-
-function setShapeOutlineCommand(
-  document: PptxSourceModel,
-  command: SetShapeOutlineCommand,
-): PptxSourceModel {
-  validateShapeOutline(command.outline, "setShapeOutline");
-  return setShapeOutline(document, command.handle, command.outline);
-}
-
-const EDITABLE_TEXT_RUN_PROPERTIES = [
-  "bold",
-  "italic",
-  "underline",
-  "fontSize",
-  "color",
-  "typeface",
-] as const satisfies readonly EditableTextRunProperty[];
-const EDITABLE_TEXT_RUN_PROPERTY_SET: ReadonlySet<string> = new Set(EDITABLE_TEXT_RUN_PROPERTIES);
-const EDITABLE_PARAGRAPH_PROPERTIES = [
-  "align",
-  "level",
-  "bullet",
-] as const satisfies readonly EditableParagraphProperty[];
-const EDITABLE_PARAGRAPH_PROPERTY_SET: ReadonlySet<string> = new Set(EDITABLE_PARAGRAPH_PROPERTIES);
-const PARAGRAPH_ALIGN_VALUES = new Set(["left", "center", "right", "justify"]);
-const AUTO_NUM_SCHEMES = new Set([
-  "arabicPeriod",
-  "arabicParenR",
-  "romanUcPeriod",
-  "romanLcPeriod",
-  "alphaUcPeriod",
-  "alphaLcPeriod",
-  "alphaLcParenR",
-  "alphaUcParenR",
-  "arabicPlain",
-]);
-
-function requireNonEmptyPropertySet(
-  properties: EditableTextRunProperties,
-  commandName: "setTextRunProperties",
-): void {
-  if (Object.values(properties).every((value) => value === undefined)) {
-    throw new Error(`${commandName}: properties must contain at least one defined property`);
-  }
-}
-
-function validateTextRunPropertySet(
-  properties: EditableTextRunProperties,
-  commandName: "setTextRunProperties",
-): void {
-  for (const property of Object.keys(properties)) {
-    if (!EDITABLE_TEXT_RUN_PROPERTY_SET.has(property)) {
-      throw new Error(`${commandName}: unsupported text run property '${property}'`);
-    }
-  }
-  requireBooleanOrUndefined(properties.bold, commandName, "bold");
-  requireBooleanOrUndefined(properties.italic, commandName, "italic");
-  requireBooleanOrUndefined(properties.underline, commandName, "underline");
-  if (
-    properties.fontSize !== undefined &&
-    (!Number.isFinite(properties.fontSize) || properties.fontSize <= 0)
-  ) {
-    throw new Error(`${commandName}: fontSize must be a finite positive pt value`);
-  }
-  if (properties.typeface !== undefined && properties.typeface.trim() === "") {
-    throw new Error(`${commandName}: typeface must be a non-empty string`);
-  }
-  if (properties.color !== undefined) {
-    if (properties.color.kind !== "srgb") {
-      throw new Error(`${commandName}: only srgb text run color is supported`);
-    }
-    if (!/^[0-9A-Fa-f]{6}$/.test(properties.color.hex)) {
-      throw new Error(`${commandName}: color.hex must be a 6-digit hex value`);
-    }
-  }
-}
-
-function requireNonEmptyParagraphPropertySet(
-  properties: EditableParagraphProperties,
-  commandName: "setParagraphProperties",
-): void {
-  if (Object.values(properties).every((value) => value === undefined)) {
-    throw new Error(`${commandName}: properties must contain at least one defined property`);
-  }
-}
-
-function validateParagraphPropertySet(
-  properties: EditableParagraphProperties,
-  commandName: "setParagraphProperties",
-): void {
-  for (const property of Object.keys(properties)) {
-    if (!EDITABLE_PARAGRAPH_PROPERTY_SET.has(property)) {
-      throw new Error(`${commandName}: unsupported paragraph property '${property}'`);
-    }
-  }
-  if (properties.align !== undefined && !PARAGRAPH_ALIGN_VALUES.has(properties.align)) {
-    throw new Error(`${commandName}: align must be left, center, right, or justify`);
-  }
-  if (
-    properties.level !== undefined &&
-    (!Number.isInteger(properties.level) || properties.level < 0 || properties.level > 8)
-  ) {
-    throw new Error(`${commandName}: level must be an integer from 0 to 8`);
-  }
-  if (properties.bullet !== undefined) {
-    validateParagraphBullet(properties.bullet, commandName);
-  }
-}
-
-function validateParagraphBullet(
-  bullet: NonNullable<EditableParagraphProperties["bullet"]>,
-  commandName: "setParagraphProperties",
-): void {
-  if (bullet.type === "none") return;
-  if (bullet.type === "char") {
-    if (bullet.char.length === 0) {
-      throw new Error(`${commandName}: bullet.char must be a non-empty string`);
-    }
-    return;
-  }
-  if (bullet.type === "autoNum") {
-    if (!AUTO_NUM_SCHEMES.has(bullet.scheme)) {
-      throw new Error(`${commandName}: unsupported bullet auto-numbering scheme`);
-    }
-    if (!Number.isInteger(bullet.startAt) || bullet.startAt < 1) {
-      throw new Error(`${commandName}: bullet.startAt must be a positive integer`);
-    }
-    return;
-  }
-  throw new Error(`${commandName}: unsupported bullet type`);
-}
-
-function requireBooleanOrUndefined(
-  value: boolean | undefined,
-  commandName: "setTextRunProperties",
-  fieldName: "bold" | "italic" | "underline",
-): void {
-  if (value !== undefined && typeof value !== "boolean") {
-    throw new Error(`${commandName}: ${fieldName} must be a boolean value`);
-  }
-}
-
-function validateShapeOutline(outline: EditableShapeOutline, commandName: "setShapeOutline"): void {
-  if (outline.width === undefined && outline.fill === undefined) {
-    throw new Error(`${commandName}: outline must set width or fill`);
-  }
-  if (outline.width !== undefined) {
-    requirePositiveFiniteEmu(outline.width, commandName, "width");
-  }
-  if (outline.fill !== undefined) validateShapeFill(outline.fill, commandName);
-}
-
-function validateShapeFill(
-  fill: EditableShapeFill,
-  commandName: "setShapeFill" | "setShapeOutline",
-): void {
-  if (fill.kind === "none") return;
-  if (fill.kind !== "solid") {
-    throw new Error(`${commandName}: only solid and none fills are supported`);
-  }
-  if (fill.color.kind !== "srgb") {
-    throw new Error(`${commandName}: only srgb solid fill colors are supported`);
-  }
-  if (!/^[0-9A-Fa-f]{6}$/.test(fill.color.hex)) {
-    throw new Error(`${commandName}: color.hex must be a 6-digit hex value`);
-  }
-}
-
-function requireEditableShapeTransform(
-  document: PptxSourceModel,
-  handle: SourceHandle,
-  commandName: "moveShape" | "resizeShape" | "setShapeTransform",
-): SourceTransform {
-  const shape = findShapeNodeBySourceHandle(document, handle);
-  if (shape === undefined) {
-    throw new Error(`${commandName}: shape handle was not found in PptxSourceModel source`);
-  }
-  if (!hasTransform(shape)) {
-    throw new Error(`${commandName}: shape handle does not reference a shape with xfrm`);
-  }
-  return shape.transform;
-}
-
-function requireFiniteEmu(
-  value: Emu,
-  commandName:
-    | "moveShape"
-    | "resizeShape"
-    | "setShapeTransform"
-    | "setShapeOutline"
-    | "addTextBox"
-    | "addConnector",
-  fieldName: string,
-): void {
-  if (!Number.isFinite(value)) {
-    throw new Error(`${commandName}: ${fieldName} must be a finite EMU value`);
-  }
-}
-
-function requirePositiveFiniteEmu(
-  value: Emu,
-  commandName:
-    | "moveShape"
-    | "resizeShape"
-    | "setShapeTransform"
-    | "setShapeOutline"
-    | "addTextBox"
-    | "addConnector",
-  fieldName: string,
-): void {
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new Error(`${commandName}: ${fieldName} must be a finite positive EMU value`);
-  }
-}
-
-function hasTransform(shape: SourceShapeNode): shape is SourceShapeNode & {
-  readonly transform: SourceTransform;
-} {
-  return shape.kind !== "raw" && shape.transform !== undefined;
 }
 
 function normalizeEditorEdits(document: PptxSourceModel): PptxSourceModel {
