@@ -44,23 +44,20 @@ export function attemptCommand(
   try {
     return { ok: true, document: operation() };
   } catch (cause) {
-    if (
-      !(cause instanceof Error) ||
-      !expectedRejectionPrefixes.some((prefix) => cause.message.startsWith(prefix))
-    ) {
-      throw cause;
-    }
-    return {
-      ok: false,
-      code: "invalid-command",
-      message: cause.message,
-      cause,
-    };
+    return invalidCommandFailure(expectedRejectionPrefixes, cause);
   }
 }
 
-export function invalidCommandFailure(cause: unknown): EditorOperationFailure<"invalid-command"> {
-  if (!(cause instanceof Error)) throw cause;
+export function invalidCommandFailure(
+  expectedRejectionPrefixes: readonly string[],
+  cause: unknown,
+): EditorOperationFailure<"invalid-command"> {
+  if (
+    !(cause instanceof Error) ||
+    !expectedRejectionPrefixes.some((prefix) => cause.message.startsWith(prefix))
+  ) {
+    throw cause;
+  }
   return {
     ok: false,
     code: "invalid-command",

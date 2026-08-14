@@ -56,7 +56,7 @@ import type {
 import { invalidCommandFailure } from "./command-contract.js";
 import {
   applyCommandToDocument,
-  type EditorCommand,
+  type EditorCommand as CommandEditorCommand,
   type GroupableSourceShape,
 } from "./commands/index.js";
 
@@ -76,7 +76,6 @@ export type {
   DeleteShapeCommand,
   DeleteSlideCommand,
   DuplicateSlideCommand,
-  EditorCommand,
   GroupableSourceShape,
   GroupShapesCommand,
   MoveShapeCommand,
@@ -146,6 +145,8 @@ export type {
  * @inlineType AddConnectorConnectionEndpointInput
  * @inlineType AddConnectorOutlineInput
  */
+export type EditorCommand = CommandEditorCommand;
+
 export type EditorHistoryResult =
   | {
       readonly ok: true;
@@ -579,6 +580,7 @@ export class EditorSession {
     );
     if (crossSlideMoveIndex >= 0 && crossSlideMoveIndex !== commands.length - 1) {
       return invalidCommandFailure(
+        EXPECTED_BATCH_REJECTION_PREFIXES,
         new Error("moveShapesAcrossSlides: command must be last in an atomic batch"),
       );
     }
@@ -596,7 +598,7 @@ export class EditorSession {
     try {
       assertNoConflictingParagraphAndRunEdits(after.edits);
     } catch (cause) {
-      return invalidCommandFailure(cause);
+      return invalidCommandFailure(EXPECTED_BATCH_REJECTION_PREFIXES, cause);
     }
     after = normalizeEditorEdits(after);
     const dedupedWarnings = dedupeCommandWarnings(warnings);
@@ -727,6 +729,12 @@ export class EditorSession {
     return this.apply(createCommand(node.handle));
   }
 }
+
+const EXPECTED_BATCH_REJECTION_PREFIXES = [
+  "moveShapesAcrossSlides:",
+  "replaceTextRunPlainText:",
+  "updateTextRunProperties:",
+] as const;
 
 export function createEditorSession(document: PptxSourceModel): EditorSession {
   return new EditorSession(document);

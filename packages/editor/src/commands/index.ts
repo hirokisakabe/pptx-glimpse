@@ -25,8 +25,8 @@ export type EditorCommand =
 
 /**
  * Runtime acceptance, domain dispatch, and expected-rejection classification share this one
- * exhaustive switch. Adding a union member without a matching case fails type checking because
- * the function would no longer return an ApplyCommandAttempt on every path.
+ * exhaustive switch. The never assignment after the switch makes a missing union member fail
+ * type checking while the terminal TypeError still rejects unknown kinds from untyped callers.
  */
 export function applyCommandToDocument(
   document: PptxSourceModel,
@@ -70,5 +70,7 @@ export function applyCommandToDocument(
     case "updateThemeScheme":
       return applyThemeCommand(document, command);
   }
+  const exhaustiveCommand: never = command;
+  void exhaustiveCommand;
   throw new TypeError(`EditorSession: unsupported command kind '${String(runtimeKind)}'`);
 }
