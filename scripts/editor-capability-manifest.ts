@@ -1,0 +1,309 @@
+export type CapabilityStatus =
+  | { readonly kind: "supported"; readonly evidence: readonly string[] }
+  | { readonly kind: "intentional"; readonly reason: string }
+  | { readonly kind: "tracked"; readonly issue: number; readonly reason: string };
+
+export interface EditorCapability {
+  readonly capability: string;
+  readonly documentApis: readonly string[];
+  readonly editorCommands: readonly string[];
+  readonly document: CapabilityStatus;
+  readonly editor: CapabilityStatus;
+  readonly core: CapabilityStatus;
+  readonly ui: CapabilityStatus;
+}
+
+const supported = (...evidence: string[]): CapabilityStatus => ({ kind: "supported", evidence });
+const intentional = (reason: string): CapabilityStatus => ({ kind: "intentional", reason });
+const tracked = (issue: number, reason: string): CapabilityStatus => ({
+  kind: "tracked",
+  issue,
+  reason,
+});
+
+const DOCUMENT_ROOT = "packages/document/src/index.ts";
+const EDITOR_ROOT = "packages/editor/src/index.ts";
+const CORE_SESSION = "packages/core/src/pptx-editor-session.ts";
+const REACT_EDITOR = "packages/editor-react/src/PptxEditor.tsx";
+
+export const EDITOR_CAPABILITIES: readonly EditorCapability[] = [
+  {
+    capability: "Presentation authoring",
+    documentApis: ["createPptx", "createPptxAuthoringSession"],
+    editorCommands: [],
+    document: supported(DOCUMENT_ROOT),
+    editor: intentional("From-scratch presentation construction stays in the document layer."),
+    core: intentional("Core edits an already opened presentation."),
+    ui: intentional("The reusable editor UI edits a consumer-owned session."),
+  },
+  {
+    capability: "Text content and formatting",
+    documentApis: [
+      "replaceTextRunPlainText",
+      "replaceParagraphPlainText",
+      "setTextRunProperties",
+      "clearTextRunProperties",
+      "setParagraphProperties",
+      "clearParagraphProperties",
+    ],
+    editorCommands: [
+      "replaceTextRunPlainText",
+      "replaceParagraphPlainText",
+      "setTextRunProperties",
+      "clearTextRunProperties",
+      "setParagraphProperties",
+      "clearParagraphProperties",
+    ],
+    document: supported(DOCUMENT_ROOT),
+    editor: supported(EDITOR_ROOT),
+    core: supported(`${CORE_SESSION}#apply`),
+    ui: supported(REACT_EDITOR),
+  },
+  {
+    capability: "Shape transform",
+    documentApis: ["updateShapeTransform"],
+    editorCommands: ["moveShape", "resizeShape", "setShapeTransform"],
+    document: supported(DOCUMENT_ROOT),
+    editor: supported(EDITOR_ROOT),
+    core: supported(`${CORE_SESSION}#apply`),
+    ui: supported(REACT_EDITOR),
+  },
+  {
+    capability: "Shape fill and outline",
+    documentApis: ["setShapeFill", "setShapeOutline"],
+    editorCommands: ["setShapeFill", "setShapeOutline"],
+    document: supported(DOCUMENT_ROOT),
+    editor: supported(EDITOR_ROOT),
+    core: supported(`${CORE_SESSION}#apply`),
+    ui: intentional("The current toolbar exposes text formatting, not general shape styling."),
+  },
+  {
+    capability: "Generic drawing authoring (shape/picture/table/chart)",
+    documentApis: ["addShape", "addPicture", "addTable", "addChart"],
+    editorCommands: [],
+    document: supported(DOCUMENT_ROOT),
+    editor: intentional("The command layer exposes focused interactive authoring operations only."),
+    core: intentional("Generic document construction remains a lower-level document workflow."),
+    ui: intentional("A general-purpose drawing insertion UI is outside the reusable editor scope."),
+  },
+  {
+    capability: "Text box authoring",
+    documentApis: ["addTextBox"],
+    editorCommands: ["addTextBox"],
+    document: supported(DOCUMENT_ROOT),
+    editor: supported(EDITOR_ROOT),
+    core: supported(`${CORE_SESSION}#addTextBox`),
+    ui: supported(REACT_EDITOR),
+  },
+  {
+    capability: "Connector authoring",
+    documentApis: ["addConnector"],
+    editorCommands: ["addConnector"],
+    document: supported(DOCUMENT_ROOT),
+    editor: supported(EDITOR_ROOT),
+    core: supported(`${CORE_SESSION}#addConnector`),
+    ui: intentional("The current toolbar has no connector insertion control."),
+  },
+  {
+    capability: "Delete drawing",
+    documentApis: ["deleteShape"],
+    editorCommands: ["deleteShape"],
+    document: supported(DOCUMENT_ROOT),
+    editor: supported(EDITOR_ROOT),
+    core: supported(`${CORE_SESSION}#deleteShape`),
+    ui: supported(REACT_EDITOR),
+  },
+  {
+    capability: "Group / ungroup",
+    documentApis: ["groupShapes", "ungroupShape"],
+    editorCommands: ["groupShapes", "ungroupShape"],
+    document: supported(DOCUMENT_ROOT),
+    editor: supported(EDITOR_ROOT),
+    core: supported(`${CORE_SESSION}#groupShapes`, `${CORE_SESSION}#ungroupShape`),
+    ui: tracked(818, "Multiple selection and group/ungroup UI are planned."),
+  },
+  {
+    capability: "Move drawings within/across containers",
+    documentApis: ["moveShapes", "moveShapesAcrossSlides"],
+    editorCommands: ["moveShapes", "moveShapesAcrossSlides"],
+    document: supported(DOCUMENT_ROOT),
+    editor: supported(EDITOR_ROOT),
+    core: supported(`${CORE_SESSION}#moveShapes`, `${CORE_SESSION}#moveShapesAcrossSlides`),
+    ui: intentional("Direct manipulation currently moves one shape; container transfer has no UI."),
+  },
+  {
+    capability: "Drawing reorder",
+    documentApis: ["reorderShapes"],
+    editorCommands: [],
+    document: supported(DOCUMENT_ROOT),
+    editor: intentional("Editor uses partial move commands instead of the complete-order API."),
+    core: intentional("Core follows the editor partial-move contract."),
+    ui: intentional("Drawing z-order controls are not part of the current UI."),
+  },
+  {
+    capability: "Replace picture media",
+    documentApis: ["replaceImageBytes"],
+    editorCommands: ["replaceImage"],
+    document: supported(DOCUMENT_ROOT),
+    editor: supported(EDITOR_ROOT),
+    core: supported(`${CORE_SESSION}#apply`),
+    ui: supported(REACT_EDITOR),
+  },
+  {
+    capability: "Picture crop",
+    documentApis: ["setPictureCrop", "clearPictureCrop"],
+    editorCommands: ["setPictureCrop", "clearPictureCrop"],
+    document: supported(DOCUMENT_ROOT),
+    editor: supported(EDITOR_ROOT),
+    core: supported(`${CORE_SESSION}#apply`),
+    ui: intentional("Picture crop controls have not been adopted by the reusable UI."),
+  },
+  {
+    capability: "Table cell properties",
+    documentApis: ["setTableCellProperties", "clearTableCellProperties"],
+    editorCommands: [],
+    document: supported(DOCUMENT_ROOT),
+    editor: tracked(846, "Table cell/range commands are planned with the React table editor."),
+    core: tracked(846, "Public-session table editing is part of the tracked integration."),
+    ui: tracked(846, "Table cell selection and editing UI are planned."),
+  },
+  {
+    capability: "Chart data",
+    documentApis: ["updateChartData", "updateScatterChartData", "updateBubbleChartData"],
+    editorCommands: ["updateChartData", "updateScatterChartData", "updateBubbleChartData"],
+    document: supported(DOCUMENT_ROOT),
+    editor: supported(EDITOR_ROOT),
+    core: supported(`${CORE_SESSION}#apply`),
+    ui: tracked(847, "Chart data and formatting UI are planned."),
+  },
+  {
+    capability: "Slide/master/layout background",
+    documentApis: ["setBackground", "clearBackground", "setSlideBackground"],
+    editorCommands: [],
+    document: supported(DOCUMENT_ROOT),
+    editor: tracked(848, "Background commands are planned."),
+    core: tracked(848, "Affected-slide rendering for background edits is planned."),
+    ui: tracked(848, "Background source display and editing UI are planned."),
+  },
+  {
+    capability: "Theme color/font scheme",
+    documentApis: ["updateThemeScheme"],
+    editorCommands: ["updateThemeScheme"],
+    document: supported(DOCUMENT_ROOT),
+    editor: supported(EDITOR_ROOT),
+    core: supported(`${CORE_SESSION}#updateThemeScheme`),
+    ui: intentional("Theme scheme controls are not part of the current editor UI."),
+  },
+  {
+    capability: "Add slide from layout",
+    documentApis: ["addEmptySlideFromLayout"],
+    editorCommands: ["addEmptySlideFromLayout"],
+    document: supported(DOCUMENT_ROOT),
+    editor: supported(EDITOR_ROOT),
+    core: supported(`${CORE_SESSION}#apply`),
+    ui: supported(REACT_EDITOR),
+  },
+  {
+    capability: "Slide duplicate/move/delete",
+    documentApis: ["duplicateSlide", "moveSlide", "deleteSlide"],
+    editorCommands: ["duplicateSlide", "moveSlide", "deleteSlide"],
+    document: supported(DOCUMENT_ROOT),
+    editor: supported(EDITOR_ROOT),
+    core: supported(`${CORE_SESSION}#apply`),
+    ui: supported(REACT_EDITOR),
+  },
+  {
+    capability: "Layout authoring / cloning",
+    documentApis: ["addSlideLayout", "cloneSlideLayout"],
+    editorCommands: [],
+    document: supported(DOCUMENT_ROOT),
+    editor: intentional("Template authoring remains a document-layer workflow."),
+    core: intentional("Core exposes template catalog/preview, not template construction."),
+    ui: intentional("The layout picker consumes existing layouts only."),
+  },
+  {
+    capability: "Placeholder authoring",
+    documentApis: ["addPlaceholder"],
+    editorCommands: [],
+    document: supported(DOCUMENT_ROOT),
+    editor: intentional("Placeholder construction remains a document-layer workflow."),
+    core: intentional("Core does not materialize template placeholders."),
+    ui: intentional("The reusable UI does not author master/layout placeholders."),
+  },
+  {
+    capability: "Slide-number placeholder authoring",
+    documentApis: ["addSlideNumber"],
+    editorCommands: [],
+    document: supported(DOCUMENT_ROOT),
+    editor: intentional("Template placeholder construction remains in the document layer."),
+    core: intentional("Core does not author template placeholders."),
+    ui: intentional("The reusable UI does not author slide-number placeholders."),
+  },
+] as const;
+
+export const DOCUMENT_NON_CAPABILITY_EXPORTS = [
+  "PptxAuthoringSession",
+  "asEmu",
+  "asHundredthPt",
+  "asOoxmlAngle",
+  "asOoxmlPercent",
+  "asPartPath",
+  "asPt",
+  "asRawSidecarId",
+  "asRelationshipId",
+  "asSourceNodeId",
+  "countImageReferencesToMedia",
+  "createComputedTemplateView",
+  "createComputedView",
+  "findParagraphBySourceHandle",
+  "findShapeNodeBySourceHandle",
+  "findTextRunBySourceHandle",
+  "readPptx",
+  "writePptx",
+] as const;
+
+export const CORE_SESSION_NON_CAPABILITY_MEMBERS = [
+  "create",
+  "document",
+  "history",
+  "layoutCatalog",
+  "previewLayoutCatalogTarget",
+  "redo",
+  "renderCurrentSlides",
+  "response",
+  "save",
+  "selectShape",
+  "selection",
+  "shapes",
+  "slides",
+  "undo",
+] as const;
+
+export const CORE_SESSION_CAPABILITY_MEMBERS = [
+  "addConnector",
+  "addTextBox",
+  "apply",
+  "applyAll",
+  "deleteSelectedShape",
+  "deleteShape",
+  "groupShapes",
+  "moveShapes",
+  "moveShapesAcrossSlides",
+  "ungroupShape",
+  "updateThemeScheme",
+] as const;
+
+export const UI_DIRECT_CORE_CAPABILITY_MEMBERS = ["addTextBox"] as const;
+
+export const UI_EDITOR_COMMAND_KINDS = [
+  "addEmptySlideFromLayout",
+  "clearTextRunProperties",
+  "deleteShape",
+  "deleteSlide",
+  "duplicateSlide",
+  "moveSlide",
+  "replaceImage",
+  "replaceTextRunPlainText",
+  "setShapeTransform",
+  "setTextRunProperties",
+] as const;

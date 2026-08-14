@@ -74,6 +74,12 @@ module-level comments in `packages/document/src/source/pptx-source-model.ts`,
 
 When adding or changing a `@pptx-glimpse/document` reader, computed view, from-scratch writer, existing-element edit, or round-trip preservation capability, update `packages/document/docs/feature-support.md` in the same change. Base every `S` entry on a public root API and an implementation test; use `△`, `P`, or `—` when support is constrained, preservation-only, or unverified, and keep the linked constraints/evidence current.
 
+When adding or changing a public document mutation/authoring API, `EditorCommand`, public
+`PptxEditorSession` capability, or `@pptx-glimpse/editor-react` editing operation, update
+`scripts/editor-capability-manifest.ts` and `docs/development/editor-capability-matrix.md` in the
+same change. Every layer must remain classified as supported, an intentional boundary, or tracked
+by an existing issue; `scripts/validate-editor-capabilities.test.ts` enforces the update gate.
+
 Read [`docs/development/type-assertions.md`](docs/development/type-assertions.md) before
 adding or changing a type assertion, an `unsafe*Assertion` helper, parser/external boundary
 narrowing, a branded constructor, or the ESLint assertion rules. Update the policy when the
