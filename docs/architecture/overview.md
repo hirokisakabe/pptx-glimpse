@@ -74,7 +74,9 @@ can remain available for preservation or diagnostics without becoming a renderer
 `packages/editor` is a UI-independent command layer over `@pptx-glimpse/document`. It owns
 validated commands, selection, warnings, and undo/redo history. It does not own PPTX
 parsing/writing, rendering, or application UI. Its public API is the root entry point in
-`packages/editor/src/index.ts`.
+`packages/editor/src/index.ts`, which remains a facade over domain-owned command types and
+handlers in `packages/editor/src/commands/`. Selection, history, warning aggregation, and edit
+normalization remain shared session policies rather than domain-handler responsibilities.
 
 Expected editor failures, high-level typed errors, integration wrapping, warnings, and
 atomicity are specified in the focused [editor error contract](../editor-error-contract.md).
