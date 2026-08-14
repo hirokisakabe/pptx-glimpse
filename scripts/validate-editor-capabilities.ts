@@ -3,12 +3,10 @@ import { fileURLToPath } from "node:url";
 
 import {
   type CapabilityStatus,
-  CORE_SESSION_CAPABILITY_MEMBERS,
   CORE_SESSION_NON_CAPABILITY_MEMBERS,
   DOCUMENT_NON_CAPABILITY_EXPORTS,
   EDITOR_CAPABILITIES,
-  UI_DIRECT_CORE_CAPABILITY_MEMBERS,
-  UI_EDITOR_COMMAND_KINDS,
+  type EditorCapability,
 } from "./editor-capability-manifest.js";
 
 const REPOSITORY_ROOT = fileURLToPath(new URL("../", import.meta.url));
@@ -23,8 +21,12 @@ export interface CapabilitySources {
 
 export function validateEditorCapabilities(sources: CapabilitySources): readonly string[] {
   const errors: string[] = [];
+  errors.push(...validateEditorCapabilityManifest(EDITOR_CAPABILITIES));
   const documentApis = EDITOR_CAPABILITIES.flatMap((entry) => entry.documentApis);
   const editorCommands = EDITOR_CAPABILITIES.flatMap((entry) => entry.editorCommands);
+  const coreMembers = EDITOR_CAPABILITIES.flatMap((entry) => entry.coreMembers);
+  const uiCommandKinds = EDITOR_CAPABILITIES.flatMap((entry) => entry.uiCommandKinds);
+  const uiCoreMembers = EDITOR_CAPABILITIES.flatMap((entry) => entry.uiCoreMembers);
   const publicDocumentExports = extractNamedValueExports(sources.documentRoot);
   compareSets(
     "document public value exports",
@@ -40,27 +42,19 @@ export function validateEditorCapabilities(sources: CapabilitySources): readonly
   compareSets(
     "PptxEditorSession public members",
     publicCoreMembers,
-    [...CORE_SESSION_CAPABILITY_MEMBERS, ...CORE_SESSION_NON_CAPABILITY_MEMBERS],
+    [...coreMembers, ...CORE_SESSION_NON_CAPABILITY_MEMBERS],
     errors,
   );
 
-  const uiCommandKinds = extractStringKinds(sources.reactSources).filter((kind) =>
+  const publicUiCommandKinds = extractStringKinds(sources.reactSources).filter((kind) =>
     publicEditorCommands.includes(kind),
   );
-  compareSets("editor-react command kinds", uiCommandKinds, UI_EDITOR_COMMAND_KINDS, errors);
+  compareSets("editor-react command kinds", publicUiCommandKinds, uiCommandKinds, errors);
 
-  const uiCoreCalls = extractSessionCalls(sources.reactSources).filter(
-    (member) =>
-      CORE_SESSION_CAPABILITY_MEMBERS.includes(member) &&
-      member !== "apply" &&
-      member !== "applyAll",
+  const uiCoreCalls = extractSessionCalls(sources.reactSources).filter((member) =>
+    coreMembers.includes(member),
   );
-  compareSets(
-    "editor-react direct core capability calls",
-    uiCoreCalls,
-    UI_DIRECT_CORE_CAPABILITY_MEMBERS,
-    errors,
-  );
+  compareSets("editor-react direct core capability calls", uiCoreCalls, uiCoreMembers, errors);
 
   const generatedMatrix = renderEditorCapabilityMatrix();
   if (sources.matrixDocument !== generatedMatrix) {
@@ -69,6 +63,88 @@ export function validateEditorCapabilities(sources: CapabilitySources): readonly
     );
   }
   return errors;
+}
+
+export function validateEditorCapabilityManifest(
+  capabilities: readonly EditorCapability[],
+): readonly string[] {
+  const errors: string[] = [];
+  reportDuplicates(
+    "capability names",
+    capabilities.map((entry) => entry.capability),
+    errors,
+  );
+  for (const field of [
+    "documentApis",
+    "editorCommands",
+    "coreMembers",
+    "uiCommandKinds",
+    "uiCoreMembers",
+  ] as const) {
+    reportDuplicates(
+      `${field} ownership`,
+      capabilities.flatMap((entry) => entry[field]),
+      errors,
+    );
+  }
+
+  for (const entry of capabilities) {
+    validateStatus(entry, "document", entry.documentApis.length > 0, errors);
+    validateStatus(entry, "editor", entry.editorCommands.length > 0, errors);
+    validateStatus(
+      entry,
+      "core",
+      entry.editorCommands.length > 0 || entry.coreMembers.length > 0,
+      errors,
+    );
+    validateStatus(
+      entry,
+      "ui",
+      entry.uiCommandKinds.length > 0 || entry.uiCoreMembers.length > 0,
+      errors,
+    );
+    for (const kind of entry.uiCommandKinds) {
+      if (!entry.editorCommands.includes(kind)) {
+        errors.push(
+          `${entry.capability}: uiCommandKinds member ${kind} is not owned by editorCommands.`,
+        );
+      }
+    }
+    for (const member of entry.uiCoreMembers) {
+      if (!entry.coreMembers.includes(member)) {
+        errors.push(
+          `${entry.capability}: uiCoreMembers member ${member} is not owned by coreMembers.`,
+        );
+      }
+    }
+  }
+  return errors;
+}
+
+function validateStatus(
+  entry: EditorCapability,
+  layer: "document" | "editor" | "core" | "ui",
+  hasCapability: boolean,
+  errors: string[],
+): void {
+  const supported = entry[layer].kind === "supported";
+  if (supported !== hasCapability) {
+    errors.push(
+      `${entry.capability}: ${layer} status is ${entry[layer].kind} but row metadata is ${hasCapability ? "present" : "empty"}.`,
+    );
+  }
+}
+
+function reportDuplicates(label: string, values: readonly string[], errors: string[]): void {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const value of values) {
+    if (seen.has(value)) duplicates.add(value);
+    seen.add(value);
+  }
+  if (duplicates.size > 0) {
+    errors.push(`${label}: duplicate: ${[...duplicates].sort().join(", ")}`);
+  }
 }
 
 function renderEditorCapabilityMatrix(): string {
@@ -169,7 +245,7 @@ export function extractCoreSessionMembers(source: string): readonly string[] {
   const classEnd = source.indexOf("\nfunction buildLayoutCatalog", classStart);
   const classSource = source.slice(classStart, classEnd === -1 ? undefined : classEnd);
   const members = [
-    ...classSource.matchAll(/^  (?:static )?(?:async )?(?:get )?([A-Za-z][A-Za-z0-9]*)\s*\(/gmu),
+    ...classSource.matchAll(/^  (?:(?:public|static|async|get)\s+)*([A-Za-z][A-Za-z0-9]*)\s*\(/gmu),
   ]
     .flatMap((match) => (match[1] === undefined ? [] : [match[1]]))
     .filter((name) => name !== "constructor");
