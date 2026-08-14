@@ -1,12 +1,13 @@
 import type { PptxSourceModel } from "@pptx-glimpse/document";
 
 import type { ApplyCommandAttempt } from "../command-contract.js";
-import { applyChartCommand, type ChartEditorCommand } from "./chart.js";
-import { applyDrawingCommand, type DrawingEditorCommand } from "./drawing.js";
-import { applyMediaCommand, type MediaEditorCommand } from "./media.js";
-import { applySlideCommand, type SlideEditorCommand } from "./slide.js";
-import { applyTextCommand, type TextEditorCommand } from "./text.js";
-import { applyThemeCommand, type ThemeEditorCommand } from "./theme.js";
+import type { EditorCommand } from "../index.js";
+import { applyChartCommand } from "./chart.js";
+import { applyDrawingCommand } from "./drawing.js";
+import { applyMediaCommand } from "./media.js";
+import { applySlideCommand } from "./slide.js";
+import { applyTextCommand } from "./text.js";
+import { applyThemeCommand } from "./theme.js";
 
 export type * from "./chart.js";
 export type * from "./drawing.js";
@@ -14,14 +15,6 @@ export type * from "./media.js";
 export type * from "./slide.js";
 export type * from "./text.js";
 export type * from "./theme.js";
-
-export type EditorCommand =
-  | TextEditorCommand
-  | DrawingEditorCommand
-  | MediaEditorCommand
-  | ChartEditorCommand
-  | SlideEditorCommand
-  | ThemeEditorCommand;
 
 /**
  * Runtime acceptance, domain dispatch, and expected-rejection classification share this one

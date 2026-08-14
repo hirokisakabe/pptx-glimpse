@@ -54,11 +54,46 @@ import type {
   EditorOperationFailure,
 } from "./command-contract.js";
 import { invalidCommandFailure } from "./command-contract.js";
-import {
-  applyCommandToDocument,
-  type EditorCommand as CommandEditorCommand,
-  type GroupableSourceShape,
-} from "./commands/index.js";
+import type {
+  UpdateBubbleChartDataCommand,
+  UpdateChartDataCommand,
+  UpdateScatterChartDataCommand,
+} from "./commands/chart.js";
+import type {
+  AddConnectorCommand,
+  AddTextBoxCommand,
+  DeleteShapeCommand,
+  GroupShapesCommand,
+  MoveShapeCommand,
+  MoveShapesAcrossSlidesCommand,
+  MoveShapesCommand,
+  ResizeShapeCommand,
+  SetShapeFillCommand,
+  SetShapeOutlineCommand,
+  SetShapeTransformCommand,
+  UngroupShapeCommand,
+} from "./commands/drawing.js";
+import { applyCommandToDocument, type GroupableSourceShape } from "./commands/index.js";
+import type {
+  ClearPictureCropCommand,
+  ReplaceImageCommand,
+  SetPictureCropCommand,
+} from "./commands/media.js";
+import type {
+  AddEmptySlideFromLayoutCommand,
+  DeleteSlideCommand,
+  DuplicateSlideCommand,
+  MoveSlideCommand,
+} from "./commands/slide.js";
+import type {
+  ClearParagraphPropertiesCommand,
+  ClearTextRunPropertiesCommand,
+  ReplaceParagraphPlainTextCommand,
+  ReplaceTextRunPlainTextCommand,
+  SetParagraphPropertiesCommand,
+  SetTextRunPropertiesCommand,
+} from "./commands/text.js";
+import type { UpdateThemeSchemeCommand } from "./commands/theme.js";
 
 export type {
   EditorApplyCommandResult,
@@ -98,6 +133,68 @@ export type {
   UpdateScatterChartDataCommand,
   UpdateThemeSchemeCommand,
 } from "./commands/index.js";
+
+// TypeDoc discovers @inline metadata through symbols declared in this public facade. These
+// private aliases keep the re-exported EditorCommand page expanded while implementation and
+// validation ownership remains in commands/.
+/** @inline */
+type RootReplaceTextRunPlainTextCommand = ReplaceTextRunPlainTextCommand;
+/** @inline */
+type RootReplaceParagraphPlainTextCommand = ReplaceParagraphPlainTextCommand;
+/** @inline */
+type RootSetTextRunPropertiesCommand = SetTextRunPropertiesCommand;
+/** @inline */
+type RootClearTextRunPropertiesCommand = ClearTextRunPropertiesCommand;
+/** @inline */
+type RootSetParagraphPropertiesCommand = SetParagraphPropertiesCommand;
+/** @inline */
+type RootClearParagraphPropertiesCommand = ClearParagraphPropertiesCommand;
+/** @inline */
+type RootMoveShapeCommand = MoveShapeCommand;
+/** @inline */
+type RootResizeShapeCommand = ResizeShapeCommand;
+/** @inline */
+type RootSetShapeTransformCommand = SetShapeTransformCommand;
+/** @inline */
+type RootSetShapeFillCommand = SetShapeFillCommand;
+/** @inline */
+type RootSetShapeOutlineCommand = SetShapeOutlineCommand;
+/** @inline */
+type RootAddTextBoxCommand = AddTextBoxCommand;
+/** @inline */
+type RootAddConnectorCommand = AddConnectorCommand;
+/** @inline */
+type RootDeleteShapeCommand = DeleteShapeCommand;
+/** @inline */
+type RootGroupShapesCommand = GroupShapesCommand;
+/** @inline */
+type RootMoveShapesCommand = MoveShapesCommand;
+/** @inline */
+type RootMoveShapesAcrossSlidesCommand = MoveShapesAcrossSlidesCommand;
+/** @inline */
+type RootUngroupShapeCommand = UngroupShapeCommand;
+/** @inline */
+type RootReplaceImageCommand = ReplaceImageCommand;
+/** @inline */
+type RootSetPictureCropCommand = SetPictureCropCommand;
+/** @inline */
+type RootClearPictureCropCommand = ClearPictureCropCommand;
+/** @inline */
+type RootUpdateChartDataCommand = UpdateChartDataCommand;
+/** @inline */
+type RootUpdateScatterChartDataCommand = UpdateScatterChartDataCommand;
+/** @inline */
+type RootUpdateBubbleChartDataCommand = UpdateBubbleChartDataCommand;
+/** @inline */
+type RootAddEmptySlideFromLayoutCommand = AddEmptySlideFromLayoutCommand;
+/** @inline */
+type RootDuplicateSlideCommand = DuplicateSlideCommand;
+/** @inline */
+type RootMoveSlideCommand = MoveSlideCommand;
+/** @inline */
+type RootDeleteSlideCommand = DeleteSlideCommand;
+/** @inline */
+type RootUpdateThemeSchemeCommand = UpdateThemeSchemeCommand;
 
 /**
  * All commands accepted by the high-level `apply` and `applyAll` APIs.
@@ -145,7 +242,36 @@ export type {
  * @inlineType AddConnectorConnectionEndpointInput
  * @inlineType AddConnectorOutlineInput
  */
-export type EditorCommand = CommandEditorCommand;
+export type EditorCommand =
+  | RootReplaceTextRunPlainTextCommand
+  | RootReplaceParagraphPlainTextCommand
+  | RootSetTextRunPropertiesCommand
+  | RootClearTextRunPropertiesCommand
+  | RootSetParagraphPropertiesCommand
+  | RootClearParagraphPropertiesCommand
+  | RootMoveShapeCommand
+  | RootResizeShapeCommand
+  | RootSetShapeTransformCommand
+  | RootSetShapeFillCommand
+  | RootSetShapeOutlineCommand
+  | RootAddTextBoxCommand
+  | RootAddConnectorCommand
+  | RootDeleteShapeCommand
+  | RootGroupShapesCommand
+  | RootMoveShapesCommand
+  | RootMoveShapesAcrossSlidesCommand
+  | RootUngroupShapeCommand
+  | RootReplaceImageCommand
+  | RootSetPictureCropCommand
+  | RootClearPictureCropCommand
+  | RootUpdateChartDataCommand
+  | RootUpdateScatterChartDataCommand
+  | RootUpdateBubbleChartDataCommand
+  | RootAddEmptySlideFromLayoutCommand
+  | RootDuplicateSlideCommand
+  | RootMoveSlideCommand
+  | RootDeleteSlideCommand
+  | RootUpdateThemeSchemeCommand;
 
 export type EditorHistoryResult =
   | {
