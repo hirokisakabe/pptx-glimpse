@@ -9,7 +9,7 @@ import {
   type SourceHandle,
 } from "@pptx-glimpse/document";
 
-import { type ApplyCommandAttempt,attemptCommand } from "../command-contract.js";
+import { type ApplyCommandAttempt, attemptCommand } from "../command-contract.js";
 
 /** Add an empty slide based on an existing layout. @inline */
 export interface AddEmptySlideFromLayoutCommand extends AddEmptySlideFromLayoutInput {

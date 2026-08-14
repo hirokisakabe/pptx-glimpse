@@ -13,7 +13,7 @@ import {
   type SourceHandle,
 } from "@pptx-glimpse/document";
 
-import { type ApplyCommandAttempt,attemptCommand } from "../command-contract.js";
+import { type ApplyCommandAttempt, attemptCommand } from "../command-contract.js";
 
 /** Replace the text of one source run. @inline */
 export interface ReplaceTextRunPlainTextCommand {

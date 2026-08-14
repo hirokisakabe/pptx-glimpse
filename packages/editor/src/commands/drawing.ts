@@ -27,7 +27,7 @@ import {
   updateShapeTransform,
 } from "@pptx-glimpse/document";
 
-import { type ApplyCommandAttempt,attemptCommand } from "../command-contract.js";
+import { type ApplyCommandAttempt, attemptCommand } from "../command-contract.js";
 
 /** Move one shape without resizing it. @inline */
 export interface MoveShapeCommand {
