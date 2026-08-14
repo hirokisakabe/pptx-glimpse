@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import {
@@ -51,7 +51,7 @@ export function validateEditorCapabilities(sources: CapabilitySources): readonly
   );
   compareSets("editor-react command kinds", publicUiCommandKinds, uiCommandKinds, errors);
 
-  const uiCoreCalls = extractSessionCalls(sources.reactSources).filter((member) =>
+  const uiCoreCalls = extractMemberCalls(sources.reactSources).filter((member) =>
     coreMembers.includes(member),
   );
   compareSets("editor-react direct core capability calls", uiCoreCalls, uiCoreMembers, errors);
@@ -225,19 +225,36 @@ export function extractNamedValueExports(source: string): readonly string[] {
 export function extractEditorCommandKinds(source: string): readonly string[] {
   const union = source.match(/export type EditorCommand\s*=([\s\S]*?);/u)?.[1];
   if (union === undefined) return [];
-  const interfaceNames = [...union.matchAll(/\b([A-Z][A-Za-z0-9]*Command)\b/gu)].flatMap((match) =>
-    match[1] === undefined ? [] : [match[1]],
-  );
-  return uniqueSorted(
-    interfaceNames.flatMap((name) => {
-      const expression = new RegExp(
-        `export interface ${name}(?:\\s+extends[^\\{]+)?\\s*\\{[\\s\\S]*?readonly kind: "([^"]+)";`,
-        "u",
-      );
-      const kind = source.match(expression)?.[1];
-      return kind === undefined ? [] : [kind];
-    }),
-  );
+  const aliases = new Map<string, string>();
+  for (const match of source.matchAll(
+    /(?:export\s+)?type\s+([A-Z][A-Za-z0-9]*)\s*=([\s\S]*?);/gu,
+  )) {
+    const [, name, expression] = match;
+    if (name !== undefined && expression !== undefined) aliases.set(name, expression);
+  }
+  const kinds = new Map<string, string>();
+  for (const match of source.matchAll(
+    /export interface\s+([A-Z][A-Za-z0-9]*Command)(?:\s+extends[^\{]+)?\s*\{[\s\S]*?readonly kind:\s*"([^"]+)";/gu,
+  )) {
+    const [, name, kind] = match;
+    if (name !== undefined && kind !== undefined) kinds.set(name, kind);
+  }
+
+  const resolvedKinds = new Set<string>();
+  const visited = new Set<string>();
+  const visitExpression = (expression: string): void => {
+    for (const match of expression.matchAll(/\b([A-Z][A-Za-z0-9]*Command)\b/gu)) {
+      const name = match[1];
+      if (name === undefined || visited.has(name)) continue;
+      visited.add(name);
+      const kind = kinds.get(name);
+      if (kind !== undefined) resolvedKinds.add(kind);
+      const alias = aliases.get(name);
+      if (alias !== undefined) visitExpression(alias);
+    }
+  };
+  visitExpression(union);
+  return uniqueSorted([...resolvedKinds]);
 }
 
 export function extractCoreSessionMembers(source: string): readonly string[] {
@@ -260,10 +277,10 @@ function extractStringKinds(source: string): readonly string[] {
   );
 }
 
-function extractSessionCalls(source: string): readonly string[] {
+function extractMemberCalls(source: string): readonly string[] {
   return uniqueSorted(
-    [...source.matchAll(/\bsession\.([A-Za-z][A-Za-z0-9]*)\s*\(/gu)].flatMap((match) =>
-      match[1] === undefined ? [] : [match[1]],
+    [...source.matchAll(/\b[A-Za-z][A-Za-z0-9]*\.([A-Za-z][A-Za-z0-9]*)\s*\(/gu)].flatMap(
+      (match) => (match[1] === undefined ? [] : [match[1]]),
     ),
   );
 }
@@ -288,15 +305,24 @@ function uniqueSorted(values: readonly string[]): readonly string[] {
 
 export function readRepositoryCapabilitySources(): CapabilitySources {
   const read = (relativePath: string) => readFileSync(`${REPOSITORY_ROOT}${relativePath}`, "utf8");
+  const readProductionSources = (relativeDirectory: string): string =>
+    readdirSync(`${REPOSITORY_ROOT}${relativeDirectory}`, { withFileTypes: true })
+      .filter(
+        (entry) =>
+          entry.isFile() &&
+          /\.tsx?$/u.test(entry.name) &&
+          !/\.(?:test|spec)\.tsx?$/u.test(entry.name),
+      )
+      .map((entry) => read(`${relativeDirectory}/${entry.name}`))
+      .join("\n");
   return {
     documentRoot: read("packages/document/src/index.ts"),
-    editorRoot: read("packages/editor/src/index.ts"),
-    coreSession: read("packages/core/src/pptx-editor-session.ts"),
-    reactSources: [
-      read("packages/editor-react/src/PptxEditor.tsx"),
-      read("packages/editor-react/src/EditorToolbar.tsx"),
-      read("packages/editor-react/src/EditorSlideStrip.tsx"),
+    editorRoot: [
+      read("packages/editor/src/index.ts"),
+      readProductionSources("packages/editor/src/commands"),
     ].join("\n"),
+    coreSession: read("packages/core/src/pptx-editor-session.ts"),
+    reactSources: readProductionSources("packages/editor-react/src"),
     matrixDocument: read("docs/development/editor-capability-matrix.md"),
   };
 }
