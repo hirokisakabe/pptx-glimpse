@@ -9,7 +9,7 @@ import {
   type UpdateScatterChartDataInput,
 } from "@pptx-glimpse/document";
 
-import { attemptCommand, type ApplyCommandAttempt } from "../command-contract.js";
+import { type ApplyCommandAttempt,attemptCommand } from "../command-contract.js";
 
 /** Update the series data of one chart. @inline */
 export interface UpdateChartDataCommand extends UpdateChartDataInput {

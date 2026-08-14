@@ -7,7 +7,7 @@ import {
   type SourceHandle,
 } from "@pptx-glimpse/document";
 
-import { attemptCommand, type ApplyCommandAttempt } from "../command-contract.js";
+import { type ApplyCommandAttempt,attemptCommand } from "../command-contract.js";
 
 /** Replace the media bytes referenced by one image shape. @inline */
 export interface ReplaceImageCommand {

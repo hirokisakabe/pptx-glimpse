@@ -5,7 +5,7 @@ import {
   type UpdateThemeSchemeInput,
 } from "@pptx-glimpse/document";
 
-import { attemptCommand, type ApplyCommandAttempt } from "../command-contract.js";
+import { type ApplyCommandAttempt,attemptCommand } from "../command-contract.js";
 
 /** Update selected color/font fields on one existing theme. @inline */
 export interface UpdateThemeSchemeCommand extends UpdateThemeSchemeInput {

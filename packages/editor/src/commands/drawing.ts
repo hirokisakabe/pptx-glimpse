@@ -6,11 +6,11 @@ import {
   deleteShape,
   type EditableShapeFill,
   type EditableShapeOutline,
+  type Emu,
   findShapeNodeBySourceHandle,
   groupShapes,
   moveShapes,
   moveShapesAcrossSlides,
-  type Emu,
   type PptxSourceModel,
   setShapeFill,
   setShapeOutline,
@@ -27,7 +27,7 @@ import {
   updateShapeTransform,
 } from "@pptx-glimpse/document";
 
-import { attemptCommand, type ApplyCommandAttempt } from "../command-contract.js";
+import { type ApplyCommandAttempt,attemptCommand } from "../command-contract.js";
 
 /** Move one shape without resizing it. @inline */
 export interface MoveShapeCommand {
