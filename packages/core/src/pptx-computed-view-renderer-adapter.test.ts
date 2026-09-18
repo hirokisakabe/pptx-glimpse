@@ -205,6 +205,44 @@ describe("adaptComputedViewToRendererModel", () => {
     expect(result.diagnostics).toEqual([]);
   });
 
+  it("Sort gradient stops that OOXML declared out of order", () => {
+    const result = adaptComputedViewToRendererModel(
+      createComputedView(
+        buildSource({
+          extraSlideShapes: [
+            shape("Unsorted gradient", {
+              transform: transform(60, 61, 62, 63),
+              fill: {
+                kind: "gradient",
+                gradientType: "linear",
+                angle: asOoxmlAngle(0),
+                stops: [
+                  { position: 1, color: { kind: "srgb", hex: "0000FF" } },
+                  { position: 0.5, color: { kind: "srgb", hex: "00FF00" } },
+                  { position: 0, color: { kind: "srgb", hex: "FF0000" } },
+                ],
+              },
+            }),
+          ],
+        }),
+      ),
+    );
+
+    // SVG clamps a <stop> whose offset is below the previous one, so the renderer model
+    // needs ascending offsets even though <a:gsLst> may list them in any order.
+    expect(findElementByAltText(result.slides[0].elements, "Unsorted gradient")).toMatchObject({
+      fill: {
+        type: "gradient",
+        stops: [
+          { position: 0, color: { hex: "#ff0000", alpha: 1 } },
+          { position: 0.5, color: { hex: "#00ff00", alpha: 1 } },
+          { position: 1, color: { hex: "#0000ff", alpha: 1 } },
+        ],
+      },
+    });
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it("Convert shape effects and image blip effects to renderer model", () => {
     const result = adaptComputedViewToRendererModel(
       createComputedView(
