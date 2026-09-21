@@ -1,5 +1,11 @@
 # pptx-glimpse
 
+## 5.3.1
+
+### Patch Changes
+
+- 98d64c8: Sort gradient stops by position when adapting a computed view to the renderer model. OOXML does not require `<a:gs pos>` to be listed in ascending order, but SVG clamps a gradient `<stop>` whose offset is below the previous one, which rendered such gradients with a wrong colour band.
+
 ## 5.3.0
 
 ### Minor Changes
