@@ -890,10 +890,15 @@ function adaptFill(
     case "gradient":
       return {
         type: "gradient",
-        stops: fill.stops.map((stop) => ({
-          position: stop.position,
-          color: adaptColor(stop.color),
-        })),
+        // OOXML does not require <a:gs pos> to be in ascending order, but SVG clamps a
+        // gradient <stop> whose offset is below the previous one. Sort a copy so the
+        // renderer emits monotonic offsets without mutating the source model.
+        stops: [...fill.stops]
+          .sort((a, b) => a.position - b.position)
+          .map((stop) => ({
+            position: stop.position,
+            color: adaptColor(stop.color),
+          })),
         angle: fill.angle ?? 0,
         gradientType: fill.gradientType,
         ...(fill.centerX !== undefined ? { centerX: fill.centerX } : {}),
