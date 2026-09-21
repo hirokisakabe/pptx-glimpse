@@ -321,7 +321,7 @@ export function renderMarkers(outline: Outline | null): MarkerResult {
 
   if (outline.headEnd) {
     const id = `marker-${crypto.randomUUID()}`;
-    const markerDef = buildMarkerDef(id, outline.headEnd, color, alpha);
+    const markerDef = buildMarkerDef(id, outline.headEnd, color, alpha, true);
     if (markerDef) {
       defs.push(markerDef);
       startAttr = `marker-start="url(#${id})"`;
@@ -340,11 +340,19 @@ export function renderMarkers(outline: Outline | null): MarkerResult {
   return { defs: defs.join(""), startAttr, endAttr };
 }
 
+/**
+ * Builds a `<marker>` definition for one line endpoint.
+ *
+ * @param isStart - True for `marker-start` (OOXML `headEnd`). With `orient="auto"`
+ *   the marker's +x axis follows the path direction, which at the start vertex points
+ *   into the line, so the arrow has to be mirrored to point outwards.
+ */
 function buildMarkerDef(
   id: string,
   endpoint: ArrowEndpoint,
   color: string,
   alpha: number,
+  isStart = false,
 ): string | null {
   const mw = ARROW_SIZE_MAP[endpoint.length];
   const mh = ARROW_SIZE_MAP[endpoint.width];
@@ -366,6 +374,7 @@ function buildMarkerDef(
       fillAttr = `fill="${color}"`;
       break;
     case "oval":
+      // Symmetric around its centre, so the same definition is correct at both ends.
       return `<marker id="${id}" markerWidth="${mw}" markerHeight="${mh}" refX="${mw / 2}" refY="${mh / 2}" orient="auto" markerUnits="userSpaceOnUse"><ellipse cx="${mw / 2}" cy="${mh / 2}" rx="${mw / 2}" ry="${mh / 2}" ${`fill="${color}"`}${alphaAttr}/></marker>`;
     case "arrow":
       path = `M 0 0 L ${mw} ${mh / 2} L 0 ${mh}`;
@@ -375,5 +384,12 @@ function buildMarkerDef(
       return null;
   }
 
-  return `<marker id="${id}" markerWidth="${mw}" markerHeight="${mh}" refX="${mw}" refY="${mh / 2}" orient="auto" markerUnits="userSpaceOnUse"><path d="${path}" ${fillAttr}${alphaAttr}/></marker>`;
+  // Every path above draws its tip at x=mw. Mirroring horizontally turns the tip
+  // towards -x for the start marker, and refX moves the anchor to the mirrored tip.
+  // `orient="auto-start-reverse"` would express this declaratively, but resvg
+  // (the rasteriser behind convertPptxToPng) treats it as plain `auto`.
+  const refX = isStart ? 0 : mw;
+  const mirrorAttr = isStart ? ` transform="translate(${mw},0) scale(-1,1)"` : "";
+
+  return `<marker id="${id}" markerWidth="${mw}" markerHeight="${mh}" refX="${refX}" refY="${mh / 2}" orient="auto" markerUnits="userSpaceOnUse"><path d="${path}"${mirrorAttr} ${fillAttr}${alphaAttr}/></marker>`;
 }
