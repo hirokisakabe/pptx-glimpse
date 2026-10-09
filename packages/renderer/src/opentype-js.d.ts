@@ -1,5 +1,5 @@
 declare module "opentype.js" {
-  export function parse(buffer: ArrayBuffer): unknown;
+  export function parse(buffer: ArrayBuffer, options?: { lowMemory?: boolean }): unknown;
 
   export class Font {
     constructor(options: Record<string, unknown>);
