@@ -44,6 +44,17 @@ interface OpentypeParser {
 }
 
 /**
+ * opentype.js parse options used for every font buffer.
+ *
+ * `lowMemory` keeps glyph outlines and horizontal metrics in the source buffer and
+ * decodes a glyph only when it is first requested (then caches it). Rendering only
+ * looks glyphs up through `charToGlyph` / `glyphs.get`, so output is unchanged, while
+ * eager parsing would materialize every glyph up front. For CJK fonts with ~65k glyphs
+ * that is the difference between ~30 MiB and ~220 MiB of heap per parsed font.
+ */
+const OPENTYPE_PARSE_OPTIONS = { lowMemory: true } as const;
+
+/**
  * Load opentype.js with dynamic import.
  * Returns null if opentype.js is not installed.
  */
@@ -51,7 +62,10 @@ export async function tryLoadOpentype(): Promise<OpentypeParser | null> {
   try {
     const mod = await import("opentype.js");
     return {
-      parse: (buffer) => unsafeExternalInteropAssertion<OpentypeFontWithNames>(mod.parse(buffer)),
+      parse: (buffer) =>
+        unsafeExternalInteropAssertion<OpentypeFontWithNames>(
+          mod.parse(buffer, OPENTYPE_PARSE_OPTIONS),
+        ),
     };
   } catch {
     return null;
