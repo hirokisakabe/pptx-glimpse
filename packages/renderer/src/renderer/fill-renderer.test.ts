@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 
 import { createRepresentativeWmf } from "../../../../vrt/snapshot/fixtures-src/images.js";
+import type { Outline } from "../model/line.js";
 import { createWarningLogger } from "../warning-logger.js";
-import { renderFillAttrs, renderOutlineAttrs } from "./fill-renderer.js";
+import { renderFillAttrs, renderMarkers, renderOutlineAttrs } from "./fill-renderer.js";
 import { createRendererContext } from "./render-context.js";
 
 describe("renderFillAttrs", () => {
@@ -240,5 +241,68 @@ describe("renderOutlineAttrs", () => {
     // customDash is applied (instead of prstDash)
     const widthPx = (12700 / 914400) * 96;
     expect(result.attrs).toContain(`stroke-dasharray="${3 * widthPx} ${1 * widthPx}"`);
+  });
+});
+
+describe("renderMarkers", () => {
+  const solidBlack = { type: "solid", color: { hex: "#000000", alpha: 1 } } as const;
+  const triangle = { type: "triangle", width: "med", length: "med" } as const;
+
+  const outlineWith = (ends: Partial<Pick<Outline, "headEnd" | "tailEnd">>): Outline => ({
+    width: 12700,
+    fill: solidBlack,
+    dashStyle: "solid",
+    headEnd: null,
+    tailEnd: null,
+    ...ends,
+  });
+
+  it("renders no markers when both endpoints are absent", () => {
+    const result = renderMarkers(outlineWith({}));
+    expect(result).toEqual({ defs: "", startAttr: "", endAttr: "" });
+  });
+
+  it("anchors the end marker on its tip without mirroring", () => {
+    const result = renderMarkers(outlineWith({ tailEnd: triangle }));
+    // ARROW_SIZE_MAP.med === 8, and every arrow path draws its tip at x=mw.
+    expect(result.defs).toContain('refX="8"');
+    expect(result.defs).not.toContain("scale(-1,1)");
+    expect(result.endAttr).toMatch(/^marker-end="url\(#marker-/);
+    expect(result.startAttr).toBe("");
+  });
+
+  it("mirrors the start marker so the arrow points away from the line", () => {
+    const result = renderMarkers(outlineWith({ headEnd: triangle }));
+    // orient="auto" aligns the marker's +x axis with the path direction, which at the
+    // start vertex points into the line. Mirroring turns the tip outwards, and refX=0
+    // keeps the mirrored tip anchored on the start point.
+    expect(result.defs).toContain('refX="0"');
+    expect(result.defs).toContain('transform="translate(8,0) scale(-1,1)"');
+    expect(result.startAttr).toMatch(/^marker-start="url\(#marker-/);
+    expect(result.endAttr).toBe("");
+  });
+
+  it("keeps both endpoints independent", () => {
+    const result = renderMarkers(outlineWith({ headEnd: triangle, tailEnd: triangle }));
+    expect(result.defs.match(/<marker /g)).toHaveLength(2);
+    expect(result.defs).toContain('refX="0"');
+    expect(result.defs).toContain('refX="8"');
+    expect(result.startAttr).not.toBe("");
+    expect(result.endAttr).not.toBe("");
+  });
+
+  it("does not mirror the symmetric oval endpoint", () => {
+    const oval = { type: "oval", width: "med", length: "med" } as const;
+    const start = renderMarkers(outlineWith({ headEnd: oval }));
+    const end = renderMarkers(outlineWith({ tailEnd: oval }));
+    expect(start.defs).not.toContain("scale(-1,1)");
+    expect(start.defs).toContain('refX="4"');
+    expect(end.defs).toContain('refX="4"');
+  });
+
+  it("skips endpoints of type none", () => {
+    const none = { type: "none", width: "med", length: "med" } as const;
+    const result = renderMarkers(outlineWith({ headEnd: none, tailEnd: none }));
+    expect(result).toEqual({ defs: "", startAttr: "", endAttr: "" });
   });
 });
