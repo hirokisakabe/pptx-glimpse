@@ -34,20 +34,29 @@ export function renderShape(
 
   const geometrySvg = renderGeometry(geometry, w, h);
 
+  // marker-start / marker-end are inheritable, so attaching them to the <g> wrapper that
+  // multi-path custom geometry produces would draw an arrow on every subpath. Only a
+  // single geometry element can carry them.
+  const markerResult = renderMarkers(geometrySvg.startsWith("<g") ? null : outline);
+
   const defs: string[] = [];
   if (fillResult.defs) defs.push(fillResult.defs);
   if (outlineResult.defs) defs.push(outlineResult.defs);
+  if (markerResult.defs) defs.push(markerResult.defs);
   if (effectResult.filterDefs) defs.push(effectResult.filterDefs);
 
   const parts: string[] = [];
   const filterAttr = effectResult.filterAttr ? ` ${effectResult.filterAttr}` : "";
   parts.push(`<g transform="${transformAttr}"${filterAttr}>`);
 
+  const markerAttrs = [markerResult.startAttr, markerResult.endAttr].filter(Boolean).join(" ");
+  const markerAttrStr = markerAttrs ? ` ${markerAttrs}` : "";
+
   if (geometrySvg) {
     // Apply fill/stroke to the geometry element
     const styledGeometry = geometrySvg.replace(
       /^<(\w+)/,
-      `<$1 ${fillResult.attrs} ${outlineResult.attrs}`,
+      `<$1 ${fillResult.attrs} ${outlineResult.attrs}${markerAttrStr}`,
     );
     parts.push(styledGeometry);
   }
