@@ -136,6 +136,73 @@ describe("renderShape", () => {
     expect(result.content).toContain("url(#grad-");
     expect(result.content).not.toContain("<linearGradient");
   });
+
+  const arrow = { type: "triangle", width: "med", length: "med" } as const;
+  const lineOutlineWithArrows = {
+    width: 12700,
+    fill: { type: "solid", color: { hex: "#000000", alpha: 1 } },
+    dashStyle: "solid",
+    headEnd: arrow,
+    tailEnd: arrow,
+  } as const;
+
+  it("renders arrow markers on a line shape", () => {
+    const result = renderShape(
+      makeShape({
+        geometry: { type: "preset", preset: "line", adjustValues: {} },
+        outline: lineOutlineWithArrows,
+      }),
+    );
+
+    expect(result.defs).toHaveLength(1);
+    expect(result.defs[0].match(/<marker /g)).toHaveLength(2);
+    expect(result.content).toContain('marker-start="url(#marker-');
+    expect(result.content).toContain('marker-end="url(#marker-');
+  });
+
+  it("renders no marker attributes when the outline has no endpoints", () => {
+    const result = renderShape(
+      makeShape({ geometry: { type: "preset", preset: "line", adjustValues: {} } }),
+    );
+
+    expect(result.content).not.toContain("marker-");
+    expect(result.defs).toHaveLength(0);
+  });
+
+  it("skips markers on multi-path custom geometry to avoid arrows on every subpath", () => {
+    const result = renderShape(
+      makeShape({
+        geometry: {
+          type: "custom",
+          paths: [
+            { commands: "M 0 0 L 10 10", width: 10, height: 10 },
+            { commands: "M 0 10 L 10 0", width: 10, height: 10 },
+          ],
+        },
+        outline: lineOutlineWithArrows,
+      }),
+    );
+
+    // The geometry is a <g> wrapper, so markers would be inherited by both subpaths.
+    expect(result.content.match(/<path /g)).toHaveLength(2);
+    expect(result.content).not.toContain("marker-");
+    expect(result.defs).toHaveLength(0);
+  });
+
+  it("renders markers on single-path custom geometry", () => {
+    const result = renderShape(
+      makeShape({
+        geometry: {
+          type: "custom",
+          paths: [{ commands: "M 0 0 L 10 10", width: 10, height: 10 }],
+        },
+        outline: lineOutlineWithArrows,
+      }),
+    );
+
+    expect(result.content).toContain('marker-start="url(#marker-');
+    expect(result.content).toContain('marker-end="url(#marker-');
+  });
 });
 
 describe("renderConnector", () => {
